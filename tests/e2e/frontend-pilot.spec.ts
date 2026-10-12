@@ -96,7 +96,10 @@ function headers(session: Session) {
  * A literal template space adds to Bootstrap's existing badge margin even when the
  * class names match. The range excludes trailing whitespace but keeps the label. */
 async function counterBadgeGaps(surface: Locator): Promise<number[]> {
-    return surface.locator('[data-packing-counters] > span').evaluateAll(function measureCounterBadgeGaps(groups) {
+    // The immutable native counter groups have no migration-only hook. Locate
+    // their established rendered classes on both surfaces rather than changing
+    // the reference template to make the comparison convenient.
+    return surface.locator('.card-body > .d-flex > span.fs-6.fw-semibold').evaluateAll(function measureCounterBadgeGaps(groups) {
         const gaps: number[] = [];
         for (const group of groups) {
             let label: ChildNode | undefined;

@@ -35,25 +35,22 @@ describe('contract and catalog generation', () => {
         // bundles consume stale behavior despite a successful TypeScript check.
         // Build output belongs outside this authored tree; report every collision
         // together so another external emitter cannot silently invalidate review.
-        // Include shared browser/server helpers and the generated permission registry,
-        // which are frontend inputs even though they live outside the Vue directory.
-        const files = new Set(await fs.readdir(path.join(root, 'src'), {recursive: true}));
         const collisions: string[] = [];
-        for (const file of files) {
-            if (!file.endsWith('.ts') || file.endsWith('.d.ts')) continue;
-            const emitted = file.slice(0, -3) + '.js';
-            if (files.has(emitted)) collisions.push(path.join('src', emitted));
-        }
-        // Runner/build configuration is authored in explicit TypeScript module
-        // formats. Adjacent emitted .mjs/.cjs copies can similarly select stale
-        // configuration before the maintained source, including a different test
-        // concurrency policy. Discover these pairs without a second config list.
-        const rootFiles = new Set(await fs.readdir(root));
-        for (const file of rootFiles) {
-            if (file.endsWith('.d.mts') || file.endsWith('.d.cts')) continue;
-            const emitted = file.endsWith('.mts') ? file.slice(0, -4) + '.mjs'
-                : file.endsWith('.cts') ? file.slice(0, -4) + '.cjs' : null;
-            if (emitted !== null && rootFiles.has(emitted)) collisions.push(emitted);
+        // Include every authored consumer: runtime helpers, test fixtures and
+        // scripts can also resolve stale siblings. Root runner/build configurations
+        // use all three TypeScript module formats. Discover pairs rather than
+        // maintaining a second list of configs or generated-file exceptions.
+        for (const directory of ['src', 'tests', 'scripts', '.']) {
+            const files = new Set(await fs.readdir(path.join(root, directory), {recursive: directory !== '.'}));
+            for (const file of files) {
+                if (/\.d\.(?:ts|mts|cts)$/u.test(file)) continue;
+                const extension = path.extname(file);
+                const emittedExtension = extension === '.ts' ? '.js'
+                    : extension === '.mts' ? '.mjs' : extension === '.cts' ? '.cjs' : null;
+                if (emittedExtension === null) continue;
+                const emitted = file.slice(0, -extension.length) + emittedExtension;
+                if (files.has(emitted)) collisions.push(path.join(directory, emitted));
+            }
         }
         expect(collisions.sort()).toEqual([]);
     });

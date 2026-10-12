@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-10-04
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: second-pass source review of invoice controllers, functional operations, DBAL, Pug/browser behavior, and actual existing test assertions; no tests, database operations, email deliveries, or PDF visual checks executed for this review
-source-anchors: src/controller/eventPoolController.ts; src/modules/invoice/; src/modules/database/services/EventInvoiceService.ts; src/public/js/events.ts; src/public/js/modules/invoice-submission.ts; src/views/modules/module_invoice_pool.pug; tests/unit/invoice-distribution.spec.ts; tests/unit/invoice-settlements.spec.ts; tests/unit/invoice-shares-pdf.spec.ts; tests/frontend/invoice-submission.spec.ts; tests/frontend/invoice-admin-ui.spec.ts; tests/frontend/invoice-calculation-preview.spec.ts; tests/integration/invoice-workflows.spec.ts; tests/integration/invoice-history-changes.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/integration/invoice-admin-feedback.spec.ts; tests/e2e/invoice-pools.spec.ts; tests/e2e/invoice-organizer-expenses.spec.ts; docs/documentation-remediation.yml
+source-anchors: src/controller/eventPoolController.ts; src/modules/invoice/; src/modules/database/services/EventInvoiceService.ts; src/public/js/events.ts; src/public/js/modules/invoice-submission.ts; src/views/modules/module_invoice_pool.pug; tests/unit/invoice-distribution.spec.ts; tests/unit/invoice-settlements.spec.ts; tests/unit/invoice-shares-pdf.spec.ts; tests/frontend/invoice-submission.spec.ts; tests/frontend/invoice-admin-ui.spec.ts; tests/frontend/invoice-calculation-preview.spec.ts; tests/integration/invoice-workflows.spec.ts; tests/integration/invoice-history-changes.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/integration/invoice-admin-feedback.spec.ts; tests/e2e/invoice-pools.spec.ts; tests/e2e/invoice-organizer-expenses.spec.ts; docs/backlog/documentation-remediation.yml
 next-review: invoice-contract-or-frontend-cutover
 -->
 
@@ -437,7 +437,7 @@ migrating the affected behavior; it does not prescribe additional tests for unch
 
 ## Registered defects and reconciliation notes
 
-The [defect register](../documentation-remediation.yml) remains the single register for implementation defects.
+The [defect register](../backlog/documentation-remediation.yml) remains the single register for implementation defects.
 IMP-013 is relevant to upload/deletion cleanup and must not become a preservation invariant. Organizer rejected-proof
 cleanup has explicit integration evidence; that does not establish equivalent cleanup for every participant failure.
 

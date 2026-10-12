@@ -102,11 +102,12 @@ for (const file of files) {
     }
     if (catalog.locale !== 'en' && catalog.uiContracts) throw new Error('Only English owns UI parameter declarations');
     // Only release-owned help directories are selectable. A catalog cannot point the runtime
-    // at uploads, an absolute path, or an ancestor outside docs/user-guide.
+    // at uploads, an absolute path, or an ancestor outside the release-owned corpus.
     if (!catalog.help || typeof catalog.help.directory !== 'string'
-        || catalog.help.directory !== (catalog.locale === 'en' ? '.' : catalog.locale)) {
-        // The existing English corpus owns the root. Every added language owns its own directory;
-        // a catalog may never silently redirect help to another language's documents or pictures.
+        || catalog.help.directory !== catalog.locale) {
+        // Every language names its own fixed directory. Localized Help may be absent;
+        // the controller then selects reviewed English and exposes that fallback explicitly.
+        // Catalog metadata itself may never redirect to another corpus or filesystem root.
         throw new Error(`Invalid fixed help source: ${file}`);
     }
     const messages = flattenResources(catalog.resources);

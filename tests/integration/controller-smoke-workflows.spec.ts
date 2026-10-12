@@ -29,6 +29,7 @@ import {
     registerEventAttendance,
     registerLocalAccount,
     submitSurveyResponses,
+    unassignPackingItem,
 } from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
@@ -79,6 +80,7 @@ describe('remaining high-value controller workflows', () => {
         const participantJourney = (await driverService.getDriversItems(driversId)).find((item) => item.title === 'Participant journey')!;
         await assignDriversItem(participantJourney.id, participant.id);
         await assignPackingItem(packingItem.id, participant.id);
+        expect((await packingService.getPackingListByParticipant(participant.id)).map(list => list.id)).toContain(packingId);
         await submitSurveyResponses(surveyId, participant, {[combinations[0].id]: 'yes'});
 
         const dashboard = await userController.getOverviewPage({profile: participant, auth: {user: participant.user!}});
@@ -140,11 +142,22 @@ describe('remaining high-value controller workflows', () => {
         const [listId, item] = await createPackingListWithItem(owner.id);
         const list = await packingService.getPackingListById(listId);
         await assignPackingItem(item.id, participant.id);
+        await assignPackingItem(item.id, participant.id);
+        expect(await packingService.getPackingAssignments(listId, participant.id)).toEqual([item.id]);
+        await expect(assignPackingItem(item.id, secondParticipant.id)).rejects.toMatchObject({status: 409});
+        expect(await packingService.getPackingItemAssignees(listId)).toEqual({[item.id]: [expect.objectContaining({name: participant.name})]});
 
         const view = await packingController.fetchForView(list!, {session: {profile: participant}} as Request);
 
         expect(view.assignments).toContain(item.id);
         expect(view.counters).toMatchObject({participants: 1, empty: 0});
+
+        // Legacy membership removal must preserve a concurrently edited item as well as
+        // clearing the assignment. Reuse this persisted fixture rather than another smoke story.
+        await packingService.updatePackingItem(item.id, {title: 'Updated tent'});
+        await unassignPackingItem(item.id, participant.id);
+        expect(await packingService.getPackingAssignments(listId, participant.id)).toEqual([]);
+        expect(await packingService.getPackingItemById(item.id)).toMatchObject({title: 'Updated tent'});
     });
 
     it('returns survey choices and grouped participant responses', async () => {
@@ -199,11 +212,11 @@ describe('remaining high-value controller workflows', () => {
 
         const results = await entityAdminController.searchUsers(account.username, 5);
 
-        expect(results).toContainEqual(expect.objectContaining({
+        expect(results[0]).toMatchObject({
             id: profile.id,
             name: profile.name,
             username: account.username
-        }));
+        });
         expect(results[0].email).not.toBe(account.email);
     });
 

@@ -63,6 +63,36 @@ async function nativeApplication(url: string, bootstrap: FrontendPilotBootstrap)
 }
 
 describe('drafts entered before hydration', () => {
+    it('keeps visible English Help fallback, actual content language and chosen interface across SSR and hydration', async () => {
+        const request = vi.fn(() => { throw new Error('Hydration must not submit or read'); });
+        vi.stubGlobal('fetch', request);
+        const englishTopic = {name: 'PACKING_LISTS.md', title: 'Packing lists', path: 'packing_lists',
+            url: '/help/packing_lists?locale=de', contentLocale: 'en'};
+        const fallback: components['schemas']['HelpPageData'] = {...help, locale: 'de', contentLocale: 'en', fallbackToEnglish: true,
+            content: '<h2 id="task">A synthetic task</h2><p>Reviewed English instructions.</p>'
+                + '<a href="/help/packing_lists?locale=de#task">Packing</a><img src="/frontend-pilot/help/assets/figure.png?locale=en" alt="English figure">',
+            docsList: [englishTopic], docsGroups: [{title: 'Organisieren und teilen', docs: [englishTopic]}],
+            toc: [{id: 'task', title: 'A synthetic task', level: 2}]};
+        const {container, context, hydrate} = await nativeApplication('/frontend-pilot/help?locale=de', {
+            session: {...session, locale: 'de'}, help: fallback,
+        });
+        const notice = container.querySelector<HTMLElement>('.help-language-fallback')!;
+        const article = container.querySelector<HTMLElement>('article')!;
+        expect(notice.textContent).toContain('werden auf Englisch angezeigt');
+        expect(article.lang).toBe('en');
+        expect(container.querySelector('.help-toc a')?.getAttribute('lang')).toBe('en');
+        expect(container.querySelector('nav[aria-label="Hilfethemen"] a')?.textContent).toContain('(Englisch)');
+        expect(container.querySelector('nav[aria-label="Hilfethemen"] a span')?.getAttribute('lang')).toBe('en');
+        expect(container.querySelector<HTMLInputElement>('form input[name="locale"]')?.value).toBe('de');
+        expect(container.querySelector('.help-content a')?.getAttribute('href')).toContain('locale=de');
+        expect(container.querySelector('.help-content img')?.getAttribute('src')).toContain('locale=en');
+        await hydrate();
+        expect(container.querySelector('.help-language-fallback')).toBe(notice);
+        expect(container.querySelector('article')).toBe(article);
+        expect(context.locale.value).toBe('de');
+        expect(request).not.toHaveBeenCalled();
+    }, 30_000);
+
     it('keeps an early help search and submits its edited value through client navigation', async () => {
         const request = vi.fn(() => { throw new Error('Hydration must not submit or read'); });
         vi.stubGlobal('fetch', request);
@@ -155,7 +185,10 @@ describe('drafts entered before hydration', () => {
         'keeps all early %s draft controls in the actual multipart command without replaying HTTP',
         async mode => {
             let submitted: components['schemas']['PackingCreateInput'] | undefined;
-            let upload: FormDataEntryValue | null = null;
+            // The HTTP callback records its actual multipart value. Keep that
+            // asynchronous observation in a holder rather than casting an initial
+            // null variable into the expected uploaded File after submission.
+            const capturedUpload: {value: FormDataEntryValue | null} = {value: null};
             let posts = 0;
             const request = vi.fn(async (input: RequestInfo | URL) => {
                 const captured = input as Request;
@@ -169,7 +202,7 @@ describe('drafts entered before hydration', () => {
                 posts++;
                 const body = await captured.formData();
                 submitted = JSON.parse(String(body.get('data'))) as components['schemas']['PackingCreateInput'];
-                upload = body.get('image');
+                capturedUpload.value = body.get('image');
                 // A known validated rejection keeps this production form mounted for observation.
                 // Its command has crossed the real generated serializer; no destination stub is needed.
                 return creationResponse({type: 'about:blank', title: 'Rejected', status: 400,
@@ -224,10 +257,12 @@ describe('drafts entered before hydration', () => {
             expect(submitted).toMatchObject({title: 'Early list',
                 defaultPermissions: {...creation.defaults, participant: mode === 'create' ? 3 : 0},
                 items: [{title: 'Early tent', maxAssignees: 9, requiredByAll: mode === 'create'}]});
+            const upload = capturedUpload.value;
             expect(upload).not.toBeNull();
             expect(typeof upload).not.toBe('string');
-            expect((upload as File).name).toBe('early.png');
-            expect(await (upload as File).text()).toBe('synthetic image');
+            if (!(upload instanceof File)) throw new Error('Expected the hydrated multipart image File');
+            expect(upload.name).toBe('early.png');
+            expect(await upload.text()).toBe('synthetic image');
             expect(request).toHaveBeenCalledTimes(2); // One explicit admission read and one explicit POST.
         }, 30_000,
     );

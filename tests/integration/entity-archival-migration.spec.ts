@@ -52,10 +52,14 @@ function describeTable(table: Table, archiveOnly: boolean) {
 
     const indices = [];
     for (const index of table.indices) {
-        if (archiveOnly && !index.name.endsWith('_auto_archive')) {
+        // TypeORM permits unnamed definitions, but these indices come from the
+        // persisted schema and need a concrete name for filtering and comparison.
+        const name = index.name;
+        if (!name) throw new Error(`Persisted index in ${table.name} has no name.`);
+        if (archiveOnly && !name.endsWith('_auto_archive')) {
             continue;
         }
-        indices.push({name: index.name, columns: index.columnNames, unique: index.isUnique});
+        indices.push({name, columns: index.columnNames, unique: index.isUnique});
     }
     indices.sort((a, b) => a.name.localeCompare(b.name));
 

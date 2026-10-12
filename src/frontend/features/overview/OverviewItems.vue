@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import type {components} from '../../../types/api/v1';
+import type {PilotOverviewCardInteraction} from '../../../types/FrontendPilotUiTypes';
 import {usePilot} from '../../app/context';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -8,7 +9,8 @@ import OverviewCard from './OverviewCard.vue';
 
 type Card = components['schemas']['OverviewCard'];
 const props = defineProps<{view: components['schemas']['OverviewRegion']; disabled: boolean; readRevision?: number; active?: boolean;
-    pageHref: (page: number) => string; expandHref: (card: Card) => string}>();
+    pageHref: (page: number) => string; expandHref: (card: Card) => string;
+    cardInteraction: (card: Card) => PilotOverviewCardInteraction}>();
 const emit = defineEmits<{
     visibility: [card: Card, value: components['schemas']['OverviewVisibilityInput']['visibility']];
     archive: [card: Card, restore: boolean];
@@ -51,6 +53,7 @@ function followPage(event: MouseEvent, page: number, available: boolean): void {
         <div v-for="card in view.items" :key="card.type + ':' + card.id" class="col">
             <OverviewCard
                 :card="card"
+                :interaction="cardInteraction(card)"
                 :disabled="disabled"
                 :expansion="!view.parent"
                 :filtered="filtered"

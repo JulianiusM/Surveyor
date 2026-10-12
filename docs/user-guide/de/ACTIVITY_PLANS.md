@@ -4,12 +4,13 @@ documentation-metadata
 audience: Aktivitätsteilnehmer; Aktivitätsorganisatoren
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: vollständige eigenständige deutsche Anleitung einschließlich veranstaltungsweiter Überschneidungen, Anforderungen, Abdeckung, Vorschlagsprüfung, manueller Änderungen, Archivierung und Fehlerbehebung; Überschriftenreihenfolge und Linkziele bleiben erhalten
-source-anchors: docs/user-guide/ACTIVITY_PLANS.md
+verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
+source-anchors: docs/user-guide/en/ACTIVITY_PLANS.md
 heading-anchors: 1:activity-plans; 2:choose-your-task; 3:i-am-participating; 3:i-am-organizing; 2:before-you-begin; 2:participate-in-an-activity-plan; 3:find-a-slot; 3:join-a-whole-slot; 3:take-a-named-role; 3:leave-a-slot-or-role; 3:understand-assignment-warnings; 3:use-shared-text-fields; 2:organize-an-activity-plan; 3:create-an-activity-plan; 3:understand-the-tabs; 3:change-plan-properties; 3:link-change-or-remove-an-event; 3:add-and-edit-slots; 4:add-a-slot-after-creation; 4:edit-a-slot; 3:add-named-roles-to-a-slot; 3:manage-role-assignments; 3:review-participants; 3:configure-basic-assignment-rules; 3:change-permissions-and-administrators; 3:export-the-schedule; 2:advanced-requirements-and-assignment-recommendations; 3:set-participant-requirements; 4:understand-which-requirement-wins; 3:check-requirement-coverage; 3:generate-assignment-suggestions; 3:review-generated-suggestions; 3:stage-a-manual-assignment-change; 3:save-and-apply-the-review; 3:advanced-limitations; 2:archive-or-restore-a-plan; 2:troubleshooting; 3:i-see-registration-required; 3:join-or-take-is-unavailable; 3:a-slot-does-not-appear-under-open-slots; 3:i-joined-the-wrong-profile; 3:i-cannot-edit-slots-roles-participants-rules-settings-or-exports; 3:my-changes-in-rules-and-auto-assign-were-lost; 3:auto-generate-is-disabled; 3:requirement-coverage-says-the-configuration-is-incomplete; 3:recommendation-generation-became-stale-or-failed; 3:a-participant-still-needs-shifts-after-generation; 3:an-approved-change-was-not-applied; 2:related-guides
 next-review: activity-plan-visible-UI-or-behavior-change
+production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->
 
 Aktivitätspläne stellen Zeitfenster in einem datierten Ablaufplan bereit. Teilnehmer können einem vollständigen Zeitfenster beitreten oder eine benannte Rolle übernehmen. Organisatoren können Zeitfenster erstellen, Zuweisungen verwalten und den Plan mit einer Veranstaltung verknüpfen.

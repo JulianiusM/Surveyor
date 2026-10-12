@@ -4,14 +4,16 @@ documentation-metadata
 audience: GitHub Copilot; maintainers
 owner: project maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: D13 topic-index role, canonical delegation, and duplication-prevention contract
-source-anchors: AGENTS.md; .github/copilot-instructions.md; docs/README.md; docs/DOCUMENTATION_POLICY.md; repository-tree
-next-review: D14
+verification-scope: mandatory policy routing and topic-index role without competing rules
+source-anchors: AGENTS.md; .github/copilot-instructions.md; docs/README.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; repository-tree
+next-review: explicit-maintainer-policy-amendment
 -->
 
-These files are focused navigation aids for GitHub Copilot. The governing AI contract is
+These files are focused navigation aids for GitHub Copilot. Read and enforce the governing
+[documentation](../../docs/policies/DOCUMENTATION_POLICY.md) and
+[development](../../docs/policies/DEVELOPMENT_POLICY.md) policies before edits. The required routing entry point is
 [`AGENTS.md`](../../AGENTS.md), with the Copilot entry point in
 [`copilot-instructions.md`](../copilot-instructions.md). Neither this directory nor the entry point is an independent
 source of implementation truth.

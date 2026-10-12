@@ -18,7 +18,8 @@ import {test, expect} from '@playwright/test';
 import {createPublicPageCase} from '../../factories/publicPageFactory';
 
 const helpAvailabilityCases = [
-    createPublicPageCase({description: 'renders the help index page', path: '/help', expectedStatus: 200, expectedText: 'Documentation'}),
+    createPublicPageCase({description: 'renders the help index page', path: '/help', expectedStatus: 200,
+        expectedText: '<h1 id="surveyor-user-guide">Surveyor User Guide</h1>'}),
     createPublicPageCase({description: 'renders the getting-started help page', path: '/help/getting_started', expectedStatus: 200, expectedText: 'Getting Started'}),
     createPublicPageCase({description: 'renders the overview help page', path: '/help/dashboard', expectedStatus: 200, expectedText: 'Your Overview'}),
     createPublicPageCase({description: 'renders the surveys help page', path: '/help/surveys', expectedStatus: 200, expectedText: 'Surveys'}),

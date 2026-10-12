@@ -577,7 +577,8 @@ describe('identity forms and packing overview navigation', () => {
     });
 
     it('preserves a native guest name and navigates confirmed registration to canonical detail', async () => {
-        const anonymous = {...session, kind: 'anonymous' as const, activeProfile: null, profiles: []};
+        const anonymous: components['schemas']['SessionView'] = {...session, kind: 'anonymous',
+            activeProfile: null, profiles: [], logoutUrl: null};
         const guest = {...session, kind: 'guest' as const, context: 'registered-guest-context-1234567890'};
         let submittedName: unknown;
         let registered = false;
@@ -739,7 +740,7 @@ describe('identity forms and packing overview navigation', () => {
         await router.push('/frontend-pilot/help');
         await router.push(path);
         await flushPromises();
-        expect(wrapper.get('#username').exists()).toBe(true);
+        expect(wrapper.find('#username').exists()).toBe(true);
         expect(wrapper.find('form').exists()).toBe(true);
     });
 
@@ -1010,12 +1011,12 @@ describe('identity forms and packing overview navigation', () => {
                 code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}}, 403);
         });
         expect(wrapper.findAll('.input-group-lg')).toHaveLength(2);
-        expect(wrapper.get('label[for="guest-name"] .bi-person-circle').exists()).toBe(true);
+        expect(wrapper.find('label[for="guest-name"] .bi-person-circle').exists()).toBe(true);
         expect(wrapper.get('#guest-name').attributes('placeholder')).toBe('Your name');
         expect(wrapper.get('#guest-email').attributes('inputmode')).toBe('email');
         expect(wrapper.get('.status-notice.alert-warning').classes()).toContain('mb-4');
-        expect(wrapper.get('.status-notice .bi-exclamation-triangle-fill').exists()).toBe(true);
-        expect(wrapper.get('.text-center.mt-4 .bi-arrow-left-circle').exists()).toBe(true);
+        expect(wrapper.find('.status-notice .bi-exclamation-triangle-fill').exists()).toBe(true);
+        expect(wrapper.find('.text-center.mt-4 .bi-arrow-left-circle').exists()).toBe(true);
         await wrapper.get('#guest-name').setValue('Guest name');
         await wrapper.get('#guest-email').setValue('guest@example.test');
         await wrapper.get('form').trigger('submit');

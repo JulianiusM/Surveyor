@@ -2,18 +2,20 @@
 import {computed, watch} from 'vue';
 import {RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
+import type {PilotOverviewCardInteraction, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {usePilot} from '../../app/context';
 import {useAuthorizedImage} from '../../composables/authorizedImage';
-import {usePackingApi} from '../packing/api';
+import {ObsoleteRequestError} from '../../app/transport';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import ActionButton from '../../components/ActionButton.vue';
 import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 
-// TODO (docs/FRONTEND_PILOT.md): Migrate non-packing detail/administration destinations
+// TODO (docs/frontend-migration/FRONTEND_PILOT.md): Migrate non-packing detail/administration destinations
 // with their feature owners. These mixed Overview cards deliberately keep working native
 // links until then; their shared projection does not make those workflows complete.
 const props = defineProps<{
     card: components['schemas']['OverviewCard'];
+    interaction: PilotOverviewCardInteraction;
     disabled?: boolean;
     expansion?: boolean;
     expansionHref?: string;
@@ -29,20 +31,29 @@ const emit = defineEmits<{
 }>();
 const context = usePilot();
 const {messages} = context;
-const packingApi = usePackingApi(context);
-const packingHeader = useAuthorizedImage(
+// This card owns image lifetime and presentation. The region supplies the feature
+// endpoint and SPA eligibility; adding a migrated feature does not add API imports here.
+const authorizedHeader = useAuthorizedImage(
     computed(() => props.card.id),
-    computed(() => (props.card.type === 'packing' ? props.card.headerVersion : null)),
-    packingApi.header.bind(packingApi),
+    computed(() => props.interaction.readHeader ? props.card.headerVersion : null),
+    readHeader,
     computed(() => props.active !== false),
 );
-const image = computed(() => (props.card.type === 'packing' ? packingHeader.source.value : props.card.headerUrl));
+const image = computed(() => props.interaction.readHeader ? authorizedHeader.source.value : props.card.headerUrl);
+
+/** A retired feature declaration supplies no binary authority. The image helper
+ * already fences actor, resource and version before installing any returned bytes. */
+function readHeader(id: string, scope: PilotRequestScope, signal: AbortSignal): Promise<Blob> {
+    const read = props.interaction.readHeader;
+    if (!read) throw new ObsoleteRequestError();
+    return read(id, scope, signal);
+}
 // The region owns JSON delivery. Its completion marker also advances for equal
 // responses, allowing a missing binary image to recover while healthy URLs stay.
 watch(() => props.readRevision, recoverHeaderAfterRead);
 
 function recoverHeaderAfterRead(): void {
-    if (props.card.type === 'packing') void packingHeader.refresh();
+    if (props.interaction.readHeader) void authorizedHeader.refresh();
 }
 
 /** The href remains usable for a separate document; only ordinary clicks expand this region. */
@@ -59,7 +70,7 @@ function expand(event: MouseEvent): void {
         :data-type="card.type"
     >
         <component
-            :is="card.type === 'packing' ? RouterLink : 'a'"
+            :is="interaction.migrated ? RouterLink : 'a'"
             v-if="image"
             :to="card.url"
             :href="card.url"
@@ -71,7 +82,7 @@ function expand(event: MouseEvent): void {
                 loading="lazy"
         /></component>
         <component
-            :is="card.type === 'packing' ? RouterLink : 'a'"
+            :is="interaction.migrated ? RouterLink : 'a'"
             class="card-body text-decoration-none"
             :to="card.url"
             :href="card.url"
@@ -91,18 +102,18 @@ function expand(event: MouseEvent): void {
                 }}</span
                 ><span v-if="card.archived" class="badge text-bg-secondary"
                     ><i class="bi bi-archive me-1" aria-hidden="true"></i
-                    >{{ messages.t('packing.archivedOption') }}</span
+                    >{{ messages.t('common.archived') }}</span
                 ><span v-if="card.visibility !== 'default'" class="badge text-bg-info">{{
                     messages.t(card.visibility === 'hidden' ? 'overview.hiddenBadge' : 'overview.shown')
                 }}</span>
             </div>
             <div class="d-flex flex-wrap gap-2">
-                <AppNavigationDropdown :navigation="false" :label="messages.t('packing.archival')"
+                <AppNavigationDropdown :navigation="false" :label="messages.t('common.archival')"
                     trigger-class="btn btn-sm btn-outline-light dropdown-toggle"
                     :trigger-label="messages.t('overview.archiveMenu', {title: card.title})">
                         <template
                             v-if="
-                                card.type === 'packing' &&
+                                interaction.migrated &&
                                 (card.capabilities.archive || card.capabilities.restore)
                             "
                             ><h6 class="dropdown-header">{{ messages.t('overview.forEveryone') }}</h6>
@@ -113,7 +124,7 @@ function expand(event: MouseEvent): void {
                                 :disabled="disabled"
                                 @click="emit('archive', false)"
                             >
-                                {{ messages.t('packing.archive') }}</button
+                                {{ messages.t('common.archive') }}</button
                             ><button
                                 type="button"
                                 v-if="card.capabilities.restore"
@@ -121,7 +132,7 @@ function expand(event: MouseEvent): void {
                                 :disabled="disabled"
                                 @click="emit('archive', true)"
                             >
-                                {{ messages.t('packing.restore') }}
+                                {{ messages.t('common.restore') }}
                             </button>
                             <hr class="dropdown-divider"
                         /></template>
@@ -158,14 +169,14 @@ function expand(event: MouseEvent): void {
                     class="d-inline btn-group"
                 >
                     <RouterLink
-                        v-if="card.type === 'packing' && card.capabilities.duplicate"
+                        v-if="interaction.migrated && interaction.duplicateUrl && card.capabilities.duplicate"
                         class="btn btn-sm btn-info"
-                        :to="card.url + '/duplicate'"
+                        :to="interaction.duplicateUrl"
                         ><i class="bi bi-files me-1" aria-hidden="true"></i
-                        >{{ messages.t('packing.duplicate') }}</RouterLink
+                        >{{ messages.t('common.duplicate') }}</RouterLink
                     >
                     <ActionButton
-                        v-if="card.type === 'packing' && card.capabilities.remove"
+                        v-if="interaction.migrated && card.capabilities.remove"
                         class="btn-sm"
                         variant="danger"
                         :disabled="disabled"

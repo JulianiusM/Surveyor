@@ -32,17 +32,21 @@ describe('native packing permission-specific presentation', () => {
         const page = packingView();
         expect(page.querySelector('#planDesc')?.innerHTML).toBe('First paragraph<br>&lt;Second line&gt;');
         expect(page.querySelector('tbody')?.textContent).toContain('Other participant');
-        expect(page.querySelector('[data-packing-counters]')?.firstElementChild?.textContent).toBe('Participants:1');
-        expect(page.querySelectorAll('[data-action], [data-edit], [data-required-toggle], [data-owner-remove], [data-delete-item]')).toHaveLength(0);
+        expect(page.querySelector('.card-body > .d-flex > span.fs-6.fw-semibold')?.textContent).toBe('Participants:1');
+        expect(page.querySelectorAll('[data-edit], [data-required-toggle], [data-owner-remove], [data-delete-item]')).toHaveLength(0);
+        // Original admission displays personal assignment controls independently
+        // of their HTTP write grant. Preserve that baseline, including its hint.
+        expect(page.querySelector('[data-action="assign"]')?.textContent).toBe('Take');
         expect(page.querySelector('#quickAddForm')).toBeNull();
-        expect(page.textContent).not.toContain('Double click to edit');
+        expect(page.textContent).toContain('Double click to edit');
         expect(page.querySelector('[data-packed]')).not.toBeNull();
     });
 
     it('keeps item creation independent from self-assignment or editing existing rows', () => {
         const page = packingView(['ITEM_ADD']);
         expect(page.querySelector('#quickAddForm')).not.toBeNull();
-        expect(page.querySelectorAll('[data-action], [data-edit], [data-required-toggle]')).toHaveLength(0);
+        expect(page.querySelectorAll('[data-edit], [data-required-toggle]')).toHaveLength(0);
+        expect(page.querySelector('[data-action="assign"]')?.textContent).toBe('Take');
         expect(packingView(['ACCESS_VIEW']).querySelector('[data-action="assign"]')?.textContent).toBe('Take');
     });
 

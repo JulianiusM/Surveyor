@@ -16,6 +16,7 @@ import {Profile} from '../../src/modules/database/entities/user/Profile';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as driverService from '../../src/modules/database/services/DriverService';
 import * as adminService from '../../src/modules/database/services/EntityAdminService';
+import {getRootRepository} from '../../src/modules/database/services/EntityLifecycleService';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as packingService from '../../src/modules/database/services/PackingService';
 import * as surveyService from '../../src/modules/database/services/SurveyService';
@@ -56,6 +57,20 @@ async function createEvent(title: string, endDate = '2027-06-03'): Promise<Archi
     return {type: 'event', id: await eventService.createEventTx(owner.id, {
         title, startDate: '2027-06-01', endDate, timezone: 'UTC',
     })};
+}
+
+/** Observe queued primary-row reads without advancing either competing writer. */
+async function expectPrimaryLockWaiters(id: string, expectedCount: number): Promise<void> {
+    async function countPrimaryLockWaiters(): Promise<number> {
+        const processes: {Info: string | null}[] = await AppDataSource.query('SHOW FULL PROCESSLIST');
+        let count = 0;
+        for (const process of processes) {
+            if (process.Info?.includes('FOR UPDATE') && process.Info.includes(id)) count++;
+        }
+        return count;
+    }
+
+    await expect.poll(countPrimaryLockWaiters, {timeout: 5000}).toBe(expectedCount);
 }
 
 async function state(ref: ArchiveReference) {
@@ -327,10 +342,7 @@ describe('authoritative archival and personal overview visibility', () => {
         // Observe the real MariaDB connection waiting on our row lock: the candidate
         // has been read, but its conditional write cannot yet see the new dates.
         try {
-            await expect.poll(async () => {
-                const processes: {Info: string | null}[] = await AppDataSource.query('SHOW FULL PROCESSLIST');
-                return processes.some(row => row.Info?.startsWith('UPDATE') && row.Info.includes(event.id));
-            }, {timeout: 5000}).toBe(true);
+            await expectPrimaryLockWaiters(event.id, 1);
             await editor.manager.getRepository(Event).update(event.id, {endDate: '2027-12-31'});
             await editor.commitTransaction();
         } finally {
@@ -341,41 +353,41 @@ describe('authoritative archival and personal overview visibility', () => {
         expect(await state(event)).toMatchObject({archived: false, autoArchivePaused: false});
     });
 
-    it('serializes restoration with concurrent automatic jobs and keeps repeated sweeps harmless', async () => {
-        const event = await createEvent('Concurrent restore');
+    it.each(['event', 'activity'] as const)('serializes %s restoration with concurrent automatic jobs and keeps repeated sweeps harmless', async (type) => {
+        // Events and standalone plans have separate eligibility indexes and write
+        // paths. One representative per table protects their common lock protocol.
+        const reference: ArchiveReference = type === 'event'
+            ? await createEvent('Concurrent restore')
+            : {type, id: await activityService.createActivityPlanTx(
+                owner.id, 'Concurrent standalone restore', '', '2027-06-01', '2027-06-03', [createActivitySlotEntity()],
+            )};
         const blocker = AppDataSource.createQueryRunner();
         await blocker.connect();
         await blocker.startTransaction();
-        await blocker.manager.getRepository(Event).findOneOrFail({where: {id: event.id}, lock: {mode: 'pessimistic_write'}});
-        const restore = restoreAsOwner(event);
+        await getRootRepository(blocker.manager, type).findOneOrFail({where: {id: reference.id}, lock: {mode: 'pessimistic_write'}});
+        const restore = restoreAsOwner(reference);
         let sweep: Promise<number> | undefined;
         try {
-            // Queue restoration first, then wait for the automatic UPDATE to reach the
-            // same locked row. Releasing it tests the real database ordering: the sweep
+            // Queue restoration first, then observe both writers waiting for the
+            // same primary row. Releasing it tests the real database ordering: the sweep
             // must recheck the newly committed pause instead of using stale eligibility.
-            await expect.poll(async () => {
-                const processes: {Info: string | null}[] = await AppDataSource.query('SHOW FULL PROCESSLIST');
-                return processes.some(row => row.Info?.includes('FOR UPDATE') && row.Info.includes(event.id));
-            }, {timeout: 5000}).toBe(true);
+            await expectPrimaryLockWaiters(reference.id, 1);
             sweep = entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z'));
-            await expect.poll(async () => {
-                const processes: {Info: string | null}[] = await AppDataSource.query('SHOW FULL PROCESSLIST');
-                return processes.some(row => row.Info?.startsWith('UPDATE') && row.Info.includes(event.id));
-            }, {timeout: 5000}).toBe(true);
+            await expectPrimaryLockWaiters(reference.id, 2);
             await blocker.commitTransaction();
         } finally {
             if (blocker.isTransactionActive) await blocker.rollbackTransaction();
             await blocker.release();
             await Promise.all([restore, sweep]);
         }
-        expect(await state(event)).toMatchObject({archived: false, autoArchivePaused: true});
-        await pauseAsOwner(event, false);
+        expect(await state(reference)).toMatchObject({archived: false, autoArchivePaused: true});
+        await pauseAsOwner(reference, false);
         const counts = await Promise.all([
             entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z')),
             entityAdminController.archiveExpiredEntities(0, new Date('2027-07-01T00:00:00Z')),
         ]);
         expect(counts.reduce((sum, count) => sum + count, 0)).toBe(1);
-        expect((await state(event)).archived).toBe(true);
+        expect((await state(reference)).archived).toBe(true);
     });
 
     it('deletes archived events with their children and keeps profile preference cleanup independent', async () => {

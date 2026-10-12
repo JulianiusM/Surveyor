@@ -34,6 +34,13 @@ const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Fixtu
     docsGroups: [{title: 'Fixture group', docs: [{name: 'fixture', title: 'Fixture guide', path: 'fixture.md', url: '/help/fixture'}]}],
     toc: [{id: 'fixture-task', title: 'A synthetic task', level: 2}]};
 
+// Compile each maintained native template once in this isolated test file. Every
+// render still receives fresh locals and creates a fresh DOM, so the native page
+// remains the independent presentation oracle without repeated parser work.
+const renderNativeGuest = pug.compileFile(resolve('src/views/users/register-guest.pug'));
+const renderNativeAlert = pug.compileFile(resolve('src/views/modules/module_alert.pug'));
+const renderNativeMessage = pug.compileFile(resolve('src/views/message.pug'));
+
 async function renderHelp(data = help, url = '/frontend-pilot/help?doc=fixture', requestFetch?: typeof fetch,
                           bootstrap: Partial<FrontendPilotBootstrap> = {}) {
     const context = createPilotContext({session, help: data, initialUrl: url, ...bootstrap}, true, requestFetch ?? vi.fn());
@@ -53,7 +60,7 @@ async function renderHelp(data = help, url = '/frontend-pilot/help?doc=fixture',
 /** The native page supplies actual label/footer markup, not a copied template fixture. */
 function nativeGuestPage(helpUrl?: string): HTMLElement {
     const native = document.createElement('div');
-    native.innerHTML = pug.renderFile(resolve('src/views/users/register-guest.pug'), {
+    native.innerHTML = renderNativeGuest({
         status: undefined, messages: {}, version: session.shell.version, nxtUrl: '/packing/fixture', profile: undefined, helpUrl,
         permData: undefined, settings: {imprintUrl: session.shell.imprintUrl, privacyPolicyUrl: session.shell.privacyPolicyUrl},
         data: {entityType: 'packing', entityId: 'fixture', title: 'Fixture list', guestRegistrationNags: {}},
@@ -168,7 +175,7 @@ describe('native shell and help presentation contract', () => {
     it('renders the guest private-return sentence like the plain native flash', async () => {
         const link = 'https://example.test/guest/login/fixture/one-visit-token';
         const native = document.createElement('div');
-        native.innerHTML = pug.renderFile(resolve('src/views/modules/module_alert.pug'), {
+        native.innerHTML = renderNativeAlert({
             messages: {success: `Login successful. Use ${link} to edit later.`}, status: undefined,
         });
         const {wrapper, context} = await renderHelp(help, '/frontend-pilot/help?doc=fixture', undefined,
@@ -330,8 +337,9 @@ describe('native shell and help presentation contract', () => {
         {target: '_blank', admitted: false},
         {target: '', admitted: false, download: true},
         {target: '', admitted: false, ctrlKey: true},
+        {target: '_self', admitted: false, href: '/frontend-pilot/help/assets/diagram.png?locale=en'},
     ])('uses the shared ordinary-click policy for delegated Help links ($target, $admitted)', async variant => {
-        const content = '<a href="/help/fixture#fixture-task" target="' + variant.target + '"'
+        const content = '<a href="' + (variant.href ?? '/help/fixture#fixture-task') + '" target="' + variant.target + '"'
             + (variant.download ? ' download' : '') + '><span>Follow task</span></a>';
         const {wrapper, context, router} = await renderHelp({...help, content});
         const push = vi.spyOn(router, 'push');
@@ -539,13 +547,15 @@ describe('native shell and help presentation contract', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
-    it.each(['info', 'success', 'error'] as const)('keeps a full %s message expired across translation until its semantic receipt renews', async kind => {
+    // Message kind changes styling, not this semantic lifetime. The separate
+    // native presentation oracle below retains all three kind comparisons.
+    it('keeps a full success message expired across translation until its semantic receipt renews', async () => {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
         const {wrapper, context, router} = await renderHelp();
         const path = '/frontend-pilot/message-fixture';
         router.addRoute({path, component: defineComponent({
-            render: () => h(PageMessage, {kind, message: context.messages.value.t('auth.recoverySent'),
+            render: () => h(PageMessage, {kind: 'success', message: context.messages.value.t('auth.recoverySent'),
                 renewal: context.pageCompletion.value}),
         })});
         try {
@@ -587,7 +597,7 @@ describe('native shell and help presentation contract', () => {
         const message = 'Synthetic native message';
         const native = document.createElement('div');
         const nativeDocument = document.createElement('div');
-        nativeDocument.innerHTML = pug.renderFile(resolve('src/views/message.pug'), {
+        nativeDocument.innerHTML = renderNativeMessage({
             status: kind, message, messages: {}, version: session.shell.version,
             nxtUrl: '/', profile: undefined, permData: undefined,
             settings: {imprintUrl: session.shell.imprintUrl, privacyPolicyUrl: session.shell.privacyPolicyUrl}, data: {},
@@ -844,6 +854,24 @@ describe('native shell and help presentation contract', () => {
         expect(native.querySelector('.help-toc a')?.textContent).toBe('Eine Aufgabe');
     });
 
+    it('visibly identifies English fallback search results while preserving the selected interface language', async () => {
+        const result = await renderHelp({...help, locale: 'de', contentLocale: 'de', fallbackToEnglish: true,
+            content: '', toc: [], searchQuery: 'fixture', searchResults: [
+                {title: 'English result', url: '/help/fixture?locale=de#fixture-task', contentLocale: 'en',
+                    sectionTitle: 'An English task', excerpt: 'Reviewed English excerpt'},
+            ]}, '/frontend-pilot/help?q=fixture&locale=de', undefined, {session: {...session, locale: 'de'}});
+        try {
+            expect(result.wrapper.get('.help-language-fallback').text()).toContain('werden auf Englisch angezeigt');
+            const link = result.wrapper.get('.help-search-results .list-group-item');
+            expect(link.attributes('href')).toContain('locale=de');
+            expect(link.get('h3').text()).toBe('English result (Englisch)');
+            expect(link.get('h3 span[lang="en"]').text()).toBe('English result');
+            expect(link.get('p.small').attributes('lang')).toBe('en');
+            expect(link.get('p.mb-0').attributes('lang')).toBe('en');
+            expect(link.text()).toContain('In “An English task”');
+        } finally { result.wrapper.unmount(); result.context.queryClient.clear(); }
+    });
+
     it('clears a recovered locale error without clearing the independent session-read warning', async () => {
         let rejectPreference = true;
         const request = vi.fn(async () => {
@@ -878,7 +906,9 @@ describe('native shell and help presentation contract', () => {
         const {wrapper, router, context} = await renderHelp(data);
         try {
             const links = wrapper.findAll('.help-content a');
-            const searchLink = new URL(links[0].attributes('href'), 'https://fixture.test');
+            const searchHref = links[0].attributes('href');
+            if (searchHref === undefined) throw new Error('Expected the rendered Help search href');
+            const searchLink = new URL(searchHref, 'https://fixture.test');
             expect(searchLink.pathname).toBe('/frontend-pilot/help/search');
             expect(Object.fromEntries(searchLink.searchParams)).toEqual({q: 'packing', source: 'fixture', locale: 'en'});
             expect(searchLink.hash).toBe('#fixture-task');
@@ -903,7 +933,9 @@ describe('native shell and help presentation contract', () => {
         try {
             await router.push(path);
             await flushPromises();
-            const link = new URL(wrapper.get('header a[aria-label="Help for this page"]').attributes('href'), 'https://fixture.test');
+            const helpHref = wrapper.get('header a[aria-label="Help for this page"]').attributes('href');
+            if (helpHref === undefined) throw new Error('Expected the contextual Help href');
+            const link = new URL(helpHref, 'https://fixture.test');
             expect(link.searchParams.get('doc')).toBe(doc);
             if (path.includes('/guest/')) expect(link.hash).toBe('#join-an-invitation-as-a-guest');
         } finally { wrapper.unmount(); context.queryClient.clear(); }
@@ -935,10 +967,11 @@ describe('native shell and help presentation contract', () => {
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
         const disclosed = ref(false);
         const message = ref('state.saved' as const);
+        const receipt = ref(0);
         const dismiss = vi.fn();
         const wrapper = mount(defineComponent({components: {StatusNotice},
-            setup: () => ({disclosed, message, dismiss}),
-            template: '<section v-show="disclosed"><StatusNotice :notice="message" @dismiss="dismiss">Saved</StatusNotice></section>',
+            setup: () => ({disclosed, message, receipt, dismiss}),
+            template: '<section v-show="disclosed"><StatusNotice :notice="message" :renewal="receipt" @dismiss="dismiss">Saved</StatusNotice></section>',
         }), {attachTo: document.body});
         try {
             await vi.advanceTimersByTimeAsync(11_000);
@@ -950,6 +983,16 @@ describe('native shell and help presentation contract', () => {
             await vi.advanceTimersByTimeAsync(1);
             expect(dismiss).toHaveBeenCalledOnce();
             expect(wrapper.find('.alert-success').exists()).toBe(true);
+            // The actual reactive owner can renew an identical receipt. Disposal
+            // before its deadline must cancel the shared scheduler rather than
+            // emit a late dismissal into a retired component.
+            receipt.value++;
+            await flushPromises();
+            await vi.advanceTimersByTimeAsync(9000);
+            expect(vi.getTimerCount()).toBe(1);
+            wrapper.unmount();
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(dismiss).toHaveBeenCalledOnce();
         } finally { wrapper.unmount(); }
         expect(vi.getTimerCount()).toBe(0);
     });

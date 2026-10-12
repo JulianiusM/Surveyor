@@ -7,11 +7,12 @@
     "types": [
       "@playwright/test",
       "node",
-      "jquery"
+      "jquery",
+      "vite/client"
     ]
   },
   "include": [
-    "src/**/*.ts",
+    "src/types/**/*.d.ts",
     "tests/**/*.ts",
     "tests/**/*.d.ts"
   ]

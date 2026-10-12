@@ -3,10 +3,13 @@ import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue';
 import {usePilot} from '../app/context';
 import {useDraftProtection} from '../composables/command';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     value: string | number | null;
     token: string;
     editable: boolean;
+    // Native field affordance can be broader than its browser write guard.
+    // The feature supplies that distinction; this component derives no grants.
+    writeAdmission?: boolean;
     label: string;
     numeric?: boolean;
     // Input presentation does not define a feature's accepted values. Callers opt
@@ -15,8 +18,8 @@ const props = defineProps<{
     maxLength?: number;
     disabled?: boolean;
     save: (value: string, token: string) => Promise<boolean>;
-}>();
-const emit = defineEmits<{editing: [active: boolean]}>();
+}>(), {writeAdmission: true});
+const emit = defineEmits<{editing: [active: boolean]; denied: [source?: Event]}>();
 const context = usePilot();
 const {messages} = context;
 const editing = ref(false);
@@ -48,18 +51,29 @@ useDraftProtection({
 watch(
     () => props.editable,
     (allowed) => {
-        if (!allowed && !pending.value) cancel();
+        // Field-only grant loss does not revoke the readable row or discard its
+        // dirty draft. Retain that disabled input until explicit Cancel/departure.
+        if (!allowed && !pending.value && !dirty.value) cancel();
     },
 );
 
-async function begin(): Promise<void> {
+/** Capture the displayed value and comparison token once on editor entry.
+ * Display permission remains distinct from command admission; the original
+ * lexical value also preserves native trim/no-change and focus behavior. */
+async function begin(source?: Event): Promise<void> {
     if (!props.editable || props.disabled || editing.value) return;
+    if (!props.writeAdmission) {
+        emit('denied', source);
+        return;
+    }
+
     original.value = String(props.value ?? '');
     editableOriginal.value = original.value.trim();
     local.value = editableOriginal.value;
     token.value = props.token;
     editing.value = true;
     emit('editing', true);
+
     await nextTick();
     // Native editing focuses the existing value without selecting it. Selecting
     // here changes the first typed character from an insertion into a replacement.
@@ -78,16 +92,27 @@ function review(): void {
     editableOriginal.value = original.value.trim();
     void nextTick(() => input.value?.focus());
 }
-async function commit(): Promise<void> {
+/** Submit only this editor's reviewed draft through its injected save owner.
+ * Current write admission and declared field constraints are checked first;
+ * rejected/unconfirmed writes keep the input, and pending blur/Enter cannot duplicate it. */
+async function commit(source?: Event): Promise<void> {
     if (!editing.value || !props.editable || props.disabled || pending.value || remoteChanged.value) return;
     if (!dirty.value) {
         cancel();
+        return;
+    }
+
+    // A refreshed write grant can retire while the user's readable draft stays
+    // mounted. Neither an old input nor a synthetic blur authorizes submission.
+    if (!props.writeAdmission) {
+        emit('denied', source);
         return;
     }
     // Native inline editors submit on blur/Enter without validating a containing
     // form. A number input's implicit step must not add a new rejection policy;
     // validate only constraints explicitly supplied by the field's owner.
     if ((props.required || props.maxLength !== undefined) && !input.value?.reportValidity()) return;
+
     pending.value = true;
     try {
         if (await props.save(local.value.trim(), token.value)) {
@@ -127,9 +152,13 @@ onBeforeUnmount(() => {
                 @keydown.enter.prevent="commit"
                 @keydown.esc.prevent="cancel"
             />
+            <button v-if="!editable && !remoteChanged" type="button"
+                class="btn btn-sm btn-outline-secondary mt-1" :disabled="pending || disabled" @click="cancel">
+                {{ messages.t('common.cancel') }}
+            </button>
             <div v-if="remoteChanged" class="pilot-inline-conflict small text-warning mt-1">
-                {{ messages.t('packing.readConflict') }}
-                <div>{{ messages.t('packing.conflictValue', {value: String(value ?? '')}) }}</div>
+                {{ messages.t('draft.readConflict') }}
+                <div>{{ messages.t('draft.conflictValue', {value: String(value ?? '')}) }}</div>
                 <button
                     type="button"
                     class="btn btn-sm btn-outline-warning"

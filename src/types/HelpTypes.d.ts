@@ -6,3 +6,10 @@ export type HelpNavigationGroup = components['schemas']['HelpNavigationGroup'];
 export type HelpTocEntry = components['schemas']['HelpTocEntry'];
 export type HelpSearchResult = components['schemas']['HelpSearchResult'];
 export type HelpPageData = components['schemas']['HelpPageData'];
+
+/** Trusted release asset selected by the Help controller. Routes use the actual
+ * source language for HTTP disclosure and never derive a filesystem root themselves. */
+export interface HelpAssetSource {
+    readonly filePath: string;
+    readonly locale?: string;
+}

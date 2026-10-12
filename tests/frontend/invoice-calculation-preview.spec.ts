@@ -238,7 +238,8 @@ describe('invoice calculation preview', () => {
 const invoiceRenderers = new Map<string, ReturnType<typeof pug.compile>>();
 
 /** Render the production mixin with fresh feature data, without an application, session, or database. */
-function renderInvoiceFragment(fragment: string, pool: Record<string, unknown>, savedShare?: Preview['shares'][number]): string {
+function renderInvoiceFragment(fragment: string, pool: Record<string, unknown>, savedShare?: Preview['shares'][number],
+                               locals: Record<string, unknown> = {}): string {
     let renderer = invoiceRenderers.get(fragment);
     if (!renderer) {
         const filename = resolve('src/views/modules/module_invoice_pool.pug');
@@ -249,7 +250,11 @@ function renderInvoiceFragment(fragment: string, pool: Record<string, unknown>, 
         invoiceRenderers.set(fragment, renderer);
     }
     // The same presentation owner supplies optional columns and wording to real renderer calls.
-    return renderer({pool, share: savedShare, ui: invoicePresentation});
+    // Personal ledgers use the same fixed invocation for one or many pools and
+    // different participants. Only fresh render locals vary, so those financial
+    // and privacy fixtures need not parse the complete production mixin again.
+    return renderer({pool, share: savedShare, ui: invoicePresentation,
+        registrationId: 1, pools: [pool], participants: [], ...locals});
 }
 
 describe('rendered invoice overviews', () => {
@@ -274,7 +279,7 @@ describe('rendered invoice overviews', () => {
         const pool = {id: 'captions', name: 'Shared costs', status: 'CLOSED', shares: [saved],
             calculationSnapshot: {takeovers: []}, takeovers: []};
         const organizer = renderInvoiceFragment("+invoiceShareTable(pool, [], true, 'test-event', ui)", pool);
-        const personal = renderInvoiceFragment('+participantShareSummary(1, [pool], ui)', pool);
+        const personal = renderInvoiceFragment('+participantShareSummary(registrationId, pools, ui, participants)', pool);
         expect(organizer).toContain('data-share-balance-note');
         expect(organizer).toContain(invoicePresentation.balanceCaption(saved, 'organizer'));
         expect(personal).toContain('data-share-balance-note');
@@ -307,7 +312,7 @@ describe('rendered invoice overviews', () => {
         const notice = invoicePresentation.settledShareNotice(pool, saved, []);
         expect(notice).not.toBeNull();
         const organizer = renderInvoiceFragment("+invoiceShareTable(pool, [], true, 'test-event', ui)", pool);
-        const personal = renderInvoiceFragment('+participantShareSummary(1, [pool], ui)', pool);
+        const personal = renderInvoiceFragment('+participantShareSummary(registrationId, pools, ui, participants)', pool);
         for (const output of [organizer, personal]) {
             expect(output).toContain('data-share-settlement-history');
             expect(output).toContain(notice!.label);
@@ -492,7 +497,8 @@ describe('rendered invoice overviews', () => {
                     isExempt: false, effectiveWeight: 1, weightNumerator: '1', baseShareAmount: 25},
             ]};
         const pool = {name: 'Travel costs', shares: [other, personal], calculationSnapshot: {explanation, surcharges: []}};
-        const output = renderInvoiceFragment('+participantShareSummary(2, [pool], ui)', pool);
+        const output = renderInvoiceFragment('+participantShareSummary(registrationId, pools, ui, participants)', pool,
+            undefined, {registrationId: 2});
         expect(output).toContain('Base share for Personal payer name');
         expect(output).not.toContain('Private payer name');
         expect(output).not.toContain('Participant A');
@@ -524,9 +530,8 @@ describe('rendered invoice overviews', () => {
     it('renders hundreds of personal pool rows with one reusable modal and the established display controls', () => {
         const pools = Array.from({length: 180}, (_, index) => ({id: `pool-${index}`, name: `Pool ${index}`,
             shares: [share({paymentCreditAmount: 0, shareAmount: 75})]}));
-        const filename = resolve('src/views/modules/module_invoice_pool.pug');
-        const output = pug.render(readFileSync(filename, 'utf8') + '\n+participantShareSummary(1, pools, ui)',
-            {filename, pools, ui: invoicePresentation});
+        const output = renderInvoiceFragment('+participantShareSummary(registrationId, pools, ui, participants)', {},
+            undefined, {pools});
         expect(output.match(/data-personal-share-ledger=/g)).toHaveLength(1);
         expect(output.match(/data-share-row=/g)).toHaveLength(180);
         expect(output.match(/class="modal fade pool-edit-modal"/g)).toHaveLength(1);
@@ -539,12 +544,11 @@ describe('rendered invoice overviews', () => {
     });
 
     it('uses the explicitly supplied participant name for a legacy credit-only personal payer', () => {
-        const filename = resolve('src/views/modules/module_invoice_pool.pug');
         const pool = {id: 'legacy', name: 'Earlier travel costs',
             shares: [share({payerName: undefined, baseShareAmount: 0, paymentCreditAmount: 50, shareAmount: -50})]};
         const participants = [{id: 1, name: 'Known former payer'}, {id: 2, name: 'Private participant'}];
-        const output = pug.render(readFileSync(filename, 'utf8') + '\n+participantShareSummary(1, [pool], ui, participants)',
-            {filename, pool, participants, ui: invoicePresentation});
+        const output = renderInvoiceFragment('+participantShareSummary(registrationId, pools, ui, participants)', pool,
+            undefined, {participants});
         expect(output).toContain('Calculated balance for Known former payer');
         expect(output).not.toContain('Private participant');
         expect(output).not.toContain('Participant A');

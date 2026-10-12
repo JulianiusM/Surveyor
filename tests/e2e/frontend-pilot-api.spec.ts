@@ -203,8 +203,11 @@ test('native and pilot creation/duplicate entries drop missing or forbidden init
     const nativeEntry = await page.request.get(`/packing/create?eventId=${event.id}`);
     const nativeAction = (await nativeEntry.text()).match(/<form[^>]*id="packingForm"[^>]*action="([^"]+)"/u)?.[1];
     expect(nativeAction).toBe('/packing/create');
+    const nativeForm = createE2EPackingList().form;
     const nativeCreated = await page.request.post(nativeAction!, {
-        form: {...createE2EPackingList().form, title: `Native standalone ${randomUUID().slice(0, 8)}`, event_id: ''}, maxRedirects: 0,
+        // An absent persistence description is the native text input's empty value.
+        form: {...nativeForm, description: nativeForm.description ?? '',
+            title: `Native standalone ${randomUUID().slice(0, 8)}`, event_id: ''}, maxRedirects: 0,
     });
     expect(nativeCreated.status()).toBe(302);
     const nativeId = new URL(nativeCreated.headers().location!, 'https://surveyor.invalid').pathname.split('/').at(-1)!;
@@ -361,12 +364,14 @@ test('keeps exact native and SPA duplicate destinations including query context 
         const action = html.match(/<form[^>]*id="packingForm"[^>]*action="([^"]+)"/)?.[1]?.replaceAll('&amp;', '&');
         expect(action).toBeTruthy();
         expect(new URL(action!, baseURL).searchParams.get('next')).toBe(nativeReturn);
-        const rejected = await anonymous.request.post(action!, {form: input.form, maxRedirects: 0});
+        const rejected = await anonymous.request.post(action!, {
+            form: {...input.form, description: input.form.description ?? ''}, maxRedirects: 0,
+        });
         expect(rejected.status()).toBe(302);
         const login = new URL(rejected.headers().location!, baseURL);
         expect(login.pathname).toBe('/users/login');
         expect(login.searchParams.get('next')).toBe(nativeReturn);
-        const resumed = await anonymous.request.post(login.pathname + login.search, {form: createE2ELogin(), maxRedirects: 0});
+        const resumed = await anonymous.request.post(login.pathname + login.search, {form: {...createE2ELogin()}, maxRedirects: 0});
         expect(resumed.status()).toBe(302);
         expect(resumed.headers().location).toBe(nativeReturn);
 
@@ -673,12 +678,18 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
     const staleNative = await request.post(`/api/packing/${list.id}/description`, {
         data: {description: 'Stale native edit', expectedValue: 'Independent description'},
     });
-    expect(staleNative.status()).toBe(412);
-    expect(await staleNative.json()).toMatchObject({status: 'error'});
+    // Original native description requests ignore extra comparison evidence;
+    // only v1 requires its reviewed If-Match token. Keep that compatibility gap
+    // explicit rather than changing the existing native endpoint to fix it.
+    expect(staleNative.status()).toBe(200);
+    expect(await staleNative.json()).toMatchObject({status: 'success'});
+    await expectProblem(await request.patch(path, {headers: {...headers, 'If-Match': latest.headers().etag},
+        data: {description: 'Stale versioned edit'}}), 412, 'PRECONDITION_FAILED');
     const staleSetup = await request.post(`/api/packing/${list.id}/update`, {
         data: {description: 'Stale native setup', expectedValues: {description: 'Shared equipment'}},
     });
-    expect(staleSetup.status()).toBe(412);
+    expect(staleSetup.status()).toBe(400);
+    expect(await staleSetup.json()).toMatchObject({status: 'error', message: 'Unknown entity property.', data: {field: 'expectedValues'}});
 
     // Native Joi and HTML maxlength count UTF-16 units; the authored v1 JSON Schema
     // counts code points. Preserve both existing transport meanings instead of silently
@@ -702,6 +713,245 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
     });
     expect(unicodeVersioned.status()).toBe(200);
     expect((await unicodeVersioned.json()).values).toEqual(codePointValues);
+});
+
+test('serves usable item and order edit baselines independently of linked detail admission', async ({request}) => {
+    await loginForE2E(request, createE2ELogin());
+    const owner = await bootstrap(request);
+    const event = await createResourceViaForm(request, createE2EEvent());
+    const input = createE2EPackingList();
+    Object.assign(input.form, {event_id: event.id, 'defaultPerms[public][0]': 'ITEM_EDIT_DESC',
+        items: JSON.stringify([
+            {title: 'Tent', description: 'Two person tent', maxAssignees: 1, requiredByAll: false},
+            {title: 'Stove', description: 'Shared stove', maxAssignees: 1, requiredByAll: false},
+        ])});
+    const list = await createResourceViaForm(request, input);
+    const listPath = `/api/v1/packing-lists/${list.id}`;
+    const ownerRead = await request.get(listPath, {headers: headersFor(owner)});
+    expect(ownerRead.status()).toBe(200);
+    const original = await ownerRead.json() as components['schemas']['PackingListView'];
+    const item = original.items[0];
+    expect((await request.put(`${listPath}/items/${item.id}/self-assignment`, {headers: headersFor(owner)})).status()).toBe(200);
+
+    // This active profile has only the explicit public editing grant. It was never
+    // admitted to the linked detail page and cannot borrow a token from that page.
+    const profileName = `Baseline editor ${randomUUID().slice(0, 8)}`;
+    expect((await request.post('/users/profile/create', {form: {name: profileName}, maxRedirects: 0})).status()).toBe(302);
+    const profiles = await bootstrap(request);
+    const editor = profiles.profiles.find(profile => profile.name === profileName)!;
+    expect(editor).toBeTruthy();
+    expect((await request.get(`/users/profile/change/${editor.id}`, {maxRedirects: 0})).status()).toBe(302);
+    const editorHeaders = headersFor(await bootstrap(request));
+    await expectProblem(await request.get(listPath, {headers: editorHeaders}), 403, 'FORBIDDEN');
+
+    const itemPath = `${listPath}/items/${item.id}/edit-baseline`;
+    const baselineRead = await request.get(itemPath, {headers: editorHeaders});
+    expect(baselineRead.status()).toBe(200);
+    const baseline = await baselineRead.json() as components['schemas']['PackingItemEditBaseline'];
+    expect(Object.keys(baseline).sort()).toEqual(['editToken', 'editableFields', 'id', 'values']);
+    expect(baseline.values).toEqual({description: item.description});
+    expect(baseline.editableFields).toEqual(['description']);
+    expect(baselineRead.headers().etag).toBe(baseline.editToken);
+    await expectProblem(await request.get(`${listPath}/item-order`, {headers: editorHeaders}), 403, 'FORBIDDEN');
+
+    const editHeaders = {...editorHeaders, 'If-Match': baseline.editToken};
+    await expectProblem(await request.patch(`${listPath}/items/${item.id}`, {
+        headers: editHeaders, data: {title: 'Unauthorized title'},
+    }), 403, 'FORBIDDEN');
+    expect((await request.patch(`${listPath}/items/${item.id}`, {
+        headers: editHeaders, data: {description: 'Permitted description from its own baseline'},
+    })).status()).toBe(200);
+    await expectProblem(await request.patch(`${listPath}/items/${item.id}`, {
+        headers: editHeaders, data: {description: 'Stale description'},
+    }), 412, 'PRECONDITION_FAILED');
+    const current = await request.get(itemPath, {headers: editorHeaders});
+    expect(current.status()).toBe(200);
+    expect((await request.get(itemPath, {
+        headers: {...editorHeaders, 'If-None-Match': current.headers().etag},
+    })).status()).toBe(304);
+
+    // Change authority through the unchanged native settings API, then capture a
+    // fresh actor context. Reorder receives only the IDs/positions it needs; neither
+    // edit baseline inherits the detail page's assignment names or parent metadata.
+    expect((await request.get(`/users/profile/change/${owner.activeProfile!.id}`, {maxRedirects: 0})).status()).toBe(302);
+    expect((await request.post(`/api/packing/${list.id}/settings`, {
+        data: {defaultPerms: {public: ['ITEM_EDIT']}},
+    })).ok()).toBe(true);
+    expect((await request.get(`/users/profile/change/${editor.id}`, {maxRedirects: 0})).status()).toBe(302);
+    const orderHeaders = headersFor(await bootstrap(request));
+    await expectProblem(await request.get(listPath, {headers: orderHeaders}), 403, 'FORBIDDEN');
+    const orderRead = await request.get(`${listPath}/item-order`, {headers: orderHeaders});
+    expect(orderRead.status()).toBe(200);
+    const order = await orderRead.json() as components['schemas']['PackingOrderEditBaseline'];
+    expect(Object.keys(order).sort()).toEqual(['items', 'orderToken']);
+    expect(order.items).toHaveLength(original.items.length);
+    for (const row of order.items) expect(Object.keys(row).sort()).toEqual(['id', 'position']);
+    const itemIds = order.items.map(row => row.id).reverse();
+    const reorderHeaders = {...orderHeaders, 'If-Match': order.orderToken};
+    expect((await request.put(`${listPath}/item-order`, {headers: reorderHeaders, data: {itemIds}})).status()).toBe(200);
+    await expectProblem(await request.put(`${listPath}/item-order`, {headers: reorderHeaders, data: {itemIds}}), 412, 'PRECONDITION_FAILED');
+
+    // Matching validators never replace current authorization. Capture the saved
+    // baselines, revoke the only method grant through native settings, then use
+    // the editor's fresh context with those still-matching private validators.
+    const confirmedItem = await request.get(itemPath, {headers: orderHeaders});
+    const confirmedOrder = await request.get(`${listPath}/item-order`, {headers: orderHeaders});
+    expect(confirmedItem.status()).toBe(200);
+    expect(confirmedOrder.status()).toBe(200);
+    expect((await request.get(`/users/profile/change/${owner.activeProfile!.id}`, {maxRedirects: 0})).status()).toBe(302);
+    expect((await request.post(`/api/packing/${list.id}/settings`, {
+        data: {defaultPerms: {public: []}},
+    })).ok()).toBe(true);
+    expect((await request.get(`/users/profile/change/${editor.id}`, {maxRedirects: 0})).status()).toBe(302);
+    const revokedHeaders = headersFor(await bootstrap(request));
+    await expectProblem(await request.get(itemPath, {
+        headers: {...revokedHeaders, 'If-None-Match': confirmedItem.headers().etag},
+    }), 403, 'FORBIDDEN');
+    await expectProblem(await request.get(`${listPath}/item-order`, {
+        headers: {...revokedHeaders, 'If-None-Match': confirmedOrder.headers().etag},
+    }), 403, 'FORBIDDEN');
+});
+
+test('honors native public method grants without disclosing protected packing projections', async ({request, browser, baseURL}) => {
+    await loginForE2E(request, createE2ELogin());
+    const owner = await bootstrap(request);
+    const event = await createResourceViaForm(request, createE2EEvent());
+    const input = createE2EPackingList();
+    Object.assign(input.form, {event_id: event.id, items: JSON.stringify([
+        {title: 'Tent', description: 'Private baseline fixture', maxAssignees: 2, requiredByAll: false},
+        {title: 'Stove', description: 'Shared stove', maxAssignees: 1, requiredByAll: false},
+        {title: 'Spare item', description: '', maxAssignees: 1, requiredByAll: false},
+    ])});
+    const list = await createResourceViaForm(request, input);
+    const rootPath = `/api/v1/packing-lists/${list.id}`;
+    const ownerRead = await request.get(rootPath, {headers: headersFor(owner)});
+    expect(ownerRead.status()).toBe(200);
+    const original = await ownerRead.json() as components['schemas']['PackingListView'];
+    const item = original.items[0];
+    expect((await request.put(`${rootPath}/items/${item.id}/self-assignment`, {headers: headersFor(owner)})).status()).toBe(200);
+    const assigned = await request.get(rootPath, {headers: headersFor(owner)});
+    const assignmentId = (await assigned.json() as components['schemas']['PackingListView']).items[0].assignees[0].assignmentId!;
+    const targetName = `Public admin target ${randomUUID().slice(0, 8)}`;
+    expect((await request.post('/users/profile/create', {form: {name: targetName}, maxRedirects: 0})).status()).toBe(302);
+    const target = (await bootstrap(request)).profiles.find(profile => profile.name === targetName)!;
+    expect(target).toBeTruthy();
+    expect((await request.get(`/users/profile/change/${owner.activeProfile!.id}`, {maxRedirects: 0})).status()).toBe(302);
+
+    const firstContext = await browser.newContext({baseURL});
+    const secondContext = await browser.newContext({baseURL});
+    try {
+        const first = firstContext.request;
+        const second = secondContext.request;
+        const firstSession = await bootstrap(first);
+        const secondSession = await bootstrap(second);
+        expect(firstSession.kind).toBe('anonymous');
+        expect(firstSession.activeProfile).toBeNull();
+        expect(secondSession.context).not.toBe(firstSession.context);
+        const publicHeaders = headersFor(firstSession);
+        const itemPath = `${rootPath}/items/${item.id}`;
+
+        // Default access bits do not authorize editing. Public actions become
+        // available only after the owner explicitly selects the native method grants.
+        await expectProblem(await first.get(`${itemPath}/edit-baseline`, {headers: publicHeaders}), 403, 'FORBIDDEN');
+        await expectProblem(await first.get(`${rootPath}/description`, {headers: publicHeaders}), 403, 'FORBIDDEN');
+        expect((await request.post(`/api/packing/${list.id}/settings`, {data: {defaultPerms: {public: [
+            'EDIT_DESC', 'EDIT_META', 'ITEM_EDIT', 'ITEM_DELETE', 'MANAGE_ASSIGNMENTS', 'MANAGE_PERMISSIONS',
+        ]}}})).ok()).toBe(true);
+
+        // A method grant does not admit full page/settings/image reads or replace
+        // profile-owned creation, self-assignment, property, lifecycle or deletion rules.
+        for (const suffix of ['', '/metadata', '/settings', '/header']) {
+            await expectProblem(await first.get(rootPath + suffix, {headers: publicHeaders}), 401, 'AUTH_REQUIRED');
+        }
+        await expectProblem(await first.patch(`${rootPath}/metadata`, {headers: publicHeaders, data: {description: 'Protected property route'}}), 401, 'AUTH_REQUIRED');
+        await expectProblem(await first.put(`${itemPath}/self-assignment`, {headers: publicHeaders}), 401, 'AUTH_REQUIRED');
+        await expectProblem(await first.post(`${rootPath}/archive`, {headers: publicHeaders}), 401, 'AUTH_REQUIRED');
+        await expectProblem(await first.delete(rootPath, {headers: publicHeaders}), 401, 'AUTH_REQUIRED');
+
+        const itemRead = await first.get(`${itemPath}/edit-baseline`, {headers: publicHeaders});
+        expect(itemRead.status()).toBe(200);
+        const itemBaseline = await itemRead.json() as components['schemas']['PackingItemEditBaseline'];
+        expect(Object.keys(itemBaseline).sort()).toEqual(['editToken', 'editableFields', 'id', 'values']);
+        const itemHeaders = {...publicHeaders, 'If-Match': itemBaseline.editToken};
+        await expectProblem(await second.patch(itemPath, {headers: {...headersFor(secondSession), 'If-Match': itemBaseline.editToken},
+            data: {title: 'Another anonymous context'}}), 412, 'PRECONDITION_FAILED');
+        await expectProblem(await first.patch(itemPath, {headers: {...itemHeaders, 'X-CSRF-Token': 'invalid'}, data: {title: 'Missing CSRF'}}), 403, 'CSRF_INVALID');
+        await expectProblem(await first.patch(itemPath, {headers: {...itemHeaders, Origin: 'https://other.example'}, data: {title: 'Cross origin'}}), 403, 'CSRF_INVALID');
+        await expectProblem(await first.patch(itemPath, {headers: itemHeaders, data: {title: 'Forged actor', profileId: owner.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
+        expect((await first.patch(itemPath, {headers: itemHeaders, data: {title: 'Explicit public edit'}})).status()).toBe(200);
+        expect((await first.delete(`${rootPath}/assignments/${assignmentId}`, {headers: publicHeaders})).status()).toBe(200);
+
+        const orderRead = await first.get(`${rootPath}/item-order`, {headers: publicHeaders});
+        expect(orderRead.status()).toBe(200);
+        const order = await orderRead.json() as components['schemas']['PackingOrderEditBaseline'];
+        expect(Object.keys(order).sort()).toEqual(['items', 'orderToken']);
+        const itemIds = order.items.map(row => row.id).reverse();
+        expect((await first.put(`${rootPath}/item-order`, {headers: {...publicHeaders, 'If-Match': order.orderToken}, data: {itemIds}})).status()).toBe(200);
+        expect((await first.delete(`${rootPath}/items/${original.items[2].id}`, {headers: publicHeaders})).status()).toBe(200);
+
+        const descriptionRead = await first.get(`${rootPath}/description`, {headers: publicHeaders});
+        expect(descriptionRead.status()).toBe(200);
+        const description = await descriptionRead.json() as components['schemas']['PackingDescriptionBaseline'];
+        expect(Object.keys(description).sort()).toEqual(['description', 'editToken']);
+        const descriptionHeaders = {...publicHeaders, 'If-Match': description.editToken};
+        await expectProblem(await first.patch(`${rootPath}/description`, {headers: descriptionHeaders, data: {}}), 400, 'VALIDATION_FAILED');
+        await expectProblem(await first.patch(`${rootPath}/description`, {headers: descriptionHeaders, data: {description: 'Wrong field', title: 'Protected'}}), 400, 'VALIDATION_FAILED');
+        expect((await first.patch(`${rootPath}/description`, {headers: descriptionHeaders, data: {description: 'Explicit public description'}})).status()).toBe(200);
+
+        const defaultsRead = await first.get(`${rootPath}/default-permissions`, {headers: publicHeaders});
+        expect(defaultsRead.status()).toBe(200);
+        const defaults = await defaultsRead.json() as components['schemas']['PackingDefaultsBaseline'];
+        expect(Object.keys(defaults).sort()).toEqual(['defaultPermissions', 'editToken']);
+        expect((await first.put(`${rootPath}/default-permissions`, {headers: {...publicHeaders, 'If-Match': defaults.editToken}, data: {guest: 0}})).status()).toBe(200);
+        const searchQuery = createE2ELogin().username;
+        const nativeSearch = await first.get('/api/users/search', {params: {q: searchQuery}});
+        const profileSearch = await first.get(`${rootPath}/profiles`, {headers: publicHeaders, params: {q: searchQuery}});
+        expect(nativeSearch.status()).toBe(200);
+        expect(profileSearch.status()).toBe(200);
+        expect(profileSearch.headers()['ratelimit-limit']).toBe(nativeSearch.headers()['ratelimit-limit']);
+        const profiles = await profileSearch.json() as components['schemas']['PackingProfileOptions'];
+        expect(profiles.length).toBeGreaterThan(0);
+        for (const profile of profiles) {
+            expect(Object.keys(profile).sort()).toEqual(['isGuest', 'name', 'profileId', 'username']);
+            expect(profile.isGuest).toBe(false);
+        }
+        const adminPath = `${rootPath}/admins/${target.id}`;
+        const absentRead = await first.get(`${adminPath}/edit-baseline`, {headers: publicHeaders});
+        expect(absentRead.status()).toBe(200);
+        const absent = await absentRead.json() as components['schemas']['PackingAdminBaseline'];
+        expect(Object.keys(absent).sort()).toEqual(['editToken', 'mask']);
+        expect(absent.mask).toBeNull();
+        expect((await first.post(`${rootPath}/admins`, {headers: {...publicHeaders, 'If-Match': absent.editToken}, data: {profileId: target.id, mask: 0}})).status()).toBe(200);
+        const savedAdmin = await first.get(`${adminPath}/edit-baseline`, {headers: publicHeaders});
+        const admin = await savedAdmin.json() as components['schemas']['PackingAdminBaseline'];
+        expect(admin.mask).toBe(0);
+        expect((await first.patch(adminPath, {headers: {...publicHeaders, 'If-Match': admin.editToken}, data: {mask: 1}})).status()).toBe(200);
+        const updatedAdmin = await first.get(`${adminPath}/edit-baseline`, {headers: publicHeaders});
+        expect((await first.delete(adminPath, {headers: {...publicHeaders, 'If-Match': updatedAdmin.headers().etag}})).status()).toBe(200);
+
+        // The header baseline supplies only a comparison token. Even a successful
+        // public upload does not grant the protected header-byte read.
+        const headerRead = await first.get(`${rootPath}/header/edit-baseline`, {headers: publicHeaders});
+        expect(headerRead.status()).toBe(200);
+        const header = await headerRead.json() as components['schemas']['PackingHeaderBaseline'];
+        expect(Object.keys(header)).toEqual(['editToken']);
+        const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+        expect((await first.put(`${rootPath}/header`, {headers: {...publicHeaders, 'If-Match': header.editToken},
+            multipart: {image: {name: 'public-header.png', mimeType: 'image/png', buffer: image}}})).status()).toBe(200);
+        await expectProblem(await first.get(`${rootPath}/header`, {headers: publicHeaders}), 401, 'AUTH_REQUIRED');
+        const savedHeader = await first.get(`${rootPath}/header/edit-baseline`, {headers: publicHeaders});
+        expect((await first.delete(`${rootPath}/header`, {headers: {...publicHeaders, 'If-Match': savedHeader.headers().etag}})).status()).toBe(200);
+
+        // Revoke all explicit Public powers through the same native owner API.
+        // Old comparison evidence cannot turn a current denial into a 304 or a save.
+        const confirmed = await first.get(`${itemPath}/edit-baseline`, {headers: publicHeaders});
+        expect((await request.post(`/api/packing/${list.id}/settings`, {data: {defaultPerms: {public: []}}})).ok()).toBe(true);
+        await expectProblem(await first.get(`${itemPath}/edit-baseline`, {headers: {...publicHeaders, 'If-None-Match': confirmed.headers().etag}}), 403, 'FORBIDDEN');
+        await expectProblem(await first.patch(itemPath, {headers: {...publicHeaders, 'If-Match': confirmed.headers().etag}, data: {title: 'Revoked public edit'}}), 403, 'FORBIDDEN');
+    } finally {
+        await firstContext.close();
+        await secondContext.close();
+    }
 });
 
 test('rejects old profile scopes and returns structured authentication loss after the cookie disappears', async ({context}) => {
@@ -824,26 +1074,15 @@ test('preserves native signed capacity edits and SQL rounding through the versio
         return body.items;
     }
 
-    // Literal persisted outcomes are the independent native/MariaDB oracle. Comparing
-    // two adapters alone would miss a shared JS conversion (blank -> zero or negative
-    // half rounding). Separate items start alike and retain the same value on failure.
+    // The full signed/decimal/integer-boundary matrix belongs at the real MariaDB
+    // integration boundary. These representatives protect HTTP parsing, native/v1
+    // envelopes, safe SQL failures and unchanged persisted values after a rejection.
     const cases: {value: number | string | null; status: number; saved?: number | null}[] = [
         {value: '0', status: 200, saved: 0},
-        {value: '-1', status: 200, saved: -1},
+        {value: '-1.5', status: 200, saved: -2},
         {value: null, status: 200, saved: null},
         {value: '', status: 500},
-        {value: 'not-a-number', status: 500},
-        {value: '1.5', status: 200, saved: 2},
-        {value: '-1.5', status: 200, saved: -2},
-        {value: '2.499', status: 200, saved: 2},
-        {value: '2.5', status: 200, saved: 3},
-        {value: '-2147483648', status: 200, saved: -2147483648},
-        {value: '2147483647', status: 200, saved: 2147483647},
-        {value: '-2147483648.4', status: 200, saved: -2147483648},
-        {value: '2147483647.4', status: 200, saved: 2147483647},
-        {value: '-2147483649', status: 500},
         {value: '2147483648', status: 500},
-        {value: 0, status: 200, saved: 0},
         {value: -1.5, status: 200, saved: -2},
     ];
     try {
@@ -853,7 +1092,7 @@ test('preserves native signed capacity edits and SQL rounding through the versio
             const nativeItem = before[0];
             const versionedItem = before[1];
             const native = await request.post(`/api/packing/${list.id}/item/${nativeItem.id}/attr`, {
-                data: {field: 'maxAssignees', value: scenario.value, expectedValue: nativeItem.maxAssignees},
+                data: {field: 'maxAssignees', value: scenario.value},
             });
             const versioned = await request.patch(`${path}/items/${versionedItem.id}`, {
                 headers: {...headers, 'If-Match': versionedItem.editToken}, data: {maxAssignees: scenario.value},

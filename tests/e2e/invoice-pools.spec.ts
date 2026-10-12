@@ -280,6 +280,10 @@ test('previews invoice settlements, carries payments forward, and restores saved
         const organizerRegistration = participants.find(participant => participant.id !== guestRegistration.id)!;
         expect(participants).toHaveLength(2);
 
+        // Exercise the real delayed-feedback timers without spending ten and five seconds
+        // waiting on the clock. Network gates still hold actual committed responses below.
+        await page.clock.install();
+
         // Create with the rendered form so its allocation/credit checkboxes cross the real parsing boundary.
         await page.goto(`${event.path}/admin`);
         await page.getByRole('button', {name: 'Create pool', exact: true}).click();
@@ -327,6 +331,7 @@ test('previews invoice settlements, carries payments forward, and restores saved
             await expect(submission.getByLabel('Proof (image or PDF)')).toBeDisabled();
             await expect(submission.getByRole('status')).toContainText(/Uploading|Upload complete/);
             await submission.evaluate(form => form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})));
+            await page.clock.fastForward(11000);
             await expect(submission.getByRole('status')).toContainText('taking longer than usual', {timeout: 15000});
             expect(submissionCount).toBe(1);
         } finally {
@@ -361,6 +366,7 @@ test('previews invoice settlements, carries payments forward, and restores saved
             await expect(invoiceRow).toHaveAttribute('aria-busy', 'true');
             await expect(invoiceRow.getByRole('button', {name: 'Working…'})).toBeDisabled();
             await expect(invoiceRow.getByRole('button', {name: 'Reject', exact: true})).toBeDisabled();
+            await page.clock.fastForward(6000);
             await expect(invoiceRow.getByRole('status')).toContainText('Still working', {timeout: 8000});
             expect(reviewRequests).toBe(1);
         } finally {
@@ -397,6 +403,7 @@ test('previews invoice settlements, carries payments forward, and restores saved
             await expect(paid).toContainText('Record payment');
             await expect(paid.locator('.invoice-settlement-progress')).toBeVisible();
             await expectPaidPositions(pool, initialPositions);
+            await page.clock.fastForward(6000);
             await expect(pool.getByText(/Still working.*server has not confirmed/)).toBeVisible({timeout: 8000});
             await expectPaidPositions(pool, initialPositions);
         } finally { releasePayment(); }

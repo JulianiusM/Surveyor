@@ -17,12 +17,15 @@ describe('invoice shares PDF preferences', () => {
 
     it.each(['invalid', '', 0, 1, ['false'], ['true', 'false'], {value: false}, null])(
         'rejects an ambiguous or invalid preference %j', (example) => {
-            expect(() => prepareSharesPdfOptions({example})).toThrow(APIError);
+            // One rejection supplies both the error contract and HTTP status.
+            let failure: unknown;
             try {
                 prepareSharesPdfOptions({example});
             } catch (error) {
-                expect(error).toMatchObject({status: 400});
+                failure = error;
             }
+            expect(failure).toBeInstanceOf(APIError);
+            expect(failure).toMatchObject({status: 400});
         },
     );
 });

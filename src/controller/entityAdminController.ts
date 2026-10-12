@@ -20,6 +20,7 @@ import {archiveKey, automaticArchiveCutoff, isEffectivelyArchived} from '../modu
 import type {EntityManager} from 'typeorm';
 import {invalidateGeneratedRecommendations} from '../modules/database/services/ActivityRecommendationService';
 import {Profile} from "../modules/database/entities/user/Profile";
+import type {Event} from '../modules/database/entities/event/Event';
 import * as entityAdminService from '../modules/database/services/EntityAdminService';
 import * as eventService from '../modules/database/services/EventService';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
@@ -30,7 +31,7 @@ import {requireSessionProfileId} from '../modules/lib/session';
 import {evaluateEntities, evaluateSubject} from '../modules/permissionEngine';
 import type {BasicEntityPropertyPatch, EntityPropertyField, EntityPropertyPresentation} from '../types/EntityPropertyTypes';
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, ArchiveState, ArchiveTarget, LockedArchiveContext} from '../types/ArchiveTypes';
-import type {EntityDescriptor, PermType, PermView, SessionLike} from '../types/PermissionTypes';
+import type {EntityAdministratorCommand, EntityAdministratorOutcome, EntityDescriptor, PermType, PermView, SessionLike} from '../types/PermissionTypes';
 import type {Entity, EntityBase, EntityViewAdmission} from '../types/UserTypes';
 import type {CombEntityType, EntityType} from "../types/UtilTypes";
 
@@ -112,6 +113,26 @@ export function getAuthorizedEventUrl(eventId: string, permissions: PermView): s
     return permissions.has('ACCESS_VIEW') ? `/event/${encodeURIComponent(eventId)}` : null;
 }
 
+/** Share parent-field disclosure without granting navigation from a relationship.
+ * Native presentation omits protected labels/dates; versioned adapters may map
+ * those absent fields to their authored null shape. Only ACCESS_VIEW supplies a URL. */
+export function projectCurrentEntityEvent(
+    event: Pick<Event, 'id' | 'title' | 'startDate' | 'endDate'>,
+    permissions: PermView,
+): NonNullable<EntityPropertyPresentation['currentEvent']> {
+    const current: NonNullable<EntityPropertyPresentation['currentEvent']> = {id: event.id};
+    if (permissions.has('ACCESS_VIEW') || permissions.has('MANAGE_ASSIGNMENTS')) {
+        current.title = event.title;
+        current.startDate = event.startDate;
+        current.endDate = event.endDate;
+
+        // Field visibility and permission to follow the parent link are separate.
+        const url = getAuthorizedEventUrl(event.id, permissions);
+        if (url) current.url = url;
+    }
+    return current;
+}
+
 /** Only editable values enter renderer data; action flags reflect their existing API guards. */
 export async function getEntityPropertyPresentation(type: EntityType, entity: EntityBase, session: SessionLike): Promise<EntityPropertyPresentation> {
     const permissions = await evaluateSubject({kind: 'entity', entity: {
@@ -140,11 +161,7 @@ export async function getEntityPropertyPresentation(type: EntityType, entity: En
             const parentPermissions = await evaluateSubject({kind: 'entity', entity: {
                 entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
             }}, session);
-            if (parentPermissions.has('ACCESS_VIEW') || parentPermissions.has('MANAGE_ASSIGNMENTS')) {
-                currentEvent = {id: event.id, title: event.title, startDate: event.startDate, endDate: event.endDate};
-                const url = getAuthorizedEventUrl(event.id, parentPermissions);
-                if (url) currentEvent.url = url;
-            }
+            currentEvent = projectCurrentEntityEvent(event, parentPermissions);
         }
     }
     return {
@@ -244,7 +261,43 @@ export function requiredAdminManagePerm() {
     return REQ_PERM;
 }
 
-/** POST /admins — add admin (create or upsert) */
+/** One controller-owned administrator operation for normalized native/v1 intent.
+ * The profile check and required mask have one owner. A versioned caller may
+ * compare its reviewed grant and choose add/update inside its existing locked
+ * transaction; native callers retain their direct command and persistence defaults.
+ * Domain outcomes leave each adapter's established error/feedback shape unchanged. */
+export async function applyEntityAdministrator(
+    entityType: CombEntityType, entityId: string, profileId: string,
+    command: EntityAdministratorCommand, manager?: EntityManager,
+    reviewCurrentGrant?: () => Promise<EntityAdministratorCommand | void>,
+): Promise<EntityAdministratorOutcome> {
+    // Both adapters retain profile-first diagnostics. The optional review callback
+    // runs only after this evidence and inside the supplied caller transaction.
+    const profile = await userService.getProfileById(profileId, manager);
+    if (!profile) return 'profile-missing';
+
+    const approved = await reviewCurrentGrant?.() ?? command;
+    if (approved.kind !== 'remove' && approved.mask === undefined) return 'mask-required';
+
+    // Persist normalized intent through the existing DBAL. Zero is a stored mask;
+    // only an explicit remove command selects deletion.
+    if (approved.kind === 'remove') {
+        await entityAdminService.removeAdmin(entityType, entityId, profileId, manager);
+    } else if (approved.kind === 'add') {
+        await entityAdminService.addAdmin(entityType, entityId, profile.id, approved.mask!, approved.createdBy, manager);
+    } else {
+        await entityAdminService.updateAdminPerms(entityType, entityId, profileId, approved.mask!, manager);
+    }
+    return 'saved';
+}
+
+/** Native adapters preserve the original profile-first errors and operation receipts. */
+function requireNativeAdministratorOutcome(outcome: EntityAdministratorOutcome): void {
+    if (outcome === 'profile-missing') throw new Error('Not Found');
+    if (outcome === 'mask-required') throw new Error('Either mask or perms must be provided');
+}
+
+/** POST /admins — add one administrator using the native collector and feedback. */
 export async function addAdmin(entityType: CombEntityType, entityId: string, body: any, creator?: Profile | null) {
     const schema = Joi.object({
         profileId: Joi.string().uuid().required(),
@@ -256,11 +309,6 @@ export async function addAdmin(entityType: CombEntityType, entityId: string, bod
     const {value, error} = schema.validate(body, {abortEarly: false, allowUnknown: true});
     if (error) throw new Error(error.details.map(d => d.message).join(', '));
 
-    const profile: Profile | null = await userService.getProfileById(value.profileId);
-    if (!profile) {
-        throw new Error("Not Found");
-    }
-
     // Choose mask: explicit mask > perms keys > preset > 0
     let mask = 0;
     if (typeof value.mask === 'number') mask = value.mask;
@@ -270,10 +318,14 @@ export async function addAdmin(entityType: CombEntityType, entityId: string, bod
         mask = presetMask;
     }
 
-    await entityAdminService.addAdmin(entityType, entityId, profile.id, mask, creator?.userId);
+    const outcome = await applyEntityAdministrator(entityType, entityId, value.profileId,
+        {kind: 'add', mask, createdBy: creator?.userId});
+    requireNativeAdministratorOutcome(outcome);
     return 'Admin added';
 }
 
+/** Decode native mask/key input and preserve its validation wording. The common
+ * command owner checks target existence before reporting a missing mask. */
 export async function updateAdmin(entityType: CombEntityType, entityId: string, profileId: string, body: any) {
     const schema = Joi.object({
         perms: Joi.array().items(Joi.string()).optional(),
@@ -283,27 +335,20 @@ export async function updateAdmin(entityType: CombEntityType, entityId: string, 
     const {value, error} = schema.validate(body, {abortEarly: false, allowUnknown: true});
     if (error) throw new Error(error.details.map(d => d.message).join(', '));
 
-    const profile: Profile | null = await userService.getProfileById(profileId);
-    if (!profile) {
-        throw new Error("Not Found");
-    }
-
-    let mask = 0;
+    let mask: number | undefined;
     if (typeof value.mask === 'number') mask = value.mask;
     else if (Array.isArray(value.perms)) mask = toMask(value.perms);
-    else throw new Error('Either mask or perms must be provided');
 
-    await entityAdminService.updateAdminPerms(entityType, entityId, profileId, mask);
+    const outcome = await applyEntityAdministrator(entityType, entityId, profileId, {kind: 'update', mask});
+    requireNativeAdministratorOutcome(outcome);
     return 'Permissions updated';
 }
 
+/** Native removal shares profile-first validation and persistence, while keeping
+ * its established literal acknowledgement even when no grant row remains. */
 export async function removeAdmin(entityType: CombEntityType, entityId: string, profileId: string) {
-    const profile: Profile | null = await userService.getProfileById(profileId);
-    if (!profile) {
-        throw new Error("Not Found");
-    }
-
-    await entityAdminService.removeAdmin(entityType, entityId, profileId);
+    const outcome = await applyEntityAdministrator(entityType, entityId, profileId, {kind: 'remove'});
+    requireNativeAdministratorOutcome(outcome);
     return 'Admin removed';
 }
 
@@ -367,13 +412,16 @@ export async function getArchivePresentations(
     references: ArchiveReference[],
     session: SessionLike,
     snapshot?: Map<string, ArchiveSnapshotEntry>,
+    manager?: EntityManager,
 ): Promise<Map<string, ArchivePresentation>> {
-    // LifecycleService also returns the linked events from this snapshot. Include those
-    // parents in the permission batch even when the user's overview contains only a child.
-    // This lets us offer a restoration link without assuming that child access grants event access.
-    // Paged overview reads already own a coherent lifecycle/placement snapshot. Reuse that
-    // projection rather than rereading archival after page selection and contradicting it.
-    const states = await getArchiveStates(references, snapshot);
+    // Reuse an existing overview/transaction snapshot. Without one, native callers
+    // keep their ordinary reads; a supplied manager keeps lifecycle and grants in
+    // the versioned caller's same transaction, rather than starting a second read.
+    const currentSnapshot = snapshot ?? (manager ? await lifecycleService.getArchiveSnapshot(references, manager) : undefined);
+    const states = await getArchiveStates(references, currentSnapshot);
+
+    // Linked events are internal permission inputs, including when discovery
+    // selected only a child. Parent restoration links require their own view grant.
     const permissionTargets = new Map<string, ArchiveReference>();
     for (const reference of references) {
         permissionTargets.set(archiveKey(reference), reference);
@@ -401,7 +449,7 @@ export async function getArchivePresentations(
             eventId: reference.type === 'event' ? reference.id : state.eventId,
         });
     }
-    const permissions = await evaluateEntities(descriptors, session);
+    const permissions = await evaluateEntities(descriptors, session, manager);
 
     const presentations = new Map<string, ArchivePresentation>();
     for (const reference of references) {

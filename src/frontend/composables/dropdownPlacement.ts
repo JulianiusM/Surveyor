@@ -4,18 +4,23 @@ import {onBeforeUnmount, onMounted, ref, type CSSProperties, type Ref} from 'vue
 export function useDropdownPlacement(element: Ref<HTMLDetailsElement | null>) {
     const dropdownStyle = ref<CSSProperties>({});
 
+    /** Measure the actual disclosure/menu after toggle, scroll or viewport change.
+     * Desktop collision handling may choose above; Bootstrap's static mobile
+     * menu keeps normal flow and must not inherit an earlier absolute placement. */
     function updatePlacement(): void {
         const disclosure = element.value;
         if (!disclosure?.open) return;
         const trigger = disclosure.querySelector('summary');
         const menu = disclosure.querySelector<HTMLElement>(':scope > .dropdown-menu');
         if (!trigger || !menu) return;
+
         // Bootstrap keeps collapsed mobile navigation menus in normal document flow.
         // Those menus need no collision handling and must retain their natural height.
         if (getComputedStyle(menu).position === 'static') {
             dropdownStyle.value = {};
             return;
         }
+
         const bounds = trigger.getBoundingClientRect();
         const height = menu.getBoundingClientRect().height;
         const roomBelow = window.innerHeight - bounds.bottom;

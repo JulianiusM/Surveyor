@@ -2,7 +2,10 @@ import {describe, expect, it} from 'vitest';
 import * as server from '../../.generated/api/v1/server.cjs';
 import * as browser from '../../.generated/api/v1/browser.mjs';
 import type {components} from '../../src/types/api/v1';
-import {isRegistrationPasswordValid} from '../../src/public/js/core/password-policy';
+import {isRegistrationPasswordValid} from '../../src/modules/lib/frontendIdentity';
+import type {Request} from 'express';
+import {normalizePackingMetadataPatch} from '../../src/controller/packingController';
+import {validateOperationRequest} from '../../src/modules/api/transport';
 
 const listId = 'd506d78a-e2d7-4be9-bc95-04d83bbd22ec';
 const itemId = 'f092070d-07e3-461e-94bb-84b1d828dc38';
@@ -15,10 +18,37 @@ function packingView(): components['schemas']['PackingListView'] {
         counters: {participants: 1, open: 0, empty: 0},
         items: [{id: itemId, title: 'Tent', description: null, position: 0, requiredByAll: false,
             maxAssignees: 1, assignedCount: 1, selfAssigned: true, assignees: [{name: 'A participant', assignmentId: null}], editToken: '"edit-aXRlbQ"',
-            capabilities: {editTitle: false, editDescription: false, editCapacity: false, editRequired: false, removeItem: false, removeAssignments: false}}]};
+            capabilities: {editTitle: false, editDescription: false, editCapacity: false, showTitleEdit: false,
+                showCapacityEdit: false, editRequired: false, removeItem: false, removeAssignments: false}}]};
+}
+
+/** Supply only the real transport boundary's request data; no HTTP application or database is needed. */
+function packingMetadataRequest(body: unknown): Request {
+    return {
+        params: {listId}, query: {}, body,
+        get() { return undefined; },
+        is(mediaType: string) { return mediaType === 'application/json' ? 'application/json' : false; },
+    } as unknown as Request;
 }
 
 describe('generated v1 contract boundaries', () => {
+    it('normalizes metadata at its HTTP boundary and rejects malformed patches before a typed command can run', () => {
+        const submitted = {title: '  Trimmed title  ', description: ''};
+        const req = packingMetadataRequest(submitted);
+        validateOperationRequest(req, 'updatePackingMetadata', normalizePackingMetadataPatch);
+        expect(req.body).toEqual({title: 'Trimmed title', description: null});
+        expect(submitted).toEqual({title: '  Trimmed title  ', description: ''});
+
+        // This structural matrix previously occupied a database suite even though
+        // its actual owner is the HTTP decoder plus generated request schema.
+        const invalidBodies = [{}, {description: undefined}, {title: null}, {title: false}, {title: '   '},
+            {description: false}, {ownerId: itemId}, {title: 'Must not save', description: 'x'.repeat(16001)}];
+        for (const body of invalidBodies) {
+            expect(() => validateOperationRequest(packingMetadataRequest(body), 'updatePackingMetadata', normalizePackingMetadataPatch))
+                .toThrow(expect.objectContaining({code: 'VALIDATION_FAILED', status: 400}));
+        }
+    });
+
     it('preserves native password length acceptance without weakening other credential constraints', () => {
         const password = 'A1'.repeat(501);
         const registration = {username: 'Account', displayname: 'Account name', email: 'account@example.invalid',
@@ -96,13 +126,9 @@ describe('generated v1 contract boundaries', () => {
         }
     });
 
-    it('keeps native optional non-null creation descriptions separate from nullable wire descriptions', () => {
-        const native = {title: 'Native', items: [{title: 'Tent', maxAssignees: 1, requiredByAll: false}]};
-        expect(server.validatePackingNativeCreateInput(native)).toBe(true);
-        expect(server.validatePackingNativeCreateInput({...native, description: ''})).toBe(true);
-        expect(server.validatePackingNativeCreateInput({...native, description: null})).toBe(false);
-        expect(server.validatePackingNativeCreateInput({...native, items: [{...native.items[0], description: null}]})).toBe(false);
-        expect(server.validatePackingNewItem({...native.items[0], description: null})).toBe(true);
+    it('validates nullable new-item descriptions and closed page-entry outcomes', () => {
+        const item = {title: 'Tent', maxAssignees: 1, requiredByAll: false, description: null};
+        expect(server.validatePackingNewItem(item)).toBe(true);
         expect(server.validatePageEntryOutcome({kind: 'denied', status: 400, messageKey: 'packing.eventRegistrationRequired'})).toBe(true);
         expect(server.validatePageEntryOutcome({kind: 'redirect', url: '/frontend-pilot/users/login', notice: null})).toBe(true);
         expect(server.validatePageEntryOutcome({kind: 'render', url: '/unrequested'})).toBe(false);
@@ -168,8 +194,8 @@ describe('generated v1 contract boundaries', () => {
         // These are native number-control drafts, not claimed persisted values. The
         // actual signed integer column owns rounding and invalid/overflow failures;
         // this isolated test protects the authored request distinction in both runtimes.
-        const drafts = [0, -1, 1.5, null, '0', '-1', '', '1.5', '-1.5',
-            '-2147483648.4', '2147483647.4', '-2147483649', '2147483648'];
+        const drafts = [0, -1, 1.5, -1.5, null, '0', '-1', '', 'not-a-number', '1.5', '-1.5', '2.499', '2.5',
+            '-2147483648', '2147483647', '-2147483648.4', '2147483647.4', '-2147483649', '2147483648'];
         const newItem = {title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false};
         for (const validators of [server, browser]) {
             for (const maxAssignees of drafts) {

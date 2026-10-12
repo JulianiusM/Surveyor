@@ -4,8 +4,8 @@
  * data. Explanatory diagrams are deliberately separate from application screenshots.
  * Run after npm run build: node scripts/generate-help-visuals.mjs --locale=de --figure=navigation
  * Omit --figure to reproduce all three figures; selecting one leaves other PNGs untouched.
- * During frontend migration, add --staged to write prospective figures beside the staged
- * guides. The default canonical output is never suitable for a Vue navigation draft.
+ * During frontend migration, figures and their labels belong exclusively beside
+ * the release-owned localized guides. This tool never writes into the native help corpus.
  * Each language owns visual-labels.json beside its guides; UI labels come from the
  * same application catalog used by the actual Vue header. Inspect every PNG export.
  */
@@ -22,12 +22,12 @@ const selectedFigure = process.argv.find(argument => argument.startsWith('--figu
 if (!['all', 'navigation', 'survey', 'packing'].includes(selectedFigure)) throw new Error('Choose navigation, survey, packing or all.');
 const catalogPath = `src/locales/${locale}.json`;
 const catalog = JSON.parse(await fs.readFile(path.join(root, catalogPath), 'utf8'));
-const labelsPath = path.join('docs/user-guide', catalog.help.directory, 'visual-labels.json');
+// Both source labels and generated pictures belong to the approved runtime corpus. Keeping
+// one fixed destination prevents a missing CLI flag from changing native help.
+const outputRoot = 'docs/user-guide';
+if (catalog.locale !== locale || catalog.help?.directory !== locale) throw new Error('The catalog must name its own fixed Help directory.');
+const labelsPath = path.join(outputRoot, catalog.help.directory, 'visual-labels.json');
 const labels = JSON.parse(await fs.readFile(path.join(root, labelsPath), 'utf8'));
-// The source labels remain language-owned. Only the destination changes for prospective
-// migration figures, so regeneration cannot overwrite the preserved native help images.
-const staged = process.argv.includes('--staged');
-const outputRoot = staged ? 'docs/frontend-migration/staged/user-guide' : 'docs/user-guide';
 const output = path.join(root, outputRoot, catalog.help.directory, 'assets');
 const evidence = path.join(root, `.temp/help-visuals-${locale}`);
 const ui = catalog.resources.ui;

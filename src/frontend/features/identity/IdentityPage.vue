@@ -17,9 +17,8 @@ import NativeContextFields from '../../components/NativeContextFields.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {ApiFailure, ObsoleteRequestError} from '../../app/transport';
 import type {components} from '../../../types/api/v1';
-import {frontendDocumentUrl, frontendIdentityMessageFeedback, frontendIdentityPageEntry, frontendIdentityProblemKey, safeFrontendReturn} from '../../../modules/lib/frontendIdentity';
+import {frontendDocumentUrl, frontendIdentityMessageFeedback, frontendIdentityPageEntry, frontendIdentityProblemKey, isRegistrationPasswordValid, passwordCriteria, safeFrontendReturn} from '../../../modules/lib/frontendIdentity';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
-import {isRegistrationPasswordValid, passwordCriteria} from '../../../public/js/core/password-policy';
 
 const context = usePilot();
 const {messages} = context;
@@ -107,6 +106,9 @@ const configuredEntry = computed(() => context.session.value
 // merely because its GET counterpart normally enters the external provider.
 const needsOidc = computed(() => initialDocument.value?.pageEntry?.kind !== 'denied'
     && !initialDocument.value?.identityProblem && configuredEntry.value.kind === 'redirect');
+// Native document/command denials take precedence over a shell's configured GET
+// entry. This keeps a rejected POST on its complete error presentation instead
+// of redirecting it to a provider or reopening a form under different settings.
 const identityDenial = computed(() => {
     const entry = initialDocument.value?.pageEntry;
     if (entry?.kind === 'denied') {
@@ -222,6 +224,9 @@ const presentations = {
         submit: 'common.successTitle', submitIcon: 'bi-check-circle'},
 } as const;
 const presentation = computed(() => presentations[mode.value]);
+
+// Confirmed completion owns the success page; a current validated denial owns
+// Error. Ordinary form labels are the fallback only while neither result applies.
 const title = computed(() => {
     if (identityDenial.value || mode.value === 'reset' && resetDenial.value) return messages.value.t('common.errorTitle');
     if (pageCompleted.value) return messages.value.t('common.successTitle');
@@ -300,7 +305,9 @@ async function signIn(scope: PilotRequestScope): Promise<components['schemas']['
     }
 }
 
-/** Keep each identity operation readable rather than hiding policy in a nested conditional expression. */
+/** Dispatch registration, reset-mail, activation or password reset in the captured
+ * actor scope. Await rejection here to preserve native secret-clearing behavior;
+ * invalid reset tokens retire admission, while unconfirmed delivery remains unknown. */
 async function submitIdentityForm(scope: PilotRequestScope) {
     try {
         // Await inside this boundary so every confirmed server rejection releases secrets.

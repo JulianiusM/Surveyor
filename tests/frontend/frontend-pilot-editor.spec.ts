@@ -73,13 +73,13 @@ afterEach(() => {
 
 describe('shared inline input constraints', () => {
     it.each(['title', 'description'] as const)('preserves the native initial caret for an existing %s', async field => {
-        const permission = field === 'description' ? 'EDIT_DESC' : 'EDIT_TITLE';
+        const permission = field === 'description' ? 'EDIT_DESC' : 'EDIT_META';
         window.Surveyor = {permissions: createPermissionBundle([], [permission], 'item')};
         const table = document.createElement('table');
         table.innerHTML = `<tbody><tr><td data-edit="${field}" data-id="item">Existing equipment</td></tr></tbody>`;
         document.body.append(table);
         const nativeCell = table.querySelector<HTMLElement>('td')!;
-        startInlineEdit(nativeCell, '/api/packing/list/item', permission, true);
+        startInlineEdit(nativeCell, '/api/packing/list/item');
         const nativeInput = nativeCell.querySelector('input')!;
         // The native editor is the oracle: focus alone must not become select-all.
         // Real-browser coverage also compares the first keystroke in number controls,
@@ -115,13 +115,13 @@ describe('shared inline input constraints', () => {
                 {headers: {'Content-Type': 'application/json'}});
         });
         vi.stubGlobal('fetch', send);
-        window.Surveyor = {permissions: createPermissionBundle([], ['EDIT_CAPACITY'], 'item')};
+        window.Surveyor = {permissions: createPermissionBundle([], ['EDIT_META'], 'item')};
         const table = document.createElement('table');
         table.innerHTML = '<tbody><tr><td data-edit="maxAssignees" data-id="item">'
             + '<span data-count>0</span> / <span data-max>2</span></td></tr></tbody>';
         document.body.append(table);
         const cell = table.querySelector<HTMLElement>('td')!;
-        startInlineEdit(cell, '/api/packing/list/item', 'EDIT_CAPACITY', true);
+        startInlineEdit(cell, '/api/packing/list/item');
         const nativeInput = cell.querySelector('input')!;
         expect(nativeInput.required).toBe(false);
         expect(nativeInput.min).toBe('');
@@ -132,7 +132,7 @@ describe('shared inline input constraints', () => {
         await flushPromises();
         expect(send).toHaveBeenCalledOnce();
         const nativeBody = JSON.parse((send.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
-        expect(nativeBody).toEqual({field: 'maxAssignees', value, expectedValue: 2});
+        expect(nativeBody).toEqual({field: 'maxAssignees', value});
         expect(nativeValidity).not.toHaveBeenCalled();
 
         const save = vi.fn(async () => true);
@@ -299,7 +299,7 @@ describe('packing presentation compatibility', () => {
                 expect(input.element.value).toBe('Unsubmitted equipment title');
                 expect(document.activeElement).toBe(focused);
                 expect(mounted.context.ready.value).toBe(true);
-                expect(mounted.context.session.value.context).toBe(session.context);
+                expect(mounted.context.session.value?.context).toBe(session.context);
                 expect(mounted.context.queryClient.getQueryState(queryKey)?.error).toMatchObject({confirmedRejection: false});
                 expect(mounted.wrapper.find('h1').exists()).toBe(true);
                 // The real dialog uses a portal outside RouterView's root. Inspect
@@ -693,7 +693,8 @@ describe('packing presentation compatibility', () => {
         const base: components['schemas']['PackingItemView'] = {id: '33333333-3333-4333-8333-333333333333',
             title: 'Historical capacity', description: null, position: 0, requiredByAll: false,
             maxAssignees: null, assignedCount: 0, selfAssigned: false, assignees: [], editToken: '"edit-item"',
-            capabilities: {editTitle: false, editDescription: false, editCapacity: false, editRequired: false, removeItem: false, removeAssignments: false}};
+            capabilities: {editTitle: false, editDescription: false, editCapacity: false, showTitleEdit: false,
+                showCapacityEdit: false, editRequired: false, removeItem: false, removeAssignments: false}};
         const everyone = {...base, id: '44444444-4444-4444-8444-444444444444', title: 'Everyone item',
             requiredByAll: true, maxAssignees: 1, assignedCount: 1, selfAssigned: true};
         const negative = {...base, id: '55555555-5555-4555-8555-555555555555', title: 'Negative legacy capacity', maxAssignees: -1};

@@ -4,12 +4,13 @@ documentation-metadata
 audience: deutschsprachige Endnutzer
 owner: product documentation maintainers
 status: current
-last-verified: 2026-10-08
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: FPR-07 native navigation image with German task explanations and exact native menu labels; existing translated tasks and stable links unchanged; prospective localized header and matching caption retained in staging
+verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
 heading-anchors: 1:surveyor-user-guide; 2:find-help-quickly; 2:start-here; 3:create-or-use-a-full-account; 3:join-as-a-guest; 3:use-the-correct-profile; 2:feature-guides; 2:permissions-and-sharing; 2:common-controls; 2:guide-index
 source-anchors: src/controller/helpController.ts; src/views/layout.pug; src/locales/de.json; src/frontend/components/AppHeader.vue; docs/user-guide/de/assets/navigation-at-a-glance.png; scripts/generate-help-visuals.mjs; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue
 next-review: help-source-or-visible-UI-change
+production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->
 
 Surveyor hilft Gruppen, Termine zu finden, Veranstaltungen zu organisieren, Ausrüstung und Fahrten abzustimmen und Aktivitäten zu verteilen. Beginne mit dem Weg, über den du die Anwendung aufgerufen hast.
@@ -18,9 +19,9 @@ Surveyor hilft Gruppen, Termine zu finden, Veranstaltungen zu organisieren, Ausr
 
 Die Hilfe ordnet Anleitungen nach Aufgaben statt alphabetisch. Verwende **Hilfe durchsuchen**, wenn du die Aufgabe oder eine sichtbare Schaltfläche kennst, aber nicht den Namen der Funktion. Der Link **Hilfe** in der Navigationsleiste öffnet die passende Anleitung zum aktuellen Bereich. Mit **Auf dieser Seite** springst du innerhalb einer Anleitung zu einem Ablauf oder zur Problemlösung.
 
-![Surveyor-Navigation mit Home, New, Overview, Help und Profilmenü; drei nummerierte Hinweise erklären Anlegen, Zurückkehren und Hilfe finden.](assets/navigation-at-a-glance.png)
+![Surveyor-Navigation mit Startseite, Neu, Übersicht, Hilfe und Profilmenü; drei nummerierte Hinweise erklären Anlegen, Zurückkehren und Hilfe finden.](assets/navigation-at-a-glance.png)
 
-*Mit **New** (Neu) legst du einen Eintrag an, mit **Overview** (Übersicht) kehrst du zu deiner Arbeit zurück und mit **Help** (Hilfe) findest du die passende Anleitung. Öffne auf kleinen Bildschirmen zuerst das Navigationsmenü. Im Bild in voller Größe kannst du die Navigation genauer ansehen.*
+*Mit **Neu** legst du einen Eintrag an, mit **Übersicht** kehrst du zu deiner Arbeit zurück und mit **Hilfe** findest du die passende Anleitung. Öffne auf kleinen Bildschirmen zuerst das Navigationsmenü. Im Bild in voller Größe kannst du die Navigation genauer ansehen.*
 
 [Navigationsbild in voller Größe öffnen](/help/assets/navigation-at-a-glance.png?locale=de).
 

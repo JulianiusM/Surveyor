@@ -28,6 +28,7 @@ const metadataPattern = /<!--\s*documentation-metadata\s*\r?\n[\s\S]*?-->\s*/iu;
 
 const errors = [];
 const warnings = [];
+const referencedAssets = new Map();
 let linksChecked = 0;
 let imagesChecked = 0;
 let rawHtmlChecks = 0;
@@ -40,59 +41,60 @@ function addError(filePath, message) {
     errors.push({file: relative(filePath), message});
 }
 
+function addWarning(filePath, message) {
+    warnings.push({file: relative(filePath), message});
+}
+
+/** Distinguish absent translations from malformed release entries. A directory,
+ * symlink, unreadable path or realpath escape must never be hidden by English fallback. */
+function inspectHelpFile(corpusRoot, relativePath) {
+    const filePath = path.resolve(corpusRoot, relativePath);
+    if (!isInside(corpusRoot, filePath)) return {present: true, filePath: null};
+    let entry;
+    try { entry = fs.lstatSync(filePath); }
+    catch (error) {
+        if (error.code === 'ENOENT') return {present: false, filePath: null};
+        throw error;
+    }
+    const valid = entry.isFile() && !entry.isSymbolicLink() && isInside(corpusRoot, fs.realpathSync(filePath));
+    return {present: true, filePath: valid ? filePath : null};
+}
+
+/** Match runtime source selection without importing the application or compiled output.
+ * Native Help remains rooted here; localized missing topics/figures borrow only adjacent
+ * reviewed English. Reports disclose those omissions as warnings, never invented errors. */
+function resolveCorpusFile(corpus, relativePath, authoredFile) {
+    const selected = inspectHelpFile(corpus.root, relativePath);
+    if (selected.present) return selected.filePath;
+    if (!corpus.locale || corpus.locale === 'en') return null;
+    const english = inspectHelpFile(path.join(helpRoot, 'en'), relativePath);
+    if (english.filePath) {
+        addWarning(authoredFile, `Localized ${relativePath} is absent; the runtime visibly falls back to reviewed English`);
+    }
+    return english.filePath;
+}
+
+/** Collect each actual locale directory under the canonical tree. No translated
+ * corpus, visual-label registry or retired alias is treated as another Help root. */
+function helpCorpora() {
+    const corpora = [{root: helpRoot, locale: null}];
+    for (const entry of fs.readdirSync(helpRoot, {withFileTypes: true})) {
+        if (entry.name === 'assets' || entry.isFile()) continue;
+        let canonicalLocale;
+        try { canonicalLocale = Intl.getCanonicalLocales(entry.name)[0]; }
+        catch { canonicalLocale = null; }
+        if (!entry.isDirectory() || canonicalLocale !== entry.name) {
+            addError(path.join(helpRoot, entry.name), 'Help subdirectories must be regular canonical locale directories');
+            continue;
+        }
+        corpora.push({root: path.join(helpRoot, entry.name), locale: entry.name});
+    }
+    return corpora;
+}
+
 function isInside(basePath, candidatePath) {
     const rel = path.relative(path.resolve(basePath), path.resolve(candidatePath));
     return rel === '' || (!rel.startsWith(`..${path.sep}`) && rel !== '..' && !path.isAbsolute(rel));
-}
-
-/**
- * Read the same authored corpus routing used by locale generation. This remains
- * an offline, advisory report: neither generated runtime files nor an application
- * process are prerequisites. Synthetic tooling fixtures retain the English root
- * when they intentionally omit application catalogs.
- */
-function discoverHelpCorpora() {
-    const corpora = new Map();
-    corpora.set(helpRoot, createCorpus('en', helpRoot));
-    const catalogs = path.join(repositoryRoot, 'src', 'locales');
-    if (!fs.existsSync(catalogs)) {
-        return [...corpora.values()];
-    }
-
-    for (const name of fs.readdirSync(catalogs).sort()) {
-        if (!name.endsWith('.json')) {
-            continue;
-        }
-        const catalogPath = path.join(catalogs, name);
-        try {
-            const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
-            const directory = catalog.help?.directory;
-            if (typeof catalog.locale !== 'string' || typeof directory !== 'string'
-                || (directory !== '.' && !/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/u.test(directory))) {
-                addError(catalogPath, 'Catalog must declare a locale and a fixed relative help directory');
-                continue;
-            }
-            const corpusRoot = path.resolve(helpRoot, directory);
-            if (!isInside(helpRoot, corpusRoot)) {
-                addError(catalogPath, 'Catalog help directory must remain inside docs/user-guide');
-                continue;
-            }
-            corpora.set(corpusRoot, createCorpus(catalog.locale, corpusRoot));
-        } catch (error) {
-            addError(catalogPath, `Cannot inspect help corpus routing: ${error.message}`);
-        }
-    }
-    return [...corpora.values()];
-}
-
-/** Each language owns its references, so English cannot satisfy a missing local asset. */
-function createCorpus(locale, corpusRoot) {
-    return {locale, helpRoot: corpusRoot, assetRoot: path.join(corpusRoot, 'assets'), referencedAssets: new Map()};
-}
-
-function reportAssetName(corpus, assetName) {
-    const directory = path.relative(helpRoot, corpus.helpRoot).split(path.sep).join('/');
-    return directory ? `${directory}/${assetName}` : assetName;
 }
 
 function decodeReferences(value) {
@@ -158,6 +160,9 @@ function parseMarkdownTarget(rawTarget) {
     return trimmed.replace(quotedTitle, '').trim();
 }
 
+/** Review the authored subset without executing application code: metadata is stripped,
+ * code examples stay literal, and links/figures use this corpus's containment/fallback.
+ * All findings remain advisory; this regex report does not replace runtime token validation. */
 function validateHelpFile(filePath, corpus) {
     const markdown = fs.readFileSync(filePath, 'utf8');
     const metadataMatches = markdown.match(/<!--\s*documentation-metadata\b/giu) ?? [];
@@ -191,10 +196,12 @@ function validateHelpFile(filePath, corpus) {
             const targetWithoutSuffix = target.split(/[?#]/u, 1)[0].replaceAll('\\', '/');
             if (targetWithoutSuffix.toLowerCase().endsWith('.md')) {
                 const resolvedDoc = path.resolve(path.dirname(filePath), targetWithoutSuffix);
-                if (!isInside(corpus.helpRoot, resolvedDoc) || path.dirname(resolvedDoc) !== corpus.helpRoot
-                    || !fs.existsSync(resolvedDoc) || !fs.statSync(resolvedDoc).isFile()) {
-                    addError(filePath, `In-app Markdown link must target a maintained guide in the same language corpus: ${target}`);
+                if (!isInside(corpus.root, resolvedDoc) || path.dirname(resolvedDoc) !== corpus.root
+                    || !resolveCorpusFile(corpus, targetWithoutSuffix, filePath)) {
+                    addError(filePath, `In-app Markdown link must target a maintained guide in ${relative(corpus.root)}: ${target}`);
                 }
+            } else if (targetWithoutSuffix.startsWith('assets/') || targetWithoutSuffix.startsWith('/help/assets/')) {
+                validateAssetReference(filePath, targetWithoutSuffix.replace(/^\/help\//u, ''), corpus);
             }
             continue;
         }
@@ -206,25 +213,48 @@ function validateHelpFile(filePath, corpus) {
             addError(filePath, `Image must use a local packaged asset under assets/: ${target}`);
             continue;
         }
-        const assetName = targetWithoutSuffix.slice('assets/'.length);
-        const extension = path.extname(assetName).toLowerCase();
-        if (!allowedAssetExtensions.has(extension)) {
-            addError(filePath, `Unsupported help image type "${extension}": ${target}`);
-            continue;
-        }
-        const assetPath = path.resolve(corpus.assetRoot, assetName);
-        if (!isInside(corpus.assetRoot, assetPath) || !fs.existsSync(assetPath) || !fs.statSync(assetPath).isFile()) {
-            addError(filePath, `Referenced help image does not exist: ${target}`);
-            continue;
-        }
-        corpus.referencedAssets.set(assetName, (corpus.referencedAssets.get(assetName) ?? 0) + 1);
+        validateAssetReference(filePath, targetWithoutSuffix, corpus);
     }
 }
 
+/** Images and full-size figure links share one format/source/reference owner. */
+function validateAssetReference(filePath, target, corpus) {
+    const assetName = target.slice('assets/'.length);
+    const extension = path.extname(assetName).toLowerCase();
+    if (!allowedAssetExtensions.has(extension)) {
+        addError(filePath, `Unsupported help image type "${extension}": ${target}`);
+        return;
+    }
+    if (!/^assets\/[^/]+$/iu.test(target)) {
+        addError(filePath, `Help figures must use a local packaged asset under assets/: ${target}`);
+        return;
+    }
+    const assetPath = resolveCorpusFile(corpus, target, filePath);
+    if (!assetPath) {
+        addError(filePath, `Referenced help image is missing or is not a regular reviewed file: ${target}`);
+        return;
+    }
+    const sourcePath = relative(assetPath);
+    referencedAssets.set(sourcePath, (referencedAssets.get(sourcePath) ?? 0) + 1);
+}
+
+/** Inventory only regular reviewed raster files after every corpus's references have
+ * been collected. A missing translation is a warning; malformed entries or orphaned
+ * assets are findings for explicit maintainer review rather than automatic cleanup. */
 function validateAssets(corpus) {
-    const assetRoot = corpus.assetRoot;
-    if (!fs.existsSync(assetRoot) || !fs.statSync(assetRoot).isDirectory()) {
-        addError(assetRoot, 'Help asset directory is missing');
+    const assetRoot = path.join(corpus.root, 'assets');
+    let directory;
+    try { directory = fs.lstatSync(assetRoot); }
+    catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+    }
+    if (!directory) {
+        if (corpus.locale && corpus.locale !== 'en') addWarning(assetRoot, 'Localized asset directory is absent; referenced figures may use visible English fallback');
+        else addError(assetRoot, 'Help asset directory is missing');
+        return [];
+    }
+    if (!directory.isDirectory() || directory.isSymbolicLink() || !isInside(corpus.root, fs.realpathSync(assetRoot))) {
+        addError(assetRoot, 'Help assets must use a regular directory inside the reviewed corpus');
         return [];
     }
     const assets = fs.readdirSync(assetRoot, {withFileTypes: true});
@@ -237,26 +267,25 @@ function validateAssets(corpus) {
         if (!allowedAssetExtensions.has(path.extname(entry.name).toLowerCase())) {
             addError(assetPath, 'Only reviewed raster image formats are allowed in the help asset directory');
         }
-        if ((corpus.referencedAssets.get(entry.name) ?? 0) === 0) {
+        if ((referencedAssets.get(relative(assetPath)) ?? 0) === 0) {
             addError(assetPath, 'Help asset is not referenced by any maintained user guide');
         }
     }
     return assets.filter(entry => entry.isFile()).map(entry => entry.name).sort();
 }
 
+/** Check the canonical release-copy comparison independently of runtime implementation
+ * spelling. Only application fixtures can establish how requests resolve actual sources. */
 function validateSourceBoundary() {
     const controllerPath = path.join(repositoryRoot, 'src', 'controller', 'helpController.ts');
-    const controller = fs.readFileSync(controllerPath, 'utf8');
-    for (const required of [
-        "'docs', 'user-guide'",
-        'validateTrustedHelpMarkdown',
-        'resolveHelpAssetPath',
-        'renderTrustedHelpMarkdown',
-    ]) {
-        if (!controller.includes(required)) {
-            addError(controllerPath, `Missing fixed help-source guard: ${required}`);
-        }
+    if (!fs.existsSync(controllerPath)) {
+        addError(controllerPath, 'Help controller is missing');
     }
+
+    // This report checks reviewed native/localized content and packaging, not executable path
+    // selection. Searching for a particular path expression would reject equivalent
+    // composition and could accept an unsafe unused string. Synthetic application
+    // tests independently exercise fixed roots, traversal and content rejection.
 
     const releasePath = path.join(repositoryRoot, '.github', 'workflows', 'release.yml');
     const release = fs.readFileSync(releasePath, 'utf8');
@@ -272,32 +301,29 @@ if (!fs.existsSync(helpRoot) || !fs.statSync(helpRoot).isDirectory()) {
     process.stdout.write(`${JSON.stringify({advisory: true, ok: false, errors}, null, 2)}\n`);
     process.exitCode = 0;
 } else {
-    const corpusReports = [];
+    const corpora = helpCorpora();
+    const helpFiles = [];
+    // Validate every article first so English assets referenced by a partial locale
+    // are counted before any corpus's unreferenced-asset report is calculated.
+    for (const corpus of corpora) {
+        corpus.files = [];
+        for (const entry of fs.readdirSync(corpus.root, {withFileTypes: true})) {
+            if (!entry.name.toLowerCase().endsWith('.md')) continue;
+            const filePath = path.join(corpus.root, entry.name);
+            if (!entry.isFile() || !inspectHelpFile(corpus.root, entry.name).filePath) {
+                addError(filePath, 'Maintained Help articles must be regular files inside their reviewed corpus');
+                continue;
+            }
+            corpus.files.push(filePath);
+        }
+        corpus.files.sort();
+        for (const filePath of corpus.files) validateHelpFile(filePath, corpus);
+        helpFiles.push(...corpus.files);
+    }
     const assets = [];
-    const referencedAssets = new Map();
-    let markdownFiles = 0;
-    for (const corpus of discoverHelpCorpora()) {
-        if (!fs.existsSync(corpus.helpRoot) || !fs.statSync(corpus.helpRoot).isDirectory()) {
-            addError(corpus.helpRoot, 'Catalog-selected help corpus is missing');
-            continue;
-        }
-        const helpFiles = fs.readdirSync(corpus.helpRoot, {withFileTypes: true})
-            .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
-            .map(entry => path.join(corpus.helpRoot, entry.name))
-            .sort();
-        for (const filePath of helpFiles) {
-            validateHelpFile(filePath, corpus);
-        }
-        const corpusAssets = validateAssets(corpus);
-        for (const assetName of corpusAssets) {
-            assets.push(reportAssetName(corpus, assetName));
-        }
-        for (const [assetName, count] of corpus.referencedAssets) {
-            referencedAssets.set(reportAssetName(corpus, assetName), count);
-        }
-        markdownFiles += helpFiles.length;
-        corpusReports.push({locale: corpus.locale, helpRoot: relative(corpus.helpRoot), markdownFiles: helpFiles.length,
-            assets: corpusAssets, referencedAssets: Object.fromEntries([...corpus.referencedAssets.entries()].sort())});
+    for (const corpus of corpora) {
+        corpus.assets = validateAssets(corpus);
+        assets.push(...corpus.assets.map(name => relative(path.join(corpus.root, 'assets', name))));
     }
     validateSourceBoundary();
 
@@ -305,12 +331,13 @@ if (!fs.existsSync(helpRoot) || !fs.statSync(helpRoot).isDirectory()) {
         advisory: true,
         ok: errors.length === 0,
         helpRoot: relative(helpRoot),
-        markdownFiles,
-        corpora: corpusReports,
+        corpora: corpora.map(corpus => ({directory: relative(corpus.root), locale: corpus.locale,
+            markdownFiles: corpus.files.length, assets: corpus.assets})),
+        markdownFiles: helpFiles.length,
         linksChecked,
         imagesChecked,
         rawHtmlChecks,
-        assets: assets.sort(),
+        assets,
         referencedAssets: Object.fromEntries([...referencedAssets.entries()].sort()),
         warnings,
         errors,

@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import type {Request} from 'express';
 import {getAccountPageEntry} from '../../src/controller/userController';
 import {getEntityViewAdmission} from '../../src/controller/entityAdminController';
-import {readPackingCreateEntry} from '../../src/modules/packing/api';
+import {readPackingCreateEntry} from '../../src/controller/packingController';
 import {captureApiActor} from '../../src/modules/api/session';
 import {contractValidator} from '../../src/modules/api/contracts';
 import {Profile} from '../../src/modules/database/entities/user/Profile';

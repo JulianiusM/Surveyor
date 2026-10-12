@@ -9,14 +9,15 @@ mixin entityHeader(entity, entityType, icon, permData, settings, archive)
                 style="object-fit:cover;height:250px;"
             )
 
-        //- Equal desktop side tracks keep the title centered even when only one control exists.
-        //- Mobile retains the reading order: title, authorized parent link, settings.
-        .entity-header-layout.p-3.gap-3
+        .p-3.d-flex.flex-column.flex-md-row.align-items-md-center.justify-content-between.gap-3
             if settings && settings.currentEvent && settings.currentEvent.url
-                .entity-header-parent.btn-group.d-md-inline.d-none
+                .btn-group.d-md-inline.d-none
                     a.btn.btn-outline-light(href=settings.currentEvent.url)
                         i.bi.bi-arrow-left-circle.me-1(aria-hidden="true")
                         | Go to event
+            else
+                .d-none.d-md-inline
+
             h1.mb-0.text-center
                 i(class=`bi ${icon} me-2` aria-hidden="true")
                 | #{entity.title}

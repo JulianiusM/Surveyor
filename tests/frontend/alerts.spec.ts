@@ -105,77 +105,9 @@ describe('transient alert lifetime', () => {
         expect(message.removed).toBe(true);
     });
 
-    it('keeps a receipt-owned deadline when rendered text changes without a new outcome', () => {
-        const message = alert();
-        dispose = initAlertDismissal(html(root), {renewContent: false});
-        vi.advanceTimersByTime(9000);
-        message.textContent = 'The same outcome in another language';
-        ObserverStub.current.emit(message, 'characterData');
-        vi.advanceTimersByTime(999);
-        expect(message.removed).toBe(false);
-        vi.advanceTimersByTime(1);
-        expect(message.removed).toBe(true);
-    });
-
-    it('preserves a shown receipt deadline through relocation and unrelated observer cleanup', () => {
-        const message = alert();
-        const clear = vi.fn();
-        const stopNative = initAlertDismissal(html(root));
-        const nativeObserver = ObserverStub.current;
-        dispose = initAlertDismissal(html(message), {
-            onDismiss: clear,
-            renewContent: false,
-            preserveStartedLifetime: true,
-        });
-        const receiptObserver = ObserverStub.current;
-
-        vi.advanceTimersByTime(9000);
-        message.hidden = true;
-        receiptObserver.emit(message, 'attributes');
-        message.remove();
-        nativeObserver.emit(root);
-        // Stopping a document observer must not clear another owner's temporarily
-        // disconnected receipt, even though the timer registry is shared.
-        stopNative();
-        expect(vi.getTimerCount()).toBe(1);
-
-        message.removed = false;
-        message.hidden = false;
-        root.appendChild(message);
-        receiptObserver.emit(message, 'attributes');
-        vi.advanceTimersByTime(999);
-        expect(clear).not.toHaveBeenCalled();
-        vi.advanceTimersByTime(1);
-        expect(clear).toHaveBeenCalledOnce();
-        expect(message.removed).toBe(false);
-        expect(vi.getTimerCount()).toBe(0);
-    });
-
-    it('waits for a receipt first disclosure and cancels its detached timer on explicit owner cleanup', () => {
-        const message = alert();
-        const clear = vi.fn();
-        message.hidden = true;
-        dispose = initAlertDismissal(html(message), {
-            onDismiss: clear,
-            renewContent: false,
-            preserveStartedLifetime: true,
-        });
-        vi.advanceTimersByTime(10000);
-        expect(clear).not.toHaveBeenCalled();
-        expect(vi.getTimerCount()).toBe(0);
-
-        message.hidden = false;
-        ObserverStub.current.emit(message, 'attributes');
-        vi.advanceTimersByTime(9000);
-        message.remove();
-        ObserverStub.current.emit(message);
-        expect(vi.getTimerCount()).toBe(1);
-        dispose();
-        dispose = undefined;
-        vi.advanceTimersByTime(1000);
-        expect(clear).not.toHaveBeenCalled();
-        expect(vi.getTimerCount()).toBe(0);
-    });
+    // Reactive receipt translation, relocation and first-disclosure cleanup are
+    // covered through StatusNotice's actual consumers in frontend-pilot-shell.
+    // The immutable native observer owns native content renewal only.
 
     it('retains native cancellation and a fresh disclosure interval without a receipt policy', () => {
         const message = alert();

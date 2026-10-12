@@ -4,20 +4,12 @@ documentation-metadata
 audience: maintainers; developers; AI agents
 owner: architecture maintainers
 status: current
-last-verified: 2026-10-11
+last-verified: 2026-10-04
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current shared test-project ordering reviewed against executable configuration; FPR-07 preservation of the pre-pilot native production documentation reference and current non-pilot source-path corrections; no deployment or runtime certification
-source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoice/retention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
-next-review: native-production-change-or-frontend-cutover
-production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
+verification-scope: Native runtime, domain, controller/DBAL, identity, lifecycle, UI, build and test boundaries; completed design contracts consolidated editorially without pilot behavior claims.
+source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoice/retention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md
+next-review: architecture-or-help-delivery-change
 -->
-
-This document describes the native frontend production reference. It preserves the existing production contract
-while the frontend migration is in progress; the reference is not evidence of the commit installed at a particular
-site. Developers working in the migration checkout must use the [staged replacement](frontend-migration/staged/ARCHITECTURE.md) and current
-`package.json` for the changed frontend commands. Merge the staged replacement into this canonical document at
-production cutover, retaining any intervening native changes.
-
 
 Surveyor is a TypeScript monolith that serves HTML and JSON from one Express process. MariaDB stores application records and sessions; the filesystem stores uploaded header images and invoice proofs. Pug renders the primary UI, with focused browser-side TypeScript enhancing interactive pages.
 
@@ -399,7 +391,7 @@ prior credits, and signed transfers recorded in this calculation without inferri
 
 ### Activity plans
 
-Activity plans contain dated slots, optional roles, assignments, shared fields, participant requirements, availability, recommendations, and review operations. The user guide owns the basic and advanced organizer workflows. [Activity Requirements and Assignment Recommendations](ACTIVITY_REQUIREMENTS_ALGORITHM.md) is the canonical technical reference for precedence, coverage, fair allocation, bounded repair, overfill, background jobs, review states, and application persistence.
+Activity plans contain dated slots, optional roles, assignments, shared fields, participant requirements, availability, recommendations, and review operations. The user guide owns the basic and advanced organizer workflows. [Activity Requirements and Assignment Recommendations](features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md) is the canonical technical reference for precedence, coverage, fair allocation, bounded repair, overfill, background jobs, review states, and application persistence.
 
 ### Packing lists
 
@@ -519,6 +511,18 @@ preference-service layers.
 
 Archival never calls deletion, proof/image removal, invoice retention, or financial recalculation. File retention and deliberate deletion retain their own lifecycles. Schema and locking details are in [Database and Migrations](DATABASE.md#entity-archival-state); the settings and inclusive UTC schedule are defined in [Configuration](CONFIGURATION.md#automatic-entity-archival).
 
+Only events and standalone activity plans have independent automatic schedules. Linked activities follow the event;
+packing/drivers lists inherit their event and surveys are standalone. Restoring a parent preserves independently
+archived children and personal preferences. A child cannot restore through an archived parent. Date/delay changes
+do not restore roots or clear pauses; disabling automation stops future automatic writes only. New/duplicated roots
+start directly active and unpaused, inherit a selected event immediately, and copy no personal preferences.
+
+The startup/hourly job captures one time per bounded sweep, repeats current direct-state/pause/date/standalone
+predicates in each write, counts committed transitions and prevents local overlapping runs. Duplicate sweeps are
+harmless; this remains the documented single-process schedule. Restoration cannot recreate files or business records
+independently removed by retention or deliberate deletion. Detailed managerial archival context belongs to authorized
+Entity settings; shared feature pages/cards show only the minimal archived condition.
+
 ### Other durable state
 
 Surveyor's durable state spans more than the database:
@@ -561,9 +565,7 @@ The runtime archive does not include TypeScript source or migration tooling and 
 
 ## Testing architecture
 
-Vitest runs isolated unit/frontend files with at most two workers, then runs integration files serially against their
-guarded disposable MariaDB schema. Node is the default environment; selected DOM suites use `happy-dom`. The
-[Testing Guide](TESTING_GUIDE.md) owns the current runner and test-selection procedure.
+Vitest discovers `tests/unit/`, `tests/frontend/`, and `tests/integration/`. It runs them in the Node environment with file-level parallelism disabled because integration suites share a guarded disposable MariaDB schema.
 
 Playwright discovers `tests/e2e/`, runs Chromium, initializes the E2E database, and starts the built server through its managed `webServer` command. Factories under `tests/factories/` build production-shaped inputs; reusable workflow/assertion helpers live under `tests/keywords/`; runner and database setup live under `tests/support/`.
 
@@ -604,4 +606,4 @@ advisory, with real findings and subprocess exits preserved in reports. The corp
 `tests/documentation/`; the required help tests use synthetic renderer fixtures and application-only route assertions.
 The release copies and compares documentation in a separate non-blocking step. A missing guide, stale fingerprint,
 wording mismatch, or unavailable documentation checker cannot stop CI, builds, merges, or release. Runtime content
-rejection remains active; see [Documentation Policy](DOCUMENTATION_POLICY.md).
+rejection remains active; see [Documentation Policy](policies/DOCUMENTATION_POLICY.md).

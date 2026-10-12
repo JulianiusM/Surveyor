@@ -4,7 +4,6 @@
  */
 
 import {showInlineAlert} from '../shared/alerts';
-import {isRegistrationPasswordValid, passwordCriteria} from './password-policy';
 
 /**
  * Update element class state based on validation
@@ -38,7 +37,7 @@ export function refreshState(
  * @returns True if password is valid
  */
 export function isPasswordValid(password?: string): boolean {
-    return isRegistrationPasswordValid(password);
+    return !!password && password.length >= 8 && /[a-z,A-Z]/g.test(password) && /\d/g.test(password);
 }
 
 /**
@@ -83,7 +82,9 @@ export function generatePasswordFeedback(hasEight: boolean, hasLetter: boolean, 
  */
 export function verifyPassword(passwordObj: JQuery<HTMLInputElement>, infoObj: JQuery<HTMLElement>): void {
     const password = passwordObj.val() ?? '';
-    const {length: isEightChars, letter: hasLetter, digit: hasDigit} = passwordCriteria(password);
+    const isEightChars = password.length >= 8;
+    const hasLetter = /[a-z,A-Z]/g.test(password);
+    const hasDigit = /\d/g.test(password);
     const isValid = isPasswordValid(password);
 
     // Update feedback display

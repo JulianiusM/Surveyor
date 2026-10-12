@@ -5,18 +5,19 @@
  * You may obtain a copy at http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {Router, type Request, type Response} from 'express';
+import {Router, type NextFunction, type Request, type Response} from 'express';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import type {components} from '../../../types/api/v1';
 import {ApiProblem} from '../../../modules/api/problem';
 import {prepareFileUploader, removeImage} from '../../../modules/lib/fileCommons';
 import settings from '../../../modules/settings';
-import * as packingApi from '../../../modules/packing/api';
+import * as packingApi from '../../../controller/packingController';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {requireApiContext} from '../../../modules/api/session';
+import {searchLimiter} from '../../../middleware/adminApiFactory';
 import {sendValidatedBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
-import {patchPackingMetadata, preparePackingMetadataPatch, readPackingList, readPackingMetadata, setPackingSelfAssignment} from '../../../modules/packing/api';
+import {patchPackingMetadata, normalizePackingMetadataPatch, readPackingList, readPackingMetadata, setPackingSelfAssignment} from '../../../controller/packingController';
 
 const router = Router();
 const uploadHeader = prepareFileUploader(settings.value.headerImgDir).single('image');
@@ -99,9 +100,25 @@ router.get('/:listId/metadata', asyncHandler(async function getPackingMetadata(r
 router.patch('/:listId/metadata', asyncHandler(async function updatePackingMetadata(req, res) {
     const actor = await requireApiContext(req, res, true);
     // Preserve trim-before-length-check behavior after the common media/parameter admission.
-    validateOperationRequest(req, 'updatePackingMetadata', preparePackingMetadataPatch);
-    const result = await patchPackingMetadata(String(req.params.listId), req.body as unknown, req.get('If-Match'), actor);
+    validateOperationRequest(req, 'updatePackingMetadata', normalizePackingMetadataPatch);
+    const result = await patchPackingMetadata(String(req.params.listId), req.body as components['schemas']['PackingMetadataPatch'], req.get('If-Match'), actor);
     sendValidatedJson(req, res, 'updatePackingMetadata', 200, result.data, result.etag);
+}));
+
+// The native description method is publicly grantable. Its separate adapter keeps
+// the mixed root-property endpoint and its event/archive projection profile-only.
+router.get('/:listId/description', asyncHandler(async function getPackingDescription(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'getPackingDescription');
+    const baseline = await packingApi.readPackingDescription(String(req.params.listId), actor);
+    sendValidatedJson(req, res, 'getPackingDescription', 200, baseline, baseline.editToken);
+}));
+
+router.patch('/:listId/description', asyncHandler(async function updatePackingDescription(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'updatePackingDescription', normalizePackingMetadataPatch);
+    const baseline = await packingApi.patchPackingDescription(String(req.params.listId), req.body, req.get('If-Match'), actor);
+    sendValidatedJson(req, res, 'updatePackingDescription', 200, baseline, baseline.editToken);
 }));
 
 router.put('/:listId/items/:itemId/self-assignment', asyncHandler(async function assignSelf(req, res) {
@@ -143,26 +160,42 @@ router.post('/:listId/items', asyncHandler(async function createPackingItem(req,
     sendValidatedJson(req, res, 'createPackingItem', 201, result);
 }));
 
+// Independently granted methods need reviewable baselines without revealing the
+// linked detail page, assignments, parent context or unrelated edit fields.
+router.get('/:listId/items/:itemId/edit-baseline', asyncHandler(async function getPackingItemEditBaseline(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'getPackingItemEditBaseline');
+    const baseline = await packingApi.readPackingItemEditBaseline(String(req.params.listId), String(req.params.itemId), actor);
+    sendValidatedJson(req, res, 'getPackingItemEditBaseline', 200, baseline, baseline.editToken);
+}));
+
 router.patch('/:listId/items/:itemId', asyncHandler(async function updatePackingItem(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'updatePackingItem');
     sendValidatedJson(req, res, 'updatePackingItem', 200, await packingApi.updatePackingItem(String(req.params.listId), String(req.params.itemId), req.body, req.get('If-Match'), actor));
 }));
 
 router.delete('/:listId/items/:itemId', asyncHandler(async function deletePackingItem(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'deletePackingItem');
     sendValidatedJson(req, res, 'deletePackingItem', 200, await packingApi.deletePackingItem(String(req.params.listId), String(req.params.itemId), actor));
 }));
 
+router.get('/:listId/item-order', asyncHandler(async function getPackingItemOrderBaseline(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'getPackingItemOrderBaseline');
+    const baseline = await packingApi.readPackingItemOrderBaseline(String(req.params.listId), actor);
+    sendValidatedJson(req, res, 'getPackingItemOrderBaseline', 200, baseline, baseline.orderToken);
+}));
+
 router.put('/:listId/item-order', asyncHandler(async function reorderPackingItems(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'reorderPackingItems');
     sendValidatedJson(req, res, 'reorderPackingItems', 200, await packingApi.reorderPackingItems(String(req.params.listId), req.body, req.get('If-Match'), actor));
 }));
 
 router.delete('/:listId/assignments/:assignmentId', asyncHandler(async function deletePackingAssignment(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'deletePackingAssignment');
     sendValidatedJson(req, res, 'deletePackingAssignment', 200, await packingApi.deletePackingAssignment(String(req.params.listId), String(req.params.assignmentId), actor));
 }));
@@ -173,45 +206,74 @@ router.put('/:listId/event', asyncHandler(async function changePackingEvent(req,
     sendValidatedJson(req, res, 'changePackingEvent', 200, await packingApi.changePackingEvent(String(req.params.listId), req.body, actor, req.get('If-Match')));
 }));
 
+router.get('/:listId/default-permissions', asyncHandler(async function getPackingDefaultsBaseline(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'getPackingDefaultsBaseline');
+    const baseline = await packingApi.readPackingDefaultsBaseline(String(req.params.listId), actor);
+    sendValidatedJson(req, res, 'getPackingDefaultsBaseline', 200, baseline, baseline.editToken);
+}));
+
 router.put('/:listId/default-permissions', asyncHandler(async function updatePackingDefaults(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'updatePackingDefaults');
     sendValidatedJson(req, res, 'updatePackingDefaults', 200, await packingApi.updatePackingDefaults(String(req.params.listId), req.body, actor, req.get('If-Match')));
 }));
 
 router.post('/:listId/admins', asyncHandler(async function addPackingAdmin(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'addPackingAdmin');
     const body = req.body as components['schemas']['PackingAdminInput'];
     sendValidatedJson(req, res, 'addPackingAdmin', 200, await packingApi.setPackingAdmin(String(req.params.listId), body.profileId, body.mask, actor, req.get('If-Match')));
 }));
 
+router.get('/:listId/admins/:profileId/edit-baseline', asyncHandler(async function getPackingAdminBaseline(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'getPackingAdminBaseline');
+    const baseline = await packingApi.readPackingAdminBaseline(String(req.params.listId), String(req.params.profileId), actor);
+    sendValidatedJson(req, res, 'getPackingAdminBaseline', 200, baseline, baseline.editToken);
+}));
+
 router.patch('/:listId/admins/:profileId', asyncHandler(async function updatePackingAdmin(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'updatePackingAdmin');
     sendValidatedJson(req, res, 'updatePackingAdmin', 200, await packingApi.setPackingAdmin(String(req.params.listId), String(req.params.profileId), req.body.mask, actor, req.get('If-Match')));
 }));
 
 router.delete('/:listId/admins/:profileId', asyncHandler(async function deletePackingAdmin(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'deletePackingAdmin');
     sendValidatedJson(req, res, 'deletePackingAdmin', 200, await packingApi.setPackingAdmin(String(req.params.listId), String(req.params.profileId), null, actor, req.get('If-Match')));
 }));
 
-router.get('/:listId/profiles', asyncHandler(async function searchPackingProfiles(req, res) {
-    const actor = await requireApiContext(req, res, true);
+/** Admit the authoritative context before the limiter can emit a versioned
+ * Problem. The final controller still evaluates current management grants. */
+async function admitPackingProfileSearch(req: Request, res: Response, next: NextFunction): Promise<void> {
+    await requireApiContext(req, res);
     validateOperationRequest(req, 'searchPackingProfiles');
-    sendValidatedJson(req, res, 'searchPackingProfiles', 200, await packingApi.searchPackingProfiles(String(req.params.listId), String(req.query.q ?? ''), actor));
+    next();
+}
+
+router.get('/:listId/profiles', asyncHandler(admitPackingProfileSearch), searchLimiter, asyncHandler(async function searchPackingProfiles(req, res) {
+    sendValidatedJson(req, res, 'searchPackingProfiles', 200, await packingApi.searchPackingProfiles(String(req.params.listId), String(req.query.q ?? ''), req.apiActor!));
+}));
+
+router.get('/:listId/header/edit-baseline', asyncHandler(async function getPackingHeaderBaseline(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'getPackingHeaderBaseline');
+    const baseline = await packingApi.readPackingHeaderBaseline(String(req.params.listId), actor);
+    sendValidatedJson(req, res, 'getPackingHeaderBaseline', 200, baseline, baseline.editToken);
 }));
 
 router.put('/:listId/header', asyncHandler(async function uploadPackingHeader(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    const actor = await requireApiContext(req, res);
     // Reject an unprivileged upload before writing bytes, and check again under the root lock.
-    if (!(await packingApi.readPackingSettings(String(req.params.listId), actor)).capabilities.editHeader) throw new ApiProblem('FORBIDDEN');
+    await packingApi.readPackingHeaderBaseline(String(req.params.listId), actor);
     let committed = false;
     try {
         await readImageUpload(req, res);
-        validateOperationRequest(req, 'uploadPackingHeader', body => ({...body as object, ...(req.file ? {image: req.file.originalname} : {})}));
+        validateOperationRequest(req, 'uploadPackingHeader', function decodeHeaderForm(body) {
+            return {...body as object, ...(req.file ? {image: req.file.originalname} : {})};
+        });
         if (!req.file) throw new ApiProblem('UPLOAD_INVALID');
         const result = await packingApi.setPackingHeader(String(req.params.listId), req.file, actor, req.get('If-Match'));
         committed = true;
@@ -222,7 +284,7 @@ router.put('/:listId/header', asyncHandler(async function uploadPackingHeader(re
 }));
 
 router.delete('/:listId/header', asyncHandler(async function deletePackingHeader(req, res) {
-    const actor = await requireApiContext(req, res, true);
+    const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'deletePackingHeader');
     sendValidatedJson(req, res, 'deletePackingHeader', 200, await packingApi.setPackingHeader(String(req.params.listId), undefined, actor, req.get('If-Match')));
 }));

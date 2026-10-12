@@ -167,12 +167,16 @@ function retainIdentityNavigation(context: PilotContext, router: Router, confirm
         if (identityNavigations.get(context.session) === retireNavigation) identityNavigations.delete(context.session);
     }
 
+    /** Consume this confirmed destination only from its original visit and the
+     * matching recovered actor. Retire the observers before navigating so a later
+     * bootstrap cannot deliver this identity command's destination a second time. */
     function resumeNavigation(): void {
         if (frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(origin)) {
             retireNavigation();
             return;
         }
         if (!context.ready.value || navigation.pending()) return;
+
         const matches = context.session.value?.context === confirmedContext;
         retireNavigation();
         if (matches) void navigateConfirmedEntry(context, router, outcome, origin, completion);
@@ -220,9 +224,10 @@ function navigateConfirmedEntry(context: PilotContext, router: Router,
 // those remounts. Separate SSR requests/browser apps have separate session ref keys.
 const confirmedNavigations = new WeakMap<PilotContext['session'], ReturnType<typeof createConfirmedNavigation>>();
 
-/** One application-owned delivery state, observed by mounted command owners. Component
- * type and an optional logical identity survive actor remounts while keeping simultaneous
- * instances independent. Unrelated editors cannot expose another owner's confirmed Retry. */
+/** One application-owned delivery state, observed by mounted command owners.
+ * Component type survives actor remounts; simultaneous instances of that same
+ * type must supply distinct stable logical identities to retain separate receipts.
+ * Without a supplied identity, identifyOwner deliberately uses the component type. */
 function createConfirmedNavigation(context: PilotContext, router: Router) {
     const receipt = shallowRef<{destination: string; scope: PilotRequestScope; origin: string;
         notice: components['schemas']['EntryNotice'] | null; owner: unknown}>();
@@ -296,6 +301,10 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
     async function retry(owner: unknown): Promise<boolean> {
         const confirmed = receipt.value;
         if (disposed || pending.value || !confirmed || confirmed.owner !== owner) return false;
+
+        // A receipt may survive a remount, but cannot cross another actor or an
+        // accepted departure from its originating form. Retire that obsolete
+        // continuation before attempting delivery; the business command stays done.
         if (!context.isCurrent(confirmed.scope)
             || frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(confirmed.origin)) {
             receipt.value = undefined;
@@ -304,6 +313,9 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
 
         pending.value = true;
         try {
+            // Retry only destination delivery with the current presentation
+            // language. Clear this exact receipt after commitment; a newer owner
+            // or failed navigation must not lose its retained recovery state.
             const committed = await navigatePageEntry(context, router,
                 {kind: 'redirect', url: confirmed.destination, notice: confirmed.notice}, context.capture(), confirmed.origin);
             if (committed && receipt.value === confirmed) receipt.value = undefined;
@@ -350,12 +362,16 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         }
     }
 
+    /** Release one mounted consumer without discarding another consumer's receipt.
+     * The final release retires the application-local navigation and every guard;
+     * disposing an older owner must not remove a newer navigation from the registry. */
     function release(owner: unknown): void {
         const counts = new Map(mountedOwners.value);
         const count = (counts.get(owner) ?? 1) - 1;
         if (count > 0) counts.set(owner, count);
         else counts.delete(owner);
         mountedOwners.value = counts;
+
         if (--owners > 0) return;
         disposed = true;
         receipt.value = undefined;
@@ -554,6 +570,9 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
     // equal read. Observe its completed query state as well as its payload so
     // retained admission reports the latest real receipt after a later failure.
     watch([query.data, query.dataUpdatedAt, query.isFetching, query.error], rememberRender, {immediate: true});
+    // Presentation can retain only an admitted render decision, never a denied
+    // resource's private payload. A redirect waits behind that subtree's existing
+    // departure guards; a current denial always wins over the retained decision.
     const outcome = computed<components['schemas']['PageEntryOutcome'] | undefined>(() => {
         if (deniedEntry.value) return deniedEntry.value instanceof ApiFailure ? undefined : deniedEntry.value;
         const entry = query.data.value?.entry;

@@ -20,25 +20,38 @@ import {prepareFileUploader} from "../modules/lib/fileCommons";
 import {PERM} from "../modules/lib/permissions";
 import renderer from '../modules/renderer';
 import settings from "../modules/settings";
-import type {EntityGetter, GetResource, SessionLike} from "../types/PermissionTypes";
+import type {EntityGetter, GetResource} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
 import {requirePermissionApi} from "./permissionMiddleware";
 
 const fileUploader = prepareFileUploader(settings.value.headerImgDir);
 
-export function createEntityHeaderUpdateRouter(app: Router, permFct: EntityGetter, resFct: GetResource, setImg: (entity: EntityBase, file?: Express.Multer.File, session?: SessionLike) => Promise<string>, delImg: (entity: EntityBase, session?: SessionLike) => Promise<string>) {
+/** Attach native header writes to the existing feature's admitted resource.
+ * Method permission precedes multipart storage; feature callbacks own image
+ * validation/persistence/cleanup and return their established literal messages.
+ * The read/download route and its page admission remain separate responsibilities.
+ */
+export function createEntityHeaderUpdateRouter(
+    app: Router,
+    permFct: EntityGetter,
+    resFct: GetResource,
+    setImg: (entity: EntityBase, file?: Express.Multer.File) => Promise<string>,
+    delImg: (entity: EntityBase) => Promise<string>
+) {
+    // Reject missing method authority before the uploader writes a new file.
     app.put("/:id/header",
         requirePermissionApi(permFct, PERM.EDIT_META),
         fileUploader.single("image"),
         asyncHandler(async (req: Request, res: Response) => {
-            const msg = await setImg(resFct(req), req.file, req.session);
+            const msg = await setImg(resFct(req), req.file);
             renderer.respondWithSuccessJson(res, msg)
         }));
 
+    // Removal needs the same method authority but has no multipart side effect.
     app.delete("/:id/header",
         requirePermissionApi(permFct, PERM.EDIT_META),
         asyncHandler(async (req: Request, res: Response) => {
-            const msg = await delImg(resFct(req), req.session);
+            const msg = await delImg(resFct(req));
             renderer.respondWithSuccessJson(res, msg);
         }));
 }

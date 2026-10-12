@@ -51,10 +51,14 @@ function beginNavigation(to: RouteLocationNormalized, from: RouteLocationNormali
     pendingNavigation.value = to.path !== from.path ? to : undefined;
 }
 
+/** Commit shell feedback only for an accepted path/query change. Fragment-only
+ * movement keeps the current receipt, and an obsolete or canceled lazy navigation
+ * cannot consume a command's destination-specific success message. */
 function finishNavigation(to: RouteLocationNormalized, from?: RouteLocationNormalized,
                           failure?: NavigationFailure | void): void {
     // A cancelled older import must not clear the newer destination's indicator.
     if (pendingNavigation.value === to) pendingNavigation.value = undefined;
+
     // Redirect feedback is applied after its destination commits. Clear it on the next
     // accepted visit, never while a cancelled guard keeps the user on the same form.
     const changedDocument = from && frontendDocumentUrl(to.fullPath) !== frontendDocumentUrl(from.fullPath);
@@ -63,6 +67,7 @@ function finishNavigation(to: RouteLocationNormalized, from?: RouteLocationNorma
         context.personalLink.value = null;
         if (notice.value === 'auth.logoutDone') notice.value = null;
     }
+
     // A command's full message belongs only to its admitted canonical destination.
     // Keep it through that commitment; the next accepted different visit retires it.
     if (!failure && changedDocument && context.pageCompletion.value

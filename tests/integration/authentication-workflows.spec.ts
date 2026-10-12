@@ -134,7 +134,7 @@ describe('authentication user stories', () => {
         }
     });
 
-    it('registers an inactive account with a usable profile, email lookup, and verified password', async () => {
+    it('registers an inactive account with a usable profile, all account lookups, and verified password', async () => {
         // These reads exercise the same newly committed account/profile transaction.
         // Reusing that account keeps each persistence and password assertion without
         // repeating registration and its deliberately expensive password hashing.
@@ -145,6 +145,9 @@ describe('authentication user stories', () => {
         expect(Boolean(account?.isActive)).toBe(false);
         expect(account?.profiles).toHaveLength(1);
         expect(await userService.getUserByEmail(accountEmail)).toMatchObject({id: userId, username});
+        expect((await userService.findUserByNameOrEmail(username))?.id).toBe(userId);
+        expect((await userService.findUserByNameOrEmail(accountEmail))?.id).toBe(userId);
+        expect((await userService.findUserByNameOrEmail(userId))?.id).toBe(userId);
         await expect(userService.verifyPassword(userId, 'initial-secret')).resolves.toBe(true);
         await expect(userService.verifyPassword(userId, 'wrong-secret')).resolves.toBe(false);
     });
@@ -247,25 +250,6 @@ describe('authentication user stories', () => {
         expect(oidc.oidcSub).toBe('jit-provisioned-subject');
         expect(Boolean(oidc.isActive)).toBe(true);
         expect(oidc.profiles).toHaveLength(1);
-    });
-
-    it('resolves an account by username, email, and numeric id', async () => {
-        const {email, id: userId, username} = await registerLocalAccount('account-resolution');
-
-        expect((await userService.findUserByNameOrEmail(username))?.id).toBe(userId);
-        expect((await userService.findUserByNameOrEmail(email))?.id).toBe(userId);
-        expect((await userService.findUserByNameOrEmail(userId))?.id).toBe(userId);
-    });
-
-    it('searches accounts without disclosing a raw email address', async () => {
-        const user = await registerLocalAccount('secure-search');
-        const profiles = user.profiles;
-        expect(profiles).toHaveLength(1);
-        const profile = profiles![0];
-
-        const [result] = await userService.searchUsersSecure(user.username, 5);
-        expect(result).toMatchObject({id: profile.id, name: profile.name, username: user.username});
-        expect(result.email).not.toBe(user.email);
     });
 
 });

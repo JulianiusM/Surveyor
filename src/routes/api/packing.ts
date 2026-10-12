@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-import express, {Request, Response, type NextFunction} from 'express';
+import express, {Request, Response} from 'express';
 
 import controller from "../../controller/packingController";
+import {packingMethodPermission} from '../../controller/packingController';
 import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPropertyApiRouter} from "../../middleware/adminApiFactory";
 import {attachAssignRoutes} from '../../middleware/assignFlowFactory';
 import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
@@ -37,12 +38,9 @@ import {
     getResource
 } from "../../modules/lib/util";
 import renderer from '../../modules/renderer';
-import {APIError} from '../../modules/lib/errors';
 import type {ItemGetter} from "../../types/PermissionTypes";
 import type {EntityItemType, EntityType} from "../../types/UtilTypes";
-import {packingItemFieldPermission} from '../../modules/packing/api';
-import {entityPropertyPermission} from '../../controller/entityAdminController';
-import type {components} from '../../types/api/v1';
+import type {PackingMethod} from '../../types/PackingTypes';
 
 const app = express.Router();
 
@@ -57,6 +55,19 @@ const permFctItems = getPermFctItems(resFct, resFctItems, entityName, entityItem
 const permFctAssign = getPermFctAssign(resFct, resFctAssign, entityName, entityItemName);
 const itemPermFct: ItemGetter = getItemFromEntityPermFct(packingService.getPackingItems, resFct, entityItemName);
 
+/** Native decoding/feedback remains here; the owning controller chooses method grants. */
+function requirePackingPermission(method: PackingMethod) {
+    return requirePermissionApi(permFct, PERM[packingMethodPermission(method).permission]);
+}
+
+/** Translate the controller's item fallback rule to the existing native middleware. */
+function requirePackingItemPermission(method: PackingMethod, assignment = false) {
+    const rule = packingMethodPermission(method);
+    const parent = Array.isArray(rule.parent) ? rule.parent.map(key => PERM[key])
+        : rule.parent ? PERM[rule.parent] : undefined;
+    return requireItemPermissionApi(assignment ? permFctAssign : permFctItems, PERM[rule.permission], parent);
+}
+
 apiParamHandler('id', app, packingService.getPackingListById, entityName);
 apiParamHandler('itemId', app, packingService.getPackingItemById, entityItemName);
 apiParamHandler('assignId', app, packingService.getPackingAssignmentById, assignName);
@@ -68,8 +79,8 @@ createEntityAdminApiRouter(app, entityName, permFct)
 createEntityArchiveApiRouter(app, entityName, resFct);
 createEntityPropertyApiRouter(app, entityName, resFct, controller.updateProperties);
 
-app.post('/:id/description', requirePermissionApi(permFct, PERM[entityPropertyPermission('packing', 'description')!]), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateDescription(resFct(req).id, req.body, resFct(req).eventId ?? null, req.session);
+app.post('/:id/description', requirePackingPermission('editDescription'), asyncHandler(async (req: Request, res: Response) => {
+    const msg = await controller.updateDescription(resFct(req).id, req.body, resFct(req).eventId ?? null);
     renderer.respondWithSuccessJson(res, msg);
 }))
 
@@ -77,7 +88,7 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM[entityPropertyPe
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */
 
 attachAssignRoutes(app, controller.getAssignmentAccessMapping(), {
-    middleware: [requirePermissionApi(permFct, PERM.ACCESS_VIEW)],
+    middleware: [requirePackingPermission('selfAssignment')],
     resolveItemEntityId: async (itemId) => (await packingService.getPackingItemById(itemId))?.entityId,
 });
 createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg, controller.deleteHeaderImg);
@@ -85,62 +96,48 @@ createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg,
 /* ───────────────── REORDER (Owner) ────────────────────────── */
 
 /* ----------- REORDER (nur Owner, JSON-Antwort) ---------------- */
-app.post('/:id/reorder', requirePermissionApi(permFct, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.reorderItems(resFct(req).id, req.body.orders, req.session);
+app.post('/:id/reorder', requirePackingPermission('reorderItems'), asyncHandler(async (req: Request, res: Response) => {
+    const msg = await controller.reorderItems(resFct(req).id, req.body.orders);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ───────────────── QUICK-ADD ──────────────────────────────── */
 
-app.post('/:id/items', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/items', requirePackingPermission('addItem'), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.quickAddItem(resFct(req), req.body, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-/** Translate the existing field declaration to the native middleware's numeric permission contract. */
-function requireItemFieldPermission(field: keyof components['schemas']['PackingItemPatch']) {
-    const rule = packingItemFieldPermission(field);
-    const parent = Array.isArray(rule.parent) ? rule.parent.map(key => PERM[key])
-        : rule.parent ? PERM[rule.parent] : undefined;
-    return requireItemPermissionApi(permFctItems, PERM[rule.permission], parent);
-}
-
-app.post('/:id/item/:itemId/description', requireItemFieldPermission('description'), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateItemDescription(req.params.itemId as string, req.body, resFct(req).id, req.session);
+app.post('/:id/item/:itemId/description', requirePackingItemPermission('editItemDescription'), asyncHandler(async (req: Request, res: Response) => {
+    const msg = await controller.updateItemDescription(req.params.itemId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ---------- PATCH einzelnes Attribut -------------------------------- */
-// The inline title/capacity controls use their field grants, as the separate description route does.
-function requireAttributePermission(req: Request, res: Response, next: NextFunction) {
-    const field = req.body?.field;
-    if (!['title', 'description', 'maxAssignees'].includes(field)) return next(new APIError('Invalid field', {}, 400));
-    return requireItemFieldPermission(field)(req, res, next);
-}
-app.post('/:id/item/:itemId/attr', requireAttributePermission, asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateItemAttr(req.params.itemId as string, req.body, resFct(req).id, req.session);
+app.post('/:id/item/:itemId/attr', requirePackingItemPermission('editItemAttr'), asyncHandler(async (req: Request, res: Response) => {
+    const msg = await controller.updateItemAttr(req.params.itemId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ---------- Everyone flag -------------------------------- */
-app.post('/:id/item/:itemId/required', requireItemFieldPermission('requiredByAll'), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateRequired(req.params.itemId as string, req.body, resFct(req).id, req.session);
+app.post('/:id/item/:itemId/required', requirePackingItemPermission('editItemRequired'), asyncHandler(async (req: Request, res: Response) => {
+    const msg = await controller.updateRequired(req.params.itemId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/assignment/:assignId/delete', requireItemPermissionApi(permFctAssign, PERM.MANAGE_ASSIGNMENTS), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.deleteAssignment(req.params.assignId as string, resFct(req).id, req.session);
+app.post('/:id/assignment/:assignId/delete', requirePackingItemPermission('deleteAssignment', true), asyncHandler(async (req: Request, res: Response) => {
+    const msg = await controller.deleteAssignment(req.params.assignId as string);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* Owner-Settings ändern (AJAX) -------------------------------------- */
-app.post('/:id/settings', requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.updateSettings(resFct(req).id, req.body, req.session);
+app.post('/:id/settings', requirePackingPermission('managePermissions'), asyncHandler(async (req: Request, res: Response) => {
+    const msg = await controller.updateSettings(resFct(req).id, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/item/:itemId/delete', requireItemPermissionApi(permFctItems, PERM.ITEM_DELETE, PERM.ITEM_DELETE), asyncHandler(async (req: Request, res: Response) => {
-    const msg = await controller.deleteItem(req.params.itemId as string, resFct(req).id, req.session);
+app.post('/:id/item/:itemId/delete', requirePackingItemPermission('deleteItem'), asyncHandler(async (req: Request, res: Response) => {
+    const msg = await controller.deleteItem(req.params.itemId as string);
     renderer.respondWithSuccessJson(res, msg);
 }));
 

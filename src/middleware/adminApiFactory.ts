@@ -31,15 +31,28 @@ import {
 import type {EntityBase} from '../types/UserTypes';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import renderer from "../modules/renderer";
-import type {EntityGetter, GetResource, SessionLike} from "../types/PermissionTypes";
+import type {EntityGetter, GetResource} from "../types/PermissionTypes";
 import type {CombEntityType, EntityType} from "../types/UtilTypes";
 import {requirePermissionApi} from './permissionMiddleware';
+import {isVersionedApiRequest} from '../modules/api/problem';
+import {APIError} from '../modules/lib/errors';
 
-const searchLimiter = rateLimit({
+/** Native and versioned administrator discovery share one per-IP search budget.
+ * This is a transport limit, not a permission decision. V1 routes admit their
+ * authoritative context before using it, then controllers evaluate resource grants. */
+export const searchLimiter = rateLimit({
     windowMs: 10 * 60 * 1000, // 10 minutes
     limit: 120,                  // 120 searches / 10 min per IP
     standardHeaders: true,
     legacyHeaders: false,
+    handler: function handleSearchRateLimit(req, res, next, options) {
+        // The shared budget keeps its original native wire response. A mounted
+        // v1 request reaches the existing Problem classifier/localization owner.
+        if (isVersionedApiRequest(req)) return next(new APIError('Search rate limit exceeded', {}, options.statusCode));
+
+        // Preserve the native limiter's original status and unstructured message.
+        res.status(options.statusCode).send(options.message);
+    },
 });
 
 /**
@@ -124,20 +137,13 @@ export function createEntityPropertyApiRouter(
     app: Router,
     entityType: EntityType,
     getResource: GetResource,
-    updateProperties: (entity: any, body: unknown, session?: SessionLike) => Promise<string>,
+    updateProperties: (entity: any, body: unknown) => Promise<string>,
     invalidateEventContext?: (id: string) => void,
 ) {
     async function update(req: Request, res: Response) {
         const entity: EntityBase = getResource(req);
-        // Packing's original values are comparison evidence, not additional editable fields.
-        // Its controller validates them under the write lock after ordinary field authorization.
-        let authorizedBody = req.body;
-        if (entityType === 'packing' && authorizedBody && typeof authorizedBody === 'object' && !Array.isArray(authorizedBody)) {
-            authorizedBody = {...authorizedBody};
-            delete authorizedBody.expectedValues;
-        }
-        await requireEntityPropertyUpdate(entityType, entity, authorizedBody, req.session);
-        const message = await updateProperties(entity, req.body, req.session);
+        await requireEntityPropertyUpdate(entityType, entity, req.body, req.session);
+        const message = await updateProperties(entity, req.body);
         renderer.respondWithSuccessJson(res, message);
     }
     app.post('/:id/update', asyncHandler(update));

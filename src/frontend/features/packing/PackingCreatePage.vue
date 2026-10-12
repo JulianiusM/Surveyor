@@ -4,10 +4,9 @@ import {useRoute} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import type {MessageKey} from '../../../types/LocalizationTypes';
 import {usePackingApi} from './api';
 import {usePilot} from '../../app/context';
-import {ApiFailure, isReadDenial} from '../../app/transport';
+import {isReadDenial} from '../../app/transport';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
 import {useCommand} from '../../composables/command';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
@@ -48,14 +47,16 @@ function initialCreationEntry(): components['schemas']['PackingCreateEntry'] | u
 function initialDuplicate(): components['schemas']['PackingDuplicate'] | undefined {
     return isInitialForm() ? context.bootstrap.packingDuplicate : undefined;
 }
-type Row = components['schemas']['PackingDuplicateItem'] & {key: number};
+// This number control keeps its lexical draft. Native collection applies parseInt
+// to the DOM string; Vue's numeric v-model would turn "2e3" into 2000 first.
+type Row = Omit<components['schemas']['PackingDuplicateItem'], 'maxAssignees'> & {key: number; maxAssignees: string};
 const nextKey = ref(0);
 const title = ref('');
 const description = ref('');
 // A contextual URL is resolved before becoming draft state. Subsequent picker reads
 // can retire a label while retaining an actual user choice for explicit recovery.
 const eventId = ref<string | null>(null);
-const selectedEvent = ref<components['schemas']['PackingEventOption'] | null>(null);
+const selectedEvent = ref<components['schemas']['EventPickerOption'] | null>(null);
 const image = ref<File | null>(null);
 const rows = ref<Row[]>([]);
 const defaults = ref<components['schemas']['PermissionDefaults'] | null>(null);
@@ -64,9 +65,13 @@ const submitted = ref(false);
 const admittingSubmission = ref(false);
 const leavingAfterSubmission = ref(false);
 const retainedContext = ref<components['schemas']['PackingCreateContext'] | null>(null);
-// Submission admission is a read with its own durable feedback. Keep its exact
-// descriptor so recovered authority cannot erase a later command's validation.
-let submissionAdmissionError: MessageKey | ApiFailure | null = null;
+// Submission admission is a read, independently of the form's initial query and
+// any later mutation. Its recovery displays the shared deadline and never POSTs
+// or clears an unrelated command validation/unknown outcome.
+const submissionAdmissionError = ref<Error | null>(null);
+const submissionAdmittedAt = ref<number>();
+const submissionRetryAvailable = useReadRetry(() => submissionAdmissionError.value);
+const submissionRetryAt = useReadRetryAt(() => submissionAdmissionError.value, submissionRetryAvailable);
 // Vue reuses this route component between creation/duplicate URLs. A confirmed navigation
 // starts a new draft instead of retaining a previous list's copied rows or uploaded file.
 // Watch each identity value independently. Router replaces its query object on a
@@ -79,7 +84,8 @@ function resetCreationDraft(): void {
     command.acknowledge();
     baseline.value = null;
     retainedContext.value = null;
-    submissionAdmissionError = null;
+    submissionAdmissionError.value = null;
+    submissionAdmittedAt.value = undefined;
     submitted.value = false;
     title.value = '';
     description.value = '';
@@ -182,7 +188,7 @@ function newRow(value?: components['schemas']['PackingDuplicateItem']): Row {
         title: value?.title ?? '',
         description: value?.description ?? '',
         // Native duplication initializes historical blank capacities to one in its form.
-        maxAssignees: value?.maxAssignees || 1,
+        maxAssignees: String(value?.maxAssignees || 1),
         requiredByAll: value?.requiredByAll ?? false,
     };
 }
@@ -218,13 +224,14 @@ const command = useCommand(context.refreshSession, true, {
     busy: () => admittingSubmission.value,
     unknownMessage: 'packing.leaveUnknown',
 });
-const blocked = computed(() => submitted.value || command.pending.value || command.uncertain.value || admittingSubmission.value);
+const blocked = computed(() => submitted.value || command.pending.value || command.uncertain.value
+    || admittingSubmission.value || !submissionRetryAvailable.value);
 function chooseImage(event: Event): void {
     image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
 }
 /** A duplicate grant admits its form independently of creation. The server projects the
  * account-login journey and exact duplicate return; the browser does not duplicate that policy. */
-async function admitSubmission(): Promise<boolean> {
+async function admitSubmission(purpose: 'submission' | 'recovery'): Promise<boolean> {
     const scope = context.capture();
     // Fragments move within this document and cannot cancel a submitted form.
     // Path/query, actor and locale changes still retire the admission receipt.
@@ -233,29 +240,39 @@ async function admitSubmission(): Promise<boolean> {
     try {
         const result = await api.createEntry(scope, undefined, expectedRoute);
         if (!context.isCurrent(scope, true) || frontendDocumentUrl(route.fullPath) !== expectedRoute) return false;
-        if (submissionAdmissionError) {
-            command.clearRecoveredError(submissionAdmissionError);
-            submissionAdmissionError = null;
+        submissionAdmissionError.value = null;
+        if (result.entry.kind === 'render') {
+            // This receipt belongs to the successful preflight itself. Initial
+            // creation/duplicate data is a different read, not proof of admission.
+            submissionAdmittedAt.value = Date.now();
+            return true;
         }
-        if (result.entry.kind === 'render') return true;
+        submissionAdmittedAt.value = undefined;
 
-        // A known submission admission is a completed native form journey. It does
-        // not introduce another discard prompt; cancellation by another owner still
-        // keeps this mounted draft. Pending/unknown commands never use this bypass.
+        // Submission already consents to its native admission journey. A read-only
+        // Retry retains the ordinary draft departure decision instead of treating
+        // recovered authority as consent to create or discard the entered form.
         admittingSubmission.value = false;
-        leavingAfterSubmission.value = true;
+        leavingAfterSubmission.value = purpose === 'submission';
         await creation.navigate(result.entry, scope, expectedRoute);
         return false;
     } catch (failure) {
         if (context.isCurrent(scope, true) && frontendDocumentUrl(route.fullPath) === expectedRoute) {
-            submissionAdmissionError = failure instanceof ApiFailure ? failure : 'state.loadFailed';
-            command.setError(submissionAdmissionError, 'durable');
+            submissionAdmissionError.value = failure instanceof Error ? failure : new Error('Admission read failed');
+            if (isReadDenial(failure)) submissionAdmittedAt.value = undefined;
         }
         return false;
     } finally {
         admittingSubmission.value = false;
         leavingAfterSubmission.value = false;
     }
+}
+
+/** Recover only account admission. A successful GET leaves this form intact and
+ * requires a separate explicit Create before collecting and sending its draft. */
+async function retrySubmissionAdmission(): Promise<void> {
+    if (submitted.value || admittingSubmission.value || !context.ready.value || !submissionRetryAvailable.value) return;
+    await admitSubmission('recovery');
 }
 
 /** Mirror the native browser collector: omit blank titles, trim item strings and
@@ -265,17 +282,26 @@ function collectedItems(): components['schemas']['PackingNewItem'][] {
     for (const row of rows.value) {
         const itemTitle = row.title.trim();
         if (!itemTitle) continue;
-        const capacity = String(row.maxAssignees ?? '');
         items.push({title: itemTitle, description: row.description?.trim() ?? '',
-            maxAssignees: Number.parseInt(capacity || '1'), requiredByAll: row.requiredByAll});
+            maxAssignees: Number.parseInt(row.maxAssignees || '1'), requiredByAll: row.requiredByAll});
     }
     return items;
 }
 
+/** Number-type v-model also coerces without a .number modifier. Preserve the
+ * actual DOM string until the feature's native-equivalent collection boundary. */
+function updateCapacity(row: Row, event: Event): void {
+    row.maxAssignees = (event.target as HTMLInputElement).value;
+}
+
+/** Revalidate account-only admission before submitting the native-equivalent draft.
+ * Blank rows are omitted by the existing collector. Unknown delivery retains input;
+ * a confirmed creation transfers its destination to the shared navigation owner so
+ * a canceled or failed route load cannot make the creation command available again. */
 async function create(): Promise<void> {
     if (!defaults.value || !formContext.value || blocked.value) return;
     // A held preflight cannot reuse definitions retired by another confirmed read.
-    if (!(await admitSubmission()) || !formContext.value) return;
+    if (!(await admitSubmission('submission')) || !formContext.value) return;
 
     const items = collectedItems();
     if (!items.length) {
@@ -344,6 +370,12 @@ async function create(): Promise<void> {
                 {{ messages.t(lastUpdatedAt ? 'state.stale' : 'state.loadFailed') }}
                 <ActionButton class="btn-sm ms-2" variant="outline-light" :pending="reading"
                     :disabled="!retryAvailable" @click="retryRead">{{ messages.t('common.retry') }}</ActionButton>
+            </StatusNotice>
+            <StatusNotice v-if="submissionAdmissionError" kind="warning" :last-updated-at="submissionAdmittedAt"
+                :retry-at="submissionRetryAt" :read-error="submissionAdmissionError">
+                {{ messages.t(submissionAdmittedAt ? 'state.stale' : 'state.loadFailed') }}
+                <ActionButton class="btn-sm ms-2" variant="outline-light" :pending="admittingSubmission"
+                    :disabled="!submissionRetryAvailable" @click="retrySubmissionAdmission">{{ messages.t('common.retry') }}</ActionButton>
             </StatusNotice>
             <!-- Both create and duplicate use one admitted initial projection. The
                  event picker loads independently; a refresh never replaces this draft. -->
@@ -451,7 +483,8 @@ async function create(): Promise<void> {
                                         </td>
                                         <td style="width: 110px">
                                             <input
-                                                v-model.number="row.maxAssignees"
+                                                :value="row.maxAssignees"
+                                                @input="updateCapacity(row, $event)"
                                                 class="form-control text-bg-dark"
                                                 type="number"
                                                 data-hydration-draft

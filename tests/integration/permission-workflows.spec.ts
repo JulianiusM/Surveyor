@@ -56,47 +56,26 @@ afterAll(async () => {
 });
 
 describe('permission user stories', () => {
-    it('delegates view access to an event administrator', async () => {
+    it('delegates, lists, updates and revokes event administration while accepting an unchanged mask', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
         const viewAdmin = PERM.ACCESS_VIEW;
         await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
-
         expect(await adminService.getProfilePerms('event', eventId, participant.id)).toBe(viewAdmin);
-    });
+        expect(await adminService.listAdmins('event', eventId)).toContainEqual(expect.objectContaining({profile: expect.objectContaining({id: participant.id})}));
 
-    it('upgrades a delegated administrator permission mask', async () => {
-        const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
-        const viewAdmin = PERM.ACCESS_VIEW;
-        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
-
-        await entityAdminController.updateAdmin('event', eventId, participant.id, {mask: viewAdmin | PERM.ACCESS_ADMIN});
-        expect(await adminService.getProfilePerms('event', eventId, participant.id)).toBe(viewAdmin | PERM.ACCESS_ADMIN);
-    });
-
-    it('accepts an unchanged delegated administrator permission mask', async () => {
-        // Protects administrators from a persistence error when Save is clicked without changing any checkbox.
-        const eventId = await createIntegrationEvent(owner.id, 'Unchanged administrator permission event');
-        const viewAdmin = PERM.ACCESS_VIEW;
-        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
-
+        // Save without checkbox changes must preserve the same delegated row before
+        // an actual upgrade. Reuse its persisted state instead of creating another event.
         await entityAdminController.updateAdmin('event', eventId, participant.id, {mask: viewAdmin});
-
         expect(await adminService.getProfilePerms('event', eventId, participant.id)).toBe(viewAdmin);
         expect(await adminService.isAdmin('event', eventId, participant.id)).toBe(true);
-    });
+        await entityAdminController.updateAdmin('event', eventId, participant.id, {mask: viewAdmin | PERM.ACCESS_ADMIN});
+        expect(await adminService.getProfilePerms('event', eventId, participant.id)).toBe(viewAdmin | PERM.ACCESS_ADMIN);
 
-    it('lists delegated administrators with their profile', async () => {
-        const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
-        const viewAdmin = PERM.ACCESS_VIEW;
-        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: viewAdmin});
-
-        expect(await adminService.listAdmins('event', eventId)).toContainEqual(expect.objectContaining({profile: expect.objectContaining({id: participant.id})}));
-    });
-
-    it('removes delegated event administration', async () => {
-        const eventId = await createIntegrationEvent(owner.id, 'Permission workflow event');
+        // Match the original revocation fixture's exact administrator-only mask.
+        // Both membership and permission-filtered discovery must forget this row.
         const adminMask = PERM.ACCESS_ADMIN;
-        await entityAdminController.addAdmin('event', eventId, {profileId: participant.id, mask: adminMask});
+        await entityAdminController.updateAdmin('event', eventId, participant.id, {mask: adminMask});
+        expect(await adminService.getProfilePerms('event', eventId, participant.id)).toBe(adminMask);
         expect(await adminService.getIds('event', participant.id, PERM.ACCESS_ADMIN)).toContain(eventId);
 
         await entityAdminController.removeAdmin('event', eventId, participant.id);

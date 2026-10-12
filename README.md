@@ -4,20 +4,12 @@ documentation-metadata
 audience: users; developers; operators
 owner: project maintainers
 status: current
-last-verified: 2026-10-08
+last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: FPR-07 preservation of the pre-pilot native production documentation reference and current non-pilot source-path corrections; no deployment, command execution or runtime certification
+verification-scope: non-blocking documentation policy and optional report/test routing; D12 product summary, clean-clone development start, current scripts, test layers, CI branches, release entry points, and repository map; operator execution remains tracked in D04V; D14 help validation and focused command surface
 source-anchors: package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts
-next-review: native-production-change-or-frontend-cutover
-production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
+next-review: repository-command-or-help-tooling-change
 -->
-
-This document describes the native frontend production reference. It preserves the existing production contract
-while the frontend migration is in progress; the reference is not evidence of the commit installed at a particular
-site. Developers working in the migration checkout must use the [staged replacement](docs/frontend-migration/staged/README.md) and current
-`package.json` for the changed frontend commands. Merge the staged replacement into this canonical document at
-production cutover, retaining any intervening native changes.
-
 
 Surveyor is a server-rendered collaboration application for recurring-date surveys, events, activity schedules, packing lists, rides, and event cost sharing. It is written in TypeScript and runs as an Express application backed by MariaDB.
 
@@ -42,7 +34,7 @@ Surveyor is a server-rendered collaboration application for recurring-date surve
 | Prepare or migrate the database | [Database and Migrations](docs/DATABASE.md) |
 | Operate a production instance | [Production Operations](docs/OPERATIONS.md) |
 | Upgrade or roll back | [Upgrading and Rolling Back](docs/UPGRADING.md) |
-| Continue the documentation migration | [Documentation Migration Status](docs/DOCUMENTATION_MIGRATION_STATUS.md) |
+| Continue the documentation migration | [Documentation Migration Status](docs/frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md) |
 
 The complete inventory and review state are in [`docs/README.md`](docs/README.md).
 

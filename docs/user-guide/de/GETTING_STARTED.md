@@ -4,12 +4,13 @@ documentation-metadata
 audience: neue Nutzer; Gäste; registrierte Nutzer
 owner: identity feature maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: vollständige eigenständige deutsche Anleitung mit unveränderter Abschnittsstruktur, Fristen, Datenschutz- und Kontolebenszyklusregeln; Abgleich übersetzter Konto-, Übersichts- und Packlistenbeschriftungen mit dem zentralen Katalog, englische E-Mail- und bestehende Formularbezeichnungen erhalten
+verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
 source-anchors: src/routes/users.ts; src/controller/userController.ts; src/views/users/; src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue
 heading-anchors: 1:getting-started-with-surveyor; 2:find-your-task; 2:choose-how-to-enter-surveyor; 2:create-and-activate-a-local-account; 3:activation-link-problems; 2:sign-in-with-an-organization-account; 2:log-in-to-a-local-account; 3:reset-a-local-password; 2:join-an-invitation-as-a-guest; 3:when-the-email-already-has-guest-accounts; 3:what-a-guest-account-can-do; 2:recover-guest-access-by-email; 2:understand-accounts-and-profiles; 2:edit-the-active-profile; 2:create-or-switch-profiles-on-a-full-account; 3:create-another-profile; 3:switch-profiles; 2:move-a-profile-to-another-full-account; 3:obtain-the-token-from-the-profile-being-moved; 3:complete-the-migration-in-the-receiving-account; 2:deactivate-a-profile-or-delete-an-account; 3:deactivate-one-profile-on-a-full-account; 3:delete-a-full-or-guest-account; 2:troubleshooting; 3:i-do-not-see-local-registration-or-password-fields; 3:local-login-says-the-account-is-not-activated; 3:i-requested-a-password-reset-but-received-no-email; 3:i-requested-guest-access-but-received-no-email; 3:my-overview-does-not-show-the-item-i-expected; 3:a-migration-token-is-rejected; 2:next-steps
 next-review: identity-or-authentication-visible-behavior-change
+production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->
 
 Diese Anleitung hilft dir, Surveyor zu öffnen, deinen Zugang wiederherzustellen und das Profil zu verwalten, das dich repräsentiert. Übersetzte Ansichten verwenden die deutschen Beschriftungen. Die englische Entsprechung steht bei der ersten Verwendung dabei, wenn noch englische Ansichten dieselbe Aktion anbieten. E-Mail-Betreffzeilen und Schaltflächen noch englischer Profilformulare sind mit ihrer tatsächlichen Beschriftung angegeben.

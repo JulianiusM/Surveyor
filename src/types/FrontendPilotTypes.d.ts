@@ -36,7 +36,7 @@ export interface FrontendPilotBootstrap {
     /** Only admitted creation/duplication forms receive these public form definitions and copied values. */
     packingCreateContext?: components['schemas']['PackingCreateContext'];
     /** An initial event query is resolved by the shared native selection owner before drafting. */
-    packingSelectedEvent?: components['schemas']['PackingEventOption'] | null;
+    packingSelectedEvent?: components['schemas']['EventPickerOption'] | null;
     packingDuplicate?: components['schemas']['PackingDuplicate'];
     personalLink?: string;
     /** Controller-projected native regions hydrate under their ordinary identity-scoped query keys. */

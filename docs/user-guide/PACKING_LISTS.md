@@ -4,20 +4,20 @@ documentation-metadata
 audience: packing-list participants; packing-list organizers
 owner: packing-list feature maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D10 packing workflow plus D14 rendered-label assertions, shared-versus-local visual aid, per-page navigation, and trusted-help integration; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: measured and individually inspected shared-versus-local diagram
-source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/assets/packing-shared-vs-local.png; docs/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/packing/packing-create.pug; src/views/packing/packing-view.pug; src/public/js/packing-create.ts; src/public/js/packing.ts; src/routes/packing.ts; src/routes/api/packing.ts; src/controller/packingController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/packing/PackingList.ts; src/modules/database/entities/packing/PackingItem.ts; src/modules/database/entities/packing/PackingAssignment.ts; src/modules/database/services/PackingService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/packing-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; src/controller/helpController.ts
+verification-scope: Native creation, settings, assignments, Everyone, counters and browser-local Packed state; prose and assets preserved.
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/assets/packing-shared-vs-local.png; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/packing/packing-create.pug; src/views/packing/packing-view.pug; src/public/js/packing-create.ts; src/public/js/packing.ts; src/routes/packing.ts; src/routes/api/packing.ts; src/controller/packingController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/packing/PackingList.ts; src/modules/database/entities/packing/PackingItem.ts; src/modules/database/entities/packing/PackingAssignment.ts; src/modules/database/services/PackingService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/packing-management-api.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; src/controller/helpController.ts
 next-review: packing-visible-UI-or-behavior-change
 -->
 
 Packing lists help a group divide shared equipment and remember personal essentials. A participant can volunteer for ordinary items, while an organizer can mark an item as something **Everyone** should bring.
 
-> **Important: shared assignments and `Packed?` are different.** Names, assignment counts, item details, and the **Everyone** setting are shared with the group. A **Packed?** check mark is visible only in the browser where you checked it. It does not belong to the active Surveyor profile or carry over to another browser or device.
+> **Important: shared assignments and `Packed?` are different.** Names, assignment counts, item details, and the **Everyone** setting are shared with the group. A **Packed?** check mark is stored only in the current browser for that list item. It is not sent to Surveyor, is not tied to the active profile, and does not synchronize to another browser or device.
 
-![Packing-list row contrasting the personal Packed checkbox with shared Take or Remove assignments and Assigned / Max counts.](assets/packing-shared-vs-local.png)
+![Annotated packing-list row contrasting the browser-local Packed checkbox with shared Take or Remove assignments and Assigned / Max counts.](assets/packing-shared-vs-local.png)
 
-*The left-side check mark is your personal reminder in this browser. Assignee names and assignment counts are visible to the group. Checking **Packed?** does not take responsibility for an item.*
+*This schematic row uses a fictional profile. The left-side check mark is personal to one browser; assignee names and assignment counts are shared application data.*
 
 [View the packing-state image at full size](/help/assets/packing-shared-vs-local.png).
 
@@ -36,11 +36,11 @@ Packing lists help a group divide shared equipment and remember personal essenti
 
 ## Understand the three kinds of state
 
-| State | Who sees it | When you return |
+| State | Who sees it | Where it is kept |
 |---|---|---|
-| Item title, description, maximum assignees, order, and **Everyone** setting | Everyone admitted to the list | Available when you reopen the list, including on another device. |
-| Who selected **Take** and the **Assigned / Max** count | Everyone admitted to the list | Your assignment stays with your Surveyor profile, including on another device. |
-| **Packed?** check mark and green row highlight | Only that browser for that list item | Available in the same browser unless its site data is cleared. |
+| Item title, description, maximum assignees, order, and **Everyone** setting | Everyone admitted to the list | Shared application data |
+| Who selected **Take** and the **Assigned / Max** count | Everyone admitted to the list | Shared application data attached to profiles |
+| **Packed?** check mark and green row highlight | Only that browser for that list item | Browser local storage |
 
 Use assignments to coordinate responsibility. Use **Packed?** only as a personal reminder on the browser you will take with you.
 
@@ -120,10 +120,10 @@ The check mark:
 - does not assign the item to you;
 - is not visible to the organizer or other participants;
 - is not included in the participant or assignment counters;
-- stays in the browser where you checked it and does not carry over to another browser or device;
+- is stored under the list and item identifiers in that browser’s local storage;
 - is not associated with a Surveyor account or profile.
 
-The mark normally remains when you close and reopen the page in the same browser. It can disappear when you use another browser or device, browse privately, or clear site data. A duplicated list starts with its own unchecked items. Another person using the same browser profile can see the same check marks, even after the active Surveyor profile changes.
+The mark normally remains when you close and reopen the page in the same browser. It can disappear when you use another browser or device, open a private-browsing session, clear site data, or receive a duplicated list whose items have new identifiers. Another person using the same browser profile can see the same local check marks, even after the active Surveyor profile changes.
 
 Do not use **Packed?** as proof that the group has completed a task. Use shared assignments and direct communication for group accountability.
 
@@ -150,7 +150,7 @@ Creation requires a signed-in full account. A guest can participate but cannot c
 1. Open **New** in the top navigation.
 2. Under **Organize & share**, select **Packing list**.
 
-An event organizer can instead open **Event administration dashboard**, expand **Event packing lists**, and select **Create new packing list**. This opens the same form with the event selected.
+An event organizer can instead open **Event administration dashboard**, expand **Event packing lists**, and select **Create new packing list**. That route opens the same form with the event selected.
 
 ### 2. Enter the list details
 
@@ -242,7 +242,7 @@ Deletion removes the item and all of its shared assignments. It cannot be undone
 
 A profile with **Edit Meta** can open **Entity settings** → **General** → **Header image**. Select **Choose image**, choose a file, and select **Upload** to add or replace the image. Use **Remove image** and confirm to delete it.
 
-The upload accepts JPEG, PNG, and GIF images up to 10 MiB. Replacing or removing an image permanently removes the previous image.
+The upload accepts JPEG, PNG, and GIF images up to 10 MiB. Replacing or removing an image removes the previous stored file.
 
 ## Link a packing list to an event
 
@@ -307,7 +307,7 @@ With a full account and **Data Duplicate**, duplicate from the list's **Entity s
 
 Owners can also use **Duplicate** on their **Administrable entities** overview card.
 
-The duplicate is an independent list. It does not copy participant assignments, browser-local **Packed?** marks, or the header image. The active profile creating the copy becomes its owner.
+The duplicate is an independent list with new item identifiers. It does not copy participant assignments, browser-local **Packed?** marks, or the header image. The active profile creating the copy becomes its owner.
 
 ### Delete a list
 
@@ -391,7 +391,7 @@ Expand **Archived and hidden** in both overview collections and clear any filter
 
 ### My **Packed?** marks disappeared
 
-Use the same browser profile and device. Private browsing, cleared site data, another browser or device, and a duplicated list do not carry over your check marks. The organizer cannot restore your personal check marks.
+Use the same browser profile and device. Private browsing, cleared site data, another browser, another device, or a duplicated list uses different local storage or identifiers. The organizer cannot restore these check marks because Surveyor never received them.
 
 ### Someone else can see my **Packed?** marks
 

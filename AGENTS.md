@@ -4,170 +4,57 @@ documentation-metadata
 audience: AI coding agents; maintainers
 owner: project maintainers
 status: current
-last-verified: 2026-10-08
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; explicit active-user authorization for departures from primary design choices; explicit prohibition of implementation information in user-facing documentation and illustrations across all languages; explicit controller-owned checks and pure DBAL/no context-specific service errors; explicit maintainer requirements for human readability, purposeful comments, existing formatting and module reuse, declaration-file contracts, renderer data, and deletion boundaries; non-blocking documentation policy and optional report/test routing; D13 repository-wide agent contract, source precedence, change boundaries, test selection, database safety, documentation rules, and canonical-reference routing; D14 implemented fixed-source in-app help validation and maintained visual-asset rules
-source-anchors: docs/DOCUMENTATION_POLICY.md; README.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/PERMISSIONS_REFERENCE.md; docs/DOCUMENTATION_MIGRATION_STATUS.md; package.json; repository-tree; scripts/check-help-documentation.mjs; docs/HELP_VISUALS.md
-next-review: AI-instruction-or-help-trust-boundary-change
+verification-scope: mandatory centralized policy routing, explicit approval/conflict/delegation requirements and restored canonical documentation classifications
+source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/README.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; package.json; repository-tree
+next-review: explicit-maintainer-policy-amendment
 -->
 
-This is the repository-wide entry point for coding agents. It intentionally contains only durable rules. Current
-commands, versions, paths, architecture, and operating procedures belong in the canonical documents linked below and
-in executable repository configuration, not in duplicated AI summaries.
+This is the repository-wide entry point for every AI coding agent. The authoritative rules live in policies;
+this file routes agents and must not introduce competing rules or duplicate volatile implementation facts.
 
-## Authority and evidence
+## Required start and enforcement
 
-For repository facts, follow the order defined in the [documentation policy](docs/DOCUMENTATION_POLICY.md):
+Before edits, read BOTH [Documentation Policy](docs/policies/DOCUMENTATION_POLICY.md) and
+[Development Policy](docs/policies/DEVELOPMENT_POLICY.md), then the relevant canonical guide below.
+Apply them throughout the task, including documentation classification, human readability, DRY, controller/DBAL
+separation, declaration-file contracts, test selection, database safety and native-reference preservation.
+Inspect exact source/tests and the working tree; preserve unrelated changes.
 
-1. Feature-specific executable behavior and tests, including routes, controllers, services, entities, views, browser
-   code, package scripts, and workflows.
-2. Explicit maintainer or product decisions.
-3. References generated directly from implementation sources.
-4. Canonical maintained user, maintainer, and operator documentation.
-5. AI instruction files, including this one.
+Follow the [enforcement procedure](docs/policies/DEVELOPMENT_POLICY.md#agent-enforcement), including concrete
+pre-edit conflict inspection, complete task-owned scope, measurable checks and independent semantic review.
+Do not substitute a policy acknowledgement or a clean syntax result for that procedure.
 
-Primary approved design choices require active, explicit user authorization before changing them. A listed
-alternative, implementation convenience, or later document edit does not authorize a departure. Preserve the
-original decision and record each approved amendment; never rewrite a design to legitimize an unapproved choice.
+Policies and approved designs govern what may change. Code establishes current behavior and cannot silently override
+those decisions. Conflicting instructions or potentially unintended consequences require direct maintainer approval
+before dependent implementation. Ask in the conversation; never hide plans or approval requests in a document.
+After approval, record a concise dated amendment without erasing the original choice. Continue independent authorized
+work while a required answer is pending; elapsed time is not approval.
 
-The user-requested scope still governs the task. Do not use an AI summary to override current code, tests, an explicit
-decision, or a canonical document. When sources disagree, inspect the affected implementation and record the conflict
-rather than silently choosing the most convenient statement.
+A new request that disagrees with an existing canonical path or approved policy/design still needs explicit conflict
+resolution. Do not infer that a newer name overrides the established one or silently correct a suspected typo.
 
-Deliberate feature differences are part of the product contract. A transient implementation defect is not. During
-this documentation migration, record such defects once in
-[`docs/documentation-remediation.yml`](docs/documentation-remediation.yml), keep the details in migration-control
-material, and write product documentation for the coherent working contract. Do not spread temporary warnings or
-workarounds through user, operator, maintainer, or AI documentation.
-
-## Start every task by narrowing the scope
-
-1. Read the request and the relevant canonical document from the routing table below.
-2. Inspect the current implementation and tests for the exact feature or boundary being changed.
-3. Check the working tree and preserve unrelated user changes.
-4. Identify affected boundaries: database, authorization, files, UI labels, tests, user help, maintainer guidance,
-   operator procedures, and AI summaries.
-5. Make the smallest coherent change. Do not refactor unrelated code or invent a new architecture while solving a
-   localized task.
-
-A documentation-only task may inspect source and tests but must not alter runtime behavior. The only exception is a
-separately authorized, explicitly targeted change to the in-app help integration itself.
+Every delegated agent must read the policies and receive current authorization, file ownership and unresolved
+conflicts. The delegating agent reviews compliance and actual production adoption. No agent may silently change a
+policy/design, invent approval, create a new documentation destination or remove unclassified material without
+approval. Report any violation immediately.
 
 ## Canonical routing
 
-| Task | Canonical starting point |
+| Task | Starting point |
 |---|---|
-| Understand or start the repository | [Project README](README.md) |
-| Understand runtime and module boundaries | [Architecture](docs/ARCHITECTURE.md) |
-| Follow development patterns or add a feature | [Development Guide](docs/DEVELOPMENT.md) |
-| Select, configure, or run tests | [Testing Guide](docs/TESTING_GUIDE.md) |
-| Change settings or authentication configuration | [Configuration Reference](docs/CONFIGURATION.md) |
-| Change entities, migrations, or database operations | [Database and Migrations](docs/DATABASE.md) |
-| Change permissions or administration behavior | [Permission System Reference](docs/PERMISSIONS_REFERENCE.md) |
-| Change production deployment, storage, backup, or recovery | [Production Operations](docs/OPERATIONS.md) and [Upgrading and Rolling Back](docs/UPGRADING.md) |
-| Change end-user behavior or visible labels | [In-app user guides](docs/user-guide/) plus the relevant Pug and browser code |
-| Change documentation structure or trust assumptions | [Documentation Policy](docs/DOCUMENTATION_POLICY.md) |
-| Continue the documentation migration | [Migration Status](docs/DOCUMENTATION_MIGRATION_STATUS.md) and [remediation backlog](docs/documentation-remediation.yml) |
+| Understand/start the repository | [Project README](README.md) and [documentation index](docs/README.md) |
+| Runtime/module boundaries | [Architecture](docs/ARCHITECTURE.md) |
+| Development patterns | [Development guide](docs/DEVELOPMENT.md) |
+| Testing | [Testing guide](docs/TESTING_GUIDE.md) |
+| Configuration/authentication | [Configuration](docs/CONFIGURATION.md) |
+| Database/migrations | [Database guide](docs/DATABASE.md) |
+| Permissions | [Permission reference](docs/PERMISSIONS_REFERENCE.md) |
+| Deployment/backup/recovery | [Operations](docs/OPERATIONS.md) and [upgrading/rollback](docs/UPGRADING.md) |
+| End-user tasks/labels | [User docs](docs/user-guide/), rendered Pug and browser code |
+| Migration continuation | [Migration status](docs/frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md), [pilot review](docs/frontend-migration/PILOT_PARITY_REVIEW.md) and [backlog](docs/backlog/documentation-remediation.yml) |
 
-Use `package.json`, runner configuration, workflows, and the repository tree as the authority for current script and
-path inventories. Do not copy dependency versions, test counts, branch lists, or command matrices into AI files.
-
-## Implementation rules
-
-- Follow the neighboring implementation before introducing a new pattern. Surveyor uses practical route, controller,
-  functional database-service, entity, middleware, Pug, and browser-module boundaries described in the architecture
-  guide.
-- Treat human readability, DRY, separation of concerns, a single source of truth, and information hiding as acceptance
-  criteria. Reuse an existing controller, service, or middleware module when its responsibility already fits; keep
-  coherent behavior together instead of adding thin modules or exposing persistence internals to their callers.
-- Preserve strict TypeScript behavior and existing local style. Choose an interface or type alias according to the
-  existing contract; do not apply blanket style slogans that conflict with nearby code.
-- Document nontrivial behavior generously with purposeful comments explaining intent, data flow, constraints, and
-  concurrency or authorization decisions. Keep comments current and make the code understandable to a human maintainer.
-- Apply the same commenting standard to Pug templates and mixins: explain parameters, required render data, conditional
-  branches, shared versus personal state, and the DOM hooks consumed by browser modules. Use unbuffered Pug comments.
-- Prefer descriptive named helpers and straightforward control flow over excessive or nested anonymous functions.
-  Short callbacks are appropriate when they remain easy to follow. Preserve neighboring formatting and avoid unrelated
-  formatting changes.
-- Put shared type-only contracts in `.d.ts` files under `src/types/`, following the existing declaration-file pattern.
-  Keep executable code in `.ts` modules and implementation-only details inside their owning module.
-- Pass optional feature and page state through the renderer's `data` object and explicit Pug mixin arguments.
-  `res.locals` is for established common request infrastructure, not an additional feature-state channel.
-- Keep visible labels, form field names, routes, controller parsing, and user documentation aligned.
-- Enforce authentication, authorization, validation, and ownership on the server. UI visibility is not an authorization
-  boundary.
-- Controllers own business checks, authorization decisions, validation, and context-specific errors. Database
-  services are pure DBAL: queries, locks, transactions, and persistence only. They must not throw `APIError`,
-  `ExpectedError`, or other request/UI-specific errors. When a check depends on locked data, invoke the controller's
-  named operation inside the service-managed transaction; do not move the check into the service or outside the lock.
-- Keep authoritative archival, personal overview visibility, actual hard deletion, and file retention separate.
-  Archiving or restoring must not delete business records or files. Preserve the simple repository deletion in each
-  feature's existing service; do not route permanent deletion through archival coordination helpers.
-- Do not hand-edit or commit generated or ignored outputs. Regenerate them through the repository scripts when a
-  verification step requires them.
-- Never commit credentials, local environment files, uploaded data, reports, or other ignored runtime state.
-
-## One test-selection rule
-
-**Use the cheapest stable test layer that protects the observable behavior; add another layer only when the risk crosses
-that layer's boundary.** Do not require unit, integration, frontend, and E2E coverage for every change.
-
-| Layer | Use it when the behavior requires this boundary |
-|---|---|
-| `tests/unit/` | Isolated production logic with no database, HTTP application, external service, or real browser. |
-| `tests/frontend/` | Browser helpers or DOM behavior that can run with explicit, restored globals under Vitest. |
-| `tests/integration/` | TypeORM persistence, entity relationships, transactions, or selected controller orchestration against the guarded disposable MariaDB schema. |
-| `tests/e2e/` | A critical built-application workflow whose route, middleware, session, rendering, and database integration matter together. |
-
-`npm run test:quick` is the database-free unit-plus-frontend check. `npm test` includes the database-backed integration
-suite. Read the testing guide before running integration or E2E commands because both suites rebuild their selected
-schemas.
-
-Test production behavior rather than test-only helpers or private implementation details. When persistence is the
-behavior under test, use the real TypeORM metadata and disposable integration database instead of repository or core
-service mocks. A narrow replacement at a true external side-effect boundary is acceptable when it keeps the production
-workflow intact.
-
-## One database and migration rule
-
-**A persistent schema change requires the matching entity change and a reviewed migration for existing installations.**
-Use Surveyor's settings-aware package wrappers and the procedures in the database guide. Verify the effective database
-target before every schema-changing command.
-
-Never use schema synchronization, schema drop, or test reset procedures against production, staging, shared
-development data, or any database that is not explicitly disposable. Database-backed tests must use dedicated schemas
-and credentials with no privileges beyond those schemas.
-
-## Documentation rules
-
-- Identify affected end-user, maintainer, operator, and AI documentation. Update it when appropriate or record a
-  follow-up; documentation work must never block application review, CI, merge, release, or deployment.
-- In-app help is task-first: use exact visible labels, give novices a successful shortest path, then include recovery,
-  privacy, role, and advanced details without forcing them into the first-use procedure.
-- User-facing documentation and pictures must contain only user tasks, observable behavior, and exact visible UI
-  labels. Implementation information is strictly forbidden in every language, including prose, captions, alt text,
-  diagrams, and screenshots: do not expose frameworks, architecture, internal APIs, source paths, storage keys,
-  permission identifiers, or how content was implemented, rendered, generated, or verified. Keep authoring and
-  provenance details in maintainer documentation or ignored review evidence. Required hidden metadata and source
-  anchors remain maintainer evidence and must never appear in rendered help or release-shipped pictures.
-- Verify labels and available actions against rendered Pug output and browser code rather than copying old prose.
-- The files under `docs/user-guide/` are trusted, release-shipped application content. Use Markdown, keep the required
-  metadata comment, and do not introduce active raw HTML, executable attributes, unsafe URI schemes, or unreviewed
-  imported or generated content.
-- Preserve intentional feature exceptions. Do not infer that a feature implements a capability merely because peer
-  features share middleware, entities, or UI components.
-- Every maintained Markdown file requires the metadata defined by the documentation policy.
-
-Documentation reports are optional and advisory, including strict mode. Never add them as required CI checks,
-application-test assertions against maintained prose, lifecycle hooks, or release prerequisites. Use the reporting
-commands in the documentation policy to retain findings; an advisory exit zero does not mean that every check passed.
-Help security tests must use synthetic fixtures and remain application tests.
-
-## Verification and reporting
-
-Run the smallest focused checks first, followed by the broader checks justified by the affected boundaries. Use exact
-scripts from `package.json`; do not infer that a command prepares databases, builds assets, or supplies credentials
-unless its implementation or canonical documentation says so.
-
-Report what was changed, what was verified, and what could not be executed because a prerequisite was unavailable.
-Never describe an unrun build, migration, restore, or test suite as passed.
+Use executable package/runner/workflow configuration for commands and paths. Documentation reports are advisory;
+application correctness and security checks remain distinct. Report actual changes, executed checks and limitations,
+and never describe an unrun check as passed.

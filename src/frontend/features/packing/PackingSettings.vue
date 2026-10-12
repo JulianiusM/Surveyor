@@ -3,7 +3,8 @@ import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {MessageKey} from '../../../types/LocalizationTypes';
+import type {PilotMetadataSnapshot, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {permissionLabel as translatedPermissionLabel} from '../../../modules/localization/permissionLabels';
 import {usePackingApi} from './api';
 import {usePilot, refreshInterval} from '../../app/context';
@@ -12,7 +13,9 @@ import {useCommand} from '../../composables/command';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {useConfirmedNavigation} from '../../composables/pageEntry';
 import {useDebouncedValue} from '../../composables/debounced';
+import {MetadataDraft} from '../../composables/metadataDraft';
 import {packingKeys} from '../../app/queryKeys';
+import {observeQueryReads, refetchFreshQuery, retireQueryFamily} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -44,6 +47,7 @@ function retireEditor(): void {
 }
 type Settings = components['schemas']['PackingSettings'];
 type Defaults = components['schemas']['PermissionDefaults'];
+type DefaultsSnapshot = PilotMetadataSnapshot<Defaults>;
 const panel = ref(props.metadataAvailable === true ? 'general' : '');
 const accessPanel = ref('defaults');
 const fields = ref<InstanceType<typeof MetadataFields> | null>(null);
@@ -57,7 +61,7 @@ const preset = ref('');
 const openAdmin = ref<string | null>(null);
 // A confirmed write may outlive its failed read. Keep its clean local value separate
 // from the last authoritative original/token until a successful read supplies authority.
-const defaults = ref<{original: Defaults; values: Defaults; token: string; confirmed?: Defaults} | null>(null);
+const defaults = ref<MetadataDraft<Defaults, DefaultsSnapshot> | null>(null);
 const admins = ref<Record<string, {original: number; value: number; token: string; name: string;
     isGuest: boolean; regrantReviewed?: boolean; confirmed?: number}>>({});
 const event = ref<{original: string | null; value: string | null; token: string;
@@ -65,8 +69,9 @@ const event = ref<{original: string | null; value: string | null; token: string;
 const imageToken = ref<string | null>(null);
 const imageOriginal = ref<string | null>(null);
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
+const settingsKey = computed(() => packingKeys.settings(context.session.value?.context, props.listId));
 const settings = useQuery({
-    queryKey: computed(() => packingKeys.settings(context.session.value?.context, props.listId)),
+    queryKey: settingsKey,
     enabled: computed(() => context.hydrated.value && context.ready.value && context.visible.value),
     queryFn: ({signal}) => api.settings(props.listId, context.capture(), signal),
     refetchInterval: (query) =>
@@ -77,12 +82,15 @@ const settings = useQuery({
 const last = ref<Settings | null>(null);
 let completedSettingsReads = 0;
 let relinkingMetadata = false;
-watch(settings.data, receiveSettings, {immediate: true});
 
 /** Reconcile each independent editor with authority without replacing another editor's dirty baseline. */
-function receiveSettings(value: Settings | undefined): void {
+function receiveSettings(value: Settings | undefined, fresh = false): void {
     if (!value) return;
     last.value = value;
+    // A canceled warm refetch can expose retained data as a successful observer
+    // result. Keep confirmed values/tokens separate until an actual fresh read;
+    // in-flight commands likewise own their causal post-confirmation adoption.
+    if (!fresh && (command.pending.value || command.recovering.value || awaitingSettingsAuthority())) return;
     receiveDefaults(value);
     receiveAdmins(value);
 
@@ -100,46 +108,47 @@ function receiveSettings(value: Settings | undefined): void {
     }
 }
 
-/** A defaults PATCH contains changed audiences only; adopt remote changes to untouched masks. */
-function receiveDefaults(value: Settings): void {
-    if (!value.access) return;
-    const draft = defaults.value;
-    const original = draft?.confirmed ?? draft?.original;
-    if (!draft || JSON.stringify(draft.values) === JSON.stringify(original)) {
-        defaults.value = {
-            original: {...value.access.defaults},
-            values: {...value.access.defaults},
-            token: value.settingsToken,
-        };
-        return;
-    }
-
-    if (draft.confirmed) {
-        draft.original = {...draft.confirmed};
-        delete draft.confirmed;
-    }
-
-    let overlap = false;
-    for (const audience of ['participant', 'guest', 'authenticated', 'public'] as const) {
-        const current = value.access.defaults[audience];
-        if (draft.values[audience] === draft.original[audience]) {
-            draft.values[audience] = current;
-            draft.original[audience] = current;
-        } else if (draft.values[audience] === current) draft.original[audience] = current;
-        else if (draft.original[audience] !== current) overlap = true;
-    }
-    if (!overlap) draft.token = value.settingsToken;
+/** Local confirmation is presentation, never a replacement server comparison token. */
+function awaitingSettingsAuthority(): boolean {
+    return !!defaults.value?.awaitingAuthority || event.value?.confirmed !== undefined
+        || Object.values(admins.value).some(draft => draft.confirmed !== undefined);
 }
 
-/** A removed grant with local edits stays reviewable; only a deliberate save may grant it again. */
+/** The authorized Access projection admits all four audience fields. Keep that
+ * feature mapping here; generic draft reconciliation owns neither audiences nor grants. */
+function defaultsSnapshot(values: Defaults): DefaultsSnapshot {
+    return {values, editableFields: ['participant', 'guest', 'authenticated', 'public']};
+}
+
+/** Audience controls retain their native independent review: untouched remote masks
+ * appear immediately, and an overlapping local mask keeps its original/token. The
+ * shared draft owner supplies sparse PATCH, equality and confirmation mechanics. */
+function receiveDefaults(value: Settings): void {
+    if (!value.access) return;
+    const snapshot = defaultsSnapshot(value.access.defaults);
+    const draft = defaults.value;
+    if (!draft) defaults.value = new MetadataDraft(snapshot, value.settingsToken);
+    else draft.receiveIndependent(snapshot, value.settingsToken);
+}
+
+/** Reconcile admitted administrator rows without overwriting entered masks.
+ * Removed edited/regrant drafts stay reviewable. Edited confirmed drafts adopt
+ * a new token only when the current server mask confirms that baseline; pristine
+ * rows adopt the admitted server state directly. */
 function receiveAdmins(value: Settings): void {
     if (!value.access) return;
+
+    // First retire absent pristine rows. Keep a changed mask or deliberately
+    // reviewed regrant so remote removal cannot silently discard that local choice.
     const active = new Set(value.access.admins.map((admin) => admin.profileId));
     for (const id of Object.keys(admins.value)) {
         const draft = admins.value[id]!;
         if (!active.has(id) && draft.value === (draft.confirmed ?? draft.original)
             && !draft.regrantReviewed) delete admins.value[id];
     }
+
+    // Then admit current rows: clean drafts can fully adopt server state, while
+    // edited drafts retain their local value and original comparison evidence.
     for (const admin of value.access.admins) {
         const draft = admins.value[admin.profileId];
         if (!draft || draft.value === (draft.confirmed ?? draft.original)) {
@@ -151,6 +160,9 @@ function receiveAdmins(value: Settings): void {
                 isGuest: admin.isGuest,
             };
         } else if (draft.confirmed !== undefined) {
+            // A completed command acknowledges this baseline, not newer authority.
+            // Adopt the read token only when it agrees with that confirmed mask;
+            // otherwise the differing remote mask still needs deliberate Review.
             draft.original = draft.confirmed;
             delete draft.confirmed;
             if (draft.original === admin.mask) draft.token = admin.editToken;
@@ -218,14 +230,18 @@ async function refreshAfterCommand(): Promise<void> {
     if (!active || isReadDenial(settings.error.value)) return;
     const scope = context.capture();
     const resource = props.listId;
-    const result = await settings.refetch({throwOnError: true});
+    const result = await refetchFreshQuery<Settings>(context.queryClient, settingsKey.value, refetchSettings, mayRead);
     if (!active || resource !== props.listId || !context.isCurrent(scope)) return;
-    receiveSettings(result.data);
+    receiveSettings(result, true);
     completedSettingsReads++;
     // Refresh related snapshots after a confirmed settings write. Each dirty form compares
     // only its own edited fields; unrelated setup changes do not manufacture conflicts.
     await fields.value?.refreshAfterSettings(relinkingMetadata && command.outcome.value?.confirmation === 'confirmed');
     if (active && resource === props.listId && context.isCurrent(scope)) emit('saved');
+
+    function mayRead(): boolean {
+        return active && resource === props.listId && context.ready.value && context.isCurrent(scope);
+    }
 }
 const command = useCommand(refreshAfterCommand, false, {
     dirty: () => dirty.value || !!fields.value?.dirty,
@@ -233,6 +249,21 @@ const command = useCommand(refreshAfterCommand, false, {
     uncertain: () => !!fields.value?.unknown,
     unknownMessage: 'draft.leaveUnknown',
 });
+// Observe ordinary DTO changes for initial/clean drafts. Equal background network
+// successes restore confirmed editors too; idle/cancel and manual aliases do not.
+watch(settings.data, value => receiveSettings(value), {immediate: true});
+const stopSettingsReads = observeQueryReads<Settings>(context.queryClient, () => settingsKey.value, receiveSettingsRead);
+onBeforeUnmount(stopSettingsReads);
+
+function receiveSettingsRead(value: Settings): void {
+    if (active && !command.pending.value && !command.recovering.value) receiveSettings(value, true);
+}
+
+/** Keep the observer operation private; the cache owner certifies its actual read. */
+function refetchSettings(): Promise<unknown> {
+    return settings.refetch({throwOnError: true});
+}
+
 const settingsRetryAvailable = useReadRetry(() => settings.error.value);
 const retryAt = useReadRetryAt(() => settings.error.value, settingsRetryAvailable);
 // Refresh spans settings and the related metadata authority. Its visible control
@@ -246,8 +277,7 @@ const busy = computed(() => refreshingSettings.value || command.pending.value ||
 // Native commands lock the entire modal, including its navigation and nested tabs.
 // Uncertainty alone keeps those tabs reachable so another panel cannot hide recovery.
 const controlsPending = computed(() => !!busy.value || !!destination.target.value);
-const awaitingAuthority = computed(() => !!defaults.value?.confirmed || event.value?.confirmed !== undefined
-    || Object.values(admins.value).some(draft => draft.confirmed !== undefined) || !!fields.value?.awaitingAuthority);
+const awaitingAuthority = computed(() => awaitingSettingsAuthority() || !!fields.value?.awaitingAuthority);
 const blocked = computed(
     () => busy.value || command.uncertain.value || fields.value?.unknown || awaitingAuthority.value || !!destination.target.value,
 );
@@ -256,7 +286,14 @@ async function metadataSaved(): Promise<void> {
     // Complete the current-value read before another panel sends a command.
     refreshingSettings.value = true;
     try {
-        await settings.refetch({throwOnError: true});
+        const scope = context.capture();
+        const resource = props.listId;
+        const result = await refetchFreshQuery<Settings>(context.queryClient, settingsKey.value, refetchSettings, mayRead);
+        if (active && resource === props.listId && context.isCurrent(scope)) receiveSettings(result, true);
+
+        function mayRead(): boolean {
+            return active && resource === props.listId && context.ready.value && context.isCurrent(scope);
+        }
     } catch {
         command.notice.value = 'state.savedRefreshFailed';
     } finally {
@@ -264,25 +301,9 @@ async function metadataSaved(): Promise<void> {
         emit('saved');
     }
 }
-const dirtyDefaults = computed(
-    () =>
-        !!defaults.value && JSON.stringify(defaults.value.values)
-            !== JSON.stringify(defaults.value.confirmed ?? defaults.value.original),
-);
-const defaultsPatch = computed<components['schemas']['PermissionDefaultsPatch']>(() => {
-    const patch: components['schemas']['PermissionDefaultsPatch'] = {};
-    if (defaults.value) for (const audience of ['participant', 'guest', 'authenticated', 'public'] as const) {
-        if (defaults.value.values[audience] !== defaults.value.original[audience]) {
-            patch[audience] = defaults.value.values[audience];
-        }
-    }
-    return patch;
-});
-const defaultsConflict = computed(() => !!defaults.value && !!data.value?.access &&
-    Object.keys(defaultsPatch.value).some(key => {
-        const audience = key as keyof Defaults;
-        return defaults.value!.original[audience] !== data.value!.access!.defaults[audience];
-    }));
+const dirtyDefaults = computed(() => !!defaults.value?.dirty);
+const defaultsPatch = computed<components['schemas']['PermissionDefaultsPatch']>(() => defaults.value?.patch ?? {});
+const defaultsConflict = computed(() => !!defaults.value?.overlappingChanges);
 const eventConflict = computed(() => !!event.value && event.value.original !== (data.value?.currentEvent?.id ?? null));
 const headerConflict = computed(() => !!image.value && imageOriginal.value !== (data.value?.headerVersion ?? null));
 function adminConflict(id: string): boolean {
@@ -319,6 +340,31 @@ const displayedAdmins = computed(() => {
 function adminRemoved(id: string): boolean {
     return !data.value?.access?.admins.some(admin => admin.profileId === id);
 }
+
+/** Count the saved grant, rather than its unsaved checkbox draft, for the native badge. */
+function adminPermissionCount(mask: number): number {
+    let count = 0;
+    for (const permission of data.value?.access?.permissions ?? []) {
+        if (mask & permission.bit) count++;
+    }
+    return count;
+}
+
+/** A removed grant stays visible for review even when its local mask is unchanged.
+ * Existing grants warn only when local work overlaps the current server grant. */
+function hasAdminWarning(id: string): boolean {
+    if (adminRemoved(id)) return true;
+    const draft = admins.value[id];
+    return !!draft && (draft.value !== draft.original || draft.regrantReviewed === true) && adminConflict(id);
+}
+
+/** Keep removal/regrant feedback in this feature owner; the template only renders its key. */
+function adminWarningMessage(id: string): MessageKey {
+    if (!adminRemoved(id)) return 'draft.readConflict';
+    if (admins.value[id]?.regrantReviewed) return 'packing.adminRegrantReviewed';
+    return 'packing.adminRemoved';
+}
+
 function reviewHeader(): void {
     if (controlsPending.value) return;
     imageToken.value = data.value?.settingsToken ?? null;
@@ -337,12 +383,36 @@ const profiles = useQuery({
     queryKey: computed(() => packingKeys.profiles(context.session.value?.context, props.listId, profileSearch.value)),
     enabled: computed(() => addOpen.value && context.ready.value && context.visible.value && !!profileSearch.value),
     queryFn: ({signal}) => api.profiles(props.listId, profileSearch.value, context.capture(), signal),
+    refetchInterval: (query) => addOpen.value && context.visible.value
+        ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter) : false,
 });
+const profileRetryAvailable = useReadRetry(() => profiles.error.value);
+const profileRetryAt = useReadRetryAt(() => profiles.error.value, profileRetryAvailable);
+watch(profiles.error, retireDeniedProfiles, {flush: 'sync'});
+
+/** Discovery owns only these suggestions and the selected returned identity.
+ * Its denial does not revoke the independently admitted Settings projection or
+ * discard typed search/preset drafts. Retire every search's protected cache body
+ * while preserving the mounted query's explicit read recovery. */
+function retireDeniedProfiles(failure: Error | null): void {
+    if (!isReadDenial(failure)) return;
+    selectedProfile.value = '';
+    void retireQueryFamily(context.queryClient,
+        packingKeys.profilesFamily(context.session.value?.context, props.listId), failure);
+}
+
+async function retryProfiles(): Promise<void> {
+    if (!active || !addOpen.value || !context.ready.value || profiles.isFetching.value || !profileRetryAvailable.value) return;
+    await profiles.refetch({cancelRefetch: false});
+}
 function profileOptionValue(profile: components['schemas']['PackingProfileOption']): string {
     return profile.username || profile.profileId;
 }
+/** Only an exact current discovery result can supply the target profile ID.
+ * Denied or freely edited text clears that target immediately, preventing an
+ * old datalist selection from surviving a revoked/changed search projection. */
 function selectMatchingProfile(): boolean {
-    const match = profiles.data.value?.find(
+    const match = isReadDenial(profiles.error.value) ? undefined : profiles.data.value?.find(
         (profile) => profileOptionValue(profile) === profileQuery.value.trim(),
     );
     selectedProfile.value = match?.profileId ?? '';
@@ -371,20 +441,34 @@ function chooseImage(event: Event): void {
     imageToken.value = data.value?.settingsToken ?? null;
     imageOriginal.value = data.value?.headerVersion ?? null;
 }
+
+/** Submit the selected file against the header baseline captured when it was
+ * chosen. Retain that file after rejection or uncertain delivery; only a confirmed
+ * command clears it, while the shared refresh owner admits subsequent authority. */
 async function upload(source?: Event): Promise<void> {
     if (blocked.value || headerConflict.value) return;
+
+    // Native missing-file feedback happens before a request. The chosen file's
+    // retained token must still exist; a later settings read cannot replace it.
     if (!image.value) {
         command.captureFeedback(source);
         command.setError('metadata.chooseImage', 'transient', 'inline');
         return;
     }
     if (!imageToken.value) return;
+
+    // The shared command distinguishes write confirmation from refresh failure.
+    // Rejection/unknown delivery keeps the file; confirmation alone releases it.
     const result = await command.run((scope) =>
         api.uploadHeader(props.listId, image.value!, imageToken.value!, scope),
         true, false, {initiator: source, presentation: 'inline', success: 'metadata.imageUpdated'},
     );
     if (result) image.value = null;
 }
+
+/** Header removal is a separate reviewed command, not clearing the file draft.
+ * The current settings token protects the stored image and the server retains
+ * authority over the write and its post-commit file cleanup. */
 async function removeImage(source?: Event): Promise<void> {
     if (data.value && window.confirm(messages.value.t('packing.confirmRemoveImage'))) {
         await command.run((scope) =>
@@ -438,7 +522,7 @@ async function saveEvent(source?: Event): Promise<void> {
     if (result && event.value) {
         event.value.value = submitted.value;
         event.value.confirmed = submitted.value;
-        if (completedSettingsReads > previousRead && last.value) receiveSettings(last.value);
+        if (completedSettingsReads > previousRead && last.value) receiveSettings(last.value, true);
     }
     // The command owner's refresh already updates related metadata. A failed read
     // keeps its existing recovery controls instead of throwing from this click handler.
@@ -450,15 +534,19 @@ function reviewEvent(): void {
 }
 function reviewDefaults(): void {
     if (controlsPending.value || !defaults.value || !data.value?.access) return;
-    defaults.value.original = {...data.value.access.defaults};
-    defaults.value.token = data.value.settingsToken;
+    // Native permission Review retains every entered mask as one explicit choice.
+    // Metadata's per-field Mine/Current controls remain a separate presentation.
+    const draft = defaults.value;
+    draft.offerReview(defaultsSnapshot(data.value.access.defaults), data.value.settingsToken);
+    for (const audience of draft.conflicts) draft.choices[audience] = 'mine';
+    draft.review();
 }
 /** Save the sparse changed audience masks, retaining accepted presentation after a
  * failed follow-up read. A confirmed mask never manufactures a replacement write token. */
 async function saveDefaults(source?: Event): Promise<void> {
     if (!defaults.value || blocked.value || defaultsConflict.value) return;
     if (!Object.keys(defaultsPatch.value).length) {
-        // Sparse conditional commands preserve D5's no-empty-PATCH boundary.
+        // Sparse conditional commands preserve the no-empty-PATCH boundary.
         // A pristine save retains native permission feedback and renews its receipt.
         command.setNotice('permissions.updated', {initiator: source, presentation: 'inline'});
         return;
@@ -468,7 +556,7 @@ async function saveDefaults(source?: Event): Promise<void> {
     // completing while the request waits cannot silently change that write's inputs.
     const submitted = {...defaults.value.values};
     const patch = {...defaultsPatch.value};
-    const token = defaults.value.token;
+    const token = defaults.value.etag;
     const previousRead = completedSettingsReads;
     const result = await command.run((scope) =>
         api.setDefaults(props.listId, patch, token, scope),
@@ -478,11 +566,13 @@ async function saveDefaults(source?: Event): Promise<void> {
     // Show the confirmed choice even when refresh failed. If a newer settings read
     // did complete, reconcile its authoritative values and tokens through their owner.
     if (result && defaults.value) {
-        defaults.value.values = submitted;
-        defaults.value.confirmed = {...submitted};
+        defaults.value.confirm(defaultsSnapshot(submitted));
         if (completedSettingsReads > previousRead && last.value) receiveDefaults(last.value);
     }
 }
+/** Adopt current comparison evidence without replacing the entered permission
+ * mask. A missing remote row needs explicit regrant consent; an existing zero
+ * mask remains a real grant and follows its own administrator token. */
 function reviewAdmin(id: string): void {
     if (controlsPending.value) return;
     const current = data.value?.access?.admins.find((admin) => admin.profileId === id);
@@ -523,12 +613,20 @@ async function saveAdmin(id: string, source?: Event): Promise<void> {
         if (completedSettingsReads > previousRead && last.value) receiveAdmins(last.value);
     }
 }
+/** A grant already removed remotely needs only local draft dismissal. Otherwise
+ * confirm the server removal against that row's latest admitted mask token;
+ * this does not silently acknowledge or recreate a conflicting permission draft. */
 async function removeAdmin(id: string, source?: Event): Promise<void> {
+    // Remote removal has already happened. Closing this retained local draft
+    // issues no DELETE and must not accidentally recreate its reviewed mask.
     if (adminRemoved(id)) {
         delete admins.value[id];
         if (openAdmin.value === id) openAdmin.value = null;
         return;
     }
+
+    // An existing row needs explicit confirmation and that admitted row's token.
+    // The command owns refresh/error recovery instead of optimistically deleting it.
     if (data.value && window.confirm(messages.value.t('packing.confirmRemoveAdmin'))) {
         await command.run((scope) =>
             api.removeAdmin(props.listId, id, data.value!.access!.admins.find(admin => admin.profileId === id)!.editToken, scope),
@@ -536,13 +634,23 @@ async function removeAdmin(id: string, source?: Event): Promise<void> {
         );
     }
 }
+
+/** Resolve the selected discovery result to its profile ID before granting a
+ * preset. A rejected or unknown command keeps the selection for review; success
+ * alone closes this form, without inferring authority from its display label. */
 async function addAdmin(source?: Event): Promise<void> {
     if (!data.value?.access || blocked.value) return;
+
+    // Discovery supplies the target ID; typed display text cannot select a grant.
+    // Explain a missing choice locally before collecting a preset or issuing a write.
     if (!selectedProfile.value) {
         command.captureFeedback(source);
         command.setError('permissions.selectUser', 'transient', 'inline');
         return;
     }
+
+    // Use the admitted preset and root baseline for a deliberate new grant.
+    // Clear the form only after confirmation; unknown delivery retains its choice.
     const mask = data.value.access.presets.find((value) => value.key === preset.value)?.mask ?? 0;
     if (
         await command.run((scope) =>
@@ -558,17 +666,25 @@ async function addAdmin(source?: Event): Promise<void> {
         cancelAddAdmin();
     }
 }
+
+/** Explain direct versus inherited archival before issuing the existing lifecycle
+ * command. These are shared resource actions; personal visibility and permanent
+ * deletion remain separate operations with their own confirmation and authority. */
 async function archive(restore: boolean, source?: Event): Promise<void> {
     const confirmation = restore
         ? 'packing.confirmRestore'
         : data.value?.archive.inherited
           ? 'packing.confirmArchiveIndependent'
           : 'packing.confirmArchive';
+
     if (window.confirm(messages.value.t(confirmation))) {
         await command.run((scope) => api.archive(props.listId, restore, scope), true, false,
             {initiator: source, presentation: 'inline', success: restore ? 'overview.restored' : 'overview.archived'});
     }
 }
+/** Delete only after the command owner has approved departure of every mounted draft.
+ * A confirmed deletion retains its destination/consent through failed navigation;
+ * recovery repeats delivery, while the controller remains the deletion policy owner. */
 async function remove(source?: Event): Promise<void> {
     if (blocked.value) return;
     const approval = command.prepareDeparture();
@@ -717,7 +833,7 @@ function permissionLabel(key: string): string {
                         />
                         <p class="form-text">{{ messages.t('packing.imageHint') }}</p>
                         <StatusNotice v-if="headerConflict" kind="warning"
-                            ><p>{{ messages.t('packing.readConflict') }}</p>
+                            ><p>{{ messages.t('draft.readConflict') }}</p>
                             <p>{{ messages.t('draft.mine') }}: {{ image?.name }}</p>
                             <ActionButton
                                 variant="outline-warning"
@@ -768,18 +884,18 @@ function permissionLabel(key: string): string {
                     />
                     <p class="form-text">{{ messages.t('packing.eventHint') }}</p>
                     <StatusNotice v-if="eventConflict" kind="warning"
-                        ><p>{{ messages.t('packing.readConflict') }}</p>
+                        ><p>{{ messages.t('draft.readConflict') }}</p>
                         <dl>
                             <dt>{{ messages.t('draft.original') }}</dt>
-                            <dd>{{ event.original || messages.t('packing.noEvent') }}</dd>
+                            <dd>{{ event.original || messages.t('eventPicker.noEvent') }}</dd>
                             <dt>{{ messages.t('draft.mine') }}</dt>
-                            <dd>{{ event.value || messages.t('packing.noEvent') }}</dd>
+                            <dd>{{ event.value || messages.t('eventPicker.noEvent') }}</dd>
                             <dt>{{ messages.t('draft.current') }}</dt>
                             <dd>
                                 {{
                                     data.currentEvent?.title ||
                                     data.currentEvent?.id ||
-                                    messages.t('packing.noEvent')
+                                    messages.t('eventPicker.noEvent')
                                 }}
                             </dd>
                         </dl>
@@ -817,11 +933,11 @@ function permissionLabel(key: string): string {
                         :disabled="blocked"
                     />
                     <StatusNotice v-if="defaultsConflict" kind="warning"
-                        ><p>{{ messages.t('packing.readConflict') }}</p>
+                        ><p>{{ messages.t('draft.readConflict') }}</p>
                         <div class="pilot-conflict-values">
                             <dl>
                                 <dt>{{ messages.t('draft.original') }}</dt>
-                                <dd>{{ defaults.original }}</dd>
+                                <dd>{{ defaults.baseline.values }}</dd>
                             </dl>
                             <dl>
                                 <dt>{{ messages.t('draft.mine') }}</dt>
@@ -887,11 +1003,7 @@ function permissionLabel(key: string): string {
                                         >{{ initials(admin.name) }}</span
                                     ><span class="me-2">{{ admin.name }}</span
                                     ><span class="badge bg-secondary ms-2"
-                                        >{{
-                                            data.access.permissions.filter(
-                                                (permission) => admin.mask & permission.bit,
-                                            ).length
-                                        }}/{{ data.access.permissions.length }}</span
+                                        >{{ adminPermissionCount(admin.mask) }}/{{ data.access.permissions.length }}</span
                                     >
                                 </button>
                             </h2>
@@ -906,15 +1018,9 @@ function permissionLabel(key: string): string {
                                         :disabled="blocked"
                                     />
                                     <StatusNotice
-                                        v-if="
-                                            adminRemoved(admin.profileId) || ((admins[admin.profileId]!.value !==
-                                                admins[admin.profileId]!.original || admins[admin.profileId]!.regrantReviewed) &&
-                                            adminConflict(admin.profileId))
-                                        "
+                                        v-if="hasAdminWarning(admin.profileId)"
                                         kind="warning"
-                                        ><p>{{ messages.t(adminRemoved(admin.profileId)
-                                            ? admins[admin.profileId]!.regrantReviewed ? 'packing.adminRegrantReviewed' : 'packing.adminRemoved'
-                                            : 'packing.readConflict') }}</p>
+                                        ><p>{{ messages.t(adminWarningMessage(admin.profileId)) }}</p>
                                         <p>
                                             {{ messages.t('draft.original') }}:
                                             {{ admins[admin.profileId]!.original }} ·
@@ -965,6 +1071,13 @@ function permissionLabel(key: string): string {
                             <h5 class="modal-title">{{ messages.t('packing.addAdministrator') }}</h5>
                         </div>
                         <div data-command-feedback aria-live="polite"></div>
+                        <StatusNotice v-if="profiles.error.value" kind="warning"
+                            :last-updated-at="profiles.data.value ? profiles.dataUpdatedAt.value : undefined"
+                            :retry-at="profileRetryAt" :read-error="profiles.error.value">
+                            {{ messages.t(profiles.data.value ? 'state.stale' : 'state.loadFailed') }}
+                            <ActionButton class="btn-sm ms-2" variant="outline-light" :pending="profiles.isFetching.value"
+                                :disabled="!profileRetryAvailable" @click="retryProfiles">{{ messages.t('common.retry') }}</ActionButton>
+                        </StatusNotice>
                         <div class="mb-3">
                             <label class="form-label" for="profile-search"
                                 ><i class="bi bi-search me-1" aria-hidden="true" />{{
@@ -1003,7 +1116,7 @@ function permissionLabel(key: string): string {
                                 class="form-select text-bg-dark"
                                 :disabled="blocked"
                             >
-                                <option value="">{{ messages.t('packing.none') }}</option>
+                                <option value="">{{ messages.t('common.none') }}</option>
                                 <option
                                     v-for="option in data.access.presets"
                                     :key="option.key"
@@ -1033,7 +1146,7 @@ function permissionLabel(key: string): string {
                 aria-labelledby="pilot-settings-tab-actions"
             >
                 <section v-if="data.capabilities.manageArchive" class="mb-4" data-entity-section="archival">
-                    <h3 class="fs-5">{{ messages.t('packing.archival') }}</h3>
+                    <h3 class="fs-5">{{ messages.t('common.archival') }}</h3>
                     <div data-command-feedback aria-live="polite"></div>
                     <p>
                         {{
@@ -1057,14 +1170,14 @@ function permissionLabel(key: string): string {
                             variant="outline-light"
                             :disabled="blocked"
                             @click="archive(false, $event)"
-                            >{{ messages.t('packing.archive') }}</ActionButton
+                            >{{ messages.t('common.archive') }}</ActionButton
                         ><ActionButton
                             v-if="data.capabilities.restore"
                             class="btn-sm"
                             variant="outline-light"
                             :disabled="blocked"
                             @click="archive(true, $event)"
-                            >{{ messages.t('packing.restore') }}</ActionButton
+                            >{{ messages.t('common.restore') }}</ActionButton
                         >
                     </div>
                 </section>
@@ -1075,7 +1188,7 @@ function permissionLabel(key: string): string {
                             v-if="data.capabilities.duplicate"
                             class="btn btn-outline-light"
                             :to="'/frontend-pilot/packing/' + listId + '/duplicate'"
-                            >{{ messages.t('packing.duplicate') }}</RouterLink
+                            >{{ messages.t('common.duplicate') }}</RouterLink
                         ><ActionButton
                             v-if="data.capabilities.remove"
                             variant="outline-danger"

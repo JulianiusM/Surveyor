@@ -4,6 +4,21 @@ import type {FrontendIdentityOperation, IdentityLoginSettings} from '../../types
 
 type IdentityProblemCode = components['schemas']['Problem']['code'];
 
+/**
+ * Pilot registration projects the native password criteria without importing its
+ * jQuery/alert module. Preserve UTF-16 length and the established character classes;
+ * this is presentation guidance, while the identity controller owns submission checks.
+ */
+export function passwordCriteria(password: string): {length: boolean; letter: boolean; digit: boolean} {
+    return {length: password.length >= 8, letter: /[a-z,A-Z]/u.test(password), digit: /\d/u.test(password)};
+}
+
+export function isRegistrationPasswordValid(password?: string): boolean {
+    if (!password) return false;
+    const criteria = passwordCriteria(password);
+    return criteria.length && criteria.letter && criteria.digit;
+}
+
 /** API problems describe transport outcomes, while native forms retain operation-specific
  * presentation. This explicit mapping never parses controller prose or exposes submitted
  * credentials. Other problems keep their existing validated API presentation. */

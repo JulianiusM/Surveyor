@@ -26,7 +26,7 @@ import {test} from 'node:test';
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const script = path.join(repository, 'scripts/check-documentation.mjs');
 const helpScript = path.join(repository, 'scripts/check-help-documentation.mjs');
-const productionConfig = JSON.parse(fs.readFileSync(path.join(repository, 'docs/documentation-check.json'), 'utf8'));
+const productionConfig = JSON.parse(fs.readFileSync(path.join(repository, 'docs/policies/documentation-check.json'), 'utf8'));
 const optionalPaths = [
     'src/modules/database/__index__.ts', 'tests/.env.test.local', 'tests/.env.test', '.env.e2e',
 ];
@@ -66,7 +66,7 @@ function fixture(t) {
     config.documentedPathAllowlist = optionalPaths.map(name => ({
         path: name, expectedOccurrences: 1, reason: 'Synthetic optional file', package: 'fixture',
     }));
-    write(root, 'docs/documentation-check.json', JSON.stringify(config));
+    write(root, 'docs/policies/documentation-check.json', JSON.stringify(config));
     write(root, 'package.json', JSON.stringify({scripts: {valid: 'node -v'}}));
     write(root, 'README.md', `# Fixture\n${metadata}\n\n${optionalPaths.map(name => `\`${name}\``).join('\n')}\n`);
     write(root, 'docs/user-guide/README.md', `# Guide\n${metadata}\n\nUse [this page](README.md).\n`);
@@ -76,7 +76,7 @@ function fixture(t) {
     const fingerprint = run(script, ['--root', root, '--fingerprint']);
     assert.equal(fingerprint.status, 0, fingerprint.stderr);
     config.baselines[0].sourceFingerprint = fingerprint.stdout.trim();
-    write(root, 'docs/documentation-check.json', JSON.stringify(config));
+    write(root, 'docs/policies/documentation-check.json', JSON.stringify(config));
     return root;
 }
 
@@ -111,28 +111,6 @@ test('creating optional/generated files changes neither reference counts nor fin
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.equal(report.sourceFingerprint, before.sourceFingerprint);
     assert.equal(report.allowlistedMissingDocumentedPaths.length, 0);
-});
-
-test('local review evidence is excluded while maintained migration staging stays checked', t => {
-    const root = fixture(t);
-    const before = inspect(root).report;
-
-    // Evidence can contain generated Markdown without maintainer metadata and copied source.
-    // Neither belongs to the maintained corpus or the implementation fingerprint.
-    write(root, '.temp/review/summary.md', '# Generated review\n[Absent evidence](missing.md)\n');
-    write(root, '.temp/review/reproducer.ts', 'export const evidence = true;\n');
-
-    // Staged guidance is maintained source material, even though it is not yet production prose.
-    const staged = 'docs/frontend-migration/staged/EXAMPLE.md';
-    write(root, staged, `# Staged guide\n${metadata}\n\nUse the existing workflow.\n`);
-    const {report} = inspect(root, true);
-    assert.equal(report.sourceFingerprint, before.sourceFingerprint);
-    assert.equal(report.summary.markdownFiles, before.summary.markdownFiles + 1);
-    assert.equal(report.summary.totalErrors, 0);
-
-    // Excluding local evidence must not accidentally excuse invalid maintained staging.
-    write(root, staged, '# Staged guide without metadata\n');
-    expectError(root, 'missing-metadata');
 });
 
 for (const present of [false, true]) {
@@ -172,6 +150,25 @@ test('local settings and IDE files are not implementation inputs', t => {
     const {result, report} = inspect(root, true);
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.equal(report.sourceFingerprint, before);
+});
+
+test('temporary release copies do not enter maintained-document scans or source fingerprints', t => {
+    const root = fixture(t);
+    const before = inspect(root).report.sourceFingerprint;
+    write(root, '.temp/release/docs/UNVERIFIED.md', '# Temporary copy\n[Missing](missing.md)\n');
+    write(root, '.temp/release/src/copied.ts', 'export const temporary = true;\n');
+    const {report} = inspect(root, true);
+    assert.equal(report.summary.totalErrors, 0);
+    assert.equal(report.sourceFingerprint, before);
+});
+
+test('advisory source inventory accepts equivalent fixed-path composition', t => {
+    const root = fixture(t);
+    write(root, 'src/controller/helpController.ts', "const docsRoot = path.join(root, 'docs');\nconst helpRoot = path.join(docsRoot, 'user-guide');\n");
+    const {report} = inspect(root, true);
+    // A source change still has fingerprint evidence; static expression spelling
+    // must not be mistaken for a runtime source-boundary assertion.
+    assert.ok(report.errors.every(error => error.type === 'source-baseline-mismatch'));
 });
 
 test('real source changes are reported without blocking in both modes', t => {
@@ -233,6 +230,41 @@ test('forbidden stale concepts remain visible findings', t => {
     expectError(root, 'forbidden-stale-term');
 });
 
+test('classification accepts the policy root allowlist and reports unclassified files without deleting them', t => {
+    const root = fixture(t);
+    write(root, 'docs/README.md', `# Documentation\n${metadata}\n`);
+    assert.equal(inspect(root).report.summary.classificationErrors, 0);
+    const document = 'docs/UNAPPROVED_PLAN.md';
+    const content = `# Unclassified plan\n${metadata}\n\nAwait human classification.\n`;
+    write(root, document, content);
+    expectError(root, 'unclassified-document');
+    assert.equal(fs.readFileSync(path.join(root, document), 'utf8'), content);
+});
+
+test('classification reports misplaced user help, migration amendments and formal decisions', t => {
+    const root = fixture(t);
+    write(root, 'docs/features/help/TASKS.md', `# User task\n${metadata.replace('audience: test fixture', 'audience: end users')}\n`);
+    write(root, 'docs/features/packing/MIGRATION.md', `# Migration amendment\n${metadata.replace('status: current', 'status: migration-pending')}\n`);
+    write(root, 'docs/frontend-migration/DEC-999-SAMPLE.md', `# Formal decision\n${metadata}\n`);
+    const {result, report} = inspect(root);
+    assert.equal(result.status, 0);
+    for (const type of ['misplaced-user-help-document', 'misplaced-migration-document', 'misplaced-decision-document']) {
+        assert.ok(report.errors.some(error => error.type === type), type);
+    }
+});
+
+test('decision/source conflicts are reported without rewriting the policy configuration or record', t => {
+    const root = fixture(t);
+    const configPath = path.join(root, 'docs/policies/documentation-check.json');
+    const before = fs.readFileSync(configPath, 'utf8');
+    const record = 'docs/decisions/DEC-999-HELP-SOURCE.md';
+    const content = `# Conflicting source decision\n${metadata}\n\nA source proposes docs/user-docs.\n`;
+    write(root, record, content);
+    expectError(root, 'ambiguous-user-guide-path');
+    assert.equal(fs.readFileSync(configPath, 'utf8'), before);
+    assert.equal(fs.readFileSync(path.join(root, record), 'utf8'), content);
+});
+
 function helpFixture(t, extra = '') {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'surveyor-help-check-'));
     t.after(() => fs.rmSync(root, {recursive: true, force: true}));
@@ -257,6 +289,13 @@ test('help checker is parseable and accepts metadata, safe links and packaged im
     assert.equal(result.status, 0, result.stdout);
     assert.equal(report.ok, true);
     assert.equal(report.imagesChecked, 1);
+});
+
+test('help report accepts named fixed-root composition without certifying runtime behavior', t => {
+    const root = helpFixture(t);
+    write(root, 'src/controller/helpController.ts', "const docsRoot = path.join(root, 'docs');\nconst helpRoot = path.join(docsRoot, 'user-guide');\n");
+    const {report} = inspectHelp(root);
+    assert.equal(report.ok, true);
 });
 
 for (const [name, markdown] of [
@@ -296,44 +335,52 @@ test('unreferenced help assets remain visible findings', t => {
     assert.ok(report.errors.some(error => error.message.includes('not referenced')));
 });
 
-/** Catalog-shaped fixtures exercise reporting only; no maintained prose or application content is asserted. */
-function localizedHelpFixture(t, extra = '') {
+test('help report scans native and localized articles together and discloses supported English fallback', t => {
     const root = helpFixture(t);
-    write(root, 'src/locales/en.json', JSON.stringify({locale: 'en', help: {directory: '.'}}));
-    write(root, 'src/locales/de.json', JSON.stringify({locale: 'de', help: {directory: 'de'}}));
-    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n![Testbild](assets/test.png)\n${extra}\n`);
-    write(root, 'docs/user-guide/de/assets/test.png', Buffer.from('89504e470d0a1a0a', 'hex'));
-    return root;
-}
-
-test('help advisory discovers catalog-owned corpora and counts each language independently', t => {
-    const {result, report} = inspectHelp(localizedHelpFixture(t, '[Anleitung](README.md)'));
+    write(root, 'docs/user-guide/en/README.md', `# English Help\n${metadata}\n\n![English figure](assets/english.png)\n`);
+    write(root, 'docs/user-guide/en/TASK.md', `# English task\n${metadata}\n\nTake an item.\n`);
+    write(root, 'docs/user-guide/en/assets/english.png', Buffer.from([1]));
+    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n[Aufgabe](TASK.md)\n![Abbildung](assets/english.png)\n`);
+    const {result, report} = inspectHelp(root);
     assert.equal(result.status, 0);
-    assert.equal(report.ok, true);
-    assert.equal(report.markdownFiles, 2);
-    assert.equal(report.imagesChecked, 2);
-    assert.deepEqual(report.corpora.map(corpus => corpus.helpRoot), ['docs/user-guide', 'docs/user-guide/de']);
-    assert.deepEqual(report.referencedAssets, {'de/test.png': 1, 'test.png': 1});
+    assert.equal(report.ok, true, JSON.stringify(report.errors));
+    assert.equal(report.markdownFiles, 4);
+    assert.deepEqual(report.corpora.map(corpus => corpus.directory), ['docs/user-guide', 'docs/user-guide/de', 'docs/user-guide/en']);
+    assert.ok(report.warnings.some(warning => warning.message.includes('TASK.md')));
+    assert.ok(report.warnings.some(warning => warning.message.includes('assets/english.png')));
+    assert.equal(report.referencedAssets['docs/user-guide/en/assets/english.png'], 2);
 });
 
-test('localized help findings cannot be satisfied by English articles or images', t => {
-    const root = localizedHelpFixture(t, '[Wrong language](../README.md)');
-    fs.rmSync(path.join(root, 'docs/user-guide/de/assets/test.png'));
+test('unsafe localized content and cross-corpus traversal remain findings even when English exists', t => {
+    const root = helpFixture(t);
+    write(root, 'docs/user-guide/en/README.md', `# English Help\n${metadata}\n`);
+    write(root, 'docs/user-guide/en/assets/english.png', Buffer.from([1]));
+    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n<script>unsafe()</script>\n[Andere](../README.md)\n`);
     const {result, report} = inspectHelp(root);
     assert.equal(result.status, 0);
     assert.equal(report.ok, false);
-    assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/README.md'
-        && error.message.includes('same language corpus')));
-    assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/README.md'
-        && error.message.includes('image does not exist')));
+    assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/README.md' && error.message.includes('Raw HTML')));
+    assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/README.md' && error.message.includes('maintained guide')));
 });
 
-test('catalog corpus traversal remains a structured advisory finding', t => {
-    const root = localizedHelpFixture(t);
-    write(root, 'src/locales/de.json', JSON.stringify({locale: 'de', help: {directory: '../../outside'}}));
+test('malformed localized entries remain findings rather than silently borrowing English', t => {
+    const root = helpFixture(t);
+    write(root, 'docs/user-guide/en/TASK.md', `# English task\n${metadata}\n`);
+    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n[Aufgabe](TASK.md)\n`);
+    fs.mkdirSync(path.join(root, 'docs/user-guide/de/TASK.md'));
+    write(root, 'docs/user-guide/de/assets', 'Invalid asset directory');
     const {result, report} = inspectHelp(root);
     assert.equal(result.status, 0);
-    assert.ok(report.errors.some(error => error.file === 'src/locales/de.json'
-        && error.message.includes('fixed relative help directory')));
+    assert.equal(report.ok, false);
+    assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/TASK.md' && error.message.includes('regular files')));
+    assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/assets' && error.message.includes('regular directory')));
+    assert.ok(!report.warnings.some(warning => warning.message.includes('TASK.md')));
 });
 
+test('missing canonical release-copy comparison remains an advisory finding', t => {
+    const root = helpFixture(t);
+    write(root, '.github/workflows/release.yml', 'cp -R docs release/docs\ndiff -qr docs/user-docs release/docs/user-docs\n');
+    const {result, report} = inspectHelp(root);
+    assert.equal(result.status, 0);
+    assert.ok(report.errors.some(error => error.message.includes('diff -qr docs/user-guide')));
+});

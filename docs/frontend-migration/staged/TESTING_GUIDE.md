@@ -1,560 +1,185 @@
-# Testing Guide
+# Staged frontend testing guidance
 <!--
 documentation-metadata
-audience: developers; maintainers; AI agents
-owner: test maintainers
+audience: maintainers; frontend developers; migration reviewers
+owner: application maintainers
 status: migration-pending
-last-verified: 2026-10-11
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: 2026-10-11 risk-based test selection, bounded parallel database-free project, serial integration project, UTC workers, explicit runner source and split CI/report ownership reviewed; isolated tooling, bounded output cleanup and application/evidence watcher separation reviewed; actual startup control categories, independent native operation/input comparisons, semantic feature first-read premises, genuine normal source/HMR/regeneration and separate built/package boundaries verified; exact bounded final runtime evidence remains in the paired review; shared/feature loading and FPR-07 staging retained; prospective frontend replacement, not production cutover
-source-anchors: tests/frontend/frontend-loading-shell.spec.ts; tests/frontend/frontend-content-loading.spec.ts; src/frontend/components/LoadingSkeleton.vue; src/modules/frontendDevelopment.ts; src/frontend/app/mountPreservingDrafts.ts; tests/unit/frontend-development.spec.ts; tests/frontend/frontend-hydration-drafts.spec.ts; tests/e2e/frontend-development.spec.ts; tests/unit/frontend-contracts.spec.ts; tests/unit/frontend-localization.spec.ts; tests/unit/frontend-api-problems.spec.ts; tests/frontend/frontend-pilot.spec.ts; tests/integration/packing-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-pilot.spec.ts; tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs; vite.config.mts
+verification-scope: frontend test-layer, compiler-scope and risk/cost delta consolidated against executable configuration; current correction results belong to the paired review
+source-anchors: package.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tsconfig.server.json; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tests/support/database.ts; tests/support/env.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; .github/workflows/ci.yml; docs/TESTING_GUIDE.md
 next-review: frontend-production-cutover
-production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
 canonical-merge-target: docs/TESTING_GUIDE.md
-staging-origin: c42758a frontend pilot documentation; authorized 2026-10-08 migration-only rectification
+production-reference: 2dfa257 native documentation; not evidence of the installed production commit
 -->
 
 ## Cutover staging
 
-This is the temporary replacement draft for `docs/TESTING_GUIDE.md`. The canonical document continues to describe native
-production until frontend cutover. For work on the migration checkout, use this draft with the
-[Frontend Pilot](../../FRONTEND_PILOT.md) guide and executable package configuration. Merge the relevant draft into its existing
-canonical owner at cutover, reconcile intervening native changes, remove this staging notice and temporary metadata,
-and then remove the merged copy. Staging is advisory and introduces no release prerequisite.
+This is the frontend delta for [Testing](../../TESTING_GUIDE.md), which retains unchanged setup, environment,
+database guards and operator procedures. At authorized cutover, reconcile changes, merge this guidance into existing
+sections and remove the copy. Staged documents are never runtime inputs or required prose assertions.
 
-The native documentation reference is `2dfa257`; it does not establish which commit is installed in production.
-Original design decisions and D1–D5 remain in the linked migration records. This document records prospective
-implementation guidance; the paired review owns actual runtime verification evidence.
+The [Development playbook](DEVELOPMENT.md#implementing-the-next-feature-slice) owns implementation handoffs.
+The [pilot review](../PILOT_PARITY_REVIEW.md) records actual final commands/results and limits.
+Historical counts/timings do not establish acceptance of changed inputs.
 
+## Choose the cheapest stable boundary
 
-Surveyor uses two runners with four test layers:
+| Layer | Observable behavior requiring it |
+|---|---|
+| Unit | Pure production logic with no database, HTTP app, external service or real browser. |
+| Frontend | Browser helpers/DOM/mounted Vue behavior using explicit restored globals and real production owners. |
+| Integration | TypeORM metadata/relationships, locked controller orchestration and persistence against guarded disposable MariaDB. |
+| E2E | Critical route/middleware/session/rendering/database workflow, real focus/browser validation or source/hydration integration. |
 
-- **Vitest unit tests** for isolated server-side production logic.
-- **Vitest frontend tests** for deterministic browser helpers and DOM-adjacent behavior without starting the application.
-- **Vitest integration tests** for production services and selected controllers against a real disposable MariaDB schema.
-- **Playwright E2E tests** for critical HTTP, session, route, render, and browser-facing workflows against the built application.
+Add another layer only when risk crosses that boundary. A shared helper assertion cannot prove a feature adopted it.
+Repository/service mocks cannot establish transaction behavior. Replace only a true external side effect when the
+production workflow remains intact. Frontend tests restore globals, dispose apps/queries/timers/listeners and use
+fresh inputs instead of shared mutable snapshots.
 
-The test file suffix is `*.spec.ts`. Runner configuration and the repository tree are the source of truth for inventory; do not hard-code test counts in documentation.
+## Generated inputs and focused commands
 
-## Safety first
+Package pre-hooks prepare generated consumers for normal test/typecheck scripts.
+Direct Vitest/Playwright/compiler invocations can bypass hooks; prepare inputs after a clean checkout or authored
+contract/catalog change. Generation does not connect to the database.
 
-The test suites rebuild databases:
-
-- Integration setup calls `AppDataSource.synchronize(true)` for each integration suite.
-- E2E setup clears its database and recreates the schema from entities.
-
-The guards require:
-
-```text
-TEST_DB_NAME contains "test"
-E2E_DB_NAME contains "e2e"
-```
-
-Those name checks reduce risk but do not prove that a database is disposable. Use dedicated local schemas and credentials with no privileges outside those schemas. Never point test settings at development, staging, or production data.
-
-## Prerequisites
-
-Match CI for reproducibility:
-
-- Node.js 24.15.0
-- MariaDB 10.11
-- Dependencies installed with `npm ci`
-- Chromium installed through Playwright for E2E
-
-## Vitest setup
-
-### 1. Create the integration database
-
-Example:
-
-```sql
-CREATE DATABASE surveyor_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'surveyor_test'@'127.0.0.1' IDENTIFIED BY 'replace-this-password';
-GRANT ALL PRIVILEGES ON surveyor_test.* TO 'surveyor_test'@'127.0.0.1';
-FLUSH PRIVILEGES;
-```
-
-### 2. Create `tests/.env.test`
-
-```bash
-cp tests/.env.test.example tests/.env.test
-```
-
-Then set the dedicated credentials:
-
-```dotenv
-TEST_DB_HOST=127.0.0.1
-TEST_DB_PORT=3306
-TEST_DB_USER=surveyor_test
-TEST_DB_PASSWORD=replace-this-password
-TEST_DB_NAME=surveyor_test
-TEST_DB_LOGGING=false
-```
-
-`tests/env.load.ts` loads the root `.env`, then `tests/.env.test`, then optional `tests/.env.test.local`. Each dotenv load fills values that are still unset. It then maps `TEST_DB_*` to the ordinary `DB_*` names before application modules import the production datasource.
-
-Process-level environment variables therefore remain authoritative. Keep application development and integration-test database values separate and verify the final target before running database-backed tests.
-
-### 3. Run the desired layer
-
-```bash
-npm run test:unit
-npm run test:frontend
+```powershell
+npm run generate
 npm run test:quick
-npm run test:integration
-npm test
+npm run typecheck:frontend
+npm run typecheck:tests
 ```
 
-`npm test` runs every Vitest layer, including MariaDB integration tests. It is not a database-free shortcut. `npm run test:quick` is the database-free unit-plus-frontend command.
+These commands have different scopes. `test:quick` is database-free unit plus frontend; it is not an integration
+check. The exact package scripts are authoritative. To select one changed frontend file without also selecting
+the whole directory, use the prepared direct runner:
 
-The package pre-hooks for `test`, `test:unit`, `test:frontend`, `test:quick`, `test:integration`, and `test:ci` run `npm run generate` first. This regenerates the TypeORM index, API declarations/validators and localization artifacts without connecting to a database. Unit and frontend test layers remain database-free. Direct `npx vitest` invocations bypass these hooks, so run `npm run generate` first after a clean checkout or source-definition change.
+```powershell
+npx vitest run --config vitest.config.mts tests/frontend/frontend-command-recovery.spec.ts
+```
 
-## Vitest configuration
+Adding a filename to a script that already selects the whole directory may still run that directory.
+Use named test filters only when their actual selection is appropriate; report filtered/unexecuted cases honestly.
 
-`vitest.config.mts` discovers:
+## Static checking
+
+`npm run typecheck:frontend` checks both client and SSR Vue configurations.
+The server build owns `tsconfig.server.json`; `npm run typecheck:tests` uses vue-tsc and `tsconfig.test.json`
+for test entries, shared declarations and production/SFC imports reached by those entries.
+Vitest transpilation does not type-check test assertions, mounted fixtures or all SFC imports.
+
+The current test-import graph is narrower than the old all-production-TypeScript graph. A PASS must describe that
+scope. The broad editor graph still has two inherited native nullable-date diagnostics; they are not suppressed,
+fixed or excluded through this documentation change. Server/client/SSR/test scopes do not certify every unimported
+native browser source. Changes to required check scope need explicit resolution, not a convenient clean result.
+
+Generated compile fixtures protect actual request/response/problem declaration relationships and negative cases.
+Do not add parallel handwritten types to make fixtures compile.
+
+## Database-backed checks
+
+Read canonical [database safety](../../TESTING_GUIDE.md) before integration or E2E commands: selected schemas are
+rebuilt. Confirm effective host/schema/credentials and explicit disposability; names containing test/e2e alone
+do not prove safe targets. Use restricted credentials with no privileges outside their dedicated schemas.
+Never reset development, staging, production or shared data.
+
+Integration files rebuild the same schema and remain serialized. Database-free workers are independently isolated.
+Follow runner configuration rather than parallelizing fixture resets for speed.
+
+Shared-operation/method-policy consolidation is applied. Its final persistence selection invokes actual native/v1
+operations against real TypeORM metadata.
+Keep page membership separate from action authorization, private edit-token projection, touched-field comparison,
+capacity and assignment interleavings. The opposing native item/FK and v1 root/item schedule reproduced a real
+MariaDB deadlock. The approved 2026-10-12 remedy now takes a native shared root lock before the exclusive item lock;
+v1 keeps its exclusive root coordination. Production-controller regressions cover both arrival orders, parallel
+different-item assignments, deletion races and preserved removals; their execution belongs to the
+[review](../PILOT_PARITY_REVIEW.md). Preserve the historical failure separately from evidence for the remedy.
+Any future scheduling change still needs direct authorization and bounded verification; v1/v1 coverage alone does
+not establish coexistence.
+
+## Mounted read, draft and command evidence
+
+Retain actual-consumer checks where they uniquely detect:
+
+- Missing initial data versus background refresh; parallel regions and no invented empty/count state.
+- Dirty/original/local/remote values, independent dialog drafts and changed-field submission.
+- Field write loss versus readable content, validated denial, actor/locale retirement and stale SSR/cache aliases.
+- Confirmed write followed by failed/canceled read; blocked token/baseline authority until a new admitted receipt.
+- Unknown command recovery without replay or a false conclusion about an unknown creation.
+- Retained completion/destination/one-time feedback through canceled navigation and retired editors.
+- Receipt-owned expiry, repeated outcome renewal, reactive translation and detached initiating hosts.
+- Shared read Retry deadlines without automatic writes/GETs or unrelated-warning clearing.
+
+Use real query/cache/transport behavior for authority regressions. A fulfilled observer refetch may return retained
+pre-write data after cancellation; hold and cancel the actual mounted post-write read, prove one write, and restore
+authority through a new admitted read. Equal successful data is a valid receipt; object identity/idle flags are not.
+
+## Browser, visual and source boundaries
+
+Use E2E for direct URLs, Back/forward/fragments, native-equivalent admission/destinations, duplicate return,
+keyboard/focus, pending dismissal locks and real browser validity. Exercise required usable controls, not only a
+hydration marker. Configuration-dependent skips are unrun modes unless executed separately.
+
+Paired visual checks use the same synthetic records, actors and desktop/mobile sizes. Inspect original-resolution
+screenshots and affected controls; capture success or a contact sheet alone is not visual approval.
+Native comparator overflow/feedback defects stay disclosed without changing frozen source or test oracles.
+A focused owner/control change does not require another whole application capture matrix.
+
+Source/Vite HMR, authored-input regeneration/restart, production-without-development-dependencies and installed-folder
+replacement cross separate boundaries. Exercise them when affected; ordinary feature migration does not need every
+rehearsal repeated. Keep current-release/chunk recovery and mounted drafts under D5.
+
+SSR checks prove request-local identity/locale, escaped bootstrap, same-tree hydration and absence of private leaks.
+Read-only Help retains no-JavaScript GET/search. Interactive routes have the approved message/read-only contract.
+
+## Help security versus maintained prose
+
+Native English Help remains `docs/user-guide/`; reviewed EN/DE pilot Help is `docs/user-guide/<locale>/`.
+Staged maintainer content must never be read/searched/served by application selectors.
+Synthetic fixtures specify permitted source roots independently and exercise forbidden staging, traversal,
+Markdown URI/HTML/image validation and locale-owned asset behavior.
+
+Maintained guide text/images are documentation, not required application assertions.
+Optional content/browser reports remain outside mandatory application test discovery. Changing a runtime source
+or trust model still requires application security coverage; introducing tenant/upload/editor/remote Help needs
+a separate DEC-004 decision.
+
+## Risk and test cost
+
+Evaluate incremental protection after retained coverage and review:
 
 ```text
-tests/unit/**/*.spec.ts
-tests/frontend/**/*.spec.ts
-tests/integration/**/*.spec.ts
+Expected harm without this test = P(regression) × impact × P(unique detection)
+Cost = setup/execution time + maintenance + failure diagnosis
 ```
 
-The maintained `vitest.config.mts` owns two projects. Database-free unit/frontend files use at most two isolated
-workers; integration files use one worker and run after that group because they rebuild the same disposable schema.
-Workers use UTC, matching CI and the existing date/database contract. The default environment is Node, with explicit
-happy-dom for mounted Vue consumers and restored globals/query state. Package commands select this config explicitly;
-the existing generation guard also rejects adjacent emitted copies that could shadow maintained source/configuration.
-
-Coverage uses V8 and includes TypeScript and Vue components under `src/`, excluding migrations, generated database metadata, and declaration-only type files. The CI command writes text, LCOV, JSON, and JUnit outputs.
-
-## Layer contracts
-
-### Unit tests
-
-Use `tests/unit/` for isolated production logic or tooling without MariaDB, the running Surveyor application,
-SMTP, OIDC discovery or a real browser. Tooling tests may read maintained sources, write test-owned temporary
-output or use a bounded local middleware fixture without application routes/session/database; close those fixtures
-and verify cleanup stays within their owned directory, as in the
-[production-generator checks](../../../tests/unit/frontend-generation.spec.ts).
-
-Good subjects include:
-
-- pure transformations and formatting;
-- permission-mask helpers;
-- allocation and requirements algorithms;
-- email rendering that returns text/HTML without sending;
-- API input normalization utilities; and
-- deterministic job-state helpers.
-
-A current factory-backed pattern is:
-
-```typescript
-import {describe, expect, it} from 'vitest';
-import {buildDateTotals} from '../../src/modules/lib/util';
-import {createDateTotalsCase} from '../factories/dateTotalsFactory';
-
-describe('event registration date totals', () => {
-    it('counts registrations across the event window', () => {
-        const testCase = createDateTotalsCase();
-        expect(buildDateTotals(
-            testCase.eventStart,
-            testCase.eventEnd,
-            testCase.registrations,
-        )).toEqual(testCase.expectedTotals);
-    });
-});
-```
-
-Prefer production inputs/outputs over private helper call sequences.
-
-### Frontend tests
-
-Use `tests/frontend/` for browser TypeScript that can be tested deterministically without navigation through a running server. The Vitest environment is still Node, so tests install only the minimal `window`, `document`, storage, element, or event stubs required by the production helper.
-
-Good subjects include:
-
-- form serialization and dynamic row behavior;
-- permission-bundle interpretation;
-- client-side date/status display decisions;
-- UI helper state transitions; and
-- local-storage behavior.
-
-Do not assume a global browser DOM. Save and restore every global installed by the test so one frontend spec cannot contaminate another.
-
-### Integration tests
-
-Use `tests/integration/` when correctness depends on TypeORM mappings, transactions, constraints, relationships, persisted queries, or coordination among production service functions. Selected controller orchestration may also be exercised when it can be called directly with production-shaped data and without constructing a full HTTP stack.
-
-Integration suites use the real `AppDataSource` and production entity metadata. They do not replace TypeORM repositories with general-purpose mocks.
-
-The standard lifecycle is:
-
-```typescript
-import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import {
-    closeIntegrationDatabase,
-    initializeIntegrationDatabase,
-} from '../support/database';
-
-beforeAll(async () => {
-    await initializeIntegrationDatabase();
-});
-
-afterAll(async () => {
-    await closeIntegrationDatabase();
-});
-
-describe('a persisted workflow', () => {
-    it('writes and reloads production entities', async () => {
-        // Arrange through tests/factories and production service functions.
-        // Act through the public workflow operation.
-        // Assert persisted state and user-visible projections.
-    });
-});
-```
-
-Each integration file owns a clean schema for its suite. Do not rely on rows created by another spec file. Use `tests/factories/` for valid production-shaped entities/inputs and remove arbitrary sleeps or ordering assumptions.
-
-Narrow spies are appropriate at an external side-effect boundary when the database workflow is the subject. The existing invoice integration suite, for example, spies on the mail-sending function while preserving the production database services. Keep such replacements local, restore them, and assert the observable notification contract.
-
-### E2E tests
-
-The shared Playwright configuration supplies `Connection: close` to browser and API contexts, including additional
-actors created inside tests. This keeps loopback transports fresh instead of sharing idle sockets between fixtures;
-routes, cookies, payloads and assertions remain unchanged. It does not retry uncertain business commands.
-
-Use `tests/e2e/` for a critical journey that requires the actual built server, middleware order, cookies/session state, redirects, Pug rendering, or public route/API behavior.
-
-Playwright is configured for Chromium. Its managed web server runs:
-
-```text
-npm run e2e:init
-```
-
-That command initializes the E2E database and starts `dist/server.js`; it does not build the application. Build first.
-
-The E2E suite currently uses `APIRequestContext` heavily for focused HTTP workflows. This is still E2E coverage because requests pass through the real built application, routes, middleware, session store, and database.
-
-Use E2E sparingly for high-value flows. Avoid reproducing every service-level edge case in the slowest layer.
-
-## E2E setup
-
-### 1. Create the E2E database
-
-```sql
-CREATE DATABASE surveyor_e2e CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'surveyor_e2e'@'127.0.0.1' IDENTIFIED BY 'replace-this-password';
-GRANT ALL PRIVILEGES ON surveyor_e2e.* TO 'surveyor_e2e'@'127.0.0.1';
-FLUSH PRIVILEGES;
-```
-
-### 2. Create `.env.e2e`
-
-```bash
-cp .env.e2e.example .env.e2e
-```
-
-Update the dedicated credentials and seeded local account. Keep:
-
-```dotenv
-NODE_ENV=e2e
-APP_PORT=3001
-ROOT_URL=http://localhost:3001
-LOCAL_LOGIN_ENABLED=1
-OIDC_ENABLED=0
-E2E_DB_NAME=surveyor_e2e
-```
-
-The initializer also requires `E2E_ADMIN_USERNAME`, `E2E_ADMIN_EMAIL`, and `E2E_ADMIN_PASSWORD`. It maps the E2E settings through the normal application settings loader when the built server starts.
-
-Playwright's managed server defaults `E2E_AUTO_ARCHIVE_ENABLED` to `false` so historical fixtures remain stable. The
-example environment makes this choice explicit. Override it only for an intentional automatic-archival workflow;
-manual archive/restore and personal-visibility E2E tests run normally with the automatic job disabled.
-
-By default, the initializer recreates the schema from entity metadata and skips historical migrations. Set `E2E_RUN_MIGRATIONS=true` only for an explicit migration exercise whose database and migration expectations have been reviewed.
-
-### 3. Install Chromium and run
-
-```bash
-npx playwright install --with-deps chromium
-npm run build
-npm run e2e
-```
-
-Playwright starts and stops the server according to `playwright.config.ts`. Outside CI, it may reuse a server already responding at the configured base URL. Stop unrelated processes or verify the responding instance before trusting the result.
-
-Useful alternatives:
-
-```bash
-npm run e2e:prepare   # reset/recreate/seed only
-npm run e2e:init      # prepare, then start the compiled application
-npm run test:all      # all Vitest layers, build, then Playwright
-```
-
-## Factories, keywords, fixtures, and support
-
-| Directory | Contract |
-|---|---|
-| `tests/factories/` | Build valid production-shaped inputs, entities, expected projections, and E2E form data. |
-| `tests/keywords/` | Reusable workflow and assertion functions shared by specs. |
-| `tests/fixtures/` | Static fixture assets or seed material. |
-| `tests/support/` | Runner environment loading and integration database lifecycle. |
-
-Use a factory when several tests share a non-trivial valid shape. Keep overrides explicit so the important difference is visible in the spec. Use a keyword when several tests repeat a meaningful public workflow, not merely to hide all arrange/act/assert details.
-
-Do not create a new helper path in documentation before it exists in the repository.
-
-## Choosing the layer
-
-| Behavior | Primary layer | Add a broader layer when... |
-|---|---|---|
-| Pure calculation or normalization | Unit | it also depends on persistence or rendered controls |
-| Browser helper with stubbed globals | Frontend | real Pug wiring, navigation, or session state matters |
-| Service transaction or relationship | Integration | middleware/route admission is part of the risk |
-| Controller using production services | Integration | full request parsing, cookies, redirect, or view rendering matters |
-| Authentication, guest, route, or critical creation flow | E2E | a distinct lower-layer edge risk remains unprotected |
-| Documentation label/path contract | Optional advisory documentation report | Keep application-behavior tests separate from maintained wording and images. |
-
-A change may need several layers, but more layers are not automatically better. Protect each distinct failure mode at the cheapest stable seam.
-
-### Risk and test cost
-
-Evaluate the *incremental* protection of a candidate test after retained coverage and review:
-
-```text
-Expected harm without this test = P(regression) × impact × P(this test uniquely detects it)
-Cost = execution/setup time + maintenance + failure diagnosis
-```
-
-Use incident/change evidence for probabilities when available; otherwise document uncertainty and use ordinal
-likelihood (1 unlikely, 2 plausible, 3 recurring) and impact (1 cosmetic, 2 recoverable inconvenience, 3 ordinary
-record corruption, 4 destructive/privacy/authorization loss, 5 financial or widespread data loss) to prioritize.
-Their product is a priority score, not a measured probability or monetary loss estimate. Never invent percentages.
-
-- Delete an explicit or effective duplicate only after naming the retained inputs, boundary and observable assertions.
-  Same names or operations across layers do not prove equivalence: middleware/session, DB locks, mounted consumers
-  and SSR/hydration can fail independently. Transfer any unique assertion before deleting the redundant fixture.
-- For equivalent cosmetic inputs, keep one representative; retain meaningful boundaries and each genuinely distinct
-  branch. Reuse compilation and setup while rendering fresh inputs. Cache neither mutable state nor expected results.
-- Keep consequential money, deletion, privacy and authorization checks even with low estimated likelihood. Preserve
-  the actual consumer/race checks that exposed previous pilot defects; do not replace them with transport mocks.
-- During iteration, run the affected existing files and type/build checks only where their boundary changed. Broaden
-  after new failure, shared-owner changes or release risk. Full visual/deployment/source replay is conditional, not
-  a per-module ritual. Required CI retains all distinct application checks; optional documentation stays separate.
-- Measure wall time and imports/setup as well as case count. Fix repeated preparation or safe runner serialization
-  first. Use a ten-minute routine CI target unless the maintainer specifies another budget; report measured local
-  and hosted times separately rather than claiming an unexecuted pipeline met it.
-
-Record deletion-to-retained coverage, risk judgment and actual timings in the existing paired pilot review. The
-[migration guideline](DEVELOPMENT.md#implementing-the-next-feature-slice) owns the implementation/review procedure.
-
-## Archival coverage
-
-`tests/unit/entity-archival.spec.ts` protects UTC inclusive-date boundaries, direct/inherited state, personal placement,
-settings, and scheduling. `tests/frontend/entity-archive.spec.ts` and `entity-cards-overview.spec.ts` cover explicit
-commands, success/failure handling, and independent main/archive filters. Keep time deterministic and use `TZ=UTC`,
-matching CI and the datasource contract.
-
-Persistence and concurrency belong in `tests/integration/entity-archival.spec.ts` against the guarded real MariaDB
-schema. Preserve real entity metadata and exercise parent inheritance, durable restore, membership/privacy, target
-deletion cleanup, conditional automatic updates, and unchanged business/file references. Mock only true external
-side effects; file-preservation fixtures must not run invoice retention while asserting archival behavior.
-
-`tests/e2e/archival.spec.ts` covers the actual session/API/render/browser boundaries, including collapsed sections,
-private placement, authorized lifecycle actions, and inherited event state. Schema synchronization in these suites
-does not validate migration SQL: separately rehearse `AddEntityArchival1789862400000` against an existing-schema copy
-and the supported fresh-schema bootstrap. Follow [Database and Migrations](../../DATABASE.md) and prove the disposable target
-before either rehearsal. Documentation reports remain advisory and are not substitutes for these application checks.
-
-## Frontend pilot coverage
-
-The implemented scope and entry points are in [Frontend Pilot](../../FRONTEND_PILOT.md). Use the boundary that changed:
-
-| Boundary | Focused files |
-|---|---|
-| Generated contract parity, typed parameters and safe additive browser responses | `tests/unit/frontend-contracts.spec.ts` |
-| Shared catalogs and structured API errors | `tests/unit/frontend-localization.spec.ts`, `tests/unit/frontend-api-problems.spec.ts` |
-| Refresh, identity isolation, draft/conflict and browser-local packing state | `tests/frontend/frontend-pilot.spec.ts` |
-| Rendered editor, packing special states, shell navigation and native locale selection | `tests/frontend/frontend-pilot-editor.spec.ts`, `tests/frontend/frontend-pilot-shell.spec.ts` |
-| Packing projections, grants, stale edits, legacy writers and assignment locking | `tests/integration/packing-api.spec.ts` |
-| Unknown command recovery, reactive feedback and update coordination | `tests/frontend/frontend-command-recovery.spec.ts`, `tests/frontend/frontend-update-coordinator.spec.ts` |
-| Metadata/settings recovery, nullable descriptions and existing packing form behavior | `tests/frontend/packing-management-ui.spec.ts` |
-| Complete identity/guest dirty guards and committed navigation | `tests/frontend/frontend-pilot-identity.spec.ts` |
-| Eligible read recovery, selected-event authority and native search/history semantics | `tests/frontend/frontend-refresh-navigation.spec.ts` |
-| Shared decorative skeletons, localized status, SSR-safe phrasing and lazy-route progress without replacing the mounted draft | `tests/frontend/frontend-loading-shell.spec.ts` |
-| Independent Help/Overview loading, complete read-only SSR, language isolation and preserved draft/focus/error/empty semantics | `tests/frontend/frontend-content-loading.spec.ts` |
-| Native-equivalent packing HTML and the shared JavaScript-required/read-only fallback | `tests/frontend/frontend-native-fallback.spec.ts`; relevant HTTP cases in `tests/e2e/frontend-pilot-api.spec.ts` |
-| Locked settings, native duplicate grants and copied form context | `tests/integration/packing-management-api.spec.ts` |
-| Real cookie sessions, context/CSRF admission, conditional reads and v1 HTTP errors | `tests/e2e/frontend-pilot-api.spec.ts` |
-| Rendered desktop/mobile pilot behavior, native help fallback and incremental loading under held genuine reads | `tests/e2e/frontend-pilot.spec.ts` |
-
-The loading cases in `tests/e2e/frontend-pilot.spec.ts` hold individual browser reads without replacing their real
-responses. The Overview case checks session-only initial HTML, a ready owner region while participation is still
-pending, and real reduced-motion styling. The packing/settings case checks the independent table and dialog reads:
-authorized metadata accepts a focused draft before the remaining settings arrive, and retains that input after they
-load. Held reads are released and interception removed in teardown; they do not change command/retry semantics.
-
-Set `E2E_PILOT_STATE_SCREENSHOTS=true` to optionally retain the mounted loading checkpoints in that suite's ignored
-Playwright output: independent Overview regions, pending/loaded packing, and metadata-ready/loaded settings. The
-existing capture helper records each checkpoint at desktop/mobile sizes and checks horizontal overflow; optional
-pictures require individual inspection and do not constitute automatic visual approval. Follow the ordinary
-[E2E database configuration and guarded reset procedure](#e2e-setup) before running the suite. These are application tests;
-staged guidance and maintained-prose checks are not required delivery gates. Actual results remain in the paired review.
-
-Run `npm run typecheck:frontend` for Vue client/server type checks and `npm run build` before Playwright. The ordinary
-build includes both Vue bundles and packaged API artifacts. Contract/catalog source edits need
-`npm run prepare:frontend` for a standalone runner. The root development workflow watches authored inputs and
-regenerates them before restarting Express; a standalone source watcher does not supply that workflow. A focused direct runner command
-still uses the integration or E2E database setup described above, including its destructive reset behavior.
-
-Packing fixtures that call `createEntity` directly do not receive form permission defaults automatically. When a test
-needs public assignment access, persist that intended grant through the creation/settings hook; native forms submit
-`defaultPerms[public][0]=ACCESS_VIEW`. Do not weaken the API permission check to compensate for an incomplete fixture.
-
-Frontend completion also requires the [paired visual and behavior review](../../FRONTEND_PILOT.md#visual-and-behavior-review)
-against the current application. The optional baseline capture adds HTTP fixtures to a guarded, existing disposable
-schema; it does not initialize or reset it. Its capture manifest is evidence for manual inspection, not automatic
-visual approval or a required documentation check. Use a separate Playwright `--output` directory when retaining
-baseline images under `test-results`, since the runner cleans its selected output directory.
-
-For a bounded follow-up without business fixture changes, the optional
-`scripts/capture-frontend-rectification-readonly.cjs` accepts an explicit environment file, an existing packing UUID,
-the existing local HTTP port and the disposable schema name. It checks exact database grants; the runtime owner
-must separately verify that the HTTP process uses that target. The optional fifth argument `corrections` limits
-capture to native/pilot error presentation and metadata recovery, including reachable Review and acknowledgement
-without command replay. Omit it for the full focused collection. One native login of an existing fictional account
-establishes the session. All browser mutations are then intercepted before dispatch. Its unknown-outcome pictures
-simulate response loss against real, unchanged reads and do not prove a backend write. Generated ignored captures
-still require individual inspection. The helper performs no fixture creation, schema reset or server management.
-
-Built browser tests do not exercise Vite middleware or source-module hydration. For changes to frontend bootstrap,
-development integration or routing, run an actual `npm run server` against explicitly isolated development settings,
-then test document-emitted module/style URLs, same-document controls/navigation, HMR and generated-input restart.
-Vite watches application inputs, excluding generated inputs published through the authored-input watcher and the
-evidence/build directories listed in its configuration. Test traces and reports can contain HTML; writing them
-under `.temp`, `test-results`, `playwright-report`, `coverage` or `dist` must not replace the live document. Assert
-a retained document marker as well as the early draft and its submitted/result values. For controlled CSS HMR,
-observe application and restoration as separate completed saves, allowing the installed watcher to settle between
-them. Check generated-input restart independently of that same-document HMR proof.
-Before a deployment handover or feature action, establish the feature's admitted usable control and completed first
-read as described in the [contribution recipe](DEVELOPMENT.md#baseline-to-observable-verification). A root hydration marker or
-visible progressive shell alone does not establish a card, action or cold-module-import precondition.
-Development settings use ordinary `DB_*` names; an `E2E_DB_*` file alone does not select the source server's database.
-Never reuse the default reset hook to attach to an existing development server. A separate Playwright configuration
-with `webServer` disabled can target a verified disposable source server without initializing its schema.
-Set `E2E_FRONTEND_DEVELOPMENT=true` in that separately configured run to include
-`tests/e2e/frontend-development.spec.ts`. It exercises actual document-emitted modules and native asset URLs,
-locale changes during a held lazy navigation, and text typed before client hydration. It is skipped in ordinary
-built-release runs. Keep `TZ=UTC` for deterministic date fixtures, matching the documented archival checks below.
-`FRONTEND_BASELINE_RUNTIME=development` selects source Express/Vite for the optional paired capture, with the same
-explicit schema acknowledgment and restricted-grant checks. It records source fingerprints and omits startup jobs;
-it supplements, rather than substitutes for, checking the normal watcher/startup command and installed release.
-
-## Assertions and isolation
-
-- Assert user-visible output, returned domain data, persisted state, emitted email contract, or permission result.
-- Avoid assertions on repository-call counts or private implementation order unless that order itself is the contract.
-- Use unique identifiers or factory defaults that make failures readable.
-- Keep uploads in test-owned directories permitted by the production file-serving policy; file existence alone does not prove a valid download fixture.
-- Freeze or inject time for deadline/retention behavior where production functions allow it.
-- Close database connections and restore globals/spies in teardown.
-- Never make a test depend on a previous spec file.
-- Keep external network services out of Vitest; OIDC provider interoperability belongs in a controlled integration environment, while local OIDC helpers can be isolated around their inputs.
-
-## Command matrix
-
-| Command | Database | Build | Browser | Intended use |
-|---|---|---|---|---|
-| `npm run test:unit` | No | No | No | Isolated server logic/tooling. |
-| `npm run test:frontend` | No | No | Stubbed globals or happy-dom | Browser helpers and mounted consumers. |
-| `npm run test:quick` | No | No | Stubbed globals or happy-dom | Bounded parallel database-free regression. |
-| `npm run test:integration` | Disposable MariaDB | No | No | Serialized persistence/production workflows. |
-| `npm test` | Disposable MariaDB | No | Stubbed globals or happy-dom | Both Vitest projects. |
-| `npm run test:ci` | Disposable MariaDB | No | Stubbed globals or happy-dom | Both projects with coverage/JUnit. |
-| `npm run e2e:prepare` | Destructive E2E schema reset | Existing `dist/` not used | No | Initialize and seed only. |
-| `npm run e2e` | Destructive E2E schema reset through managed server | Requires existing `dist/` | Chromium | Focused built-application flows. |
-| `npm run test:all` | Both disposable schemas | Yes | Chromium | Full local sequence. |
-
-## CI contract
-
-`.github/workflows/ci.yml` runs three independent verification stages with Node.js 24.15.0 and their own MariaDB
-10.11 services. Shared steps install the lockfile, configure disposable schemas and write test environment files:
-
-- **Database-free** runs the complete isolated unit/frontend project with at most two workers.
-- **Integration** runs the complete database-backed project with one schema-owning worker.
-- **Browser** performs the full server/client/SSR/type/assets build, restores or installs Chromium, and runs all
-  ordinary built E2E checks with two workers. Source-only development cases retain their explicit separate workflow.
-
-Both Vitest stages use `npm run test:ci -- --project=<project>` with coverage and uniquely named blob reports. Each
-stage uploads diagnostics even on failure; separate copies preserve partial JUnit/coverage during collection. The
-report job uses the matching lockfile, fresh generation and Vitest's built-in `--merge-reports` to replay results
-and merge both coverage maps without rerunning tests. The existing combined `test-reports` artifact retains the
-original JUnit/LCOV paths and stage diagnostics. Sonar and release still require complete CI success. A twenty-minute
-stage timeout is an upper bound, not a claim that the ten-minute target has been measured on hosted runners.
-
-Documentation checks and tooling regressions are absent from this required sequence. Tests of maintained prose,
-images, guide search examples, or documentation completeness live outside application test discovery.
-
-Locally, run the layer relevant to the change while iterating. Before release-sensitive or cross-boundary work, reproduce the full sequence as closely as practical.
-
-## Troubleshooting
-
-### Integration tests refuse the database
-
-Confirm that `TEST_DB_NAME` contains `test`, points to a disposable schema, and that the user can drop/create tables in that schema. Check for a conflicting process-level `TEST_DB_*` value loaded before the file.
-
-### Integration suites interfere with one another
-
-Keep the integration project serialized. Each integration suite rebuilds the shared schema; the isolated
-database-free project's bounded parallelism does not grant integration files permission to run concurrently.
-
-### E2E initialization refuses the database
-
-Confirm that `E2E_DB_NAME` contains `e2e`. Do not weaken the guard or reuse another environment's database.
-
-### Playwright reports an unavailable server
-
-Run `npm run build`, verify `.env.e2e`, confirm MariaDB is reachable, and check that the configured port is free. The managed server waits for `/healthz`.
-
-### A unit/frontend-only command cannot import generated metadata or contracts
-
-Prefer importing the production module actually under test without crossing the database bootstrap boundary. The normal unit/frontend/quick package scripts regenerate their inputs. For a direct runner invocation, run `npm run generate` first; do not switch to database-backed `npm test` merely to obtain generated files.
-
-### CI passes a layer that fails locally
-
-Compare Node.js, MariaDB, environment files, process-level variables, generated output, Chromium version, and whether an old server is being reused. The workflow files and lockfile are the reproducibility baseline.
-
-## Help runtime tests and optional documentation reports
-
-The normal unit suite in `tests/unit/help-documentation.spec.ts` now tests the executable renderer against synthetic
-fixtures: fixed source paths, traversal rejection, metadata stripping, heading generation, URI/HTML rejection, and
-contextual route mapping. It must work even when the maintained documentation directory is absent. The normal
-Playwright test in `tests/e2e/help-experience.spec.ts` checks the application navbar's contextual link, not a guide's
-contents. Neither requires real guide text, images, wording, or a reviewed source fingerprint.
-
-Checks of the actual guides are retained under `tests/documentation/`, not silently deleted or marked passing.
-The optional configurations there are separate from the application Vitest and Playwright discovery paths.
-
-```bash
-npm run docs:check
-npm run docs:check:strict
-npm run docs:check:help
-npm run docs:test:tooling
-npm run docs:test:content
-npm run docs:test:browser
-```
-
-All of these report commands are advisory and exit zero on findings and tool failures. Their logs and JSON under
-`artifacts/documentation/` preserve the actual child exits and distinguish findings from incomplete execution.
-The strict command broadens the reported concepts; it is not an enforcement switch.
-
-The first four commands need no dependency installation or database. Content reports use installed Vitest and marked.
-Browser reports require the existing build, installed Chromium, controlled environment, and disposable E2E database
-specified above. They reuse the normal managed-server configuration, including its destructive E2E initialization.
-They are not invoked by application CI, application test scripts, or the release prerequisite chain.
-
-An offline help-authoring finding does not disable the runtime security guard. Unsafe Markdown continues to be rejected
-by the running help renderer. Application-security regressions remain real failures; documentation quality does not.
-
-Use findings to improve guides or record follow-up work without delaying application delivery. Visual changes still
-require the individual inspection practice in [In-App Help Visuals](../../HELP_VISUALS.md), not an automated delivery gate.
+Use incident/change evidence when available. Otherwise label ordinal likelihood/impact and uncertainty; their
+product is a prioritization score, not a measured probability. Never invent percentages.
+
+- Name retained inputs, boundaries and observable assertions before deleting an explicit/effective duplicate.
+  Transfer unique observations first. Similar operation names across layers do not establish equivalence.
+- Keep consequential money, deletion, privacy, authorization and demonstrated race checks even with low estimated
+  likelihood. Preserve production-consumer evidence that exposed defects.
+- Use representative equivalent cosmetic inputs while keeping genuinely distinct branches. Reuse compilation/setup,
+  render fresh values and cache neither mutable state nor expected outputs.
+- During iteration run affected files and necessary type/build scopes. Broaden for a new failure, changed shared
+  owner or unresolved risk; full visual/deployment/source replay is conditional, not a per-module ritual.
+- Measure wall time, imports/setup and diagnosis as well as case count. Improve repeated preparation/serialization
+  before dropping coverage. A ten-minute routine CI target is a target; report local and hosted measurements separately.
+
+The earlier native deletion/privacy transfer gaps show why sampling cannot certify all removed tests.
+Keep actual native deletion-owner assertions and whole-response denied-identity exclusion where their retained
+fixtures already provide unique detection. Do not add another broad cross-product merely to increase counts.
+
+## CI and reporting
+
+Executable CI currently separates database-free, serial integration and browser stages, with isolated runner setup.
+Report merging does not rerun suites. Preserve distinct application checks and configured diagnostics.
+Node/MariaDB versions, worker limits, stage timeout and exact preparation order belong to workflow/runner files,
+rather than duplicated command matrices.
+
+Application correctness checks remain required; documentation reports/tooling/content checks stay advisory.
+Optional `docs:check`, `docs:check:strict`, `docs:check:help` and `docs:test:*` report findings/failures/tool errors.
+An exit zero does not mean every diagnostic passed. See canonical [Documentation Policy](../../policies/DOCUMENTATION_POLICY.md).
+Record only actual final execution and prerequisites in the existing review; do not rebaseline or suppress findings
+to obtain green, or claim hosted CI/live providers/mail/production cutover from local evidence.

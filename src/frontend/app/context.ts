@@ -129,6 +129,9 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             && (!checkLocale || scope.locale === locale.value);
     }
 
+    /** Close the old actor's entire presentation before admitting another cookie
+     * context. Advancing the epoch also fences still-pending responses; canceling
+     * HTTP alone cannot prevent a completed response from restoring private state. */
     function clearIdentity(): void {
         initialDocumentActive.value = false;
         pendingIdentity = undefined;
@@ -171,6 +174,9 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         const capturedLocaleGeneration = localeGeneration;
         sessionRead.value = {...sessionRead.value, pending: true};
 
+        /** Adopt only this bootstrap generation. Identity changes retire private
+         * state even when locale changed meanwhile; locale generation independently
+         * decides whether this response may replace the current language choice. */
         function receiveBootstrap(current: components['schemas']['SessionView']): void {
             if (disposed || generation !== epoch.value) return;
 
@@ -222,6 +228,9 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         return bootstrapRequest;
     }
 
+    /** Serialize preference writes and share their completion across rapid clicks.
+     * Callers keep their current actor and drafts; only the final admitted language
+     * invalidates its dependent reads after the cookie command is confirmed. */
     function changeLocale(nextLocale: Locale): Promise<void> {
         if (!ready.value) return Promise.resolve();
         desiredLocale = nextLocale;
@@ -269,6 +278,9 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         if (session.value.context !== result.session.context) throw new ObsoleteRequestError();
     }
 
+    /** Install the browser's shared session/recovery lifetime after hydration.
+     * SSR gets disposal only; browser disposal retires generations before releasing
+     * listeners and caches, including statuses retained by unmounted editors. */
     function start(): () => void {
         if (!browser) return () => {
             disposed = true;
@@ -279,6 +291,10 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         };
         hydrated.value = true;
         let checking = false;
+
+        /** Bootstrap precedes resource recovery so focus/reconnect cannot reuse an
+         * old cookie context. The interval checks identity only; active resource
+         * observers retain their own polling and server-imposed retry deadlines. */
         async function revalidate(refreshReads = true): Promise<void> {
             if (checking || document.visibilityState === 'hidden') return;
             checking = true;
@@ -291,6 +307,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
                 // request must never create another actor's warning here.
             } finally { checking = false; }
         }
+
         function visibilityChanged(): void {
             visible.value = document.visibilityState !== 'hidden';
             if (visible.value) void revalidate();

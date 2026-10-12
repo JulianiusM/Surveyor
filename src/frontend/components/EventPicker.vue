@@ -5,6 +5,7 @@ import type {QueryFunctionContext} from '@tanstack/vue-query';
 import type {PilotEventPickerOption, PilotEventPickerQuery, PilotEventPickerSelection, PilotEventPickerSource} from '../../types/FrontendPilotUiTypes';
 import {usePilot, refreshInterval} from '../app/context';
 import {isReadDenial, ObsoleteRequestError} from '../app/transport';
+import {retireQueryFamily} from '../app/queryCache';
 import {useDebouncedValue} from '../composables/debounced';
 import {useReadRetry, useReadRetryAt} from '../composables/feedback';
 import ActionButton from './ActionButton.vue';
@@ -83,7 +84,7 @@ const displayed = computed(() => context.ready.value && !isReadDenial(options.er
     && confirmedPage.value?.family === family.value
     ? confirmedPage.value.result : undefined);
 const visibleOptions = computed(uniqueOptions);
-watch(options.error, retireDeniedOptions);
+watch(options.error, retireDeniedOptions, {flush: 'sync'});
 
 /** Confirmed denial retires discovery's protected options/label, not the user's
  * selected draft ID. Retain its resolution guard so retirement cannot trigger
@@ -91,8 +92,14 @@ watch(options.error, retireDeniedOptions);
  * readable title independently of discovery permission and remains authoritative. */
 function retireDeniedOptions(failure: Error | null): void {
     if (!isReadDenial(failure)) return;
+    // Retire the outstanding visit before clearing its observed cache family.
+    // gcTime only removes unused queries; a mounted picker must also release
+    // its previously readable protected response while keeping Retry attached.
+    retireReads();
     confirmedPage.value = undefined;
     selected.value = props.current?.id === props.modelValue ? props.current : null;
+    void retireQueryFamily(context.queryClient,
+        props.source.filterKey(context.session.value?.context, context.locale.value, filterKey.value), failure);
 }
 
 /** Discovery can repeat an ID within a bounded batch. Render one choice per ID, matching
@@ -209,8 +216,8 @@ const selection = computed(() =>
 );
 const selectionTitle = computed(() =>
     props.modelValue
-        ? selection.value?.title || messages.value.t('packing.currentEvent')
-        : messages.value.t('packing.noEvent'),
+        ? selection.value?.title || messages.value.t('eventPicker.currentEvent')
+        : messages.value.t('eventPicker.noEvent'),
 );
 function choose(value: PilotEventPickerOption | null): void {
     if (props.disabled) return;
@@ -245,6 +252,9 @@ function requestPage(nextDirection: 'next' | 'previous', cursor: string | undefi
 function retry(): void {
     if (enabled.value && !options.isFetching.value && retryAvailable.value) void options.refetch();
 }
+/** Clear this browsing draft immediately without changing the selected event.
+ * Reset the cursor/search generation together so delayed typing cannot restore
+ * the old filters or dispatch another page after this explicit reset. */
 function reset(): void {
     if (props.disabled) return;
     Object.assign(filters, {q: '', from: '', to: '', period: 'all', archive: 'all', deadline: 'all'});
@@ -255,19 +265,24 @@ function reset(): void {
     resetBrowsing();
     if (enabled.value) void options.refetch({cancelRefetch: false});
 }
+
+/** Describe only the admitted option using its civil dates and server flags.
+ * The UTC date comparison affects the visible period label; it never decides
+ * event eligibility, archival authority or whether a relationship can be saved. */
 function details(event: PilotEventPickerOption): string {
     const today = new Date().toISOString().slice(0, 10);
     const period =
         event.startDate > today
-            ? 'packing.upcoming'
+            ? 'eventPicker.upcoming'
             : event.endDate < today
-              ? 'packing.ended'
-              : 'packing.ongoing';
+              ? 'eventPicker.ended'
+              : 'eventPicker.ongoing';
+
     return [
         event.startDate && event.endDate ? event.startDate + ' – ' + event.endDate : '',
         event.startDate && event.endDate ? messages.value.t(period) : '',
-        messages.value.t(event.archived ? 'packing.archivedOption' : 'packing.active'),
-        event.deadlinePassed ? messages.value.t('packing.deadlinePassed') : '',
+        messages.value.t(event.archived ? 'common.archived' : 'common.active'),
+        event.deadlinePassed ? messages.value.t('eventPicker.deadlinePassed') : '',
         event.description,
     ]
         .filter(Boolean)
@@ -279,7 +294,7 @@ function details(event: PilotEventPickerOption): string {
     <div class="entity-picker">
         <template v-if="!inline">
             <label class="form-label" :for="prefix + '-event-button'">{{
-                messages.t('packing.assignEvent')
+                messages.t('eventPicker.assignEvent')
             }}</label>
             <ActionButton
                 :id="prefix + '-event-button'"
@@ -294,7 +309,7 @@ function details(event: PilotEventPickerOption): string {
         <component
             :is="inline ? 'div' : AppDialog"
             :open="open"
-            :title="messages.t('packing.chooseEvent')"
+            :title="messages.t('eventPicker.chooseEvent')"
             :pending="disabled"
             :fullscreen-on-small="false"
             :initial-focus="'#' + prefix + '-search'"
@@ -304,7 +319,7 @@ function details(event: PilotEventPickerOption): string {
                 <div class="row g-2 align-items-end mb-2">
                     <div class="col">
                         <label class="form-label" :for="prefix + '-search'">{{
-                            messages.t('packing.searchEvents')
+                            messages.t('eventPicker.searchEvents')
                         }}</label>
                         <input
                             :id="prefix + '-search'"
@@ -312,7 +327,7 @@ function details(event: PilotEventPickerOption): string {
                             type="search"
                             autocomplete="off"
                             class="form-control text-bg-dark"
-                            :placeholder="messages.t('packing.eventSearchPlaceholder')"
+                            :placeholder="messages.t('eventPicker.eventSearchPlaceholder')"
                             :disabled="disabled"
                             :aria-controls="prefix + '-list'"
                             @keydown.enter.prevent
@@ -324,16 +339,16 @@ function details(event: PilotEventPickerOption): string {
                             variant="outline-secondary"
                             :disabled="disabled"
                             @click="reset"
-                            >{{ messages.t('packing.resetFilters') }}</ActionButton
+                            >{{ messages.t('eventPicker.resetFilters') }}</ActionButton
                         >
                     </div>
                 </div>
                 <details class="border border-secondary rounded p-2 mb-2">
-                    <summary class="small">{{ messages.t('packing.advancedFilters') }}</summary>
+                    <summary class="small">{{ messages.t('eventPicker.advancedFilters') }}</summary>
                     <div class="row g-2 mt-1">
                         <div class="col-sm-6">
                             <label class="form-label small" :for="prefix + '-from'">{{
-                                messages.t('packing.dateFrom')
+                                messages.t('eventPicker.dateFrom')
                             }}</label
                             ><input
                                 :id="prefix + '-from'"
@@ -345,7 +360,7 @@ function details(event: PilotEventPickerOption): string {
                         </div>
                         <div class="col-sm-6">
                             <label class="form-label small" :for="prefix + '-to'">{{
-                                messages.t('packing.dateTo')
+                                messages.t('eventPicker.dateTo')
                             }}</label
                             ><input
                                 :id="prefix + '-to'"
@@ -357,7 +372,7 @@ function details(event: PilotEventPickerOption): string {
                         </div>
                         <div class="col-sm-4">
                             <label class="form-label small" :for="prefix + '-period'">{{
-                                messages.t('packing.period')
+                                messages.t('eventPicker.period')
                             }}</label
                             ><select
                                 :id="prefix + '-period'"
@@ -365,15 +380,15 @@ function details(event: PilotEventPickerOption): string {
                                 class="form-select form-select-sm text-bg-dark"
                                 :disabled="disabled"
                             >
-                                <option value="all">{{ messages.t('packing.all') }}</option>
-                                <option value="upcoming">{{ messages.t('packing.upcoming') }}</option>
-                                <option value="ongoing">{{ messages.t('packing.ongoing') }}</option>
-                                <option value="ended">{{ messages.t('packing.ended') }}</option>
+                                <option value="all">{{ messages.t('common.all') }}</option>
+                                <option value="upcoming">{{ messages.t('eventPicker.upcoming') }}</option>
+                                <option value="ongoing">{{ messages.t('eventPicker.ongoing') }}</option>
+                                <option value="ended">{{ messages.t('eventPicker.ended') }}</option>
                             </select>
                         </div>
                         <div class="col-sm-4">
                             <label class="form-label small" :for="prefix + '-archive'">{{
-                                messages.t('packing.archiveFilter')
+                                messages.t('eventPicker.archiveFilter')
                             }}</label
                             ><select
                                 :id="prefix + '-archive'"
@@ -381,14 +396,14 @@ function details(event: PilotEventPickerOption): string {
                                 class="form-select form-select-sm text-bg-dark"
                                 :disabled="disabled"
                             >
-                                <option value="all">{{ messages.t('packing.all') }}</option>
-                                <option value="active">{{ messages.t('packing.active') }}</option>
-                                <option value="archived">{{ messages.t('packing.archivedOption') }}</option>
+                                <option value="all">{{ messages.t('common.all') }}</option>
+                                <option value="active">{{ messages.t('common.active') }}</option>
+                                <option value="archived">{{ messages.t('common.archived') }}</option>
                             </select>
                         </div>
                         <div class="col-sm-4">
                             <label class="form-label small" :for="prefix + '-deadline'">{{
-                                messages.t('packing.deadlineFilter')
+                                messages.t('eventPicker.deadlineFilter')
                             }}</label
                             ><select
                                 :id="prefix + '-deadline'"
@@ -396,9 +411,9 @@ function details(event: PilotEventPickerOption): string {
                                 class="form-select form-select-sm text-bg-dark"
                                 :disabled="disabled"
                             >
-                                <option value="all">{{ messages.t('packing.all') }}</option>
-                                <option value="open">{{ messages.t('packing.openDeadline') }}</option>
-                                <option value="passed">{{ messages.t('packing.passedDeadline') }}</option>
+                                <option value="all">{{ messages.t('common.all') }}</option>
+                                <option value="open">{{ messages.t('eventPicker.openDeadline') }}</option>
+                                <option value="passed">{{ messages.t('eventPicker.passedDeadline') }}</option>
                             </select>
                         </div>
                     </div>
@@ -410,17 +425,17 @@ function details(event: PilotEventPickerOption): string {
                         :disabled="disabled"
                         :aria-pressed="!modelValue"
                         @click="choose(null)"
-                        >{{ messages.t('packing.noEvent') }}</ActionButton
+                        >{{ messages.t('eventPicker.noEvent') }}</ActionButton
                     >
                     <p class="small mb-0" role="status">
-                        {{ messages.t('packing.currentSelection', {title: selectionTitle}) }}
+                        {{ messages.t('eventPicker.currentSelection', {title: selectionTitle}) }}
                     </p>
                 </div>
                 <p v-if="selection?.archived" class="small text-info">
-                    {{ messages.t('packing.archivedEventHint') }}
+                    {{ messages.t('eventPicker.archivedEventHint') }}
                 </p>
                 <p v-if="invalidDates" class="small text-danger" role="alert">
-                    {{ messages.t('packing.invalidEventDates') }}
+                    {{ messages.t('eventPicker.invalidEventDates') }}
                 </p>
                 <!-- Retain only this admitted family's successful page/time after
                      a temporary read failure; confirmed denial hides old choices. -->
@@ -438,7 +453,7 @@ function details(event: PilotEventPickerOption): string {
                 <ul
                     :id="prefix + '-list'"
                     class="list-group list-group-flush text-bg-dark overflow-auto"
-                    :aria-label="messages.t('packing.availableEvents')"
+                    :aria-label="messages.t('eventPicker.availableEvents')"
                     :aria-describedby="prefix + '-summary'"
                     :aria-busy="options.isFetching.value"
                     style="max-height: 22rem"
@@ -471,17 +486,17 @@ function details(event: PilotEventPickerOption): string {
                 >
                     <template v-if="visibleOptions.length"
                         >{{
-                            messages.t('packing.eventPage', {
+                            messages.t('eventPicker.eventPage', {
                                 page: shownPage,
                                 count: visibleOptions.length,
                             })
                         }}
-                        {{ displayed.nextCursor ? messages.t('packing.moreEvents') : '' }}</template
+                        {{ displayed.nextCursor ? messages.t('eventPicker.moreEvents') : '' }}</template
                     ><template v-else>{{
                         messages.t(
                             displayed.nextCursor
-                                ? 'packing.emptyEventBatch'
-                                : 'packing.noMatchingEvents',
+                                ? 'eventPicker.emptyEventBatch'
+                                : 'eventPicker.noMatchingEvents',
                         )
                     }}</template>
                 </p>
@@ -492,14 +507,14 @@ function details(event: PilotEventPickerOption): string {
                         variant="outline-light"
                         :disabled="disabled || searchPending || options.isFetching.value || !retryAvailable"
                         @click="previous"
-                        >{{ messages.t('packing.previousPage') }}</ActionButton
+                        >{{ messages.t('eventPicker.previousPage') }}</ActionButton
                     ><ActionButton
                         v-if="displayed?.nextCursor"
                         class="btn-sm"
                         variant="outline-light"
                         :disabled="disabled || searchPending || options.isFetching.value || !retryAvailable"
                         @click="next"
-                        >{{ messages.t('packing.nextPage') }}</ActionButton
+                        >{{ messages.t('eventPicker.nextPage') }}</ActionButton
                     ><ActionButton
                         v-if="options.error.value"
                         class="btn-sm"

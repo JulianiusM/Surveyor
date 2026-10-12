@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-09-05
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: feature-specific-static-behavior
-source-anchors: src/views/surveyor/survey-vote.pug; src/routes/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/services/SurveyService.ts; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; docs/documentation-remediation.yml
+source-anchors: src/views/surveyor/survey-vote.pug; src/routes/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/services/SurveyService.ts; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; docs/backlog/documentation-remediation.yml
 next-review: D09
 -->
 

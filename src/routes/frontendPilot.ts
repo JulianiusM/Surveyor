@@ -3,9 +3,9 @@ import type {NextFunction, Request, Response} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {captureApiActor, identityTransitionGuard, requireApiContext, sessionView} from '../modules/api/session';
 import {ApiProblem, classifyApiError, requestLocale, validatedProblemBody} from '../modules/api/problem';
-import {isPlainMessageKey, localeManifest} from '../modules/localization/translator';
+import {createTranslator, isPlainMessageKey, localeManifest} from '../modules/localization/translator';
 import {renderFrontendPilot} from '../modules/frontendPilotRenderer';
-import {fetchHelpDoc, fetchHelpIndex, fetchHelpSearch} from '../controller/helpController';
+import {fetchHelpDoc, fetchHelpIndex, fetchHelpSearch, resolveHelpAssetSource} from '../controller/helpController';
 import type {FrontendPilotBootstrap} from '../types/FrontendPilotTypes';
 import * as userController from '../controller/userController';
 import {frontendIdentityFeedback, frontendIdentityPageEntry, safeFrontendReturn} from '../modules/lib/frontendIdentity';
@@ -20,7 +20,7 @@ import type {ApiOperationId} from '../types/ApiTransportTypes';
 import {paramHandler} from '../middleware/paramHandler';
 import {getResource} from '../modules/lib/util';
 import type {PackingList} from '../modules/database/entities/packing/PackingList';
-import {readPackingCreateEntry, readPackingDuplicate, readPackingResourceEntry} from '../modules/packing/api';
+import {projectPackingGuestEntry, readPackingCreateEntry, readPackingDuplicate, readPackingResourceEntry} from '../controller/packingController';
 import {resolvePilotHelpQuery} from '../modules/lib/helpNavigation';
 
 const router = Router();
@@ -158,9 +158,9 @@ router.get('/packing/:listId', asyncHandler(async function renderPackingPilot(re
 
 async function guestBootstrap(req: Request): Promise<FrontendPilotBootstrap> {
     const state = await bootstrap(req);
-    const list = packingResource(req);
-    // The native guest entry discloses its title before item/view permission, exactly like the API.
-    state.guestEntry = {id: list.id, title: list.title};
+    // Reuse the public feature projection and the native loader's admitted row when
+    // redisplaying a rejected POST. Do not add a query or guest-page redirect here.
+    state.guestEntry = projectPackingGuestEntry(packingResource(req));
     return state;
 }
 router.get('/packing/:listId/guest', asyncHandler(async function renderGuestPilot(req, res) {
@@ -467,6 +467,18 @@ async function renderHelpPilot(req: Request, res: Response): Promise<void> {
     await renderFrontendPilot(res, req.originalUrl, state);
 }
 router.get('/help', asyncHandler(renderHelpPilot));
+// Localized visuals stay within the opt-in pilot namespace. The original native
+// /help/assets route remains bound to its unchanged English release payload.
+router.get('/help/assets/:assetName', asyncHandler(async function readPilotHelpAsset(req, res) {
+    const locale = requestLocale(req);
+    const source = resolveHelpAssetSource(String(req.params.assetName), locale);
+    if (!source) throw new ExpectedError(createTranslator(locale).t('help.notFound'), 'error', 404);
+    // Figure URLs normally already select their actual corpus. Direct requests for
+    // an absent translation still disclose the source instead of mislabeling English.
+    res.set('Content-Language', source.locale ?? 'en').set('X-Content-Type-Options', 'nosniff');
+    if (source.locale !== locale) res.set('X-Help-Fallback', 'en');
+    res.sendFile(source.filePath);
+}));
 router.get('/help/:doc', asyncHandler(renderHelpPilot));
 
 /** Preserve native packing statuses while rendering only known, localized admission messages. */

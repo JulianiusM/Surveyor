@@ -4,9 +4,9 @@ documentation-metadata
 audience: novice users; organizers; participants
 owner: dashboard feature maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; source review of mixed paged cards, event expansion, search/count labels, profile membership and visibility fallbacks; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D02 global navigation, profile-scoped overview collections, and owner-only card actions; D14 rendered help navigation, semantic checks, and trusted-content integration
+verification-scope: Native mixed overview cards, membership, search, event sub-views, private visibility and actions; prose and assets preserved.
 source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/views/modules/module_entity_archive.pug; src/views/layout.pug; src/routes/users.ts; src/routes/api/users.ts; src/controller/userController.ts; src/views/users/dashboard.pug; src/views/modules/module_unified_entity_cards.pug; src/public/js/user-dashboard.ts; src/public/js/modules/entity-cards-overview.ts; tests/integration/controller-smoke-workflows.spec.ts; tests/unit/application-utilities.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: overview-or-navigation-visible-UI-change
 -->
@@ -193,7 +193,7 @@ Surveyor opens that feature's creation form. After the form is submitted success
 
 ### An overview page could not load
 
-Select **Retry** beside the error. If you are no longer signed in, sign in again and reopen **Your overview**. If an event or your membership changed while you were browsing, Surveyor returns to the valid overview and keeps any remaining eligible items available.
+Select **Retry** beside the error. If your session expired, sign in again and reopen **Your overview**. If an event or your membership changed while you were browsing, Surveyor returns to the valid overview and keeps any remaining eligible items available.
 
 ### Duplicate or Delete is missing
 

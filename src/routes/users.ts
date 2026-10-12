@@ -17,7 +17,6 @@
 import express, {Request, Response} from 'express';
 import * as userController from "../controller/userController";
 import {safeFrontendReturn} from '../modules/lib/frontendIdentity';
-import {persistSession} from '../modules/lib/session';
 import {isAuthenticated, isLoggedIn} from "../middleware/permissionMiddleware";
 import {addNextQuery} from "../middleware/referrerUpdater";
 import {asyncHandler} from '../modules/lib/asyncHandler';
@@ -107,9 +106,6 @@ app.get('/activate/:token', asyncHandler(async (req: Request, res: Response) => 
     if (!settings.value.localLoginEnabled) throw new ExpectedError('Login is not enabled!', 'error', 500);
     await userController.activateAccount(req.params.token as string);
     req.flash('success', 'Account successfully activated');
-    // Redirect headers can reach the browser before express-session's deferred save.
-    // Commit the one-time message first so the immediately followed login can display it.
-    await persistSession(req.session);
     if (typeof req.query.next === 'string') {
         return res.redirect(`/users/login?next=${req.query.next}`);
     }

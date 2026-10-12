@@ -46,7 +46,14 @@ export async function createIntegrationEvent(
         maxParticipants: capacity ?? '',
         deadlineTz: 'UTC',
     });
-    return await eventController.createEntity(ownerId, event);
+    // Creation requires the normalized values returned by preprocessing. Fail
+    // at this fixture boundary if its broad Partial<Event> contract omits one.
+    if (event.title === undefined || event.startDate === undefined || event.endDate === undefined) {
+        throw new Error('Integration event preprocessing omitted a required creation field.');
+    }
+    return await eventController.createEntity(ownerId, {
+        ...event, title: event.title, startDate: event.startDate, endDate: event.endDate,
+    });
 }
 
 export async function registerLocalAccount(label: string): Promise<WithRequired<Partial<User>, "email" | "id" | "username">> {

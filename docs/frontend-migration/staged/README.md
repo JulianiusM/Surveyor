@@ -1,223 +1,48 @@
-# Surveyor
+# Staged frontend repository guide amendment
 <!--
 documentation-metadata
-audience: users; developers; operators
-owner: project maintainers
+audience: maintainers; developers; migration reviewers
+owner: application maintainers
 status: migration-pending
-last-verified: 2026-10-09
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicitly authorized source-reviewed startup and staged-reference reconciliation; FPR-07 documentation staging and source corrections; prospective frontend replacement, not production cutover or new runtime execution evidence
-source-anchors: src/routes/frontendPilot.ts; src/routes/api/v1.ts; src/frontend/; contracts/api/v1/; src/locales/; vite.config.mts; package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts
+verification-scope: migration entry/routing delta consolidated; implemented corrections and completed scoped execution owned by paired review
+source-anchors: README.md; package.json; src/routes/frontendPilot.ts; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: frontend-production-cutover
-production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
 canonical-merge-target: README.md
-staging-origin: c42758a frontend pilot documentation; authorized 2026-10-08 migration-only rectification
+production-reference: 2dfa257 native documentation; not evidence of the installed production commit
 -->
 
-## Cutover staging
+Merge this amendment into the [repository README](../../../README.md) only at authorized cutover; reconcile
+intervening changes and remove this copy. Use its unchanged checkout setup, settings and database procedures.
+Native implementation/docs/assets remain the comparison reference. Staging contains maintainer drafts, never
+runtime content.
 
-This is the temporary replacement draft for `README.md`. The canonical document continues to describe native
-production until frontend cutover. For work on the migration checkout, use this draft with the
-[Frontend Pilot](../../FRONTEND_PILOT.md) guide and executable package configuration. Merge the relevant draft into its existing
-canonical owner at cutover, reconcile intervening native changes, remove this staging notice and temporary metadata,
-and then remove the merged copy. Staging is advisory and introduces no release prerequisite.
+## Frontend migration checkout
 
-The native documentation reference is `2dfa257`; it does not establish which commit is installed in production.
-Original design decisions and D1–D5 remain in the linked migration records. This document records prospective
-implementation guidance; the paired review owns actual runtime verification evidence.
+The opt-in Vue pilot runs under `/frontend-pilot` with a generated versioned API.
+Help/Packing and necessary identity/foundation journeys are the current completeness obligation.
+Overview and other scaffolds have remaining migration TODOs; native destinations stay available.
+Default-route replacement and application-wide migration remain future work.
 
+Packing now demonstrates named shared operations/method policy in existing controllers, with removable native/v1
+adapters and pure DBAL. Completed scoped acceptance and the approved coexistence remedy are recorded in the paired review.
+Reviewed EN/DE pilot Help is release-owned under `docs/user-guide/<locale>/`;
+native English Help remains unchanged under `docs/user-guide/`.
 
-Surveyor is a server-rendered collaboration application for recurring-date surveys, events, activity schedules, packing lists, rides, and event cost sharing. It is written in TypeScript and runs as an Express application backed by MariaDB.
-
-The expanding Vue frontend pilot migrates existing workflows under `/frontend-pilot`, backed by the versioned API. Help and packing are the current feature-completeness obligation; Overview and other implemented scaffolds have remaining migration TODOs. Native destinations remain available until their migration increments. See [Frontend Pilot](../../FRONTEND_PILOT.md) for its current scope and entry points.
-
-## Features
-
-- **Surveys** — organize recurring monthly dates with Yes/Maybe/No votes on weekday and week-of-month patterns.
-- **Events** — manage registrations, attendance dates, dietary information, participant administration, and invoice pools.
-- **Activity plans** — schedule time slots and roles, collect availability, and support assisted assignment planning.
-- **Packing lists** — coordinate shared responsibilities while keeping each browser's personal **Packed?** checklist local.
-- **Drivers lists** — offer rides, manage passenger capacity, and coordinate event-linked transport.
-- **Profiles and guests** — let one account act through several participant profiles and allow invitation-based guest participation.
-
-## Choose the right documentation
-
-| Goal | Start here |
+| Goal | Existing owner |
 |---|---|
-| Use Surveyor | [In-app user guides](../../user-guide/README.md) |
-| Develop or review the application | [Development Guide](DEVELOPMENT.md) |
-| Understand the migration checkout | [Staged Architecture](ARCHITECTURE.md) |
-| Run tests | [Testing Guide](TESTING_GUIDE.md) |
-| Configure a deployment | [Configuration Reference](../../CONFIGURATION.md) |
-| Prepare or migrate the database | [Database and Migrations](../../DATABASE.md) |
-| Operate a production instance | [Production Operations](../../OPERATIONS.md) |
-| Upgrade or roll back | [Upgrading and Rolling Back](../../UPGRADING.md) |
-| Continue the documentation migration | [Documentation Migration Status](../../DOCUMENTATION_MIGRATION_STATUS.md) |
+| Current pilot routes/build scope | [Frontend Pilot](../FRONTEND_PILOT.md) |
+| Original choices and approved amendments | [Foundation](../FRONTEND_FOUNDATION_DESIGN.md) |
+| Implement the next feature | [Single development playbook](DEVELOPMENT.md#implementing-the-next-feature-slice) |
+| Understand changed architecture | [Architecture delta](ARCHITECTURE.md) |
+| Choose/run checks | [Testing delta](TESTING_GUIDE.md) plus canonical [Testing](../../TESTING_GUIDE.md) |
+| Database/deployment operations | Canonical [Database](../../DATABASE.md), [Operations](../../OPERATIONS.md), [Upgrading](../../UPGRADING.md) and staged deltas |
+| Review status and actual evidence | [Pilot parity review](../PILOT_PARITY_REVIEW.md) |
+| Help source/trust/fallback governance | [Documentation policy delta](DOCUMENTATION_POLICY.md) |
 
-The complete inventory and review state are in [`docs/README.md`](../../README.md).
-
-## Development quick start
-
-This path creates a disposable local development instance from a clean clone. Production installations must use the [operations runbook](../../OPERATIONS.md) instead.
-
-### Prerequisites
-
-Use the versions exercised by the repository workflows:
-
-- Node.js 24.15.0
-- npm from that Node.js installation
-- MariaDB 10.11
-- Git
-
-### 1. Install the locked dependencies
-
-```bash
-git clone https://github.com/JulianiusM/Surveyor.git
-cd Surveyor
-npm ci
-```
-
-### 2. Create an empty development database
-
-Create a database and a dedicated account with schema privileges. Adapt the host and password to your local MariaDB installation.
-
-```sql
-CREATE DATABASE surveyor_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'surveyor_dev'@'127.0.0.1' IDENTIFIED BY 'replace-this-password';
-GRANT ALL PRIVILEGES ON surveyor_dev.* TO 'surveyor_dev'@'127.0.0.1';
-FLUSH PRIVILEGES;
-```
-
-### 3. Create the local configuration
-
-Create an ignored `.env` file in the repository root:
-
-```dotenv
-NODE_ENV=development
-APP_PORT=3000
-ROOT_URL=http://localhost:3000
-
-DB_TYPE=mariadb
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=surveyor_dev
-DB_USER=surveyor_dev
-DB_PASSWORD=replace-this-password
-
-SESSION_SECRET=replace-with-a-long-random-value
-LOCAL_LOGIN_ENABLED=1
-OIDC_ENABLED=0
-
-SMTP_HOST=127.0.0.1
-SMTP_PORT=1025
-SMTP_SECURE=0
-SMTP_POOL=0
-SMTP_EMAIL=surveyor@example.test
-SMTP_USER=surveyor
-SMTP_PASSWORD=surveyor
-```
-
-The SMTP values must point to a real development mail catcher or test SMTP service if you use local registration, password reset, or guest recovery. For organization sign-in instead, configure OIDC as described in the [Configuration Reference](../../CONFIGURATION.md); the registered callback path is `/users/oidc/callback`.
-
-Surveyor reads built-in defaults, then its CSV settings file, then environment overrides. See the configuration reference before adding more settings or changing precedence.
-
-### 4. Create the schema
-
-The generated TypeORM index is not committed, so generate it before invoking the TypeORM wrapper. The following commands are for a new, empty, disposable development database:
-
-```bash
-npm run generate
-npm run typeorm:sync
-npm run typeorm:migrate
-```
-
-Do not run schema synchronization or destructive TypeORM commands against a production database. Existing databases follow [Database and Migrations](../../DATABASE.md).
-
-### 5. Start the development server
-
-```bash
-npm run server
-```
-
-This performs a full build, starts the TypeScript server under Nodemon with Express-hosted Vite middleware/HMR,
-and starts the legacy esbuild watcher and serialized authored contract/catalog watcher. The latter publishes its
-completion marker before Express restarts. It is not a separate Vue client/server build-watch process. Confirm startup with:
-
-```bash
-curl http://localhost:3000/healthz
-```
-
-A healthy instance returns `ok`.
-
-### 6. Complete the first sign-in
-
-With local login enabled, register an account, open the activation message delivered by the configured SMTP service, activate the account, and then log in. With OIDC enabled, use the configured organization sign-in button instead.
-
-## Common development commands
-
-| Command | Purpose |
-|---|---|
-| `npm run server` | Build once, then run the server and browser-code watchers together. |
-| `npm run server:dev` | Run only the server watcher; existing generated and built assets must already be present. |
-| `npm run server:client` | Run only the legacy browser-code watcher. |
-| `npm run server:frontend` | Watch authored contracts/catalogs through the existing serialized generator/restart coordinator. Express owns the Vite middleware and client HMR. |
-| `npm run build` | Generate database/API/catalog outputs, compile the server, legacy browser code, Vue bundles and Sass, and package runtime assets in `dist/`. |
-| `npm run run` | Start the compiled application from `dist/server.js`. |
-| `npm run generate` | Regenerate the TypeORM index, API declarations/validators, and localization outputs. |
-| `npm run prepare:frontend` | Regenerate API and locale outputs after editing contract or catalog sources. |
-| `npm run typeorm:migrate` | Run pending migrations through Surveyor's settings-aware wrapper. |
-| `npm run docs:check` | Produce an optional advisory report on documentation; never fail application delivery. |
-| `npm run test:quick` | Run database-free unit and frontend Vitest suites. |
-| `npm test` | Run all Vitest suites, including MariaDB integration tests. |
-| `npm run test:all` | Run Vitest, build the application, and run the Playwright suite. |
-
-The [Development Guide](DEVELOPMENT.md) contains database safety, generated-file behavior, change recipes, and troubleshooting. The [Testing Guide](TESTING_GUIDE.md) contains the exact environment and runner contracts.
-
-The authored-input watcher in `npm run server` regenerates contracts/catalogs serially and coordinates the server restart. Express owns Vite middleware and client HMR. `npm run server:frontend` alone watches authored inputs; it does not start the HTTP application.
-
-## Repository map
-
-```text
-src/server.ts                         startup sequencing and HTTP server
-src/app.ts                            Express middleware, sessions, routes, health endpoint
-src/routes/                           page routes and top-level API router
-src/controller/                       request/response orchestration
-src/middleware/                       authentication, authorization, validation, and shared flows
-src/modules/database/entities/        TypeORM entities
-src/modules/database/services/        database and transaction functions
-src/modules/database/subscribers/     TypeORM subscribers
-src/migrations/                       TypeORM migrations
-src/public/js/                        browser TypeScript
-src/public/style/                     Sass sources
-src/views/                            Pug templates
-src/frontend/                         Vue pilot app, shared components, and feature views
-contracts/api/v1/                      authored HTTP contract and wire schemas
-src/locales/                          shared pilot UI/API language catalogs
-tests/unit/                            isolated production logic
-tests/frontend/                        browser-helper behavior under Vitest
-tests/integration/                     MariaDB-backed production-service workflows
-tests/e2e/                             Playwright critical flows
-docs/user-guide/                       canonical in-app help
-docs/                                  maintainer and operator documentation
-```
-
-## Test and release automation
-
-Vitest runs the unit, frontend, and integration suites configured in `vitest.config.mts`. Playwright runs the focused browser/API flows configured in `playwright.config.ts` and manages the built server through `npm run e2e:init`.
-
-The CI workflow currently runs for manual dispatch, reusable workflow calls, and pushes or pull requests on `master`, `dev`, and `ts-migration`. It uses Node.js 24.15.0 and MariaDB 10.11, installs dependencies, runs application Vitest tests with coverage, builds the application, and then runs Chromium Playwright checks.
-
-The manual release workflow invokes that CI workflow first. After a successful run, it updates the requested version, tags the selected ref, builds the application, and publishes a production archive containing `dist/`, `docs/`, `fonts/`, `package-lock.json`, and a production-only package manifest. Database migrations are deliberately not executed by the release archive.
-
-Documentation reporting is deliberately outside required CI. Use `npm run docs:check` or
-`npm run docs:check:strict` on demand; both retain findings and exit zero. Actual-guide content tests use the optional
-commands in the [Testing Guide](TESTING_GUIDE.md), not the required application suites. The release attempts to
-include documentation in a separate non-blocking step; missing help or a copy mismatch is reported without blocking the release.
-
-## License
-
-Surveyor is licensed under the [Apache License 2.0](../../../LICENSE.md).
-
-```bash
-npm run docs:check:help
-```
+`npm run server` is the integrated development entry, including Vite HMR and ordered contract/catalog regeneration.
+`npm run build` creates coherent native/server/client/SSR artifacts. Generated consumers stay ignored.
+Exact scripts and versions belong to `package.json`; completed scoped checks and their limits belong to the
+[pilot review](../PILOT_PARITY_REVIEW.md).
+Documentation reports are optional and never gate application delivery.

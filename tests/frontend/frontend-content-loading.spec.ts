@@ -30,7 +30,8 @@ const card: components['schemas']['OverviewCard'] = {
     capabilities: {archive: false, restore: false, duplicate: false, remove: false},
 };
 const problem: components['schemas']['Problem'] = {type: 'about:blank', title: 'Rejected', status: 400,
-    code: 'VALIDATION_FAILED', detail: 'Review the request.', messageKey: 'api:errors.VALIDATION_FAILED', params: {}};
+    code: 'VALIDATION_FAILED', detail: 'Review the request.', requestId: 'content-loading-rejection',
+    messageKey: 'api:errors.VALIDATION_FAILED', params: {}};
 const cleanups: Array<() => Promise<void>> = [];
 
 afterEach(async () => {

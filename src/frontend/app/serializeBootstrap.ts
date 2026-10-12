@@ -64,6 +64,9 @@ function validateCompletion(value: unknown): boolean {
         && (value.kind === 'success' || value.kind === 'info');
 }
 
+/** Native form restoration carries only public identity-entry drafts. Reject
+ * arbitrary properties and nontext values before hydrating them into controls;
+ * passwords, private links and acting identities have separate boundaries. */
 function validateIdentityFields(value: unknown): boolean {
     if (!isRecord(value)) return false;
     for (const [field, payload] of Object.entries(value)) {
@@ -112,8 +115,8 @@ async function validatePackingCreate(value: unknown): Promise<boolean> {
  * Null is a confirmed absence, including a rejected contextual URL selection. */
 async function validatePackingSelectedEvent(value: unknown): Promise<boolean> {
     if (value === null) return true;
-    const {validatePackingEventOption} = await import('../../../.generated/api/v1/browser/validatePackingEventOption.mjs');
-    return validatePackingEventOption(value);
+    const {validateEventPickerOption} = await import('../../../.generated/api/v1/browser/validateEventPickerOption.mjs');
+    return validateEventPickerOption(value);
 }
 
 async function validatePackingDuplicate(value: unknown): Promise<boolean> {

@@ -33,7 +33,7 @@ test.describe('actual frontend development runtime', () => {
         await expect(page.locator('head link[href^="/app/src/frontend/styles/pilot.css"]')).toHaveCount(1);
         const helpPictures = await page.locator('.help-content img').evaluateAll(nodes => nodes.map(node => node.getAttribute('src')!));
         expect(helpPictures.length).toBeGreaterThan(0);
-        expect(helpPictures.every(url => url.startsWith('/help/assets/'))).toBe(true);
+        expect(helpPictures.every(url => url.startsWith('/frontend-pilot/help/assets/'))).toBe(true);
         expect(await page.locator('[src],[href]').evaluateAll(nodes => nodes.some(node =>
             ['src', 'href'].some(attribute => /^file:/i.test(node.getAttribute(attribute) ?? ''))))).toBe(false);
 

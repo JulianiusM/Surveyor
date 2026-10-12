@@ -1,6 +1,11 @@
 import {defineConfig} from 'vitest/config';
 import vue from '@vitejs/plugin-vue';
 
+// Node threads inherit the process timezone before Vitest applies test.env.
+// Establish the existing UTC test contract before workers start, including on
+// Windows; the per-worker value below also keeps that contract explicit.
+process.env.TZ = 'UTC';
+
 export default defineConfig({
     plugins: [vue()],
     test: {
@@ -14,6 +19,11 @@ export default defineConfig({
         // Bound concurrency for ordinary two-core CI runners instead of serializing
         // those files behind a restriction required only by the shared test schema.
         isolate: true,
+        // Keep a fresh JavaScript isolate per file in bounded threads. Paired
+        // coverage runs spent much less time preparing controller/entity imports
+        // than forks, including serialized real persistence checks. The separate
+        // integration project still owns only one schema-resetting worker.
+        pool: 'threads',
         maxWorkers: 2,
         hookTimeout: 30_000,
         setupFiles: ['tests/support/env.ts'],

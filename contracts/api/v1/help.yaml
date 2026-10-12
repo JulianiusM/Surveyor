@@ -9,6 +9,8 @@ schemas:
       title: {type: string}
       path: {type: string}
       url: {type: string}
+      # Pilot summaries identify their reviewed source; omitted by native adapters.
+      contentLocale: {type: string}
   HelpNavigationGroup:
     type: object
     additionalProperties: false
@@ -35,12 +37,17 @@ schemas:
       url: {type: string}
       sectionTitle: {type: string}
       excerpt: {type: string}
+      contentLocale: {type: string}
   HelpPageData:
     type: object
     additionalProperties: false
     required: [locale, title, content, docsList, docsGroups, currentDoc, toc]
     properties:
       locale: {type: string}
+      # Interface locale remains requested when an absent translation uses English.
+      contentLocale: {type: string}
+      # Covers article, topic/search labels and referenced figures; the client must announce it.
+      fallbackToEnglish: {type: boolean}
       title: {type: string}
       # HTML is trusted only because the existing fixed-release-source help renderer validated it.
       content: {type: string}

@@ -482,13 +482,17 @@ async function capturePilotScenes(browser, organizer, guest, phase) {
     }
     await account.request.get('/users/dashboard');
 
-    /** Measure the regression itself, rather than treating matching markup as visual proof. */
-    async function assertPackingLayout(page, title) {
+    // The fixed native DOM is the comparator. Do not add native hooks or improve its
+    // layout to satisfy a capture: each pilot view must reproduce the same actor and
+    // viewport, including existing wrapping and asymmetric header spacing.
+    const nativeLayouts = new Map();
+    async function assertPackingLayout(page, scene, viewport, implementation) {
+        const title = scene.title;
         const heading = page.getByRole('heading', {name: labelName(title)});
         const geometry = await heading.evaluate(element => {
             const titleRect = element.getBoundingClientRect();
             const headerRect = element.closest('.card-header').getBoundingClientRect();
-            const counters = document.querySelector('[data-packing-counters]');
+            const counters = element.closest('.card').querySelector('.card-body > .d-flex.justify-content-between.align-items-center.mb-3');
             const participant = counters?.firstElementChild;
             const labelRange = document.createRange();
             const label = participant && Array.from(participant.childNodes).find(node => node.nodeType === Node.TEXT_NODE && node.textContent.includes('Participants'));
@@ -501,10 +505,20 @@ async function capturePilotScenes(browser, organizer, guest, phase) {
                 descriptionGap: description && counters ? counters.getBoundingClientRect().top - description.getBoundingClientRect().bottom : null,
                 overflow: document.documentElement.scrollWidth - innerWidth};
         });
-        expect(geometry.centerOffset, 'Entity title remains centered independently of available actions').toBeLessThanOrEqual(1);
-        expect(geometry.participantSameLine, 'Participants label and count remain on the same line').toBe(true);
-        if (geometry.descriptionGap !== null) expect(geometry.descriptionGap, 'Description has breathing room before counters').toBeGreaterThanOrEqual(16);
-        expect(geometry.overflow, 'Table scroll stays inside its own container').toBeLessThanOrEqual(1);
+        const key = `${scene.id}:${viewport.name}`;
+        if (implementation === 'current') {
+            nativeLayouts.set(key, geometry);
+            return;
+        }
+        const original = nativeLayouts.get(key);
+        expect(original, 'Native layout must be measured before its pilot comparison').toBeDefined();
+        expect(geometry.participantSameLine, 'Counter wrapping preserves the fixed native view').toBe(original.participantSameLine);
+        for (const metric of ['centerOffset', 'descriptionGap', 'overflow']) {
+            if (original[metric] === null) expect(geometry[metric]).toBeNull();
+            else expect(Math.abs(geometry[metric] - original[metric]), `${metric} matches native geometry`).toBeLessThanOrEqual(2);
+        }
+        manifest.checks.push({name: `${phase} ${key} packing layout matches fixed native geometry`, passed: true,
+            native: original, pilot: geometry});
     }
     const scenes = [
         {id: 'packing-anonymous-entry', context: anonymous, current: `${f.packing.path}/guest`, pilot: `/frontend-pilot${f.packing.path}`,
@@ -692,7 +706,9 @@ async function capturePilotScenes(browser, organizer, guest, phase) {
                 await expect(page.getByRole('button', {name: labelName('Entity settings')})).toHaveCount(role.settings ? 1 : 0);
                 const add = page.getByRole('button', {name: labelName('Add')});
                 await expect(add).toHaveCount(role.preset || role.perms.includes('ITEM_ADD') ? 1 : 0);
-                if (!role.preset) await expect(page.getByRole('button', {name: labelName('Take')})).toHaveCount(0);
+                // The original view exposes Take for this non-full shared item even
+                // when the subsequent server command will deny self-assignment.
+                await expect(page.getByRole('button', {name: labelName('Take')})).toHaveCount(1);
             }});
         if (role.settings) scenes.push({id: `packing-role-${role.key}-settings`, context,
             current: role.list.path, pilot: `/frontend-pilot${role.list.path}`, title: role.list.title, viewportOnly: true,
@@ -810,9 +826,9 @@ async function capturePilotScenes(browser, organizer, guest, phase) {
     // Locale belongs to each route/request. Keep the German cases after the English ones so
     // their persisted anonymous cookie cannot accidentally translate an English comparison.
     scenes.push(
-        {id: 'help-german-article', context: anonymous, current: '/help/packing_lists?locale=de', pilot: '/frontend-pilot/help?doc=packing_lists&locale=de'},
-        {id: 'help-german-results', context: anonymous, current: '/help/search?q=Packliste&locale=de', pilot: '/frontend-pilot/help?q=Packliste&locale=de'},
-        {id: 'help-german-native', context: native, current: '/help?locale=de', pilot: '/frontend-pilot/help?locale=de',
+        {id: 'help-german-article', context: anonymous, pilot: '/frontend-pilot/help?doc=packing_lists&locale=de'},
+        {id: 'help-german-results', context: anonymous, pilot: '/frontend-pilot/help?q=Packliste&locale=de'},
+        {id: 'help-german-native', context: native, pilot: '/frontend-pilot/help?locale=de',
             prepare: async page => {
                 await expect(page.locator('html')).toHaveAttribute('lang', 'de');
                 await page.getByRole('searchbox').fill('zzzzfixture');
@@ -822,10 +838,13 @@ async function capturePilotScenes(browser, organizer, guest, phase) {
             }},
     );
     for (const doc of additionalHelpArticles) scenes.push({id: `help-german-article-${doc}`, context: anonymous,
-        current: `/help/${doc}?locale=de`, pilot: `/frontend-pilot/help?doc=${doc}&locale=de`});
+        pilot: `/frontend-pilot/help?doc=${doc}&locale=de`});
     try {
         for (const scene of scenes) for (const viewport of viewports) {
             for (const implementation of ['current', 'pilot']) {
+                // Native Help remains its original English corpus. German belongs
+                // only to the explicitly staged pilot and has no native comparison.
+                if (!scene[implementation]) continue;
                 const page = await scene.context.newPage();
                 try {
                     if (scene.title) {
@@ -835,7 +854,7 @@ async function capturePilotScenes(browser, organizer, guest, phase) {
                     }
                     await capture(page, {id: `${phase}-${scene.id}-${implementation}`, role: scene.id,
                         path: scene[implementation], text: scene.title, viewportOnly: scene.viewportOnly}, viewport, async page => {
-                            if (scene.title) await assertPackingLayout(page, scene.title);
+                            if (scene.title) await assertPackingLayout(page, scene, viewport, implementation);
                             if (scene.prepare) await scene.prepare(page);
                         });
                 } finally { await page.close(); }
@@ -848,6 +867,7 @@ async function capturePilotScenes(browser, organizer, guest, phase) {
             ['current', `/help/packing_lists?locale=${locale}`],
             ['pilot', `/frontend-pilot/help?doc=packing_lists&locale=${locale}`],
         ]) {
+            if (implementation === 'current' && locale !== 'en') continue;
             const page = await native.newPage();
             try {
                 await page.goto(articlePath, {waitUntil: 'networkidle'});
@@ -865,8 +885,8 @@ async function capturePilotScenes(browser, organizer, guest, phase) {
         manifest.checks.push({name: `${phase} current and pilot help search submits with JavaScript disabled`,
             passed: nativeCaptures.length === viewports.length * 2 && nativeCaptures.every(entry => entry.status === 'captured')});
         const germanCaptures = manifest.captures.filter(entry => entry.scene.startsWith(`${phase}-help-german-native-`));
-        manifest.checks.push({name: `${phase} current and pilot German help search preserves locale with JavaScript disabled`,
-            passed: germanCaptures.length === viewports.length * 2 && germanCaptures.every(entry => entry.status === 'captured')});
+        manifest.checks.push({name: `${phase} staged pilot German help search preserves locale with JavaScript disabled`,
+            passed: germanCaptures.length === viewports.length && germanCaptures.every(entry => entry.status === 'captured')});
     } finally { await anonymous.close(); await native.close(); await account.close(); }
 }
 
@@ -891,7 +911,7 @@ async function captureGermanPilotLayouts(contexts, phase) {
                 await expect(page.getByRole('button', {name: labelName(packing.edit)})).toHaveCount(role.settings ? 1 : 0);
                 await expect(page.getByRole('button', {name: labelName(packing.add)}))
                     .toHaveCount(role.preset || role.perms.includes('ITEM_ADD') ? 1 : 0);
-                if (!role.preset) await expect(page.getByRole('button', {name: labelName(packing.assign)})).toHaveCount(0);
+                await expect(page.getByRole('button', {name: labelName(packing.assign)})).toHaveCount(1);
             }});
         if (role.settings) scenes.push({id: `packing-role-${role.key}-settings`, context,
             path: `/frontend-pilot${role.list.path}`, viewportOnly: true,
@@ -1090,17 +1110,46 @@ async function captureIdentityFeedback(browser, phase) {
                 });
                 const activation = new URL(await takeIdentityMail('activation', email));
                 expect(activation.pathname.startsWith(`${prefix}/users/activate/`)).toBe(true);
-                await scene('activation-success', activation.pathname + activation.search, async () => {
-                    try {
-                        await expect(page.getByText(/^Account successfully activated\.?$/)).toBeVisible();
-                    } catch (error) {
-                        // Retain the real page for diagnosis; filenames never contain the
-                        // activation capability, and the form does not show its token.
-                        await page.screenshot({path: path.join(output,
-                            `${phase}-identity-activation-observed-${implementation}-${viewport.name}.png`), fullPage: true});
-                        throw error;
-                    }
-                });
+                let nativeActivationAdmitted = false;
+                let activationFeedbackReadable = true;
+                let activationNoticeMissing = false;
+                const nativeNext = activation.searchParams.get('next');
+                const nativeDestination = `/users/login${nativeNext ? `?next=${nativeNext}` : ''}`;
+                function observeNativeActivation(response) {
+                    if (implementation !== 'current' || response.url() !== activation.href) return;
+                    // Native redirects only after the controller's activation write succeeds.
+                    // Keep this receipt in memory; never persist the single-use capability.
+                    nativeActivationAdmitted = response.status() === 302 && response.headers().location === nativeDestination;
+                }
+                page.on('response', observeNativeActivation);
+                try {
+                    await scene('activation-success', activation.pathname + activation.search, async () => {
+                        try {
+                            await expect(page.getByText(/^Account successfully activated\.?$/)).toBeVisible();
+                        } catch (error) {
+                            // Retain the real page for diagnosis; filenames never contain the
+                            // activation capability, and the form does not show its token.
+                            await page.screenshot({path: path.join(output,
+                                `${phase}-identity-activation-observed-${implementation}-${viewport.name}.png`), fullPage: true});
+                            activationNoticeMissing = true;
+                            throw error;
+                        }
+                    });
+                } catch (error) {
+                    const arrived = new URL(page.url());
+                    if (!activationNoticeMissing || !nativeActivationAdmitted
+                        || arrived.pathname + arrived.search !== nativeDestination) throw error;
+                    await expect(page.getByRole('heading', {name: labelName('Login'), exact: true})).toBeVisible();
+                    await expect(page.locator('#username')).toBeVisible();
+                    await expect(page.locator('#password')).toBeVisible();
+                    // The frozen native redirect may outrun its asynchronous flash save.
+                    // Preserve the failed image/check, while continuing independent password
+                    // recovery. Missing feedback neither reverses the admitted write nor
+                    // justifies replaying a token or changing the native session behavior.
+                    activationFeedbackReadable = false;
+                    manifest.checks.push({name: `current ${viewport.name} activation redirect admitted; success feedback missing`,
+                        passed: false, nativeActivationAdmitted, continuedIndependentRecovery: true});
+                } finally { page.off('response', observeNativeActivation); }
                 await scene('forgot-success', `${prefix}/users/forgot-password`, async () => {
                     await page.locator('#username').fill(username);
                     await page.getByRole('button', {name: labelName('Send reset link')}).click();
@@ -1133,7 +1182,8 @@ async function captureIdentityFeedback(browser, phase) {
                     await page.getByRole('button', {name: labelName('Login')}).click();
                     await expect(page.getByText(/^Invalid username\/email or password\.?$/)).toBeVisible();
                 });
-                manifest.checks.push({name: `${implementation} ${viewport.name} identity feedback uses real single-use mail links`, passed: true});
+                manifest.checks.push({name: `${implementation} ${viewport.name} identity feedback uses real single-use mail links`,
+                    passed: activationFeedbackReadable});
             } catch (error) {
                 manifest.checks.push({name: `${implementation} ${viewport.name} identity feedback`, passed: false,
                     error: redactCaptureText(error.message)});

@@ -4,12 +4,13 @@ documentation-metadata
 audience: neue Nutzer; Organisatoren; Teilnehmer
 owner: dashboard feature maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: vollständige eigenständige deutsche Anleitung mit unveränderter Abschnittsstruktur; profilbezogene Sammlungen, Suche, Filter, Ereignisgruppierung sowie persönliche und gemeinsame Archivierung; Abgleich übersetzter Konto-, Übersichts- und Packlistenbeschriftungen mit dem zentralen Katalog, englische E-Mail- und bestehende Formularbezeichnungen erhalten
+verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
 source-anchors: src/views/users/dashboard.pug; src/views/modules/module_unified_entity_cards.pug; src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue
 heading-anchors: 1:your-overview; 2:open-your-overview; 2:check-the-active-profile; 2:understand-the-two-collections; 2:find-an-item; 3:search; 3:filter-by-type; 2:read-and-open-a-card; 2:open-an-event-s-linked-entities; 2:find-archived-and-hidden-items; 2:hide-or-show-an-item-only-for-yourself; 2:archive-or-restore-for-everyone; 2:use-owner-actions; 2:create-a-new-item; 2:navigation-at-a-glance; 2:troubleshooting; 3:an-expected-item-is-missing; 3:an-overview-page-could-not-load; 3:duplicate-or-delete-is-missing; 3:both-collections-are-empty; 2:related-guides
 next-review: overview-or-navigation-visible-UI-change
+production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->
 
 **Deine Übersicht** führt dich zu Einträgen zurück, die mit dem aktiven Profil verbunden sind. Dazu gehören dessen Teilnahmen sowie Einträge, die es besitzt oder verwalten darf. Die Seite ist nicht auf selbst erstellte Inhalte beschränkt. Englische Beschriftungen sind bei noch englischen Ansichten zur Wiedererkennung angegeben.

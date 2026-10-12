@@ -68,6 +68,9 @@ function readEntry(scope: PilotRequestScope, signal: AbortSignal): Promise<compo
     return api.resourceEntry(listId.value, guestRoute.value ? 'guest' : 'detail', scope, signal);
 }
 
+// A typed server denial keeps its native wording. Transport failure instead
+// offers read recovery, and neither case exposes a private detail payload merely
+// because an earlier admission query retained data in the cache.
 const admissionError = computed(() => {
     const entry = admission.outcome.value;
     if (entry?.kind === 'denied') {

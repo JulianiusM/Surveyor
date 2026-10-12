@@ -299,18 +299,21 @@ export async function buildPermBundle(
     return bundle;
 }
 
-/** Single-place check used by middleware */
+/** Shared permission check used by middleware and locked controller commands.
+ * An optional manager keeps authorization in the caller's transaction; existing
+ * native callers retain the same fresh caches and application-manager reads. */
 export async function can(
     subject: Subject,
     session: SessionLike,
     requiredPerm: number,
-    requiredParentPerm?: number | number[]
+    requiredParentPerm?: number | number[],
+    manager?: EntityManager,
 ): Promise<boolean> {
     const view = await evaluateSubject(subject, session, {
         participant: new Map(),
         userPerms: new Map(),
         defaults: new Map(),
-    });
+    }, manager);
 
     // self
     if (hasPerm(view.mask, requiredPerm)) return true;
@@ -331,7 +334,10 @@ export async function getDefaultPerms(entityType: CombEntityType, entityId?: str
 
 /**
  * Parse default-permission matrix from the request body and persist via updatePerms().
- * Works with both application/x-www-form-urlencoded and JSON posts from the mixin.
+ * Native form/mixin collectors retain their named-key decoder. A versioned HTTP
+ * adapter validates integer masks first and explicitly selects inputFormat:'masks';
+ * this shared collector does not become a competing request validator.
+ * A supplied manager preserves the controller's existing lock/commit boundary.
  *
  * Usage from a controller:
  *   await saveDefaultPermsFromBody('event', eventId, req.body);
@@ -353,7 +359,11 @@ export async function saveDefaultPermsFromBody(
 
     for (const aud of audiences) {
         const raw = src?.[aud];
-        const mask = toMaskFromBodyValue(raw, PERM);
+
+        // Versioned commands have already crossed their generated integer/mask
+        // validator. Preserve all authored bits, including reserved future bits;
+        // native collectors keep their existing key decoder and empty semantics.
+        const mask = opts.inputFormat === 'masks' ? raw as number | undefined : toMaskFromBodyValue(raw, PERM);
         if (mask === undefined) {
             if (opts.clearMissing) partial[aud] = 0; // explicit clear if requested
             // else: untouched
@@ -363,11 +373,13 @@ export async function saveDefaultPermsFromBody(
     }
 
     // Persist (upsert per audience). updatePerms ignores undefined fields.
+    // Locked controller commands retain their existing transaction; native callers
+    // omit the manager and use the DBAL's unchanged application-manager default.
     await updatePerms(entityType, entityId, {
         guest: partial.guest,
         participant: partial.participant,
         authenticated: partial.authenticated,
         public: partial.public,
-    });
+    }, opts.manager);
 }
 

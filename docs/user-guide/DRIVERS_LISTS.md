@@ -4,9 +4,9 @@ documentation-metadata
 audience: drivers; passengers; transport organizers
 owner: drivers-list feature maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; source-reviewed Entity settings dialog labels, per-action permissions, root property changes, image/actions, minimal archival hints, and event selection/reassociation boundaries; archival behavior and labels reviewed against shared policy, persistence service, and Pug controls; D11 driver, passenger, and organizer workflows; profile-derived driver identity; capacity and counter semantics; event linkage; permissions; privacy; images; duplication; deletion; and troubleshooting; D14 rendered help navigation, semantic checks, and trusted-content integration
+verification-scope: Native creation, capacity, driver/passenger counters, privacy, assignment and management tasks; prose and assets preserved.
 source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/drivers/drivers-create.pug; src/views/drivers/drivers-view.pug; src/public/js/drivers.ts; src/routes/drivers.ts; src/routes/api/drivers.ts; src/controller/driversController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/drivers/DriversList.ts; src/modules/database/entities/drivers/DriversItem.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/services/DriverService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/drivers-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/decisions/DEC-003-DRIVER-LIST-PARTICIPANT-COUNT.md; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: drivers-visible-UI-or-behavior-change
 -->
@@ -237,7 +237,7 @@ Deleting the row permanently removes that ride offer and all passenger assignmen
 
 A profile with **Edit Meta** can open **Entity settings** → **General** → **Header image**. Select **Choose image**, choose a file, and select **Upload** to add or replace it. Use **Remove image** and confirm to delete it.
 
-The upload accepts JPEG, PNG, and GIF images up to 10 MiB. Replacing or removing an image permanently removes the previous image.
+The upload accepts JPEG, PNG, and GIF images up to 10 MiB. Replacing or removing an image removes the previous stored file.
 
 ## Link a drivers list to an event
 

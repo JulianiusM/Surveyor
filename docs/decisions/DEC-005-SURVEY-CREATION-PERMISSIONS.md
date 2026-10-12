@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-09-05
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: maintainer-confirmed-product-contract-and-static-behavior
-source-anchors: src/routes/survey.ts; src/controller/surveyController.ts; src/views/surveyor/survey-create.pug; src/middleware/guestFlowFactory.ts; src/modules/lib/permissions.ts; docs/documentation-remediation.yml
+source-anchors: src/routes/survey.ts; src/controller/surveyController.ts; src/views/surveyor/survey-create.pug; src/middleware/guestFlowFactory.ts; src/modules/lib/permissions.ts; docs/backlog/documentation-remediation.yml
 next-review: D03
 -->
 

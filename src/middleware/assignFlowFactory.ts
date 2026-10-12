@@ -26,8 +26,8 @@ import renderer from '../modules/renderer';
 import type {PermBundle} from "../types/PermissionTypes";
 
 interface AssignmentAccessMapping {
-    assign: (body: any, profileId: string, req?: Request) => Promise<void>,
-    unassign: (body: any, profileId: string, req?: Request) => Promise<void>
+    assign: (body: any, profileId: string) => Promise<void>,
+    unassign: (body: any, profileId: string) => Promise<void>
 }
 
 export type AssignmentOperation = 'assign' | 'unassign';
@@ -79,12 +79,19 @@ export function attachGenericAssignRoutes(
     }));
 }
 
+/** Resolve the native session profile through the common API-action wrapper,
+ * then scope the submitted item before optional feature authority and mutation.
+ * This wrapper opens no transaction: the selected feature action owns its DBAL
+ * locks/business checks and retains the native success/error presentation.
+ */
 async function performSecuredAssignmentAction(
     req: Request,
     action: AssignmentAccessMapping['assign'],
     security: AssignmentRouteSecurity,
     operation: AssignmentOperation,
 ) {
+    // The wrapper supplies the admitted native profile; body fields never select
+    // the acting identity. Scope and feature checks must precede the chosen action.
     await performAPIAction(req, async (body, profileId) => {
         const itemId = typeof body?.itemId === 'string' ? body.itemId : '';
         if (!itemId) {
@@ -94,9 +101,9 @@ async function performSecuredAssignmentAction(
         await enforceAssignmentItemScope(req.params.id as string, itemId, security.resolveItemEntityId);
 
         await security.authorize?.(req, profileId, operation);
-        // Features may re-evaluate the captured request actor inside their write transaction.
-        // Older mappings ignore this optional context and retain their existing behavior.
-        await action(body, profileId, req);
+
+        // The feature owner retains any locked capacity/deadline decision.
+        await action(body, profileId);
     });
 }
 

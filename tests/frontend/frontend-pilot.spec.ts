@@ -62,7 +62,7 @@ describe('complete frontend bootstrap boundary', () => {
     });
 
     it('preserves an admitted initial event through the real bootstrap codec and rejects malformed selection data', async () => {
-        const selectedEvent: components['schemas']['PackingEventOption'] = {id: listId, title: 'Admitted contextual event',
+        const selectedEvent: components['schemas']['EventPickerOption'] = {id: listId, title: 'Admitted contextual event',
             description: null, startDate: '2026-10-07', endDate: '2026-10-08', archived: false, deadlinePassed: false};
         for (const packingSelectedEvent of [selectedEvent, null]) {
             const bootstrap = {session: session(), packingSelectedEvent};
@@ -113,7 +113,6 @@ describe('packing draft reconciliation', () => {
         expect(draft.values).toEqual({title: 'Remote title', description: 'My note'});
         expect(draft.patch).toEqual({description: 'My note'});
         expect(draft.remote).toBeNull();
-        expect(draft.patch).toEqual({description: 'My note'});
     });
 
     it('requires an explicit same-field choice and does not carry newly forbidden fields into reapply', () => {
@@ -267,9 +266,81 @@ describe('typed pilot transport', () => {
         const api = new PackingApi(new PilotApi(() => true, vi.fn(), vi.fn(async () => new Response(null,
             {status: 304, headers: {'X-Surveyor-Context': scope.context}}))));
         expect(await api.metadata(listId, scope, undefined, previous)).toBe(previous);
+
+        // Conditional responses have no decoded body. Cancellation must precede
+        // this fast path too, rather than publishing its earlier private snapshot.
+        const held = deferred<Response>();
+        const conditional = vi.fn(async () => held.promise);
+        const canceled = new PackingApi(new PilotApi(() => true, vi.fn(), conditional));
+        const controller = new AbortController();
+        const reading = canceled.metadata(listId, scope, controller.signal, previous);
+        const retired = expect(reading).rejects.toBeInstanceOf(ObsoleteRequestError);
+        controller.abort();
+        held.resolve(new Response(null, {status: 304, headers: {'X-Surveyor-Context': scope.context}}));
+        await retired;
+        const beforeAdmission = new AbortController();
+        beforeAdmission.abort();
+        await expect(canceled.metadata(listId, scope, beforeAdmission.signal, previous))
+            .rejects.toBeInstanceOf(ObsoleteRequestError);
+        expect(conditional).toHaveBeenCalledOnce();
+
         const empty = new PackingApi(new PilotApi(() => true, vi.fn(), vi.fn(async () => new Response(null, {status: 204}))));
         await expect(empty.assign(listId, itemId, true, scope)).rejects.toBeInstanceOf(UnconfirmedResponseError);
     });
+
+    it.each([
+        {status: 200, deferredBody: false},
+        {status: 200, deferredBody: true},
+        {status: 401, deferredBody: false},
+        {status: 403, deferredBody: true},
+        {status: 429, deferredBody: false},
+        {status: 503, deferredBody: true},
+    ])('retires canceled JSON reads before $status classification and shared publication (body held: $deferredBody)',
+        async ({status, deferredBody}) => {
+            const held = deferred<Response>();
+            let finishBody!: () => void;
+            const error = {type: 'about:blank', title: 'Read unavailable', status,
+                detail: 'Synthetic read issue.', requestId: 'canceled-json-read'};
+            let body: unknown;
+            if (status === 200) body = metadata({title: 'Retired title', description: 'Old note'});
+            else if (status === 401) body = {...error, code: 'AUTH_REQUIRED', messageKey: 'api:errors.AUTH_REQUIRED', params: {}};
+            else if (status === 403) body = {...error, code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}};
+            else body = {...error, code: 'FUTURE_RETRYABLE_READ'};
+            const headers = {ETag: '"retired"', ...(status === 429 || status === 503 ? {'Retry-After': '90'} : {})};
+            // Headers can arrive before a native body stream completes. Keep that
+            // actual generated decoder active; an early fetch-only guard is insufficient.
+            const stream = new ReadableStream<Uint8Array>({start(controller) {
+                finishBody = function deliverBody(): void {
+                    controller.enqueue(new TextEncoder().encode(JSON.stringify(body)));
+                    controller.close();
+                };
+            }});
+            const initial = new Response(stream, {status, headers: {'Content-Type': 'application/json',
+                'X-Surveyor-Context': scope.context, ...headers}});
+            const decode = vi.spyOn(initial, 'text');
+            const invalidate = vi.fn();
+            const request = vi.fn(async function readFixture(_input: RequestInfo | URL): Promise<Response> {
+                if (request.mock.calls.length > 1) return response(metadata(), 200, {ETag: '"current"'});
+                return deferredBody ? initial : held.promise;
+            });
+            const api = new PackingApi(new PilotApi(() => true, invalidate, request));
+            const controller = new AbortController();
+            const reading = api.metadata(listId, scope, controller.signal);
+            const retired = expect(reading).rejects.toBeInstanceOf(ObsoleteRequestError);
+            await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+            if (deferredBody) await vi.waitFor(() => expect(decode).toHaveBeenCalledOnce());
+            controller.abort();
+            expect((request.mock.calls[0]![0] as Request).signal.aborted).toBe(true);
+            if (deferredBody) finishBody();
+            else held.resolve(response(body, status, headers));
+            await retired;
+            expect(invalidate).not.toHaveBeenCalled();
+            // An obsolete error has no cooldown lease. A fresh read must reach HTTP,
+            // including after canceled 429/503, and retain ordinary success validation.
+            await expect(api.metadata(listId, scope)).resolves.toMatchObject({data: metadata(), etag: '"current"'});
+            expect(request).toHaveBeenCalledTimes(2);
+        });
+
     it.each([201, 202])('rejects undeclared assignment success status %s even with a valid body', async status => {
         const data = {listId, itemId, selfAssigned: true, assignedCount: 1, maxAssignees: 1};
         const api = new PackingApi(new PilotApi(() => true, vi.fn(), vi.fn(async () => response(data, status))));
@@ -366,7 +437,7 @@ describe('identity, refresh and local state boundaries', () => {
         fresh.resolve(response(current, 200, {'X-Surveyor-Context': current.context}));
         await accepted;
         expect(context.ready.value).toBe(true);
-        expect(context.session.value.context).toBe(current.context);
+        expect(context.session.value?.context).toBe(current.context);
         expect(context.personalLink.value).toBe('https://example.test/private-link');
         expect(send).toHaveBeenCalledTimes(2);
         context.queryClient.clear();
@@ -385,7 +456,7 @@ describe('identity, refresh and local state boundaries', () => {
         await context.refreshSession();
 
         expect(context.ready.value).toBe(true);
-        expect(context.session.value.context).toBe(current.context);
+        expect(context.session.value?.context).toBe(current.context);
         expect(context.personalLink.value).toBe('https://example.test/private-link');
         expect(send).toHaveBeenCalledTimes(2);
         expect(send.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
@@ -403,7 +474,7 @@ describe('identity, refresh and local state boundaries', () => {
         await expect(context.acceptIdentity({session: confirmed, personalLink: 'https://example.test/private-link', redirect: null}))
             .rejects.toThrow();
         await context.refreshSession();
-        expect(context.session.value.context).toBe(other.context);
+        expect(context.session.value?.context).toBe(other.context);
         expect(context.personalLink.value).toBeNull();
         await context.refreshSession();
         expect(context.personalLink.value).toBeNull();
@@ -443,7 +514,7 @@ describe('identity, refresh and local state boundaries', () => {
         await reading;
 
         expect(context.locale.value).toBe('de');
-        expect(context.session.value.locale).toBe('de');
+        expect(context.session.value?.locale).toBe('de');
         expect(context.messages.value.locale).toBe('de');
         expect(context.isCurrent(captured)).toBe(true);
         expect(context.queryClient.getQueryData(['private'])).toBe('Existing editor');
@@ -464,12 +535,12 @@ describe('identity, refresh and local state boundaries', () => {
         olderSession.resolve(response(current, 200, {'X-Surveyor-Context': current.context}));
         await reading;
 
-        expect(context.session.value.context).toBe(current.context);
+        expect(context.session.value?.context).toBe(current.context);
         expect(context.ready.value).toBe(true);
         expect(context.isCurrent(captured)).toBe(false);
         expect(context.queryClient.getQueryData(['private'])).toBeUndefined();
         expect(context.locale.value).toBe('de');
-        expect(context.session.value.locale).toBe('de');
+        expect(context.session.value?.locale).toBe('de');
         context.queryClient.clear();
     });
 
@@ -488,7 +559,7 @@ describe('identity, refresh and local state boundaries', () => {
         await reading;
 
         expect(context.locale.value).toBe('de');
-        expect(context.session.value.locale).toBe('de');
+        expect(context.session.value?.locale).toBe('de');
         context.queryClient.clear();
     });
 
@@ -646,6 +717,10 @@ describe('identity, refresh and local state boundaries', () => {
     });
 
     it('suppresses obsolete/confirmed-denial polling and honors server retry delay', () => {
+        // Keep direct scheduling policy in this one inexpensive case. Mounted
+        // consumers separately prove disclosure, cancellation and recovery.
+        expect(refreshInterval(null, 0, 2000)).toBe(32_000);
+        expect(refreshInterval(new Error('Temporary read failure'), 0, 2000)).toBe(30_000);
         expect(refreshInterval(new ObsoleteRequestError(), 0, 1000)).toBe(false);
         const denial: components['schemas']['Problem'] = {type: 'urn:surveyor:problem:forbidden', title: 'Forbidden', status: 403,
             detail: 'Read access changed.', requestId: 'polling-denial', code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}};
@@ -696,7 +771,8 @@ describe('identity, refresh and local state boundaries', () => {
     });
 
     it('serializes hostile text as inert bootstrap JSON without changing the decoded value', () => {
-        const bootstrap = {session: {...session(), activeProfile: {id: itemId, name: '</script><script>alert(1)</script>&\u2028'}}};
+        const bootstrap = {session: {...session(), kind: 'account' as const,
+            activeProfile: {id: itemId, name: '</script><script>alert(1)</script>&\u2028'}}};
         const encoded = serializeBootstrap(bootstrap);
         expect(encoded).not.toContain('<');
         expect(encoded).not.toContain('&');

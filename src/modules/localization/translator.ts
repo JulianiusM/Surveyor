@@ -17,7 +17,8 @@ export function isPlainMessageKey(value: unknown): value is MessageKey {
     return manifest.messages[value as MessageKey].required.length === 0;
 }
 
-/** The same locale definition owns interface messages and its fixed, release-shipped help corpus. */
+/** The same locale definition names interface messages and its fixed directory under
+ * docs/user-guide. Missing localized content is resolved explicitly by the Help controller. */
 export function helpSourceDirectory(requestedLocale?: string | null): string {
     return manifest.helpSources[resolveLocale(requestedLocale)];
 }

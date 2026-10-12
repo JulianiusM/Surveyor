@@ -13,7 +13,7 @@ schemas:
       selectedEvent:
         description: Present only when eventId context was requested. Authorized initial URL selection; a missing or rejected selection is omitted from the creation draft.
         anyOf:
-          - $ref: '#/schemas/PackingEventOption'
+          - $ref: './common.yaml#/schemas/EventPickerOption'
           - type: 'null'
   PackingResourceEntry:
     type: object
@@ -26,33 +26,6 @@ schemas:
         anyOf:
           - $ref: ./auth.yaml#/schemas/GuestEntry
           - type: 'null'
-  PackingNativeItem:
-    description: Decoded native creation item, after the native form adapter's established scalar coercions. Optional descriptions accept empty strings, never explicit null.
-    type: object
-    additionalProperties: true
-    required: [title, maxAssignees, requiredByAll]
-    properties:
-      title: {type: string, minLength: 1}
-      description: {type: string}
-      maxAssignees: {type: integer, minimum: 1}
-      requiredByAll: {type: boolean}
-  PackingNativeCreateInput:
-    description: Native decoded form contract. Keep its optional/non-null fields distinct from the nullable JSON API transport.
-    type: object
-    additionalProperties: true
-    required: [title, items]
-    properties:
-      title: {type: string, minLength: 1}
-      description: {type: string}
-      items:
-        type: array
-        minItems: 1
-        items:
-          $ref: '#/schemas/PackingNativeItem'
-      event_id:
-        anyOf:
-          - $ref: ./common.yaml#/schemas/Uuid
-          - {type: string, const: ''}
   PackingAssignee:
     type: object
     additionalProperties: false
@@ -111,6 +84,8 @@ schemas:
         type: object
         additionalProperties: false
         required:
+          - showTitleEdit
+          - showCapacityEdit
           - editTitle
           - editDescription
           - editCapacity
@@ -118,6 +93,12 @@ schemas:
           - removeItem
           - removeAssignments
         properties:
+          showTitleEdit:
+            type: boolean
+            description: Original native title-control visibility; command authorization is independently editTitle.
+          showCapacityEdit:
+            type: boolean
+            description: Original native capacity-control visibility; command authorization is independently editCapacity.
           editTitle:
             type: boolean
           editDescription:
@@ -270,6 +251,9 @@ schemas:
         type: boolean
       inheritedArchived:
         type: boolean
+  PackingDescriptionValue:
+    type: [string, 'null']
+    maxLength: 16000
   PackingMetadataPatch:
     type: object
     additionalProperties: false
@@ -281,10 +265,55 @@ schemas:
         maxLength: 255
         pattern: \S
       description:
-        type:
-          - string
-          - "null"
-        maxLength: 16000
+        $ref: '#/schemas/PackingDescriptionValue'
+  PackingDescriptionPatch:
+    description: Bounded adapter for the independently grantable native description method; root properties remain profile-only.
+    type: object
+    additionalProperties: false
+    required: [description]
+    properties:
+      description:
+        $ref: '#/schemas/PackingDescriptionValue'
+  PackingDescriptionBaseline:
+    description: Only the method-authorized description and its actor/resource-bound field precondition; no root title, event or archival context.
+    type: object
+    additionalProperties: false
+    required: [description, editToken]
+    properties:
+      description:
+        type: [string, 'null']
+      editToken:
+        $ref: '#/schemas/PackingItemView/properties/editToken'
+  PackingDefaultsBaseline:
+    description: Audience masks independently authorized by MANAGE_PERMISSIONS; excludes roster, header, parent and root metadata.
+    type: object
+    additionalProperties: false
+    required: [defaultPermissions, editToken]
+    properties:
+      defaultPermissions:
+        $ref: '#/schemas/PermissionDefaults'
+      editToken:
+        $ref: '#/schemas/PackingItemView/properties/editToken'
+  PackingAdminBaseline:
+    description: One selected administrator mask, or null for the new-administrator comparison marker; no roster or profile presentation.
+    type: object
+    additionalProperties: false
+    required: [mask, editToken]
+    properties:
+      mask:
+        type: [integer, 'null']
+        minimum: 0
+        maximum: 2147483647
+      editToken:
+        $ref: '#/schemas/PackingItemView/properties/editToken'
+  PackingHeaderBaseline:
+    description: Method-authorized header field hash only; contains no stored path, image bytes, root title or parent context.
+    type: object
+    additionalProperties: false
+    required: [editToken]
+    properties:
+      editToken:
+        $ref: '#/schemas/PackingItemView/properties/editToken'
   PackingAssignmentResult:
     type: object
     additionalProperties: false
@@ -487,6 +516,55 @@ schemas:
       requiredByAll:
         type: boolean
     minProperties: 1
+  PackingItemEditBaseline:
+    description: Method-authorized edit baseline independent of detail-page admission. Values and hashes include only fields currently permitted by the item's existing method policy.
+    type: object
+    additionalProperties: false
+    required: [id, values, editableFields, editToken]
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      values:
+        type: object
+        additionalProperties: false
+        minProperties: 1
+        properties:
+          title:
+            $ref: '#/schemas/PackingItemView/properties/title'
+          description:
+            $ref: '#/schemas/PackingItemView/properties/description'
+          maxAssignees:
+            $ref: '#/schemas/PackingItemView/properties/maxAssignees'
+          requiredByAll:
+            $ref: '#/schemas/PackingItemView/properties/requiredByAll'
+      editableFields:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          enum: [title, description, maxAssignees, requiredByAll]
+      editToken:
+        $ref: '#/schemas/PackingItemView/properties/editToken'
+  PackingOrderEditBaseline:
+    description: Method-authorized reorder baseline containing only ordered item identifiers, positions and the existing actor-bound order token.
+    type: object
+    additionalProperties: false
+    required: [items, orderToken]
+    properties:
+      items:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [id, position]
+          properties:
+            id:
+              $ref: '#/schemas/PackingItemView/properties/id'
+            position:
+              $ref: '#/schemas/PackingItemView/properties/position'
+      orderToken:
+        $ref: '#/schemas/PackingListView/properties/orderToken'
   PackingItemOrder:
     type: object
     additionalProperties: false
@@ -520,54 +598,6 @@ schemas:
         type: boolean
       canView:
         type: boolean
-  PackingEventOption:
-    type: object
-    additionalProperties: false
-    required:
-      - id
-      - title
-      - startDate
-      - endDate
-      - archived
-      - description
-      - deadlinePassed
-    properties:
-      id:
-        $ref: ./common.yaml#/schemas/Uuid
-      title:
-        type: string
-      startDate:
-        type: string
-      endDate:
-        type: string
-      archived:
-        type: boolean
-      description:
-        type:
-          - string
-          - "null"
-      deadlinePassed:
-        type: boolean
-  PackingEventOptions:
-    type: object
-    additionalProperties: false
-    required:
-      - items
-      - selected
-      - nextCursor
-    properties:
-      items:
-        type: array
-        items:
-          $ref: "#/schemas/PackingEventOption"
-      selected:
-        anyOf:
-          - $ref: "#/schemas/PackingEventOption"
-          - type: "null"
-      nextCursor:
-        type:
-          - string
-          - "null"
   PackingProfileOption:
     type: object
     additionalProperties: false
@@ -844,7 +874,7 @@ schemas:
       selectedEvent:
         description: Present only when eventId context was requested. Authorized initial URL selection, independently of the duplicated source's parent event.
         anyOf:
-          - $ref: '#/schemas/PackingEventOption'
+          - $ref: './common.yaml#/schemas/EventPickerOption'
           - type: 'null'
     description: Draft copied from persisted rows, including cleared titles and historical invalid capacity. Creation validates the edited
       draft independently.

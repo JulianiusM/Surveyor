@@ -9,10 +9,18 @@ import {validateOverviewVisibilityResult} from '../../../../.generated/api/v1/br
 export class OverviewApi {
     constructor(private transport: PilotApi) {}
 
+    /** Fetch only the requested collection/region/filter projection. The query
+     * identifies its recovery deadline; the mounted region separately fences
+     * navigation generation and adopts the server's canonical page/query state. */
     async overview(query: NonNullable<paths['/overview']['get']['parameters']['query']>, scope: PilotRequestScope, signal?: AbortSignal) {
-        return this.transport.allowedRead('overview/' + JSON.stringify(query), scope, async () => this.transport.read('getOverview', await this.transport.client.GET('/overview', {
-            params: {query, header: this.transport.headers(scope)}, signal, cache: 'no-store',
-        }), validateOverviewRegion, scope).data);
+        const transport = this.transport;
+        async function readOverview(): Promise<components['schemas']['OverviewRegion']> {
+            const response = await transport.client.GET('/overview', {
+                params: {query, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getOverview', {...response, signal}, validateOverviewRegion, scope).data;
+        }
+        return transport.allowedRead('overview/' + JSON.stringify(query), scope, readOverview, signal);
     }
 
     async visibility(type: components['schemas']['OverviewCard']['type'], entityId: string, visibility: components['schemas']['OverviewVisibilityInput']['visibility'], scope: PilotRequestScope) {

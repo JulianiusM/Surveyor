@@ -93,6 +93,11 @@ describe('invoice settlement emails', () => {
             result: {label: 'Calculated balance', value: '25.00'},
         });
         expect(JSON.stringify(sections)).not.toMatch(/Alex Jordan|Participant A|Payer A|example|surcharge|rebate|invoice credit/iu);
+        // Contribution metadata is not an immutable saved note; retain the full
+        // calculated formula without inventing a second notes presentation.
+        expect(result.sections).toEqual([]);
+        expect(JSON.stringify(result.sectionGroups)).not.toMatch(/Saved source notes|Your saved calculation notes|You stayed/u);
+        expect(result.heading).toBe('Your calculated balance: 25.00 · Payment due');
         expect(input).toEqual(before);
     });
 
@@ -285,14 +290,5 @@ describe('invoice settlement emails', () => {
         expect(rendered.html.indexOf(warning)).toBeLessThan(rendered.html.indexOf('>View your invoice pool</a>'));
         expect(rendered.text.indexOf(warning)).toBeLessThan(rendered.text.indexOf('View your invoice pool:'));
         expect(rendered.text.match(/a new calculation may change your balance/gu)).toHaveLength(1);
-    });
-
-    it('does not manufacture saved notes from contribution metadata when no immutable note was recorded', () => {
-        const result = buildInvoiceSettlementEmail({...notice(), explanation: calculation()});
-        expect(result.sections).toEqual([]);
-        expect(JSON.stringify(result.sectionGroups)).not.toMatch(/Saved source notes|Your saved calculation notes|You stayed/u);
-        expect(result.heading).toBe('Your calculated balance: 25.00 · Payment due');
-        expect(result.sectionGroups![0].sections.find(section => section.title === 'Base share for Taylor Morgan')!.formula)
-            .toBeDefined();
     });
 });

@@ -85,8 +85,12 @@ export function useDraftProtection(draft: PilotCommandDraft) {
         return state;
     }
 
+    /** Decide departure from the combined page/dialog state. Pending work blocks
+     * departure before any prompt; unknown delivery needs its own acknowledgement
+     * even when an earlier destructive command already obtained discard consent. */
     function mayLeave(): boolean {
         const state = readState();
+
         if (state.busy) return false;
         if (state.unknownMessage) return window.confirm(context.messages.value.t(state.unknownMessage));
         if (approvedDepartures.size) return true;
@@ -192,9 +196,13 @@ export function useDraftProtection(draft: PilotCommandDraft) {
         const lifetime = effectScope(true);
         lifetime.run(() => watch([context.epoch, () => context.session.value?.context], clearDepartures, {flush: 'sync'}));
         let disposed = false;
+        /** Retire the root's shared guards exactly once after its final retained
+         * command settles. A component unmount alone must not release these guards
+         * while an orphaned command still protects an unknown or pending result. */
         disposeRoot = function disposeProtection(): void {
             if (disposed) return;
             disposed = true;
+
             removeDepartureObserver();
             removeIdentityGuard();
             removeUpdateGuard();
@@ -278,8 +286,10 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     }
 
     /** Read authority before releasing a desired-state command; creations still need acknowledgement.
-     * Return eligibility for any explicit follow-up so retired reads cannot open review prompts. */
-    async function reconcile(): Promise<boolean> {
+     * Return eligibility for any explicit follow-up so retired reads cannot open review prompts.
+     * An explicit recovery may supply a fresh read distinct from its normal post-write follow-up;
+     * both use the same scoped protection and never infer authority from a skipped callback. */
+    async function reconcile(read: PilotRecoveryRead = refreshAuthority): Promise<boolean> {
         if (pending.value || recovering.value || !mounted) return false;
         const scope = context.capture();
         const origin = frontendDocumentUrl(router.currentRoute.value.fullPath);
@@ -292,8 +302,8 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         // GET cannot acknowledge a later independently submitted unknown mutation.
         let currentRead = true;
         try {
-            if (reviewedUnknown) currentRead = await readAuthority(refreshAuthority, false);
-            else await refresh();
+            if (reviewedUnknown) currentRead = await readAuthority(read, false);
+            else await read(scope, ownsReconciliation);
         } catch (failure) {
             // The query retains its own failure. An obsolete caller must not replace
             // a newer command's unknown warning or attach feedback to another list.
@@ -403,7 +413,10 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         noticeReceipt.value = {key, kind: 'success', transient: true, presentation};
     }
 
-    /** Execute once in the captured identity scope and distinguish write failure from refresh failure. */
+    /** Execute once in the captured identity scope, protecting its status through
+     * any requested follow-up read. Only the operation's admitted result confirms
+     * a write; refresh failure cannot undo it, and unknown delivery never replays.
+     * Return that confirmed result even when its follow-up remains stale. */
     async function run<T>(operation: (scope: PilotRequestScope) => Promise<T>, refreshAfter = true,
                           reviewUnknown = requireUnknownReview, feedback?: PilotCommandFeedback): Promise<T | undefined> {
         if (pending.value || recovering.value || uncertain.value) return;
@@ -412,6 +425,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         // follow-up read. Recovery retains this same host instead of moving it to a
         // different section's controls or creating another message state owner.
         captureFeedback(feedback?.initiator);
+
         // Capture authority before submission; a later identity change retires this result.
         const scope = context.capture();
         commandScope = scope;
@@ -424,6 +438,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         const finishUpdateCommand = context.updates.commandStarted();
         let confirmed = false;
         let result: T | undefined;
+
         try {
             result = await operation(scope);
             if (!context.isCurrent(scope)) {
@@ -432,6 +447,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
             }
             confirmed = true;
             outcome.value = {confirmation: 'confirmed', refresh: refreshAfter ? 'pending' : 'not-requested'};
+
             // Confirmation belongs to the write. A following read failure cannot undo it.
             if (refreshAfter) {
                 await refresh();

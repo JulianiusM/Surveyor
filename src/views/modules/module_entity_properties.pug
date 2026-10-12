@@ -65,9 +65,7 @@ mixin entityGeneralSettings(entity, state)
                 if (hasEntityPropertyGroup(state, ['requireDietaryInfo', 'allowDietComment', 'allowRegDietUpdateAfterDeadline'])) groups.push('dietary');
             //- The first permitted family opens automatically; remaining families use progressive
             //- disclosure. All fields still belong to one atomic property form and one save action.
-            //- Packing submits its saved primitive values beside changed fields for a locked
-            //- comparison. The extra hook changes no visual controls or peer feature payloads.
-            form(data-property-form data-api=state.updateUrl data-compare-fields=state.entityType === 'packing' ? true : undefined novalidate)
+            form(data-property-form data-api=state.updateUrl novalidate)
                 if groups.includes('details')
                     details.entity-property-group.mb-3(open=groups[0] === 'details')
                         summary.fw-semibold Details

@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import {computed, nextTick, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
+import {computed, nextTick, onBeforeUnmount, ref, shallowRef, toRaw, watch} from 'vue';
 import {isNavigationFailure, useRoute, useRouter} from 'vue-router';
 import type {LocationQuery, NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components, paths} from '../../../types/api/v1';
-import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {PilotOverviewCardInteraction, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
 import {usePilot, refreshInterval} from '../../app/context';
@@ -14,7 +14,7 @@ import {useDebouncedValue} from '../../composables/debounced';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../../app/transport';
 import {overviewKeys} from '../../app/queryKeys';
-import {retireQueryFamily} from '../../app/queryCache';
+import {observeQueryReads, refetchFreshQueries, retireQueryFamily} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
@@ -31,6 +31,16 @@ const emit = defineEmits<{counts: [total: number, hidden: number]}>();
 const context = usePilot();
 const api = useOverviewApi(context);
 const packingApi = usePackingApi(context);
+// The mixed projection already owns feature command dispatch. Keep its bounded
+// migration decision here too; card components receive operations, never import
+// feature APIs or grow a registry as subsequent route families migrate.
+const packingInteraction: PilotOverviewCardInteraction = {migrated: true, readHeader: packingApi.header.bind(packingApi)};
+const nativeInteraction: PilotOverviewCardInteraction = {migrated: false};
+
+function cardInteraction(card: components['schemas']['OverviewCard']): PilotOverviewCardInteraction {
+    if (card.type !== 'packing') return nativeInteraction;
+    return {...packingInteraction, duplicateUrl: card.url + '/duplicate'};
+}
 const {messages} = context;
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const route = useRoute();
@@ -38,7 +48,7 @@ const router = useRouter();
 // Visible/hidden regions coexist, including across collections. Keep confirmed
 // delivery scoped to this logical region through any actor-driven remount.
 const destination = useConfirmedNavigation(props.collection + ':' + props.region);
-// TODO (docs/FRONTEND_PILOT.md): Complete the remaining Overview migration before its
+// TODO (docs/frontend-migration/FRONTEND_PILOT.md): Complete the remaining Overview migration before its
 // default-route cutover; non-packing administration stays with its native feature owner meanwhile.
 let pendingNavigation: RouteLocationNormalized | undefined;
 let readGeneration = 0;
@@ -102,8 +112,9 @@ watch(
         if (!searchPending.value) search.value = value ?? '';
     },
 );
+const overviewKey = computed(() => overviewKeys.region(context.session.value?.context, context.locale.value, query.value));
 const overview = useQuery({
-    queryKey: computed(() => overviewKeys.region(context.session.value?.context, context.locale.value, query.value)),
+    queryKey: overviewKey,
     enabled: computed(() => props.active !== false && context.hydrated.value && context.ready.value && context.visible.value),
     queryFn: ({signal}) => loadOverview(signal),
     initialData: () => context.initialDocumentFor(route.fullPath)?.session.locale === context.locale.value
@@ -130,7 +141,7 @@ const displayed = computed(() => {
 // receipt with its scoped projection, never borrow a date from unrelated or denied data.
 const lastUpdatedAt = computed(() => {
     const confirmed = lastConfirmed.value;
-    return confirmed && displayed.value === confirmed.data && context.isCurrent(confirmed.scope, true)
+    return confirmed && toRaw(displayed.value) === toRaw(confirmed.data) && context.isCurrent(confirmed.scope, true)
         ? confirmed.updatedAt : undefined;
 });
 // Every mounted region resolves independently. Keep confirmed cards and focused filters
@@ -145,19 +156,24 @@ const filterTypes = computed(() => {
     return selected && selected !== 'all' && !types.includes(selected) ? [...types, selected] : types;
 });
 // Cards retain their identity when an equal JSON result is structurally shared.
-// A settled readable projection supplies its successful-read timestamp and an
+// An actual readable response supplies its successful-read timestamp and an
 // explicit presentation-recovery hint. Neither grants command authority; healthy
-// card images ignore the hint and failed reads advance neither observation.
+// card images ignore the hint. Failed/canceled reads and manual cache aliases
+// advance neither observation; canonical navigation owns its admitted delivery.
 const imageReadRevision = ref(0);
-watch([overview.dataUpdatedAt, overview.isFetching, overview.error], finishOverviewRead);
+const stopOverviewReads = observeQueryReads<components['schemas']['OverviewRegion']>(
+    context.queryClient, () => overviewKey.value, finishOverviewRead);
+onBeforeUnmount(stopOverviewReads);
 
-function finishOverviewRead(): void {
-    if (props.active === false || !overview.data.value || overview.isFetching.value
-        || overview.error.value || deniedRead.value) return;
+function finishOverviewRead(value: components['schemas']['OverviewRegion'], updatedAt: number): void {
+    // The shared owner supplies this exact key's actual DTO and success receipt.
+    // Do not depend on observer notification timing or compare its reactive proxy
+    // with raw cache action data; the feature's route/actor fences own admission.
+    const scope = context.capture();
+    if (!mayPresentRead(scope, readGeneration) || deniedRead.value) return;
     // Equal JSON can retain the same object, so the data watcher alone cannot
     // record a later successful refresh. Count emissions still belong to that watcher.
-    if (lastConfirmed.value?.data === overview.data.value && context.isCurrent(lastConfirmed.value.scope, true))
-        lastConfirmed.value = {...lastConfirmed.value, updatedAt: overview.dataUpdatedAt.value};
+    lastConfirmed.value = {scope, data: value, updatedAt};
     imageReadRevision.value++;
 }
 
@@ -180,13 +196,19 @@ watch([context.epoch, context.locale], retirePresentation, {flush: 'sync'});
 // A private preference can change both collection appearances. Refresh all mounted regions
 // together; server-owned placement remains separate from authoritative archival.
 async function refresh(): Promise<void> {
-    await context.queryClient.refetchQueries(
+    const scope = context.capture();
+    const generation = readGeneration;
+    await refetchFreshQueries(context.queryClient,
         {
             queryKey: overviewKeys.all(context.session.value?.context),
             type: 'active',
         },
-        {throwOnError: true},
+        mayRead,
     );
+
+    function mayRead(): boolean {
+        return context.ready.value && mayPresentRead(scope, generation);
+    }
 }
 const command = useCommand(refresh);
 const blocked = computed(() => command.pending.value || command.recovering.value || command.uncertain.value
@@ -249,6 +271,9 @@ function mayPresentRead(scope: PilotRequestScope, generation: number): boolean {
         && route.path === '/frontend-pilot' && (!pendingNavigation || pendingNavigation.path === '/frontend-pilot');
 }
 
+/** Fence this region when Router starts a relevant Back/Forward or page change.
+ * Its own prepared read stays attached to that destination; sibling regions
+ * retain their requests and only a later admitted render may restore focus. */
 function rememberNavigation(to: RouteLocationNormalized): void {
     pendingNavigation = to;
     // Back/Forward can start outside this component. Only changed parameters for this
@@ -303,6 +328,9 @@ watch(() => props.active, active => {
     searchPending.value = false;
     retireReads();
 });
+/** Merge this region's sparse parameters into the latest requested whole-page
+ * URL. Undefined removes only its own field; other collections, selected events
+ * and hidden-region disclosure survive independent navigation in a sibling. */
 function navigationQuery(values: Record<string, string | undefined>) {
     // Native typing during Back targets the requested destination rather than the
     // still-rendered old event. Merge only this region into the latest whole-page URL.
@@ -311,6 +339,7 @@ function navigationQuery(values: Record<string, string | undefined>) {
         if (value === undefined) delete next[prefix.value + key];
         else next[prefix.value + key] = value;
     }
+
     // Native region URLs explicitly retain disclosure even when entered through a
     // selected-event deep link that did not originally include the open parameter.
     if (props.region === 'hidden') next[prefix.value + 'open'] = '1';
@@ -439,16 +468,27 @@ function expand(card: components['schemas']['OverviewCard']): void {
 /** Restore focus only after a matching successful read renders. Focused search controls
  * take precedence; failed/obsolete/background and other-region reads move neither focus nor scroll. */
 async function restoreCommittedFocus(): Promise<void> {
+    // Require the intended region/actor and a completed readable projection before
+    // waiting for its DOM. Background or unrelated reads own no navigation intent.
     const intent = pendingFocus;
     if (!intent || !overview.data.value || overview.isFetching.value || overview.error.value
         || intent.key !== navigationKey(query.value) || !context.isCurrent(intent.scope, true)) return;
+
     await nextTick();
+
+    // Rendering yields: a newer visit, disclosure, read or actor may have replaced
+    // the intended destination. Recheck before consuming it or moving any focus.
     if (pendingFocus !== intent || !mounted || props.active === false || intent.key !== navigationKey(query.value)
         || !context.isCurrent(intent.scope, true) || overview.isFetching.value || overview.error.value) return;
     pendingFocus = undefined;
 
+    // Consume the intent while retaining an actively edited search control. A
+    // later blur/background refresh must not revive this navigation's focus move.
     const active = document.activeElement;
     if (active instanceof HTMLInputElement && element.value?.contains(active) && active.type === 'search') return;
+
+    // Back returns to its originating event link. Restore the saved scroll only
+    // for unchanged filters; a changed card layout instead reveals that link nearby.
     if (intent.action === 'back' && returnPosition) {
         const origin = [...(element.value?.querySelectorAll<HTMLAnchorElement>('[data-overview-event]') ?? [])]
             .find(link => link.dataset.overviewEvent === returnPosition?.eventId);
@@ -459,6 +499,8 @@ async function restoreCommittedFocus(): Promise<void> {
             return;
         }
     }
+
+    // Ordinary page/filter delivery, or a removed origin, announces this region.
     element.value?.querySelector<HTMLElement>('.js-overview-heading')?.focus();
 }
 // GET search submits this region's controls, preserves other regions and the selected
@@ -477,6 +519,9 @@ function filterType(type: string): void {
     void navigate({q: search.value || undefined, type: type === 'all' ? undefined : type,
         page: undefined, childPage: undefined}, 'replace');
 }
+/** Change only this actor's placement, independently of shared archival.
+ * The server checks membership; the region's command owner refreshes current
+ * projections without turning the selected visibility label into authority. */
 async function setVisibility(
     card: components['schemas']['OverviewCard'],
     value: components['schemas']['OverviewVisibilityInput']['visibility'],
@@ -487,6 +532,10 @@ async function setVisibility(
     await command.run((scope) => api.visibility(card.type, card.id, value, scope), true, false,
         {presentation: 'inline', success});
 }
+
+/** Confirm the shared lifecycle action using the card's inherited-state wording.
+ * Fresh server policy remains authoritative; the command refreshes affected
+ * regions and cannot silently turn restore/archive into personal hiding. */
 async function archive(card: components['schemas']['OverviewCard'], restore: boolean): Promise<void> {
     if (actionsBlocked.value) return;
     if (
@@ -503,6 +552,10 @@ async function archive(card: components['schemas']['OverviewCard'], restore: boo
         await command.run((scope) => packingApi.archive(card.id, restore, scope), true, false,
             {presentation: 'inline', success: restore ? 'overview.restored' : 'overview.archived'});
 }
+
+/** Deliver permanent deletion through the existing confirmed-navigation owner.
+ * A failed destination retains its receipt for navigation-only Retry; the
+ * deleted card cannot become another eligible DELETE just because delivery failed. */
 async function remove(card: components['schemas']['OverviewCard']): Promise<void> {
     if (actionsBlocked.value) return;
     if (!window.confirm(messages.value.t('overview.confirmDelete'))) return;
@@ -629,6 +682,7 @@ function page(next: number): void {
                 </a>
                 <OverviewCard
                     :card="displayed.parent"
+                    :interaction="cardInteraction(displayed.parent)"
                     :disabled="actionsBlocked"
                     :read-revision="imageReadRevision"
                     :active="active"
@@ -660,6 +714,7 @@ function page(next: number): void {
                         :active="active"
                         :page-href="pageHref"
                         :expand-href="expandHref"
+                        :card-interaction="cardInteraction"
                         @visibility="setVisibility"
                         @archive="archive"
                         @remove="remove"
@@ -675,6 +730,7 @@ function page(next: number): void {
                 :active="active"
                 :page-href="pageHref"
                 :expand-href="expandHref"
+                :card-interaction="cardInteraction"
                 @visibility="setVisibility"
                 @archive="archive"
                 @remove="remove"

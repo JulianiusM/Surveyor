@@ -15,8 +15,10 @@ export const packingKeys = {
         [...packingKeys.editors(context, id), 'metadata'] as const,
     settings: (context: string | undefined, id: string) =>
         [...packingKeys.editors(context, id), 'settings'] as const,
+    profilesFamily: (context: string | undefined, id: string) =>
+        [...packingKeys.editors(context, id), 'profiles'] as const,
     profiles: (context: string | undefined, id: string, search: string) =>
-        [...packingKeys.editors(context, id), 'profiles', {search}] as const,
+        [...packingKeys.profilesFamily(context, id), {search}] as const,
     // URL preselection changes the admitted form projection. Keep it in the key;
     // omitting it retains the family prefix for ordinary invalidation callers.
     creation: (context: string | undefined, eventId?: string) =>

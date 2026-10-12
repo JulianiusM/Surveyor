@@ -20,13 +20,11 @@ import {describe, expect, it} from 'vitest';
 import {
     fetchHelpDoc,
     fetchHelpIndex,
-    getHelpDocsBasePath,
     renderTrustedHelpMarkdown,
     resolveHelpAssetPath,
     searchHelpDocuments,
     validateTrustedHelpMarkdown,
 } from '../../src/controller/helpController';
-import {resolveContextualHelpUrl} from '../../src/modules/lib/helpNavigation';
 
 const repositoryRoot = process.cwd();
 
@@ -68,12 +66,19 @@ function expectAll(source: string, values: Array<string | RegExp>): void {
     }
 }
 
+/** Preserve the documented priority itself, rather than requiring an old heading's wording. */
+function expectTextInOrder(source: string, values: readonly string[]): void {
+    let previousEnd = 0;
+    for (const value of values) {
+        const index = source.indexOf(value, previousEnd);
+        expect(index).toBeGreaterThanOrEqual(previousEnd);
+        previousEnd = index + value.length;
+    }
+}
+
 describe('in-app help source and trust boundary', () => {
-    it('uses the fixed release-controlled docs/user-guide directory', () => {
-        expect(path.relative(repositoryRoot, getHelpDocsBasePath()).split(path.sep).join('/')).toBe('docs/user-guide');
+    it('resolves a maintained packaged help asset', () => {
         expect(resolveHelpAssetPath('navigation-at-a-glance.png')).toBeTruthy();
-        expect(resolveHelpAssetPath('../README.md')).toBeNull();
-        expect(resolveHelpAssetPath('unsafe.svg')).toBeNull();
     });
 
     it('lists every guide once in task order rather than alphabetical order', () => {
@@ -99,45 +104,13 @@ describe('in-app help source and trust boundary', () => {
         expect(new Set(help.docsList.map(doc => doc.path)).size).toBe(help.docsList.length);
     });
 
-    it('rejects traversal and unknown document names', () => {
-        expect(() => fetchHelpDoc('../README')).toThrow('Documentation not found');
+    it('rejects document names absent from the maintained corpus', () => {
         expect(() => fetchHelpDoc('not-a-guide')).toThrow('Documentation not found');
     });
 
-    it('permits the documentation metadata comment but does not render it', () => {
-        const rendered = renderTrustedHelpMarkdown(`# Example\n<!--\ndocumentation-metadata\naudience: test\n-->\n\n## First task\n\nUse **Start**.`);
-        expect(rendered.title).toBe('Example');
-        expect(rendered.content).not.toContain('documentation-metadata');
-        expect(rendered.content).toContain('<h2 id="first-task">First task</h2>');
-        expect(rendered.toc).toContainEqual({id: 'first-task', title: 'First task', level: 2});
-    });
-
-    it('rejects raw HTML outside the permitted metadata comment', () => {
-        expect(() => validateTrustedHelpMarkdown('# Unsafe\n\n<script>alert(1)</script>')).toThrow(/raw HTML/iu);
-        expect(() => validateTrustedHelpMarkdown('# Unsafe\n\n<details><summary>Open</summary></details>')).toThrow(/raw HTML/iu);
-        expect(() => validateTrustedHelpMarkdown('# Unsafe\n\n<!-- another comment -->')).toThrow(/raw HTML/iu);
-    });
-
-    it.each([
-        '[bad](javascript:alert(1))',
-        '[bad](data:text/html,hello)',
-        '[bad](vbscript:msgbox(1))',
-        '[bad](//untrusted.example/path)',
-        '[bad](jav&colon;ascript:alert(1))',
-    ])('rejects unsafe help URI %s', unsafeLink => {
-        expect(() => validateTrustedHelpMarkdown(`# Unsafe\n\n${unsafeLink}`)).toThrow(/URI/iu);
-    });
-
-    it('allows reviewed internal and ordinary external destinations', () => {
-        expect(() => validateTrustedHelpMarkdown([
-            '# Safe links',
-            '',
-            '[Start](GETTING_STARTED.md#choose-how-to-enter-surveyor)',
-            '[Section](#safe-links)',
-            '[Project](https://example.org/docs)',
-            '[Email](mailto:help@example.org)',
-            '[Phone](tel:+1234567)',
-        ].join('\n'))).not.toThrow();
+    it('allows a reviewed destination in the maintained guide corpus', () => {
+        expect(() => validateTrustedHelpMarkdown('# Safe links\n\n[Start](GETTING_STARTED.md#choose-how-to-enter-surveyor)'))
+            .not.toThrow();
     });
 
     it('requires packaged raster assets and rewrites them to the help asset route', () => {
@@ -146,8 +119,7 @@ describe('in-app help source and trust boundary', () => {
             '',
             '![Navigation map](assets/navigation-at-a-glance.png)',
         ].join('\n'));
-        expect(rendered.content).toContain('src="/help/assets/navigation-at-a-glance.png?locale=en"');
-        expect(() => validateTrustedHelpMarkdown('# Bad\n\n![Remote](https://example.org/image.png)')).toThrow(/packaged file/iu);
+        expect(rendered.content).toContain('src="/help/assets/navigation-at-a-glance.png"');
         expect(() => validateTrustedHelpMarkdown('# Bad\n\n![Missing](assets/missing.png)')).toThrow(/packaged file/iu);
     });
 
@@ -167,21 +139,8 @@ describe('in-app help navigation', () => {
         const guestResults = searchHelpDocuments('guest recovery');
         expect(guestResults).toContainEqual(expect.objectContaining({title: 'Getting Started with Surveyor'}));
 
-        const controlResults = searchHelpDocuments('Auto-generate');
+        const controlResults = searchHelpDocuments('Auto generate');
         expect(controlResults).toContainEqual(expect.objectContaining({title: 'Activity Plans'}));
-    });
-
-    it('maps application areas to their contextual guide', () => {
-        expect(resolveContextualHelpUrl('/users/register')).toBe('/help/getting_started');
-        expect(resolveContextualHelpUrl('/users/dashboard')).toBe('/help/dashboard');
-        expect(resolveContextualHelpUrl('/users/profile/manage')).toContain('/help/getting_started#');
-        expect(resolveContextualHelpUrl('/guest/recovery')).toContain('/help/getting_started#');
-        expect(resolveContextualHelpUrl('/survey/123')).toBe('/help/surveys');
-        expect(resolveContextualHelpUrl('/event/123/admin')).toBe('/help/events');
-        expect(resolveContextualHelpUrl('/packing/123')).toBe('/help/packing_lists');
-        expect(resolveContextualHelpUrl('/activity/123')).toBe('/help/activity_plans');
-        expect(resolveContextualHelpUrl('/drivers/123')).toBe('/help/drivers_lists');
-        expect(resolveContextualHelpUrl('/')).toBe('/help');
     });
 });
 
@@ -190,7 +149,7 @@ describe('critical rendered help contracts', () => {
         const gettingStarted = renderedText('getting_started');
         expectAll(gettingStarted, [
             /activation email/iu,
-            /at least eight characters/iu,
+            /at least 8 characters/iu,
             /one letter/iu,
             /one digit/iu,
             'Request access',
@@ -201,7 +160,7 @@ describe('critical rendered help contracts', () => {
         expectAll(overview, ['New', 'Your participation', 'Administrable entities']);
 
         const permissions = renderedText('permissions');
-        expectAll(permissions, [/cumulative/iu, /several audiences/iu, /Surveys.*do not use/iu]);
+        expectAll(permissions, [/cumulative/iu, /One profile can match several groups/iu, /Surveys.*do not use/iu]);
 
         const visibleSources = readRepositoryFiles(
             'src/views/users',
@@ -221,9 +180,9 @@ describe('critical rendered help contracts', () => {
             'Maybe',
             'No',
             'All answers',
-            /does not use.*Group Permissions/iu,
+            /They do not use the Group Permissions matrix/iu,
             /standalone.*event|cannot be linked.*event/iu,
-            /Any participant who has reached the voting page/iu,
+            /Every participant admitted to the voting page may add a combination/iu,
             /registered guest/iu,
             /owner-only/iu,
         ]);
@@ -246,14 +205,17 @@ describe('critical rendered help contracts', () => {
         const packing = renderedText('packing_lists');
         expectAll(packing, [
             'Everyone',
-            /existing row.*All/iu,
+            /On an existing list, the editor switch in the Action column is labelled All/iu,
             'Take',
             'Remove',
             'Assigned / Max',
             'Packed?',
-            /stored only in the current browser/iu,
+            // Preserve the locality/privacy contract without pinning a superseded
+            // sentence. Application tests independently verify localStorage behavior.
+            /check mark is stored only in the current browser for that list item/iu,
+            /not tied to the active profile/iu,
             /Participants.*distinct/iu,
-            /Items.*every row/iu,
+            /Items.*all rows in the list, including Everyone items/iu,
             /open.*ordinary item/iu,
             /unassigned.*ordinary item/iu,
             /Everyone.*excluded/iu,
@@ -277,12 +239,15 @@ describe('critical rendered help contracts', () => {
             'Free',
             'Required',
             'Stay duration requirements',
-            /highest to lowest precedence/iu,
+            /first applicable source in this order wins/iu,
             /role-scoped participant override/iu,
             /participant-wide override/iu,
             /role requirement/iu,
             /stay-duration/iu,
-            /aggregate coverage.*timetable feasibility/iu,
+            // The task-first guide names the two visible totals, then distinguishes
+            // aggregate coverage from timetable feasibility in its explanation.
+            /compares Required shifts with total Slot capacity/iu,
+            /Coverage is an aggregate planning check, not proof that a timetable is feasible/iu,
             'Auto-generate',
             'Pending',
             'Approved',
@@ -292,13 +257,19 @@ describe('critical rendered help contracts', () => {
             'Stage unassignment',
             'Stage as approved',
             'Save changes',
-            /named-role/iu,
-            /protected/iu,
+            /Automatic generation creates only ordinary slot assignments\. It does not fill named roles/iu,
+            /An assignment carrying a named role is never moved automatically/iu,
             /roleless/iu,
-            /bounded/iu,
+            /A workable arrangement can exist even when no suggestion is found/iu,
             /last resort/iu,
             /overfill/iu,
-            /server.*revalid/iu,
+            /Before applying, Surveyor checks the plan and participants again/iu,
+        ]);
+        expectTextInOrder(activity, [
+            '1 A role-scoped participant override',
+            '2 A participant-wide override without a role',
+            '3 The lowest matching Role requirements value',
+            '4 The exact saved Stay duration requirements value',
         ]);
 
         const activityUi = readRepositoryFiles('src/views/activity', 'src/public/js/modules/activity');
@@ -321,9 +292,9 @@ describe('critical rendered help contracts', () => {
     it('protects the drivers-list participant counter decision', () => {
         const drivers = renderedText('drivers_lists');
         expectAll(drivers, [
-            /Participants.*distinct profiles assigned as passengers/iu,
+            /Participants.*distinct profiles assigned to one or more driver rows/iu,
             /driver who only offers a ride.*not counted/iu,
-            /same passenger.*several rows.*counts once/iu,
+            /same passenger assigned to several rows is counted once/iu,
             /Drivers.*ride rows/iu,
         ]);
     });

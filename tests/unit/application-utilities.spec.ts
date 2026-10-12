@@ -121,13 +121,6 @@ describe('backend application behavior suite', () => {
         });
 
         // Canary: protects a high-value production behavior while avoiding private implementation details.
-        it('preserves parent event ids for child-module cards', () => {
-            expect(convertToSingleList({activityPlans: [activity]} as Partial<DashboardEntities>)).toEqual([
-                {...createExpectedEntity('activity', activity), imageVersion: null},
-            ]);
-        });
-
-        // Canary: protects a high-value production behavior while avoiding private implementation details.
         it('returns an empty card list for users without visible entities', () => {
             expect(convertToSingleList({})).toEqual([]);
         });

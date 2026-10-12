@@ -22,20 +22,33 @@ test.describe('in-app help experience', () => {
         await page.getByRole('searchbox', {name: 'Search the user guides'}).fill('guest recovery');
         await page.getByRole('button', {name: 'Search help'}).click();
 
-        await expect(page.getByRole('heading', {name: 'Search results'})).toBeVisible();
-        await expect(page.getByRole('link', {name: 'Getting Started with Surveyor'})).toBeVisible();
+        // The topic navigation names the same guide. Require its actual result card
+        // and destination so the sidebar cannot satisfy a missing-result assertion.
+        const results = page.locator('.help-search-results');
+        const guestGuide = results.getByRole('link').filter({
+            has: page.getByRole('heading', {name: 'Getting Started with Surveyor', exact: true}),
+        });
+        await expect(results.getByRole('heading', {name: 'Search results', exact: true})).toBeVisible();
+        await expect(guestGuide).toBeVisible();
+        await expect(guestGuide).toHaveAttribute('href', '/help/getting_started?locale=en#join-an-invitation-as-a-guest');
     });
 
     test('renders a document table of contents and maintained visual aid', async ({page}) => {
         await page.goto('/help/surveys');
 
-        await expect(page.getByRole('navigation', {name: 'On this page'})).toBeVisible();
-        await expect(page.getByRole('link', {name: 'Vote in a survey'})).toBeVisible();
-        await expect(page.getByRole('img', {name: /recurring first-Monday result/iu})).toBeVisible();
-    });
+        // The article's task list repeats this link. Check the separately named
+        // table of contents and its anchor, rather than an arbitrary matching link.
+        const contents = page.getByRole('navigation', {name: 'On this page', exact: true});
+        const votingTask = contents.getByRole('link', {name: 'Vote in a survey', exact: true});
+        await expect(contents).toBeVisible();
+        await expect(votingTask).toBeVisible();
+        await expect(votingTask).toHaveAttribute('href', '#vote-in-a-survey');
 
-    test('opens contextual help from an account page', async ({page}) => {
-        await page.goto('/users/register');
-        await expect(page.getByRole('link', {name: 'Help for this page'})).toHaveAttribute('href', '/help/getting_started');
+        const visualAid = page.getByRole('article').getByRole('img', {
+            name: 'Survey controls showing Weekday, Day in month, Add, and the first Monday of every month with Yes, Maybe and No choices.',
+            exact: true,
+        });
+        await expect(visualAid).toBeVisible();
+        await expect(visualAid).toHaveAttribute('src', '/help/assets/survey-recurring-pattern.png?locale=en');
     });
 });

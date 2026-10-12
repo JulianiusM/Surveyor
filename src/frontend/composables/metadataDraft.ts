@@ -55,9 +55,16 @@ export class MetadataDraft<TValues extends object, TMetadata extends PilotMetada
         return Object.keys(this.patch).length > 0;
     }
 
+    /** Offer Mine/Current only for different local and remote edits to the same
+     * original field. Equal normalized edits need no choice; lost write permission
+     * is handled by overlappingChanges rather than inventing an editable field. */
     get conflicts(): PilotMetadataField<TValues>[] {
         if (!this.remote) return [];
         const conflicts: PilotMetadataField<TValues>[] = [];
+
+        // Choices belong only to fields the reviewed projection still permits.
+        // Compare both edits with their common original, then exclude equal local
+        // and remote outcomes so normalization does not create a false conflict.
         for (const field of this.remote.data.editableFields) {
             const original = this.baseline.values[field];
             const mine = this.values[field];
@@ -66,6 +73,25 @@ export class MetadataDraft<TValues extends object, TMetadata extends PilotMetada
                 && !this.sameValue(field, mine, current)) conflicts.push(field);
         }
         return conflicts;
+    }
+
+    /** Independent review controls compare touched original/current values until
+     * an admitted read or explicit review advances authority. Merely typing the
+     * remote value must not adopt its token; returning to the original value does
+     * remove that field from the sparse draft. Per-field choice presentation uses
+     * conflicts separately, since equal local/remote values need no Mine/Current choice. */
+    get overlappingChanges(): boolean {
+        if (!this.remote) return false;
+
+        // Keep this authority warning separate from Mine/Current choices: an
+        // edited field still needs review when its permission or original remote
+        // value changed, even when the user has typed the same value as the server.
+        for (const field of this.baseline.editableFields) {
+            if (this.sameValue(field, this.values[field], this.baseline.values[field])) continue;
+            if (!this.remote.data.editableFields.includes(field)
+                || !this.sameValue(field, this.remote.data.values[field], this.baseline.values[field])) return true;
+        }
+        return false;
     }
 
     /** Refresh untouched fields immediately; overlapping edits retain their original comparison baseline. */
@@ -88,6 +114,49 @@ export class MetadataDraft<TValues extends object, TMetadata extends PilotMetada
         }
     }
 
+    /** Independent controls can display remote changes to untouched fields while
+     * another field remains conflicted. Keep each overlapping field's original value
+     * and the reviewed token, but adopt equal local/remote values without a conflict.
+     * The caller still decides when to review and which local values to retain; this
+     * operation does not submit, acknowledge uncertainty or calculate permissions. */
+    receiveIndependent(data: TMetadata, etag: string): void {
+        if (!this.dirty) {
+            this.accept(data, etag);
+            return;
+        }
+
+        let overlap = false;
+        for (const field of this.baseline.editableFields) {
+            if (!data.editableFields.includes(field)) {
+                overlap = true;
+                continue;
+            }
+
+            const original = this.baseline.values[field];
+            const mine = this.values[field];
+            const current = data.values[field];
+            if (this.sameValue(field, mine, original)) {
+                this.values[field] = current;
+                this.baseline.values[field] = current;
+            } else if (this.sameValue(field, mine, current)) {
+                this.baseline.values[field] = current;
+            } else if (!this.sameValue(field, original, current)) {
+                overlap = true;
+            }
+        }
+
+        if (overlap) {
+            this.offerReview(data, etag);
+            return;
+        }
+
+        // A fresh token is safe only after every changed field is reconciled.
+        // Accept the whole authoritative projection, then restore its sparse draft.
+        const patch = this.patch;
+        this.accept(data, etag);
+        Object.assign(this.values, patch);
+    }
+
     /** Retain the values acknowledged by the server without adopting its permissions
      * or token. The feature must fence reads started before confirmation and obtain
      * fresh authority before enabling another write. A failed follow-up remains saved. */
@@ -108,14 +177,23 @@ export class MetadataDraft<TValues extends object, TMetadata extends PilotMetada
     /** A caller invokes this only after deliberate review; it never issues a write or selects a conflict. */
     review(): boolean {
         if (!this.remote || this.conflicts.some(field => !this.choices[field])) return false;
+
         const current = this.remote;
         const merged = {...current.data.values};
+
+        // Start from the reviewed server projection, then retain only explicit
+        // local changes to its still-editable fields. Removed fields cannot become
+        // sparse writes, and explicit Current choices keep the server value.
         for (const field of current.data.editableFields) {
             const mine = this.values[field];
             const original = this.baseline.values[field];
             const retain = !this.sameValue(field, mine, original) && this.choices[field] !== 'current';
             if (retain && mine !== undefined) merged[field] = mine;
         }
+
+        // Adopt the reviewed permissions/token before reinstating the merged
+        // local draft. Review grants no write; a later Save submits its sparse diff
+        // against this newly accepted baseline instead of the retired original.
         this.accept(current.data, current.etag);
         this.values = merged;
         return true;

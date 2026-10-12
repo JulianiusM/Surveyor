@@ -14,6 +14,17 @@ import {pilotHelpUrl, resolveContextualHelpUrl, resolvePilotHelpQuery} from '../
 describe('help renderer and source boundaries (synthetic fixtures)', () => {
     it('uses a fixed help root and rejects traversal and executable asset formats', () => {
         expect(path.relative(process.cwd(), getHelpDocsBasePath()).split(path.sep).join('/')).toBe('docs/user-guide');
+        expect(path.relative(process.cwd(), getHelpDocsBasePath('en')).split(path.sep).join('/'))
+            .toBe('docs/user-guide/en');
+        expect(path.relative(process.cwd(), getHelpDocsBasePath('de')).split(path.sep).join('/'))
+            .toBe('docs/user-guide/de');
+        // Staging holds documentation drafts only. This expectation is independent of
+        // the selector and protects the approved native/pilot source distinction.
+        expect(getHelpDocsBasePath('en')).not.toContain('frontend-migration');
+        expect(getHelpDocsBasePath('de')).not.toContain('frontend-migration');
+        expect(getHelpDocsBasePath('en')).not.toContain('frontend-help');
+        expect(getHelpDocsBasePath()).not.toContain('user-docs');
+        expect(getHelpDocsBasePath('../../uploads')).toBe(getHelpDocsBasePath('en'));
         expect(resolveHelpAssetPath('../README.md')).toBeNull();
         expect(resolveHelpAssetPath('unsafe.svg')).toBeNull();
         expect(() => fetchHelpDoc('../README')).toThrow('Documentation not found');
@@ -25,19 +36,6 @@ describe('help renderer and source boundaries (synthetic fixtures)', () => {
         expect(result.content).not.toContain('documentation-metadata');
         expect(result.content).toContain('<h2 id="first-task">First task</h2>');
         expect(result.toc).toContainEqual({id: 'first-task', title: 'First task', level: 2});
-    });
-
-    it('keeps translated bodies and headings while preserving language-independent deep links', () => {
-        const result = renderTrustedHelpMarkdown('# Anleitung\n<!--\ndocumentation-metadata\nheading-anchors: 1:guide; 2:bring-water\n-->\n\n## Wasser mitbringen\n\nFülle deine Flasche auf. [Weiter](#bring-water)',
-            'synthetic translation', 'de');
-        expect(result.title).toBe('Anleitung');
-        expect(result.content).toContain('<h2 id="bring-water">Wasser mitbringen</h2>');
-        expect(result.content).toContain('Fülle deine Flasche auf.');
-        expect(result.content).not.toContain('Fill your bottle');
-        expect(result.toc).toEqual([{id: 'bring-water', title: 'Wasser mitbringen', level: 2}]);
-        expect(resolveContextualHelpUrl('/users/profile', 'de')).toBe('/help/getting_started?locale=de#understand-accounts-and-profiles');
-        expect(getHelpDocsBasePath('de')).toBe(path.join(getHelpDocsBasePath(), 'de'));
-        expect(getHelpDocsBasePath('../../uploads')).toBe(getHelpDocsBasePath());
     });
 
     it.each([
@@ -76,8 +74,14 @@ describe('help renderer and source boundaries (synthetic fixtures)', () => {
     it('maps application routes without reading a documentation file', () => {
         expect(resolveContextualHelpUrl('/users/register')).toBe('/help/getting_started');
         expect(resolveContextualHelpUrl('/users/dashboard')).toBe('/help/dashboard');
+        expect(resolveContextualHelpUrl('/users/profile/manage')).toContain('/help/getting_started#');
+        expect(resolveContextualHelpUrl('/users/profile', 'de')).toBe('/help/getting_started?locale=de#understand-accounts-and-profiles');
+        expect(resolveContextualHelpUrl('/guest/recovery')).toContain('/help/getting_started#');
         expect(resolveContextualHelpUrl('/survey/123')).toBe('/help/surveys');
+        expect(resolveContextualHelpUrl('/event/123/admin')).toBe('/help/events');
         expect(resolveContextualHelpUrl('/packing/123')).toBe('/help/packing_lists');
+        expect(resolveContextualHelpUrl('/activity/123')).toBe('/help/activity_plans');
+        expect(resolveContextualHelpUrl('/drivers/123')).toBe('/help/drivers_lists');
         expect(resolveContextualHelpUrl('/')).toBe('/help');
     });
 

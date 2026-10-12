@@ -22,7 +22,7 @@ afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); vi.restoreAl
 
 async function mountedCommand(review = false, request?: typeof fetch) {
     const context = createPilotContext({session}, false, request);
-    const refresh = vi.fn(async () => undefined);
+    const refresh = vi.fn(async (): Promise<void> => undefined);
     let command!: ReturnType<typeof useCommand>;
     const component = defineComponent({
         setup() { command = useCommand(refresh, review); return {command}; },

@@ -4,12 +4,13 @@ documentation-metadata
 audience: Umfrageteilnehmer; Umfrageorganisatoren
 owner: survey feature maintainers
 status: current
-last-verified: 2026-10-07
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: eigenständige deutsche Anleitung mit stabilen Linkzielen; wiederkehrende Monatsmuster, Gäste, namentliche Antworten und Eigentümeraktionen; deutsch erklärtes Diagramm mit den tatsächlichen Bezeichnungen der Umfragefelder
+verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
 heading-anchors: 1:surveys; 2:choose-your-task; 2:understand-the-recurring-monthly-model; 2:vote-in-a-survey; 3:1-open-the-survey-link; 3:2-check-the-active-profile; 3:3-choose-one-answer-for-every-combination; 3:4-select-submit; 2:change-an-answer; 2:return-as-a-guest; 2:read-the-results; 3:your-response; 3:all-answers; 3:result-visibility-and-privacy; 2:add-another-combination; 2:create-a-survey; 3:1-open-the-creation-form; 3:2-enter-the-survey-details; 3:3-add-at-least-one-combination; 3:4-select-create-survey; 2:understand-survey-access-before-sharing; 2:share-a-survey; 2:surveys-and-events; 2:manage-a-survey; 3:header-image; 3:title-and-description; 3:duplicate-a-survey; 3:delete-a-survey; 2:practical-examples; 3:primary-use-choose-a-recurring-monthly-meeting-pattern; 3:secondary-use-choose-a-day-within-one-stated-month; 3:compare-regular-volunteer-days; 2:capabilities-and-limits; 2:archive-or-restore-a-survey; 2:troubleshooting; 3:the-survey-cannot-be-created; 3:the-survey-is-missing-from-your-overview; 3:a-guest-cannot-return; 3:a-new-combination-shows-no-for-earlier-voters; 3:the-add-action-reports-an-error; 3:permission-or-event-controls-cannot-be-found; 3:entity-settings-or-an-expected-action-is-missing; 2:related-guides
 source-anchors: src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/controller/surveyController.ts; docs/user-guide/de/assets/survey-recurring-pattern.png; scripts/generate-help-visuals.mjs
 next-review: survey-visible-UI-or-behavior-change
+production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->
 
 Umfragen dienen vor allem der Abstimmung **wiederkehrender monatlicher Termine**, etwa ob eine Gruppe sich jeden Monat am ersten Montag, zweiten Mittwoch oder letzten Freitag treffen soll. Dieses Muster ist die Stärke der Funktion: Teilnehmer beantworten jede verständliche Wochentagsposition einmal mit **Yes** (Ja), **Maybe** (Vielleicht) oder **No** (Nein).

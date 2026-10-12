@@ -6,7 +6,8 @@ import {createTranslator} from '../../src/modules/localization/translator';
 import {ExpectedError, ValidationError} from '../../src/modules/lib/errors';
 import {frontendIdentityProblemKey} from '../../src/modules/lib/frontendIdentity';
 import {loginUser, registerUser, resetPassword} from '../../src/controller/userController';
-import {preparePackingMetadataPatch} from '../../src/modules/packing/api';
+import {normalizePackingMetadataPatch} from '../../src/controller/packingController';
+import {validateApiInput} from '../../src/modules/api/transport';
 
 /** Only request data used by the pure negotiation/error boundary is present; no application or database starts. */
 function request(options: {header?: string; cookie?: unknown; languages?: string[]; context?: string} = {}): Request {
@@ -74,7 +75,7 @@ describe('validated API problem output', () => {
 
     it('keeps versioned metadata validation bounded instead of publishing native structural prose', () => {
         try {
-            preparePackingMetadataPatch({description: 'D'.repeat(16001)});
+            validateApiInput('updatePackingMetadata', normalizePackingMetadataPatch({description: 'D'.repeat(16001)}));
             throw new Error('Invalid versioned metadata was accepted');
         } catch (error) {
             const result = respond(error, request({header: 'en'}));
@@ -86,9 +87,9 @@ describe('validated API problem output', () => {
     });
 
     it('keeps the versioned sparse-patch rule closed to undefined-only internal inputs', () => {
-        // JSON cannot encode undefined; the versioned wrapper treats it as omitted.
+        // JSON cannot encode undefined; the real versioned body normalizer treats it as omitted.
         // Native's distinct optional own-key tracking update must never weaken this boundary.
-        expect(() => preparePackingMetadataPatch({description: undefined}))
+        expect(() => validateApiInput('updatePackingMetadata', normalizePackingMetadataPatch({description: undefined})))
             .toThrow(expect.objectContaining({code: 'VALIDATION_FAILED', status: 400}));
     });
 

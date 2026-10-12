@@ -17,9 +17,13 @@ export function createUpdateCoordinator(initial: components['schemas']['Deployme
     let disposed = false;
     let nextBuild = initial.buildId;
 
+    /** Reload only when every mounted draft/command permits departure. The build
+     * marker limits retries across this document's replacement recovery; it is
+     * neither a command receipt nor permission to discard unresolved work. */
     function requestReload(): boolean {
         if (!browser || disposed || reloading || !available.value || commands > 0
             || [...guards].some(guard => !guard())) return false;
+
         // A failed chunk on an unchanged build may have another cause (offline, corrupt cache).
         // Remember only the attempted build, so repeated errors cannot cause a reload loop.
         const marker = `surveyor:reload:${initial.buildId}:${nextBuild}`;

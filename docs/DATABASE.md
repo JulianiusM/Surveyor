@@ -5,20 +5,12 @@ documentation-metadata
 audience: database administrators; operators; site reliability engineers; maintainers
 owner: application operators
 status: current
-last-verified: 2026-10-08
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: FPR-07 preservation of the pre-pilot native production documentation reference and current non-pilot source-path corrections; no deployment, command execution or runtime certification
+verification-scope: Native schema, migration/rollback safety, archival state and coherent persistence boundaries.
 source-anchors: src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml
-next-review: native-production-change-or-frontend-cutover
-production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
+next-review: D04V
 -->
-
-This document describes the native frontend production reference. It preserves the existing production contract
-while the frontend migration is in progress; the reference is not evidence of the commit installed at a particular
-site. Developers working in the migration checkout must use the [staged replacement](frontend-migration/staged/DATABASE.md) and current
-`package.json` for the changed frontend commands. Merge the staged replacement into this canonical document at
-production cutover, retaining any intervening native changes.
-
 
 Surveyor uses TypeORM with MariaDB for application data and server-side sessions. The application opens the database
 before it starts listening for HTTP requests, but it does **not** apply schema migrations automatically.

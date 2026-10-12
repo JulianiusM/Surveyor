@@ -207,7 +207,13 @@ export async function getArchiveSnapshot(refs: ArchiveReference[], manager?: Ent
     return manager ? readSnapshot(manager) : AppDataSource.transaction('REPEATABLE READ', readSnapshot);
 }
 
-/** Archive eligible dated roots in bounded batches using one captured UTC cutoff. */
+/** Archive eligible dated roots in bounded batches using the controller's single
+ * UTC cutoff/timestamp. Candidate discovery stays outside individual writes; each
+ * candidate holds its primary-row lock in a short READ COMMITTED transaction and
+ * rechecks all eligibility predicates before persistence/counting.
+ * Event and standalone-activity roots share this order with restoration/property
+ * writers, preventing index-first/root-first lock inversion without business errors.
+ */
 export async function archiveExpiredEntities(cutoff: string, now: Date): Promise<number> {
     // The controller supplies one validated cutoff and timestamp. SQL retains every
     // predicate in the write so concurrent changes cannot satisfy an earlier stale read.
@@ -246,6 +252,13 @@ export async function archiveExpiredEntities(cutoff: string, now: Date): Promise
             // process's sweep cannot archive an ineligible root or count it twice.
             for (const root of rows) {
                 async function archiveCandidate(manager: EntityManager): Promise<number> {
+                    // Restoration and property writers acquire the primary root lock before
+                    // changing the indexed archive/pause/date fields. Take that same lock
+                    // first: a conditional UPDATE alone can enter through the eligibility
+                    // index and deadlock with a writer already holding the primary row.
+                    // The predicates below still recheck the committed values after a wait.
+                    await lockTarget(manager, {type, id: root.id});
+
                     const update = getRootRepository(manager, type).createQueryBuilder().update()
                         .set({archivedAt: now})
                         .where('id = :id', {id: root.id})
@@ -253,14 +266,16 @@ export async function archiveExpiredEntities(cutoff: string, now: Date): Promise
                         .andWhere('auto_archive_paused = 0')
                         .andWhere('end_date <= :cutoff', {cutoff});
                     if (type === 'activity') update.andWhere('event_id IS NULL');
+
+                    // Count only the conditional write's actual persistence receipt.
                     const affected = (await update.execute()).affected ?? 0;
                     return affected;
                 }
                 // Count writes that still qualified, not earlier candidates; another
                 // process may already have archived or an organizer restored a row.
-                archived += type === 'event'
-                    ? await AppDataSource.transaction('READ COMMITTED', archiveCandidate)
-                    : await archiveCandidate(AppDataSource.manager);
+                // Both dated root tables retain their primary lock through this write;
+                // standalone activity candidates therefore also need a transaction.
+                archived += await AppDataSource.transaction('READ COMMITTED', archiveCandidate);
             }
 
             // A stable keyset avoids OFFSET skipping rows after earlier updates

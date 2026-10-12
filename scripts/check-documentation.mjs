@@ -5,7 +5,7 @@
  *
  * This checker intentionally validates structural integrity and migration
  * bookkeeping. Behavioral truth is verified by the work-package-specific
- * reviews and tests recorded in docs/DOCUMENTATION_MIGRATION_STATUS.md.
+ * reviews and tests recorded in docs/frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md.
  */
 
 import crypto from 'node:crypto';
@@ -14,7 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const DEFAULT_CONFIG_PATH = 'docs/documentation-check.json';
+const DEFAULT_CONFIG_PATH = 'docs/policies/documentation-check.json';
 const METADATA_RE = /<!--\s*documentation-metadata\s*\r?\n([\s\S]*?)-->/i;
 const INLINE_LINK_RE = /!?\[[^\]]*\]\(([^)\n]+)\)/g;
 const REFERENCE_LINK_RE = /^\s*\[[^\]]+\]:\s*(\S+)/gm;
@@ -504,6 +504,9 @@ function collectStaleTerms(root, config, markdownFiles, strict) {
     return {occurrences, deferred, errors};
 }
 
+/** Check the policy-owned source location and authored references. Equivalent source
+ * expressions are deliberately not interpreted as runtime proof; synthetic application
+ * tests exercise actual selection, while alias conflicts remain visible for human review. */
 function validateCanonicalUserGuide(root, config, markdownFiles) {
     const errors = [];
     const canonical = config.canonicalUserGuideDirectory;
@@ -521,25 +524,22 @@ function validateCanonicalUserGuide(root, config, markdownFiles) {
             type: 'missing-help-controller',
             message: `Configured help controller does not exist: ${config.helpController}`,
         });
-    } else {
-        const source = fs.readFileSync(helpController, 'utf8');
-        if (!/['"]docs['"]\s*,\s*['"]user-guide['"]/u.test(source)) {
-            errors.push({
-                type: 'help-controller-path-mismatch',
-                message: `${config.helpController} does not resolve the canonical docs/user-guide directory`,
-            });
-        }
     }
+
+    // Source spelling cannot establish the runtime trust boundary. The controller
+    // may compose the fixed path through named variables without changing it.
+    // Independently specified synthetic application tests protect source selection;
+    // this advisory checker verifies the native corpus and its maintained references.
 
     for (const relativePath of markdownFiles) {
         const text = fs.readFileSync(path.join(root, relativePath), 'utf8');
-        const match = /docs\/user-docs\b/giu.exec(text);
+        const match = /docs\/(?:user-docs|frontend-help)\b/giu.exec(text);
         if (match) {
             errors.push({
                 type: 'ambiguous-user-guide-path',
                 path: relativePath,
                 line: lineNumber(text, match.index),
-                message: `${relativePath} references non-canonical docs/user-docs`,
+                message: `${relativePath} references a retired user-help alias (${match[0]}); review the conflict against ${canonical}`,
             });
         }
     }
@@ -547,6 +547,8 @@ function validateCanonicalUserGuide(root, config, markdownFiles) {
     return errors;
 }
 
+/** Accept either the full documentation copy or an explicit configured Help-tree copy.
+ * This diagnostic reports packaging drift and never controls release continuation. */
 function validateReleaseBundle(root, config) {
     const errors = [];
     const workflowPath = path.join(root, config.releaseWorkflow);
@@ -559,12 +561,88 @@ function validateReleaseBundle(root, config) {
 
     const workflow = fs.readFileSync(workflowPath, 'utf8');
     const copiesAllDocs = /cp\s+-R\s+docs\s+release\/docs/u.test(workflow);
-    const copiesUserGuide = /cp\s+-R\s+docs\/user-guide\s+release\/docs\/user-guide/u.test(workflow);
+    const canonical = config.canonicalUserGuideDirectory.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    const copiesUserGuide = new RegExp(`cp\\s+-R\\s+${canonical}\\s+release/${canonical}`, 'u').test(workflow);
     if (!copiesAllDocs && !copiesUserGuide) {
         errors.push({
             type: 'release-missing-user-guides',
             message: `${config.releaseWorkflow} does not copy ${config.canonicalUserGuideDirectory} into the release bundle`,
         });
+    }
+    return errors;
+}
+
+/** Classify maintained documentation from the explicit policy configuration. Findings
+ * request human review; this diagnostic never moves/deletes documents or reinterprets
+ * an ADR as permission to rewrite the governing policy. Non-Markdown assets are checked
+ * too, so a second help tree or an unowned root configuration cannot disappear from view. */
+function validateDocumentClassification(root, config) {
+    const classification = config.documentClassification;
+    if (!classification || !Array.isArray(classification.rootAllowlist)
+        || !classification.categories || typeof classification.categories !== 'object') {
+        return [{type: 'missing-document-classification-config',
+            message: 'Documentation classification requires an explicit policy-owned root allowlist and category locations'}];
+    }
+    const errors = [];
+    const docsPath = path.join(root, 'docs');
+    if (!fs.existsSync(docsPath)) return errors;
+    const rootAllowlist = new Set(classification.rootAllowlist);
+    const categories = Object.entries(classification.categories);
+    for (const category of ['policy', 'decision', 'backlog', 'feature', 'migration', 'userHelp']) {
+        if (!Object.hasOwn(classification.categories, category)) {
+            errors.push({type: 'invalid-document-classification-config', category,
+                message: `Documentation policy classification is missing the ${category} location`});
+        }
+    }
+    const metadataByPath = new Map();
+
+    for (const name of rootAllowlist) {
+        if (typeof name !== 'string' || path.posix.basename(name) !== name) {
+            errors.push({type: 'invalid-document-classification-config',
+                message: 'Root documentation allowlist entries must be individual filenames'});
+        }
+    }
+    for (const [category, directory] of categories) {
+        if (typeof directory !== 'string' || !directory.startsWith('docs/') || path.posix.normalize(directory) !== directory
+            || directory.includes('\\')) {
+            errors.push({type: 'invalid-document-classification-config', category,
+                message: `Category ${category} must name a fixed directory beneath docs/`});
+        }
+    }
+    if (errors.length) return errors;
+
+    const files = walkFiles(docsPath, config.excludedDirectories ?? []);
+    for (const file of files) {
+        const relativePath = `docs/${file}`;
+        const rootDocument = !file.includes('/');
+        const classified = rootDocument ? rootAllowlist.has(file)
+            : categories.some(([_category, directory]) => relativePath.startsWith(`${directory}/`));
+        if (!classified) {
+            errors.push({type: 'unclassified-document', path: relativePath,
+                message: `${relativePath} has no approved documentation category; classify it through review, never automatic deletion`});
+        }
+        if (!file.toLowerCase().endsWith('.md')) continue;
+        const metadata = parseMetadata(fs.readFileSync(path.join(root, relativePath), 'utf8'));
+        if (metadata) metadataByPath.set(relativePath, metadata);
+        const inDecision = relativePath.startsWith(`${classification.categories.decision}/`);
+        if (/^DEC-\d+/u.test(path.posix.basename(file)) && !inDecision) {
+            errors.push({type: 'misplaced-decision-document', path: relativePath,
+                message: `${relativePath} is a decision record outside ${classification.categories.decision}; review its intended owner`});
+        }
+    }
+
+    for (const [relativePath, metadata] of metadataByPath) {
+        const inHelp = relativePath.startsWith(`${classification.categories.userHelp}/`);
+        const inMigration = relativePath.startsWith(`${classification.categories.migration}/`);
+        const inDecision = relativePath.startsWith(`${classification.categories.decision}/`);
+        if (/(?:^|;)\s*(?:end users|users)\s*(?:;|$)/iu.test(metadata.audience ?? '') && !inHelp) {
+            errors.push({type: 'misplaced-user-help-document', path: relativePath,
+                message: `${relativePath} declares end-user content outside ${classification.categories.userHelp}`});
+        }
+        if ((metadata.status === 'migration-pending' || metadata['canonical-merge-target']) && !inMigration && !inDecision) {
+            errors.push({type: 'misplaced-migration-document', path: relativePath,
+                message: `${relativePath} declares a pending migration amendment outside ${classification.categories.migration}`});
+        }
     }
     return errors;
 }
@@ -626,6 +704,7 @@ function buildReport(root, config, strict) {
     const staleTerms = collectStaleTerms(root, config, markdownFiles, strict);
     const canonicalErrors = validateCanonicalUserGuide(root, config, markdownFiles);
     const releaseErrors = validateReleaseBundle(root, config);
+    const classificationErrors = validateDocumentClassification(root, config);
     const baseline = validateCurrentBaseline(config, fingerprint);
 
     const errors = [
@@ -637,6 +716,7 @@ function buildReport(root, config, strict) {
         ...staleTerms.errors,
         ...canonicalErrors,
         ...releaseErrors,
+        ...classificationErrors,
     ];
 
     return {
@@ -660,6 +740,7 @@ function buildReport(root, config, strict) {
             missingDocumentedRepositoryPaths: repositoryPaths.errors.length,
             metadataRecords: metadata.records.length,
             metadataErrors: metadata.errors.length,
+            classificationErrors: classificationErrors.length,
             staleTermOccurrences: staleTerms.occurrences.length,
             deferredStaleTermOccurrences: staleTerms.deferred.length,
             totalErrors: errors.length,

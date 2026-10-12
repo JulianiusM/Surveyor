@@ -1,9 +1,4 @@
 /* Help content styling to match dark theme */
-.card-header > h1.card-title
-  // Keep translated compound titles inside the shared title-and-home-button row.
-  min-width: 0
-  overflow-wrap: anywhere
-
 .help-content
   color: #e9ecef
 
@@ -84,9 +79,6 @@
   th, td
     padding: 0.75rem
     border: 1px solid #495057
-    // Translated compound words must not set a table's minimum width beyond the
-    // article column. Ordinary words still wrap at spaces; only long runs break.
-    overflow-wrap: anywhere
 
   th
     background-color: #343a40
@@ -94,12 +86,6 @@
 
   td
     background-color: #212529
-
-  // Keep user-visible reference labels readable after removing internal-code columns.
-  // Other prose tables retain their existing wrapping and proportions.
-  table:has(td:first-child > strong) td:first-child
-    min-width: 9rem
-    overflow-wrap: normal
 
   hr
     border-color: #495057
@@ -157,18 +143,3 @@
   .help-toc
     position: static
     max-height: none
-
-@media (max-width: 767.98px)
-  // Reference labels need room beside their descriptions, including translated
-  // compound words. Keep scrolling inside the table rather than squeezing words
-  // into single-character columns or widening the whole article.
-  .help-content table:has(code), .help-content table:has(td:first-child > strong)
-    display: block
-    overflow-x: auto
-
-    th, td
-      min-width: 9rem
-      overflow-wrap: normal
-
-    :not(pre) > code
-      white-space: nowrap

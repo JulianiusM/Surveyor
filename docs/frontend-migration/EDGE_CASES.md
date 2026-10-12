@@ -7,7 +7,7 @@ status: current
 last-verified: 2026-10-04
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: second-pass source and test-assertion review of special-use cases, browser state, permissions, lifecycle, participation and financial workflows; separates implemented protection, known defects and future SPA acceptance scenarios; no application suites or new browser capture executed in this pass
-source-anchors: src/public/js/core/http.ts; src/public/js/shared/alerts.ts; src/public/js/modules/entity-properties.ts; src/public/js/modules/entity-select.ts; src/public/js/modules/timezone-select.ts; src/public/js/modules/entity-header.ts; src/modules/lib/fileCommons.ts; src/controller/helpController.ts; src/routes/; src/middleware/; tests/frontend/; tests/integration/; tests/e2e/; docs/documentation-remediation.yml
+source-anchors: src/public/js/core/http.ts; src/public/js/shared/alerts.ts; src/public/js/modules/entity-properties.ts; src/public/js/modules/entity-select.ts; src/public/js/modules/timezone-select.ts; src/public/js/modules/entity-header.ts; src/modules/lib/fileCommons.ts; src/controller/helpController.ts; src/routes/; src/middleware/; tests/frontend/; tests/integration/; tests/e2e/; docs/backlog/documentation-remediation.yml
 next-review: frontend-migration-contract-and-first-feature-slice
 -->
 
@@ -184,7 +184,7 @@ when the modern API is unavailable. Clipboard success is not evidence of registr
 
 **Preserve:** copied URLs must use the real token and survive the authorized identity-entry flow. Current source has
 two separate defects: IMP-035 concerns the newly created link's automatic copy; IMP-010 concerns first-time guest
-onboarding losing the token. Both are in the [central register](../documentation-remediation.yml), not desired parity.
+onboarding losing the token. Both are in the [central register](../backlog/documentation-remediation.yml), not desired parity.
 Dedicated create/copy/use/revoke browser assertions and clipboard-denial recovery were not established in this pass.
 
 ### EC-UI-10 — Separate documents and new tabs are part of the workflow

@@ -6,7 +6,7 @@ import type {LocalizationContext, MessageKey} from '../../types/LocalizationType
 import type {components} from '../../types/api/v1';
 import type {PilotPlainMessageKey, PilotProblemPresentation} from '../../types/FrontendPilotUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
-import {initAlertDismissal, isVisibleTransientAlert} from '../../public/js/shared/alerts';
+import {scheduleAlertDismissal} from '../../public/js/shared/alerts';
 
 /** Make the shared server cooldown reactive even when a failed read has no polling observer.
  * The wakeup changes availability only; the caller owns explicit retry and request scope. */
@@ -53,6 +53,14 @@ export function useReadRetryAt(error: () => Error | null, available: Readonly<Re
     });
 }
 
+/** Actual geometry covers hidden ancestors and CSS disclosure. The pilot's
+ * reactive notices and section targets share this check without changing the
+ * native alert observer or its DOM-owned lifecycle. */
+export function isElementVisible(element: HTMLElement): boolean {
+    return element.isConnected
+        && !element.closest('[hidden], .d-none, [aria-hidden="true"]') && !!element.getClientRects().length;
+}
+
 /** Bind the native transient-alert lifetime to a reactive renderer's state owner.
  * Hidden messages wait for disclosure, renewed receipts get a fresh interval, and
  * page-cache restoration restarts observation without accumulating timers/listeners. */
@@ -61,35 +69,72 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
     let mounted = false;
     let paused = false;
     let listening = false;
-    let stop: (() => void) | undefined;
+    let observer: MutationObserver | undefined;
+    type NoticeLifetime = {element: HTMLElement; renewal: unknown; cancel?: () => void};
+    let lifetime: NoticeLifetime | undefined;
     let presented: {element: HTMLElement; renewal: unknown} | undefined;
 
     function stopObservation(): void {
-        stop?.();
-        stop = undefined;
+        observer?.disconnect();
+        observer = undefined;
     }
 
+    function cancelLifetime(): void {
+        lifetime?.cancel?.();
+        lifetime = undefined;
+    }
+
+    /** Bind DOM observation only to a mounted transient receipt. Re-rendering or
+     * moving the same outcome must preserve its existing timer/focus lifetime;
+     * durable warnings and SSR never acquire a dismissal scheduler. */
     function observeNotice(): void {
         stopObservation();
         setLifecycleListeners(mounted && transient());
         // SSR and durable progress/warnings never schedule transient dismissals.
-        if (!mounted || paused || !transient() || !element.value) return;
+        if (!mounted || paused || !transient() || !element.value) {
+            cancelLifetime();
+            return;
+        }
+
         // Reactive translation and moving between a retired section and its live
         // fallback belong to the same outcome. Only the semantic receipt watcher
         // may renew its deadline or inline focus; explicit lifecycle cleanup stops it.
-        stop = initAlertDismissal(element.value, {
-            onDismiss: dismiss,
-            onVisible: presentInlineNotice,
-            renewContent: false,
-            preserveStartedLifetime: true,
-        });
+        if (lifetime && (lifetime.element !== element.value || !Object.is(lifetime.renewal, renewal()))) cancelLifetime();
+        // Vue owns this node and its ancestors. The unchanged native observer is
+        // reserved for native documents; it cannot remove or renew a Vue receipt.
+        // Observe disclosure and relocation, while the shared existing scheduler
+        // remains the sole owner of the ten-second interval.
+        observer = new MutationObserver(refreshVisibility);
+        observer.observe(document.body, {subtree: true, childList: true,
+            attributes: true, attributeFilter: ['class', 'style', 'hidden', 'role', 'aria-hidden']});
+        refreshVisibility();
+    }
+
+    /** A hidden receipt has no timer until its first disclosure. Once shown, its
+     * deadline survives translation and relocation; an expired receipt remains
+     * recorded until its owner clears/renews it, preventing a DOM change from
+     * scheduling it again before Vue has applied dismissal. */
+    function refreshVisibility(): void {
+        const target = element.value;
+        if (!mounted || paused || !transient() || !target || !isElementVisible(target)) return;
+        if (!lifetime) {
+            const started: NoticeLifetime = {element: target, renewal: renewal()};
+            lifetime = started;
+            started.cancel = scheduleAlertDismissal(target, expireReceipt);
+
+            function expireReceipt(): void {
+                if (mounted && !paused && lifetime === started && transient()
+                    && Object.is(started.renewal, renewal())) dismiss();
+            }
+        }
+        presentInlineNotice(target);
     }
 
     /** Native inline feedback focuses the alert and scrolls its initiating host.
      * A disclosure can make the same receipt visible later; unrelated DOM mutations,
      * locale changes and page-cache restoration must not repeatedly steal focus. */
     function presentInlineNotice(target: HTMLElement): void {
-        if (!mounted || paused || !inline?.() || !isVisibleTransientAlert(target)) return;
+        if (!mounted || paused || !transient() || !inline?.() || !isElementVisible(target)) return;
         const receipt = renewal();
         const host = target.closest<HTMLElement>('[data-command-feedback], [data-dialog-feedback], #liveAlerts')
             ?? target.parentElement ?? target;
@@ -99,6 +144,9 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
         host.scrollIntoView(true);
     }
 
+    /** Own one page-cache pause/resume subscription while transient feedback is
+     * active. Removing it with the receipt prevents later browser lifecycle events
+     * from restarting a timer belonging to disposed or durable presentation. */
     function setLifecycleListeners(enabled: boolean): void {
         if (enabled === listening) return;
         listening = enabled;
@@ -114,6 +162,7 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
     function pauseNotice(): void {
         paused = true;
         stopObservation();
+        cancelLifetime();
     }
 
     function resumeNotice(event: PageTransitionEvent): void {
@@ -138,6 +187,7 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
     onBeforeUnmount(() => {
         mounted = false;
         stopObservation();
+        cancelLifetime();
         setLifecycleListeners(false);
     });
 }
@@ -188,6 +238,10 @@ export function useFeedbackError(presentation?: PilotProblemPresentation) {
     const errorRenewal = ref(0);
     const errorPresentation = ref<'flash' | 'inline'>('flash');
     const feedbackKind = ref<'danger' | 'info' | 'success'>('danger');
+
+    // Translate the retained semantic descriptor at render time. Locale changes
+    // alter text only; setError remains the owner of a new feedback receipt and
+    // its transient/durable lifetime, including repeated identical rejections.
     const error = computed(() => {
         const value = descriptor.value;
         if (value === null) return null;

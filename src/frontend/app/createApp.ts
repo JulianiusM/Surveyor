@@ -29,7 +29,7 @@ function isRouteModuleLoadFailure(error: unknown): boolean {
 export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boolean) {
     const context = createPilotContext(bootstrap, browser);
     const app = createSSRApp(App);
-    // TODO (docs/FRONTEND_PILOT.md): Add the remaining native feature/account routes in
+    // TODO (docs/frontend-migration/FRONTEND_PILOT.md): Add the remaining native feature/account routes in
     // their migration increments before default-route cutover. This route table covers
     // help, packing and their necessary existing identity journeys, not the complete app.
     const router = createRouter({
@@ -55,6 +55,9 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             {path: '/frontend-pilot/help', component: HelpPage},
             {path: '/frontend-pilot/help/:doc', component: HelpPage},
         ],
+        /** Browser history owns saved positions; independently loaded Overview
+         * regions own query-transition focus/scroll. Ordinary fragments and new
+         * documents retain Router's explicit target/top behavior. */
         scrollBehavior(to, from, saved) {
             if (saved) return saved;
             // Overview's independent regions restore focus/scroll after their authorized

@@ -63,7 +63,7 @@ Static public assets are served before the session middleware; uploaded files ar
 | `GET /help/assets/:assetName` | File | Controller resolves allowed local assets; missing assets are 404; response sets `nosniff`. |
 
 Help remains trusted release-shipped content from `docs/user-guide/`. A client renderer must preserve the
-[help trust boundary](../DOCUMENTATION_POLICY.md#in-app-help-trust-boundary); the migration does not authorize
+[help trust boundary](../policies/DOCUMENTATION_POLICY.md#in-app-help-trust-boundary); the migration does not authorize
 user-editable or remote help sources. Unknown API paths and unknown page paths currently reach their respective
 error handling chains, not a generic SPA document.
 

@@ -15,6 +15,7 @@
  */
 
 import type {Request} from "express";
+import type {EntityManager} from 'typeorm';
 import type {Guest} from "../modules/database/entities/user/Guest";
 import type {Profile} from "../modules/database/entities/user/Profile";
 import type {User} from "../modules/database/entities/user/User";
@@ -28,6 +29,16 @@ export interface PermissionFieldRule {
     permission: PermType;
     parent?: PermType | PermType[];
 }
+
+/** Normalized administrator intent shared by native and versioned controller adapters. */
+export type EntityAdministratorCommand = {
+    kind: 'add' | 'update';
+    mask?: number;
+    createdBy?: number;
+} | {kind: 'remove'};
+
+/** Domain evidence; each transport retains its own existing error presentation. */
+export type EntityAdministratorOutcome = 'saved' | 'profile-missing' | 'mask-required';
 
 export type GetResource = (req: Request) => any;
 export type GetAdditional = (req: Request) => any[];
@@ -93,6 +104,10 @@ export interface EntityPermissionQueryScope {
 }
 
 export type SaveOpts = {
+    /** Optional caller-owned transaction; omitted by all existing native callers. */
+    manager?: EntityManager;
+    /** Native collectors post permission keys; validated versioned commands supply numeric masks. */
+    inputFormat?: 'permissionKeys' | 'masks';
     /** Name of the root field in the form body (default: "defaultPerms") */
     fieldBase?: string;
     /**

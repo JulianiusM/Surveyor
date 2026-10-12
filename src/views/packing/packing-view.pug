@@ -13,29 +13,27 @@ block content
     //- The list has no automatic date schedule of its own, but the projection can include event archival.
     //- Rendering this status does not change access to the list or its existing participant actions.
     +entityArchiveNotice(data.list, 'packing', data.archive)
-    //- Keep the saved description's paragraphs separate from the shared counters. Editing is
-    //- owned by settings; this presentation must not collapse after the old editor is removed.
+    //- Root descriptions are read-only here; item editing retains its own permission rules.
     if data.list.description
-        p#planDesc.mb-0
+        p#planDesc.mb-0.mt-2
             - const lines = data.list.description.split('\n')
             each line, i in lines
                 | #{line}
                 if i < lines.length - 1
                     br
-        hr.my-3
+        hr.mb-1.mt-0
 
 
     //Erste Zeile: Metainfos / Badge
-    //- Wrap complete counter groups on phones, never the participant label away from its value.
-    .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mb-3(data-packing-counters)
+    .d-flex.justify-content-between.align-items-center.mb-3
         //- Titel / Hauptlabel links
-        span.fs-6.fw-semibold.text-nowrap
+        span.fs-6.fw-semibold
             i.bi.bi-people-fill.me-1
             | Participants:
             span.badge.bg-light.text-dark.ms-1 #{data.counters.participants}
 
         //── Items + Offene / Leere
-        span.fs-6.fw-semibold.text-nowrap
+        span.fs-6.fw-semibold
             i.bi.bi-card-checklist.me-1
             | Items:
             span.badge.bg-light.text-dark.ms-1 #{data.items.length}
@@ -48,11 +46,7 @@ block content
 
     //Tabelle
     .table-responsive
-        //- Page admission is broader than write permission. Do not advertise editing to an
-        //- admitted read-only profile; each cell still applies its own effective permission.
-        - const canEditItems = data.items.some(item => permData.itemAllow(item.id, 'EDIT_TITLE', 'ITEM_EDIT') || permData.itemAllow(item.id, 'EDIT_DESC', ['ITEM_EDIT', 'ITEM_EDIT_DESC']) || permData.itemAllow(item.id, 'EDIT_CAPACITY', 'ITEM_EDIT'));
-        if canEditItems || permData.entity.has('ITEM_EDIT')
-            small.text-info.fst-italic.fw-light Double click to edit, drag to reorder
+        small.text-info.fst-italic.fw-light Double click to edit, drag to reorder
         table.table.table-dark.table-hover.table-bordered.align-middle(data-assignable)
             thead
                 tr
@@ -133,17 +127,15 @@ block content
                                         data-itemid=item.id
                                         checked=!!all)
                                     span.ms-1.small All
-                            //- Self assignment has an independent root ACCESS_VIEW guard on the API.
-                            //- Standalone readers and event-admitted profiles may lack that grant.
-                            if my && permData.entity.has('ACCESS_VIEW')
+                            if my
                                 button.btn.btn-sm.btn-outline-danger(data-action="unassign") Remove
                                 if isFull
                                     span.badge.bg-secondary.ms-1 Full
-                            else if !isFull && data.assignments !== undefined && !all && permData.entity.has('ACCESS_VIEW')
+                            else if !isFull && data.assignments !== undefined && !all
                                 button.btn.btn-sm.btn-outline-success(data-action="assign") Take
-                            else if all
+                            else if all && !my
                                 span.badge.bg-info.ms-1 Everyone
-                            else if isFull
+                            else
                                 span.badge.bg-secondary Full
                             if permData.itemAllow(item.id, 'ITEM_DELETE', "ITEM_DELETE")
                                 button.btn.btn-sm.btn-outline-danger.ms-1(

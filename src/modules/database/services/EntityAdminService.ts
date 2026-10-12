@@ -146,7 +146,17 @@ export function addEntityPermissionCandidates<T extends ObjectLiteral>(query: Se
         permissionProfileId: scope.profileId, permissionMask: scope.requiredMask, permissionAudiences: scope.audiences});
 }
 
-export async function addAdmin(entityType: CombEntityType, entityId: string, profileId: string, perms: number, createdBy?: number, manager: EntityManager = AppDataSource.manager): Promise<void> {
+/** Insert the controller-approved grant and creator attribution. Packing's
+ * nontransactional callers first coordinate with its root; an active supplied
+ * manager is reused rather than starting a separate ACL transaction. */
+export async function addAdmin(
+    entityType: CombEntityType,
+    entityId: string,
+    profileId: string,
+    perms: number,
+    createdBy?: number,
+    manager: EntityManager = AppDataSource.manager
+): Promise<void> {
     if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
         return withPackingAclWrite(entityId, transaction => addAdmin(entityType, entityId, profileId, perms, createdBy, transaction));
     }
@@ -154,7 +164,16 @@ export async function addAdmin(entityType: CombEntityType, entityId: string, pro
     await repo.save(repo.create({entityType, entityId, profile: {id: profileId}, perms, createdBy: createdBy ?? null}));
 }
 
-export async function upsertAdmin(entityType: CombEntityType, entityId: string, profileId: string, perms: number, manager: EntityManager = AppDataSource.manager): Promise<void> {
+/** Upsert one grant through the established entity/profile unique key.
+ * Packing uses the same root coordination as add/update/remove; this DBAL does
+ * not interpret native fields, decide authority or convert numeric masks. */
+export async function upsertAdmin(
+    entityType: CombEntityType,
+    entityId: string,
+    profileId: string,
+    perms: number,
+    manager: EntityManager = AppDataSource.manager
+): Promise<void> {
     if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
         return withPackingAclWrite(entityId, transaction => upsertAdmin(entityType, entityId, profileId, perms, transaction));
     }
@@ -165,6 +184,9 @@ export async function upsertAdmin(entityType: CombEntityType, entityId: string, 
     );
 }
 
+/** Remove only the selected grant. Packing's existing writers coordinate
+ * against the root so an authorized command's ACL evidence survives to commit;
+ * target existence and native/versioned diagnostics remain controller-owned. */
 export async function removeAdmin(entityType: CombEntityType, entityId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
     if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
         return withPackingAclWrite(entityId, transaction => removeAdmin(entityType, entityId, profileId, transaction));
@@ -173,9 +195,12 @@ export async function removeAdmin(entityType: CombEntityType, entityId: string, 
     await repo.delete({entityType, entityId, profile: {id: profileId}});
 }
 
+/** Load roster evidence through the caller's manager for an admitted setup
+ * projection. The controller determines which profile fields may leave the server. */
 export async function listAdmins(entityType: CombEntityType, entityId: string, manager: EntityManager = AppDataSource.manager) {
     const repo = manager.getRepository(ACL);
-    // join users if you want to render names/emails
+    // The admitted controller needs both account/guest associations for roster
+    // presentation. Single-target mask reads avoid these joins via getAdminGrant.
     return await repo.find({
         where: {entityType, entityId}, relations: {
             profile: {
@@ -186,7 +211,21 @@ export async function listAdmins(entityType: CombEntityType, entityId: string, m
     });
 }
 
-export async function updateAdminPerms(entityType: CombEntityType, entityId: string, profileId: string, perms: number, manager: EntityManager = AppDataSource.manager): Promise<void> {
+/** Read one authored grant without loading the administrator roster or profile data.
+ * Null distinguishes an absent assignment from an explicitly stored zero mask. */
+export async function getAdminGrant(entityType: CombEntityType, entityId: string, profileId: string, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(ACL).findOneBy({entityType, entityId, profile: {id: profileId}});
+}
+
+/** Store the reviewed grant mask, including zero, without changing other rows.
+ * Packing callers reuse or acquire the same root coordination as other ACL writes. */
+export async function updateAdminPerms(
+    entityType: CombEntityType,
+    entityId: string,
+    profileId: string,
+    perms: number,
+    manager: EntityManager = AppDataSource.manager
+): Promise<void> {
     if (entityType === 'packing' && !manager.queryRunner?.isTransactionActive) {
         return withPackingAclWrite(entityId, transaction => updateAdminPerms(entityType, entityId, profileId, perms, transaction));
     }
@@ -198,17 +237,15 @@ export async function isAdmin(entityType: CombEntityType, entityId: string, prof
     return await repo.exists({where: {entityType, entityId, profile: {id: profileId}}});
 }
 
+/** The permission engine treats a missing individual grant as zero. Minimal
+ * editing baselines use getAdminGrant directly to retain absent-versus-zero evidence. */
 export async function getProfilePerms(entityType: CombEntityType, entityId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<number> {
-    const row = await manager.getRepository(ACL).findOne({
-        where: {
-            entityType,
-            entityId,
-            profile: {id: profileId}
-        }
-    });
+    const row = await getAdminGrant(entityType, entityId, profileId, manager);
     return row?.perms ?? 0;
 }
 
+/** Read authored audience rows in the current manager. Missing audiences remain
+ * absent evidence here; projection defaults and sparse-write choices belong upstream. */
 export async function getDefaultPerms(entityType: CombEntityType, entityId: string, manager: EntityManager = AppDataSource.manager): Promise<PermData> {
     const rows = await manager.getRepository(EntityPermissions).find({where: {entityType, entityId}});
     const out: Partial<Record<Audience, number>> = {};
@@ -220,6 +257,8 @@ export async function getDefaultPerms(entityType: CombEntityType, entityId: stri
  * Upsert default permissions (bitmask) for the given entity and audience(s).
  * - Only audiences provided in `opts` are touched.
  * - To clear an audience, pass mask 0 for that audience.
+ * Reuse a supplied active transaction; Packing callers outside one first hold its
+ * root coordination lock. Skip unchanged rows so a no-op does not rewrite metadata.
  */
 export async function updatePerms(
     entityType: CombEntityType,
@@ -251,6 +290,8 @@ export async function updatePerms(
 
     if (!rows.length) return;
 
+    // Compare current persisted rows inside the same manager before upserting.
+    // This is persistence evidence, not a permission or body-validation decision.
     const current = await getDefaultPerms(entityType, entityId, manager);
     const changedRows = rows.filter((row) => current[row.audience] !== row.perms);
     if (!changedRows.length) return;
@@ -272,10 +313,18 @@ export async function getIds(entityType: CombEntityType, profileId: string, mask
     return (ids ?? []).map(i => i.entity_id);
 }
 
-/** Packing ACL writers share the root lock with reviewed v1 settings updates, including legacy routes. */
+/**
+ * Packing's polymorphic ACL/default rows have no owning-root foreign-key lock.
+ * Coordinate only these existing writers with the v1 root transaction so a grant or
+ * reviewed settings value cannot change between authorization/comparison and commit.
+ * The DBAL chooses no permission policy and still permits the original persisted inputs.
+ */
 async function withPackingAclWrite<T>(id: string, write: (manager: EntityManager) => Promise<T>): Promise<T> {
     return AppDataSource.transaction(async function persistAcl(manager) {
         await manager.getRepository(PackingList).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
+
+        // The callback uses this manager after the root wait. Missing-root policy
+        // remains with callers; polymorphic rows retain their original DB semantics.
         return write(manager);
     });
 }

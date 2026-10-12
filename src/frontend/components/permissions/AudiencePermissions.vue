@@ -23,7 +23,7 @@ function update(mask: number): void {
 <template>
     <div class="perm-matrix text-bg-dark">
         <div class="mb-3">
-            <label class="form-label" :for="prefix + '-audience'">{{ messages.t('packing.audience') }}</label>
+            <label class="form-label" :for="prefix + '-audience'">{{ messages.t('permissions.audience') }}</label>
             <!-- The owning command locks audience navigation as well as its masks,
                  including a mounted permission matrix behind an inactive Settings tab. -->
             <select :id="prefix + '-audience'" v-model="audience" class="form-select text-bg-dark" :disabled="disabled">

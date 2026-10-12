@@ -1,6 +1,6 @@
 import {Router, type Request, type Response} from 'express';
 import * as userController from '../../../controller/userController';
-import * as packingService from '../../../modules/database/services/PackingService';
+import {readPackingGuestEntry} from '../../../controller/packingController';
 import {ApiProblem} from '../../../modules/api/problem';
 import {identityTransitionGuard, requireApiContext, sessionView} from '../../../modules/api/session';
 import {sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
@@ -111,22 +111,14 @@ router.put('/auth/profile', asyncHandler(async function switchIdentityProfile(re
     await sendIdentity(req, res, 'switchIdentityProfile');
 }));
 
-async function packingGuestEntry(listId: string): Promise<components['schemas']['GuestEntry']> {
-    const list = await packingService.getPackingListById(listId);
-    if (!list) throw new ApiProblem('NOT_FOUND');
-    // Native guest entry deliberately discloses this title before view admission. No items,
-    // assignments, parent event or permissions are included in this public entry projection.
-    return {id: list.id, title: list.title};
-}
-
 router.get('/packing-lists/:listId/guest', asyncHandler(async function getPackingGuestEntry(req, res) {
     await admit(req, res, 'getPackingGuestEntry');
-    sendValidatedJson(req, res, 'getPackingGuestEntry', 200, await packingGuestEntry(String(req.params.listId)));
+    sendValidatedJson(req, res, 'getPackingGuestEntry', 200, await readPackingGuestEntry(String(req.params.listId)));
 }));
 
 router.post('/packing-lists/:listId/guest', asyncHandler(async function registerPackingGuest(req, res) {
     await admit(req, res, 'registerPackingGuest');
-    const list = await packingGuestEntry(String(req.params.listId));
+    const list = await readPackingGuestEntry(String(req.params.listId));
     const body = req.body as components['schemas']['GuestRegistrationInput'];
     const personalLink = await userController.registerGuest(body.username, body.email ?? undefined, req.session,
         {frontend: true, next: `/frontend-pilot/packing/${list.id}`, beforeTransition: identityTransitionGuard(req)});

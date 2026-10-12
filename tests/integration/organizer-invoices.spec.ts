@@ -15,7 +15,7 @@ import * as invoiceService from '../../src/modules/database/services/EventInvoic
 import * as eventService from '../../src/modules/database/services/EventService';
 import mailer from '../../src/modules/email';
 import settings from '../../src/modules/settings';
-import type {PermBundle} from '../../src/types/PermissionTypes';
+import {createPermissionBundle} from '../factories/frontendCoreDynamicFactory';
 import {createIntegrationEvent, persistIntegrationProfile, registerEventAttendance} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
@@ -24,7 +24,6 @@ let first: Profile;
 let second: Profile;
 const proofs = new Set<string>();
 const sendEmail = vi.spyOn(mailer, 'sendEmail').mockResolvedValue(undefined);
-const managePerms = {entity: {has: (permission: string) => permission === 'MANAGE_ASSIGNMENTS'}} as PermBundle;
 const sessionFor = (profile: Profile) => ({profile} as Request['session']);
 
 beforeAll(async () => {
@@ -252,8 +251,11 @@ describe('organizer invoice entries without event attendance', () => {
     });
 
     it.each([
-        {state: 'OPEN', credits: true}, {state: 'OPEN', credits: false},
-        {state: 'ORGANIZER_ONLY', credits: true}, {state: 'ORGANIZER_ONLY', credits: false},
+        // Uncalculated states share attribution and credit application; represent
+        // both states and both credit settings without repeating their cross-product.
+        // Closed states retain both modes because an earlier recorded payment must
+        // carry forward into distinct refund-versus-payment balances.
+        {state: 'OPEN', credits: true}, {state: 'ORGANIZER_ONLY', credits: false},
         {state: 'CLOSED', credits: true}, {state: 'CLOSED', credits: false},
     ] as const)('attributes an organizer invoice in $state with participant credits=$credits', async ({state, credits}) => {
         const {event, poolId, firstId, secondId} = await context();
@@ -373,6 +375,9 @@ describe('organizer invoice entries without event attendance', () => {
 
     it('authorizes optional organizer proof and close operations without treating a null registration as ownership', async () => {
         const {event, poolId} = await context();
+        // Supply the complete public permission contract with only the original
+        // grant, so an unintended additional controller requirement still fails.
+        const managePerms = createPermissionBundle(['MANAGE_ASSIGNMENTS']);
         const proof = await proofFile();
         const invoiceId = await eventPoolController.addOrganizerInvoice(event, poolId, {amount: 20, description: 'External receipt'}, sessionFor(organizer), proof);
         await expect(eventPoolController.serveInvoiceProof(event, poolId, String(invoiceId), sessionFor(organizer), managePerms)).resolves.toBe(proof.path);

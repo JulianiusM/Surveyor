@@ -1,7 +1,7 @@
 import type {ComputedRef, Ref, ShallowRef} from 'vue';
 import type {QueryClient} from '@tanstack/vue-query';
 import type {i18n} from 'i18next';
-import type {components, paths} from './api/v1';
+import type {components} from './api/v1';
 import type {LocalizationContext, Locale, MessageKey, MessageParameters} from './LocalizationTypes';
 import type {FrontendPageCompletion, FrontendPilotBootstrap} from './FrontendPilotTypes';
 import type {PilotApi} from '../frontend/app/api';
@@ -113,16 +113,28 @@ export interface PilotCommandFeedback {
     success?: PilotPlainMessageKey;
 }
 
-/** Reuse the authored wire shapes while the caller owns its discovery endpoint and cache family.
- * These aliases are UI contracts, not a second definition of the event response. */
-export type PilotEventPickerQuery = NonNullable<paths['/packing-lists/events']['get']['parameters']['query']>;
-export type PilotEventPickerOption = components['schemas']['PackingEventOption'];
-export type PilotEventPickerSelection = Pick<components['schemas']['PackingCurrentEvent'], 'id' | 'title'>
+/** Reuse neutral authored wire shapes while the caller owns its discovery endpoint,
+ * authorization and cache family. Selectors do not depend on a particular feature path. */
+export type PilotEventPickerQuery = components['schemas']['EventPickerQuery'];
+export type PilotEventPickerOption = components['schemas']['EventPickerOption'];
+/** A current relationship can expose its ID without a readable title. Preserve
+ * that nullable display projection; discovery choices still have required titles. */
+export type PilotEventPickerSelection = Pick<PilotEventPickerOption, 'id'>
+    & {title: PilotEventPickerOption['title'] | null}
     & Partial<Pick<PilotEventPickerOption, 'archived'>>;
 export interface PilotEventPickerSource {
-    search(query: PilotEventPickerQuery, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingEventOptions']>;
+    search(query: PilotEventPickerQuery, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventPickerOptions']>;
     pageKey(context: string | undefined, locale: string, filters: string, parameters: PilotEventPickerQuery): readonly unknown[];
     filterKey(context: string | undefined, locale: string, filters: string): readonly unknown[];
+}
+
+/** The mixed Overview owner selects the feature's migrated presentation. Cards
+ * consume this bounded policy without importing another feature's API or choosing
+ * an endpoint from its entity type. Unmigrated destinations retain native links. */
+export interface PilotOverviewCardInteraction {
+    migrated: boolean;
+    readHeader?: PilotImageRead;
+    duplicateUrl?: string;
 }
 
 /** Guards cover mounted drafts and unresolved operation status after an editor retires.

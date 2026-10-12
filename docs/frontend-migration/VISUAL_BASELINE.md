@@ -7,11 +7,11 @@ status: current
 last-verified: 2026-10-04
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: manual review of 34 Chromium desktop and mobile screenshots from synthetic fixtures; successful application build, persisted local packing check and native overview search without JavaScript; representative states only
-source-anchors: scripts/capture-frontend-baseline.cjs; src/views/; src/public/js/; tests/factories/e2eCoreFactory.ts; tests/keywords/e2eCoreKeywords.ts; package.json; docs/TESTING_GUIDE.md; docs/documentation-remediation.yml
+source-anchors: scripts/capture-frontend-baseline.cjs; src/views/; src/public/js/; tests/factories/e2eCoreFactory.ts; tests/keywords/e2eCoreKeywords.ts; package.json; docs/TESTING_GUIDE.md; docs/backlog/documentation-remediation.yml
 next-review: frontend-migration-slice-or-capture-fixture-change
 -->
 
-This is representative visual evidence for the [frontend migration baseline](../FRONTEND_MIGRATION_BASELINE.md).
+This is representative visual evidence for the [frontend migration baseline](FRONTEND_MIGRATION_BASELINE.md).
 Use it with the [behavior inventory](BEHAVIOR_INVENTORY.md), [route inventory](ROUTE_INVENTORY.md) and
 [test coverage map](TEST_COVERAGE.md). Screenshots show appearance at selected states; they do not establish complete
 feature, permission, interaction or accessibility coverage.
@@ -81,7 +81,7 @@ The English invoice view displays a German-formatted date in this environment. T
 when designing shared locale resolution; the screenshots do not establish a consistent current localization contract.
 
 Two implementation defects are separated from intended migration parity in the
-[existing defect register](../documentation-remediation.yml): IMP-019 covers the absent survey description; IMP-034
+[existing defect register](../backlog/documentation-remediation.yml): IMP-019 covers the absent survey description; IMP-034
 covers the empty help browser title. The replacement should preserve the coherent working behavior described there,
 not reproduce these omissions. Application remediation is outside this baseline change.
 

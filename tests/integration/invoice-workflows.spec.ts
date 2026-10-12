@@ -681,67 +681,10 @@ describe('retained settled share responsibility', () => {
 });
 
 describe('invoice pool factors, rebates, and recalculation', () => {
-    it.each([true, false])('reconciles a 28-person scenario assuming four nights except E with roundUpShares=%s', async (roundUpShares) => {
-        // A..Z, AA, AB; A and all other unspecified stays are explicitly four nights, E is three.
-        const nights = Array.from({length: 28}, (_, index) => index === 4 ? 3 : 4);
-        const {poolId, event, registrationIds: ids} = await createRosterCalculationContext('28-person stated scenario', nights);
-        await poolOperations.saveInvoicePoolSettings(poolId, 'NIGHTS', undefined, false, roundUpShares);
-        await poolOperations.saveInvoicePoolAssignments(poolId, false, true, true, [], [], {[ids[0]]: 2});
-        await poolOperations.savePoolSurcharge(poolId, ids[0], -5, 'A redistributed rebate', true);
-        await poolOperations.savePoolSurcharge(poolId, ids[4], -5, 'E redistributed rebate', true);
-        await poolOperations.savePoolSurcharge(poolId, ids[4], 20, 'E additional charge', false);
-        await poolOperations.savePoolSurcharge(poolId, ids[9], -5, 'J redistributed rebate', true);
-        await poolOperations.savePoolSurcharge(poolId, ids[9], 10, 'J redistributed charge', true);
-        await savePoolTakeovers(poolId, ids[0], [ids[4]], true);
-        await savePoolTakeovers(poolId, ids[1], [ids[11], ids[7]], true);
-
-        // Independent arithmetic: 115 weighted nights, shared 1000 - (-5) = 1005, adjustments +15.
-        const expected = roundUpShares
-            ? {base: 1005.10, gross: 1020.10, net: 20.10, difference: 0.10, aBase: 96.14, aNet: -893.86, b: 104.88, j: 39.96, other: 34.96}
-            : {base: 1004.82, gross: 1019.82, net: 19.82, difference: -0.18, aBase: 96.12, aNet: -893.88, b: 104.85, j: 39.95, other: 34.95};
-        const preview = await eventPoolController.previewPool(event, poolId);
-        expect(preview.roundUpShares).toBe(roundUpShares);
-        expect(preview.totals).toMatchObject({
-            invoiceAmount: 1000, redistributedAmount: -5, distributableAmount: 1005,
-            allocatedBaseAmount: expected.base, roundingDifference: expected.difference,
-            adjustmentAmount: 15, grossAmount: expected.gross, invoiceCreditAmount: 1000,
-            expectedNetAmount: 20, calculatedAmount: expected.net,
-        });
-        // Attendance, factor weights, and individual rounding remain distinct from takeover sums.
-        expect(preview.explanation).toMatchObject({
-            assignedParticipants: 28, exemptParticipants: 0, attendanceUnits: 111,
-            eligibleAttendanceUnits: 111, effectiveWeight: 115, distributableAmount: 1005,
-            distributionMethod: 'NIGHTS', roundUpShares,
-        });
-        expect(preview.explanation.contributions.find(row => row.registrationId === ids[0]))
-            .toMatchObject({attendanceWeight: 4, factor: 2, effectiveWeight: 8, payerRegistrationId: ids[0]});
-        expect(preview.explanation.contributions.find(row => row.registrationId === ids[4]))
-            .toMatchObject({attendanceWeight: 3, factor: 1, effectiveWeight: 3, payerRegistrationId: ids[0]});
-        await eventPoolController.closePool(event, poolId, {sendEmails: false, expectedRevision: preview.revision});
-        let pool = (await invoiceService.getPoolWithInvoices(poolId))!;
-        expect(pool.calculationSnapshot!.explanation).toEqual(preview.explanation);
-        expect(pool.shares).toHaveLength(25);
-        expect(pool.shares.find(share => share.registrationId === ids[0])).toMatchObject({
-            baseShareAmount: expected.aBase, extraAmount: 10, invoiceCreditAmount: 1000, shareAmount: expected.aNet,
-        });
-        expect(pool.shares.find(share => share.registrationId === ids[1])!.shareAmount).toBe(expected.b);
-        expect(pool.shares.find(share => share.registrationId === ids[9])!.shareAmount).toBe(expected.j);
-        const ordinary = pool.shares.filter(share => ![ids[0], ids[1], ids[9]].includes(share.registrationId));
-        expect(ordinary).toHaveLength(22);
-        expect(ordinary.every(share => share.shareAmount === expected.other)).toBe(true);
-        expect(pool.shares.reduce((sum, share) => sum + Math.round(share.shareAmount * 100), 0)).toBe(Math.round(expected.net * 100));
-
-        // Turning invoice credit off changes only that credit, including within the combined payer share.
-        await poolOperations.saveInvoicePoolAssignments(poolId, false, true, false, [], [], {[ids[0]]: 2});
-        await eventPoolController.recalculatePool(event, poolId, {sendEmails: false});
-        pool = (await invoiceService.getPoolWithInvoices(poolId))!;
-        expect(pool.shares.find(share => share.registrationId === ids[0])).toMatchObject({
-            baseShareAmount: expected.aBase, extraAmount: 10, invoiceCreditAmount: 0,
-        });
-        expect(pool.shares.reduce((sum, share) => sum + Math.round(share.shareAmount * 100), 0)).toBe(Math.round(expected.gross * 100));
-    }, 30_000);
-
-    it.each([true, false])('reconciles an anonymous mixed-stay roster with an exemption and roundUpShares=%s', async (roundUpShares) => {
+    it('persists the mixed-stay roster calculation, covered shares and exemption with upward rounding', async () => {
+        // Numeric permutations run against the pure production calculator. This representative
+        // keeps the real registration/assignment read mapping and saved money/snapshot boundary.
+        const roundUpShares = true;
         const nights = [4,4,4,4,4,4,1,4,4,4,2,4,4,4,4,4,2,4,4,4,4,4,3,4,2,3,4,1];
         const {poolId, event, registrationIds: ids} = await createRosterCalculationContext('28-person mixed stays', nights);
         await poolOperations.saveInvoicePoolSettings(poolId, 'NIGHTS', undefined, false, roundUpShares);
@@ -751,9 +694,8 @@ describe('invoice pool factors, rebates, and recalculation', () => {
         }
         await savePoolTakeovers(poolId, ids[0], [ids[25]], true);
         await savePoolTakeovers(poolId, ids[3], [ids[5], ids[11]], true);
-        const expected = roundUpShares
-            ? {base: 1005.19, net: 20.19, difference: 0.19, aBase: 113.98, a: -896.02, b: 113.99, j: 46.45, additional: 40.73, ordinary: 41.45}
-            : {base: 1004.92, net: 19.92, difference: -0.08, aBase: 113.96, a: -896.04, b: 113.96, j: 46.44, additional: 40.72, ordinary: 41.44};
+        const expected = {base: 1005.19, net: 20.19, difference: 0.19, aBase: 113.98, a: -896.02,
+            b: 113.99, j: 46.45, additional: 40.73, ordinary: 41.45};
         // 97 weighted nights; A's 8+3 and B's 4+3+4 are rounded per participant before combining.
         const preview = await eventPoolController.previewPool(event, poolId);
         expect(preview.totals).toMatchObject({
@@ -769,6 +711,7 @@ describe('invoice pool factors, rebates, and recalculation', () => {
             .toMatchObject({isExempt: true, attendanceWeight: 4, effectiveWeight: 0, baseShareAmount: 0});
         await eventPoolController.closePool(event, poolId, {sendEmails: false, expectedRevision: preview.revision});
         const pool = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(pool.calculationSnapshot!.explanation).toEqual(preview.explanation);
         expect(pool.shares.find(share => share.registrationId === ids[0])).toMatchObject({
             baseShareAmount: expected.aBase, extraAmount: -10, invoiceCreditAmount: 1000, shareAmount: expected.a,
         });
@@ -853,6 +796,14 @@ describe('invoice pool factors, rebates, and recalculation', () => {
         expect(pool.shares).toHaveLength(1);
         expect(pool.shares[0]).toMatchObject({registrationId: firstId, baseShareAmount: 90, extraAmount: 15, invoiceCreditAmount: 100, shareAmount: 5});
         expect(pool.needsRecalculation).toBeFalsy();
+
+        // A saved credit toggle must change only the credit, including a combined payer share.
+        await poolOperations.saveInvoicePoolAssignments(poolId, false, true, false, [], [], {[firstId]: 1.5, [secondId]: 0.5});
+        await eventPoolController.recalculatePool(event, poolId, {sendEmails: false});
+        pool = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(pool.shares).toHaveLength(1);
+        expect(pool.shares[0]).toMatchObject({registrationId: firstId, baseShareAmount: 90, extraAmount: 15,
+            invoiceCreditAmount: 0, shareAmount: 105});
     });
 
     it.each([

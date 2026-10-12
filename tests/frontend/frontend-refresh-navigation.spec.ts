@@ -8,7 +8,7 @@ import I18NextVue from 'i18next-vue';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import * as pug from 'pug';
-import {createPilotContext, pilotContextKey, refreshInterval} from '../../src/frontend/app/context';
+import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {overviewKeys} from '../../src/frontend/app/queryKeys';
 import {ApiFailure} from '../../src/frontend/app/transport';
 import EventPicker from '../../src/frontend/components/EventPicker.vue';
@@ -31,7 +31,7 @@ const session: components['schemas']['SessionView'] = {
     loginUrl: '/users/login', logoutUrl: '/users/logout', shell: {version: 'fixture', imprintUrl: '/imprint',
         privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'SSO'},
 };
-const event: components['schemas']['PackingEventOption'] = {id: eventId, title: 'Authorized camp',
+const event: components['schemas']['EventPickerOption'] = {id: eventId, title: 'Authorized camp',
     startDate: '2026-10-07', endDate: '2026-10-08', archived: true, description: null, deadlinePassed: false};
 const card: components['schemas']['OverviewCard'] = {
     id: otherId, type: 'survey', title: 'Latest survey', description: null, url: '/survey/' + otherId,
@@ -39,6 +39,12 @@ const card: components['schemas']['OverviewCard'] = {
     archived: false, inheritedArchived: false, visibility: 'default', overviewHidden: false,
     capabilities: {archive: false, restore: false, duplicate: false, remove: false},
 };
+// Compile the immutable native oracle once per isolated file. Every comparison
+// still renders current fixture membership into a new DOM; no output or locals
+// are cached, and the migrated component never supplies its expected markup.
+const nativeRegionFilename = resolve('src/views/modules/module_unified_entity_cards.pug');
+const renderNativeRegion = pug.compile(readFileSync(resolve('src/views/modules/module_entity_archive.pug'), 'utf8')
+    + '\n' + readFileSync(nativeRegionFilename, 'utf8') + '\n+pagedEntityRegion(view)', {filename: nativeRegionFilename});
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
     for (const cleanup of cleanups.splice(0)) await cleanup();
@@ -109,10 +115,7 @@ function nativeOverviewRegion(value: components['schemas']['OverviewRegion']): H
         items: value.items.map(nativeCard), canonicalUrl: '/users/dashboard', backUrl: '/users/dashboard',
         clearUrl: '/users/dashboard', loaded: true, searchFields: []};
     const element = document.createElement('section');
-    const filename = resolve('src/views/modules/module_unified_entity_cards.pug');
-    const archive = readFileSync(resolve('src/views/modules/module_entity_archive.pug'), 'utf8');
-    element.innerHTML = pug.render(archive + '\n' + readFileSync(filename, 'utf8') + '\n+pagedEntityRegion(view)',
-        {filename, view, profile: session.activeProfile});
+    element.innerHTML = renderNativeRegion({view, profile: session.activeProfile});
     return element;
 }
 
@@ -460,14 +463,6 @@ describe('visible resource recovery', () => {
         expect(document.activeElement).toBe(input.element);
     });
 
-    it('keeps healthy cadence and bounds ordinary recovery without bypassing server cooldown', () => {
-        expect(refreshInterval(null, 0, 2000)).toBe(32_000);
-        expect(refreshInterval(new Error('Temporary read failure'), 0, 2000)).toBe(30_000);
-        expect(refreshInterval(new Error('Temporary read failure'), 3, 2000)).toBe(60_000);
-        const limited = new ApiFailure(429, null, 90_000);
-        expect(refreshInterval(limited, 3, 2000)).toBeGreaterThanOrEqual(89_900);
-    });
-
     it('clears only a recovered session-read notice and pauses checks while hidden', async () => {
         const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
         const request = vi.fn(async () => json(session));
@@ -509,7 +504,7 @@ describe('selected-event authority', () => {
         await flushPromises();
         expect(wrapper.text()).not.toContain('Authorized camp');
         expect(wrapper.text()).not.toContain('Archived with selected event');
-        expect(wrapper.props('modelValue')).toBe(eventId);
+        expect(wrapper.props()).toMatchObject({modelValue: eventId});
         expect(wrapper.emitted('update:modelValue')).toBeUndefined();
     });
 
@@ -522,11 +517,11 @@ describe('selected-event authority', () => {
         await flushPromises();
         expect(search).toHaveBeenCalledOnce();
         expect(wrapper.text()).not.toContain('Authorized camp');
-        expect(wrapper.props('modelValue')).toBe(eventId);
+        expect(wrapper.props()).toMatchObject({modelValue: eventId});
     });
 
     it('does not restore a retired selection when its old discovery resolves after a new selection', async () => {
-        const first = deferred<components['schemas']['PackingEventOptions']>();
+        const first = deferred<components['schemas']['EventPickerOptions']>();
         const next = {...event, id: otherId, title: 'Current camp'};
         const search = vi.fn(async (query: Parameters<PilotEventPickerSource['search']>[0]) =>
             query.selectedId === eventId ? first.promise : {items: [], selected: next, nextCursor: null});
@@ -589,15 +584,12 @@ describe('native overview search and history', () => {
         expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
     });
 
+    // Each status and unusable format reaches this actual consumer once. The
+    // transport suite owns complete wire classification; repeating their full
+    // Cartesian product here does not exercise a different projection lifetime.
     it.each([
         {status: 401, representation: 'html'},
-        {status: 401, representation: 'malformed'},
-        {status: 401, representation: 'mismatched'},
-        {status: 403, representation: 'html'},
         {status: 403, representation: 'malformed'},
-        {status: 403, representation: 'mismatched'},
-        {status: 404, representation: 'html'},
-        {status: 404, representation: 'malformed'},
         {status: 404, representation: 'mismatched'},
     ] as const)('retains confirmed cards and focused input after an unusable $status $representation read', async value => {
         vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
@@ -1324,7 +1316,8 @@ describe('shared native disclosure interaction', () => {
     });
 
     it('uses the same disclosure owner for Overview actions and restores the actual trigger on Escape', async () => {
-        const {wrapper, update} = await mounted(OverviewCard, {card});
+        const {wrapper, update} = await mounted(OverviewCard, {card,
+            interaction: {migrated: true, duplicateUrl: card.url + '/duplicate'}});
         const menu = wrapper.get('details');
         const trigger = menu.get<HTMLElement>('summary');
         const nativeTrigger = nativeOverviewRegion(region(new Request('http://localhost/overview')))

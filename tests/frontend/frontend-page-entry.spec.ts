@@ -213,7 +213,8 @@ describe('server-owned page entry and canonical navigation', () => {
         }});
         context.pageNotice.value = {kind: 'success', messageKey: 'auth.loginDone'};
         context.personalLink.value = 'https://fixture.test/guest/private-token';
-        const delivery = navigatePageEntry(context, router, {kind: 'redirect', url: '/frontend-pilot/slow-destination'});
+        const delivery = navigatePageEntry(context, router,
+            {kind: 'redirect', url: '/frontend-pilot/slow-destination', notice: null});
         await flushPromises();
 
         // Expiry or explicit dismissal belongs to the live owner while its current

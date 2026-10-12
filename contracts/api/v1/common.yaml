@@ -1,4 +1,82 @@
 schemas:
+  EventPickerQuery:
+    description: Shared bounded event-discovery filters. Each consuming endpoint owns its authorization and selected-event visibility.
+    type: object
+    additionalProperties: false
+    properties:
+      q:
+        type: string
+        maxLength: 200
+      from:
+        type: string
+        format: date
+      to:
+        type: string
+        format: date
+      period:
+        type: string
+        enum: [all, upcoming, ongoing, ended]
+      archive:
+        type: string
+        enum: [all, active, archived]
+      deadline:
+        type: string
+        enum: [all, open, passed]
+      cursor:
+        type: string
+        maxLength: 2048
+      selectedId:
+        type: string
+        format: uuid
+  EventPickerOption:
+    description: Authorized event choice shared by selectors; feature endpoints decide which records may be projected.
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - title
+      - startDate
+      - endDate
+      - archived
+      - description
+      - deadlinePassed
+    properties:
+      id:
+        $ref: '#/schemas/Uuid'
+      title:
+        type: string
+      startDate:
+        type: string
+      endDate:
+        type: string
+      archived:
+        type: boolean
+      description:
+        type:
+          - string
+          - 'null'
+      deadlinePassed:
+        type: boolean
+  EventPickerOptions:
+    type: object
+    additionalProperties: false
+    required:
+      - items
+      - selected
+      - nextCursor
+    properties:
+      items:
+        type: array
+        items:
+          $ref: '#/schemas/EventPickerOption'
+      selected:
+        anyOf:
+          - $ref: '#/schemas/EventPickerOption'
+          - type: 'null'
+      nextCursor:
+        type:
+          - string
+          - 'null'
   EntryNotice:
     description: One plain localized page notice. Message keys require no interpolation parameters.
     type: object
@@ -193,6 +271,12 @@ schemas:
           code: {const: LOCAL_LOGIN_DISABLED}
           messageKey: {const: 'api:errors.LOCAL_LOGIN_DISABLED'}
           status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: RATE_LIMITED}
+          messageKey: {const: 'api:errors.RATE_LIMITED'}
+          status: {const: 429}
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
       - properties:

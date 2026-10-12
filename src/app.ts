@@ -36,7 +36,7 @@ import activityRouter from './routes/activity';
 import apiRouter from './routes/api';
 import apiV1Router from './routes/api/v1';
 import frontendPilotRouter from './routes/frontendPilot';
-import {handleApiProblem} from './modules/api/problem';
+import {handleApiProblem, isVersionedApiRequest} from './modules/api/problem';
 import driversRouter from './routes/drivers';
 import eventRouter from './routes/event';
 import guestsRouter from './routes/guests';
@@ -144,7 +144,7 @@ app.use(function (req: Request, res: Response, next: NextFunction) {
 // error handler
 // JSON parsing can fail before a request reaches the router or even the session middleware.
 app.use(function routeApiParsingError(error: unknown, req: Request, res: Response, next: NextFunction) {
-    if (req.path === '/api/v1' || req.path.startsWith('/api/v1/')) return handleApiProblem(error, req, res, next);
+    if (isVersionedApiRequest(req)) return handleApiProblem(error, req, res, next);
     next(error);
 });
 app.use(handleGenericError);

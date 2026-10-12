@@ -285,6 +285,60 @@ paths:
                 $ref: "#/components/schemas/PackingMetadata"
         default:
           $ref: "#/components/responses/Problem"
+  /packing-lists/{listId}/description:
+    get:
+      operationId: getPackingDescription
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read only the independently granted native description field
+      parameters:
+        - $ref: "#/components/parameters/Context"
+        - $ref: "#/components/parameters/Locale"
+        - $ref: "#/components/parameters/ListId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Current independently authorized field baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackingDescriptionBaseline"
+        "304":
+          description: Authorized baseline unchanged; no response body
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updatePackingDescription
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: metadata}
+      summary: Update only the independently granted native description field
+      parameters:
+        - $ref: "#/components/parameters/Context"
+        - $ref: "#/components/parameters/Locale"
+        - $ref: "#/components/parameters/ListId"
+        - $ref: "#/components/parameters/Csrf"
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: Updated description field baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackingDescriptionBaseline"
+        default:
+          $ref: "#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PackingDescriptionPatch"
   /packing-lists/{listId}/items/{itemId}/self-assignment:
     put:
       operationId: assignPackingItem
@@ -394,67 +448,49 @@ paths:
           in: query
           required: false
           schema:
-            type: string
-            maxLength: 200
+            $ref: '#/components/schemas/EventPickerQuery/properties/q'
         - name: from
           in: query
           required: false
           schema:
-            type: string
-            format: date
+            $ref: '#/components/schemas/EventPickerQuery/properties/from'
         - name: to
           in: query
           required: false
           schema:
-            type: string
-            format: date
+            $ref: '#/components/schemas/EventPickerQuery/properties/to'
         - name: period
           in: query
           required: false
           schema:
-            type: string
-            enum:
-              - all
-              - upcoming
-              - ongoing
-              - ended
+            $ref: '#/components/schemas/EventPickerQuery/properties/period'
         - name: archive
           in: query
           required: false
           schema:
-            type: string
-            enum:
-              - all
-              - active
-              - archived
+            $ref: '#/components/schemas/EventPickerQuery/properties/archive'
         - name: deadline
           in: query
           required: false
           schema:
-            type: string
-            enum:
-              - all
-              - open
-              - passed
+            $ref: '#/components/schemas/EventPickerQuery/properties/deadline'
         - name: cursor
           in: query
           required: false
           schema:
-            type: string
-            maxLength: 2048
+            $ref: '#/components/schemas/EventPickerQuery/properties/cursor'
         - name: selectedId
           in: query
           required: false
           schema:
-            type: string
-            format: uuid
+            $ref: '#/components/schemas/EventPickerQuery/properties/selectedId'
       responses:
         "200":
           description: Authorized operation result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/PackingEventOptions"
+                $ref: "#/components/schemas/EventPickerOptions"
         default:
           $ref: "#/components/responses/Problem"
   /packing-lists/{listId}/duplicate:
@@ -522,6 +558,32 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/PackingNewItem"
+  /packing-lists/{listId}/items/{itemId}/edit-baseline:
+    get:
+      operationId: getPackingItemEditBaseline
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read permitted item edit values independently of detail-page admission
+      parameters:
+        - $ref: "#/components/parameters/Context"
+        - $ref: "#/components/parameters/Locale"
+        - $ref: "#/components/parameters/ListId"
+        - $ref: "#/components/parameters/ItemId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Current method-authorized item edit baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackingItemEditBaseline"
+        "304":
+          description: Authorized edit baseline unchanged; no response body
+        default:
+          $ref: "#/components/responses/Problem"
   /packing-lists/{listId}/items/{itemId}:
     patch:
       operationId: updatePackingItem
@@ -569,6 +631,30 @@ paths:
         default:
           $ref: "#/components/responses/Problem"
   /packing-lists/{listId}/item-order:
+    get:
+      operationId: getPackingItemOrderBaseline
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read permitted order values independently of detail-page admission
+      parameters:
+        - $ref: "#/components/parameters/Context"
+        - $ref: "#/components/parameters/Locale"
+        - $ref: "#/components/parameters/ListId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Current method-authorized item order baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackingOrderEditBaseline"
+        "304":
+          description: Authorized order baseline unchanged; no response body
+        default:
+          $ref: "#/components/responses/Problem"
     put:
       operationId: reorderPackingItems
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: order}
@@ -641,6 +727,30 @@ paths:
             schema:
               $ref: "#/components/schemas/PackingEventChange"
   /packing-lists/{listId}/default-permissions:
+    get:
+      operationId: getPackingDefaultsBaseline
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read only granted audience masks for a reviewed defaults update
+      parameters:
+        - $ref: "#/components/parameters/Context"
+        - $ref: "#/components/parameters/Locale"
+        - $ref: "#/components/parameters/ListId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Current independently authorized field baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackingDefaultsBaseline"
+        "304":
+          description: Authorized baseline unchanged; no response body
+        default:
+          $ref: "#/components/responses/Problem"
     put:
       operationId: updatePackingDefaults
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
@@ -692,6 +802,32 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/PackingAdminInput"
+  /packing-lists/{listId}/admins/{profileId}/edit-baseline:
+    get:
+      operationId: getPackingAdminBaseline
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read only one granted administrator mask or new-grant marker
+      parameters:
+        - $ref: "#/components/parameters/Context"
+        - $ref: "#/components/parameters/Locale"
+        - $ref: "#/components/parameters/ListId"
+        - $ref: "#/components/parameters/ProfileId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Current independently authorized field baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackingAdminBaseline"
+        "304":
+          description: Authorized baseline unchanged; no response body
+        default:
+          $ref: "#/components/responses/Problem"
   /packing-lists/{listId}/admins/{profileId}:
     patch:
       operationId: updatePackingAdmin
@@ -756,6 +892,31 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PackingProfileOptions"
+        default:
+          $ref: "#/components/responses/Problem"
+  /packing-lists/{listId}/header/edit-baseline:
+    get:
+      operationId: getPackingHeaderBaseline
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read only the granted header comparison hash
+      parameters:
+        - $ref: "#/components/parameters/Context"
+        - $ref: "#/components/parameters/Locale"
+        - $ref: "#/components/parameters/ListId"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Current independently authorized field baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackingHeaderBaseline"
+        "304":
+          description: Authorized baseline unchanged; no response body
         default:
           $ref: "#/components/responses/Problem"
   /packing-lists/{listId}/header:
@@ -970,10 +1131,6 @@ components:
       $ref: ./packing.yaml#/schemas/PackingCreateEntry
     PackingResourceEntry:
       $ref: ./packing.yaml#/schemas/PackingResourceEntry
-    PackingNativeItem:
-      $ref: ./packing.yaml#/schemas/PackingNativeItem
-    PackingNativeCreateInput:
-      $ref: ./packing.yaml#/schemas/PackingNativeCreateInput
     OverviewCard:
       $ref: ./overview.yaml#/schemas/OverviewCard
     OverviewRegion:
@@ -1078,16 +1235,41 @@ components:
       $ref: ./packing.yaml#/schemas/MutationResult
     PackingItemPatch:
       $ref: ./packing.yaml#/schemas/PackingItemPatch
+    PackingDescriptionValue:
+      $ref: ./packing.yaml#/schemas/PackingDescriptionValue
+    PackingDescriptionPatch:
+      $ref: ./packing.yaml#/schemas/PackingDescriptionPatch
+    PackingDescriptionBaseline:
+      $ref: ./packing.yaml#/schemas/PackingDescriptionBaseline
+    PackingDefaultsBaseline:
+      $ref: ./packing.yaml#/schemas/PackingDefaultsBaseline
+    PackingAdminBaseline:
+      $ref: ./packing.yaml#/schemas/PackingAdminBaseline
+    PackingHeaderBaseline:
+      $ref: ./packing.yaml#/schemas/PackingHeaderBaseline
+    PackingItemEditBaseline:
+      $ref: ./packing.yaml#/schemas/PackingItemEditBaseline
+    PackingOrderEditBaseline:
+      $ref: ./packing.yaml#/schemas/PackingOrderEditBaseline
     PackingItemOrder:
       $ref: ./packing.yaml#/schemas/PackingItemOrder
     PackingEventChange:
       $ref: ./packing.yaml#/schemas/PackingEventChange
     PackingEventChanged:
       $ref: ./packing.yaml#/schemas/PackingEventChanged
+    EventPickerQuery:
+      $ref: ./common.yaml#/schemas/EventPickerQuery
+    EventPickerOption:
+      $ref: ./common.yaml#/schemas/EventPickerOption
+    EventPickerOptions:
+      $ref: ./common.yaml#/schemas/EventPickerOptions
+    # Keep the existing backend declaration names during its separately reviewed
+    # relocation. These aliases have no independent wire definition; selectors and
+    # new feature consumers use the shared EventPicker owner above.
     PackingEventOption:
-      $ref: ./packing.yaml#/schemas/PackingEventOption
+      $ref: ./common.yaml#/schemas/EventPickerOption
     PackingEventOptions:
-      $ref: ./packing.yaml#/schemas/PackingEventOptions
+      $ref: ./common.yaml#/schemas/EventPickerOptions
     PackingProfileOption:
       $ref: ./packing.yaml#/schemas/PackingProfileOption
     PackingProfileOptions:

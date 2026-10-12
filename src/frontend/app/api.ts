@@ -12,13 +12,16 @@ type Session = components['schemas']['SessionView'];
 
 /** Session and identity commands are needed by the shell; product feature operations stay with their routes. */
 export class PilotApi extends PilotTransport {
+    /** Bootstrap establishes the authoritative cookie context before scoped reads.
+     * Its shared deadline is application-local; no conditional private snapshot or
+     * previously captured actor is supplied to this identity admission request. */
     async bootstrap(signal?: AbortSignal): Promise<Session> {
         const transport = this;
         async function readSession(): Promise<Session> {
             const response = await transport.client.GET('/session', {signal, cache: 'no-store'});
-            return transport.read("getSession", response, validateSessionView).data;
+            return transport.read("getSession", {...response, signal}, validateSessionView).data;
         }
-        return this.allowedRead('session', undefined, readSession);
+        return this.allowedRead('session', undefined, readSession, signal);
     }
 
     async setLocale(locale: string, scope: PilotRequestScope): Promise<Session> {
@@ -27,20 +30,33 @@ export class PilotApi extends PilotTransport {
         }), validateSessionView, scope).data;
     }
 
+    /** Check this token without consuming it or replaying password submission.
+     * Cancellation, captured actor validation and the token-specific read deadline
+     * remain with the transport; only validated admission reaches the reset form. */
     async checkPasswordReset(token: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PasswordResetCheck']> {
         const transport = this;
         async function readResetAdmission(): Promise<components['schemas']['PasswordResetCheck']> {
             const response = await transport.client.GET('/auth/reset-password', {
                 params: {query: {token}, header: transport.headers(scope)}, signal, cache: 'no-store',
             });
-            return transport.read("checkPasswordReset", response, validatePasswordResetCheck, scope).data;
+            return transport.read("checkPasswordReset", {...response, signal}, validatePasswordResetCheck, scope).data;
         }
-        return this.allowedRead(`identity/reset/${token}`, scope, readResetAdmission);
+        return this.allowedRead(`identity/reset/${token}`, scope, readResetAdmission, signal);
     }
 
+    /** Validate a cookie-changing command from its still-current original actor.
+     * Its response legitimately carries a new context; bind that header to the
+     * returned session, leaving authoritative new-actor bootstrap to the context owner. */
     identity(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, scope: PilotRequestScope) {
         if (!this.isCurrent(scope)) throw new ObsoleteRequestError();
+
+        // Intentionally omit the old scope from ordinary response validation:
+        // login/logout/profile/guest success returns the resulting session context,
+        // so comparing its header with the submitted actor would reject confirmation.
         const value = this.read(operationId, result, validateIdentityResult).data;
+
+        // The new context must positively bind both header and validated payload.
+        // Accepting this result alone does not open private views under that actor.
         if (result.response.headers.get('X-Surveyor-Context') !== value.session.context) throw new UnconfirmedResponseError();
         return value;
     }

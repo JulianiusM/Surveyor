@@ -139,9 +139,11 @@ async function retainInvoiceLayoutScreenshot(page: Page, testInfo: TestInfo, nam
     await testInfo.attach(name, {path, contentType: 'image/png'});
 }
 
-// These viewports cross both Bootstrap modal sizing and the established ledger/card breakpoint.
-// Long names, saved notes, formulas, and large signed refunds must wrap within the same components.
-for (const width of [320, 390, 768, 834, 1024, 1440]) {
+// Keep the narrowest phone and tablet representatives: 320/390 share the <=575.98px
+// rules, while 768/834 use the same 720px Bootstrap container, 500px modal and
+// <=991.98px cards. Desktop widths retain different container sizes. Actual touch
+// settlement journeys still cover 390/834; this fixture isolates wrapping and layout.
+for (const width of [320, 768, 1024, 1440]) {
     test(`saved shares and calculation previews fit a ${width}px viewport`, async ({page}, testInfo) => {
         const filename = resolve('src/views/modules/module_invoice_pool.pug');
         const payerName = 'LongPayerName'.repeat(15);
@@ -185,7 +187,7 @@ for (const width of [320, 390, 768, 834, 1024, 1440]) {
         await expect(exports.nth(0)).toHaveAttribute('href', '/event/layout-event/export/invoice-pools/responsive/shares');
         await expect(exports.nth(1)).toHaveAttribute('href', '/event/layout-event/export/invoice-pools/responsive/shares?example=false');
         await expectInvoiceLayoutFits(page, '.container', ['.pool-header-summary', '.share-ledger', '.share-ledger-table']);
-        if ([320, 834, 1440].includes(width)) await retainInvoiceLayoutScreenshot(page, testInfo, `share-ledgers-${width}`);
+        if ([320, 768, 1440].includes(width)) await retainInvoiceLayoutScreenshot(page, testInfo, `share-ledgers-${width}`);
 
         // Initialize and open the same single lazy dialog used by the live participant collection.
         await personal.getByRole('button', {name: 'View breakdown for Shared travel', exact: true}).click();
@@ -199,7 +201,7 @@ for (const width of [320, 390, 768, 834, 1024, 1440]) {
         await expect(personalModal.locator('[data-share-details-content] > dl')).toContainText('-99999999.99');
         await expectInvoiceLayoutFits(page, '#pool-personal-shares-1-share-breakdown',
             ['.modal-dialog', '.modal-body', '.invoice-share-breakdown', '.invoice-calculation', '.invoice-calculation-formula']);
-        if ([320, 834, 1440].includes(width)) {
+        if ([320, 768, 1440].includes(width)) {
             // Keep both the financial summary and a concrete equation visible in the review artifacts.
             // Opening the final notes disclosure may have scrolled past the calculation on a short screen.
             await personalModal.locator('.modal-body').evaluate(element => { element.scrollTop = 0; });
@@ -213,7 +215,11 @@ for (const width of [320, 390, 768, 834, 1024, 1440]) {
         await expect(personalModal).toBeHidden();
         await page.evaluate(() => {
             const modal = document.getElementById('pool-responsive-calculation')!;
-            window.bootstrap.Modal.getOrCreateInstance(modal).show();
+            // The public modal command requires the shipped Bootstrap script;
+            // a missing fixture prerequisite must fail rather than skip opening.
+            const bootstrap = window.bootstrap;
+            if (!bootstrap) throw new Error('Invoice preview requires the loaded Bootstrap script.');
+            bootstrap.Modal.getOrCreateInstance(modal).show();
             modal.querySelector<HTMLDetailsElement>('[data-pool-preview-reconciliation]')!.open = true;
             modal.querySelector<HTMLDetailsElement>('[data-pool-preview-rows] details')!.open = true;
         });

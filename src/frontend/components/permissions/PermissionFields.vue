@@ -53,11 +53,11 @@ function toggle(bit: number, event: Event): void {
     <fieldset :disabled="disabled">
         <div class="d-flex flex-wrap gap-2 justify-content-between align-items-start mb-3">
             <details v-if="presets.length">
-                <summary class="small">{{ messages.t('packing.presets') }}</summary>
+                <summary class="small">{{ messages.t('permissions.presets') }}</summary>
                 <div
                     class="d-flex flex-wrap gap-1 mt-2"
                     role="group"
-                    :aria-label="messages.t('packing.presets')"
+                    :aria-label="messages.t('permissions.presets')"
                 >
                     <button
                         v-for="preset in presets"
@@ -73,12 +73,12 @@ function toggle(bit: number, event: Event): void {
             <div
                 class="btn-group btn-group-sm"
                 role="group"
-                :aria-label="messages.t('packing.selectPermissions')"
+                :aria-label="messages.t('permissions.selectPermissions')"
             >
                 <button
                     type="button"
                     class="btn btn-outline-light"
-                    :title="messages.t('packing.selectAll')"
+                    :title="messages.t('permissions.selectAll')"
                     @click="
                         emit(
                             'update:modelValue',
@@ -86,15 +86,15 @@ function toggle(bit: number, event: Event): void {
                         )
                     "
                 >
-                    {{ messages.t('packing.all') }}
+                    {{ messages.t('common.all') }}
                 </button>
                 <button
                     type="button"
                     class="btn btn-outline-light"
-                    :title="messages.t('packing.clearAll')"
+                    :title="messages.t('permissions.clearAll')"
                     @click="emit('update:modelValue', 0)"
                 >
-                    {{ messages.t('packing.none') }}
+                    {{ messages.t('common.none') }}
                 </button>
             </div>
         </div>

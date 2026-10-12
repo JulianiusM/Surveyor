@@ -39,7 +39,7 @@ describe('same-component native fallback', () => {
     it('uses the server-admitted initial event instead of the creation URL during SSR', async () => {
         const fetch = vi.fn(() => {throw new Error('SSR must retain server-owned initial selection');});
         vi.stubGlobal('fetch', fetch);
-        const option: components['schemas']['PackingEventOption'] = {id: entityId, title: 'Admitted initial event',
+        const option: components['schemas']['EventPickerOption'] = {id: entityId, title: 'Admitted initial event',
             description: null, startDate: '2026-10-07', endDate: '2026-10-08', archived: false, deadlinePassed: false};
         for (const selectedEvent of [option, null]) {
             const result = await render(`/frontend-pilot/packing/create?eventId=${entityId}`, {

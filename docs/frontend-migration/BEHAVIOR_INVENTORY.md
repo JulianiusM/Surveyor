@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-04
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: source-reviewed behavior baseline for existing Pug views, browser TypeScript, feature routes and controllers, and related test sources; records migration parity obligations and explicit feature exceptions; does not claim a migrated frontend, executed tests, or browser validation
+verification-scope: 2026-10-11 retained packing assertion references reconciled after test consolidation; original 2026-10-04 source-reviewed behavior baseline and deliberate exceptions remain unchanged; does not claim a migrated frontend, executed tests, or browser validation
 source-anchors: src/views/; src/public/js/; src/routes/; src/controller/; src/modules/renderer.ts; src/modules/invoice/; src/modules/activity/; tests/frontend/; tests/integration/; tests/e2e/; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/PERMISSIONS_REFERENCE.md; docs/TESTING_GUIDE.md; docs/user-guide/; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md
 next-review: frontend-route-cutover-or-user-visible-contract-change
 -->
@@ -16,7 +16,7 @@ behaviors, not implementation tasks or test results. Keep IDs stable when adding
 replacement screens. A group of related controls can share an ID while retaining every state and ownership rule
 listed in that row.
 
-The [migration baseline](../FRONTEND_MIGRATION_BASELINE.md) owns the overall status and execution evidence.
+The [migration baseline](FRONTEND_MIGRATION_BASELINE.md) owns the overall status and execution evidence.
 The [route inventory](ROUTE_INVENTORY.md) owns HTTP paths and methods; the [test coverage review](TEST_COVERAGE.md)
 owns coverage gaps. Implementation links below establish current behavior. Test links identify related existing
 test sources, not proof that every row is covered or that any test was run for this document.
@@ -175,7 +175,9 @@ Sources: [packing view](../../src/views/packing/packing-view.pug), [packing brow
 [inline editing](../../src/public/js/shared/inline-edit.ts), [list actions](../../src/public/js/shared/list-actions.ts),
 [reordering](../../src/public/js/shared/drag-drop.ts),
 [packing controller](../../src/controller/packingController.ts), [drivers controller](../../src/controller/driversController.ts).
-Related tests: [packing persistence](../../tests/integration/packing-workflows.spec.ts),
+Related tests: [packing management persistence](../../tests/integration/packing-management-api.spec.ts),
+[packing assignment persistence](../../tests/integration/packing-api.spec.ts),
+[native controller paths](../../tests/integration/controller-smoke-workflows.spec.ts),
 [drivers persistence](../../tests/integration/drivers-workflows.spec.ts),
 [shared browser helpers](../../tests/frontend/core-dynamic-functions.spec.ts),
 [core creation smoke tests](../../tests/e2e/core-workflows.spec.ts).

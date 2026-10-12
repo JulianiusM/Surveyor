@@ -43,11 +43,11 @@ function page(field: string, direct: PermType[], parent: PermType[] = []) {
 
 describe('native packing inline field permissions', () => {
     it.each([
-        {field: 'title', direct: ['EDIT_TITLE'], parent: [], value: 'Renamed'},
-        {field: 'maxAssignees', direct: ['EDIT_CAPACITY'], parent: [], value: '3'},
+        {field: 'title', direct: ['EDIT_META'], parent: [], value: 'Renamed'},
+        {field: 'maxAssignees', direct: ['EDIT_META'], parent: [], value: '3'},
         {field: 'title', direct: [], parent: ['ITEM_EDIT'], value: 'Renamed'},
         {field: 'maxAssignees', direct: [], parent: ['ITEM_EDIT'], value: '3'},
-    ])('saves $field with its direct or parent field grant', async ({field, direct, parent, value}) => {
+    ])('saves $field with the original direct metadata or parent grant', async ({field, direct, parent, value}) => {
         const {cell, send} = page(field, direct as PermType[], parent as PermType[]);
         cell.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
         const input = cell.querySelector('input');
@@ -57,17 +57,20 @@ describe('native packing inline field permissions', () => {
         await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
         const [url, options] = send.mock.calls[0] as unknown as [string, RequestInit];
         expect(url).toBe('/api/packing/list/item/item/attr');
-        expect(JSON.parse(options.body as string)).toEqual({field, value, expectedValue: field === 'maxAssignees' ? 2 : 'Original'});
+        expect(JSON.parse(options.body as string)).toEqual({field, value});
     });
 
-    it.each(['title', 'maxAssignees'])('does not allow EDIT_META alone to open packing %s', field => {
-        const {cell, send} = page(field, ['EDIT_META']);
+    it.each([
+        {field: 'title', grant: 'EDIT_TITLE' as const},
+        {field: 'maxAssignees', grant: 'EDIT_CAPACITY' as const},
+    ])('retains the original metadata guard despite the $grant display affordance', ({field, grant}) => {
+        const {cell, send} = page(field, [grant]);
         cell.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
         expect(cell.querySelector('input')).toBeNull();
         expect(send).not.toHaveBeenCalled();
     });
 
-    it('captures the complete original description for the locked comparison', async () => {
+    it('retains the original description payload without migration comparison fields', async () => {
         const {cell, send} = page('description', ['EDIT_DESC']);
         cell.textContent = '  Original description  ';
         cell.dispatchEvent(new MouseEvent('dblclick', {bubbles: true}));
@@ -77,7 +80,7 @@ describe('native packing inline field permissions', () => {
         await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
         const [url, options] = send.mock.calls[0] as unknown as [string, RequestInit];
         expect(url).toBe('/api/packing/list/item/item/description');
-        expect(JSON.parse(options.body as string)).toEqual({description: 'Updated description', expectedValue: '  Original description  '});
+        expect(JSON.parse(options.body as string)).toEqual({description: 'Updated description'});
     });
 
     it.each(['/api/drivers/list/item', '/api/activity/plan/slot'])('preserves the existing metadata guard for %s', baseUrl => {
@@ -103,49 +106,60 @@ function everyonePage(required = false) {
 }
 
 describe('native packing Everyone baseline', () => {
-    it('advances the saved comparison after a confirmed toggle before the delayed reload', async () => {
+    it('retains boolean flag collection and the original page-load default before delayed reload', async () => {
         const {toggle, send} = everyonePage();
         toggle.checked = true;
         toggle.dispatchEvent(new Event('change', {bubbles: true}));
         await flushPromises();
-        expect(toggle.defaultChecked).toBe(true);
+        expect(toggle.defaultChecked).toBe(false);
         expect(toggle.disabled).toBe(false);
         toggle.checked = false;
         toggle.dispatchEvent(new Event('change', {bubbles: true}));
         await flushPromises();
         const bodies = send.mock.calls.map(call => JSON.parse((call as unknown as [string, RequestInit])[1].body as string));
-        expect(bodies).toEqual([{flag: true, expectedValue: false}, {flag: false, expectedValue: true}]);
+        expect(bodies).toEqual([{flag: true}, {flag: false}]);
         expect(toggle.checked).toBe(false);
         expect(toggle.defaultChecked).toBe(false);
     });
 
-    it('admits one pending change and restores its captured original after rejection', async () => {
+    it('retains native overlapping toggle delivery and its late-rejection rollback', async () => {
         const {toggle, send} = everyonePage();
         let reject!: (reason: Error) => void;
         send.mockImplementationOnce(() => new Promise<Response>((_resolve, fail) => { reject = fail; }));
         toggle.checked = true;
         toggle.dispatchEvent(new Event('change', {bubbles: true}));
-        expect(toggle.disabled).toBe(true);
+        expect(toggle.disabled).toBe(false);
         toggle.checked = false;
         toggle.dispatchEvent(new Event('change', {bubbles: true}));
-        expect(toggle.checked).toBe(true);
-        expect(send).toHaveBeenCalledOnce();
+        expect(toggle.checked).toBe(false);
+        expect(send).toHaveBeenCalledTimes(2);
+        // Complete the newer request before delivering the late rejection. The
+        // native success branch reads the checkbox's current value after await.
+        await flushPromises();
+        expect(toggle.closest('tr')!.classList.contains('table-info')).toBe(false);
+        // The existing native handler rolls back the current checkbox when the
+        // earlier request fails. Migration must preserve it rather than adding
+        // a pending lock or captured-original semantics to the native browser.
         reject(new Error('The saved value changed.'));
         await flushPromises();
-        expect(toggle.checked).toBe(false);
+        expect(toggle.checked).toBe(true);
         expect(toggle.defaultChecked).toBe(false);
         expect(toggle.disabled).toBe(false);
         expect(toggle.closest('tr')!.classList.contains('table-info')).toBe(false);
     });
 
-    it('does not advance its baseline when a redirected HTML response fails to confirm saving', async () => {
+    it('preserves the original native HTML-success delivery without adding an envelope check', async () => {
         const {toggle, send} = everyonePage(true);
         send.mockResolvedValueOnce(new Response('<form>Login</form>', {headers: {'Content-Type': 'text/html'}}));
         toggle.checked = false;
         toggle.dispatchEvent(new Event('change', {bubbles: true}));
         await flushPromises();
-        expect(toggle.checked).toBe(true);
+        // The original HTTP helper permits successful text, and this native
+        // handler has no success-envelope guard. The pilot's v1 boundary is separate.
+        expect(toggle.checked).toBe(false);
         expect(toggle.defaultChecked).toBe(true);
         expect(toggle.disabled).toBe(false);
+        expect(send).toHaveBeenCalledOnce();
+        expect(toggle.closest('tr')!.classList.contains('table-info')).toBe(false);
     });
 });

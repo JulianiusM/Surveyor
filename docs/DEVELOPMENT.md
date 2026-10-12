@@ -4,20 +4,12 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: developer-experience maintainers
 status: current
-last-verified: 2026-10-11
+last-verified: 2026-10-04
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: 2026-10-11 settings-test recipe clarified against the advisory documentation policy; FPR-07 preservation of the pre-pilot native production documentation reference and current non-pilot source-path corrections; no deployment, command execution or runtime certification
+verification-scope: Native setup, generated files, module ownership, readability and declarations; property/overview/lifecycle and invoice contribution contracts; completed design plans consolidated editorially.
 source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
-next-review: native-production-change-or-frontend-cutover
-production-reference: 2dfa257 native frontend documentation; reference only, not evidence of an installed production commit
+next-review: development-workflow-or-help-tooling-change
 -->
-
-This document describes the native frontend production reference. It preserves the existing production contract
-while the frontend migration is in progress; the reference is not evidence of the commit installed at a particular
-site. Developers working in the migration checkout must use the [staged replacement](frontend-migration/staged/DEVELOPMENT.md) and current
-`package.json` for the changed frontend commands. Merge the staged replacement into this canonical document at
-production cutover, retaining any intervening native changes.
-
 
 This guide covers a source-checkout development workflow for Surveyor. Production deployment and database maintenance use the separate [operator documentation](OPERATIONS.md).
 
@@ -211,8 +203,8 @@ use the existing shared `sectionTitle` style and document conventions; formulas 
 equation per row. Any change affecting PDF output requires regeneration and visual inspection of every affected page
 before another PDF-affecting change.
 
-Every complex method requires method-level JSDoc describing its contract **and internal code comments explaining its
-steps**. JSDoc does not count toward the internal-comment requirement. Place purposeful comments at the meaningful
+The [development policy](policies/DEVELOPMENT_POLICY.md#implementation-principles) owns the mandatory method-contract
+and internal-comment rules. Apply them together: place purposeful comments at the meaningful
 phases so a maintainer can follow input selection, checks, transformations, writes, side effects, and recovery in
 execution order. Explain intent and constraints, especially transaction ordering, authorization, inherited state,
 and exceptional behavior. Keep comments current; do not substitute a summary above the method for an explanation
@@ -320,6 +312,44 @@ and opaque continuation tokens. The browser replaces result pages and retains on
 plus a bounded cursor history. Never substitute assignment presence
 or ownership alone for the shared cumulative evaluator.
 
+Each settings section has an independent save boundary: atomic properties, event association, image, permissions,
+administrators, archival, and deletion. The trigger is the union of available capabilities, and unauthorized values
+are absent from the render data as well as the DOM. The dialog does not require an unrelated dashboard permission.
+Use the [field/action policy](PERMISSIONS_REFERENCE.md#entity-settings) rather than another browser permission table.
+Keep specialized activity rules, event registrations and invoice workspaces at their existing feature boundaries.
+
+Closing discards section drafts; changing tabs preserves them. Before a refreshing or departing command, resolve
+other dirty sections through the existing host. Pending work freezes dismissal and all competing dialog commands,
+including controls created by late reads. Failures retain input and section-local feedback. Exports and modified
+clicks leave the source page's drafts protected. Image, picker and administrator helpers use inline hosts here,
+without nested dialogs or second listeners owning the same command.
+
+The event picker separates selected state from search results. Authorized historical, deadline-passed and archived
+events remain available. Filters never clear or save selection; **No event** is an explicit null choice. Resolve a
+saved/preselected event independently of the current page, and preserve an unchanged relation whose destination
+is no longer selectable without disclosing unauthorized parent details. Search has generation/abort protection;
+failed paging retains the displayed page and retry direction. Encrypted continuation tokens bind actor and filters,
+and the existing service returns 25 authorized options with one lookahead, without denied IDs or unfiltered counts.
+
+Association writes require UUID-or-null `eventId` and `expectedEventId`, reject unknown fields, and detect a changed
+relationship under deterministic old/new-parent locks followed by the child lock. An authorized identical target
+is idempotent. Persist the TypeORM relation rather than its relation-ID projection; recompute admission, capabilities
+and inherited archival after commit. Preserve root identity, grants, files, direct archival and stored pause state.
+Unlinking removes inheritance only and lets a standalone activity resume its existing schedule.
+
+Activity relinking retains committed slots/assignments, rules, saved overrides and reviewed history. Existing external
+assignee policy governs future actions; relinking never registers people automatically. Requirement edits preserve
+unchanged saved targets outside the new event without treating them as newly authorized targets. The activity
+controller invalidates generated unreviewed work and in-flight jobs using existing service/job owners. Event identity
+belongs to the generation fingerprint, and the plan lock checks the relationship before a job result can persist.
+This protects relationship races, not every independent registration/requirement write. Date edits reject ranges
+that exclude saved slots; they never move/delete slots or clamp the plan to its event's dates.
+
+Protect capability-specific sparse/false/null writes, unchanged deadline/time-zone values, denied drafts and target
+privacy at the cheapest relevant layer. Real persistence cases cover atomic saves and relationship preservation;
+mounted browser cases cover validity, pending controls and focus. The existing property, activity-integrity and
+archival suites own these assertions rather than a completed implementation-plan checklist.
+
 ### Named email delivery
 
 Every mailer entry point requires an `EmailRecipient` with `{name, address}`. Use the actual account, guest, or active
@@ -401,6 +431,24 @@ independently qualify in the same collection and region, before filtering. Apply
 roots, map matching children to those eligible parent cards, then sort and page the combined grid in SQL. Escape
 literal search wildcards and retain type/UUID identity. Reuse those predicates for counts, selected-event children,
 and fallback cards; do not group or filter a complete hydrated dashboard in application or browser code.
+
+Underlying entity counts differ from displayed card counts: an event container is one card even when it represents
+several matches. Collection totals span main/hidden placement; region matching totals and card pagers have separate
+meanings. Type choices come from the whole eligible region. Search includes unloaded children, but a matching parent
+title does not make its children match. A child match retains its independently eligible event as navigation context;
+the sub-view preserves filters until **Show all my linked entities** explicitly clears text/type.
+
+The server limits overview and child pages to 24. Initial main regions contain at most 48 cards; all four loaded
+regions contain at most 100, because a sub-view adds its enclosing event. Replace old page DOM, release closed hidden
+bodies, and retain only bounded navigation state. One selected event is allowed per region; event expansion does not
+persist a preference or change another region. Closing returns to the current overview page; unchanged filters restore
+the invoking card/focus/scroll, while changed filters reset pages and fall back to the region heading if needed.
+
+Explicit opening/closing/paging uses history entries, debounced search replaces its entry, and Back/Forward restores
+the complete namespaced state. Direct sub-view URLs have ordinary **Back to overview** links. Search/type changes
+reset both page numbers. Membership loss, relinking and deletion recompute a valid selection/page rather than leave
+an obsolete container. Real scale checks must distinguish bounded rows/HTML/DOM from query scans and response time;
+inspect actual query plans before proposing indexes, with matching entity declarations and reviewed migrations.
 
 One service-owned read snapshot covers cards, totals, placement, and lifecycle inputs. Pass its raw `ArchiveSnapshotEntry`
 map to `getArchivePresentations`; the shared controller projects effective state without rereading after paging. Batch permission projection for the returned
@@ -935,4 +983,4 @@ npm run docs:test:content
 For an actual help-renderer or routing code change, run the relevant application fixture tests. To review the maintained
 help pages in a browser, use the optional browser report after preparing its disposable environment. Neither corpus
 checks nor documentation findings block CI or release. Reporting and visual-inspection practices are described in
-[Documentation Policy](DOCUMENTATION_POLICY.md), [Testing Guide](TESTING_GUIDE.md), and [In-App Help Visuals](HELP_VISUALS.md).
+[Documentation Policy](policies/DOCUMENTATION_POLICY.md), [Testing Guide](TESTING_GUIDE.md), and [In-App Help Visuals](features/help/HELP_VISUALS.md).

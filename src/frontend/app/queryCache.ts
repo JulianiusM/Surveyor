@@ -1,6 +1,70 @@
 import {matchQuery} from '@tanstack/vue-query';
-import type {QueryClient} from '@tanstack/vue-query';
+import type {QueryCacheNotifyEvent, QueryClient, QueryFilters} from '@tanstack/vue-query';
 import {belongsToQueryFamily} from './queryKeys';
+import {UnconfirmedResponseError} from './transport';
+
+/** Observe actual successful reads, including equal responses. Observer idle/data
+ * changes are insufficient: cancellation can return retained data, and manual cache
+ * aliases are presentation delivery rather than another successful network read. */
+export function observeQueryReads<T>(client: QueryClient, key: () => readonly unknown[],
+                                     receive: (data: T, updatedAt: number) => void): () => void {
+    return client.getQueryCache().subscribe(function receiveRead(event): void {
+        if (!isNetworkReadSuccess(event) || !matchQuery({queryKey: key(), exact: true}, event.query)) return;
+        // The feature's validated query function owns this key's data contract.
+        // Capture this success action, rather than a later manual cache alias.
+        receive(event.action.data as T, event.query.state.dataUpdatedAt);
+    });
+}
+
+/** Require a new successful read before a continuation can adopt authority.
+ * Cancel explicitly: refetch's cancelRefetch option can reuse a cold pending fetch,
+ * while a canceled warm fetch may resolve with retained data instead of rejecting.
+ * The public underlying promise rejects cancellation and carries this actual read,
+ * independently of manual cache aliases, timestamps and structural sharing. */
+export async function refetchFreshQuery<T>(client: QueryClient, key: readonly unknown[],
+                                          refetch: () => Promise<unknown>, mayRead: () => boolean): Promise<T> {
+    const filter = {queryKey: key, exact: true};
+    const previous = client.getQueryCache().find(filter)?.promise;
+    await client.cancelQueries(filter);
+    // Cancellation yields. The feature's captured actor/resource/lifecycle must
+    // still admit dispatch; an observer may now belong to a different current key.
+    if (!mayRead()) throw new UnconfirmedResponseError();
+    const observerRead = refetch();
+    // Capture synchronously after dispatch. A warm replacement can reuse fetching
+    // status without a new fetch action, but its public promise still changes.
+    const current = client.getQueryCache().find(filter)?.promise;
+    const [, data] = await Promise.all([observerRead, current]);
+    if (!current || current === previous || data === undefined) throw new UnconfirmedResponseError();
+    // The feature's validated query function supplies this key's data contract.
+    // Use its successful result, never the observer's possibly retained snapshot.
+    return data as T;
+}
+
+/** A family refresh certifies each currently readable active region independently.
+ * The caller still owns which family/actor is relevant and whether its result may
+ * be presented; this owner hides the query library's retained-cancellation behavior. */
+export async function refetchFreshQueries(client: QueryClient, filter: QueryFilters, mayRead: () => boolean): Promise<void> {
+    const reads: Promise<unknown>[] = [];
+    for (const query of client.getQueryCache().findAll(filter)) {
+        if (query.isDisabled() || query.isStatic()) continue;
+        // A sibling can retire during cancellation. Preserve the caller's active
+        // filter at dispatch instead of resurrecting that inactive cached observer.
+        const selected = {...filter, queryKey: query.queryKey, exact: true};
+        reads.push(refetchFreshQuery(client, query.queryKey, function refetchSelectedQuery() {
+            return client.refetchQueries(selected, {throwOnError: true});
+        }, mayRead));
+    }
+    // An empty/disabled family has performed no authority read. It must not
+    // acknowledge an unknown command merely because Promise.all([]) resolves.
+    if (!reads.length) throw new UnconfirmedResponseError();
+    await Promise.all(reads);
+}
+
+/** The public cache action distinguishes network success from setQueryData. */
+function isNetworkReadSuccess(event: QueryCacheNotifyEvent): event is Extract<QueryCacheNotifyEvent, {type: 'updated'}>
+    & {action: {type: 'success'; data: unknown; manual?: boolean}} {
+    return event.type === 'updated' && event.action.type === 'success' && !event.action.manual;
+}
 
 /** Retire a denied family's snapshots without disconnecting mounted recovery controls.
  * Inactive variants are evicted; an observed query keeps only its error state, so an

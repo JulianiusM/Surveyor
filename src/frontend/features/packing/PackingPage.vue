@@ -4,10 +4,11 @@ import {useRoute} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {PilotRead} from '../../../types/FrontendPilotUiTypes';
+import type {QueryFunctionContext} from '@tanstack/vue-query';
 import {usePackingApi} from './api';
 import {usePilot, refreshInterval} from '../../app/context';
-import {isReadDenial} from '../../app/transport';
-import {evictQueryFamilies} from '../../app/queryCache';
+import {isReadDenial, ObsoleteRequestError} from '../../app/transport';
+import {evictQueryFamilies, observeQueryReads, refetchFreshQuery, retireQueryFamily} from '../../app/queryCache';
 import {belongsToQueryFamily, overviewKeys, packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
 import {readPacked, writePacked} from './packed';
@@ -57,13 +58,7 @@ const list = useQuery({
     enabled: computed(
         () => context.hydrated.value && context.ready.value && context.visible.value && !accessRevoked.value,
     ),
-    queryFn: ({signal, queryKey}) =>
-        api.packing(
-            listId.value,
-            context.capture(),
-            signal,
-            context.queryClient.getQueryData<PilotRead<components['schemas']['PackingListView']>>(queryKey),
-        ),
+    queryFn: readList,
     refetchInterval: (query) =>
         context.visible.value
             ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter)
@@ -81,6 +76,20 @@ const list = useQuery({
         return previous;
     },
 });
+
+/** A denial suspends ordinary polling, but explicit recovery still performs a real
+ * current read. Only that admitted response can restore the protected projection;
+ * neither an old cache hit nor a no-op command reconciliation grants authority. */
+async function readList({signal, queryKey}: QueryFunctionContext<readonly unknown[]>): Promise<ListRead> {
+    const scope = context.capture();
+    const resource = listId.value;
+    const result = await api.packing(resource, scope, signal,
+        context.queryClient.getQueryData<ListRead>(queryKey));
+    if (!active || signal.aborted || !context.isCurrent(scope) || resource !== listId.value)
+        throw new ObsoleteRequestError();
+    accessRevoked.value = false;
+    return result;
+}
 const retryAvailable = useReadRetry(() => list.error.value);
 const retryAt = useReadRetryAt(() => list.error.value, retryAvailable);
 const denied = computed(
@@ -88,6 +97,9 @@ const denied = computed(
         accessRevoked.value ||
         isReadDenial(list.error.value),
 );
+// A temporary read failure may retain only this actor/resource's last confirmed
+// list. A validated denial closes that fallback immediately; a warm cache entry
+// from another resource family never supplies display or command authority.
 const data = computed(() => {
     if (denied.value) return null;
     if (list.data.value) return list.data.value.data;
@@ -95,6 +107,9 @@ const data = computed(() => {
     return previous && belongsToQueryFamily(previous.query,
         packingKeys.resource(context.session.value?.context, listId.value)) ? previous.result.data : undefined;
 });
+// Native Pug escapes each line and inserts explicit breaks. Keep normal text
+// whitespace; pre-wrap would preserve extra spaces/tabs and change native wrapping.
+const descriptionLines = computed(() => data.value?.description?.split('\n') ?? []);
 const initialLoading = computed(() => !denied.value && !data.value && list.isPending.value);
 usePageTitle(() => data.value?.title || messages.value.t('packing.items'));
 const items = computed(() =>
@@ -109,35 +124,59 @@ const headerImage = useAuthorizedImage(
 );
 const header = headerImage.source;
 // A same-version JSON response may retain its object through structural sharing.
-// Observe read settlement too, so manual Refresh and ordinary polling can recover
-// a missing image without refetching/revoking a healthy downloaded version.
-watch([list.dataUpdatedAt, list.isFetching, list.error], recoverHeaderAfterRead);
+// Observe actual success so manual Refresh and polling can recover a missing
+// image. Canceled/idle reads and manual aliases are no new read receipt.
+const stopListReads = observeQueryReads<ListRead>(context.queryClient, () => key.value, recoverHeaderAfterRead);
+onBeforeUnmount(stopListReads);
 
 function recoverHeaderAfterRead(): void {
     if (active && data.value && !list.isFetching.value && !list.error.value) void headerImage.refresh();
 }
 
 async function refreshAfterCommand(): Promise<void> {
+    // A completed write can settle after a concurrent read retires this view's
+    // authority. Do not start an automatic private follow-up in that circumstance.
     if (!active || denied.value) return;
-    await list.refetch({throwOnError: true});
+    await refreshCurrentList();
 }
+
+/** Explicit Refresh is a fresh authority read even while ordinary polling is
+ * suspended by denial. The shared command owner retains any unknown status until
+ * this actual GET succeeds; its normal post-write callback remains narrower. */
+async function refreshCurrentList(): Promise<void> {
+    if (!active || !context.ready.value) throw new ObsoleteRequestError();
+    const scope = context.capture();
+    const resource = listId.value;
+    await refetchFreshQuery<ListRead>(context.queryClient, key.value, refetchList, mayRead);
+
+    function mayRead(): boolean {
+        return active && resource === listId.value && context.ready.value && context.isCurrent(scope);
+    }
+}
+
+function refetchList(): Promise<unknown> {
+    return list.refetch({throwOnError: true});
+}
+
+/** Native Packing HTTP permission failures use the same "Not allowed" wording.
+ * Project only its validated known code; contextual errors and future safe server
+ * details keep their own presentation, rejection and uncertainty semantics. */
+function packingProblemKey(problem: components['schemas']['Problem']) {
+    if (problem.code === 'FORBIDDEN') return 'common.notAllowed';
+}
+
 const command = useCommand(refreshAfterCommand, false, {
     // Descendant Settings and inline editors delegate their global guards here.
     // The command owner combines all mounted input into one departure decision.
     dirty: () => quickAddDirty.value,
     unknownMessage: 'draft.leaveUnknown',
+    problemKey: packingProblemKey,
 });
 const blocked = computed(() => command.pending.value || command.recovering.value || command.uncertain.value);
-const canEdit = computed(
-    () =>
-        data.value?.capabilities.reorder ||
-        items.value.some(
-            (item) =>
-                item.capabilities.editTitle ||
-                item.capabilities.editDescription ||
-                item.capabilities.editCapacity,
-        ),
-);
+
+/** Packed state is optional browser-local presentation using the native keys.
+ * SSR and browsers that reject even the localStorage getter use the same
+ * unavailable-storage path; that failure must not disable shared item commands. */
 function storage(): Storage | undefined {
     try {
         return context.browser ? window.localStorage : undefined;
@@ -162,16 +201,21 @@ watch(listId, () => {
     Object.assign(freshItem, {title: '', description: '', maxAssignees: 1});
     loadPacked();
 });
-function revokeAccess(): void {
+function revokeAccess(failure: Error): void {
     accessRevoked.value = true;
     previousList.value = null;
     editorOpen.value = false;
     // This feature owns the containing projections to retire. Cache lifetime is
     // shared, without teaching its generic owner any Packing or Overview policy.
     const actor = context.capture().context;
-    void evictQueryFamilies(context.queryClient,
-        [packingKeys.resource(actor, listId.value), packingKeys.events(actor), overviewKeys.all(actor)]);
+    // Preserve observed error-only queries so same-route recovery remains attached.
+    // Removing the current Query would leave its disabled observer's Refresh stale.
+    void retireQueryFamily(context.queryClient, packingKeys.resource(actor, listId.value), failure);
+    void evictQueryFamilies(context.queryClient, [packingKeys.events(actor), overviewKeys.all(actor)]);
 }
+/** Retire settings authority independently of detail admission. A fresh list read
+ * decides which page/self-membership actions remain available; cancellation and
+ * route/actor checks prevent this retired editor from refreshing another list. */
 async function settingsAccessLost(): Promise<void> {
     editorOpen.value = false;
     const actor = context.session.value?.context;
@@ -182,12 +226,13 @@ async function settingsAccessLost(): Promise<void> {
     const editors = {queryKey: packingKeys.editors(actor, resource)};
     await context.queryClient.cancelQueries(editors);
     context.queryClient.removeQueries(editors);
+
     if (!context.ready.value || resource !== listId.value || actor !== context.session.value?.context) return;
     await refresh();
 }
 watch(list.error, (failure) => {
-    if (isReadDenial(failure)) revokeAccess();
-});
+    if (isReadDenial(failure)) revokeAccess(failure);
+}, {flush: 'sync'});
 onMounted(loadPacked);
 function togglePacked(itemId: string, event: Event): void {
     const selected = (event.target as HTMLInputElement).checked;
@@ -198,15 +243,21 @@ function togglePacked(itemId: string, event: Event): void {
 function isFull(item: Item): boolean {
     return item.assignedCount >= (item.maxAssignees ?? 0);
 }
+/** Recover through an actually dispatched list read, honoring its deadline.
+ * Command reconciliation owns confirmed/unknown status; failed recovery keeps
+ * the existing stale presentation and never repeats the original write. */
 async function refresh(): Promise<boolean> {
     if (!retryAvailable.value) return false;
     try {
-        return await command.reconcile();
+        return await command.reconcile(refreshCurrentList);
     } catch {
         command.notice.value = 'state.stale';
         return false;
     }
 }
+/** Adapt one reviewed inline field without replacing unrelated item values.
+ * The editor supplies its captured token; raw native capacity input is deliberately
+ * left to the shared server/SQL boundary instead of coerced by this component. */
 async function patch(
     item: Item,
     field: 'title' | 'description' | 'maxAssignees',
@@ -228,14 +279,30 @@ async function patch(
         true, false, {presentation: 'inline', success: field === 'description' ? 'common.descriptionUpdated' : 'common.updated'},
     ));
 }
+
+/** Keep the original browser's local permission feedback without pretending its
+ * visible title/capacity affordance grants the actual metadata write. No HTTP
+ * operation is admitted; the server remains authoritative for every real save. */
+function denyInlineEdit(source?: Event): void {
+    command.captureFeedback(source);
+    command.setError('packing.inlineMetadataDenied', 'transient', 'inline');
+}
+/** Submit the desired opposite membership of the admitted row, not a body actor.
+ * The server owns idempotency and capacity; unknown delivery is reviewed through
+ * the shared command owner instead of automatically toggled or retried. */
 async function assign(item: Item): Promise<void> {
     await command.run((scope) => api.assign(listId.value, item.id, !item.selfAssigned, scope), true, false,
         {presentation: 'inline', success: item.selfAssigned ? 'packing.itemUnassigned' : 'packing.itemAssigned'});
 }
+/** Capture the requested Everyone value while displaying the last admitted row.
+ * The existing item token protects this sparse write; a later admitted list read
+ * supplies a replacement shared value, rather than an optimistic checkbox. */
 async function toggleRequired(item: Item, event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const value = input.checked;
-    // The checkbox remains authoritative until a confirmed response has been refreshed.
+
+    // Retain the last admitted item value while the requested change is pending,
+    // rejected or uncertain. The captured DOM choice is command input only.
     input.checked = item.requiredByAll;
     await command.run((scope) =>
         api.updateItem(listId.value, item.id, {requiredByAll: value}, item.editToken, scope),
@@ -254,6 +321,9 @@ async function removeAssignment(assignmentId: string): Promise<void> {
     await command.run((scope) => api.removeAssignment(listId.value, assignmentId, scope), true, false,
         {presentation: 'inline', success: 'common.removed'});
 }
+/** Submit the native Quick Add draft once through the shared creation command.
+ * Only a confirmed result clears the entered fields; a missing response retains
+ * both that draft and explicit review, since a read cannot identify its new row. */
 async function addItem(): Promise<void> {
     const result = await command.run((scope) =>
         api.addItem(
@@ -272,8 +342,15 @@ async function addItem(): Promise<void> {
         true,
         {presentation: 'inline', success: 'common.added'},
     );
+
+    // Confirmation still counts when the follow-up read fails. Unknown delivery
+    // yields no result here and must keep the captured creation draft for review.
     if (result) Object.assign(freshItem, {title: '', description: '', maxAssignees: 1});
 }
+
+/** Read the current list and obtain deliberate acknowledgement of an unknown
+ * Quick Add outcome. This releases its retained status without issuing another
+ * creation or treating absence from the refreshed list as proof of failure. */
 async function reviewUnknownItem(): Promise<void> {
     // A read reveals current rows, but cannot prove which one a lost creation response added.
     // Keep the captured input blocked until the user reviews that list and acknowledges it.
@@ -282,11 +359,18 @@ async function reviewUnknownItem(): Promise<void> {
         command.acknowledge();
     }
 }
+
+/** Begin one gesture only when current page state admits reordering. Capture
+ * the row membership and order token together so a later poll cannot replace
+ * the reviewed baseline consumed by drop. Server authorization remains separate. */
 function beginDrag(item: Item, event: DragEvent): void {
     if (!data.value?.capabilities.reorder || blocked.value || editing.value) {
         event.preventDefault();
         return;
     }
+
+    // Freeze the gesture's original row set and comparison evidence before the
+    // browser starts moving it; the transfer payload identifies only this item.
     dragged.value = {
         id: item.id,
         token: data.value.orderToken,
@@ -295,6 +379,9 @@ function beginDrag(item: Item, event: DragEvent): void {
     event.dataTransfer?.setData('text/plain', item.id);
     if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
 }
+/** Submit the drag-start membership and token, even when polling updates the
+ * displayed rows during the gesture. The server compares that reviewed order;
+ * this one drop consumes the gesture and cannot silently adopt a newer baseline. */
 async function drop(item: Item, event: DragEvent): Promise<void> {
     event.preventDefault();
     const original = dragged.value;
@@ -307,6 +394,7 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
         editing.value
     )
         return;
+
     const ids = original.ids.filter((id) => id !== original.id);
     ids.splice(ids.indexOf(item.id), 0, original.id);
     await command.run((scope) => api.reorder(listId.value, ids, original.token, scope), true, false,
@@ -324,13 +412,17 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                 class="card-img-top"
                 style="object-fit: cover; height: 250px"
             />
-            <div class="entity-header-layout p-3 gap-3">
-                <div v-if="data?.currentEventUrl" class="entity-header-parent btn-group d-md-inline d-none">
+            <!-- Follow the fixed native flex layout, including its empty desktop
+                 parent track. Migration must not center/reflow the native header
+                 by changing the reference template or its shared stylesheet. -->
+            <div class="p-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+                <div v-if="data?.currentEventUrl" class="btn-group d-md-inline d-none">
                     <a class="btn btn-outline-light" :href="data.currentEventUrl">
                         <i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i
                         >{{ messages.t('packing.goToEvent') }}
                     </a>
                 </div>
+                <div v-else class="d-none d-md-inline"></div>
                 <h1 class="mb-0 text-center">
                     <i class="bi bi-bag-check-check me-2" aria-hidden="true"></i
                     >{{ data?.title || messages.t('packing.items') }}
@@ -373,7 +465,9 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                 </template>
             </StatusNotice
             >
-            <StatusNotice v-if="denied" kind="danger">{{ messages.t('state.forbidden') }}</StatusNotice>
+            <StatusNotice v-if="denied" kind="danger" :retry-at="retryAt" :read-error="list.error.value">
+                {{ messages.t('state.forbidden') }}
+            </StatusNotice>
             <StatusNotice v-else-if="list.error.value" kind="warning"
                 :last-updated-at="list.data.value ? list.dataUpdatedAt.value : undefined"
                 :retry-at="retryAt" :read-error="list.error.value">{{
@@ -387,22 +481,25 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                     messages.t('packing.archived')
                 }}</StatusNotice>
                 <template v-if="data.description"
-                    ><p id="planDesc" class="pilot-description mb-0">{{ data.description }}</p>
-                    <hr class="my-3"
+                    ><p id="planDesc" class="mb-0 mt-2"
+                        ><template v-for="(line, index) in descriptionLines" :key="index"
+                            >{{ line }}<br v-if="index < descriptionLines.length - 1"
+                        /></template></p
+                    >
+                    <hr class="mb-1 mt-0"
                 /></template>
                 <!-- Badge margins own the native counter gaps. Keep labels and
                      adjacent badges together so template whitespace adds no gap. -->
                 <div
-                    class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"
-                    data-packing-counters
+                    class="d-flex justify-content-between align-items-center mb-3"
                 >
-                    <span class="fs-6 fw-semibold text-nowrap"
+                    <span class="fs-6 fw-semibold"
                         ><i class="bi bi-people-fill me-1" aria-hidden="true"></i
                         >{{ messages.t('packing.participants') }}:<span class="badge bg-light text-dark ms-1">{{
                             data.counters.participants
                         }}</span></span
                     >
-                    <span class="fs-6 fw-semibold text-nowrap"
+                    <span class="fs-6 fw-semibold"
                         ><i class="bi bi-card-checklist me-1" aria-hidden="true"></i
                         >{{ messages.t('packing.items') }}:<span class="badge bg-light text-dark ms-1">{{ data.items.length }}</span
                         ><span class="badge bg-secondary-subtle text-secondary-emphasis ms-1"
@@ -420,7 +517,7 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                  data arrives; horizontal scrolling must not create a fixed hint. -->
             <div class="table-responsive">
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                    <small v-if="canEdit" class="text-info fst-italic fw-light">{{
+                    <small class="text-info fst-italic fw-light">{{
                         messages.t('packing.inlineHint')
                     }}</small>
                     <ActionButton
@@ -515,11 +612,13 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                                 <InlineCell
                                     :value="item.title"
                                     :token="item.editToken"
-                                    :editable="item.capabilities.editTitle"
+                                    :editable="item.capabilities.showTitleEdit"
+                                    :write-admission="item.capabilities.editTitle"
                                     :disabled="blocked"
                                     :label="messages.t('packing.title')"
                                     :save="(value, token) => patch(item, 'title', value, token)"
                                     @editing="editing += $event ? 1 : -1"
+                                    @denied="denyInlineEdit"
                                 />
                                 <InlineCell
                                     :value="item.description"
@@ -534,12 +633,14 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                                     class="text-center"
                                     :value="item.maxAssignees"
                                     :token="item.editToken"
-                                    :editable="item.capabilities.editCapacity"
+                                    :editable="item.capabilities.showCapacityEdit"
+                                    :write-admission="item.capabilities.editCapacity"
                                     :disabled="blocked"
                                     :label="messages.t('packing.capacity')"
                                     numeric
                                     :save="(value, token) => patch(item, 'maxAssignees', value, token)"
                                     @editing="editing += $event ? 1 : -1"
+                                    @denied="denyInlineEdit"
                                 >
                                     {{ item.assignedCount }} / {{ item.maxAssignees }}
                                 </InlineCell>
@@ -554,12 +655,16 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                                             role="switch"
                                             :checked="item.requiredByAll"
                                             :disabled="blocked"
-                                            :aria-label="messages.t('packing.all')"
+                                            :aria-label="messages.t('common.all')"
                                             @change="toggleRequired(item, $event)"
                                         />
-                                        <span class="ms-1 small">{{ messages.t('packing.all') }}</span>
+                                        <span class="ms-1 small">{{ messages.t('common.all') }}</span>
                                     </div>
-                                    <template v-if="data.capabilities.selfAssign && item.selfAssigned">
+                                    <!-- Native admission displays these personal controls
+                                         even when the independent write grant is absent.
+                                         Preserve that presentation; the server rechecks
+                                         ACCESS_VIEW before every assignment command. -->
+                                    <template v-if="item.selfAssigned">
                                         <ActionButton
                                             class="btn-sm"
                                             variant="outline-danger"
@@ -575,14 +680,14 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                                         messages.t('packing.everyone')
                                     }}</span>
                                     <ActionButton
-                                        v-else-if="data.capabilities.selfAssign && !isFull(item)"
+                                        v-else-if="!isFull(item)"
                                         class="btn-sm"
                                         variant="outline-success"
                                         :disabled="blocked"
                                         @click="assign(item)"
                                         >{{ messages.t('packing.assign') }}</ActionButton
                                     >
-                                    <span v-else-if="isFull(item)" class="badge bg-secondary">{{
+                                    <span v-else class="badge bg-secondary">{{
                                         messages.t('packing.full')
                                     }}</span>
                                     <ActionButton

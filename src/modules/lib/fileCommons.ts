@@ -19,6 +19,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {v4 as uuidv4} from "uuid";
 import {EntityBase} from "../../types/UserTypes";
+import type {ImageSwapReceipt} from '../../types/UtilTypes';
 import {APIError} from "./errors";
 
 export function prepareFileUploader(dir: string, allowImg: boolean = true, allowPdf: boolean = false) {
@@ -69,11 +70,23 @@ export function prepareFileUploader(dir: string, allowImg: boolean = true, allow
     return proofUpload;
 }
 
-export async function performImageSwap(entity: EntityBase, updateFct: (id: string, path?: string | null) => Promise<void>, file?: Express.Multer.File) {
+/** Validate and replace an image through its owning persistence operation.
+ * Existing native callbacks return void and use the supplied entity's old path.
+ * A locked controller callback returns its actual previous path only after commit;
+ * unlinking therefore cannot destroy the authoritative image on a rolled-back write.
+ * A failed write removes the newly uploaded file through this same policy owner. */
+export async function performImageSwap<T extends void | ImageSwapReceipt>(
+    entity: Pick<EntityBase, 'id' | 'headerImg'>,
+    updateFct: (id: string, path?: string | null) => Promise<T>,
+    file?: Express.Multer.File,
+): Promise<T> {
+    // Apply the existing upload-type policy before the persistence callback.
+    // The checker owns immediate cleanup when this first admission fails.
     checkNewImage(file);
 
+    let saved: T;
     try {
-        await updateFct(entity.id, file ? file.path : null);
+        saved = await updateFct(entity.id, file ? file.path : null);
     } catch (err) {
         if (file) {
             removeImage(file.path);
@@ -81,11 +94,17 @@ export async function performImageSwap(entity: EntityBase, updateFct: (id: strin
         throw err;
     }
 
-    if (entity.headerImg) {
-        removeImage(entity.headerImg);
+    // Callback resolution is the commit boundary for receipt-producing owners.
+    // Void native callbacks retain the original resource's previous reference.
+    const previousImage = saved && typeof saved === 'object' ? saved.previousImage : entity.headerImg;
+    if (previousImage) {
+        removeImage(previousImage);
     }
+    return saved;
 }
 
+/** Retain native image-type admission and its invalid-upload cleanup. Multipart
+ * byte/extension limits belong to the uploader; this helper checks the admitted MIME. */
 export function checkNewImage(file?: Express.Multer.File) {
     const mimetypes = ["image/jpeg", "image/png", "image/gif"];
     const isValidImg = file ? mimetypes.includes(file.mimetype) : false;
@@ -96,6 +115,9 @@ export function checkNewImage(file?: Express.Multer.File) {
     }
 }
 
+/** Best-effort filesystem cleanup after the owning operation selects the path.
+ * This intentionally stays fire-and-forget and tolerates an already missing file;
+ * an unlink failure must not turn a committed business write into a failed command. */
 export function removeImage(path: string) {
     void fs.promises.unlink(path).catch(() => undefined);
 }

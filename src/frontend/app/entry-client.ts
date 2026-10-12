@@ -6,15 +6,20 @@ import {mountPreservingDrafts} from './mountPreservingDrafts';
 import {localeManifest} from '../../modules/localization/translator';
 import '../styles/pilot.css';
 
+/** Validate the server bootstrap before creating any browser owner, then restore
+ * pre-hydration controls before publishing readiness. Page lifecycle listeners
+ * preserve the same application when the browser restores its back-forward cache. */
 async function start(): Promise<void> {
     const node = document.getElementById('surveyor-pilot-state');
     const value: unknown = JSON.parse(node?.textContent ?? 'null');
     const bootstrap = await decodeBootstrap(value);
     const {app, router, context} = createPilotApp(bootstrap, true);
     await router.isReady();
+
     const container = document.getElementById('surveyor-pilot');
     if (!container) throw new Error('The pilot application container is missing.');
     await mountPreservingDrafts(app, container);
+
     watch(context.locale, locale => {
         document.documentElement.lang = locale;
         document.documentElement.dir = localeManifest.find(entry => entry.locale === locale)?.direction ?? 'ltr';
@@ -29,6 +34,7 @@ async function start(): Promise<void> {
     window.addEventListener('pageshow', event => {
         if (event.persisted) window.dispatchEvent(new Event('focus'));
     });
+
     /** Loading feedback preserves the current draft/focus. Move focus only after a
      * destination actually commits, never for cancellation or an obsolete completion. */
     async function focusDestination(to: RouteLocationNormalized, from: RouteLocationNormalized,

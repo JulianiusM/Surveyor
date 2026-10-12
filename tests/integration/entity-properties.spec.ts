@@ -133,6 +133,16 @@ describe('authorized event discovery and reassociation', () => {
         const defaults: Array<Partial<EntityPermissions>> = [];
         const registrations: Array<Partial<EventRegistration>> = [];
         const expectedIds: string[] = [];
+        const deniedIds: string[] = [];
+        // Reuse one identity per distinct denial/cursor boundary. Checking every
+        // denied row would repeat the same privacy oracle thousands of times.
+        const deniedBoundaryIndices = [
+            1, // Matches the denied-only terminal search below.
+            2279, // Last dense-prefix denial immediately before authorized rows.
+            2396, // Participant grant without the required registration.
+            2397, // View-only administrator without an attachment grant.
+            2399, // Last ungranted row beyond the authorized cursor range.
+        ];
         // Deliberately place 2,280 denied matches before any authorized row. Loading raw
         // batches and filtering in application memory would produce empty pages or scans;
         // the production query must apply the engine's eligibility inputs before LIMIT.
@@ -144,6 +154,7 @@ describe('authorized event discovery and reassociation', () => {
                 title: `Scale picker ${allowed ? 'allowed' : 'private'} ${index}`,
                 startDate: '2000-01-01', endDate: '2000-01-02'});
             if (allowed) expectedIds.push(id);
+            else if (deniedBoundaryIndices.includes(index)) deniedIds.push(id);
             if (grant === 1 || grant === 7) assignments.push({entityType: 'event', entityId: id,
                 profile: editor, perms: grant === 1 ? PERM.MANAGE_ASSIGNMENTS : PERM.ACCESS_VIEW});
             if (grant >= 2 && grant <= 6) {
@@ -169,7 +180,11 @@ describe('authorized event discovery and reassociation', () => {
         const pageSizes: number[] = [];
         do {
             const page = await getEventLinkOptions({q: 'Scale picker', cursor}, sessionFor(editor));
-            expect(JSON.stringify(page)).not.toContain('Scale picker private');
+            const serializedPage = JSON.stringify(page);
+            expect(serializedPage).not.toContain('Scale picker private');
+            // Representative denied identities must be absent from the entire
+            // response, including cursor metadata, not only the visible items.
+            for (const deniedId of deniedIds) expect(serializedPage).not.toContain(deniedId);
             pageSizes.push(page.items.length);
             received.push(...page.items.map(item => item.id));
             if (!cursor && page.nextCursor) {
@@ -189,6 +204,8 @@ describe('authorized event discovery and reassociation', () => {
         // terminal cursor, without a second expensive sparse-discovery fixture.
         const terminal = await getEventLinkOptions({q: 'Scale picker private 1'}, sessionFor(editor));
         expect(terminal).toMatchObject({items: [], nextCursor: null});
+        const serializedTerminal = JSON.stringify(terminal);
+        for (const deniedId of deniedIds) expect(serializedTerminal).not.toContain(deniedId);
     });
 
     it('requires destination authority even for a child owner and preserves committed items', async () => {

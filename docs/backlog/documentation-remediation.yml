@@ -1,0 +1,1466 @@
+schema_version: 1
+maintenance:
+  reviewed_on: 2026-10-12
+  authority: Explicit maintainer authorization to consolidate completed documentation history; live guidance continues to
+    describe native behavior.
+  policy: docs/policies/DOCUMENTATION_POLICY.md
+  history: Superseded audit metrics, completed package sequences and detailed run transcripts remain in Git history; no
+    parallel archive is maintained.
+  evidence_rule: Closed dispositions summarize recorded evidence; this editorial consolidation does not rerun application
+    or operator checks.
+documentation_delivery_policy:
+  mode: advisory-only
+  authority: Explicit maintainer instruction that documentation must never be a blocking gate, especially for CI.
+  applies_to:
+    - CI
+    - builds
+    - merges
+    - releases
+    - deployment
+    - review
+  public_report_exit_status: 0
+  application_tests: Keep security and executable behavior tests; use synthetic help fixtures rather than maintained prose or images.
+  historical_gate_language: Superseded; old package gate records describe historical review evidence only.
+audit:
+  date: 2026-09-05
+  source_archive: src(1).zip
+  archive_sha256: e5e07dd694d2af5520767d638934368c8566ed02c02f78ac2863b33db9f174b0
+  extracted_source_fingerprint: 334a506602e67e869b4021567408890bb44a6ad91ede85d2e10db01b72b95cf6
+  review_mode: static
+severity_definitions:
+  critical: Likely to make a core task fail, create an incorrect access/security decision, or block safe operation.
+  high: Materially misleading or missing for a common task, contributor workflow, or production responsibility.
+  medium: Causes avoidable confusion, incomplete feature use, or maintenance friction but has a usable workaround.
+  low: Clarity, structure, metadata, or polish issue with limited immediate behavioral impact.
+documentation_contract:
+  target: The intended current working implementation, including deliberate feature-specific exceptions, established by
+    feature-specific behavior, tests, and explicit decisions.
+  intentional_exceptions: Document confirmed feature differences wherever readers need them; do not classify them as
+    defects or flatten them into a peer-feature pattern.
+  transient_defects: Keep details only in migration-control records; do not copy defects, temporary warnings, or
+    workarounds into end-user, operator, maintainer, or AI documentation.
+  unresolved_behavior: Keep affected product documentation migration-pending until intent is supported by feature-specific
+    evidence or an explicit product decision.
+help_markdown_trust:
+  status: resolved
+  decision: DEC-004
+  model: trusted_application_shipped_content
+  source_boundary: Only reviewed Markdown packaged under docs/user-guide is rendered as in-app help.
+  authoring_rule: Treat guide changes as security-sensitive source changes; permit the metadata comment but no active raw
+    HTML or unsafe URI schemes.
+  operator_rule: Deploy the guides from the matching release and never overlay them with user-writable, tenant-writable,
+    or otherwise untrusted content.
+  boundary_change_rule: Reopen DEC-004 and implement a threat model, sanitization, and URI allowlist before enabling
+    uploads, database content, runtime editors, remote feeds, plugins, or other untrusted sources.
+migration_change_boundary:
+  default_scope: documentation-only
+  permitted_by_default:
+    - documentation files under docs
+    - migration records and documentation-only gate configuration
+  prohibited_without_explicit_authorization:
+    - application runtime source changes
+    - runtime behavior tests or fixtures
+    - configuration defaults and environment examples
+    - package, build, or workflow changes
+  exception:
+    description: A separately named package may make a targeted in-app help integration change only when explicitly authorized.
+  implementation_defect_rule: Confirm that a difference is not intentional before registering a defect; record each
+    transient defect once in migration controls, document the corrected working contract in product documentation, and
+    do not repair runtime behavior in a documentation package.
+behavior_decisions:
+  - id: DEC-001
+    status: resolved
+    title: Survey combination authorization
+    decision_record: docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md
+    resolution: Adding a date combination is a collaborative participant action. Every person with an active profile who is
+      admitted to the survey voting page may add a combination; no owner, administrator, or generic permission check
+      applies.
+  - id: DEC-002
+    status: resolved_for_documentation
+    title: OIDC callback path
+    decision_record: docs/decisions/DEC-002-OIDC-CALLBACK.md
+    resolution: Documentation uses /users/oidc/callback because that is the mounted public route and the coherent callback
+      contract. The isolated default mismatch remains IMP-001.
+  - id: DEC-003
+    status: resolved
+    title: Driver-list participant count semantics
+    decision_record: docs/decisions/DEC-003-DRIVER-LIST-PARTICIPANT-COUNT.md
+    resolution: The displayed Participants value is the number of distinct assignee profiles across all driver rows.
+      Driver-only profiles are excluded, and one profile assigned to multiple rows is counted once.
+  - id: DEC-004
+    status: resolved
+    title: Help Markdown trust model
+    decision_record: docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md
+    resolution: In-app help Markdown is trusted, application-shipped content from the fixed docs/user-guide directory.
+      Runtime sanitization is not the controlling boundary while that source restriction holds.
+  - id: DEC-005
+    status: resolved
+    title: Surveys and the general permission system
+    decision_record: docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md
+    resolution: Surveys deliberately do not implement the general permission system used by the other primary entity types.
+      The missing matrix and persistence hook are intentional feature boundaries, not defects.
+implementation_defects:
+  - id: IMP-001
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Built-in OIDC redirect default does not match the mounted callback route
+    evidence:
+      - src/app.ts mounts the users router at /users
+      - src/routes/users.ts registers /oidc/callback inside that router
+      - src/modules/settings.ts defaults to a URL ending in /user/oidc/callback
+    impact: OIDC login can fail when the mismatched default is used unchanged.
+    documentation_contract: Product documentation uses the corrected /users/oidc/callback contract and does not mention this transient defect.
+    closes_when:
+      - an explicitly authorized application change aligns the default with the mounted route or deliberately changes
+        the route
+      - tests and examples cover the selected behavior
+      - D04 and D12 are re-verified if their documented contract changes
+  - id: IMP-003
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Password policy is not enforced consistently across registration and reset boundaries
+    evidence:
+      - src/public/js/core/password-validation.ts defines the intended minimum of eight characters, one letter, and one
+        digit
+      - src/views/users/register.pug loads the password validator, but src/controller/userController.ts checks only
+        presence and equality
+      - src/views/users/reset-password.pug declares only an eight-character HTML minimum and the reset controller checks
+        only equality
+    impact: A client bypass or the reset path can accept a password that does not meet the policy presented during
+      registration.
+    documentation_contract: D01 states one coherent policy for registration and reset and does not expose the enforcement inconsistency.
+    closes_when:
+      - one server-side validator enforces the complete policy for registration and password reset
+      - registration and reset UI use the same validator and wording
+      - automated tests cover every rule and both entry paths
+  - id: IMP-004
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Guest recovery is not reachable through the login page in an organization-sign-in-only deployment
+    evidence:
+      - src/routes/users.ts redirects GET /users/login to OIDC before rendering the page when local login is disabled
+      - the guest-recovery form exists only in src/views/users/login.pug
+      - GET /guest/recovery redirects back to /users/login
+    impact: A guest with an email address can be unable to request their private links when the deployment disables local
+      login.
+    documentation_contract: D01 documents guest email recovery as an authentication-mode-independent capability and does not
+      repeat the routing defect.
+    closes_when:
+      - guest recovery remains directly reachable when local login is disabled
+      - invitation, login, and recovery routes preserve the intended return path
+      - automated route tests cover local-only, mixed, and organization-sign-in-only deployments
+  - id: IMP-005
+    status: open
+    severity: medium
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Guest profile settings expose a profile-deactivation action that rejects guest sessions
+    evidence:
+      - src/views/users/profile/view.pug renders Delete profile without checking whether the active profile belongs to a
+        full account
+      - src/routes/users.ts protects the profile-deletion routes with isAuthenticated rather than isLoggedIn
+    impact: Guests see an action that redirects them away instead of performing the supported guest-account closure flow.
+    documentation_contract: D01 directs guests to Delete account and assumes the inapplicable profile-deactivation action is not shown.
+    closes_when:
+      - the profile page hides or replaces Delete profile for guests
+      - the guest account-closure path is covered by a rendered-view or route test
+  - id: IMP-006
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Deactivating the final full-account profile can complete deletion and then fail while selecting another profile
+    evidence:
+      - src/controller/userController.ts deletes the previous user when profile deactivation leaves no profiles
+      - the profile-deletion route then unconditionally calls changeActiveProfile
+      - changeActiveProfile throws when the deleted account has no remaining profile
+    impact: The destructive operation can succeed while the user receives an error instead of a clean account-closure result.
+    documentation_contract: D01 describes final-profile deactivation as a clean permanent account closure and does not
+      expose the post-deletion failure.
+    closes_when:
+      - final-profile deactivation terminates or clears the session without attempting another profile selection
+      - multi-profile and final-profile outcomes have route-level tests
+  - id: IMP-007
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Event registration-link creation ignores the submitted Uses value
+    evidence:
+      - src/views/modules/module_registration_links.pug exposes a Uses field with values greater than one
+      - src/public/js/modules/reg-links.ts sends maxUses to the event links API
+      - src/modules/database/services/EventService.ts stores and enforces maxUses
+      - "src/controller/eventController.ts creates every link with maxUses: 1"
+    impact: A link configured for multiple late registrations is created as single-use.
+    documentation_contract: D05 documents the coherent working contract in which Uses controls the allowed number of
+      successful late registrations and does not mention the controller mismatch.
+    closes_when:
+      - the controller validates and forwards the requested positive whole-number maxUses value
+      - route or integration tests cover single-use and multi-use links, exhaustion, expiry, and revocation
+      - D05 is re-verified if the selected user-visible contract changes
+  - id: IMP-008
+    status: open
+    severity: critical
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Event participant details are embedded in the page without an Access Participants rendering guard
+    evidence:
+      - src/controller/eventController.ts fetches the complete participant rows for every admitted event-page request
+      - src/views/event/event-view.pug always serializes data.participants into participantsData
+      - the visible Participants component and API are separately guarded by ACCESS_PARTICIPANTS
+    impact: A profile without participant-list permission can receive names, available email addresses, dates, and dietary
+      data in page source even when the visible participant section is hidden.
+    documentation_contract: D05 states that participant details are available only with Access Participants and does not
+      disclose or normalize the transient data-exposure defect.
+    closes_when:
+      - participant rows are not fetched or serialized unless the effective permissions include ACCESS_PARTICIPANTS or
+        another explicitly reviewed need applies
+      - rendered-view tests assert the absence of sensitive participant JSON for unauthorized profiles
+      - the participant API and PDF permission tests remain aligned
+  - id: IMP-009
+    status: resolved
+    title: Event post-deadline setting fields use inconsistent names in permission enforcement
+    resolved_on: 2026-09-16
+    resolution: Canonical field policy now drives modal visibility and server authorization; atomic event patches preserve
+      omission and explicit false. Integration cases and browser requests verify all three unauthorized policy switches
+      are rejected and requirements-only saves work.
+  - id: IMP-010
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: A late-registration token is not preserved through first-time guest onboarding
+    evidence:
+      - src/public/js/modules/reg-links.ts creates event URLs with the regToken query parameter
+      - src/middleware/guestFlowFactory.ts redirects an anonymous event request to /event/:id/guest without carrying the
+        query parameter
+      - the guest registration POST redirects to the event page without restoring regToken
+    impact: A new guest following a valid deadline-bypass link can lose the token before submitting the registration.
+    documentation_contract: D05 documents late-registration links as usable through the normal account or guest entry flow
+      and does not expose the redirect defect.
+    closes_when:
+      - the guest onboarding flow preserves and validates the event registration token across GET, POST, and final
+        redirect
+      - tests cover anonymous guest, existing guest, and full-account use after the binding deadline
+      - invalid, expired, revoked, and consumed tokens remain rejected
+  - id: IMP-011
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Delegated invoice organizers can be rejected by the proof route's outer participant guard
+    second_pass_review:
+      date: 2026-10-04
+      finding: Current proof routing no longer has the outer participant guard; current controller policy accepts an effective
+        manager or the attributed participant. The original description is historical evidence, not an intentional
+        exception to preserve.
+      source_evidence: src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/invoice/proofs.ts;
+        tests/integration/organizer-invoices.spec.ts
+      remaining_verification: Retain open status until the full route actor matrix in closes_when is checked; this source
+        review did not execute tests.
+    evidence:
+      - src/routes/api/eventInvoices.ts protects the proof route first with requireEventParticipantAPI
+      - requireEventParticipantAPI admits only the event owner or a registered event participant
+      - src/controller/eventPoolController.ts then separately allows MANAGE_ASSIGNMENTS or the invoice submitter
+    impact: A non-owner organizer with Access Admin and Manage Assignments can administer invoices but still be blocked from
+      opening their proof unless the organizer is also registered for the event.
+    documentation_contract: D06 documents the coherent working contract in which an entrusted invoice-pool organizer can
+      inspect every invoice and proof and does not expose the guard-order mismatch.
+    closes_when:
+      - proof authorization admits the submitter or a profile with the required invoice-administration permission
+        without first requiring event registration
+      - route-level tests cover owner, delegated organizer, submitter, unrelated participant, and unrelated profile
+      - D06 is re-verified if the selected access contract changes
+  - id: IMP-012
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Invoice submission and participant pool listing disagree about default-pool assignment
+    second_pass_review:
+      date: 2026-10-04
+      finding: Current controller, locked state validation and participant-pool query use assignAll or explicit assignment for
+        eligibility; default enrollment is separate. The original mismatch appears superseded by current code.
+      source_evidence: src/controller/eventPoolController.ts; src/modules/invoice/state.ts;
+        src/modules/database/services/EventInvoiceService.ts
+      remaining_verification: The complete current-participant, future-participant, default-enrollment and listing matrix was
+        not verified in execution; retain open status pending reconciliation.
+    evidence:
+      - src/modules/database/services/EventInvoiceService.ts lists an open participant pool only when assignAll is true
+        or an explicit assignment exists
+      - src/controller/eventPoolController.ts also treats pool.isDefault as sufficient for invoice submission
+      - default-pool registration is otherwise materialized by registerForDefaultPools when a new event registration is
+        created
+    impact: A crafted submission can be accepted for an existing registration that is not shown as assigned to the pool.
+    documentation_contract: D06 states that a participant can submit only to an open pool that applies to all registrations
+      or explicitly contains their registration.
+    closes_when:
+      - listing, form choices, and submission authorization use one assignment predicate
+      - tests cover current registrations, future registrations added through a default pool, assign-all pools, explicit
+        assignment, and unassigned rejection
+  - id: IMP-013
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Invoice proof cleanup does not cover every failed-submission and event-deletion path
+    evidence:
+      - multer writes the proof before controller validation and only the unsupported-MIME branch explicitly unlinks it
+      - persistence or later validation failures can occur after upload without a common cleanup path
+      - src/modules/database/services/EventService.ts deletes an event through database cascade but does not remove its
+        proof files
+      - retention cleanup can remove a proof only while its invoice row still exists
+    impact: Sensitive proof files can remain on disk without a reachable invoice record or normal retention path.
+    documentation_contract: D06 and D04 document a coherent lifecycle in which failed submissions and entity deletion do not
+      leave inaccessible proof files behind, and do not normalize the cleanup defect.
+    closes_when:
+      - every upload failure after file creation removes the file
+      - event or pool deletion removes associated proof files safely
+      - integration tests cover validation failure, persistence failure, deletion, and retention without deleting files
+        outside the configured invoice directory
+  - id: IMP-014
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Participant takeover updates do not independently enforce the pool's open state
+    second_pass_review:
+      date: 2026-10-04
+      finding: Current locked takeover operation rejects participant changes unless the pool is OPEN, including
+        ORGANIZER_ONLY. Existing integration assertions include organizer-only and closed rejection.
+      source_evidence: src/modules/invoice/takeovers.ts; tests/integration/invoice-workflows.spec.ts
+      remaining_verification: Source assertions were inspected but not run; retain open status until the stated route-level
+        acceptance matrix is reconciled with current evidence.
+    evidence:
+      - src/views/modules/module_invoice_pool.pug exposes participant takeover controls only for open pools
+      - src/controller/eventPoolController.ts updateTakeovers validates assignment and relationship rules but not
+        pool.status
+      - the participant takeover route does not add a separate closed-pool guard
+    impact: A crafted request can alter takeover instructions for a closed pool, affecting a later recalculation despite the
+      UI presenting the configuration as frozen.
+    documentation_contract: D06 states that participant takeover changes are available only while the pool is open.
+    closes_when:
+      - participant takeover mutation rejects closed pools server-side
+      - organizer correction behavior for a closed pool remains explicit and is applied only through the reviewed
+        recalculation path
+      - route-level tests cover open and closed participant requests plus authorized organizer correction
+  - id: IMP-015
+    status: open
+    severity: medium
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Clearing the final explicit pool assignment does not remove stale takeovers and surcharges
+    second_pass_review:
+      date: 2026-10-04
+      finding: Current assignment operation retains an empty valid-ID set and prunes out-of-scope takeovers and surcharges.
+        The previous empty-set bypass is not the current implementation.
+      source_evidence: src/modules/invoice/poolOperations.ts; tests/integration/invoice-workflows.spec.ts
+      remaining_verification: Reviewed empty-allocation tests do not explicitly seed and assert removal of stale takeovers and
+        adjustments; retain open status for that exact acceptance check.
+    evidence:
+      - src/modules/database/services/EventInvoiceService.ts updateAssignments replaces explicit assignment rows with
+        the submitted registration IDs
+      - when the submitted registration list is empty, the cleanup variable validIds falls back to every event
+        registration instead of the empty effective assignment scope
+      - takeover and surcharge cleanup therefore retains rows for registrations that are no longer assigned when the
+        final assignment is cleared
+    impact: Hidden takeover and surcharge records can survive an empty pool assignment and can become effective again after
+      later reassignment or recalculation.
+    documentation_contract: D06 states the coherent working contract in which removing a participant also removes adjustment
+      records that are incompatible with the remaining assignment scope.
+    closes_when:
+      - takeover and surcharge cleanup derives from the effective assigned registration IDs, including an empty set
+      - integration tests clear the final explicit assignment and verify that stale takeovers and surcharges are removed
+      - tests also preserve adjustments for registrations that remain assigned
+  - id: IMP-016
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Editing a slot compares activity-slot-role mapping IDs with role IDs when deciding what to remove
+    evidence:
+      - src/modules/database/services/ActivityService.ts updateActivitySlotRoles loads ActivitySlotRole rows and their
+        roles
+      - the deletion filter checks roles.includes(r.id), where r.id is the mapping-row ID rather than r.roleId
+      - the creation filter correctly compares the submitted values with r.roleId, so the two halves use different
+        identifiers
+    impact: Saving Roles for this slot can remove a role that should remain or fail to represent the selected role set
+      reliably.
+    documentation_contract: D07 documents the intended working behavior in which selected role chips are added or removed
+      and Save persists the resulting role set.
+    closes_when:
+      - deletion compares submitted role IDs with the related role ID rather than the mapping-row ID
+      - integration tests retain, remove, and add several role combinations while preserving assignments according to
+        the selected contract
+      - D07 is reverified only if the visible role-editing contract changes
+  - id: IMP-017
+    status: open
+    severity: medium
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Initial activity-slot controls do not provide complete visible or programmatic field labels
+    evidence:
+      - src/public/js/activity-create.ts dynamically creates Title and Description fields with placeholders only
+      - Start time and End time are time inputs whose placeholders are not a reliable visible or accessible label
+      - the numeric Max participants input has neither a label nor a placeholder
+    impact: A novice or assistive-technology user can have difficulty identifying the initial slot fields before creating
+      the plan.
+    documentation_contract: D07 names the intended fields Title, Description, Start time, End time, and Max participants
+      without documenting the labeling defect.
+    closes_when:
+      - every dynamically generated initial-slot control has an associated visible label and accessible name
+      - creation UI tests verify the labels for keyboard and assistive-technology use
+      - duplicate/prefilled creation retains the same field contract
+  - id: IMP-018
+    status: open
+    severity: critical
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: The activity Participants tab and participant rows are not guarded by Access Participants
+    evidence:
+      - src/controller/activityController.ts builds participantList for every admitted activity-plan page request
+      - src/views/activity/activity-view.pug shows the Participants tab whenever participantList is nonempty without
+        checking ACCESS_PARTICIPANTS
+      - the Schedule view separately checks ACCESS_PARTICIPANTS before rendering assignee names
+    impact: A profile that may view the plan but lacks participant-list permission can receive names, attendance, assignment
+      counts, requirements, and roles through the Participants tab.
+    documentation_contract: D07 states that Participants appears only when participant data exists and the viewer has Access
+      Participants, and does not normalize the transient privacy defect.
+    closes_when:
+      - participant rows are not fetched, serialized, or rendered without ACCESS_PARTICIPANTS or an explicitly reviewed
+        equivalent authorization
+      - rendered-view tests prove that unauthorized profiles receive neither the tab nor participant data
+      - authorized participant review and schedule-name rendering remain aligned
+  - id: IMP-019
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Survey descriptions are not rendered correctly on the voting page
+    evidence:
+      - src/views/surveyor/survey-vote.pug creates a lines array but interpolates line and i without iterating over that
+        array
+      - the survey creation flow persists the description and the view controller returns the survey entity
+      - existing E2E detail assertions do not check the description text
+    impact: Participant instructions, date context, and an organizer-supplied response deadline can be absent from the
+      voting page even though they were saved.
+    documentation_contract: D09 describes the coherent working contract in which the saved description appears below the
+      survey title and does not expose the template defect.
+    closes_when:
+      - the voting template renders every saved description line in order
+      - rendered-view or E2E coverage checks both single-line and multiline descriptions
+      - D09 is re-verified only if the visible description contract changes
+  - id: IMP-020
+    status: open
+    severity: medium
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Survey duplication does not reliably prefill the description and week-of-month values
+    evidence:
+      - src/views/surveyor/survey-create.pug places the description in a textarea value attribute rather than its text
+        content
+      - src/public/js/survey-create.ts reads nth_week while SurveyCombination exposes nthWeek
+      - the generic duplicate route supplies the original entity and SurveyCombination objects to the creation template
+    impact: A duplicated survey can open with an empty description or incorrect ordinal selections, increasing the risk of
+      publishing an unintended copy.
+    documentation_contract: D09 states that Duplicate opens a prefilled title, description, and combination form while
+      responses and the header image are not copied.
+    closes_when:
+      - duplicate and validation rerenders populate the textarea through its text content
+      - duplicate combination rows read the canonical nthWeek property
+      - browser or rendered-view tests verify title, description, every weekday, every ordinal, and the absence of
+        copied responses and image data
+  - id: IMP-021
+    status: open
+    severity: medium
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Survey routing retains nonfunctional event-scoping plumbing
+    evidence:
+      - src/routes/survey.ts configures the generic guest-flow router with addToEvent true
+      - src/middleware/guestFlowFactory.ts accepts eventId and applies event-creation authorization for that mode
+      - Survey has no event relation and surveyController.createEntity does not persist the injected event ID
+      - the event dashboard survey section is commented out while an E2E case calls the query-driven flow event-scoped
+        without checking a relationship
+    impact: Internal routes and tests can imply that surveys become event-linked even though no relationship is stored or
+      exposed in the product.
+    documentation_contract: D05 and D09 treat surveys as standalone resources that are shared separately and do not appear
+      in event-linked resource sections.
+    closes_when:
+      - survey creation no longer accepts or authorizes an unused eventId path
+      - event-dashboard and E2E code use the same standalone survey contract
+      - a future event-link feature, if deliberately introduced, receives its own product decision, persistence model,
+        access rules, tests, and documentation
+  - id: IMP-022
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Packing-item title and capacity controls use permission checks that differ between rendering and mutation
+    migration_disposition: Explicit 2026-10-12 maintainer decision requires v1 to preserve native grants through
+      controller-owned method declarations. This native permission defect stays open for a separately reviewed
+      correction; migration must not silently replace EDIT_META with the more specific grants or infer additional parent
+      inheritance.
+    evidence:
+      - src/views/packing/packing-view.pug renders title editing for EDIT_TITLE or ITEM_EDIT and capacity editing for
+        EDIT_CAPACITY or ITEM_EDIT
+      - src/routes/api/packing.ts protects the shared item-attribute mutation route with EDIT_META or ITEM_EDIT
+      - src/public/js/packing.ts sends both title and maxAssignees changes through that shared route
+    impact: A profile granted only the field-specific title or capacity permission can see an edit control but have the save
+      rejected.
+    documentation_contract: D10 documents the coherent working contract in which the field-specific edit grants shown by the
+      page authorize the corresponding save operation.
+    closes_when:
+      - the item-attribute mutation checks the submitted field against the matching field-specific permission or uses
+        separate field routes
+      - negative and positive route tests cover EDIT_TITLE, EDIT_CAPACITY, EDIT_META, and ITEM_EDIT independently
+      - the visible controls and server-side authorization use the same contract
+  - id: IMP-023
+    status: open
+    severity: medium
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Packing-item creation passes position while persistence reads pos
+    evidence:
+      - src/controller/packingController.ts supplies position for initial and quick-added items
+      - src/modules/database/services/PackingService.ts persists item.pos in both createPackingListTx and addPackingItems
+      - subsequent reads and reorder operations use the pos column
+    impact: Initial and newly added row ordering can be stored without the intended sequence until an explicit reorder occurs.
+    documentation_contract: D10 states the coherent working contract in which creation order and later drag reordering are
+      stored for the shared list.
+    closes_when:
+      - controllers and persistence use one canonical item-order property
+      - integration tests verify initial multi-row order, quick-add order, duplicate order, and drag reorder persistence
+      - D10 is re-verified only if the visible ordering contract changes
+  - id: IMP-024
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Everyone items can retain or receive hidden individual assignments
+    evidence:
+      - src/modules/database/services/PackingService.ts togglePackingItemRequiredByAll changes only the flag and does
+        not reconcile existing PackingAssignment rows
+      - the assignment service does not reject an item whose requiredByAll flag is true
+      - src/views/packing/packing-view.pug hides individual assignee names and Take controls for Everyone rows
+      - participant overview lookup still considers any retained PackingAssignment row
+    impact: A row presented as a group-wide requirement can retain invisible individual responsibility, affect Your
+      participation, and reveal old assignments again if All is disabled.
+    documentation_contract: "D10 treats Everyone as a non-assignment mode: no individual Take action, assignee list,
+      assignment counter contribution, or participation-overview effect applies while it is enabled."
+    closes_when:
+      - enabling Everyone removes or otherwise deactivates individual assignments atomically
+      - assignment mutations reject Everyone items
+      - tests cover conversion in both directions, participant counters, overview membership, and concurrent assignment
+        attempts
+  - id: IMP-025
+    status: open
+    severity: medium
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Post-creation packing-item capacity mutations do not enforce the creation-time positive-integer rule server-side
+    evidence:
+      - src/controller/packingController.ts preprocessCreate validates maxAssignees as an integer of at least one
+      - quickAddItem converts the submitted value without a positive-integer validation boundary
+      - updateItemAttr accepts maxAssignees through the generic field update without validating its type or range
+    impact: Crafted requests can create or update an item with a capacity that breaks the documented assignment and
+      open/full semantics.
+    documentation_contract: "D10 consistently requires Max # to be a whole number of at least one for creation, quick add, and editing."
+    closes_when:
+      - one shared server-side capacity validator protects every packing-item creation and update path
+      - route and integration tests reject zero, negative, fractional, nonnumeric, and missing values while accepting
+        positive integers
+  - id: IMP-026
+    status: open
+    severity: medium
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Drivers-list capacity mutations do not consistently enforce the positive whole-number and current-assignment
+      boundary
+    evidence:
+      - src/views/drivers/drivers-view.pug supplies a numeric Max
+      - src/controller/driversController.ts quickAddItem uses Number(maxAssignees) || 1, which does not reject negative
+        or fractional values
+      - updateItemAttr writes maxAssignees through a generic field update without validating its type, range, or
+        relationship to the current assignment count
+    impact: Crafted or inconsistent updates can produce capacities that break the documented open, full, and assignment
+      semantics or place a row below its visible passenger count.
+    documentation_contract: "D11 requires Max # to be a whole number of at least one and requires passengers to be moved or
+      removed before lowering it below the current assignment count."
+    closes_when:
+      - one shared server-side validator protects ride creation and every capacity-update path
+      - capacity cannot be lowered below the current assignment count without an explicit, reviewed reconciliation
+        operation
+      - route and integration tests reject zero, negative, fractional, nonnumeric, and below-assignment values while
+        accepting valid positive integers
+  - id: IMP-027
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Drivers-list participation lookup requires a profile to be both a driver and a passenger
+    evidence:
+      - src/modules/database/services/DriverService.ts getDriversListByParticipant combines an assignment existence
+        predicate with a driver-row ownership predicate using AND
+      - src/controller/userController.ts uses that result for the drivers-list entries under Your participation
+      - tests/integration/controller-smoke-workflows.spec.ts exercises only a profile that both creates a row and
+        assigns itself, so driver-only and passenger-only participation are not covered
+    impact: A profile that only offers a ride or only takes a passenger place can be absent from the participation
+      collection even though it participates in the list.
+    documentation_contract: D11 treats either offering a ride or taking a passenger place as drivers-list participation for the active profile.
+    closes_when:
+      - the participation query includes a list when the profile owns at least one ride row OR has at least one
+        passenger assignment
+      - tests cover driver-only, passenger-only, both, neither, and repeated-row cases
+      - Your overview continues to deduplicate the same list when both predicates match
+  - id: IMP-028
+    status: open
+    severity: medium
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Drivers-list Take and Remove controls are rendered without the Access View action guard used by the API
+    evidence:
+      - src/views/drivers/drivers-view.pug renders Take or Remove from assignment and capacity state without checking
+        ACCESS_VIEW
+      - src/routes/api/drivers.ts protects both assignment mutations with requirePermissionApi for ACCESS_VIEW
+      - standalone page admission accepts any active profile even when that profile has no effective Access View grant
+    impact: A profile can be shown an assignment control that the server rejects, making access and permission behavior
+      appear inconsistent.
+    documentation_contract: D11 states that Take and Remove are available only when the active profile has effective Access View permission.
+    closes_when:
+      - the rendered controls and the assignment API use the same authorization predicate
+      - browser or rendered-view tests cover admitted profiles with and without Access View
+      - event-participant admission remains distinct from assignment authorization
+  - id: IMP-029
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: The active recommendation schedule does not render server warnings or skipped-operation results
+    evidence:
+      - src/public/js/activity.ts initializes activity-recommendations-schedule.ts as the active recommendation interface
+      - activity-recommendations-schedule.ts stores warnings returned by the recommendation endpoint but no active
+        renderer consumes ActivityRecommendationsState.getWarnings()
+      - the apply endpoint returns applied, skipped, and warning details, while the active interface ignores the
+        response body and displays only a generic success message before reload
+      - the older unused activity-recommendations.ts module contains warning rendering that is not connected to the
+        active schedule view
+    remediation_progress:
+      - 2026-10-03 activity-plan interlinking implements persistent server-backed row warnings and actual
+        applied/skipped result counts across reload
+      - tests/frontend/activity-recommendation-warnings.spec.ts and tests/integration/activity-plan-interlinking.spec.ts
+        protect operation matching, overlap confirmation, freshness, priority and atomic history
+      - broader frontend blocking scenarios listed below remain a separate coverage follow-up; this record stays open
+        until all closure criteria are verified
+    impact: An organizer can approve a blocked operation and see it omitted after saving without the intended row-level
+      reason or skipped count.
+    documentation_contract: D08 states that validation warnings and skipped operations are surfaced for organizer review after Save changes.
+    closes_when:
+      - the active schedule view renders current warning reasons beside the affected operation
+      - the Save changes result reports the applied and skipped counts before or after reload
+      - frontend and integration tests cover attendance, overlap, capacity, named-role, stale-source, and
+        reciprocal-swap blocking
+  - id: IMP-030
+    status: open
+    severity: medium
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: The active recommendation schedule does not observe automatically queued binding-deadline generation
+    evidence:
+      - src/controller/activityController.ts returns autoGenerationJob when Required mode has a past binding deadline
+        and no recommendation history
+      - src/public/js/activity.ts initializes activity-recommendations-schedule.ts for the active page
+      - activity-recommendations-schedule.ts ignores autoGenerationJob when loading recommendations and therefore does
+        not poll the queued job
+      - the older unused activity-recommendations.ts module contains the missing autoGenerationJob polling behavior
+    impact: The server can queue the initial post-deadline recommendation calculation without the active page showing
+      progress or reloading its result.
+    documentation_contract: D08 treats automatic initial post-deadline generation as a visible queued workflow that
+      completes into the review schedule.
+    closes_when:
+      - the active schedule detects autoGenerationJob, shows its status, polls it, and reloads terminal results
+      - stale, failed, and timed-out jobs produce actionable visible messages
+      - frontend or E2E tests cover the first post-deadline load with no recommendation history
+  - id: IMP-031
+    status: resolved
+    title: Long takeover lists overflow their modal dialog
+    resolution: The authorized invoice-pool feature follow-up makes the form a shrinkable flex column, scrolls the modal
+      body, keeps header/footer visible, and wraps long participant names.
+    resolution_evidence:
+      - src/views/modules/module_invoice_pool.pug
+      - src/public/style/style.sass
+      - Chromium layout checks with 28 long participant names at desktop and mobile sizes
+  - id: IMP-032
+    status: resolved
+    title: Entity creation authorizes a different event input from the persisted relationship
+    resolved_on: 2026-09-16
+    resolution: Creation authorizes the actual submitted event_id with the cumulative active-profile evaluator, including
+      participant audiences. The same destination authority drives filtered historical discovery and transactional
+      reassociation. Browser tests cover forged body/query differences, active profiles, and valid replacement
+      destinations.
+  - id: IMP-033
+    status: resolved
+    title: Event settings omit controls for profiles with only requirement-management permission
+    resolved_on: 2026-09-16
+    resolution: Entity settings derives its trigger, sections, and values from every editable field capability.
+      Rendered-view and browser tests verify requirements-only event editors receive dietary controls on the ordinary
+      view and can save without dashboard authority.
+  - id: IMP-034
+    status: open
+    severity: low
+    owner: help maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Help pages omit the browser document title
+    evidence:
+      - src/views/layout.pug supplies block meta inside head without a default title
+      - src/views/help.pug supplies the visible body title but does not override block meta with an HTML title element
+      - The frontend baseline capture on 2026-10-04 records an empty document.title for /help at desktop and mobile sizes
+    impact: Help pages have no meaningful browser-tab or history title despite a visible page heading.
+    documentation_contract: Help pages identify their current topic in the browser title as well as the visible heading.
+    closes_when:
+      - help renders an HTML title using the current help page title and application name
+      - a runtime rendering assertion using synthetic help data verifies the document title
+  - id: IMP-035
+    status: open
+    severity: medium
+    owner: event feature maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Automatic copying of a newly created registration link reads the wrong response field
+    evidence:
+      - src/routes/api/event.ts POST /:id/links responds through respondWithSuccessDataJson with data containing id and
+        token
+      - src/public/js/core/http.ts returns the complete response envelope without unwrapping data
+      - src/public/js/modules/reg-links.ts handleCreate reads data.token from that envelope when constructing the
+        automatic clipboard URL
+      - The refreshed row Copy action instead reads the actual row token and constructs the correct regToken URL
+    impact: A newly created link can be automatically copied with regToken=undefined even though the token was persisted
+      successfully.
+    documentation_contract: Creation and the subsequent Copy action both provide the actual authorized registration URL.
+    closes_when:
+      - creation validates the success envelope and reads its token from the shared response contract
+      - a browser-module assertion checks the automatic clipboard URL against the returned token and the refreshed row
+        Copy URL
+  - id: IMP-036
+    status: open
+    severity: high
+    owner: authentication maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Account and guest return targets can redirect outside the application
+    evidence:
+      - src/routes/users.ts POST /login redirects directly to any string query.next after successful authentication
+      - src/routes/guests.ts GET /:id/login/:token redirects directly to any string query.next after successful guest
+        authentication
+      - src/middleware/referrerUpdater.ts accepts a next value starting with slash, including protocol-relative external
+        destinations
+      - src/routes/users.ts GET /logout uses that weaker next validation before redirecting
+    impact: An attacker-controlled return target can send a person to an external destination after an otherwise legitimate
+      account or guest action.
+    documentation_contract: Internal return navigation preserves the requested application destination; external provider
+      redirects remain separately controlled by the OIDC flow.
+    closes_when:
+      - one shared return-target validation policy rejects external and protocol-relative destinations at every
+        consuming boundary
+      - legitimate application path, query and fragment return values remain intact through login, guest login and logout
+      - route assertions cover malicious targets and encoded or malformed variants without contacting an external site
+  - id: IMP-037
+    status: open
+    severity: high
+    owner: event feature maintainers
+    out_of_scope_for_documentation_migration: true
+    title: New event registration checks capacity before the write transaction
+    evidence:
+      - src/controller/eventController.ts registerAttendance checks isEventFull before entering withEventTransaction
+      - The transaction rechecks and locks a deadline-bypass token when applicable, but does not lock and recheck
+        current event capacity
+      - src/modules/database/services/EventService.ts register locks event pools and persists registration without a
+        capacity policy callback
+      - The second-pass frontend migration review established this ordering from source; no concurrent database
+        reproduction was run
+    impact: Concurrent new participants can pass the same remaining-capacity check before either registration is committed.
+    documentation_contract: New registrations respect the event capacity, while an existing registration can still be
+      updated when the event is full.
+    closes_when:
+      - the controller evaluates current membership and remaining capacity inside the service-managed locked
+        registration transaction
+      - a disposable-database concurrency assertion verifies two new participants competing for the final place and
+        preserves existing-registration updates
+  - id: IMP-038
+    status: open
+    severity: medium
+    owner: event feature maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Blank absent dietary notes can make an unchanged registration appear changed
+    evidence:
+      - src/controller/eventController.ts isDietaryEqual initializes localAllergy and localComment as undefined when the
+        corresponding dietary choices are absent
+      - The same function compares these values directly with submitted allergyNotes and dietComment strings before
+        later note normalization
+      - An unchanged meal selection with empty-string note fields therefore fails equality when post-deadline dietary
+        changes are disabled
+    impact: A participant can be rejected for a dietary change they did not make, including while attempting a separately
+      permitted date update.
+    documentation_contract: Post-deadline restrictions compare meaningful dietary values, allowing unchanged dietary
+      information and independently permitted date changes.
+    closes_when:
+      - absent dietary notes are normalized consistently before equality checks without erasing a real note or
+        meal-choice change
+      - controller assertions cover absent versus blank notes, unchanged selections and actual forbidden changes after
+        the deadline
+  - id: IMP-042
+    status: closed
+    closed_on: 2026-10-12
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Automatic archival can invert secondary-index and primary-row lock order
+    evidence:
+      - The earlier automatic conditional write could acquire the eligibility index before a primary-root writer; source
+        review identified a possible lock cycle.
+      - The implemented EntityLifecycleService repair locks the existing primary root before the conditional update in one
+        transaction, including standalone activity candidates.
+    authorization: Bounded repair approved in docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md on 2026-10-12; no general locking redesign
+      is authorized.
+    documentation_contract: Preserve inclusive-UTC eligibility, pause state, current relationship checks, affected-row
+      counts and separate deletion/file lifecycles.
+    closes_when:
+      - Guarded disposable-database evidence verifies the bounded repair and intended concurrency schedule.
+      - Final implementation review confirms one primary lock read per candidate and the unchanged lifecycle contract.
+    closure_evidence:
+      - tests/integration/entity-archival.spec.ts exercises real queued date edits and event/standalone-activity
+        restoration against automatic archival, observes primary FOR UPDATE waiters and checks requalification plus
+        exactly one affected row across repeated concurrent sweeps; these cases passed in the guarded full suite.
+      - Independent source review confirms exactly one primary lock read per candidate before its conditional write,
+        with inclusive-UTC cutoff, pause, relationship, affected-row and separate deletion/retention contracts preserved.
+findings:
+  - id: DOC-PERMISSION-POLICY-REVIEW
+    status: open
+    severity: medium
+    category: design-follow-up
+    owner: permission-system maintainers
+    authority: Explicit 2026-10-12 maintainer request for a later in-depth permission review and rework.
+    title: Review and deliberately rework native permission semantics across features
+    related_defects: [IMP-022, IMP-023]
+    implementation_evidence:
+      - src/modules/permissionEngine.ts and src/modules/lib/permissions.ts define audience grants and item fallbacks.
+      - src/controller/packingController.ts preserves distinct native method and display grants across both frontends.
+    desired_outcome: Review actor, page, method, field and private-projection boundaries across features; distinguish
+      intentional public powers and feature exceptions from actual unintended access. Define a coherent rework with
+      explicit approval before changing any native policy, default mask, design decision or protected-resource access.
+    containment: Current bounded v1 parity retains context/CSRF, locked grants, minimal baselines and principal-required
+      operations. The independent review found no concrete unsafe public-action expansion or original blanket-profile
+      requirement; this follow-up is not a claim of a newly established security vulnerability.
+  - id: DOC-ENTITY-PROPERTIES-VISUAL
+    severity: low
+    category: visual-maintenance
+    package: entity-property-modal
+    title: Refresh the participant and organizer controls illustration
+    status: closed
+    closed_on: 2026-10-12
+    document_evidence:
+      - The removed participant-and-organizer-controls illustration used the former activity Settings label and
+        owner-only duplicate grouping.
+    implementation_evidence:
+      - src/views/modules/module_entity_properties.pug supplies permission-filtered Entity settings and distinct
+        duplication and owner-only deletion actions
+    disposition: The maintainer explicitly approved cleanup on 2026-10-12. The unreferenced obsolete illustration was
+      removed; maintained written control guidance remains. No replacement illustration or visual redesign is required.
+  - id: STR-001
+    status: closed
+    title: Documentation indexes contain broken internal links
+    closed_in: D00
+    closed_on: 2026-09-05
+  - id: STR-002
+    status: closed
+    title: User-guide freshness metadata is not trustworthy
+    closed_in: D00
+    closed_on: 2026-09-05
+  - id: STR-003
+    status: closed
+    title: The documented user-doc directory name differs from the actual location
+    closed_in: D00
+    closed_on: 2026-09-05
+  - id: HELP-001
+    status: closed
+    title: In-app help is alphabetic rather than task-oriented
+  - id: HELP-002
+    status: closed
+    title: Help tests verify rendering, not behavioral truth
+  - id: HELP-003
+    status: closed
+    title: Trusted help-content boundary needs automated guardrails and precise code comments
+  - id: HELP-004
+    status: closed
+    title: User guides provide no screenshots or visual state confirmation
+  - id: ID-001
+    status: closed
+    title: Local registration omits mandatory email activation
+    closed_in: D01
+    closed_on: 2026-09-05
+  - id: ID-002
+    status: closed
+    title: Password rules are incomplete
+    closed_in: D01
+    closed_on: 2026-09-05
+  - id: ID-003
+    status: closed
+    title: Guest accounts are mischaracterized as unrecoverable link-only access without dashboards
+    closed_in: D01
+    closed_on: 2026-09-05
+  - id: ID-004
+    status: closed
+    title: Profile and account lifecycle is largely absent
+    closed_in: D01
+    closed_on: 2026-09-05
+  - id: ID-005
+    status: closed
+    title: Conditional local login and OIDC modes are not explained to end users
+    closed_in: D01
+    closed_on: 2026-09-05
+  - id: NAV-001
+    status: closed
+    title: Feature guides direct users to nonexistent dashboard create buttons
+    closed_in: D02
+    closed_on: 2026-09-05
+  - id: DASH-001
+    status: closed
+    title: Dashboard ownership and participation model is wrong
+    closed_in: D02
+    closed_on: 2026-09-05
+  - id: DASH-002
+    status: closed
+    title: Dashboard filters and owner actions are omitted or described incorrectly
+    closed_in: D02
+    closed_on: 2026-09-05
+  - id: PERM-001
+    status: closed
+    title: Permission precedence is documented as override hierarchy instead of cumulative grants
+    closed_in: D03
+    closed_on: 2026-09-05
+  - id: PERM-002
+    status: closed
+    title: Public, guest, registered, and individual audiences are described as a restrictive hierarchy
+    closed_in: D03
+    closed_on: 2026-09-05
+  - id: PERM-003
+    status: closed
+    title: Permission bits and defaults are incomplete
+    closed_in: D03
+    closed_on: 2026-09-05
+  - id: PERM-004
+    status: closed
+    title: Permission documentation mixes novice recipes with internal bitmask details and incorrectly includes surveys
+    closed_in: D03
+    closed_on: 2026-09-05
+  - id: SUR-001
+    status: closed
+    title: Survey creation fields and prerequisites are incomplete
+    closed_in: D09
+    closed_on: 2026-09-05
+  - id: SUR-002
+    status: closed
+    title: Survey recovery, examples, results, and lifecycle actions are inaccurate or incomplete
+    closed_in: D09
+    closed_on: 2026-09-05
+  - id: SUR-003
+    status: closed
+    title: The guide does not explain collaborative add-combination authorization
+    closed_in: D09
+    closed_on: 2026-09-05
+  - id: SUR-004
+    status: closed
+    title: Survey documentation did not make recurring monthly scheduling the primary use case
+    closed_in: D10
+    closed_on: 2026-09-05
+  - id: EVT-001
+    status: closed
+    title: Event creation fields and deadline behavior are incomplete
+    closed_in: D05
+    closed_on: 2026-09-05
+  - id: EVT-002
+    status: closed
+    title: Participant registration and organizer management are under-documented
+    closed_in: D05
+    closed_on: 2026-09-05
+  - id: EVT-003
+    status: closed
+    title: Survey linking is documented without matching current UI certainty
+    closed_in: D05
+    closed_on: 2026-09-05
+  - id: INV-001
+    status: closed
+    title: Invoice-pool lifecycle is far too shallow for safe use
+    closed_in: D06
+    closed_on: 2026-09-05
+  - id: PACK-001
+    status: closed
+    title: Packing-list creation omits initial items and header image
+    closed_in: D10
+    closed_on: 2026-09-05
+  - id: PACK-002
+    status: closed
+    title: Packed state is omitted even though it is browser-local
+    closed_in: D10
+    closed_on: 2026-09-05
+  - id: PACK-003
+    status: closed
+    title: Assignment labels and lifecycle actions do not match the UI
+    closed_in: D10
+    closed_on: 2026-09-05
+  - id: ACT-001
+    status: closed
+    title: Activity-plan setup, tabs, shared fields, and export do not match the guide
+    closed_in: D07
+    closed_on: 2026-09-05
+  - id: ACT-002
+    status: closed
+    title: The guide describes a skills/qualifications field that does not exist
+    closed_in: D07
+    closed_on: 2026-09-05
+  - id: ACT-003
+    status: closed
+    title: Algorithm internals interrupt the novice task path
+    closed_in: D08
+    closed_on: 2026-09-06
+  - id: DRV-001
+    status: closed
+    title: Driver identity editability and creation fields are wrong or omitted
+    closed_in: D11
+    closed_on: 2026-09-05
+  - id: DRV-002
+    status: closed
+    title: Participant count semantics differ between guide and implementation
+    closed_in: D11
+    closed_on: 2026-09-05
+  - id: DRV-003
+    status: closed
+    title: Driver-list guest capabilities, permissions, and contact-data privacy are under-specified
+    closed_in: D11
+    closed_on: 2026-09-05
+  - id: ROOT-001
+    status: closed
+    title: Root README advertises ranked-choice voting
+    closed_in: D00
+    closed_on: 2026-09-05
+  - id: ROOT-002
+    status: closed
+    title: Root quick start is not a clean-clone setup path
+    closed_in: D12
+    closed_on: 2026-09-05
+  - id: ROOT-003
+    status: closed
+    title: README branch, script, and test-tree facts are stale
+    closed_in: D12
+    closed_on: 2026-09-05
+  - id: ARCH-001
+    status: closed
+    title: Architecture stack, authentication, and test runner are obsolete
+    closed_in: D12
+    closed_on: 2026-09-05
+  - id: ARCH-002
+    status: closed
+    title: Architecture examples use nonexistent middleware, services, and permission schema
+    closed_in: D12
+    closed_on: 2026-09-05
+  - id: ARCH-003
+    status: closed
+    title: Architecture contains contradictory and stale test pyramids/counts
+    closed_in: D12
+    closed_on: 2026-09-05
+  - id: ARCH-004
+    status: closed
+    title: Architecture omits runtime and persistence boundaries
+    closed_in: D12
+    closed_on: 2026-09-05
+  - id: DEV-001
+    status: closed
+    title: Development guide uses incorrect and incomplete environment keys
+    closed_in: D12
+    closed_on: 2026-09-05
+  - id: DEV-002
+    status: closed
+    title: Development workflow, naming, route registration, and branch guidance conflict with code
+    closed_in: D12
+    closed_on: 2026-09-05
+  - id: TEST-001
+    status: closed
+    title: Testing guide contains conflicting integration-test guidance and nonexistent examples
+    closed_in: D12
+    closed_on: 2026-09-05
+  - id: OPS-001
+    status: closed
+    title: No production operator runbook exists
+    closed_in: D04
+    closed_on: 2026-09-05
+  - id: OPS-002
+    status: closed
+    title: Runtime and migration configuration use different loading paths without documentation
+    closed_in: D04
+    closed_on: 2026-09-05
+  - id: OPS-003
+    status: closed
+    title: Release packaging exists without deployment or upgrade instructions
+    closed_in: D04
+    closed_on: 2026-09-05
+  - id: OPS-004
+    status: closed
+    title: Configuration keys, defaults, precedence, and safety constraints are undocumented
+    closed_in: D04
+    closed_on: 2026-09-05
+  - id: OPSV-001
+    severity: high
+    category: operator-verification
+    package: D04V
+    title: Clean release installation and service startup lack a recorded rehearsal
+    document_evidence:
+      - docs/OPERATIONS.md
+      - docs/CONFIGURATION.md
+    implementation_evidence:
+      - .github/workflows/release.yml
+      - package.json
+      - src/server.ts
+    deficiency: The documented official-archive extraction, production-only dependency installation, versioned release
+      layout, systemd startup, and /healthz checks have not been captured in a reproducible validation record.
+    desired_outcome: Run the procedure with Node.js 24.15.0 and an official release archive; record versions, commands,
+      service logs, health output, ownership, and any required corrections.
+    status: open
+    verification_only: true
+    blocks_documentation_migration: false
+  - id: OPSV-002
+    severity: critical
+    category: operator-verification
+    package: D04V
+    title: Empty MariaDB database bootstrap procedure lacks execution evidence
+    document_evidence:
+      - docs/DATABASE.md
+    implementation_evidence:
+      - migrationDataSource.ts
+      - scripts/runMigration.ts
+      - src/modules/database/migrations/
+    deficiency: The documented empty-database sequence is source-derived but has not been run against a clean MariaDB 10.11
+      database, including migration-history and trigger outcomes.
+    desired_outcome: Initialize an empty isolated database exactly as documented, verify the resulting tables, migration
+      history, triggers, application startup, and repeatability, and record any discrepancy as a separate defect.
+    status: open
+    verification_only: true
+    blocks_documentation_migration: false
+  - id: OPSV-003
+    severity: critical
+    category: operator-verification
+    package: D04V
+    title: Existing-database migration targeting and compatibility lack a controlled rehearsal
+    document_evidence:
+      - docs/DATABASE.md
+      - docs/UPGRADING.md
+    implementation_evidence:
+      - src/modules/settings.ts
+      - migrationDataSource.ts
+      - scripts/runMigration.ts
+    deficiency: The SETTINGS_FILE-to-DB_* bridge, target-proof step, pending-migration inspection, and representative
+      existing-schema upgrade have not been verified together in a release-matched workspace.
+    desired_outcome: Migrate a representative pre-upgrade database, prove the selected host/database before changes, inspect
+      pending/applied migrations, start the matching release, and preserve complete command/output evidence.
+    status: open
+    verification_only: true
+    blocks_documentation_migration: false
+  - id: OPSV-004
+    severity: high
+    category: operator-verification
+    package: D04V
+    title: Persistent upload layout, service-user permissions, and retention behavior lack deployment evidence
+    document_evidence:
+      - docs/OPERATIONS.md
+      - docs/CONFIGURATION.md
+    implementation_evidence:
+      - src/modules/lib/fileCommons.ts
+      - src/modules/invoice/retention.ts
+      - src/modules/settings.ts
+    deficiency: The release symlink layout and write permissions for header images and invoice proofs have not been
+      exercised through restart, release switch, and retention processing.
+    desired_outcome: Upload representative files, restart and switch releases, verify continued access and correct
+      ownership, run retention behavior in a safe fixture, and document observed paths and permissions.
+    status: open
+    verification_only: true
+    blocks_documentation_migration: false
+  - id: OPSV-005
+    severity: high
+    category: operator-verification
+    package: D04V
+    title: Reverse proxy, secure-session, SMTP, local-login, guest-recovery, and OIDC smoke paths lack one integrated
+      validation record
+    document_evidence:
+      - docs/OPERATIONS.md
+      - docs/CONFIGURATION.md
+    implementation_evidence:
+      - src/app.ts
+      - src/modules/email.ts
+      - src/modules/oidc.ts
+      - src/routes/users.ts
+      - src/routes/guests.ts
+    deficiency: The documented proxy headers, TLS boundary, secure cookies, outbound email, authentication variants,
+      callback, and guest recovery have not been exercised in a production-shaped test deployment.
+    desired_outcome: Execute the supported authentication/email matrix behind the documented proxy, capture callback and
+      cookie behavior without recording secrets, and register any runtime mismatch once in the implementation-defect
+      register.
+    status: open
+    verification_only: true
+    blocks_documentation_migration: false
+  - id: OPSV-006
+    severity: critical
+    category: operator-verification
+    package: D04V
+    title: Paired database, upload, configuration, and release backup/restore procedure lacks isolated restore evidence
+    document_evidence:
+      - docs/OPERATIONS.md
+      - docs/DATABASE.md
+    implementation_evidence:
+      - src/modules/database/dataSource.ts
+      - src/modules/lib/fileCommons.ts
+      - src/modules/settings.ts
+    deficiency: The documented backup unit has not been restored into an isolated environment and checked for registrations,
+      sessions where applicable, header images, invoice proofs, configuration, and release compatibility.
+    desired_outcome: Create a maintenance-boundary backup, restore every component in isolation, start the matching release,
+      verify representative records and files, and retain hashes, timestamps, and recovery observations.
+    status: open
+    verification_only: true
+    blocks_documentation_migration: false
+  - id: OPSV-007
+    severity: critical
+    category: operator-verification
+    package: D04V
+    title: Versioned upgrade and conservative full rollback procedure lacks end-to-end evidence
+    document_evidence:
+      - docs/UPGRADING.md
+    implementation_evidence:
+      - .github/workflows/release.yml
+      - scripts/runMigration.ts
+      - src/server.ts
+    deficiency: The stage-backup-stop-migrate-activate-check sequence and restoration of the previous release, database,
+      uploads, and configuration have not been completed as one controlled exercise.
+    desired_outcome: Perform a representative upgrade, execute all post-start checks, then rehearse the documented full
+      rollback and verify both application behavior and data/file consistency.
+    status: open
+    verification_only: true
+    blocks_documentation_migration: false
+  - id: AI-001
+    status: closed
+    title: AI instructions tell agents to trust stale or missing documentation
+    closed_in: D13
+    closed_on: 2026-09-06
+  - id: AI-002
+    status: closed
+    title: AI guides contain contradictory test mandates
+    closed_in: D13
+    closed_on: 2026-09-06
+  - id: AI-003
+    status: closed
+    title: Copilot guidance conflicts on TypeORM mocking and migration commands
+    closed_in: D13
+    closed_on: 2026-09-06
+  - id: AI-004
+    status: closed
+    title: Volatile project facts are duplicated across many AI files
+    closed_in: D13
+    closed_on: 2026-09-06
+work_packages:
+  - id: D00
+    status: done
+    title: Documentation foundation
+    completed_on: 2026-09-05
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - STR-001
+      - STR-002
+      - STR-003
+      - ROOT-001
+  - id: D01
+    status: done
+    title: Identity, onboarding, and profiles
+    completed_on: 2026-09-05
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - ID-001
+      - ID-002
+      - ID-003
+      - ID-004
+      - ID-005
+  - id: D02
+    status: done
+    title: Navigation and dashboard
+    completed_on: 2026-09-05
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - NAV-001
+      - DASH-001
+      - DASH-002
+  - id: D03
+    status: done
+    title: Permission model and sharing recipes
+    completed_on: 2026-09-05
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - PERM-001
+      - PERM-002
+      - PERM-003
+      - PERM-004
+  - id: D04
+    status: done
+    title: Operator baseline
+    completed_on: 2026-09-05
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - OPS-001
+      - OPS-002
+      - OPS-003
+      - OPS-004
+  - id: D04V
+    status: deferred
+    priority: P1
+    title: Controlled operator-runbook verification
+    audiences:
+      - operator
+      - site reliability engineer
+      - maintainer
+    dependencies:
+      - D04
+    blocks: []
+    finding_ids:
+      - OPSV-001
+      - OPSV-002
+      - OPSV-003
+      - OPSV-004
+      - OPSV-005
+      - OPSV-006
+      - OPSV-007
+    scope:
+      - Official release installation and service startup
+      - Empty and existing MariaDB database paths
+      - Persistent uploads and retention
+      - Proxy/TLS, sessions, SMTP, local login, guest recovery, and OIDC
+      - Paired backup and isolated restore
+      - Versioned upgrade and full rollback
+    documents:
+      - docs/CONFIGURATION.md
+      - docs/DATABASE.md
+      - docs/OPERATIONS.md
+      - docs/UPGRADING.md
+    source_anchors:
+      - .github/workflows/release.yml
+      - src/modules/settings.ts
+      - migrationDataSource.ts
+      - scripts/runMigration.ts
+      - src/server.ts
+      - src/app.ts
+      - src/modules/lib/fileCommons.ts
+      - src/modules/invoice/retention.ts
+    deliverables:
+      - environment manifest and release hashes
+      - command and output transcript with secrets redacted
+      - database and persistent-file integrity evidence
+      - upgrade and rollback record
+      - separately classified defects and narrowly scoped documentation corrections
+    acceptance_criteria:
+      - every OPSV finding has environment-specific execution evidence
+      - backup and restore prove database/file/release consistency in an isolated target
+      - upgrade and rollback both finish with health, authentication, representative data, and file checks
+      - discovered runtime defects are registered once and are not copied into product documentation
+      - runbook corrections are made only where observed behavior disproves the current working contract
+    execution_note: This is explicit deferred verification debt, not a blocker for the documentation migration. Run it only
+      with Node.js 24.15.0, MariaDB 10.11, an official release archive, a matching tagged source workspace, isolated
+      persistent storage, controlled SMTP, and a non-production OIDC client where available.
+  - id: D05
+    status: done
+    title: Events and registration
+    completed_on: 2026-09-05
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - EVT-001
+      - EVT-002
+      - EVT-003
+  - id: D06
+    status: done
+    title: Invoice pools
+    completed_on: 2026-09-05
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - INV-001
+  - id: D07
+    status: done
+    title: Activity plans — basic use
+    completed_on: 2026-09-05
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - ACT-001
+      - ACT-002
+  - id: D08
+    status: done
+    title: Activity plans — advanced requirements and recommendations
+    completed_on: 2026-09-06
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - ACT-003
+  - id: D09
+    status: done
+    title: Surveys
+  - id: D10
+    status: done
+    title: Packing lists
+    completed_on: 2026-09-05
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - PACK-001
+      - PACK-002
+      - PACK-003
+  - id: D11
+    status: done
+    title: Drivers lists
+    completed_on: 2026-09-05
+    verification_baseline: docs-baseline-2026-09-05-d00
+    closed_findings:
+      - DRV-001
+      - DRV-002
+      - DRV-003
+  - id: D12
+    status: done
+    title: Maintainer architecture, development, and testing
+    completed_on: 2026-09-05
+  - id: D13
+    status: done
+    title: AI instructions
+    completed_on: 2026-09-06
+  - id: D14
+    status: done
+    title: In-app help UX, semantic validation, and trust boundary
+run_protocol:
+  - Apply the canonical documentation policy and explicitly authorized scope; feature-specific behavior and deliberate
+    exceptions govern the working contract.
+  - Reproduce open findings against current evidence; register transient implementation defects once and retain them
+    only in migration controls.
+  - Choose the smallest coherent document set; link to existing owners instead of duplicating commands, contracts or
+    execution history.
+  - Use optional reports to retain real findings and source-baseline limits; documentation never blocks application
+    delivery.
+  - Record only latest relevant evidence and remaining work; prior transcripts remain in Git and ignored run artifacts.
+migration_tracking:
+  status_document: docs/frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md
+  policy_document: docs/policies/DOCUMENTATION_POLICY.md
+  checker: scripts/check-documentation.mjs
+  checker_config: docs/policies/documentation-check.json
+  current_baseline: docs-baseline-2026-09-06-ci-repair
+  next_continuation: D04V / OPSV-001 is an independent advisory rehearsal. Frontend pilot correction and current evidence
+    belong to docs/frontend-migration/PILOT_PARITY_REVIEW.md; unrelated native repairs require their own authorization.
+completed_verification:
+  documentation_packages: D00–D14 completed; D04V remains deferred and advisory. Package/closed-finding IDs above retain disposition.
+  d14_visuals: Recorded review of four raster illustrations at full resolution and narrow preview sizes; initial tool
+    failures were later corrected. Detailed asset hashes and captures remain in Git/ignored artifacts.
+  d14_tooling: D14-VAL-001 and D14-VAL-002 closed by dependency-free path/fingerprint and help-authoring regression
+    checks. Historical blocking CI policy was subsequently withdrawn.
+  advisory_policy: Documentation checks/content suites/release copy remain non-blocking; security and executable Help
+    tests use synthetic fixtures.
+  evidence_limit: Historical execution is not certification of current application inputs, hosted CI, live providers or an
+    installed deployment.

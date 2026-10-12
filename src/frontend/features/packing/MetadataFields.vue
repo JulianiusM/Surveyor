@@ -10,6 +10,7 @@ import {MetadataDraft} from '../../composables/metadataDraft';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {useCommand} from '../../composables/command';
 import {packingKeys} from '../../app/queryKeys';
+import {observeQueryReads, refetchFreshQuery} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
@@ -25,6 +26,7 @@ type Metadata = components['schemas']['PackingMetadata'];
 type Values = Metadata['values'];
 const fieldPolicy: PilotMetadataFieldPolicy<Values> = {description: normalizeDescription};
 const draft = ref<MetadataDraft<Values, Metadata> | null>(null);
+const form = ref<HTMLFormElement | null>(null);
 
 /** Packing's optional description clears to null. Title comparison and omission stay
  * unchanged; shared reconciliation must not infer these semantics from field names. */
@@ -86,26 +88,39 @@ const retryAt = useReadRetryAt(() => metadata.error.value, retryAvailable);
 watch(
     () => [metadata.data.value, metadata.dataUpdatedAt.value, metadata.isFetching.value, metadata.error.value] as const,
     ([result, _updatedAt, fetching, failure]) => {
-        // Equal JSON/ETag can retain the same cache object. Observe completed reads
-        // too, so recovered authority clears only its own failed-read warning.
+        // Initial readable data may already be cached. Later confirmed authority
+        // is adopted by an actual read success, rather than observer idle alone.
         if (!result?.etag || fetching || failure) return;
-        clearRecoveredError('state.loadFailed');
         if (!draft.value) draft.value = new MetadataDraft<Values, Metadata>(result.data, result.etag, fieldPolicy);
         // Reads may start before PATCH commits and finish afterward. During a command
         // they may narrow visible grants, but cannot advance its value/token baseline.
         // The command's own post-confirmation read adopts authority explicitly below.
         else if (pending.value || refreshing.value) return;
-        else if (discardAfterSettings || draft.value.awaitingAuthority) {
-            const discarded = discardAfterSettings;
-            acceptReadAuthority(result);
-            if (discarded) command.acknowledge();
-        }
+        // Idle can follow cancellation with retained data. Only an actual read
+        // success below, or the explicit fresh-read continuation, grants authority.
+        else if (discardAfterSettings || draft.value.awaitingAuthority) return;
         // A background read updates the cache, but cannot decide what happened to a lost
         // command response. Keep that editor's baseline until its explicit recovery read.
         else if (!unknown.value) draft.value.receive(result.data, result.etag);
     },
     {immediate: true},
 );
+const stopMetadataReads = observeQueryReads<PilotRead<Metadata>>(context.queryClient, () => key.value, receiveMetadataRead);
+onBeforeUnmount(stopMetadataReads);
+
+/** Healthy background convergence can restore a confirmed editor as well. Cache
+ * aliases/cancellation do not call this path, and in-flight commands still own
+ * their separate causal post-confirmation read before any baseline is adopted. */
+function receiveMetadataRead(result: PilotRead<Metadata>): void {
+    if (!active || !result.etag) return;
+    clearRecoveredError('state.loadFailed');
+    if (pending.value || refreshing.value || !draft.value) return;
+    if (discardAfterSettings || draft.value.awaitingAuthority) {
+        const discarded = discardAfterSettings;
+        acceptReadAuthority(result);
+        if (discarded) command.acknowledge();
+    }
+}
 watch(metadata.error, (failure) => {
     // Only validated denial establishes lost access. An unusable response retains
     // this editor's values and baseline while the ordinary read warning recovers.
@@ -184,20 +199,28 @@ async function readMetadata(): Promise<void> {
     if (!active || lostAuthority.value) return;
     const scope = context.capture();
     const resource = props.listId;
-    const result = await metadata.refetch({throwOnError: true, cancelRefetch: true});
-    if (!mayPresentResult(scope, resource) || !result.data?.etag || !draft.value) return;
+    const result = await refetchFreshQuery<PilotRead<Metadata>>(context.queryClient, key.value, refetchMetadata, mayRead);
+    if (!mayPresentResult(scope, resource) || !result.etag || !draft.value) return;
     clearRecoveredError('state.loadFailed');
     if (discardAfterSettings || draft.value.awaitingAuthority) {
         // Confirmed relinks honor the dialog's discard decision. Confirmed metadata
         // supplies clean values only; this later read supplies current grants/token.
-        acceptReadAuthority(result.data);
+        acceptReadAuthority(result);
     } else if (unknown.value) {
         // A read cannot prove whether a lost PATCH succeeded. Even unchanged authority
         // needs deliberate review before releasing uncertainty or permitting reapply.
-        draft.value.offerReview(result.data.data, result.data.etag);
+        draft.value.offerReview(result.data, result.etag);
     } else {
-        draft.value.receive(result.data.data, result.data.etag);
+        draft.value.receive(result.data, result.etag);
     }
+
+    function mayRead(): boolean {
+        return active && resource === props.listId && context.ready.value && context.isCurrent(scope);
+    }
+}
+
+function refetchMetadata(): Promise<unknown> {
+    return metadata.refetch({throwOnError: true});
 }
 
 /** The dialog keeps its command pending until the related editor has caught up.
@@ -232,6 +255,7 @@ async function save(): Promise<void> {
         unknown.value
     )
         return;
+    if (!form.value || !reportPropertyValidity(form.value)) return;
     // Native Save remains available for a pristine form and explains the no-op.
     // This receipt never opens a command lease or submits an empty PATCH.
     if (!draft.value.dirty) {
@@ -262,6 +286,28 @@ async function save(): Promise<void> {
         emit('saved');
         emit('close');
     }
+}
+
+/** Native property forms reveal the invalid field's collapsed ancestors before
+ * asking the browser to focus/report it. novalidate lets this owner perform that
+ * reveal first; constraints still precede both pristine feedback and any PATCH. */
+function reportPropertyValidity(target: HTMLFormElement): boolean {
+    // The pilot's disabled-state fieldset can itself match :invalid because of
+    // its descendants. Inspect actual candidate controls so the collapsed field,
+    // rather than that outer container, determines which ancestors must open.
+    const controls = target.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        'input, textarea, select');
+    for (const control of controls) {
+        if (!control.willValidate || control.validity.valid) continue;
+
+        let parent = control.parentElement;
+        while (parent && parent !== target) {
+            if (parent instanceof HTMLDetailsElement) parent.open = true;
+            parent = parent.parentElement;
+        }
+        break;
+    }
+    return target.reportValidity();
 }
 defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, retryAvailable, refresh, refreshAfterSettings});
 </script>
@@ -310,7 +356,7 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
                 {{ messages.t(command.notice.value) }}
             </StatusNotice>
         </div>
-        <form id="packing-metadata-form" @submit.prevent="save">
+        <form ref="form" id="packing-metadata-form" novalidate @submit.prevent="save">
             <fieldset :disabled="disabled || busy || pending || refreshing || unknown || awaitingAuthority || lostAuthority"
                 :aria-busy="pending || refreshing || metadata.isFetching.value">
                 <details class="entity-property-group mb-3" open>

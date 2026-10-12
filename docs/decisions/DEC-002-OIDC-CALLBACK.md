@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-09-05
 verification-baseline: docs-baseline-2026-09-05-d00
 verification-scope: static-behavior-and-documentation-contract
-source-anchors: src/app.ts; src/routes/users.ts; src/modules/settings.ts; src/modules/oidc.ts; docs/documentation-remediation.yml
+source-anchors: src/app.ts; src/routes/users.ts; src/modules/settings.ts; src/modules/oidc.ts; docs/backlog/documentation-remediation.yml
 next-review: D04
 -->
 
@@ -48,7 +48,7 @@ https://surveyor.example.org/users/oidc/callback
 The hostname is illustrative; the callback path is the verified contract.
 
 A transient default-value mismatch is tracked centrally as `IMP-001` in
-[`documentation-remediation.yml`](../documentation-remediation.yml). Product documentation must not repeat that defect,
+[`documentation-remediation.yml`](../backlog/documentation-remediation.yml). Product documentation must not repeat that defect,
 its temporary consequences, or a workaround. It describes the corrected working configuration represented by this
 decision.
 

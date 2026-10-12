@@ -147,23 +147,120 @@ function pdfNode(id: string, pages: number[]): Node {
 }
 
 describe('saved invoice shares PDF', () => {
-    it('fits the widest table of applicable components within portrait A4 and repeats the header', () => {
+    it('renders saved balances with portrait geometry, anonymous explanations, ordered sections, and safe pagination', () => {
+        // These independent oracles consume the same deterministic default export.
+        // Keep its definition local to this test; altered-data variants render separately.
         const definition = buildInvoiceSharesPdfDefinition(fixture());
-        expect(definition.pageSize).toBe('A4');
-        expect(definition.pageOrientation).toBe('portrait');
-        expect(definition.pageMargins).toEqual([28, 28, 28, 36]);
-        const content = table(definition);
-        expect(content.table.headerRows).toBe(1);
-        expect(content.table.widths).toHaveLength(7);
-        expect(content.table.widths![0]).toBe('*');
-        const fixedWidths = (content.table.widths!.slice(1) as number[]).reduce((sum, width) => sum + width, 0);
-        const layout = content.layout as {paddingLeft: () => number; paddingRight: () => number; vLineWidth: () => number};
-        const columnCount = content.table.widths!.length;
-        const nameWidth = 595.28 - 56 - fixedWidths - columnCount * (layout.paddingLeft() + layout.paddingRight())
-            - (columnCount + 1) * layout.vLineWidth();
-        expect(nameWidth).toBeGreaterThan(130);
-        expect(nameWidth + fixedWidths).toBeLessThan(539.28);
-        expect(JSON.stringify(content)).not.toContain('"noWrap":true');
+
+        // Portrait geometry and repeated headers protect the widest saved table.
+        {
+            expect(definition.pageSize).toBe('A4');
+            expect(definition.pageOrientation).toBe('portrait');
+            expect(definition.pageMargins).toEqual([28, 28, 28, 36]);
+            const content = table(definition);
+            expect(content.table.headerRows).toBe(1);
+            expect(content.table.widths).toHaveLength(7);
+            expect(content.table.widths![0]).toBe('*');
+            const fixedWidths = (content.table.widths!.slice(1) as number[]).reduce((sum, width) => sum + width, 0);
+            const layout = content.layout as {paddingLeft: () => number; paddingRight: () => number; vLineWidth: () => number};
+            const columnCount = content.table.widths!.length;
+            const nameWidth = 595.28 - 56 - fixedWidths - columnCount * (layout.paddingLeft() + layout.paddingRight())
+                - (columnCount + 1) * layout.vLineWidth();
+            expect(nameWidth).toBeGreaterThan(130);
+            expect(nameWidth + fixedWidths).toBeLessThan(539.28);
+            expect(JSON.stringify(content)).not.toContain('"noWrap":true');
+        }
+
+        // Signed financial rows and aggregate totals retain saved settlement meaning.
+        {
+            const rows = table(definition).table.body.map(cellTexts);
+            expect(rows).toContainEqual(['Alice', '75.00', '-5.00', '0.00', '50.00', '20.00', 'Payment due']);
+            expect(rows).toContainEqual(['Former payer', '0.00', '0.00', '0.00', '50.00', '-50.00', 'Refund due']);
+            expect(rows).toContainEqual(['Invoice submitter', '25.00', '0.00', '100.00', '-50.00', '-25.00', 'Refund due']);
+            expect(rows).toContainEqual(['Settled payer', '100.00', '25.00', '0.00', '75.00', '50.00', 'Paid']);
+            expect(rows.some((row) => String(row[0]).startsWith('Settled on '))).toBe(true);
+            const content = definition.content as object[];
+            const summary = visiblePdfText(content.find(item => visiblePdfText(item).startsWith('Saved settlement totals')));
+            expect(summary).toMatch(/Payments due\s*:\s*20\.00/u);
+            expect(summary).toMatch(/Refunds due\s*:\s*-75\.00/u);
+            expect(summary).toMatch(/Payments received\s*:\s*50\.00/u);
+            expect(summary).toMatch(/Invoice credit\s*:\s*100\.00/u);
+            expect(summary).toMatch(/Previously settled\s*:\s*125\.00/u);
+        }
+
+        // The worked example stays anonymous while saved row notes remain concise.
+        {
+            const example = exampleText(definition);
+            const breakdown = breakdownText(definition);
+            expect(example).toContain('Example calculation');
+            expect(example).toContain('Participant A');
+            expect(example).toContain('200.00 Base to distribute');
+            expect(example).toContain('3 Nights stayed');
+            expect(example).toContain('8 Eligible nights');
+            expect(example).toContain('75.00 Base share');
+            expect(example).toContain('(-5.00) On-top rebates');
+            expect(example).toContain('50.00 Previously settled');
+            expect(example).toContain('20.00 Calculated balance');
+            // The factual breakdown names pool amounts and attendance. Their formulas and explanations
+            // belong to the worked example alongside the selected payer's saved arithmetic.
+            expect(breakdown).toContain('On-top surcharges : 25.00');
+            expect(breakdown).toContain('On-top rebates : -5.00');
+            expect(breakdown).toContain('Full pool total : 220.00');
+            expect(breakdown).toContain('Participants : 3');
+            expect(breakdown).toContain('Total nights : 8');
+            expect(example).not.toContain(invoiceText('distributionMetrics'));
+            expect(example).toContain('220.00 Full pool total');
+            expect(example.match(/Rounded up to cents\./g)).toHaveLength(1);
+            expect(example).not.toMatch(/Alice|Former payer|Invoice submitter|Settled payer|screen filter/);
+            expect(example).not.toContain('Calculated balance:');
+            const rowNotes = table(definition).table.body.filter(row => typeof row[0] === 'object' && row[0] && 'colSpan' in row[0]);
+            expect(rowNotes.map(row => String(cellTexts(row)[0]))).toEqual(['Includes a rebate.', expect.stringMatching(/^Settled on /)]);
+        }
+
+        // Section order and separate formula rows keep the figures and explanations readable.
+        {
+            const rows = formulaRows(definition.content);
+            // All three genuine equations belong to the optional example. The global breakdown is
+            // figures-only even when adjustment modes make pool-cost relationships nontrivial.
+            expect(rows).toHaveLength(3);
+            for (const row of rows) expect(visiblePdfText(row).match(/=/gu)).toHaveLength(1);
+            expect(formulaRows(displayContent(definition, 'Calculation breakdown'))).toHaveLength(0);
+            expect(standaloneTextBlocks(displayContent(definition, 'Calculation breakdown'))).toEqual(['Calculation breakdown']);
+            expect(formulaRows(displayContent(definition, 'Example calculation'))).toHaveLength(3);
+            const content = definition.content as object[];
+            const headings = content.map(visiblePdfText);
+            expect(headings.findIndex(text => text.startsWith('Calculation breakdown'))).toBeLessThan(headings.findIndex(text => text.startsWith('Example calculation')));
+            expect(headings.findIndex(text => text.startsWith('Example calculation'))).toBeLessThan(headings.findIndex(text => text.startsWith('Saved settlement totals')));
+            const sharesHeading = headings.findIndex(text => text === 'Calculated shares');
+            expect(sharesHeading).toBeGreaterThan(headings.findIndex(text => text.startsWith('Saved settlement totals')));
+            // Main sections follow the participants export's plain text heading convention, not decorated table bands.
+            expect(content[sharesHeading]).toMatchObject({text: 'Calculated shares', style: 'sectionTitle', margin: [0, 8, 0, 4]});
+            expect(JSON.stringify(definition.content)).not.toContain('#eff3f8');
+            expect(JSON.stringify(definition.content)).not.toContain('#1e3a5f');
+            expect('table' in content[sharesHeading + 1]).toBe(true);
+        }
+
+        // Pagination moves the complete financial row with an ordinary split note.
+        {
+            const rows = table(definition).table.body;
+            const noteCell = rows[2][0] as {id: string};
+            const note = pdfNode(noteCell.id, [1, 2]);
+            const queries: NodeQueries = {getFollowingNodesOnPage: () => [note], getNodesOnNextPage: () => [], getPreviousNodesOnPage: () => []};
+            for (const cell of rows[1]) {
+                const financial = pdfNode((cell as {id: string}).id, [1]);
+                expect(financial.id).toBeTruthy();
+                expect(definition.pageBreakBefore!(financial, queries)).toBe(true);
+                note.pageNumbers = [1];
+                expect(definition.pageBreakBefore!(financial, queries)).toBe(false);
+                note.pageNumbers = [1, 2, 3];
+                expect(definition.pageBreakBefore!(financial, queries)).toBe(false);
+                note.pageNumbers = [1, 2];
+            }
+            // Header and note nodes must retain normal rendering instead of triggering recursive breaks.
+            expect(definition.pageBreakBefore!(note, queries)).toBe(false);
+            expect(JSON.stringify(definition)).not.toContain('"dontBreakRows":true');
+            expect(JSON.stringify(definition)).not.toContain('"unbreakable":true');
+        }
     });
 
     it('omits unused component columns without removing the saved balance or payment status', () => {
@@ -179,23 +276,6 @@ describe('saved invoice shares PDF', () => {
         expect(cellTexts(content.table.body[0])).toEqual(['Payer', 'Base share', 'Calculated balance', 'Status']);
         expect(content.table.widths).toHaveLength(4);
         expect(cellTexts(content.table.body[1])).toEqual(['Alice', '75.00', '75.00', 'Payment due']);
-    });
-
-    it('preserves signed credits and rebates and keeps calculated balances visible after payment', () => {
-        const definition = buildInvoiceSharesPdfDefinition(fixture());
-        const rows = table(definition).table.body.map(cellTexts);
-        expect(rows).toContainEqual(['Alice', '75.00', '-5.00', '0.00', '50.00', '20.00', 'Payment due']);
-        expect(rows).toContainEqual(['Former payer', '0.00', '0.00', '0.00', '50.00', '-50.00', 'Refund due']);
-        expect(rows).toContainEqual(['Invoice submitter', '25.00', '0.00', '100.00', '-50.00', '-25.00', 'Refund due']);
-        expect(rows).toContainEqual(['Settled payer', '100.00', '25.00', '0.00', '75.00', '50.00', 'Paid']);
-        expect(rows.some((row) => String(row[0]).startsWith('Settled on '))).toBe(true);
-        const content = definition.content as object[];
-        const summary = visiblePdfText(content.find(item => visiblePdfText(item).startsWith('Saved settlement totals')));
-        expect(summary).toMatch(/Payments due\s*:\s*20\.00/u);
-        expect(summary).toMatch(/Refunds due\s*:\s*-75\.00/u);
-        expect(summary).toMatch(/Payments received\s*:\s*50\.00/u);
-        expect(summary).toMatch(/Invoice credit\s*:\s*100\.00/u);
-        expect(summary).toMatch(/Previously settled\s*:\s*125\.00/u);
     });
 
     it('wraps long names and full-width details without truncating them or mutating saved data', () => {
@@ -222,14 +302,6 @@ describe('saved invoice shares PDF', () => {
         const content = table(definition);
         expect(cellTexts(content.table.body[0])).toEqual(['Payer', 'Calculated balance', 'Status']);
         expect(content.table.body[1][0]).toMatchObject({text: 'No calculated shares in this pool.', colSpan: 3});
-    });
-
-    it('keeps an already paid refund signed without repeating its balance in a note', () => {
-        const data = fixture();
-        data.shares = [{...data.shares[2], isPaid: true}];
-        const rows = table(buildInvoiceSharesPdfDefinition(data)).table.body.map(cellTexts);
-        expect(rows[1]).toEqual(['Invoice submitter', '25.00', '100.00', '-50.00', '-25.00', 'Refunded']);
-        expect(rows).toHaveLength(2);
     });
 
     it.each([true, false])('keeps the provided compact retained-history label in saved notes when includeExampleCalculation=%s', (includeExampleCalculation) => {
@@ -282,6 +354,10 @@ describe('saved invoice shares PDF', () => {
         const data = fixture();
         data.shares = [{...data.shares[2], isPaid: true}];
         const definition = buildInvoiceSharesPdfDefinition(data);
+        const rows = table(definition).table.body.map(cellTexts);
+        expect(rows[1]).toEqual(['Invoice submitter', '25.00', '100.00', '-50.00', '-25.00', 'Refunded']);
+        expect(rows).toHaveLength(2);
+
         const content = definition.content as object[];
         const summary = visiblePdfText(content.find(item => visiblePdfText(item).startsWith('Saved settlement totals')));
         expect(summary).toMatch(/Refunds due\s*:\s*0\.00/u);
@@ -289,80 +365,6 @@ describe('saved invoice shares PDF', () => {
         expect(summary).toMatch(/Previously settled\s*:\s*-50\.00/u);
         expect(summary).toContain('apply to this calculation');
         expect(summary).not.toContain('Payments received');
-    });
-
-    it('moves every financial column with an ordinary split note and preserves oversized pagination', () => {
-        const definition = buildInvoiceSharesPdfDefinition(fixture());
-        const rows = table(definition).table.body;
-        const noteCell = rows[2][0] as {id: string};
-        const note = pdfNode(noteCell.id, [1, 2]);
-        const queries: NodeQueries = {getFollowingNodesOnPage: () => [note], getNodesOnNextPage: () => [], getPreviousNodesOnPage: () => []};
-        for (const cell of rows[1]) {
-            const financial = pdfNode((cell as {id: string}).id, [1]);
-            expect(financial.id).toBeTruthy();
-            expect(definition.pageBreakBefore!(financial, queries)).toBe(true);
-            note.pageNumbers = [1];
-            expect(definition.pageBreakBefore!(financial, queries)).toBe(false);
-            note.pageNumbers = [1, 2, 3];
-            expect(definition.pageBreakBefore!(financial, queries)).toBe(false);
-            note.pageNumbers = [1, 2];
-        }
-        // Header and note nodes must retain normal rendering instead of triggering recursive breaks.
-        expect(definition.pageBreakBefore!(note, queries)).toBe(false);
-        expect(JSON.stringify(definition)).not.toContain('"dontBreakRows":true');
-        expect(JSON.stringify(definition)).not.toContain('"unbreakable":true');
-    });
-
-    it('explains one actual saved base and balance above the table and leaves row notes concise', () => {
-        const definition = buildInvoiceSharesPdfDefinition(fixture());
-        const example = exampleText(definition);
-        const breakdown = breakdownText(definition);
-        expect(example).toContain('Example calculation');
-        expect(example).toContain('Participant A');
-        expect(example).toContain('200.00 Base to distribute');
-        expect(example).toContain('3 Nights stayed');
-        expect(example).toContain('8 Eligible nights');
-        expect(example).toContain('75.00 Base share');
-        expect(example).toContain('(-5.00) On-top rebates');
-        expect(example).toContain('50.00 Previously settled');
-        expect(example).toContain('20.00 Calculated balance');
-        // The factual breakdown names pool amounts and attendance. Their formulas and explanations
-        // belong to the worked example alongside the selected payer's saved arithmetic.
-        expect(breakdown).toContain('On-top surcharges : 25.00');
-        expect(breakdown).toContain('On-top rebates : -5.00');
-        expect(breakdown).toContain('Full pool total : 220.00');
-        expect(breakdown).toContain('Participants : 3');
-        expect(breakdown).toContain('Total nights : 8');
-        expect(example).not.toContain(invoiceText('distributionMetrics'));
-        expect(example).toContain('220.00 Full pool total');
-        expect(example.match(/Rounded up to cents\./g)).toHaveLength(1);
-        expect(example).not.toMatch(/Alice|Former payer|Invoice submitter|Settled payer|screen filter/);
-        expect(example).not.toContain('Calculated balance:');
-        const rowNotes = table(definition).table.body.filter(row => typeof row[0] === 'object' && row[0] && 'colSpan' in row[0]);
-        expect(rowNotes.map(row => String(cellTexts(row)[0]))).toEqual(['Includes a rebate.', expect.stringMatching(/^Settled on /)]);
-    });
-
-    it('puts each complete formula on its own row and clearly separates the example, totals and share table', () => {
-        const definition = buildInvoiceSharesPdfDefinition(fixture());
-        const rows = formulaRows(definition.content);
-        // All three genuine equations belong to the optional example. The global breakdown is
-        // figures-only even when adjustment modes make pool-cost relationships nontrivial.
-        expect(rows).toHaveLength(3);
-        for (const row of rows) expect(visiblePdfText(row).match(/=/gu)).toHaveLength(1);
-        expect(formulaRows(displayContent(definition, 'Calculation breakdown'))).toHaveLength(0);
-        expect(standaloneTextBlocks(displayContent(definition, 'Calculation breakdown'))).toEqual(['Calculation breakdown']);
-        expect(formulaRows(displayContent(definition, 'Example calculation'))).toHaveLength(3);
-        const content = definition.content as object[];
-        const headings = content.map(visiblePdfText);
-        expect(headings.findIndex(text => text.startsWith('Calculation breakdown'))).toBeLessThan(headings.findIndex(text => text.startsWith('Example calculation')));
-        expect(headings.findIndex(text => text.startsWith('Example calculation'))).toBeLessThan(headings.findIndex(text => text.startsWith('Saved settlement totals')));
-        const sharesHeading = headings.findIndex(text => text === 'Calculated shares');
-        expect(sharesHeading).toBeGreaterThan(headings.findIndex(text => text.startsWith('Saved settlement totals')));
-        // Main sections follow the participants export's plain text heading convention, not decorated table bands.
-        expect(content[sharesHeading]).toMatchObject({text: 'Calculated shares', style: 'sectionTitle', margin: [0, 8, 0, 4]});
-        expect(JSON.stringify(definition.content)).not.toContain('#eff3f8');
-        expect(JSON.stringify(definition.content)).not.toContain('#1e3a5f');
-        expect('table' in content[sharesHeading + 1]).toBe(true);
     });
 
     it.each([true, false])('keeps all weighted distribution facts readable outside the example when includeExampleCalculation=%s', (includeExampleCalculation) => {

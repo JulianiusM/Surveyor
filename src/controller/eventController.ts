@@ -20,6 +20,7 @@ import {assertEditableEntityFields, getArchiveView} from "./entityAdminControlle
 import crypto from 'node:crypto';
 // Business logic for the Event routes
 import Joi from 'joi';
+import type {EntityManager} from 'typeorm';
 
 import {Event} from "../modules/database/entities/event/Event";
 import {EventRegistration} from "../modules/database/entities/event/EventRegistration";
@@ -92,17 +93,31 @@ export function projectEventLinkOption(event: Event): EventLinkOption {
     };
 }
 
-/** Shared authority for a selected target, including the actual submitted creation target. */
-export async function authorizeEventLink(eventId: string | null | undefined, session: SessionLike): Promise<Event | null> {
+/**
+ * Authorize the actual attachment target through the common event method policy.
+ * A selected URL is discovery only; creation/relink adapters call this owner again.
+ *
+ * @param manager Transaction used for current permission evidence by a locked caller.
+ * @param knownEvent That caller's selected, locked event row; null means the row
+ * disappeared, while undefined retains the native lookup. The row belongs to eventId.
+ */
+export async function authorizeEventLink(eventId: string | null | undefined, session: SessionLike,
+                                         manager?: EntityManager, knownEvent?: Event | null): Promise<Event | null> {
     requireSessionProfileId(session);
     if (eventId === null || eventId === undefined || eventId === '') return null;
     const {error} = Joi.string().uuid().validate(eventId);
     if (error) throw new APIError('Invalid event.', {}, 400);
-    const event = await eventService.getEventById(eventId);
+
+    // Native callers keep their existing lookup. A controller operating under a
+    // DBAL-managed parent lock supplies that exact row and transaction instead;
+    // both paths apply this same attachment policy without another permission owner.
+    const event = knownEvent === undefined ? await eventService.getEventById(eventId) : knownEvent;
     if (!event) throw new APIError('Event not found.', {}, 404);
+
+    // Ownership, individual grants and audience membership all use the same engine.
     const allowed = await can({kind: 'entity', entity: {
         entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
-    }}, session, PERM.MANAGE_ASSIGNMENTS);
+    }}, session, PERM.MANAGE_ASSIGNMENTS, undefined, manager);
     if (!allowed) throw new APIError('Not allowed to attach entities to this event.', {}, 403);
     return event;
 }

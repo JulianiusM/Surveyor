@@ -3,8 +3,7 @@ import {computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, watch} fr
 import type {MessageKey} from '../../types/LocalizationTypes';
 import {createTranslator, formatReadTime} from '../../modules/localization/translator';
 import {pilotContextKey, usePilot} from '../app/context';
-import {readFailureMessage, useTransientNotice} from '../composables/feedback';
-import {isElementVisible} from '../../public/js/shared/alerts';
+import {isElementVisible, readFailureMessage, useTransientNotice} from '../composables/feedback';
 
 // Teleport has no DOM element for automatic fallthrough. Preserve the original
 // alert's caller classes, IDs, ARIA attributes and listeners on its actual node.

@@ -105,9 +105,18 @@ export class PilotTransport {
             detail, validatedDetails);
     }
 
-    read<T>(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, validate: Validator<T>,
-                    scope?: PilotRequestScope, previous?: PilotRead<T>, checkLocale = false): PilotRead<T> {
-        const {response, data, error} = result;
+    /** Admit one decoded response against the authored operation and captured
+     * scope. A 304 can reuse only the caller's supplied snapshot after positive
+     * context checks; malformed/empty success never confirms a command or read. */
+    read<T>(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response; signal?: AbortSignal}, validate: Validator<T>,
+                     scope?: PilotRequestScope, previous?: PilotRead<T>, checkLocale = false): PilotRead<T> {
+        const {response, data, error, signal} = result;
+        // A transport adapter can finish headers/body decoding after cancellation.
+        // Retire that read before any success, identity change or error policy is
+        // published outside the query cache; actor scope alone does not retire a
+        // same-actor read canceled by typing, disclosure or explicit replacement.
+        this.checkReadCancellation(signal);
+
         // A conditional read has no error body. Its retained snapshot still requires
         // positive actor confirmation before it can bypass ordinary success validation.
         if (response.status === 304 && previous) {
@@ -116,9 +125,11 @@ export class PilotTransport {
         }
         if (!response.ok) this.reject(response, error, scope, checkLocale);
         this.checkScope(response, scope, checkLocale);
+
         // A 204 is a valid empty HTTP response, but no pilot read/write declares an empty success body.
         // Never turn that absence (or redirected login HTML) into a successful typed command.
-        if (!operationPolicies[operationId].successStatuses.includes(response.status) || response.status === 204 || !response.headers.get('content-type')?.includes('application/json') || !validate(data)) {
+        if (!operationPolicies[operationId].successStatuses.includes(response.status) || response.status === 204
+            || !response.headers.get('content-type')?.includes('application/json') || !validate(data)) {
             throw new UnconfirmedResponseError();
         }
         return {data, etag: response.headers.get('ETag')};
@@ -126,20 +137,34 @@ export class PilotTransport {
 
     /** Every read entry point shares one deadline: focus/manual callers cannot bypass Retry-After.
      * No delayed requests are queued; the caller's ordinary query timer may retry after the deadline. */
-    async allowedRead<T>(resource: string, scope: PilotRequestScope | undefined, operation: () => Promise<T>): Promise<T> {
+    async allowedRead<T>(resource: string, scope: PilotRequestScope | undefined, operation: () => Promise<T>,
+                         signal?: AbortSignal): Promise<T> {
+        this.checkReadCancellation(signal);
         if (scope && !this.isCurrent(scope)) throw new ObsoleteRequestError();
         const key = scope ? `${scope.context}:${scope.epoch}:${resource}` : resource;
         const now = Date.now();
         for (const [stored, deadline] of this.nextAllowedRead) if (deadline <= now) this.nextAllowedRead.delete(stored);
         const deadline = this.nextAllowedRead.get(key);
         if (deadline && deadline > now) throw new ApiFailure(429, null, deadline - now);
-        try { return await operation(); }
-        catch (failure) {
+        try {
+            const result = await operation();
+            this.checkReadCancellation(signal);
+            return result;
+        } catch (failure) {
+            // Cancellation can also occur between decoding and this promise's
+            // rejection continuation. An obsolete failure owns no retry lease.
+            this.checkReadCancellation(signal);
             if (failure instanceof ApiFailure && failure.retryAt !== null && (!scope || this.isCurrent(scope))) {
                 this.nextAllowedRead.set(key, failure.retryAt);
             }
             throw failure;
         }
+    }
+
+    /** Read disposal changes presentation authority only; command responses never
+     * receive this optional signal and retain their confirmed/unknown contract. */
+    private checkReadCancellation(signal?: AbortSignal): void {
+        if (signal?.aborted) throw new ObsoleteRequestError();
     }
 
 }

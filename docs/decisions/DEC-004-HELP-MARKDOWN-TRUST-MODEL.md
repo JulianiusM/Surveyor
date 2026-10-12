@@ -8,7 +8,7 @@ status: current
 last-verified: 2026-09-06
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: non-blocking documentation policy and optional report/test routing; static-trust-boundary-and-release-flow; D14 implementation of rejection guards, local visual assets, contextual navigation, semantic tests, and release verification
-source-anchors: src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; tests/integration/controller-smoke-workflows.spec.ts; tests/e2e/public-availability.spec.ts; docs/DOCUMENTATION_POLICY.md; docs/documentation-remediation.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
+source-anchors: src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; tests/integration/controller-smoke-workflows.spec.ts; tests/e2e/public-availability.spec.ts; docs/policies/DOCUMENTATION_POLICY.md; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts
 next-review: help-source-or-trust-boundary-change
 -->
 
@@ -110,4 +110,14 @@ D14 implements this decision at four boundaries:
 
 This implementation does not change the decision’s central assumption: the Markdown remains trusted reviewed application content. It does not authorize untrusted Markdown merely because malformed content is rejected.
 
-Documentation quality and packaging reports are never delivery gates. This does not relax the fixed help source or the runtime rejection of unsafe HTML and URI schemes. The [documentation policy](../DOCUMENTATION_POLICY.md) governs advisory reporting and supersedes earlier before-merge gate language.
+Documentation quality and packaging reports are never delivery gates. This does not relax the fixed help source or the runtime rejection of unsafe HTML and URI schemes. The [documentation policy](../policies/DOCUMENTATION_POLICY.md) governs advisory reporting and supersedes earlier before-merge gate language.
+
+## Authorized canonical-path correction (2026-10-12)
+
+The maintainer explicitly restores the original `docs/user-guide/` tree: native English files at its root,
+localized/pilot files in adjacent catalog directories. An intermediate rename applied the maintainer's mistaken name
+without resolving its conflict with the canonical path; the subsequent explicit correction reverses it. Current path
+references are editorially restored; the original reviewed-release-content trust decision remains unchanged.
+Separate pilot Help roots were not authorized.
+Migration drafts remain under `docs/frontend-migration/` and are never runtime input. Technical pilot deltas and
+visible fallback details remain in the staged policy until cutover; this correction grants no untrusted content source.

@@ -122,11 +122,22 @@ jobs:
           EOF
           echo "Wrote .env.e2e"
 
+      - name: Generate application test inputs
+        if: matrix.stage != 'browser'
+        run: npm run generate
+
+      - name: Check test contracts with the Vue-aware compiler
+        if: matrix.stage == 'database-free'
+        # Vitest transpiles fixtures. Check their contracts once, including real
+        # SFC types; the other jobs retain their existing runtime boundaries.
+        run: npm run typecheck:tests --ignore-scripts
+
       - name: Run selected Vitest project with coverage and mergeable reports
         if: matrix.stage != 'browser'
         run: |
           mkdir -p artifacts
-          npm run test:ci -- --project=${{ matrix.stage }} --reporter=blob --outputFile.blob=artifacts/vitest-blobs/${{ matrix.stage }}.json
+          # Inputs were generated above; skip only the redundant package pre-hook.
+          npm run test:ci --ignore-scripts -- --project=${{ matrix.stage }} --reporter=blob --outputFile.blob=artifacts/vitest-blobs/${{ matrix.stage }}.json
 
       - name: Preserve each Vitest stage's diagnostics
         if: always() && matrix.stage != 'browser'

@@ -187,10 +187,10 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
             try {
                 // Creation and child-item initialization retain their existing domain hooks.
                 // Archival context is presentation data and never alters the submitted entity.
-                // Features with versioned commands can recheck the real actor under their
-                // creation lock. Existing feature adapters simply ignore this optional argument.
-                id = await createEntity(req.session.profile!.id, parsed, req.session);
-                await afterCreateItems(id, parsed, req.session);
+                // These hooks belong to native page forms. Versioned creation has
+                // its own actor-aware operation in the existing v1 route owner.
+                id = await createEntity(req.session.profile!.id, parsed);
+                await afterCreateItems(id, parsed);
             } catch (error) {
                 const message = error instanceof Error ? error.message : 'Failed to create the resource.';
                 throw new ValidationError(create, message, parsed);

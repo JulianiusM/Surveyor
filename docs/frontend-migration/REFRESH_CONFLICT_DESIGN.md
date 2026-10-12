@@ -1,308 +1,175 @@
 # Shared data refresh and conflict design
 <!--
 documentation-metadata
-audience: frontend developers; API developers; migration reviewers
+audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-09
+last-verified: 2026-10-12
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: source-reviewed generic cache retirement mechanics and feature-owned Packing admission/dependency policy; FPR-07 explicitly authorized 2026-10-08 scope/fallback/documentation amendments and staging; original choices/D1-D5 retained; no new runtime verification claimed; approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; source review of expanded packing metadata/item/order/settings tokens, overview refresh, identity transitions and command recovery; distinguishes implemented behavior from remaining cross-feature targets; no application, database or browser checks run for this documentation update
-source-anchors: docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/IDENTITY_LIFECYCLE_EDGE_CASES.md; docs/frontend-migration/PARTICIPATION_EDGE_CASES.md; docs/frontend-migration/INVOICE_EDGE_CASES.md; src/frontend/app/context.ts; src/frontend/app/api.ts; src/frontend/app/queryCache.ts; src/frontend/composables/command.ts; src/frontend/components/InlineCell.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/PackingSettings.vue; src/frontend/features/overview/OverviewRegion.vue; src/frontend/features/overview/OverviewPage.vue; src/modules/packing/api.ts; src/routes/api/v1/auth.ts; tests/frontend/frontend-pilot.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/packing-management-ui.spec.ts; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-select.ts; src/public/js/modules/entity-properties.ts; src/public/js/modules/invoice-submission.ts; src/modules/activity/recommendationJobs.ts; src/modules/invoice/poolOperations.ts; src/controller/entityAdminController.ts
-next-review: packing-invalidation-or-next-feature-migration
+verification-scope: original query/draft/command choices and D2/D4/D5/Oct8 refresh amendments consolidated; completed scoped execution and its limits owned by paired review
+source-anchors: src/frontend/app/context.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/overview/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
+next-review: next-refresh-migration-or-authorized-cutover
 -->
 
-Use TanStack Vue Query for authoritative server snapshots and small explicit draft objects for edits. Refreshing
-server data must not mutate an open form, silently accept a new financial preview or turn an unconfirmed write into
-a retry. This remains the cross-feature direction for the [foundation](../FRONTEND_FOUNDATION_DESIGN.md), not a claim
-about the complete legacy frontend. The [opt-in implementation](../FRONTEND_PILOT.md) now covers packing management,
-creation, settings, overview and necessary identity entry through v1. Its refresh/draft policies extend beyond the
-original metadata/self-assignment proof. Financial, activity and other feature policies below remain future work.
+TanStack Query owns server snapshots, feature drafts own unsaved values and Vue Router owns durable navigation.
+A request/application-local context coordinates identity, locale and update state without another data store.
+The original protocol and dated amendments remain in [Foundation](FRONTEND_FOUNDATION_DESIGN.md).
+[API](API_CONTRACT_DESIGN.md) owns wire/precondition shapes; [Development](staged/DEVELOPMENT.md) owns contribution steps.
 
-The [API design](API_CONTRACT_DESIGN.md) owns wire preconditions and status codes; the
-[edge-case records](EDGE_CASES.md) own existing product exceptions. The policies below connect those boundaries to
-the browser and supply scenarios for implementation and review.
+## Implemented Packing boundary
 
-## Implemented packing boundary
+The pilot implements scoped reads, draft reconciliation, capacity-sensitive operations and independent metadata/
+item/order/setup comparisons. Approved D2 replaces the original persisted Packing metadata revision with touched
+current-value tokens under existing locks, including useful setup fields. No relationship history or live-editing
+infrastructure is added. Financial revisions and recommendation fingerprints retain their own guarantees.
 
-[The app context](../../src/frontend/app/context.ts) owns session bootstrap, identity epochs, a request-local query
-client, visible-tab focus/reconnect checks, read retries and locale changes. [The transport](../../src/frontend/app/transport.ts)
-checks generated DTOs, captured identity and confirmed command responses; it never retries a mutation automatically.
-[PackingPage](../../src/frontend/features/packing/PackingPage.vue) polls the scoped detail representation;
-[PackingSettings](../../src/frontend/features/packing/PackingSettings.vue) keeps independent metadata, ACL, event and
-file draft state; [OverviewRegion](../../src/frontend/features/overview/OverviewRegion.vue) owns one bounded region.
-The four participant/owner × main/hidden regions retain independent query parameters. Hidden regions open on matching
-deep links through [OverviewPage](../../src/frontend/features/overview/OverviewPage.vue).
-
-| Reviewed state | Implemented comparison and recovery |
-|---|---|
-| Root title/description | Opaque comparison hashes of current fields; sparse writes compare touched fields under locks, adopt disjoint refreshes and retain overlapping drafts for explicit review |
-| Inline item fields/Everyone | Item `editToken` hashes current values and actor/resource scope; fresh authority is checked under the item lock, and the shared editor compares its displayed field |
-| Item order | Captured `orderToken` includes current item membership/positions; additions, removals or changed order require a fresh review before resubmitting |
-| Defaults/admin masks | Sparse audience patches compare changed masks; each administrator has its own token. Unrelated setup edits do not block a draft; actual overlapping changes require review |
-| Event association | Desired and original event remain separate; actual relink checks `expectedEventId` and the reviewed settings token under existing controller locks |
-| Header replacement | Selected file retains the reviewed settings token; scoped blob reads use opaque header versions and revoke obsolete object URLs |
-| Creation/duplication | Explicit local draft; no creation replay after response loss and no generic idempotency key |
-| Self-assignment/visibility | Explicit desired state with the existing server no-op policy; commands still require confirmation and subsequent authoritative reads |
-
-Approved D2 replaces the earlier persisted packing metadata/context counter with current-value comparisons,
-including setup fields. No packing revision column or new relationship history is needed. These tokens do not
-promise change-away-and-back detection; fresh authorization and atomic capacity checks remain mandatory. [The API owner](../../src/modules/packing/api.ts)
-and [API design](API_CONTRACT_DESIGN.md) define the exact coverage and 428/412 versus semantic 409 outcomes.
+Native/v1 adapters now invoke named shared operations and central method policy in the existing Packing controller.
+V1 independently granted actions no longer impose unrelated detail-page membership; private projections retain their
+own grants. Completed scoped execution and the approved coexistence remedy belong to the review.
+Native last-write bodies remain unchanged; a changed native value participates in later v1 comparison.
+Persistence reuse must not leave duplicated business policy or impose page membership on separately permitted actions.
 
 ## State ownership
 
 | State | Owner and lifetime |
 |---|---|
-| Server DTO and read status | Query cache, keyed by API version, identity scope, locale where representation varies, resource type/ID and normalized filters |
-| User draft | Feature/editor instance: original values and edit token, current input, validation, remote-change notice; never a mutable reference into cached DTOs |
-| Routing/search/tab context | Router query/hash or a small component owner, preserving existing deep-link and independent-region semantics |
-| Pending command | Command instance bound to its original actor, resource and submitted input; survives a read failure without being reclassified as an unsaved draft |
-| Local Packed checklist | Existing browser-local list/item key; neither query data nor an account/profile preference |
-| Session/locale | Small app owner; changes coordinate cache, drafts, requests and translations explicitly |
+| Authorized DTO/query receipt | Query cache, captured identity/resource/filter/locale scope; never mutate it as a form. |
+| Original/local/remote draft | Feature MetadataDraft or specialized owner, independent from background cache replacement. |
+| Pending/unknown/confirmed command | Shared command/completion owner; may outlive a component. |
+| URL/search/page/fragment | Router plus feature delivery policy; commit only admitted navigation. |
+| Locale/identity/update | App context and shared translator; transitions retire private generations. |
+| Packed? checklist | Existing Packing browser-local storage contract, not generic/profile server state. |
 
-Use feature-owned query functions and keys, not fetch calls scattered through components. Multiple components reading
-the same key share one cached query. Do not mirror those DTOs into another global store. A detail query must not
-silently prefetch every item, participant, proof, historical ledger or linked feature behind an unopened section.
-
-Packing detail, metadata, settings and event options contain machine state or user-authored content; their keys
-therefore keep one current projection across languages. A successful read that removes editable fields remains
-authoritative during language changes. Help and Overview include language-owned content and retain localized keys.
-Locale changes still cancel and invalidate reads; they must not select an older cached grant for an unchanged resource.
+Generic cache/command/feedback owners accept caller-selected families/policy rather than importing feature endpoints.
+Capabilities are display guidance; controllers authorize every write.
 
 ## Authorized refresh clarification (2026-10-08)
 
-The rectification retains the healthy 30-second cadence and targets roughly one-minute convergence for active
-shared views under a responsive backend. Honor server cooldown, pause hidden/unmounted observers, and reuse one
-scheduler for interval, return/focus/reconnect and read recovery. Clear only the notice belonging to a recovered
-operation. Dirty forms still receive authoritative snapshots without replacing their input or original baselines.
-Closed selectors use current authority supplied by their owner and keep draft IDs separate; they do not poll
-hidden searches continuously. Late responses cannot restore an invalidated selection or obsolete navigation.
-
-This expressly supersedes the original generic failed-read delay capped at two minutes in the initial policy
-below. The old policy remains design history, not the rectification target. The amendment introduces no automatic
-write retry, arbitrary age-based command prohibition, new relationship history or backend hardening project.
-Actual implementation and focused verification belong in the pilot guide and paired review.
+Healthy active shared views use 30-second polling. Eligible ordinary recovery targets convergence within roughly
+one minute instead of the original generic two-minute failed-read delay. Server cooldowns, hidden-tab behavior,
+observer disposal and request sequencing still apply. This is a bounded policy, not a freshness SLA, live feed or
+arbitrary age-based command prohibition.
 
 ## Initial refresh policy
 
-These are the starting policies, not library defaults or a freshness SLA. Packing detail, open settings and
-visible overview regions use 30-second polling with per-client jitter; collapsed regions stop reading. Shared
-pickers debounce searches for 200 ms and read only when open or resolving an initial selected title:
-
-| Read | Initial policy |
+| Read | Policy |
 |---|---|
-| Active visible shared detail/overview region | Read on entry; stale after 15 seconds; poll at 30 seconds with per-client jitter |
-| Open participant/list section | Same policy while observed; stop its interval when closed/unmounted |
-| Identity bootstrap | Revalidate on app entry, focus/reconnect, identity signal and periodic visible activity; at most 30 seconds between visible checks initially |
-| Picker search | Debounced request on user input, current bounded page only; event choices may refresh while open, with no closed-picker polling |
-| Reviewed invoice preview | Explicit open/Refresh preview; polling may detect that it is stale but must not replace the reviewed values/token |
-| Activity job | Retain the job-specific status/backoff/expiry policy; stop when terminal or its scope is obsolete |
-| Static catalogs/help content | Versioned build/catalog assets; no shared-data polling |
+| Visible active detail/overview/settings | Read on entry; explicitly configured stale/poll/focus/reconnect policy, healthy 30-second cadence. |
+| Closed/unmounted section | Stop observations/intervals; begin hidden region on opening. |
+| Session | Entry/focus/reconnect/identity signal and periodic visible checks, coordinated before private reads. |
+| Picker | Debounced bounded search; initial selected title independent of filter; open/active observations only. |
+| Static catalog/Help | No shared-data polling; language/release-owned content reads when required. |
+| Reviewed finance preview | Explicit preview/refresh; stale detection cannot replace reviewed values/token. |
+| Recommendation/job | Existing job-specific backoff/expiry/terminal rules. |
 
-Configure hidden-tab polling off. Refresh active reads on focus and reconnect after session revalidation. A manual
-refresh is available for recoverable stale reads; distinguish a network refresh from the invoice ledger's existing
-local Refresh list action. Do not poll writes, identity search, token-consuming routes or exports.
+Honor Retry-After and per-client jitter. Safe reads can retry with bounded shared backoff; commands default to zero.
+Do not run independent interval/retry timers against the same failed endpoint.
+Hidden polling is off; focus/reconnect refresh follows authoritative session revalidation.
 
-TanStack exposes configurable intervals and focus handling; set policy explicitly instead of inheriting defaults.
-[Query options](https://tanstack.com/query/latest/docs/framework/vue/reference/useQuery),
-[focus refetching](https://tanstack.com/query/latest/docs/framework/vue/guides/window-focus-refetching)
-
-Use conditional reads where the API offers a view ETag. An unchanged result keeps the existing DTO and updates
-freshness without rebuilding the form or moving focus. Reauthorize every conditional read before returning 304;
-an old ETag cannot authorize a private response. The application query cache stays in memory: do not persist private
-DTOs in query storage or a service worker cache. Browser HTTP caching separately follows the API's private/no-cache
-or no-store policy. Conditional requests can save response bytes but do not themselves eliminate server query cost.
-
-At 30 seconds, one active detail query produces roughly two scheduled reads per visible client per minute, plus
-navigation/focus/commands. Measure real authorized read cost and concurrent-tab load before increasing polling.
-The initial implementation needs no global change feed, websocket server or event bus. If measured load later
-justifies server-sent invalidations, add them behind the same query invalidation boundary.
+Conditional GET, where supported, can retain equal DTOs and refresh receipts without moving focus.
+It still requires authorization before 304 and does not eliminate query cost.
+Private application cache remains in memory, without persisted query/service-worker private DTO storage.
+Measure actual read cost before adding feeds/websockets or increasing cadence.
 
 ## Errors and cancellation
 
-Pass each query's AbortSignal through the typed transport to fetch. TanStack does not automatically cancel every
-unused promise unless the consumer uses its signal; additionally reject obsolete results using the local identity
-and request generation. [Query cancellation](https://tanstack.com/query/latest/docs/framework/vue/guides/query-cancellation)
+Forward the same AbortSignal through HTTP, decoding, classification and cooldown owners.
+Reject obsolete actor/resource/route/locale generations in addition to physical cancellation.
 
-| Outcome | Browser behavior |
+| Outcome | Required behavior |
 |---|---|
-| Temporary failed read | Retain last confirmed readable data, show stale/retry state and last successful refresh; do not render an empty collection |
-| Network/temporary 5xx | At most two read retries with jittered backoff; then suspend the regular interval for that failure cycle and use increasing retry delay capped at two minutes |
-| 429 or retryable 503 | Honor Retry-After before another scheduled/manual automatic request; keep the draft and display retry timing |
-| 400 validation/input rejection | Show query or validation issue; no automatic retry loop; legacy statuses retain their own adapter mapping |
-| Expired/auth-required 401 | Stop private queries, clear private cached display, retain only permitted recovery context and begin structured reauthentication; known invalid login/token credentials are ordinary confirmed rejections |
-| Context mismatch | Clear the obsolete identity scope and bootstrap the current one; never replay the failed command as the new profile |
-| Confirmed read denial or resource disappearance | Remove protected resource projections and their cached appearances; explain unavailable access without exposing private names or stale authorized DTOs |
-| Navigation/cancelled read | Ignore its completion; do not show a network-error toast for intentional cancellation |
+| Temporary read failure | Retain confirmed readable content/drafts and show corresponding last-success/deadline/retry state. |
+| 429/retryable 503 | Honor server deadline; unavailable Retry never starts an early read. |
+| Known invalid input/credential | Confirmed rejection with its operation feedback; no loop or global expiry inference. |
+| Actual identity expiry/context mismatch | Retire old private scope, bootstrap/recover without replay under another actor. |
+| Validated read denial/disappearance | Remove protected projections and relevant cached appearances; a stale alias cannot restore them. |
+| Narrow field/foreign-child rejection | Keep distinct from parent read loss; revalidate only affected authority/dependencies. |
+| Intentional navigation/cancel | Ignore retired completion without an invented network-error toast. |
 
-Implement scheduling/backoff once in the query policy so a retry timer and a normal interval cannot hammer the same
-failed endpoint independently. Reconnect/focus may request a fresh check when policy allows it; route unmount disposes
-its observers. Existing server rate limits remain meaningful.
+A fulfilled TanStack observer refetch may return canceled retained data or reuse an older cold fetch.
+`refetchFreshQuery`/`refetchFreshQueries` in the existing cache owner retire older reads, recheck captured admission
+and await a newly dispatched successful underlying promise. Cancellation cannot advance baseline/token or release
+awaiting authority. Equal actual successful data can; object identity/idle flags/timestamps alone cannot.
 
-A read-side 403/404 that establishes lost access or disappearance also removes the entity's cached card, picker and
-parent/detail appearances in the current scope. Cancel their obsolete reads and reject late results so removed private
-data cannot reappear. Do not merely mark those copies stale until the next interval. A rejected edit or foreign child
-ID does not by itself establish loss of read access to the whole parent: keep that narrower outcome distinct and
-revalidate the affected capabilities. Preserve each endpoint's disclosure policy.
+Background authority adoption uses actual successful read events for the exact current key.
+Manual cache writes and old-fetch aliases are not receipts. A fresh admitted read restores denied projections;
+old SSR closures/back navigation cannot replay a seed after eviction or actor retirement.
 
-[The generic cache owner](../../src/frontend/app/queryCache.ts) cancels and retires caller-selected families; it imports
-no feature policy. [PackingPage](../../src/frontend/features/packing/PackingPage.vue) selects the resource, event-picker
-and mixed-overview projections after detail access is lost. [PackingEntry](../../src/frontend/features/packing/PackingEntry.vue)
-owns the related typed admission policy. Its participant denial retires private detail/editor projections and their
-containing collections while preserving independent public guest admission. A 404 retires both detail/guest intents
-and guest data, plus inactive duplicate-source reads; an observed copied duplicate draft remains independent.
-The shared [page-entry owner](../../src/frontend/composables/pageEntry.ts) retires older admission variants while
-retaining the typed query that produced the denial. A fresh admitted read is required for restoration.
-Other resources, actor scopes and deliberate endpoint exceptions remain separate. Future features select their own
-dependencies through these shared owners. Current HTTP responses are private/no-store; application query caching
-is separate from browser-cache policy.
-
-Mutation retries default to zero even where a query library offers retry options. A command may expose a deliberate
-retry only through its endpoint-specific contract. Transport abort is not server transaction rollback.
-[TanStack mutation guidance](https://tanstack.com/query/latest/docs/framework/vue/guides/mutations)
+Features name dependencies when access disappears: detail/editor/picker/card/parent appearances can differ from
+public guest/copy policy. Retire late responses within selected families, not every actor/resource indiscriminately.
+Field write loss disables saving while readable drafts remain explicit; actor/read loss clears protected state.
 
 ## Identity changes and multiple tabs
 
-Session bootstrap returns an opaque context identifying the current session generation and active actor/profile.
-All subsequent v1 reads and writes send `X-Surveyor-Context`; the server rejects a mismatch before returning resource
-data or admitting a command. A request-scoped actor remains fixed throughout that operation. Each response is also
-checked against the query's captured context and the browser's current local identity epoch.
+Server session context and browser epoch jointly bind reads/commands to captured actors.
+Login/logout/profile/guest transitions rotate context. Before an intentional switch, resolve dirty/pending work,
+retire old scope, bootstrap the new context and then admit queries.
 
-On profile switch, login/logout or a cross-tab identity signal:
+A previously admitted command may complete for its original actor; abort is not rollback.
+Its late result cannot populate a new actor view, and an old tab cannot silently submit as a changed cookie's profile.
+Cross-tab messages are data-free invalidation hints, never DTOs/cookies/credentials.
+Focus/periodic checks cover missed signals and native/external transitions; no instantaneous disconnected-tab erasure
+or atomic session-store compare-and-swap is claimed.
 
-1. Resolve this tab's dirty drafts and pending command state before a user-initiated switch. Do not pretend an
-   already admitted command was cancelled by aborting its request.
-2. Pause new commands, increment the local epoch, cancel reads and clear the old private query/draft scope.
-3. Bootstrap the new session and locale, then admit new queries under its context.
-4. Broadcast only an invalidation hint to other same-origin tabs; no private DTO, cookie or credential is broadcast.
-
-Another tab may switch identity while this tab's command is already admitted. That command may complete for the
-original actor; its late result must never populate the new actor's screen. New commands from an old tab get a context
-mismatch rather than silently acting as the cookie's new profile. Focus/periodic session checks cover missed or
-unsupported cross-tab signals. This design does not claim instantaneous removal from a disconnected tab or revocation
-of bytes already delivered to a browser; current server authorization always controls subsequent reads/writes.
-
-The current context owner broadcasts a data-free identity hint after confirming a successful SPA transition and
-listens without rebroadcasting received hints. Native/external identity changes still rely on focus/periodic checks;
-there is no instantaneous cross-protocol notification guarantee. A successful identity command retires the old local generation, drains any older
-in-flight bootstrap and obtains a fresh authoritative session before accepting a private guest link. Its new response
-context must match that session. Form reuse resets completed/register/reset state, while cancelled or rejected
-profile switches restore the visible selection to the active profile. These boundaries have focused source-linked
-[transport/context](../../tests/frontend/frontend-pilot.spec.ts) and
-[mounted navigation](../../tests/frontend/frontend-pilot-identity.spec.ts) assertions.
-
-Recheck the session-audience hydration discrepancy in EC-ID-11 through real routes before trusting capability DTOs.
-Do not infer authenticated/guest audiences from whatever optional ORM relations happen to be present in a cached
-session object. The versioned API's authority must be explicit and derived from the current server identity.
+Confirmed private identity/completion survives only in its matching scope through temporary read/delivery failure.
+After successful identity transition, retire/drain obsolete bootstrap before accepting private guest-link results.
+Cancellation/rejection restores the visible active selection, without replaying identity commands.
 
 ## Draft refresh and ordinary metadata conflicts
 
-When a form is clean, a successful read may replace its saved values. When it is dirty, keep three separate values:
-the original snapshot **B**, local draft **D**, and latest authorized remote snapshot **R**. Background reads update R
-and clean display regions. Disjoint changes may advance the baseline/token while retaining the sparse draft;
-overlapping changes keep the original baseline and require explicit review.
+Keep original, local and current values independent. Normalization is supplied by the feature and used identically
+for dirtiness/submission; missing values remain omitted and null/false/empty retain field meaning.
+Refresh clean fields immediately. Unrelated remote changes can advance untouched baselines while local patches survive.
+Overlapping values/grant changes offer explicit review rather than silently rebasing dirty input.
 
-| Field comparison | Suggested reconciliation after a rejected stale save |
-|---|---|
-| D equals B | The user did not edit it; use R |
-| R equals B | Only the local draft changed; retain D |
-| D equals R | Both reached the same value; no field disagreement |
-| All differ | Show original, mine and current; require an explicit choice |
+D2 comparisons are current-value checks, not monotonic history: change-away/change-back can match an old token.
+Compare only submitted fields under required actor/parent/root/item locks. Missing/stale preconditions use the
+authored API error; do not reveal hidden current values or merge semantically coupled fields automatically.
 
-After 412, load current authorized metadata, explain the changed fields and preserve the user's draft. Offer a
-reviewed merge/discard; never automatically submit the merge. A deliberate retry uses the newly reviewed edit token.
-Only edited authorized fields are included in the PATCH. A later concurrent change can cause another 412.
-
-Strings, null, absent fields, false and zero remain distinct according to the contract. Do not run this generic merge
-over ordered slot operations, permission masks, file replacement, relationship moves or financial calculations:
-those require their feature-specific review. If permission disappears while editing, show the appropriate access
-state and stop saving; a hidden old control or retained draft is not permission to write.
-
-Treat semantically coupled fields as one reconciliation unit. In particular, a local deadline and its IANA timezone
-must be reviewed and reapplied together; combining one editor's deadline with another's timezone can change the
-intended instant despite each field looking independently conflict-free. An unrelated save preserves the original
-deadline/zone pair and existing fallback semantics (EC-UI-02/06 and EC-ID-34).
-
-Packing conditional writes compare current touched fields inside shared controller-owned operations used by
-native and v1 adapters. Assignment-only changes and unrelated setup fields do not invalidate a description edit.
-The API design separates comparison tokens from full-view read tags, rechecks authorization and retains 428/412.
-The unreleased metadata counter and migration were removed under approved D2; financial revisions remain unchanged.
+Confirmation acknowledges submitted values for presentation. Only a fresh admitted post-command read supplies
+current token/grants/baseline. A failed/canceled read leaves saved values visible with blocked stale authority.
+An equal successful read can restore that authority without requiring different JSON.
 
 ## Commands whose conflict and retry rules differ
 
-| Command | Preserve and expose |
+| Workflow | Preserve |
 |---|---|
-| Packing/driver self-assignment | Existing locked idempotence; repeat desired membership rather than an ambiguous toggle; 409 for a genuinely new assignment that loses capacity |
-| Event attendance | Existing updates at full capacity and independent deadline rules; repair the documented capacity check/write gap before claiming atomic final-place protection |
-| Event association | Packing compares expected event plus its event field token under locks for an actual move. An authorized already-achieved target remains a no-op before token comparison; other feature migrations retain their own contracts |
-| Invoice submission | Unknown result leads to authoritative history reconciliation; no automatic retry or manufactured server idempotency guarantee |
-| Invoice close/recalculate/review | Preserve each command's revision and confirmation rules, saved-versus-pending amounts and stale rejection; obtain a fresh preview/review where the command requires it |
-| Invoice payment/refund | Preserve existing payment rules; payments advance the pool calculation revision and invalidate earlier previews, but the current payment request does not itself require an expectedRevision precondition |
-| Activity recommendation application | Keep reviewed operation set, warning digest, job provenance and locked context; generic metadata merge cannot substitute for these checks |
-| Personal visibility | Set the explicit desired state and invalidate its scoped appearances; never confuse it with shared archive/restore/delete |
-| Local Packed | Immediate local change under the existing key, without API write, server refresh or profile-specific migration |
+| Creation/duplication | Unknown result retains draft/review; a read cannot prove creation failed; explicit reapply is a new action. |
+| Assignment | Locked capacity/membership/idempotent semantics; no optimistic final count or metadata-token substitute. |
+| Order/setup | Exact relevant membership/current fields; sparse policy and independent drafts. |
+| Upload | File/input retention and existing ownership/uncertainty; no automatic replay or assumed rollback. |
+| Finance/payment/refund | Command-specific revision, preview, saved-versus-pending and signed evidence; never generic merge/rebase. |
+| Recommendation review | Existing fingerprint/job/stale-review protocol. |
+| Archive/hide/delete | Separate shared lifecycle, personal placement, hard deletion and file retention. |
 
-A timeout produces an **unknown** command outcome unless the server definitively rejected it. Keep its captured input
-and recovery route; do not label it “not saved.” A successful read cannot confirm which row an unknown creation
-produced or prove that a registration/email command failed. Those drafts remain blocked from resubmission until
-the user reviews the current state and explicitly acknowledges the uncertainty, or acknowledges leaving the draft.
-Desired-state updates may reconcile from an authoritative read without replaying their command.
-Conversely, after a confirmed successful write, a failed refresh is
-a stale-display problem, not a failed mutation. Show confirmation with retry-read recovery, without inviting a second
-invoice, duplicated token consumption or another financial action. The existing organizer response-loss browser
-journey is valuable evidence to port; the participant-upload and JIT-read variants still need focused coverage.
-
-Optimistic updates are limited initially to local presentation and endpoints whose desired-state/idempotency policy
-has been established. Keep capacity-sensitive assignments and all financial effects pending until server confirmation.
-The point is a consistent command lifecycle, not identical optimism for every feature.
-
-An infrequent application release is detected through the existing session refresh. The coordinator reloads once
-when every active form is clean and no command is pending or uncertain. A compatible loaded form can finish first;
-an incompatible write is rejected before side effects. Feature owners register their draft guards with this shared
-coordinator rather than adding reload loops or requiring old release assets to remain served.
+D4 is reconcile-only without operation tracking. Recovery reads inform explicit review; they do not automatically
+retry writes or prove an unknown operation failed. Saved-plus-failed-refresh remains saved.
+Whole-page destructive departure obtains consent before writing; captured unknown/pending states can outlive editors.
 
 ## Dependent refresh and presentation stability
 
-Feature command owners declare the affected query families explicitly. They should invalidate only current-scope
-data and use an authoritative mutation response when available. Avoid a central list of every business relationship
-inside the generic HTTP client.
+Commands invalidate only named affected families, not every query. Retire pre-command reads before authority
+continuation. Dialog sections keep separate baselines/drafts; close resolves its subtree, whole-page/identity/update
+departure resolves all affected work.
 
-| Successful change | Related reads to reconsider |
-|---|---|
-| Assignment/registration | Row state, aggregate counts, own participation and affected overview membership; financial enrollment where applicable |
-| Metadata | Detail/header, metadata editor, matching overview card and affected picker labels |
-| Association | Child detail, old/new event collections, admission/capabilities, inherited archive and activity context |
-| Archive/restore/visibility | Shared archive projection and relevant personal overview regions, without changing files or unrelated profiles |
-| Invoice/review/payment | Current input totals, saved ledger/payment state, stale notices and preview freshness according to actual operation |
-| Profile/session/locale | Identity scope disposal or locale-dependent representation refresh, following the respective identity/catalog policy |
+Confirmed navigation retains canonical destination and one-time receipt through failed/canceled delivery.
+Transient feedback expiry/renewal follows receipt identity, not translated text or unrelated renders.
+Read notices clear through their own recovery; Retry deadline availability never starts commands.
 
-Avoid replacing a table row under the pointer while its settlement action is pending. Preserve the current invoice
-ledger's deferred reordering/status filtering, query search focus/caret, selected event and active activity tab.
-An identity or permission change takes precedence over keeping stale private content visible. Refresh does not
-annihilate modal focus, hide persistent status or reset local Packed colors.
+Region navigation reads before history commit, merges one region into latest URL and adopts server clamping.
+Failed/obsolete targets keep current cards/URL/focus. Preserve sibling state, modified-click hrefs, search caret,
+fragments and pending drafts. Optional images inject feature operations and own cancellation/object-URL lifetime.
 
-## Implementation and subsequent-slice scenarios
+D5 ordinary session refresh detects binary-folder replacement. Compatible loaded edits may finish before one clean
+idle reload. Missing chunks/incompatible commands retain mounted drafts; no retained asset service is required.
 
-Use deterministic fake clocks/deferred reads at the frontend boundary and actual transactions only where needed:
+## Verification boundary
 
-- A remote title changes while a local description is dirty; adopt the title and current baseline while keeping
-  the sparse description edit. A later overlapping description change rejects and requires explicit review.
-- Two clients change the same field; the loser sees a field conflict and no write occurs before a deliberate retry.
-- A legacy writer changes metadata while the Vue form is open; the same conditional-write protection applies.
-- An assignment-only change refreshes counts without causing an unrelated metadata conflict or clearing Packed.
-- A profile switches before an old read resolves; neither the old response nor a new-cookie response can enter the
-  old query scope. A command admitted before the switch is reconciled as the original actor's command.
-- A write succeeds and the following read fails; retry refresh does not submit the command again.
-- Hidden/unmounted routes stop their intervals; reconnect/refocus produces bounded requests and respects Retry-After.
-- A permission is revoked while a dialog is open; the draft cannot bypass the server and protected data is removed
-  from detail, cached cards and pickers when current read access is denied. A field-only edit denial does not remove
-  unrelated readable data, and a late read cannot restore an evicted private projection.
-- When an event editor is migrated, concurrent deadline/timezone changes are reconciled as a pair; an unrelated
-  metadata edit cannot reinterpret the saved deadline.
+Use real mounted query/transport consumers for cancellation/authority, actual controller/DBAL calls for coexistence,
+and selected browser focus/navigation/SSR cases when their boundary is affected.
+Keep native/v1 action policy and private projection scenarios independent of full-page membership.
+Future finance/activity slices preserve baseline exception IDs and existing server protocols.
 
-These remain acceptance scenarios, not a blanket claim of coverage. The source-linked packing
-[management component](../../tests/frontend/packing-management-ui.spec.ts),
-[controller/DBAL integration](../../tests/integration/packing-management-api.spec.ts), and
-[HTTP](../../tests/e2e/frontend-pilot-api.spec.ts) suites now cover selected implemented boundaries. Current run and
-visual-review evidence belongs to the [pilot record](../FRONTEND_PILOT.md). No application tests or database commands
-were run for this documentation update; use the cheapest meaningful layer for each remaining scenario.
+Completed scoped correction evidence and its limits belong to the [review](PILOT_PARITY_REVIEW.md).
+Use the [risk procedure](staged/TESTING_GUIDE.md#risk-and-test-cost), not a mandatory full-stack test cross-product.
+Documentation reports remain advisory.

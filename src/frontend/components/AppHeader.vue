@@ -15,7 +15,7 @@ import NativeContextFields from './NativeContextFields.vue';
 import ActionButton from './ActionButton.vue';
 import StatusNotice from './StatusNotice.vue';
 
-// TODO (docs/FRONTEND_PILOT.md): Migrate the remaining creation, profile-management and
+// TODO (docs/frontend-migration/FRONTEND_PILOT.md): Migrate the remaining creation, profile-management and
 // account-administration destinations in their feature increments. Keep their native links
 // until those workflows have pilot owners; the current help/packing iteration does not replace them.
 const emit = defineEmits<{localeError: []; localeRecovered: []}>();
@@ -93,19 +93,30 @@ function synchronizeHelpLocale(): void {
         .catch(() => { if (active) emit('localeError'); });
 }
 
+/** Change language through the shared serialized cookie command without changing
+ * the active actor or discarding mounted drafts. Report the command's outcome,
+ * then let the settled Help URL owner preserve article/query/fragment navigation. */
 async function selectLocale(event: Event): Promise<void> {
     changingLocale.value = true;
     try {
+        // Confirm the shared serialized preference command before marking the
+        // locale-bearing Help URL dirty; other mounted drafts keep their actor.
         await context.changeLocale((event.target as HTMLSelectElement).value as Locale);
         emit('localeRecovered');
         localeUrlNeedsSync = true;
     } catch {
+        // A rejected/unavailable preference reports its failure without inventing
+        // a confirmed language change or replacing the current article URL.
         emit('localeError');
     } finally {
+        // Release the local command fence before attempting URL synchronization.
+        // Its owner still checks confirmed intent and settled route navigation,
+        // including an earlier successful change whose URL delivery was delayed.
         changingLocale.value = false;
         synchronizeHelpLocale();
     }
 }
+
 async function logout(): Promise<void> {
     if (identityBlocked.value || !context.mayChangeIdentity()) return;
     await logoutCommand.run(logoutIdentity, false);

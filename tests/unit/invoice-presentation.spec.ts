@@ -368,18 +368,6 @@ describe('shared invoice calculation explanation', () => {
         expect(text).not.toContain('Private payer name');
     });
 
-    it('keeps legacy missing attendance evidence explicit instead of inventing an example', () => {
-        const display = invoicePoolCalculation(undefined, [calculationShare()]);
-        expect(display.sections).toEqual([]);
-        const context = invoicePoolCalculationBreakdown();
-        expectFiguresOnly(context);
-        const text = JSON.stringify(context);
-        expect(text).toContain('Not saved');
-        expect(text).not.toMatch(/Nights stayed|Share factor|Total weight/iu);
-        expect(invoicePoolCalculationBreakdown().sections.map(section => section.key)).toEqual(['legacy']);
-        expect(display.description).toBe(invoiceText('poolCalculationCostExampleCaption'));
-    });
-
     it('retains global facts before the optional anonymous example in the compatibility text adapter', () => {
         const lines = invoiceCalculationLines(calculationExplanation(), [calculationShare()]);
         expect(lines[0]).toBe('Calculation breakdown');
@@ -970,7 +958,7 @@ describe('saved global calculation breakdown', () => {
         expect({explanation, share, adjustments: scenario.adjustments}).toEqual(before);
     });
 
-    it('does not infer a legacy full pool total without any saved adjustment provenance', () => {
+    it('keeps unavailable saved inputs explicit without inferring a legacy full pool total or an example', () => {
         const context = invoicePoolCalculationBreakdown(calculationExplanation());
         expectFiguresOnly(context);
         expect(context.sections.find(section => section.key === 'costs')!.metrics).toEqual([
@@ -983,9 +971,13 @@ describe('saved global calculation breakdown', () => {
         expect(example.sections.some(section => section.formula?.result.label === 'Full pool total')).toBe(false);
         const missing = invoicePoolCalculationBreakdown();
         expectFiguresOnly(missing);
+        expect(missing.sections.map(section => section.key)).toEqual(['legacy']);
         expect(missing.sections.find(section => section.key === 'legacy')!.metrics)
             .toEqual([{label: 'Saved calculation inputs', value: 'Not saved'}]);
-        expect(invoicePoolCalculation(undefined, [calculationShare()]).sections).toEqual([]);
+        expect(JSON.stringify(missing)).not.toMatch(/Nights stayed|Share factor|Total weight/iu);
+        const missingExample = invoicePoolCalculation(undefined, [calculationShare()]);
+        expect(missingExample.sections).toEqual([]);
+        expect(missingExample.description).toBe(invoiceText('poolCalculationCostExampleCaption'));
     });
 
     it.each([

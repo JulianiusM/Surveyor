@@ -24,6 +24,11 @@ export type GuestKey = "guest";
 export type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
 export type UserOrGuestKey = UserKey | GuestKey;
 
+/** The existing image-swap owner receives this only after a locked write commits. */
+export interface ImageSwapReceipt {
+    previousImage: string | null | undefined;
+}
+
 export type RelationEntry<E, K extends keyof E & string> = {
     /** Name of the relation property on E (e.g., 'slot', 'plan', 'user', 'guest'). */
     key: K;

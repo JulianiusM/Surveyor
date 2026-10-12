@@ -10,6 +10,7 @@ import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {helpKeys} from '../../app/queryKeys';
 import {ApiFailure} from '../../app/transport';
 import {pilotHelpUrl, resolvePilotHelpQuery} from '../../../modules/lib/helpNavigation';
+import {createTranslator} from '../../../modules/localization/translator';
 import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import ActionButton from '../../components/ActionButton.vue';
@@ -18,6 +19,7 @@ import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 const context = usePilot();
 const api = useHelpApi(context);
 const {messages, locale} = context;
+const englishMessages = createTranslator('en');
 const route = useRoute();
 const router = useRouter();
 // Explicit native path aliases and ordinary pilot query links share the SSR resolver.
@@ -35,6 +37,18 @@ const help = useQuery({
 });
 // A language switch must never display an old translated body under the new interface language.
 const page = computed(() => help.data.value?.locale === locale.value ? help.data.value : undefined);
+// Source language is independent of the selected interface. Fallback is already
+// decided by the trusted renderer, so SSR, hydration and no-JavaScript reads agree.
+const contentLocale = computed(() => page.value?.contentLocale ?? locale.value);
+function isEnglishFallback(sourceLocale?: string): boolean {
+    return locale.value !== 'en' && sourceLocale === 'en';
+}
+/** Keep a result's section sentence in its actual source language so its lang
+ * attribute describes both the introductory words and the authored heading. */
+function sectionDescription(title: string, sourceLocale?: string): string {
+    const translator = isEnglishFallback(sourceLocale) ? englishMessages : messages.value;
+    return translator.t('help.inSection', {title});
+}
 // A validated missing-document rejection owns the native complete Error page. An
 // unconfirmed transport/read failure instead retains the warning and confirmed article.
 const notFound = computed(() => help.error.value instanceof ApiFailure && help.error.value.problem?.code === 'NOT_FOUND');
@@ -71,15 +85,24 @@ async function retryHelp(): Promise<void> {
     if (!context.ready.value || !context.hydrated.value || !retryAvailable.value || help.isFetching.value) return;
     await help.refetch();
 }
+/** Enhance ordinary reviewed article links only. Modified clicks and packaged
+ * image/full-size links keep their native href, while article navigation retains
+ * the selected interface locale through the shared Help URL adapter. */
 function followContentLink(event: MouseEvent): void {
     const anchor = (event.target as Element | null)?.closest('a');
     if (!anchor || !isOrdinaryNavigation(event, anchor)) return;
     const href = anchor.getAttribute('href') ?? '';
     const target = helpRoute(href);
-    if (!target.startsWith('/frontend-pilot/help')) return;
+    // Pilot assets share the route namespace but remain files, like the native
+    // help assets. Do not route a full-size image link into the article component.
+    if (!target.startsWith('/frontend-pilot/help') || target.startsWith('/frontend-pilot/help/assets/')) return;
     event.preventDefault();
     void router.push(target);
 }
+
+// Wait for the admitted article's DOM before honoring its fragment. SSR stays
+// independent of browser globals, and an invalid fragment cannot hide the guide
+// or turn readable Help into a failed navigation.
 watch(() => [pageTitle.value, route.hash], async () => {
     if (!context.browser) return;
     await nextTick();
@@ -94,12 +117,15 @@ watch(() => [pageTitle.value, route.hash], async () => {
     <PageMessage v-if="notFound" kind="error" renewal="help.notFound" :message="messages.t('help.notFound')" />
     <section v-else class="card bg-dark text-white mb-3">
         <div class="card-header d-flex justify-content-between align-items-center gap-2">
-            <h1 class="card-title mb-0"><i class="bi bi-question-circle me-2" aria-hidden="true"></i>{{ pageTitle }}</h1>
+            <h1 class="card-title mb-0" :lang="contentLocale"><i class="bi bi-question-circle me-2" aria-hidden="true"></i>{{ pageTitle }}</h1>
             <RouterLink :to="helpRoute('/help')" class="btn btn-sm btn-outline-light">
                 <i class="bi bi-house me-1" aria-hidden="true"></i>{{ messages.t('help.home') }}
             </RouterLink>
         </div>
         <div class="card-body">
+            <StatusNotice v-if="page?.fallbackToEnglish" class="help-language-fallback">{{
+                messages.t('help.englishFallbackNotice')
+            }}</StatusNotice>
             <div class="row g-3">
                 <aside class="col-lg-3">
                     <section class="card bg-dark text-white mb-3">
@@ -125,7 +151,12 @@ watch(() => [pageTitle.value, route.hash], async () => {
                                     <RouterLink v-for="doc in group.docs" :key="doc.path" :to="helpRoute(doc.url)"
                                                 class="list-group-item list-group-item-action"
                                                 :class="page.currentDoc === doc.path ? 'active bg-primary' : 'bg-dark text-white border-secondary'"
-                                                :aria-current="page.currentDoc === doc.path ? 'page' : undefined">{{ doc.title }}</RouterLink>
+                                                :aria-current="page.currentDoc === doc.path ? 'page' : undefined">
+                                        <span :lang="doc.contentLocale ?? locale">{{ doc.title }}</span>
+                                        <!-- Keep a real text separator: Vue can remove template whitespace
+                                             between these language segments during compilation. -->
+                                        <span v-if="isEnglishFallback(doc.contentLocale)" class="small ms-1">{{ ' ' }}({{ messages.t('help.englishFallbackLabel') }})</span>
+                                    </RouterLink>
                                 </div>
                             </div>
                         </div>
@@ -160,17 +191,21 @@ watch(() => [pageTitle.value, route.hash], async () => {
                                     <RouterLink v-for="result in page.searchResults" :key="result.url" :to="helpRoute(result.url)"
                                                 class="list-group-item list-group-item-action bg-dark text-white border-secondary">
                                         <div class="d-flex justify-content-between align-items-start gap-2">
-                                            <h3 class="h5 mb-1">{{ result.title }}</h3><i class="bi bi-chevron-right" aria-hidden="true"></i>
+                                            <h3 class="h5 mb-1">
+                                                <span :lang="result.contentLocale ?? locale">{{ result.title }}</span>
+                                                <span v-if="isEnglishFallback(result.contentLocale)" class="small ms-1">{{ ' ' }}({{ messages.t('help.englishFallbackLabel') }})</span>
+                                            </h3>
+                                            <i class="bi bi-chevron-right" aria-hidden="true"></i>
                                         </div>
-                                        <p v-if="result.sectionTitle" class="small text-info mb-1">{{ messages.t('help.inSection', {title: result.sectionTitle}) }}</p>
-                                        <p class="mb-0">{{ result.excerpt }}</p>
+                                        <p v-if="result.sectionTitle" class="small text-info mb-1" :lang="result.contentLocale ?? locale">{{ sectionDescription(result.sectionTitle, result.contentLocale) }}</p>
+                                        <p class="mb-0" :lang="result.contentLocale ?? locale">{{ result.excerpt }}</p>
                                     </RouterLink>
                                 </div>
                             </template>
                         </div>
                     </div>
                     <div v-else-if="page" class="row g-3">
-                        <article :class="page.toc.length ? 'col-xl-9' : 'col-12'">
+                        <article :lang="contentLocale" :class="page.toc.length ? 'col-xl-9' : 'col-12'">
                             <div class="card bg-dark text-white">
                                 <!-- This HTML is the existing server's validated, release-shipped Markdown. -->
                                 <div class="card-body help-content" @click="followContentLink" v-html="content"></div>
@@ -182,7 +217,7 @@ watch(() => [pageTitle.value, route.hash], async () => {
                                 <div class="list-group list-group-flush">
                                     <a v-for="entry in page.toc" :key="entry.id" :href="`#${entry.id}`"
                                        class="list-group-item list-group-item-action bg-dark text-white border-secondary"
-                                       :class="{'help-toc-level-3': entry.level === 3}">{{ entry.title }}</a>
+                                       :lang="contentLocale" :class="{'help-toc-level-3': entry.level === 3}">{{ entry.title }}</a>
                                 </div>
                             </nav>
                         </aside>
