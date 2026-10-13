@@ -13,7 +13,6 @@ import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import PageMessage from '../../components/PageMessage.vue';
-import NativeContextFields from '../../components/NativeContextFields.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {ApiFailure, ObsoleteRequestError} from '../../app/transport';
 import type {components} from '../../../types/api/v1';
@@ -32,11 +31,11 @@ const next = computed(() => safeFrontendReturn(route.query.next));
 const nativeInitial = context.initialDocumentFor(route.fullPath);
 // Passwords belong only to this mounted form; neither bootstrap nor persistent recovery stores them.
 const fields = reactive({
-    username: nativeInitial?.identityFields?.username ?? '',
+    username: '',
     password: '',
     passwordRepeat: '',
-    displayname: nativeInitial?.identityFields?.displayname ?? '',
-    email: nativeInitial?.identityFields?.email ?? '',
+    displayname: '',
+    email: '',
 });
 const finished = ref(!!nativeInitial?.identityFeedback && frontendIdentityMessageFeedback.includes(nativeInitial.identityFeedback));
 // Signup completion stays on this visit's existing message surface. SMTP failure
@@ -47,8 +46,8 @@ const finishedMessage = computed(() => mode.value === 'register'
     : mode.value === 'forgot' ? 'auth.resetSent' : 'auth.resetDone');
 const identityConfigurationProblem = shallowRef<components['schemas']['Problem'] | null>(null);
 // A URL is not evidence that a command succeeded. Enhanced completion is an in-memory
-// receipt scoped to its actor and exact destination. Native POST seeds that same receipt
-// once, so returning after another committed visit cannot reconstruct an old success.
+// receipt scoped to its actor and exact destination. Returning after another
+// committed visit cannot reconstruct that old success from a URL alone.
 const pageCompleted = computed(() => {
     const completion = context.pageCompletion.value;
     const messageKey = mode.value === 'recovery' ? 'auth.recoverySent'
@@ -103,18 +102,15 @@ function acceptIdentityRejection(failure: unknown, scope: PilotRequestScope): vo
     fields.passwordRepeat = '';
     if (failure.problem?.code === 'LOCAL_LOGIN_DISABLED') identityConfigurationProblem.value = failure.problem;
 }
-if (nativeInitial?.identityFormProblem) {
-    command.setError(new ApiFailure(nativeInitial.identityFormProblem.status, nativeInitial.identityFormProblem));
-}
 const initialDocument = computed(() => context.initialDocumentFor(route.fullPath));
 const configuredEntry = computed(() => context.session.value
     ? frontendIdentityPageEntry(mode.value, context.session.value.shell, next.value) : {kind: 'render' as const});
-// A trusted document denial belongs to this visit. Do not redirect a rejected native POST
-// merely because its GET counterpart normally enters the external provider.
+// A trusted GET denial belongs to this visit. Do not redirect a rejected entry
+// merely because its configured counterpart normally enters an external provider.
 const needsOidc = computed(() => initialDocument.value?.pageEntry?.kind !== 'denied'
     && !initialDocument.value?.identityProblem && configuredEntry.value.kind === 'redirect');
-// Native document/command denials take precedence over a shell's configured GET
-// entry. This keeps a rejected POST on its complete error presentation instead
+// Initial document/command denials take precedence over a shell's configured GET
+// entry. This keeps a rejected entry on its complete error presentation instead
 // of redirecting it to a provider or reopening a form under different settings.
 const identityDenial = computed(() => {
     const entry = initialDocument.value?.pageEntry;
@@ -173,7 +169,7 @@ async function refreshResetAdmission(_value: unknown, _previous: unknown, onClea
     resetReadFailure.value = null;
 
     // Use bootstrap only for its own first route. Later tokens and retry attempts read again.
-    // A confirmed native POST has already consumed the token. Its exact message receipt
+    // A confirmed command has already consumed the token. Its exact message receipt
     // is the presentation authority; a new token check would incorrectly replace Success.
     if (mode.value !== 'reset' || identityDenial.value || pageCompleted.value) return;
     if (!usedInitialReset && initialDocument.value?.passwordReset) {
@@ -379,7 +375,7 @@ onMounted(() => {
     if (mode.value === 'activate' && !identityDenial.value) void submit();
 });
 /** Reused route components need the same admission as first mounts. A URL alone cannot
- * restore a completed command; only trusted POST feedback or the scoped receipt can. */
+ * restore a completed command; only authorized initial feedback or the scoped receipt can. */
 function admitRecovery(): void {
     if (context.browser && context.ready.value && mode.value === 'recovery' && !pageCompleted.value && !identityDenial.value) {
         void router.replace('/frontend-pilot/users/login');
@@ -423,8 +419,8 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                 <i class="bi me-2" :class="titleIcon" aria-hidden="true"></i>{{ title }}
             </h1>
             <div class="card-body">
-                <!-- Only admission-dependent fields wait. The known card title and ordinary
-                     identity forms render immediately; errors retain their existing owner. -->
+                <!-- After initial JavaScript initialization, only admission-dependent
+                     fields wait. Errors retain their existing presentation owner. -->
                 <LoadingSkeleton v-if="needsOidc || mode === 'reset' && !resetAllowed"
                     :variant="needsOidc ? 'lines' : 'form'" :rows="2" />
                 <StatusNotice v-if="command.uncertain.value" kind="warning"
@@ -439,8 +435,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                 >
                 <p v-if="mode === 'forgot'" class="lead text-center mb-4"><i class="bi bi-envelope-at-fill me-1" aria-hidden="true"></i>{{ messages.t('auth.forgotIntro') }}</p>
                 <form v-if="!needsOidc && (mode !== 'reset' || resetAllowed)" class="row gy-3 justify-content-center"
-                    method="post" :action="route.path" @submit.prevent="submit">
-                    <NativeContextFields :next="next" />
+                    @submit.prevent="submit">
                     <template v-if="context.session.value?.shell.localLoginEnabled || mode === 'guest-login'">
                         <FormField
                             v-if="['login', 'register', 'forgot'].includes(mode)"
@@ -569,8 +564,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                     ><hr />
                     <h2 class="text-center">{{ messages.t('auth.recoveryTitle') }}</h2>
                     <p class="text-center">{{ messages.t('auth.recoveryIntro') }}</p>
-                    <form class="row gy-3 justify-content-center" method="post" action="/frontend-pilot/guest/recovery" @submit.prevent="recover">
-                        <NativeContextFields :next="next" />
+                    <form class="row gy-3 justify-content-center" @submit.prevent="recover">
                         <FormField
                             id="recovery-email"
                             name="email"

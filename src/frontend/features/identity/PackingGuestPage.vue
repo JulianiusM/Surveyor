@@ -16,9 +16,8 @@ import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
-import NativeContextFields from '../../components/NativeContextFields.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
-import {ApiFailure, isReadDenial} from '../../app/transport';
+import {isReadDenial} from '../../app/transport';
 
 const props = defineProps<{entry?: components['schemas']['GuestEntry']}>();
 const context = usePilot();
@@ -30,7 +29,7 @@ const completion = useConfirmedNavigation();
 const listId = computed(() => String(route.params.listId).toLowerCase());
 const next = computed(() => '/frontend-pilot/packing/' + listId.value);
 const nativeInitial = context.initialDocumentFor(route.fullPath);
-const fields = reactive({name: nativeInitial?.identityFields?.username ?? '', email: nativeInitial?.identityFields?.email ?? ''});
+const fields = reactive({name: '', email: ''});
 const choiceOpen = ref(false);
 const checkingEmail = ref(false);
 const entryKey = computed(() => packingKeys.guest(context.session.value?.context, listId.value));
@@ -68,9 +67,6 @@ watch(listId, () => {
     Object.assign(fields, {name: '', email: ''});
     choiceOpen.value = false;
 });
-if (nativeInitial?.identityFormProblem) {
-    command.setError(new ApiFailure(nativeInitial.identityFormProblem.status, nativeInitial.identityFormProblem));
-}
 usePageTitle(() => guestEntry.value?.title || messages.value.t('app.packing'));
 const blocked = computed(() => checkingEmail.value || reconciling.value || command.pending.value || command.uncertain.value
     || completion.pending.value || completion.target.value !== null);
@@ -236,9 +232,7 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                     <div class="flex-grow-1"></div>
                 </div>
             </StatusNotice>
-            <form class="row gx-3 gy-3 justify-content-center" autocomplete="on" method="post"
-                :action="'/frontend-pilot/packing/' + listId + '/guest'" @submit.prevent="submit">
-                <NativeContextFields :next="next" />
+            <form class="row gx-3 gy-3 justify-content-center" autocomplete="on" @submit.prevent="submit">
                 <FormField
                     id="guest-name"
                     name="username"

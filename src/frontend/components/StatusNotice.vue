@@ -2,7 +2,7 @@
 import {computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, watch} from 'vue';
 import type {MessageKey} from '../../types/LocalizationTypes';
 import {createTranslator, formatReadTime} from '../../modules/localization/translator';
-import {pilotContextKey, usePilot} from '../app/context';
+import {pilotContextKey, useClientInitialization, usePilot} from '../app/context';
 import {isElementVisible, readFailureMessage, useTransientNotice} from '../composables/feedback';
 
 // Teleport has no DOM element for automatic fallthrough. Preserve the original
@@ -35,6 +35,7 @@ const element = ref<HTMLElement | null>(null);
 // localize Close, read diagnostics and timestamps; standalone callers retain the
 // catalog's native English fallback without a second literal owner.
 const context = inject(pilotContextKey, null);
+const initialized = useClientInitialization();
 // Contextual notices use the same selected Vue binding as every feature. Its
 // resource-event dependency updates cached labels/diagnostics during catalog HMR;
 // the raw fixed translator would react only to a language change. Standalone
@@ -94,7 +95,7 @@ function expire(): void { emit('dismiss'); }
 function dismiss(): void {
     // Native pending commands lock every control in their modal, including inline
     // Close. Native timed expiry still clears feedback independently of that lock.
-    if (!props.disabled) emit('dismiss');
+    if (!props.disabled && initialized.value) emit('dismiss');
 }
 </script>
 
@@ -120,7 +121,7 @@ function dismiss(): void {
             </div>
             <!-- Vue owns removal. Bootstrap's data-bs-dismiss would remove the node
                  independently and leave the reactive message/timer state behind. -->
-            <button v-if="inlineNotice" type="button" class="btn-close" :disabled="disabled"
+            <button v-if="inlineNotice" type="button" class="btn-close" :disabled="disabled || !initialized"
                 :aria-label="dismissLabel" @click="dismiss"></button>
         </div>
     </Teleport>

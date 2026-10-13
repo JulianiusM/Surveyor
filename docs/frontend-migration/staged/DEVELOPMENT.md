@@ -6,7 +6,7 @@ owner: application maintainers
 status: migration-pending
 last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved migration recipe/startup/file-release boundaries retained; meaningful individual approval/semantic delegation-review routing, exact registry dependency and locked pilot completion/serializer boundaries clarified; execution owned by review
+verification-scope: approved migration recipe/startup/file-release and locked completion boundaries retained; refined Req6A initial skeleton/static delivery and API-only interactive consumers reconciled; execution owned by review
 source-anchors: package.json; src/controller/packingController.ts; src/modules/database/services/; contracts/api/v1/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/watch-frontend-inputs.mjs; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/DEVELOPMENT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/DEVELOPMENT.md
@@ -77,6 +77,7 @@ semantic delegation/root review before asking the maintainer. Correct labels alo
 | Entry/read → authorized view | `composables/pageEntry.ts`, `app/queryKeys.ts`, `app/queryCache.ts`; feature supplies policy/dependencies. |
 | Snapshot → draft/command/recovery | `metadataDraft.ts`, `command.ts`, shared feedback/confirmed-navigation/read owners. |
 | Route → SSR/hydration | Existing Express pilot route/renderer, `app/serializeBootstrap.ts`, `createApp.ts` and `mountPreservingDrafts.ts`. |
+| Initial content → usable controls | `app/context.ts` initialization helpers, route metadata and the existing shell/shared controls; one control/read readiness contract. |
 | Repeated interaction → presentation | Shared components/composables; explicit props/events and injected operations. |
 | Language → UI/server/Help | Catalog, shared translator, i18next-vue and reviewed runtime corpus. |
 
@@ -131,6 +132,10 @@ remain limited to their recorded outcome. Migration completion means native visu
    `usePageEntry` where the native journey has an admission decision; public read-only views can use a direct query.
    Request-local SSR renders the same Vue tree and makes no self-HTTP call. Initial seeds check live document/scope
    eligibility when evaluated; Back, eviction or an actor change cannot replay retired SSR data.
+   Classify initial interactive content through `requiresClientInitialization`, using existing route metadata and
+   admitted result state. Shared controls use `useClientInitialization`; initial skeletons, genuinely functional
+   static content and the independent failure notice follow the bootstrap section below. Cover shell controls as
+   well as the feature body. JavaScript failure must not leave a normal-looking action which cannot work.
 
 5. **Complete read/recovery behavior.** Start queries only when identity, hydration, visibility and activity permit.
    Retire obsolete generations and preserve server cooldowns. Missing pending data uses shared skeletons;
@@ -290,7 +295,7 @@ Pilot guest registration, API account signup and activation use the existing use
 `commitIdentityCompletion` through `UserService.withIdentitySessionTransaction`. The controller owns expiry/context
 checks, staged identity and result preparation; pure DBAL owns the manager, row lock and persistence. Prepare all
 required projections and serialized replies before the final commit through the existing session/transport owners.
-API result envelopes cross their generated validators; full SSR preparation completes rendering and serialization.
+API result envelopes cross their generated validators; retained admission GET completion prepares its notice/redirect.
 A precommit session check followed by a separate session save leaves a partial mutation and does not satisfy this
 boundary. Use `registerGuestWithSession` for Guest/profile plus stored identity, `registerUserWithSession` for the
 inactive User/profile/activation token, and `activateAccountWithSession` for token consumption. API account signup
@@ -301,32 +306,35 @@ read/write which can substitute another tab's actor or reject an already committ
 After registration commits, SMTP only selects an already prepared delivery outcome. Guest email failure remains
 explicit advisory feedback with the confirmed personal link; account failure uses its existing completion surface
 and keeps activation required. SMTP acceptance does not guarantee inbox delivery. Never recreate the identity,
-replay registration or treat network uncertainty as proof of rollback. Native compatibility paths and the unresolved
-pilot account document decision remain distinct. Do not generalize this boundary to every session/provider operation;
+replay registration or treat network uncertainty as proof of rollback. Interactive pilot callers use the existing
+APIs; refined Req6A retires their unused ordinary-form POST adapters. Native compatibility paths and capability-link
+GET completion remain distinct. Do not generalize this boundary to every session/provider operation;
 keep exact database/session schedules and client adoption/retirement assertions separate from helper-only evidence.
 
 Login, private guest-link login and profile switching use `loginUserWithSession`, `loginGuestWithSession` and
-`changeActiveProfileWithSession` with that same completion owner. API projection through `prepareIdentityReply` and
-document notice/redirect preparation finish before the locked identity save commits; delivery adopts the prepared
-receipt outside rejection handling. Native credential, profile ownership and return-path decisions remain shared.
+`changeActiveProfileWithSession` with that same completion owner. API projection through `prepareIdentityReply`
+finishes before the locked identity save commits; delivery adopts the prepared receipt outside rejection handling.
+The retained private guest-link GET prepares its existing notice/302 under that owner. Native credential, profile
+ownership and return-path decisions remain shared.
 An inactive account's established activation resend belongs before the identity transaction: its refreshed token
 must survive the intended login rejection. Keep provider logout's separately backlogged failure boundary distinct.
 
 Explicit pilot logout uses `logoutUserWithSession` only when `session.tokens` is not truthy; an empty object still
 selects the protected provider path. Recheck that classification on locked staging before clearing authority.
-Prepare its generated anonymous API receipt or existing document success notice and 303 in the same transaction,
-then adopt the detached completion without a later session save. Preserve bounded explicit return precedence and
-the locale's pilot-root default. Native logout and all token-bearing provider paths keep their existing owner/order;
+Prepare its generated anonymous API receipt in the same transaction, then adopt the detached completion without a
+later session save. The existing mounted caller owns its admitted navigation; refined Req6A retires the unused pilot
+logout POST adapter. Native logout and all token-bearing provider paths keep their existing owner/order;
 its preparation-failure defect is deferred as separate `IMP-056`. Authored cases do not substitute for executed acceptance.
 
 Pilot password reset uses `resetPasswordWithSession` to check the token under its account lock and prepare the API
-receipt or full SSR success document before password/token mutation commits. `prepareFrontendPilot` and
-`sendPreparedFrontendPilot` share the existing renderer: the document remains a 200 response at the submitted token
-URL. Serialization failure leaves the original token/password state intact. This lock covers cooperating pilot
+receipt through `prepareValidatedJson` before password/token mutation commits. `sendPreparedJson` delivers that
+captured receipt without another session write. Serialization failure leaves the original token/password state intact.
+Refined Req6A retires the unused pilot reset POST adapter; its former SSR success response is historical evidence.
+The token-admission GET remains. This lock covers cooperating pilot
 consumers; native mixed-writer defects `IMP-051`/`IMP-057` are deferred to separately authorized general-defect work.
 
 Pilot reset-mail uses `requestPasswordResetWithSession` with shared username-first account resolution. Prepare the
-token, private link/templates, cached sender, generic result and optional document flash on the same transaction.
+token, private link/templates, cached sender and generic API result on the same transaction.
 Cached sender setup makes no SMTP connection; captured delivery follows commit through the existing mail owner.
 Keep known/unknown accounts' generic confirmation and original errors, without account-found/delivery metadata.
 Native forgot-mail and inactive-login resend retain their existing owners/order. No result preparation or later
@@ -416,11 +424,31 @@ feature validators remain the schema owners rather than duplicated checks in the
 `decodeBootstrap` owns that exhaustive browser validation. `serializeBootstrap` only serializes and escapes inert
 script-element JSON; successful SSR serialization is not proof that every browser bootstrap field has been validated.
 
-The shared mount preserves pre-hydration drafts on their original controls; explicitly opted-in non-text/file controls
-use `data-hydration-draft`. Hydration recovery does not upload files or submit commands.
+Initial delivery follows the
+[refined Req6A amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-interactive-startup-delivery-clarification-2026-10-13).
+The existing context helper derives initialization needs from route metadata and admitted denial/completion evidence;
+the shell uses `context.hydrated` and `LoadingSkeleton`. Do not copy the route classification or introduce a second
+control/read readiness policy. `initializePilotApp` stages initial feature mounting through `initialContentReady`
+inside its bounded Vue error capture; that internal step does not admit actions or scoped reads. Initialization succeeds
+only after mounting and the first readiness render; a captured failure restores `context.hydrated` to false while
+retaining partial draft/command owners. Readable denials/completions and
+ordinary Help GET search, article links and anchors remain static and functional before JavaScript runs.
+
+The shared initialization owner also gates JavaScript-only shell selectors, actions, Retry and dismiss controls.
+Genuine native links and mobile navigation disclosures remain reachable. The renderer's independent localized failure
+notice must work before the entry module executes, including disabled, missing, blocked or failed initialization.
+Do not expose a normal-looking control whose action depends on a client which has not initialized.
+Initial Vue setup/mount or first-readiness failure must not leave the application marked initialized. If a failed attempt already attached client
+handlers, genuine static links and Help GET search must still navigate through their native owners, retaining existing
+edited-control consent. This is the initial readiness boundary, not a new policy for every later component error.
+
+The shared mount preserves genuine static pre-hydration drafts, such as Help search, on their original controls;
+explicitly opted-in non-text/file controls use `data-hydration-draft` where such controls are admitted. Hydration recovery
+does not upload files or submit commands. Initial interactive inputs are skeletons, so prior edited interactive SSR
+receipts do not certify the new delivery shape. Mounted feature drafts retain their existing owners and protections.
 An SSR seed is eligible only for its live document/actor at use time, not because a captured closure once matched.
 
-Startup protection precedes asynchronous route loading and mounted router guards. Retain edited SSR controls through
+Startup protection precedes asynchronous route loading and mounted router guards. Retain edited genuine static controls through
 a failed initial chunk or bootstrap, and keep the initial guard until mount restoration finishes. The
 [approved startup amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-startup-recovery-clarification-2026-10-13)
 distinguishes automatic reload from deliberate recovery: automatic departure needs demonstrably clean state and a
@@ -439,11 +467,12 @@ checks conditional on changes to those owners, rather than rerunning them for ev
 
 ## Progressive loading and shared placeholders
 
-Initial interactive HTML waits for authoritative session bootstrap, not every independent feature projection.
-Overview active regions load in parallel; unopened hidden regions wait. Read-only Help retains complete SSR.
+Initial interactive HTML is the shared skeleton until client initialization, separately from authoritative session
+admission and independently pending feature projections. Once initialized, Overview active regions load in parallel;
+unopened hidden regions wait. Read-only Help retains complete SSR and native GET search/links.
 Resource data arrives through the owning scoped query without renderer self-HTTP requests.
 
-Use `LoadingSkeleton` for missing pending data. Its shapes are decorative, with one localized status; they invent no
+Use `LoadingSkeleton` for initial client initialization and missing pending data. Its shapes are decorative, with one localized status; they invent no
 records, membership count or command. Respect reduced motion and existing responsive geometry.
 Do not replace readable same-resource content/drafts on ordinary background reads or display a false empty state.
 
@@ -533,7 +562,8 @@ boundaries remain protected; mocking persistence is not a substitute for real di
 
 Compare affected native/pilot views with identical records/actors/desktop-mobile sizes. Inspect original images,
 labels, keyboard/focus, validation/no-op behavior and confirmed/unknown delivery. A screenshot capture success is
-not visual approval. Disabled JavaScript retains readable Help and the approved interactive message/read-only contract.
+not visual approval. Disabled/failed JavaScript retains functional static Help and the approved initial skeleton/failure
+notice contract; JavaScript-dependent shell and feature controls cannot remain normal-looking and dead.
 
 Follow all review criteria in the [paired review](../PILOT_PARITY_REVIEW.md#all-requested-review-criteria).
 Record source scope, commands, results, failures, prerequisites and independent reviewer provenance.

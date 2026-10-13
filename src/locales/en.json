@@ -404,7 +404,7 @@
         "changed": "Changes are available"
       },
       "state": {
-        "javascriptRequired": "JavaScript is required to use this page. Enable JavaScript in your browser, then reload the page. Help remains available below.",
+        "javascriptRequired": "Interactive features on this site require JavaScript. Enable JavaScript and allow the site's scripts to load. You can still read and search Help.",
         "loadFailed": "This page could not be loaded.",
         "startupFailed": "This page could not finish loading. Refresh the page to try again. Any changes you entered will be lost if you refresh.",
         "stale": "The displayed data may be out of date.",

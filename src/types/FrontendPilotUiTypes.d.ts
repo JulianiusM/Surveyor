@@ -184,6 +184,9 @@ export interface PilotContext {
     locale: Ref<Locale>;
     visible: Ref<boolean>;
     hydrated: Ref<boolean>;
+    /** Initial features may mount before initialization succeeds; this releases
+     * only their skeleton, never JS control/read readiness or request authority. */
+    initialContentReady: Ref<boolean>;
     ready: Ref<boolean>;
     /** Session revalidation pauses new reads without unmounting admitted presentation
      * or drafts. Only a current successful bootstrap restores this admission. */

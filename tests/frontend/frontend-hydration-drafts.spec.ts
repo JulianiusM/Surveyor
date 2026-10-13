@@ -46,7 +46,8 @@ function selectEarlyImage(input: HTMLInputElement): void {
     input.files = selection.files;
 }
 
-/** Use the actual native render and client component tree, leaving an editing window before mount. */
+/** Use the actual SSR/client tree. Only static Help has an editing window before
+ * mount; interactive feature controls appear after the shared initialization gate. */
 async function nativeApplication(url: string, bootstrap: FrontendPilotBootstrap) {
     const result = await render(url, bootstrap);
     document.body.innerHTML = `<div id="surveyor-pilot">${result.html}</div>`;
@@ -59,7 +60,12 @@ async function nativeApplication(url: string, bootstrap: FrontendPilotBootstrap)
         await mountPreservingDrafts(browser.app, container);
         await nextTick();
     }
-    return {...browser, container, hydrate};
+    async function initialize() {
+        await hydrate();
+        browser.context.hydrated.value = true;
+        await nextTick();
+    }
+    return {...browser, container, hydrate, initialize};
 }
 
 describe('drafts entered before hydration', () => {
@@ -127,12 +133,12 @@ describe('drafts entered before hydration', () => {
     it('keeps an early help search and submits its edited value through client navigation', async () => {
         const request = vi.fn(() => { throw new Error('Hydration must not submit or read'); });
         vi.stubGlobal('fetch', request);
-        const {container, router, hydrate} = await nativeApplication('/frontend-pilot/help?q=initial', {session, help});
+        const {container, router, initialize} = await nativeApplication('/frontend-pilot/help?q=initial', {session, help});
         const input = container.querySelector<HTMLInputElement>('#pilot-help-search')!;
         input.value = 'My early help search';
         input.focus();
         input.setSelectionRange(3, 8);
-        await hydrate();
+        await initialize();
         expect(container.querySelector('#pilot-help-search')).toBe(input);
         expect(input.value).toBe('My early help search');
         expect(document.activeElement).toBe(input);
@@ -143,16 +149,16 @@ describe('drafts entered before hydration', () => {
         expect(router.currentRoute.value.query.q).toBe('My early help search');
     }, 30_000); // The first real lazy route may compile its view/validator graph under Vitest.
 
-    it('keeps independent overview search drafts and preserves the other region when submitted', async () => {
-        // Hydration itself remains read-free. An explicit enhanced search now validates
-        // its region before committing history, matching native failed-navigation behavior.
+    it('mounts independent Overview search controls after initialization and preserves the other region when submitted', async () => {
+        // Initial SSR contains no inert feature controls. Once initialized, explicit
+        // enhanced search validates its own region before committing history.
         const request = vi.fn(async (input: RequestInfo | URL) => {
             const url = new URL((input as Request).url);
             if (url.pathname !== '/api/v1/overview') throw new Error('Unexpected hydration request');
             const view: components['schemas']['OverviewRegion'] = {
                 collection: url.searchParams.get('collection') as 'owner' | 'participant', region: 'main',
                 q: url.searchParams.get('q') ?? '', type: 'all', availableTypes: [], page: 1, childPage: 1,
-                eventId: null, pageSize: 24, totalEntities: 0, hiddenEntities: 0, regionEntities: 0,
+                eventId: null, pageSize: 24, totalEntities: 1, hiddenEntities: 0, regionEntities: 1,
                 matchingEntities: 0, totalCards: 0, totalChildren: 0, hasPrevious: false, hasNext: false,
                 parent: null, items: [],
             };
@@ -162,17 +168,24 @@ describe('drafts entered before hydration', () => {
         vi.stubGlobal('fetch', request);
         const account: components['schemas']['SessionView'] = {...session, kind: 'account',
             activeProfile: {id: profileId, name: 'Fixture'}, profiles: [{id: profileId, name: 'Fixture'}], logoutUrl: '/users/logout'};
-        const {container, router, hydrate} = await nativeApplication('/frontend-pilot?owner_main_q=initial', {
+        const {container, router, initialize} = await nativeApplication('/frontend-pilot?owner_main_q=initial', {
             session: account, overview: [],
         });
+        expect(container.querySelector('main input')).toBeNull();
+        expect(container.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        await initialize();
+        await flushPromises();
+        // Both newly mounted regions perform their independent initial reads.
+        // The explicit search below is a separate admitted interaction.
+        expect(request).toHaveBeenCalledTimes(2);
+        request.mockClear();
         const owner = container.querySelector<HTMLInputElement>('input[type="search"][name="owner_main_q"]')!;
         const participant = container.querySelector<HTMLInputElement>('input[type="search"][name="participant_main_q"]')!;
         owner.value = 'Owner early search';
         participant.value = 'Participant early search';
-        await hydrate();
-        expect(owner.value).toBe('Owner early search');
-        expect(participant.value).toBe('Participant early search');
         expect(request).not.toHaveBeenCalled();
+        owner.dispatchEvent(new Event('input', {bubbles: true}));
+        participant.dispatchEvent(new Event('input', {bubbles: true}));
         participant.form!.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
         await flushPromises();
         expect(router.currentRoute.value.query).toEqual({owner_main_q: 'initial', participant_main_q: 'Participant early search'});
@@ -180,26 +193,28 @@ describe('drafts entered before hydration', () => {
         expect(owner.value).toBe('Owner early search');
     }, 30_000); // Each initially visited lazy feature can compile during its first SSR render.
 
-    it('preserves early/autofilled identity fields without submitting until the user requests it', async () => {
+    it('withholds identity fields until initialization and submits only the user-entered initialized values', async () => {
         const request = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({type: 'about:blank', title: 'Rejected',
             status: 400, code: 'VALIDATION_FAILED', detail: 'Review the request.', messageKey: 'api:errors.VALIDATION_FAILED', params: {}}),
         {status: 400, headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}}));
         vi.stubGlobal('fetch', request);
-        const {container, context, hydrate} = await nativeApplication('/frontend-pilot/users/login', {session});
+        const {container, context, initialize} = await nativeApplication('/frontend-pilot/users/login', {session});
+        expect(container.querySelector('main form')).toBeNull();
+        expect(container.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(container.querySelector<HTMLSelectElement>('#pilot-locale')!.disabled).toBe(true);
+        await initialize();
         const username = container.querySelector<HTMLInputElement>('#username')!;
         const password = container.querySelector<HTMLInputElement>('#password')!;
-        const admission = container.querySelector<HTMLInputElement>('main input[name="_csrf"]')!;
         const locale = container.querySelector<HTMLSelectElement>('#pilot-locale')!;
         username.value = 'early-account';
         password.value = 'synthetic-early-password';
-        admission.value = 'Do not adopt a hidden value';
-        locale.value = 'de';
+        username.dispatchEvent(new Event('input', {bubbles: true}));
+        password.dispatchEvent(new Event('input', {bubbles: true}));
         const selectionChange = vi.fn();
         locale.addEventListener('change', selectionChange);
-        await hydrate();
         expect(username.value).toBe('early-account');
         expect(password.value).toBe('synthetic-early-password');
-        expect(admission.value).toBe(session.csrfToken);
+        expect(container.querySelector('main input[name="_csrf"]')).toBeNull();
         expect(context.locale.value).toBe('en');
         expect(selectionChange).not.toHaveBeenCalled();
         expect(request).not.toHaveBeenCalled();
@@ -213,7 +228,7 @@ describe('drafts entered before hydration', () => {
     }, 30_000);
 
     it.each(['create', 'duplicate'] as const)(
-        'keeps all early %s draft controls in the actual multipart command without replaying HTTP',
+        'exposes %s controls only after initialization and keeps their drafts in the actual multipart command',
         async mode => {
             let submitted: components['schemas']['PackingCreateInput'] | undefined;
             // The HTTP callback records its actual multipart value. Keep that
@@ -251,30 +266,41 @@ describe('drafts entered before hydration', () => {
             const bootstrap: FrontendPilotBootstrap = mode === 'create'
                 ? {session: account, packingCreateContext: creation}
                 : {session: account, packingDuplicate: duplicate};
-            const {container, hydrate, context} = await nativeApplication(url, bootstrap);
+            const {container, initialize, context} = await nativeApplication(url, bootstrap);
+            expect(container.querySelector('main form')).toBeNull();
+            expect(container.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+            expect(request).not.toHaveBeenCalled();
+            await initialize();
             const form = container.querySelector<HTMLFormElement>('main form')!;
             const capacity = form.querySelector<HTMLInputElement>('input[type="number"]')!;
             const everyone = form.querySelector<HTMLInputElement>('tbody input[type="checkbox"]')!;
             const permissions = form.querySelectorAll<HTMLInputElement>('input[id^="create-defaults-participant-"]');
             const image = form.querySelector<HTMLInputElement>('#create-header')!;
-            form.querySelector<HTMLInputElement>('#create-title')!.value = 'Early list';
-            form.querySelector<HTMLInputElement>('input[aria-label="Item 1"]')!.value = 'Early tent';
+            const title = form.querySelector<HTMLInputElement>('#create-title')!;
+            title.value = 'Early list';
+            title.dispatchEvent(new Event('input', {bubbles: true}));
+            await nextTick();
+            const itemTitle = form.querySelector<HTMLInputElement>('input[aria-label="Item 1"]')!;
+            itemTitle.value = 'Early tent';
+            itemTitle.dispatchEvent(new Event('input', {bubbles: true}));
+            await nextTick();
             capacity.value = '9';
+            capacity.dispatchEvent(new Event('input', {bubbles: true}));
+            await nextTick();
             everyone.checked = mode === 'create';
-            for (const permission of permissions) permission.checked = mode === 'create';
+            everyone.dispatchEvent(new Event('change', {bubbles: true}));
+            await nextTick();
+            for (const permission of permissions) {
+                permission.checked = mode === 'create';
+                permission.dispatchEvent(new Event('change', {bubbles: true}));
+                await nextTick();
+            }
             selectEarlyImage(image);
-
-            // Before the awaited mount completes, Vue may be installed but restored models
-            // are not ready. Neither hydration nor a model restoration may send an HTTP call.
-            let restored = false;
-            const restoring = hydrate().then(() => { restored = true; });
-            expect((container as Element & {__vue_app__?: unknown}).__vue_app__).toBeDefined();
-            expect(restored).toBe(false);
-            expect(request).not.toHaveBeenCalled();
-            await restoring;
-            expect(restored).toBe(true);
-            expect(request).not.toHaveBeenCalled();
-            expect(context.hydrated.value).toBe(false);
+            image.dispatchEvent(new Event('change', {bubbles: true}));
+            // Browser events update only mounted draft owners. Initialization
+            // itself never creates a list or submits the selected file.
+            expect(posts).toBe(0);
+            expect(context.hydrated.value).toBe(true);
             expect(form.querySelector('input[type="number"]')).toBe(capacity);
             expect(capacity.value).toBe('9');
             expect(everyone.checked).toBe(mode === 'create');

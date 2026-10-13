@@ -404,7 +404,7 @@
         "changed": "Änderungen sind verfügbar"
       },
       "state": {
-        "javascriptRequired": "Für diese Seite ist JavaScript erforderlich. Aktiviere JavaScript in deinem Browser und lade die Seite dann neu. Die Hilfe bleibt unten verfügbar.",
+        "javascriptRequired": "Interaktive Funktionen dieser Website benötigen JavaScript. Aktiviere JavaScript und erlaube das Laden der Skripte dieser Website. Du kannst die Hilfe weiterhin lesen und durchsuchen.",
         "loadFailed": "Diese Seite konnte nicht geladen werden.",
         "startupFailed": "Diese Seite konnte nicht vollständig geladen werden. Lade die Seite neu, um es erneut zu versuchen. Dabei gehen deine eingegebenen Änderungen verloren.",
         "stale": "Die angezeigten Daten sind möglicherweise veraltet.",

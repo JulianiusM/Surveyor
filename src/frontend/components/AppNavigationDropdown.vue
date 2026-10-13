@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {onBeforeUnmount, onMounted, ref} from 'vue';
 import {useDropdownPlacement} from '../composables/dropdownPlacement';
+import {useClientInitialization} from '../app/context';
 
 withDefaults(defineProps<{
     label: string;
@@ -15,6 +16,7 @@ withDefaults(defineProps<{
 }>(), {navigation: true});
 const element = ref<HTMLDetailsElement | null>(null);
 const open = ref(false);
+const initialized = useClientInitialization();
 const {dropdownStyle, updatePlacement} = useDropdownPlacement(element);
 
 // Header links/native form controls and card actions share disclosure behavior. Reka's
@@ -31,12 +33,12 @@ function close(restoreFocus = false): void {
 
 /** Pointer or keyboard focus in another disclosure closes this one, while its form stays mounted. */
 function outside(event: Event): void {
-    if (element.value?.open && !element.value.contains(event.target as Node)) close();
+    if (initialized.value && element.value?.open && !element.value.contains(event.target as Node)) close();
 }
 
 /** Native links/actions dismiss the menu; clicking or submitting contained fields does not. */
 function follow(event: MouseEvent): void {
-    if ((event.target as Element).closest('a, button.dropdown-item')) close();
+    if (initialized.value && (event.target as Element).closest('a, button.dropdown-item')) close();
 }
 
 /** Native details supplies pointer/Enter/Space toggling; synchronize its one open-state projection. */
@@ -46,7 +48,7 @@ function synchronizeOpen(): void {
 
 /** Arrow keys visit enabled actions without taking over native input/select navigation. */
 function navigate(event: KeyboardEvent): void {
-    if (!element.value || event.defaultPrevented) return;
+    if (!initialized.value || !element.value || event.defaultPrevented) return;
     if (event.key === 'Escape') {
         if (!element.value.open) return;
         event.preventDefault();
@@ -69,6 +71,9 @@ function navigate(event: KeyboardEvent): void {
 }
 
 onMounted(() => {
+    // A native disclosure may already be open before hydration attaches its
+    // toggle listener. Read that same node before enabling enhanced ARIA/keys.
+    synchronizeOpen();
     document.addEventListener('pointerdown', outside);
     document.addEventListener('focusin', outside);
 });
@@ -85,7 +90,7 @@ onBeforeUnmount(() => {
             <!-- Native header links and card/filter buttons expose the button role.
                  Preserve that role while details retains disclosure keyboard/open-state ownership. -->
             <summary role="button" :class="[navigation ? 'nav-link dropdown-toggle' : triggerClass, {show: navigation && open}]"
-                     :aria-expanded="open" :aria-label="triggerLabel">
+                     :aria-expanded="initialized ? open : undefined" :aria-label="triggerLabel">
                 <slot name="trigger"><i v-if="icon" class="bi me-1" :class="icon" aria-hidden="true"></i>{{ label }}</slot>
             </summary>
             <!-- The native ul/li navigation and card div/button structures remain separate

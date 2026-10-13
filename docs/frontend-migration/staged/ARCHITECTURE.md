@@ -6,7 +6,7 @@ owner: application maintainers
 status: migration-pending
 last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared-operation/method-policy, request-local frontend and canonical Help boundaries retained; approved readiness admission, derived privacy, scoped locale and settings ownership clarified; execution tracked in review
+verification-scope: shared-operation/method-policy, request-local frontend and canonical Help boundaries retained; refined Req6A skeleton/static initialization and independent failure notice reconciled; execution tracked in review
 source-anchors: src/controller/packingController.ts; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/controller/helpController.ts; contracts/api/v1/; src/locales/; docs/ARCHITECTURE.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/ARCHITECTURE.md
@@ -75,13 +75,21 @@ Native/v1 coexistence changes require real scheduling evidence and unchanged bus
 Express owns authentication, sessions, routing and explicit pilot document entry points. Every Vue SSR request
 owns app, router, query cache, locale and scoped bootstrap; no renderer self-HTTP or shared private cache.
 The browser hydrates the same tree. Bootstrap escapes script delimiters and exposes only authorized DTOs.
+The [refined Req6A delivery amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-interactive-startup-delivery-clarification-2026-10-13)
+keeps this SSR architecture; it changes which initial content may be usable before client initialization.
 
 Help receives complete server content and supports native GET/search without JavaScript.
-Interactive migrated pages require JavaScript and provide the approved shared message/read-only outcome when disabled.
-Overview renders its session-authorized shell, then independently loads active collection/visibility regions.
+Its native article links/anchors remain functional. The existing context owns one initial-content classification from
+route metadata and admission/completion state. Interactive content renders shared skeletons until initialization;
+genuinely static content/messages remain readable. JavaScript-only header selectors/actions, Retry and dismissal
+controls stay unavailable meanwhile. Native links/disclosures/mobile navigation must remain genuinely usable.
+An independent localized JavaScript-required notice covers disabled, failed-loading and failed-initialization cases,
+including failures before the entry module executes. Eight unused interactive pilot POST adapters retire; commands
+use existing APIs while native/backend operations and admission GETs remain unchanged.
+After initialization, Overview independently loads session-authorized active collection/visibility regions.
 Hidden regions begin on opening; slow siblings do not hold ready regions. Unknown membership never claims empty/counts.
 
-Shared skeletons display missing pending data with localized status and reduced-motion behavior.
+Shared skeletons display initial initialization or missing pending data with localized status and reduced-motion behavior.
 Background reads retain confirmed scoped content/drafts; validated denial clears private content.
 Initial failure exposes error/retry. Language-owned bodies must match the selected locale.
 

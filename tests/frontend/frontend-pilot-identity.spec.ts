@@ -170,7 +170,7 @@ describe('identity forms and packing overview navigation', () => {
             await wrapper.get('#username').setValue('account');
             await wrapper.get('#password').setValue('password1');
         } else if (kind === 'guest') await wrapper.get('#guest-name').setValue('Guest name');
-        const form = kind === 'header' ? wrapper.get('form[action="/frontend-pilot/users/logout"]') : wrapper.get('form');
+        const form = kind === 'header' ? wrapper.get('header form') : wrapper.get('form');
         await form.trigger('submit');
         await flushPromises();
         recovering = true;
@@ -231,7 +231,7 @@ describe('identity forms and packing overview navigation', () => {
             req.method === 'POST' ? held : json(anonymous, 200, anonymous.context), {}, true);
         const confirmation = vi.fn(() => true);
         vi.stubGlobal('confirm', confirmation);
-        await wrapper.get('form[action="/frontend-pilot/users/logout"]').trigger('submit');
+        await wrapper.get('header form').trigger('submit');
         await flushPromises();
         try {
             expect(context.mayChangeIdentity()).toBe(false);
@@ -258,7 +258,7 @@ describe('identity forms and packing overview navigation', () => {
             if (req.method === 'POST') throw new TypeError('Logout response lost');
             return bootstrapUnavailable ? new Response(null, {status: 503}) : json(nextSession, 200, nextSession.context);
         }, {}, true);
-        const form = wrapper.get('form[action="/frontend-pilot/users/logout"]');
+        const form = wrapper.get('header form');
         await form.trigger('submit');
         await flushPromises();
         const warning = context.messages.value.t('state.unknownOutcome');
@@ -280,7 +280,7 @@ describe('identity forms and packing overview navigation', () => {
         await refresh.trigger('click');
         await flushPromises();
         expect(wrapper.text()).not.toContain(warning);
-        expect(wrapper.get('form[action="/frontend-pilot/users/logout"] button').attributes('disabled')).toBeUndefined();
+        expect(wrapper.get('header form button').attributes('disabled')).toBeUndefined();
         expect(context.mayChangeIdentity()).toBe(true);
         expect(request.mock.calls.filter(([req]) => (req as Request).method === 'POST')).toHaveLength(1);
     });
@@ -290,7 +290,7 @@ describe('identity forms and packing overview navigation', () => {
             if (req.method === 'POST') throw new TypeError('Logout response lost');
             return json(session);
         }, {}, true);
-        await wrapper.get('form[action="/frontend-pilot/users/logout"]').trigger('submit');
+        await wrapper.get('header form').trigger('submit');
         await flushPromises();
         await wrapper.get('#username').setValue('Retained account draft');
         const confirmation = vi.fn(() => false);
@@ -299,7 +299,7 @@ describe('identity forms and packing overview navigation', () => {
         await flushPromises();
         expect(confirmation).not.toHaveBeenCalled();
         expect(wrapper.text()).toContain(context.messages.value.t('state.unknownOutcome'));
-        expect(wrapper.get('form[action="/frontend-pilot/users/logout"] button').attributes('disabled')).toBeDefined();
+        expect(wrapper.get('header form button').attributes('disabled')).toBeDefined();
         await router.push('/frontend-pilot/users/forgot-password');
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
         expect(confirmation).toHaveBeenCalledOnce();
@@ -313,7 +313,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/forgot-password');
         expect(confirmation).toHaveBeenCalledOnce();
         expect(wrapper.text()).not.toContain(context.messages.value.t('state.unknownOutcome'));
-        expect(wrapper.get('form[action="/frontend-pilot/users/logout"] button').attributes('disabled')).toBeUndefined();
+        expect(wrapper.get('header form button').attributes('disabled')).toBeUndefined();
         expect(context.mayChangeIdentity()).toBe(true);
         expect(request.mock.calls.filter(([req]) => (req as Request).method === 'POST')).toHaveLength(1);
     });
@@ -325,7 +325,7 @@ describe('identity forms and packing overview navigation', () => {
         }, {}, true);
         const stopContext = context.start();
         cleanups.push(async () => { stopContext(); });
-        await wrapper.get('form[action="/frontend-pilot/users/logout"]').trigger('submit');
+        await wrapper.get('header form').trigger('submit');
         await flushPromises();
         const retained = new Event('beforeunload', {cancelable: true});
         window.dispatchEvent(retained);
@@ -463,7 +463,7 @@ describe('identity forms and packing overview navigation', () => {
             }
             return json(anonymous, 200, anonymous.context);
         }, {}, true);
-        await wrapper.get('form[action="/frontend-pilot/users/logout"]').trigger('submit');
+        await wrapper.get('header form').trigger('submit');
         await flushPromises();
         expect(router.currentRoute.value.fullPath).toBe(explicit ? destination : origin);
         expect(context.pageNotice.value).toEqual({kind: 'success', messageKey: 'auth.logoutDone'});
@@ -487,7 +487,7 @@ describe('identity forms and packing overview navigation', () => {
             bootstrapReads++;
             return bootstrapReads === 1 ? new Response(null, {status: 503}) : json(resumedActor, 200, resumedActor.context);
         }, {}, true);
-        await wrapper.get('form[action="/frontend-pilot/users/logout"]').trigger('submit');
+        await wrapper.get('header form').trigger('submit');
         await flushPromises();
         expect(context.ready.value).toBe(false);
         expect(router.currentRoute.value.fullPath).toBe(origin);
@@ -711,7 +711,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(request).not.toHaveBeenCalled();
     });
 
-    it('renders trusted native recovery POST feedback independently of local account configuration', async () => {
+    it('renders an explicitly supplied recovery completion independently of local account configuration', async () => {
         const path = '/frontend-pilot/guest/recovery';
         const result = await render(path, {session: {...session,
             shell: {...session.shell, localLoginEnabled: false}}, initialUrl: path,
@@ -730,7 +730,7 @@ describe('identity forms and packing overview navigation', () => {
         ['/frontend-pilot/users/register', 'auth.registered', 'Info', 'Account successfully registered.'],
         ['/frontend-pilot/users/forgot-password', 'auth.resetSent', 'Success', 'A link has been sent to the email'],
         ['/frontend-pilot/users/reset-password/confirmed-token', 'auth.resetDone', 'Success', 'Your password has been successfully reset'],
-    ] as const)('keeps confirmed native identity messages readable without JavaScript at %s', async (path, feedback, title, message) => {
+    ] as const)('keeps explicitly supplied confirmed identity messages readable without JavaScript at %s', async (path, feedback, title, message) => {
         const result = await render(path, {session, initialUrl: path, identityFeedback: feedback});
         expect(result.javascriptRequired).toBe(false);
         expect(result.title).toBe(`${title} | Surveyor`);
@@ -740,7 +740,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(content.querySelector('main form')).toBeNull();
     });
 
-    it('consumes trusted native completion once without reviving success on a later recovery visit', async () => {
+    it('consumes an explicitly supplied completion once without reviving success on a later recovery visit', async () => {
         const path = '/frontend-pilot/guest/recovery';
         const {wrapper, context, router, request} = await mounted(path, async () => json({changed: true}),
             {initialUrl: path, identityFeedback: 'auth.recoverySent',
@@ -757,7 +757,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(request).not.toHaveBeenCalled();
     });
 
-    it('retains a rejected native recovery POST on the full error surface across hydration', async () => {
+    it('retains an admitted recovery problem on the full error surface across hydration', async () => {
         const path = '/frontend-pilot/guest/recovery';
         const problem: components['schemas']['Problem'] = {type: 'about:blank', title: 'Bad Request', status: 400,
             code: 'VALIDATION_FAILED', messageKey: 'api:errors.VALIDATION_FAILED', params: {},
@@ -1135,7 +1135,7 @@ describe('identity forms and packing overview navigation', () => {
             expect((menu.element as HTMLDetailsElement).open).toBe(false);
             await menu.get('summary').trigger('click');
             const allowIdentity = context.registerIdentityGuard(() => false);
-            await header.get('form[action="/frontend-pilot/users/logout"]').trigger('submit');
+            await header.get('form').trigger('submit');
             expect(request).not.toHaveBeenCalled();
             expect(confirm).not.toHaveBeenCalled();
             allowIdentity();

@@ -1039,7 +1039,8 @@ implementation_defects:
         control flow and output compatibility were manually reviewed; non-src scripts/tests remain outside the source
         engineering checker's supported inventory. The detached fixture changes no maintained input, app server or DB.
   - id: IMP-050
-    status: open
+    status: closed
+    closed_on: 2026-10-13
     severity: high
     owner: frontend migration maintainers
     out_of_scope_for_documentation_migration: true
@@ -1047,35 +1048,37 @@ implementation_defects:
     evidence:
       - Independent source review found registerAccount and the pilot document signup calling registerUser, whose
         User/profile transaction completes before activation-token persistence and email rendering.
-      - A later token or preparation failure can reject signup while leaving an inactive account. The pilot
-        ordinary-form confirmation currently claims an activation email was sent. Neutral feedback was proposed
+      - A later token or preparation failure could reject signup while leaving an inactive account. At discovery,
+        the pilot ordinary-form confirmation claimed an activation email was sent. Neutral feedback was proposed
         for that adapter but not approved or implemented.
     authorization: The maintainer's 2026-10-13 requirement 5 authorizes commit-last creation and dependent activation
-      persistence. Subsequent request 6 requires JavaScript-only skeleton delivery with no frontend fallback,
-      superseding the subject of the earlier neutral-document wording proposal. Its conflict with the recorded
-      server-rendering/no-JavaScript design is awaiting the separate direct resolution before dependent edits.
+      persistence. The explicitly refined requirement 6A resolves the delivery conflict by retaining Vue SSR/same-tree
+      hydration, showing skeletons until interactive initialization, retaining functional static content and exposing a
+      JavaScript-required failure notice. It authorizes retirement of the eight unused interactive pilot POST
+      adapters, superseding the earlier neutral-document wording proposal without changing native behavior.
     documentation_contract: Pilot account creation prepares its activation token, required persistence and final
       transport result before committing. Delivery is separate from creation; native reference behavior remains
-      unchanged. The API scope is implemented; the remaining ordinary-form adapter disposition depends on the
-      explicitly resolved delivery design, not permission to change its wording or native backend behavior.
+      unchanged. The API scope and authorized unused signup POST adapter retirement are verified against the built
+      application. No new ordinary-form confirmation wording is adopted.
     closes_when:
       - Shared controller and existing DBAL owners establish User/profile/token and prepared output atomically.
       - Real persistence and built-system evidence verifies rollback, success and no postcommit replay.
-      - The conflicting delivery designs are explicitly resolved and the authorized ordinary-form adapter disposition
-        is verified without changing native behavior.
+      - Built-system evidence verifies the authorized unused pilot POST retirement cannot create an account or
+        alter the admitted actor, while existing API signup, native behavior and retained admission GETs remain.
       - Independent semantic review accepts actual production adoption and native preservation.
-    implementation_evidence:
+    closure_evidence:
       - The API uses registerUserWithSession through the existing shared controller/DBAL locked completion owner.
         User/profile/activation token plus mail and validated transport variants are prepared before the final commit;
         signup keeps its captured actor and exposes no activation token or link. SMTP runs after commit.
       - Real ORM assertions cover complete signup and activation, rollback before commit, document activation flash
         serialization and concurrent token consumption. The existing API signup consumer distinguishes failed SMTP
         from confirmed account creation, releases credentials and refuses retained completed-form replay.
-      - Pilot signup document adoption and neutral confirmation remain unapplied; the subsequent JavaScript-only
-        instruction requires a different delivery disposition once its existing-design conflict is resolved.
-        The built API signup case passes complete account/profile/token persistence after controlled local SMTP failure,
-        with no token exposure or actor change. Exact scoped execution belongs to the paired pilot review; this finding
-        stays open only for that delivery disposition; general shared native token defects are separate IMP-051/057.
+      - The refined requirement 6A resolves that conflict through adapter retirement; no new signup document
+        confirmation is implemented. Source inspection and built-system assertions verify all eight retired POSTs
+        return 404 without changing the admitted actor or creating User/Profile/Guest rows. Current built API signup
+        retains complete account/profile/token persistence after controlled local SMTP failure without token exposure
+        or actor change. Independent semantic review accepts production adoption and protected native/shared behavior;
+        exact current execution belongs to the paired pilot review. General native token defects remain IMP-051/057.
   - id: IMP-051
     status: open
     severity: high

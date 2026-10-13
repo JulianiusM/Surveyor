@@ -1,4 +1,4 @@
-import {createSSRApp} from 'vue';
+import {createSSRApp, nextTick} from 'vue';
 import {createMemoryHistory, createRouter, createWebHistory} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
@@ -6,6 +6,7 @@ import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from './context';
 import App from './App.vue';
+import {mountPreservingDrafts} from './mountPreservingDrafts';
 
 // Route chunks own their feature validators and views. The initial shell remains
 // small, and a later feature migration does not enlarge every visitor's entry bundle.
@@ -15,8 +16,8 @@ const PackingCreatePage = () => import('../features/packing/PackingCreatePage.vu
 const OverviewPage = () => import('../features/overview/OverviewPage.vue');
 const HelpPage = () => import('../features/help/HelpPage.vue');
 
-// One delivery declaration drives the message-only fallback for interactive
-// pages. Existing server POST contracts remain independent of that presentation.
+// One route declaration drives the initial skeleton for every interactive page.
+// Readable admitted errors/completions are classified by the shared context owner.
 const javascriptPage = {javascriptRequired: true};
 
 /** Browsers report retired module URLs differently. Recognize their load failures
@@ -46,17 +47,13 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry, meta: {...javascriptPage}},
             {path: '/frontend-pilot/packing/:listId', component: PackingEntry, meta: {javascriptRequired: true}},
             {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'login'}},
-            // Native transition failures render the same localized message component and
-            // hydrate at their actual POST URL instead of falling through to a Pug error page.
-            {path: '/frontend-pilot/users/profile', component: IdentityPage, meta: {identityMode: 'error'}},
-            {path: '/frontend-pilot/users/logout', component: IdentityPage, meta: {identityMode: 'error'}},
             {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...javascriptPage, identityMode: 'register'}},
-            {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {identityMode: 'oidc'}},
+            {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'oidc'}},
             {path: '/frontend-pilot/users/forgot-password', component: IdentityPage, meta: {...javascriptPage, identityMode: 'forgot'}},
             {path: '/frontend-pilot/users/reset-password/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'reset'}},
             {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'activate'}},
             {path: '/frontend-pilot/guest/:guestId/login/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'guest-login'}},
-            {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {identityMode: 'recovery'}},
+            {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {...javascriptPage, identityMode: 'recovery'}},
             {path: '/frontend-pilot/help', component: HelpPage},
             {path: '/frontend-pilot/help/:doc', component: HelpPage},
         ],
@@ -86,4 +83,47 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
         }
     });
     return {app, router, context, releaseInitialReloadGuard};
+}
+
+/** Hydrate the matching shell, then mount initial features before declaring JS
+ * controls/reads ready. Vue's production error boundary can consume lifecycle
+ * failures instead of rejecting mount/nextTick, so capture that bounded startup
+ * interval explicitly. It covers errors Vue reports through the initial mount
+ * and first readiness render, not arbitrary later asynchronous feature work;
+ * later feature/API failures keep their existing owners. */
+export async function initializePilotApp(application: ReturnType<typeof createPilotApp>, container: Element): Promise<() => void> {
+    const {app, context} = application;
+    const previousErrorHandler = app.config.errorHandler;
+    let failed = false;
+    let initializationError: unknown;
+
+    /** Retain the actual startup error without clearing drafts or replaying work. */
+    function captureInitializationError(error: unknown): void {
+        if (!failed) initializationError = error;
+        failed = true;
+    }
+
+    app.config.errorHandler = captureInitializationError;
+    try {
+        // Static Help edits restore on their original controls. Interactive content
+        // still matches SSR's skeleton, with no early feature fields to capture.
+        await mountPreservingDrafts(app, container);
+        context.initialContentReady.value = true;
+        await nextTick();
+        if (failed) throw initializationError;
+
+        // Only a successfully mounted initial tree enables controls and scoped
+        // reads. Include that first reactive render in the same error boundary.
+        const stop = context.start();
+        await nextTick();
+        if (failed) throw initializationError;
+        return stop;
+    } catch (error) {
+        // Keep partial owners and their command/draft guards alive. The document
+        // entry surfaces recovery and hides incomplete interactive content.
+        context.hydrated.value = false;
+        throw error;
+    } finally {
+        app.config.errorHandler = previousErrorHandler;
+    }
 }

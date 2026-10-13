@@ -18,8 +18,6 @@ const bootstrapValidators = {
     help: validateHelp,
     passwordReset: validateReset,
     identityProblem: validateProblem,
-    identityFields: validateIdentityFields,
-    identityFormProblem: validateProblem,
     identityFeedback: validateIdentityFeedback,
     guestEntry: validateGuest,
     packingError: validatePackingError,
@@ -62,17 +60,6 @@ function validateCompletion(value: unknown): boolean {
     return Object.keys(value).length === 4 && typeof value.context === 'string'
         && typeof value.destination === 'string' && isPlainMessageKey(value.messageKey)
         && (value.kind === 'success' || value.kind === 'info');
-}
-
-/** Native form restoration carries only public identity-entry drafts. Reject
- * arbitrary properties and nontext values before hydrating them into controls;
- * passwords, private links and acting identities have separate boundaries. */
-function validateIdentityFields(value: unknown): boolean {
-    if (!isRecord(value)) return false;
-    for (const [field, payload] of Object.entries(value)) {
-        if (!['username', 'displayname', 'email'].includes(field) || typeof payload !== 'string') return false;
-    }
-    return true;
 }
 
 function validateIdentityFeedback(value: unknown): boolean {

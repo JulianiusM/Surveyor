@@ -105,7 +105,7 @@ async function packing(page: Page, publicView = false) {
 }
 
 for (const intent of ['create', 'duplicate'] as const) {
-    test(`preserves native creation controls and the selected upload before ${intent} hydration`, async ({page}) => {
+    test(`boots the ${intent} skeleton before exposing working creation controls and upload`, async ({page}) => {
         await loginForE2E(page.request, createE2ELogin());
         const sourceInput = createE2EPackingList();
         const sourceRows = JSON.parse(sourceInput.form.items) as components['schemas']['PackingDuplicateItem'][];
@@ -133,9 +133,18 @@ for (const intent of ['create', 'duplicate'] as const) {
         await page.route(pattern, holdClient);
         page.on('request', countCreation);
         try {
-            // Commit allows interaction with genuine SSR while module execution is held.
+            // Hold only the actual built entry module. The genuine server document
+            // supplies a skeleton, with no dead creation form or command to replay.
             await page.goto(destination, {waitUntil: 'commit'});
             await started.promise;
+            await expect(page.locator('[data-pilot-initial-loading]')).toBeVisible();
+            await expect(page.locator('#create-title')).toHaveCount(0);
+            await expect(page.locator('#create-header')).toHaveCount(0);
+            await expect(page.locator('#pilot-locale')).toBeDisabled();
+            expect(commands).toBe(0);
+            entry.release();
+            await waitForPilotHydration(page);
+            await expect(page.locator('[data-pilot-initial-loading]')).toHaveCount(0);
             await page.locator('#create-title').fill(title);
             const row = page.locator('main tbody tr').first();
             await row.locator('input[type="text"], input:not([type])').first().fill('Early equipment');
@@ -153,8 +162,6 @@ for (const intent of ['create', 'duplicate'] as const) {
             expect(changedPermissions).toHaveLength(2);
             await page.locator('#create-header').setInputFiles({name: 'early.png', mimeType: 'image/png', buffer: png});
             expect(commands).toBe(0);
-            entry.release();
-            await waitForPilotHydration(page);
             await expect(row.locator('input[type="number"]')).toHaveValue('9');
             await expect(row.locator('input[type="checkbox"]')).toBeChecked({checked: requiredByAll});
             expect(commands).toBe(0);
@@ -567,10 +574,11 @@ test('loading overview regions renders the shell and faster authority independen
     const html = await response.text();
     const serialized = /<script id="surveyor-pilot-state" type="application\/json">([^<]+)<\/script>/u.exec(html);
     expect(serialized).not.toBeNull();
-    // Initial HTML carries the authoritative session and actual region shells. It
-    // does not wait for all four overview projections before the browser can paint.
+    // Initial HTML carries the authoritative session and shared startup skeleton.
+    // Independent region shells mount after initialization, without waiting for
+    // all four Overview projections before the browser can show ready content.
     expect(JSON.parse(serialized![1]).overview).toBeUndefined();
-    expect(html).toContain('data-loading-skeleton="cards"');
+    expect(html).toContain('data-pilot-initial-loading');
 
     const participantGate = readGate();
     const pattern = '**/api/v1/overview?*';
@@ -659,43 +667,84 @@ test('loading packing and settings reveals available sections without replacing 
     }
 });
 
-test('JavaScript-disabled identity pages remain message-only while native login and body-free logout retain their HTTP admission', async ({browser, baseURL}) => {
+test('JavaScript-disabled pilot identity has no form fallback while native login and body-free API logout stay functional', async ({browser, baseURL}) => {
     const context = await browser.newContext({baseURL, javaScriptEnabled: false});
     try {
         const page = await context.newPage();
         const credentials = createE2ELogin();
         await page.goto('/frontend-pilot/users/login?locale=de', {waitUntil: 'domcontentloaded'});
-        await expect(page.locator('noscript [role="alert"]')).toBeVisible();
-        await expect(page.locator('#surveyor-pilot')).toBeHidden();
+        await expect(page.locator('#surveyor-pilot-javascript-required')).toBeVisible();
+        await expect(page.locator('#pilot-main form')).toHaveCount(0);
+        await expect(page.locator('#pilot-locale')).toBeDisabled();
         const anonymous = await bootstrap(context.request);
-        const controls = {_context: anonymous.context, _csrf: anonymous.csrfToken,
-            _compatibility: anonymous.deployment.apiCompatibility, locale: 'de', next: '/frontend-pilot'};
-        // The fallback changes presentation only. Exercise the established native
-        // POST directly, retaining transport controls and safe credential redisplay.
-        const rejected = await context.request.post('/frontend-pilot/users/login', {maxRedirects: 0,
-            form: {...controls, username: credentials.username, password: 'invalid-native-password'}});
-        expect(rejected.ok()).toBe(false);
-        expect(await rejected.text()).not.toContain('value="invalid-native-password"');
-        const accepted = await context.request.post('/frontend-pilot/users/login', {maxRedirects: 0,
-            form: {...controls, ...credentials}});
-        expect(accepted.status()).toBe(303);
-        expect(accepted.headers().location).toBe('/frontend-pilot?locale=de');
+        const retired = await context.request.post('/frontend-pilot/users/login', {
+            form: {...credentials}, maxRedirects: 0,
+        });
+        expect(retired.status()).toBe(404);
+        expect((await bootstrap(context.request)).context).toBe(anonymous.context);
+
+        // The native reference remains an ordinary usable HTML login. The API's
+        // body-free logout independently keeps its authored context/CSRF admission.
+        await page.goto('/users/login', {waitUntil: 'domcontentloaded'});
+        await page.locator('#username').fill(credentials.username);
+        await page.locator('#password').fill(credentials.password);
+        await page.locator('form[action^="/users/login"] button[type="submit"]').click();
+        expect((await bootstrap(context.request)).kind).toBe('account');
         const account = await bootstrap(context.request);
-        expect(account.kind).toBe('account');
-        // The declared operation has no request body. Native hidden context controls
-        // must still be admitted without inventing an input schema for this command.
-        const logout = await context.request.post('/frontend-pilot/users/logout', {maxRedirects: 0,
-            form: {_context: account.context, _csrf: account.csrfToken,
-                _compatibility: account.deployment.apiCompatibility, locale: 'de', next: '/frontend-pilot'}});
-        expect(logout.status()).toBe(303);
-        expect(logout.headers().location).toBe('/frontend-pilot?locale=de');
+        const logout = await context.request.post('/api/v1/auth/logout', {headers: headers(account)});
+        expect(logout.status()).toBe(200);
+        expect(await logout.json()).toMatchObject({session: {kind: 'anonymous'}, personalLink: null, redirect: null});
         expect((await bootstrap(context.request)).kind).toBe('anonymous');
         await page.goto('/frontend-pilot/users/login?locale=de', {waitUntil: 'domcontentloaded'});
-        await expect(page.locator('noscript [role="alert"]')).toBeVisible();
+        await expect(page.locator('#surveyor-pilot-javascript-required')).toBeVisible();
         await expect(page.locator('html')).toHaveAttribute('lang', 'de');
-        await expect(page.locator('#surveyor-pilot')).toBeHidden();
+        await expect(page.locator('#pilot-main form')).toHaveCount(0);
     } finally { await context.close(); }
 });
+
+for (const failure of ['entry load', 'route initialization'] as const) {
+    test(`real built ${failure} failure exposes the localized notice without dead interactive controls`, async ({browser, baseURL}) => {
+        const context = await browser.newContext({baseURL});
+        try {
+            const page = await context.newPage();
+            const pattern = failure === 'entry load'
+                ? /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u
+                : /\/app\/assets\/IdentityPage-[^/]+\.js(?:\?|$)/u;
+            let blocked = 0;
+            let commands = 0;
+            async function rejectActualModule(route: Route): Promise<void> {
+                blocked++;
+                await route.abort('failed');
+            }
+            function countCommand(request: Request): void {
+                if (new URL(request.url()).pathname.startsWith('/api/v1/')
+                    && !['GET', 'HEAD'].includes(request.method())) commands++;
+            }
+            await page.route(pattern, rejectActualModule);
+            page.on('request', countCommand);
+            try {
+                await page.goto('/frontend-pilot/users/login?locale=de', {waitUntil: 'domcontentloaded'});
+                const notice = page.locator('#surveyor-pilot-javascript-required');
+                await expect(notice).toBeVisible();
+                await expect(notice.locator('[data-pilot-startup-failure]')).toBeVisible();
+                await expect(notice).toContainText('Diese Seite konnte nicht vollständig geladen werden.');
+                expect(blocked).toBeGreaterThan(0);
+                await expect(page.locator('#pilot-main form')).toHaveCount(0);
+                await expect(page.locator('#pilot-locale')).toBeDisabled();
+                await expect(page.locator('header button[type="submit"]')).toHaveCount(0);
+                expect(commands).toBe(0);
+
+                // The notice's anchor remains a real server navigation. Static Help
+                // does not depend on the rejected interactive feature chunk.
+                await notice.getByRole('link', {name: 'Hilfe', exact: true}).click();
+                await expect(page.locator('.help-content')).toBeVisible();
+            } finally {
+                page.off('request', countCommand);
+                await page.unroute(pattern, rejectActualModule);
+            }
+        } finally { await context.close(); }
+    });
+}
 
 test('pilot owner keyboard dialog and mobile guest assignment retain readable, reachable controls', async ({page, browser, baseURL}, testInfo) => {
     await page.setViewportSize({width: 1280, height: 900});

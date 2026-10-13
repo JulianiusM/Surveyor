@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original technology comparison, primary choices and dated rendering/development amendments retained; shared-operation status and shared-action/factory source adoption reconciled; execution belongs to paired review
+verification-scope: original technology comparison and SSR/hydration choice retained; linked refined Req6A amendment governs initial interactive/static delivery without changing selected dependencies; execution belongs to paired review
 source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; src/views/layout.pug; docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: expanded-feature-migration
 -->
@@ -32,6 +32,11 @@ Interactive migrated routes require JavaScript and display a clear shared messag
 Same-component SSR/hydration remains; Help retains readable/searchable no-JavaScript GET/search.
 Progressive Overview loads independent active regions after session-authorized shell rendering.
 Neither amendment drops native behavior from unmigrated routes or authorizes default-route cutover.
+
+The later refined Req6A [startup delivery clarification](../frontend-migration/FRONTEND_FOUNDATION_DESIGN.md#authorized-interactive-startup-delivery-clarification-2026-10-13)
+retains Vue SSR and same-tree hydration while initial interactive content uses shared skeletons. Genuinely functional
+static content remains available; JavaScript-dependent controls wait for initialization and failure has an independent
+visible notice. The original choices above remain historical rationale, not permission to expose dead controls.
 
 ## Why this fits the repository
 
@@ -75,6 +80,8 @@ Do not add Nuxt merely for Vue SSR: Express already owns the relevant responsibi
 Express explicitly authorizes recognized document routes. Request-local Vue SSR uses the same component tree,
 router/query/locale state and controlled bootstrap; no self-HTTP or global private cache.
 The browser hydrates and uses typed JSON/multipart inside migrated route families.
+Initial interactive versus static output follows the linked delivery clarification; it does not remove the SSR build,
+production dependencies or request-local rendering ownership.
 
 Preserve provider/token/email/print/download document boundaries and native destinations until migrated.
 No wildcard HTML handling for APIs, missing assets or exports.

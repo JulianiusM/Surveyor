@@ -23,7 +23,7 @@ function region(collection: 'owner' | 'participant', visibility: 'main' | 'hidde
 
 afterEach(() => { vi.unstubAllGlobals(); document.body.innerHTML = ''; });
 
-describe('same-component native fallback', () => {
+describe('admitted initial document delivery', () => {
     // Cold Vitest compilation belongs to preparation, not the timed observable
     // SSR contract. Resolve each lazy route graph with one bounded startup budget;
     // the actual render/assertion bodies retain the ordinary five-second budget.
@@ -36,7 +36,7 @@ describe('same-component native fallback', () => {
         ]);
     }, 60_000);
 
-    it('uses the server-admitted initial event instead of the creation URL during SSR', async () => {
+    it('retains the server-admitted event while withholding creation controls during SSR', async () => {
         const fetch = vi.fn(() => {throw new Error('SSR must retain server-owned initial selection');});
         vi.stubGlobal('fetch', fetch);
         const option: components['schemas']['EventPickerOption'] = {id: entityId, title: 'Admitted initial event',
@@ -48,7 +48,9 @@ describe('same-component native fallback', () => {
                 packingCreateContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []},
             });
             const document = new DOMParser().parseFromString(result.html, 'text/html');
-            expect(document.querySelector('#create-event-button')?.textContent).toBe(selectedEvent?.title ?? 'No event');
+            expect(document.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+            expect(document.querySelector('#create-event-button')).toBeNull();
+            expect(JSON.parse(result.state).packingSelectedEvent).toEqual(selectedEvent);
         }
         expect(fetch).not.toHaveBeenCalled();
     });
@@ -77,7 +79,7 @@ describe('same-component native fallback', () => {
         expect(fetch).not.toHaveBeenCalled();
     });
 
-    it('initializes an admitted public duplicate form without granting account creation or calling HTTP during SSR', async () => {
+    it('retains an admitted public copy projection without exposing a duplicate form or calling HTTP during SSR', async () => {
         const fetch = vi.fn(() => {throw new Error('SSR must use its admitted copy projection');});
         vi.stubGlobal('fetch', fetch);
         const result = await render(`/frontend-pilot/packing/${entityId}/duplicate`, {session,
@@ -87,64 +89,43 @@ describe('same-component native fallback', () => {
                 formContext: {defaults: {public: 0, guest: 0, authenticated: 0, participant: 0}, permissions: [], presets: []}},
         });
         const document = new DOMParser().parseFromString(result.html, 'text/html');
-        expect(document.querySelector<HTMLInputElement>('#create-title')?.value).toBe('Public copy');
-        expect(document.querySelector<HTMLTextAreaElement>('#create-description')?.value).toBe('Copied description');
-        expect(document.querySelector('main form')).not.toBeNull();
+        expect(document.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(document.querySelector('main form')).toBeNull();
+        expect(JSON.parse(result.state).packingDuplicate).toMatchObject({title: 'Public copy', description: 'Copied description'});
         expect(result.javascriptRequired).toBe(true);
         expect(fetch).not.toHaveBeenCalled();
     });
 
-    it('renders rejected native profile/logout transitions at their own URL without an identity form', async () => {
-        for (const path of ['/frontend-pilot/users/profile', '/frontend-pilot/users/logout']) {
-            const result = await render(path, {session, identityProblem: {type: 'urn:surveyor:problem:csrf-invalid',
-                title: 'Forbidden', status: 403, code: 'CSRF_INVALID', detail: 'The request could not be verified.',
-                requestId: 'native-transition-denial', messageKey: 'api:errors.CSRF_INVALID', params: {}}});
-            const document = new DOMParser().parseFromString(result.html, 'text/html');
-            expect(document.querySelector('main [role="alert"]')?.textContent).toContain('This request could not be verified.');
-            expect(document.querySelector('main form')).toBeNull();
-            expect(JSON.parse(result.state).initialUrl).toBe(path);
-        }
-    });
-    it('renders local identity forms with native field names and session admission in both languages', async () => {
+    it('withholds local identity forms while retaining session admission in both languages', async () => {
         for (const locale of ['en', 'de']) {
-            const result = await render('/frontend-pilot/users/register', {session: {...session, locale},
-                identityFields: {username: 'Redisplayed name', displayname: 'Public name', email: 'fixture@example.test'}});
+            const result = await render('/frontend-pilot/users/register', {session: {...session, locale}});
             const document = new DOMParser().parseFromString(result.html, 'text/html');
-            const form = document.querySelector<HTMLFormElement>('main form')!;
-            expect(form.method).toBe('post');
-            expect(form.getAttribute('action')).toBe('/frontend-pilot/users/register');
-            const data = new FormData(form);
-            expect(data.get('_context')).toBe(session.context);
-            expect(data.get('_csrf')).toBe(session.csrfToken);
-            expect(data.get('_compatibility')).toBe(session.deployment.apiCompatibility);
-            expect(data.get('locale')).toBe(locale);
-            expect(data.get('username')).toBe('Redisplayed name');
-            expect(data.get('displayname')).toBe('Public name');
-            expect(data.has('password_repeat')).toBe(true);
-            expect(data.get('password')).toBe('');
-            expect(JSON.parse(result.state).identityFields).not.toHaveProperty('password');
+            expect(document.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+            expect(document.querySelector('main form')).toBeNull();
+            const bootstrap = JSON.parse(result.state);
+            expect(bootstrap.session).toMatchObject({context: session.context, csrfToken: session.csrfToken, locale});
+            expect(bootstrap).not.toHaveProperty('identityFields');
+            expect(bootstrap).not.toHaveProperty('identityFormProblem');
             expect(result.javascriptRequired).toBe(true);
         }
     });
 
-    it('renders native reset and guest forms using their own API input names and initial admission', async () => {
+    it('withholds reset and guest forms while retaining their initial admission', async () => {
         const reset = await render('/frontend-pilot/users/reset-password/fixture-token', {session, passwordReset: {valid: true}});
         const resetDoc = new DOMParser().parseFromString(reset.html, 'text/html');
-        expect(resetDoc.querySelector('main form')?.getAttribute('method')).toBe('post');
-        expect(resetDoc.querySelector('input[name="confirmPassword"]')).not.toBeNull();
+        expect(resetDoc.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(resetDoc.querySelector('main form')).toBeNull();
+        expect(JSON.parse(reset.state).passwordReset).toEqual({valid: true});
         const guest = await render(`/frontend-pilot/packing/${entityId}/guest`, {session,
             guestEntry: {id: entityId, title: 'Guest entry fixture'}});
         const guestDoc = new DOMParser().parseFromString(guest.html, 'text/html');
-        expect(guestDoc.querySelector('h1')?.textContent).toContain('Guest entry fixture');
-        const form = guestDoc.querySelector('main form')!;
-        expect(form.getAttribute('action')).toBe(`/frontend-pilot/packing/${entityId}/guest`);
-        expect(form.querySelector('input[name="username"]')).not.toBeNull();
-        expect(form.querySelector('input[name="email"]')).not.toBeNull();
-        expect(form.querySelector('button[type="submit"]')?.hasAttribute('disabled')).toBe(false);
+        expect(guestDoc.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(guestDoc.querySelector('main form')).toBeNull();
+        expect(JSON.parse(guest.state).guestEntry).toEqual({id: entityId, title: 'Guest entry fixture'});
         expect(guest.javascriptRequired).toBe(true);
     });
 
-    it('renders authorized overview cards, badges and independent native search/hidden navigation without HTTP', async () => {
+    it('retains independent admitted overview regions without exposing their interactive controls during SSR', async () => {
         const fetch = vi.fn(() => { throw new Error('SSR must not call its own API'); });
         vi.stubGlobal('fetch', fetch);
         const account: components['schemas']['SessionView'] = {...session, kind: 'account',
@@ -154,26 +135,12 @@ describe('same-component native fallback', () => {
         overview[2].q = 'equipment';
         const result = await render(url, {session: account, overview});
         const document = new DOMParser().parseFromString(result.html, 'text/html');
-        const main = document.querySelector('[data-collection="participant"][data-region="main"]')!;
-        expect(main.textContent).toContain('participant main packing list');
-        const form = main.querySelector('form')!;
-        expect(form.getAttribute('method')).toBe('get');
-        expect(form.getAttribute('action')).toBe('/frontend-pilot');
-        expect(form.querySelector('input[name="participant_main_q"]')).not.toBeNull();
-        const search = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-        expect([search.textContent, search.name, search.value]).toEqual(['Search', 'participant_main_type', 'all']);
-        const filter = form.querySelector('summary[role="button"]')!;
-        expect(filter.textContent).toBe('Filter');
-        const choices = [...filter.parentElement!.querySelectorAll<HTMLButtonElement>('ul.dropdown-menu button[type="submit"]')];
-        expect(choices.map(button => [button.textContent, button.name, button.value, button.getAttribute('aria-pressed')]))
-            .toEqual([['All types', 'participant_main_type', 'all', 'true'],
-                ['packing', 'participant_main_type', 'packing', 'false']]);
-        expect(form.querySelector('input[name="owner_main_q"]')?.getAttribute('value')).toBe('equipment');
-        const hiddenLink = document.querySelector('a[aria-controls="overview-owner-hidden"]')!;
-        expect(hiddenLink.getAttribute('href')).toContain('owner_hidden_open=1');
-        expect(hiddenLink.getAttribute('href')).toContain('owner_main_q=equipment');
-        expect(document.querySelector('[aria-controls="overview-participant"] .badge')?.textContent).toBe('2');
-        expect(document.querySelector('[data-region="hidden"]')?.textContent).toContain('participant hidden packing list');
+        expect(document.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(document.querySelector('main form')).toBeNull();
+        expect(document.querySelector('[data-collection]')).toBeNull();
+        const bootstrap = JSON.parse(result.state);
+        expect(bootstrap.overview).toEqual(overview);
+        expect(bootstrap.initialUrl).toBe(url);
         expect(fetch).not.toHaveBeenCalled();
     });
 });

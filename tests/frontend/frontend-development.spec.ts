@@ -92,26 +92,29 @@ describe('Express-integrated frontend development', () => {
             expect(html).not.toContain('/app/app/');
             expect(html).not.toMatch(/(?:src|href)="\/app\/(?:style|img|help|frontend-pilot)\//u);
             expect(html).not.toContain('file:///');
-            expect(html).not.toContain('<noscript>');
-            // The unsupported-page notice lives outside the hydrated tree. Its local
-            // help URL and source entry survive Vite's transform unchanged.
+            expect(html).toContain('id="surveyor-pilot-javascript-required"');
+            expect(html).not.toContain('data-pilot-initial-loading');
+            // The independent initialization notice lives outside the hydrated tree.
+            // Its local Help URL and source entry survive Vite's transform unchanged.
             for (const locale of ['en', 'de']) {
                 const packing = await fetch(`${origin}/frontend-pilot/packing/create?locale=${locale}`);
                 expect(packing.status).toBe(200);
                 const packingHtml = await packing.text();
                 expect(packingHtml).toContain(locale === 'de'
-                    ? 'Für diese Seite ist JavaScript erforderlich.' : 'JavaScript is required to use this page.');
+                    ? 'Interaktive Funktionen dieser Website benötigen JavaScript.' : 'Interactive features on this site require JavaScript.');
                 expect(packingHtml).toContain(`<a class="btn btn-outline-light" href="/frontend-pilot/help?locale=${locale}">`);
-                expect(packingHtml.indexOf('</noscript>')).toBeLessThan(packingHtml.indexOf('<div id="surveyor-pilot">'));
-                expect(packingHtml).toContain('#surveyor-pilot{display:none!important}');
+                expect(packingHtml.indexOf('id="surveyor-pilot-javascript-required"')).toBeLessThan(packingHtml.indexOf('<div id="surveyor-pilot">'));
+                expect(packingHtml).toContain('data-pilot-initial-loading');
+                expect(packingHtml).not.toContain('id="create-title"');
                 expect(packingHtml).not.toContain('/app/app/');
                 expect(packingHtml).toContain(entryUrl);
             }
             const identityHtml = await (await fetch(`${origin}/frontend-pilot/users/login`)).text();
-            expect(identityHtml).toContain('<noscript>');
-            expect(identityHtml).toContain('JavaScript is required to use this page.');
-            expect(identityHtml).toContain('#surveyor-pilot{display:none!important}');
-            expect(identityHtml).toContain('action="/frontend-pilot/users/login"');
+            expect(identityHtml).toContain('id="surveyor-pilot-javascript-required"');
+            expect(identityHtml).toContain('Interactive features on this site require JavaScript.');
+            expect(identityHtml).toContain('data-pilot-initial-loading');
+            expect(identityHtml).not.toContain('action="/frontend-pilot/users/login"');
+            expect(identityHtml).not.toContain('id="username"');
             const component = await fetch(`${origin}/app/src/frontend/features/help/HelpPage.vue`);
             expect(component.status).toBe(200);
             expect(await component.text()).toContain('__VUE_HMR_RUNTIME__');

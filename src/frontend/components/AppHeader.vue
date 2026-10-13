@@ -11,7 +11,6 @@ import {useCommand} from '../composables/command';
 import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale} from '../../types/LocalizationTypes';
 import AppNavigationDropdown from './AppNavigationDropdown.vue';
-import NativeContextFields from './NativeContextFields.vue';
 import ActionButton from './ActionButton.vue';
 import StatusNotice from './StatusNotice.vue';
 
@@ -20,7 +19,7 @@ import StatusNotice from './StatusNotice.vue';
 // until those workflows have pilot owners; the current help/packing iteration does not replace them.
 const emit = defineEmits<{localeError: []; localeRecovered: []}>();
 const context = usePilot();
-const {messages, session, locale, ready} = context;
+const {messages, session, locale, ready, hydrated} = context;
 const route = useRoute();
 const router = useRouter();
 const completion = useConfirmedNavigation();
@@ -163,7 +162,9 @@ async function retryCompletion(): Promise<void> {
                     <img :src="'/img/logo.png'" :alt="messages.t('app.title')" height="30" class="me-2" />
                     <span class="fw-semibold">{{ messages.t('app.title') }}</span>
                 </RouterLink>
-                <button
+                <!-- Before initialization the ordinary navigation stays expanded,
+                     including on mobile. Its collapse button requires JavaScript. -->
+                <button v-if="hydrated"
                     class="navbar-toggler"
                     type="button"
                     aria-controls="pilot-navbar-main"
@@ -173,7 +174,7 @@ async function retryCompletion(): Promise<void> {
                 >
                     <span class="navbar-toggler-icon"></span>
                 </button>
-                <div id="pilot-navbar-main" class="collapse navbar-collapse" :class="{show: expanded}">
+                <div id="pilot-navbar-main" class="collapse navbar-collapse" :class="{show: expanded || !hydrated}">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                         <li class="nav-item">
                             <RouterLink class="nav-link" to="/frontend-pilot"
@@ -243,7 +244,7 @@ async function retryCompletion(): Promise<void> {
                     </ul>
                     <ul class="navbar-nav ms-auto">
                         <AppNavigationDropdown
-                            v-if="ready && session?.activeProfile"
+                            v-if="ready && session?.activeProfile && hydrated"
                             :label="profileLabel"
                             icon="bi-person-circle"
                             align-end
@@ -268,17 +269,16 @@ async function retryCompletion(): Promise<void> {
                             </li>
                             <li><hr class="dropdown-divider" /></li>
                             <li>
-                                <form method="post" action="/frontend-pilot/users/logout" @submit.prevent="logout">
-                                <NativeContextFields :next="next" />
-                                <button
-                                    class="dropdown-item text-danger"
-                                    type="submit"
-                                    :disabled="identityBlocked"
-                                    @click.prevent="logout"
-                                >
-                                    <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i
-                                    >{{ messages.t('app.logout') }}
-                                </button>
+                                <form @submit.prevent="logout">
+                                    <button
+                                        class="dropdown-item text-danger"
+                                        type="submit"
+                                        :disabled="identityBlocked"
+                                        @click.prevent="logout"
+                                    >
+                                        <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i
+                                        >{{ messages.t('app.logout') }}
+                                    </button>
                                 </form>
                             </li>
                             <li>
@@ -288,6 +288,11 @@ async function retryCompletion(): Promise<void> {
                                 >
                             </li>
                         </AppNavigationDropdown>
+                        <!-- Profile actions change browser-owned identity. Keep only
+                             its readable label until those handlers initialize. -->
+                        <li v-else-if="ready && session?.activeProfile" class="nav-item">
+                            <span class="nav-link"><i class="bi bi-person-circle me-1" aria-hidden="true"></i>{{ profileLabel }}</span>
+                        </li>
                         <template v-else>
                             <li class="nav-item me-1">
                                 <RouterLink
@@ -314,7 +319,7 @@ async function retryCompletion(): Promise<void> {
                                 id="pilot-locale"
                                 class="form-select form-select-sm pilot-locale"
                                 :value="locale"
-                                :disabled="changingLocale || !ready"
+                                :disabled="changingLocale || !ready || !hydrated"
                                 @change="selectLocale"
                             >
                                 <option

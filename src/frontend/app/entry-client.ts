@@ -1,8 +1,8 @@
 import {nextTick, watch} from 'vue';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {decodeBootstrap} from './serializeBootstrap';
-import {createPilotApp} from './createApp';
-import {hasHydrationDrafts, mountPreservingDrafts} from './mountPreservingDrafts';
+import {createPilotApp, initializePilotApp} from './createApp';
+import {hasHydrationDrafts} from './mountPreservingDrafts';
 import {createTranslator, localeManifest} from '../../modules/localization/translator';
 import type {Locale, LocalizationContext} from '../../types/LocalizationTypes';
 import type {PilotContext} from '../../types/FrontendPilotUiTypes';
@@ -23,13 +23,15 @@ function updateDocumentLanguage(locale: Locale): void {
 function showStartupRecovery(container: Element, messages: LocalizationContext, recover: () => void): void {
     // The initial document can remain readable/editable when its first route or
     // validator fails. Keep those original nodes and offer one explicit action.
-    const notice = document.createElement('div');
-    notice.id = 'surveyor-pilot-startup-recovery';
+    const notice = document.getElementById('surveyor-pilot-javascript-required') ?? document.createElement('div');
+    notice.hidden = false;
     notice.className = 'container-fluid py-3';
-    const alert = document.createElement('div');
+    const alert = notice.querySelector<HTMLElement>('[role="alert"]') ?? document.createElement('div');
+    alert.id = 'surveyor-pilot-startup-recovery';
     alert.className = 'alert alert-warning';
     alert.setAttribute('role', 'alert');
-    const explanation = document.createElement('p');
+    const explanation = alert.querySelector<HTMLElement>('[data-pilot-startup-failure]') ?? document.createElement('p');
+    explanation.hidden = false;
     explanation.textContent = messages.t('state.startupFailed');
 
     // Deliberate recovery uses the existing reload owner when it exists. The
@@ -39,9 +41,10 @@ function showStartupRecovery(container: Element, messages: LocalizationContext, 
     button.className = 'btn btn-outline-light';
     button.textContent = messages.t('state.refreshPage');
     button.addEventListener('click', recover);
-    alert.append(explanation, button);
-    notice.append(alert);
-    container.before(notice);
+    if (!explanation.parentNode) alert.append(explanation);
+    alert.append(button);
+    if (!alert.parentNode) notice.append(alert);
+    if (!notice.parentNode) container.before(notice);
 }
 
 /** Protect initial DOM drafts before Router starts loading, validate bootstrap,
@@ -102,16 +105,18 @@ async function start(): Promise<void> {
         const value: unknown = JSON.parse(node?.textContent ?? 'null');
         const bootstrap = await decodeBootstrap(value);
         const application = createPilotApp(bootstrap, true, mayReloadInitialDocument);
-        const {app, router} = application;
+        const {router} = application;
         context = application.context;
         await router.isReady();
-        await mountPreservingDrafts(app, container);
-
         watch(context.locale, updateDocumentLanguage, {immediate: true});
-        const stop = context.start();
+        const stop = await initializePilotApp(application, container);
         // Mounted guards now protect the restored models. Only after that handoff
         // may the temporary DOM guard and its beforeunload listener retire.
         container.setAttribute('data-pilot-hydrated', 'true');
+        // A policy may block the independent inline monitor while allowing the
+        // module entry. Proven success must also dismiss that safe default notice.
+        const javascriptNotice = document.getElementById('surveyor-pilot-javascript-required');
+        if (javascriptNotice) javascriptNotice.hidden = true;
         application.releaseInitialReloadGuard();
         window.removeEventListener('beforeunload', protectInitialDrafts);
 
@@ -137,6 +142,7 @@ async function start(): Promise<void> {
         // Keep available initial controls and surface recovery even when no component
         // mounted. Existing partial command owners, if any, retain their guards.
         showStartupRecovery(container, messages, recoverStartup);
+        container.setAttribute('data-pilot-startup-failed', 'true');
         console.error('Frontend startup failed.', error);
     }
 }

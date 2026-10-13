@@ -546,7 +546,7 @@ describe('server-owned page entry and canonical navigation', () => {
             // registration command is admitted until that preliminary read finishes.
             await wrapper.get('#guest-name').setValue('Delayed guest');
             await wrapper.get('#guest-email').setValue('delayed@example.test');
-            await wrapper.get('form[action$="/guest"]').trigger('submit');
+            await wrapper.get('main form').trigger('submit');
             await flushPromises();
             expect(registrations).toBe(0);
             expect(request.mock.calls.filter(([input]) => new URL((input as Request).url).pathname === '/api/v1/auth/guest-email-exists'))
@@ -616,7 +616,7 @@ describe('server-owned page entry and canonical navigation', () => {
                 : json({entry: {kind: 'render'}, guest: {id: firstId, title: 'Public guest title'}});
         }, true);
         await wrapper.get('#guest-name').setValue('Confirmed guest');
-        await wrapper.get('form[action$="/guest"]').trigger('submit');
+        await wrapper.get('main form').trigger('submit');
         await flushPromises();
         expect(context.ready.value).toBe(false);
         expect(context.personalLink.value).toBeNull();
@@ -730,7 +730,7 @@ describe('server-owned page entry and canonical navigation', () => {
         });
         await wrapper.get('#username').setValue('Account');
         await wrapper.get('#password').setValue('password1');
-        await wrapper.get('form[action="/frontend-pilot/users/login"]').trigger('submit');
+        await wrapper.get('main form').trigger('submit');
         await flushPromises();
         expect(context.ready.value).toBe(false);
 

@@ -92,12 +92,14 @@ describe('typed i18next-vue binding', () => {
             await browser.router.push(path);
             await browser.router.isReady();
             browser.app.mount('#binding-app');
-            const nativeSubmit = document.querySelector<HTMLButtonElement>('form[action="/frontend-pilot/users/logout"] button')!;
-            expect(nativeSubmit).not.toBeNull();
-            expect(nativeSubmit.parentElement?.tagName).toBe('FORM');
+            expect(document.querySelector('header form')).toBeNull();
+            expect(document.querySelector('header')?.textContent).toContain('First profile');
             browser.context.hydrated.value = true;
             await nextTick();
-            expect(document.querySelector('form[action="/frontend-pilot/users/logout"] button')).toBe(nativeSubmit);
+            const submit = document.querySelector<HTMLButtonElement>('header form button[type="submit"]')!;
+            expect(submit).not.toBeNull();
+            expect(submit.form?.getAttribute('method')).toBeNull();
+            expect(submit.form?.getAttribute('action')).toBeNull();
             expect(document.querySelector('a[href="/users/profile/manage"]')).not.toBeNull();
             expect(document.querySelector('#pilot-profile')).toBeNull();
             const input = document.getElementById('binding-draft') as HTMLInputElement;
@@ -120,6 +122,7 @@ describe('typed i18next-vue binding', () => {
             await nextTick();
             await nextTick();
             expect(document.getElementById('binding-message')?.textContent).toBe('Speichern');
+            expect(document.querySelector('header form button[type="submit"]')).toBe(submit);
             expect(document.getElementById('binding-draft')).toBe(input);
             expect(input.value).toBe('My unfinished edit');
             expect(warnings.mock.calls.flat().join(' ')).not.toContain('Hydration');

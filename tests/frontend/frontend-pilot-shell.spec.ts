@@ -43,7 +43,10 @@ const renderNativeMessage = pug.compileFile(resolve('src/views/message.pug'));
 
 async function renderHelp(data = help, url = '/frontend-pilot/help?doc=fixture', requestFetch?: typeof fetch,
                           bootstrap: Partial<FrontendPilotBootstrap> = {}) {
-    const context = createPilotContext({session, help: data, initialUrl: url, ...bootstrap}, true, requestFetch ?? vi.fn());
+    const context = createPilotContext({session, help: data, initialUrl: url, ...bootstrap}, true, requestFetch ?? readLoadedHelp);
+    // This helper exercises an initialized shell/Help workflow. Initial delivery
+    // and unavailable-JS behavior have their own real SSR/startup fixtures.
+    context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
         {path: '/frontend-pilot/help', component: HelpPage},
         {path: '/frontend-pilot/help/:doc', component: HelpPage},
@@ -55,6 +58,22 @@ async function renderHelp(data = help, url = '/frontend-pilot/help?doc=fixture',
     }});
     await flushPromises();
     return {wrapper, context, router};
+
+    /** Initialized language changes perform their normal Help GET. Keep this
+     * external fixture valid instead of scheduling failures/retries accidentally. */
+    async function readLoadedHelp(input: RequestInfo | URL): Promise<Response> {
+        if (!(input instanceof Request) || new URL(input.url).pathname !== '/api/v1/help')
+            throw new Error('Unexpected synthetic Help request.');
+        return helpResponse(input, data, bootstrap.session?.context);
+    }
+}
+
+/** Supply the public Help DTO for the requested presentation language at the
+ * HTTP seam. No application lookup, renderer or locale policy is replaced. */
+function helpResponse(request: Request, data = help, context = session.context): Response {
+    return new Response(JSON.stringify({...data, locale: request.headers.get('X-Surveyor-Locale') ?? data.locale}), {
+        headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': context},
+    });
 }
 
 /** The native page supplies actual label/footer markup, not a copied template fixture. */
@@ -252,6 +271,7 @@ describe('native shell and help presentation contract', () => {
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
         const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
         const context = createPilotContext({session}, true);
+        context.hydrated.value = true;
         const disclosed = ref(false);
         const pending = ref(true);
         const message = ref('Inline feedback');
@@ -506,6 +526,7 @@ describe('native shell and help presentation contract', () => {
                 headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': account.context}});
         });
         const context = createPilotContext({session: account}, true, request);
+        context.hydrated.value = true;
         const destination = defineComponent({template: '<p>Fixture destination</p>'});
         const router = createRouter({history: createMemoryHistory(), routes: [
             {path: '/frontend-pilot', component: destination},
@@ -519,7 +540,7 @@ describe('native shell and help presentation contract', () => {
             provide: {[pilotContextKey as symbol]: context},
         }});
         try {
-            const form = wrapper.get('form[action="/frontend-pilot/users/logout"]');
+            const form = wrapper.get('form');
             (form.element.closest('details') as HTMLDetailsElement).open = true;
             await form.trigger('submit');
             await flushPromises();
@@ -752,15 +773,20 @@ describe('native shell and help presentation contract', () => {
     });
 
     it('replaces the pinned help locale after a confirmed language switch while preserving reload context', async () => {
-        const request = vi.fn(async () => new Response(JSON.stringify({...session, locale: 'de'}), {
-            headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},
-        }));
+        const request = vi.fn(async (input: RequestInfo | URL) => {
+            const captured = input as Request;
+            if (new URL(captured.url).pathname === '/api/v1/help') return helpResponse(captured);
+            return new Response(JSON.stringify({...session, locale: 'de'}), {
+                headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},
+            });
+        });
         const {wrapper, context, router} = await renderHelp(help,
             '/frontend-pilot/help?doc=fixture&q=search%20term&list=fixture-list&locale=en#fixture-task', request);
         try {
             await wrapper.get('#pilot-locale').setValue('de');
             await flushPromises();
-            expect(request).toHaveBeenCalledOnce();
+            expect(request.mock.calls.map(([input]) => [(input as Request).method, new URL((input as Request).url).pathname]))
+                .toEqual([['PUT', '/api/v1/locale'], ['GET', '/api/v1/help']]);
             expect(context.locale.value).toBe('de');
             expect(router.currentRoute.value.path).toBe('/frontend-pilot/help');
             expect(router.currentRoute.value.query).toEqual({doc: 'fixture', q: 'search term', list: 'fixture-list', locale: 'de'});
@@ -874,7 +900,9 @@ describe('native shell and help presentation contract', () => {
 
     it('clears a recovered locale error without clearing the independent session-read warning', async () => {
         let rejectPreference = true;
-        const request = vi.fn(async () => {
+        const request = vi.fn(async (input: RequestInfo | URL) => {
+            const captured = input as Request;
+            if (new URL(captured.url).pathname === '/api/v1/help') return helpResponse(captured);
             if (rejectPreference) throw new TypeError('Fixture preference connection failed');
             return new Response(JSON.stringify({...session, locale: 'de'}), {
                 headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},

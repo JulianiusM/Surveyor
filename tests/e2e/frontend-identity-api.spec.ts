@@ -31,12 +31,6 @@ function renderedIdentityInput(html: string, name: string): string | undefined {
     return undefined;
 }
 
-/** Native document commands carry exactly the admitted session's transport controls. */
-function nativeIdentityControls(view: SessionView): Record<string, string> {
-    return {_context: view.context, _csrf: view.csrfToken,
-        _compatibility: view.deployment.apiCompatibility, locale: 'en', next: '/frontend-pilot'};
-}
-
 /** Browser validity evidence contains counts/flags only, never the entered credential. */
 function passwordInputValidity(input: HTMLElement) {
     const field = input as HTMLInputElement;
@@ -97,7 +91,7 @@ test('disabled authentication configuration preserves native document outcomes a
     // Invalid bodies deliberately lack context/CSRF/required fields. Configuration has
     // the same native precedence and cannot accidentally expose a credential form.
     for (const suffix of ['login', 'register', 'forgot-password', 'reset-password/unread-token']) {
-        for (const prefix of ['/users', '/frontend-pilot/users']) {
+        for (const prefix of ['/users']) {
             const denial = await request.post(`${prefix}/${suffix}`, {...options, form: {password: 'untrusted secret'}});
             expect(denial.status()).toBe(500);
             const html = await denial.text();
@@ -117,7 +111,7 @@ function headers(view: SessionView): Record<string, string> {
     return {'X-Surveyor-Context': view.context, 'X-CSRF-Token': view.csrfToken, 'X-Surveyor-Locale': 'de'};
 }
 
-test('native and pilot controller form rejections retain native document statuses and independent typed API problems', async ({request}) => {
+test('native form rejections and mounted pilot constraints retain the shared typed API problems', async ({request, page}) => {
     const before = await session(request);
     const password = 'A1'.repeat(501);
     const username = `unmatched-${randomUUID()}`;
@@ -135,15 +129,21 @@ test('native and pilot controller form rejections retain native document statuse
     ];
 
     for (const path of ['/users/login', '/users/register']) {
-        for (const prefix of ['', '/frontend-pilot']) {
-            const entry = await request.get(`${prefix}${path}?locale=en`);
-            expect(entry.status()).toBe(200);
-            const html = await entry.text();
-            const input = renderedIdentityInput(html, 'password');
-            expect(input).toBeDefined();
-            expect(input).toContain('minlength="8"');
-            expect(input).not.toContain('maxlength=');
-            if (path.endsWith('/register')) expect(renderedIdentityInput(html, 'password_repeat')).not.toContain('maxlength=');
+        const entry = await request.get(`${path}?locale=en`);
+        expect(entry.status()).toBe(200);
+        const html = await entry.text();
+        const input = renderedIdentityInput(html, 'password');
+        expect(input).toContain('minlength="8"');
+        expect(input).not.toContain('maxlength=');
+
+        // Interactive controls exist only after the real built client initializes.
+        await page.goto(`/frontend-pilot${path}?locale=en`);
+        await waitForPilotHydration(page);
+        await expect(page.locator('input[name="password"]')).toHaveAttribute('minlength', '8');
+        await expect(page.locator('input[name="password"]')).not.toHaveAttribute('maxlength');
+        if (path.endsWith('/register')) {
+            expect(renderedIdentityInput(html, 'password_repeat')).not.toContain('maxlength=');
+            await expect(page.locator('input[name="password_repeat"]')).not.toHaveAttribute('maxlength');
         }
     }
 
@@ -151,17 +151,8 @@ test('native and pilot controller form rejections retain native document statuse
     // become a schema failure, and a mismatch/taken username must create no account.
     for (const testCase of cases) {
         const native = await request.post(testCase.path, {form: testCase.form, maxRedirects: 0});
-        const pilot = await request.post(`/frontend-pilot${testCase.path}`, {
-            form: {...testCase.form, ...nativeIdentityControls(before)}, maxRedirects: 0,
-        });
         expect(native.status()).toBe(500);
-        expect(pilot.status()).toBe(native.status());
-        const nativeHtml = await native.text();
-        const pilotHtml = await pilot.text();
-        expect(renderedIdentityError(nativeHtml)).toBe(testCase.message);
-        expect(renderedIdentityError(pilotHtml)).toBe(renderedIdentityError(nativeHtml));
-        expect(pilotHtml).toContain(`"code":"${testCase.code}"`);
-        expect(pilotHtml).not.toContain(testCase.form.password);
+        expect(renderedIdentityError(await native.text())).toBe(testCase.message);
 
         const api = await request.post(testCase.apiPath, {data: testCase.form,
             headers: {...headers(before), 'X-Surveyor-Locale': 'en'}, maxRedirects: 0});
@@ -169,21 +160,21 @@ test('native and pilot controller form rejections retain native document statuse
         expect(await api.json()).toMatchObject({code: testCase.code, status: testCase.apiStatus, params: {}});
     }
 
-    // Document projection recognizes controller renderer errors only. Missing CSRF
-    // and generated-input rejection retain their typed admission statuses and codes.
-    const admission = await request.post('/frontend-pilot/users/login', {
-        form: {username, password, _context: before.context, _compatibility: before.deployment.apiCompatibility}, maxRedirects: 0,
+    // The enhanced transport owns context/CSRF and generated input admission;
+    // no ordinary HTML POST adapter remains in the pilot namespace.
+    const admission = await request.post('/api/v1/auth/login', {
+        data: {username, password}, headers: {'X-Surveyor-Context': before.context},
     });
     expect(admission.status()).toBe(403);
-    expect(await admission.text()).toContain('"code":"CSRF_INVALID"');
-    const invalidInput = await request.post('/frontend-pilot/users/login', {
-        form: {username, password: '', ...nativeIdentityControls(before)}, maxRedirects: 0,
+    expect(await admission.json()).toMatchObject({code: 'CSRF_INVALID'});
+    const invalidInput = await request.post('/api/v1/auth/login', {
+        data: {username, password: ''}, headers: headers(before),
     });
     expect(invalidInput.status()).toBe(400);
-    expect(await invalidInput.text()).toContain('"code":"VALIDATION_FAILED"');
+    expect(await invalidInput.json()).toMatchObject({code: 'VALIDATION_FAILED'});
 });
 
-test('native and pilot standalone recovery retain unbounded inputs and privacy-preserving completion', async ({request}) => {
+test('native and mounted pilot recovery retain unbounded inputs and privacy-preserving API completion', async ({request, page}) => {
     const before = await session(request);
     const cases = [
         {path: '/users/forgot-password', entryPath: '/users/forgot-password', field: 'username',
@@ -196,30 +187,24 @@ test('native and pilot standalone recovery retain unbounded inputs and privacy-p
 
     for (const testCase of cases) {
         expect(testCase.input.length).toBeGreaterThan(100);
-        for (const prefix of ['', '/frontend-pilot']) {
-            const entry = await request.get(`${prefix}${testCase.entryPath}?locale=en`);
-            expect(entry.status()).toBe(200);
-            const input = renderedIdentityInput(await entry.text(), testCase.field);
-            expect(input).toBeDefined();
-            expect(input).not.toContain('maxlength=');
-        }
+        const entry = await request.get(`${testCase.entryPath}?locale=en`);
+        expect(entry.status()).toBe(200);
+        expect(renderedIdentityInput(await entry.text(), testCase.field)).not.toContain('maxlength=');
+        await page.goto(`/frontend-pilot${testCase.entryPath}?locale=en`);
+        await waitForPilotHydration(page);
+        await expect(page.locator(`input[name="${testCase.field}"]`)).not.toHaveAttribute('maxlength');
 
         const form = {[testCase.field]: testCase.input};
         const native = await request.post(testCase.path, {form});
-        const pilot = await request.post(`/frontend-pilot${testCase.path}`, {
-            form: {...form, ...nativeIdentityControls(before)},
-        });
         expect(native.status()).toBe(200);
-        expect(pilot.status()).toBe(native.status());
         expect(await native.text()).toContain(testCase.message);
-        expect(await pilot.text()).toContain(testCase.message);
         const api = await request.post(testCase.apiPath, {data: form, headers: headers(before)});
         expect(api.status()).toBe(200);
         expect(await api.json()).toMatchObject({changed: true});
     }
 });
 
-async function identity(response: APIResponse, previous: SessionView): Promise<components['schemas']['IdentityResult']> {
+async function identity(response: APIResponse | Response, previous: SessionView): Promise<components['schemas']['IdentityResult']> {
     expect(response.status()).toBe(200);
     expect(response.headers()['cache-control']).toContain('no-store');
     const result = await response.json() as components['schemas']['IdentityResult'];
@@ -277,21 +262,17 @@ test('identity commands bind old admission and new results while retaining local
     expect(invalidProfile.status()).toBe(400);
     const switched = await identity(await request.put('/api/v1/auth/profile', {headers: headers(beforeSwitch), data: {profileId: target.id}}), beforeSwitch);
     expect(switched.session.activeProfile).toEqual(target);
-    // The retained native transport operation follows native profile activation back
-    // to Overview. A supplied previous-page next must not reopen the old actor's page.
+    // Returning to the original profile uses the same declared command and
+    // receives a new admitted context, without a separate document transition.
     const originalProfile = switched.session.profiles.find(profile => profile.id !== target.id)!;
-    const nativeSwitch = await request.post('/frontend-pilot/users/profile', {form: {
-        profileId: originalProfile.id, next: `/frontend-pilot/packing/${randomUUID()}`, locale: 'de',
-        _context: switched.session.context, _csrf: switched.session.csrfToken,
-        _compatibility: switched.session.deployment.apiCompatibility,
-    }, maxRedirects: 0});
-    expect(nativeSwitch.status()).toBe(303);
-    expect(nativeSwitch.headers().location).toBe('/frontend-pilot?locale=de');
-    const afterNative = await session(request);
-    expect(afterNative.activeProfile).toEqual(originalProfile);
-    expect(afterNative.context).not.toBe(switched.session.context);
+    const restored = await identity(await request.put('/api/v1/auth/profile', {
+        headers: headers(switched.session), data: {profileId: originalProfile.id},
+    }), switched.session);
+    expect(restored.session.activeProfile).toEqual(originalProfile);
+    const afterRestore = await session(request);
+    expect(afterRestore.context).toBe(restored.session.context);
 
-    const logout = await identity(await request.post('/api/v1/auth/logout', {headers: headers(afterNative)}), afterNative);
+    const logout = await identity(await request.post('/api/v1/auth/logout', {headers: headers(afterRestore)}), afterRestore);
     expect(logout).toMatchObject({session: {kind: 'anonymous', activeProfile: null, profiles: []}, personalLink: null, redirect: null});
     expect((await session(request)).context).toBe(logout.session.context);
 });
@@ -383,70 +364,71 @@ test('parallel guest registrations commit exactly one identity and restore its p
         }
     });
 
-test('pilot guest document POST commits its 303 and exposes the one-time link only to its matching identity context',
-    async function documentGuestFinality({request, browser, baseURL}) {
+test('mounted guest creation exposes its committed personal link only to the matching identity',
+    async function mountedGuestFinality({request, browser, baseURL}) {
         const list = await createGuestEntryList(request);
-        const suffix = randomUUID().slice(0, 12);
-        const usernames = [`Document guest A ${suffix}`, `Document guest B ${suffix}`];
-        expect(await readGuestRegistrationCountsForE2E(usernames)).toEqual({guests: 0, profiles: 0});
+        const username = `Mounted guest ${randomUUID().slice(0, 12)}`;
+        expect(await readGuestRegistrationCountsForE2E([username])).toEqual({guests: 0, profiles: 0});
+        const guest = await browser.newContext({baseURL});
+        try {
+            const page = await guest.newPage();
+            const anonymous = await session(guest.request);
+            await page.goto(`/frontend-pilot/packing/${list.id}/guest?locale=en`);
+            await waitForPilotHydration(page);
+            await page.locator('#guest-name').fill(username);
+            const submitted = page.waitForResponse(response => response.request().method() === 'POST'
+                && new URL(response.url()).pathname === `/api/v1/packing-lists/${list.id}/guest`);
+            await page.getByRole('button', {name: 'Continue as guest', exact: true}).click();
+            const created = await identity(await submitted, anonymous);
+            expect(created.session).toMatchObject({kind: 'guest', activeProfile: {name: username}});
+            const personalLink = created.personalLink!;
+            await expect(page.locator('.alert-success')).toHaveText(`Login successful. Use ${personalLink} to edit later.`);
+            expect(new URL(personalLink).searchParams.get('next')).toBe(`/frontend-pilot/packing/${list.id}`);
+            await expect(page.getByText('Your guest account was created, but the email could not be sent.', {exact: false})).toHaveCount(0);
 
-        // Separate registrations keep the second handoff unconsumed until another
-        // actor takes the session; consuming a link first could conceal a scope leak.
-        for (const changeActor of [false, true]) {
-            const guest = await browser.newContext({baseURL});
-            try {
-                const anonymous = await session(guest.request);
-                const username = usernames[Number(changeActor)];
-                const post = await guest.request.post(`/frontend-pilot/packing/${list.id}/guest`, {
-                    form: {username, ...nativeIdentityControls(anonymous)}, maxRedirects: 0,
-                });
-                expect(post.status()).toBe(303);
-                const destination = new URL(post.headers().location, 'http://fixture');
-                expect(destination.pathname).toBe(`/frontend-pilot/packing/${list.id}`);
-                expect(destination.searchParams.get('locale')).toBe('en');
-                const committed = await session(guest.request);
-                expect(committed).toMatchObject({kind: 'guest', activeProfile: {name: username}});
-                expect(committed.context).not.toBe(anonymous.context);
-
-                let current = committed;
-                if (changeActor) {
-                    // Ordinary account login changes the stored context without
-                    // consuming the guest's pilot-only flash channel.
-                    await loginForE2E(guest.request, createE2ELogin());
-                    current = await session(guest.request);
-                    expect(current.kind).toBe('account');
-                    expect(current.context).not.toBe(committed.context);
-                }
-
-                // Native guest feedback is actor-global: the first admitted pilot
-                // GET can consume it even before the prepared canonical destination.
-                const landing = await guest.request.get('/frontend-pilot?locale=en', {maxRedirects: 0});
-                expect(landing.status()).toBe(200);
-                const html = await landing.text();
-                const rendered = documentBootstrap(html);
-                expect(rendered.session.context).toBe(current.context);
-                expect(rendered.session.kind).toBe(current.kind);
-                if (changeActor) {
-                    expect(rendered.personalLink).toBeUndefined();
-                    expect(html).not.toContain('Login successful. Use ');
-                } else {
-                    expect(rendered.personalLink).toBeTruthy();
-                    expect(new URL(rendered.personalLink!).searchParams.get('next')).toBe(`/frontend-pilot/packing/${list.id}`);
-                    expect(html).toContain('Login successful. Use ');
-                    // No email was requested: confirmation never claims mail delivery.
-                    expect(html).not.toContain('auth.guestEmailFailed');
-                }
-
-                const next = await guest.request.get(destination.pathname + destination.search, {maxRedirects: 0});
-                expect(next.status()).toBe(200);
-                expect(documentBootstrap(await next.text()).personalLink).toBeUndefined();
-            } finally {
-                await guest.close();
-            }
+            // A real account transition retires the guest's private confirmation.
+            // Reloading a document may not reconstruct an API-only personal link.
+            await loginForE2E(guest.request, createE2ELogin());
+            await page.reload();
+            await waitForPilotHydration(page);
+            await expect(page.locator('#surveyor-pilot')).not.toContainText(personalLink);
+            const landing = await guest.request.get('/frontend-pilot?locale=en');
+            const rendered = documentBootstrap(await landing.text());
+            expect(rendered.session.kind).toBe('account');
+            expect(rendered.personalLink).toBeUndefined();
+            expect(await readGuestRegistrationCountsForE2E([username])).toEqual({guests: 1, profiles: 1});
+        } finally {
+            await guest.close();
         }
-
-        expect(await readGuestRegistrationCountsForE2E(usernames)).toEqual({guests: 2, profiles: 2});
     });
+
+test('retired pilot HTML POST adapters reject without creating rows or changing the admitted actor', async ({request, browser, baseURL}) => {
+    const list = await createGuestEntryList(request);
+    const anonymous = await browser.newContext({baseURL});
+    const username = `retired-form-${randomUUID().slice(0, 12)}`;
+    try {
+        const before = await session(anonymous.request);
+        const paths = ['/users/login', '/users/register', '/users/forgot-password',
+            `/users/reset-password/${randomUUID()}`, '/guest/recovery',
+            `/packing/${list.id}/guest`, '/users/profile', '/users/logout'];
+        const form = {username, displayname: username, email: `${username}@example.invalid`,
+            password: 'Retired-form!A1', password_repeat: 'Retired-form!A1',
+            confirmPassword: 'Retired-form!A1', profileId: randomUUID(),
+            _context: before.context, _csrf: before.csrfToken,
+            _compatibility: before.deployment.apiCompatibility, next: '/frontend-pilot'};
+        expect(await readAccountRegistrationCountsForE2E([username])).toEqual({accounts: 0, profiles: 0, activationReady: 0});
+        expect(await readGuestRegistrationCountsForE2E([username])).toEqual({guests: 0, profiles: 0});
+        for (const path of paths) {
+            const retired = await anonymous.request.post(`/frontend-pilot${path}`, {form, maxRedirects: 0});
+            expect(retired.status()).toBe(404);
+            expect(retired.headers().location).toBeUndefined();
+        }
+        const after = await session(anonymous.request);
+        expect(after).toMatchObject({kind: 'anonymous', context: before.context, csrfToken: before.csrfToken});
+        expect(await readAccountRegistrationCountsForE2E([username])).toEqual({accounts: 0, profiles: 0, activationReady: 0});
+        expect(await readGuestRegistrationCountsForE2E([username])).toEqual({guests: 0, profiles: 0});
+    } finally { await anonymous.close(); }
+});
 
 test('account signup commits its profile and activation token before controlled SMTP failure without exposing the token or changing identity',
     async function accountSignupFinality({request}) {
@@ -540,69 +522,65 @@ test('native and pilot known identity denials preserve the exact English message
     }
 });
 
-for (const surface of ['native', 'pilot'] as const) {
-    test(`successful ${surface} password-reset POST retains the canonical Success destination while fresh token reuse is denied`, async ({request}) => {
+for (const surface of ['native', 'api'] as const) {
+    test(`successful ${surface} password reset consumes the link and preserves unchanged identity`, async ({request}) => {
         await withPasswordResetAccountForE2E(async function exerciseReset(username, previousPassword, token) {
-            const path = `${surface === 'pilot' ? '/frontend-pilot' : ''}/users/reset-password/${token}?locale=en`;
+            const pagePath = `${surface === 'api' ? '/frontend-pilot' : ''}/users/reset-password/${token}?locale=en`;
+            const commandPath = surface === 'api' ? '/api/v1/auth/reset-password' : pagePath;
             const before = await session(request);
-            const admission = await request.get(path);
+            const admission = await request.get(pagePath);
             expect(admission.status()).toBe(200);
             const admissionHtml = await admission.text();
-            expect(admissionHtml).toContain('name="confirmPassword"');
-            for (const name of ['password', 'confirmPassword']) {
-                const input = renderedIdentityInput(admissionHtml, name);
-                expect(input).toContain('minlength="8"');
-                expect(input).not.toContain('maxlength=');
+            if (surface === 'api') {
+                // GET still admits the token before the skeleton boot. Form constraints
+                // are exercised through the real mounted browser in the next cases.
+                expect(documentBootstrap(admissionHtml).passwordReset).toEqual({valid: true});
+            } else {
+                for (const name of ['password', 'confirmPassword']) {
+                    expect(renderedIdentityInput(admissionHtml, name)).toContain('minlength="8"');
+                    expect(renderedIdentityInput(admissionHtml, name)).not.toContain('maxlength=');
+                }
             }
-            // These isolated accounts prove a complete long credential can be reset
-            // and subsequently submitted, without changing the shared seed account.
+
             const password = `Replacement-password!A1${'x'.repeat(1001)}`;
-            const form = {password, confirmPassword: password,
-                ...(surface === 'pilot' ? {_context: before.context, _csrf: before.csrfToken,
-                    _compatibility: before.deployment.apiCompatibility, locale: 'en', next: '/frontend-pilot'} : {})};
-
-            // A valid token does not change native mismatch redisplay/status, and a
-            // rejected attempt must leave the same token available for the real save.
-            const mismatch = await request.post(path, {form: {...form, confirmPassword: 'Different-password!A1'}, maxRedirects: 0});
-            expect(mismatch.status()).toBe(500);
-            const mismatchHtml = await mismatch.text();
-            expect(renderedIdentityError(mismatchHtml)).toBe('Passwords do not match!');
-            expect(mismatchHtml).not.toContain(password);
-            expect(mismatchHtml).not.toContain('Different-password!A1');
-            if (surface === 'pilot') {
-                expect(mismatchHtml).toContain('"code":"PASSWORD_MISMATCH"');
-                const apiMismatch = await request.post('/api/v1/auth/reset-password', {
-                    data: {token, password, confirmPassword: 'Different-password!A1'}, headers: headers(before),
-                });
-                expect(apiMismatch.status()).toBe(400);
-                expect(await apiMismatch.json()).toMatchObject({code: 'PASSWORD_MISMATCH', status: 400});
+            const input = {password, confirmPassword: password};
+            const mismatchInput = {...input, confirmPassword: 'Different-password!A1'};
+            const mismatch = surface === 'api'
+                ? await request.post(commandPath, {data: {...mismatchInput, token}, headers: headers(before)})
+                : await request.post(commandPath, {form: mismatchInput, maxRedirects: 0});
+            expect(mismatch.status()).toBe(surface === 'api' ? 400 : 500);
+            if (surface === 'api') {
+                expect(await mismatch.json()).toMatchObject({code: 'PASSWORD_MISMATCH', status: 400});
+            } else {
+                expect(renderedIdentityError(await mismatch.text())).toBe('Passwords do not match!');
             }
+            expect(await mismatch.text()).not.toContain(password);
 
-            // Exercise the real route/session/render boundary. A synthetic resetDone
-            // bootstrap can render Success while concealing a wrong POST redirect.
-            const completion = await request.post(path, {form, maxRedirects: 0});
+            // Both real transports invoke their existing shared controller. The API
+            // commits its prepared scalar receipt; native keeps its document Success.
+            const completion = surface === 'api'
+                ? await request.post(commandPath, {data: {...input, token}, headers: headers(before)})
+                : await request.post(commandPath, {form: input, maxRedirects: 0});
             expect(completion.status()).toBe(200);
             expect(completion.headers().location).toBeUndefined();
-            expect(new URL(completion.url()).pathname).toBe(new URL(path, 'https://surveyor.invalid').pathname);
-            const html = await completion.text();
-            expect(html).toContain('Success');
-            expect(html).toContain('Your password has been successfully reset');
-            expect(html).not.toContain('name="confirmPassword"');
-            if (surface === 'pilot') {
-                expect(html).toContain(`"destination":"${path}"`);
-                expect(html).toContain('"messageKey":"auth.resetDone","kind":"success"');
-                expect(html).not.toContain('"identityFeedback":"auth.resetDone"');
+            if (surface === 'api') {
+                expect(await completion.json()).toEqual({changed: true});
+            } else {
+                const html = await completion.text();
+                expect(html).toContain('Success');
+                expect(html).toContain('Your password has been successfully reset');
+                expect(html).not.toContain('name="confirmPassword"');
             }
-
-            // The successful POST receipt grants no future token admission. Both a
-            // fresh GET and a replayed POST must independently reject the consumed token.
-            expect((await request.get(path)).status()).toBe(401);
-            expect((await request.post(path, {form, maxRedirects: 0})).status()).toBe(401);
+            expect((await session(request)).context).toBe(before.context);
+            expect((await request.get(pagePath)).status()).toBe(401);
+            const replay = surface === 'api'
+                ? await request.post(commandPath, {data: {...input, token}, headers: headers(before)})
+                : await request.post(commandPath, {form: input, maxRedirects: 0});
+            expect(replay.status()).toBe(401);
             const oldLogin = await request.post('/users/login', {form: {username, password: previousPassword}, maxRedirects: 0});
             expect(oldLogin.status()).toBe(500);
             await loginForE2E(request, {username, password});
             const account = await session(request);
-            expect(account.kind).toBe('account');
             const enhancedLogin = await identity(await request.post('/api/v1/auth/login', {
                 data: {username, password}, headers: headers(account),
             }), account);
@@ -695,7 +673,7 @@ test('native and pilot password-reset forms retain the same canonical Success pr
             expect(new URL(page.url()).pathname).toBe(path);
             await expect(page.locator('[name="confirmPassword"]')).toHaveCount(0);
 
-            // Capture the actual completed document, not a synthetic successful bootstrap.
+            // Capture the actual completed native document or mounted API result.
             // Changing the viewport preserves the consumed-token completion in this page;
             // a reload would correctly perform fresh admission and deny the used token.
             for (const [size, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
@@ -733,7 +711,7 @@ test('native and pilot password-reset forms retain the same canonical Success pr
     }
 });
 
-test('native pilot recovery GET redirects to login while rejected and confirmed POSTs retain their full message at the recovery URL', async ({request}) => {
+test('recovery GET redirects remain native while the declared API preserves privacy and rejects invalid controls', async ({request}) => {
     const native = await request.get('/guest/recovery', {maxRedirects: 0});
     expect(native.status()).toBe(302);
     expect(native.headers().location).toBe('/users/login');
@@ -742,56 +720,26 @@ test('native pilot recovery GET redirects to login while rejected and confirmed 
     expect(pilot.headers().location).toBe('/frontend-pilot/users/login?locale=en');
     const current = await session(request);
 
-    // Login has no recovery override in the native product contract. Extra controls
-    // must not reinterpret ordinary credential admission as a different identity action.
+    // Native ignores the old recovery override on an ordinary credential request.
+    // The authored API independently rejects extra controls rather than changing operations.
     const loginFields = {...createE2ELogin(), password: 'deliberately-wrong-password', _recovery: '1', email: 'not-an-email-address'};
     const nativeLogin = await request.post('/users/login', {form: loginFields, maxRedirects: 0});
-    const login = await request.post('/frontend-pilot/users/login', {form: {
-        ...loginFields,
-        next: '/frontend-pilot', locale: 'en', _context: current.context,
-        _csrf: current.csrfToken, _compatibility: current.deployment.apiCompatibility,
-    }, maxRedirects: 0});
     expect(nativeLogin.status()).toBe(500);
-    expect(login.status()).toBe(nativeLogin.status());
-    const loginHtml = await login.text();
-    expect(renderedIdentityError(loginHtml)).toBe(renderedIdentityError(await nativeLogin.text()));
-    expect(loginHtml).toContain('"code":"INVALID_CREDENTIALS"');
-    expect(loginHtml).toContain('"status":401');
+    expect(renderedIdentityError(await nativeLogin.text())).toBe('Invalid username/email or password');
+    const overriddenLogin = await request.post('/api/v1/auth/login', {data: loginFields, headers: headers(current)});
+    expect(overriddenLogin.status()).toBe(400);
+    expect(await overriddenLogin.json()).toMatchObject({code: 'VALIDATION_FAILED'});
 
-    // A rejected recovery submission owns a complete Error page at this URL. It
-    // cannot be projected as a form error because recovery has no standalone form.
-    const rejected = await request.post('/frontend-pilot/guest/recovery', {form: {
-        email: 'not-an-email-address', next: '/frontend-pilot', locale: 'en',
-        _context: current.context, _csrf: current.csrfToken, _compatibility: current.deployment.apiCompatibility,
-    }, maxRedirects: 0});
+    const rejected = await request.post('/api/v1/auth/guest-recovery', {
+        data: {email: 'not-an-email-address'}, headers: headers(current),
+    });
     expect(rejected.status()).toBe(400);
-    expect(rejected.headers().location).toBeUndefined();
-    expect(new URL(rejected.url()).pathname).toBe('/frontend-pilot/guest/recovery');
-    expect(rejected.headers()['content-type']).toContain('text/html');
-    const errorHtml = await rejected.text();
-    expect(errorHtml).toContain('Error');
-    expect(errorHtml).toContain('"identityProblem":');
-    expect(errorHtml).toContain('"code":"VALIDATION_FAILED"');
-    expect(errorHtml).not.toContain('"identityFormProblem":');
-    expect(errorHtml).not.toContain('<input id="email"');
-    expect(errorHtml).not.toContain('"identityFeedback":"auth.recoverySent"');
-    // A nonexistent address completes the same privacy-preserving recovery workflow
-    // without requiring an external mailbox or inspecting whether a guest exists.
-    const completion = await request.post('/frontend-pilot/guest/recovery', {form: {
-        email: `no-existing-guest-${randomUUID()}@example.invalid`, next: '/frontend-pilot', locale: 'en',
-        _context: current.context, _csrf: current.csrfToken, _compatibility: current.deployment.apiCompatibility,
-    }, maxRedirects: 0});
+    expect(await rejected.json()).toMatchObject({code: 'VALIDATION_FAILED'});
+    const completion = await request.post('/api/v1/auth/guest-recovery', {
+        data: {email: `no-existing-guest-${randomUUID()}@example.invalid`}, headers: headers(current),
+    });
     expect(completion.status()).toBe(200);
-    expect(completion.headers().location).toBeUndefined();
-    expect(new URL(completion.url()).pathname).toBe('/frontend-pilot/guest/recovery');
-    expect(completion.headers()['content-type']).toContain('text/html');
-    const html = await completion.text();
-    expect(html).toContain('Success');
-    expect(html).toContain('The link(s) to your guest account(s) have been sent to your email address.');
-    expect(html).toContain('"pageCompletion":');
-    expect(html).toContain(`"context":"${current.context}","destination":"/frontend-pilot/guest/recovery"`);
-    expect(html).toContain('"messageKey":"auth.recoverySent","kind":"success"');
-    expect(html).not.toContain('"identityFeedback":"auth.recoverySent"');
-    expect(html).not.toContain('<input id="username"');
+    expect(await completion.json()).toEqual({changed: true});
+    expect((await session(request)).context).toBe(current.context);
     expect((await request.get('/frontend-pilot/guest/recovery', {maxRedirects: 0})).status()).toBe(302);
 });

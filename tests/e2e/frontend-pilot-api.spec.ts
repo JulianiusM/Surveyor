@@ -73,7 +73,8 @@ async function expectDuplicateEntry(request: APIRequestContext, id: string, titl
         const projection = await api.json();
         expect(projection).toMatchObject({title});
         expect(Object.hasOwn(projection, 'selectedEvent')).toBe(false);
-        expect(html).toContain(`value="${title}"`);
+        expect(pilotDocumentState(html).packingDuplicate).toMatchObject({title});
+        expect(html).not.toContain(`value="${title}"`);
     } else {
         await expectProblem(api, 403, 'FORBIDDEN');
         expect(html).not.toContain(`value="${title}"`);
@@ -122,8 +123,8 @@ test('preserves native packing HTML 404s, standalone guest entry and public dupl
         const guestHtml = await guestPage.text();
         expect(guestHtml).toContain(list.title);
         expect(guestHtml).not.toContain('Two person tent');
-        expect(guestHtml).toContain('<noscript>');
-        expect(guestHtml).toContain('#surveyor-pilot{display:none!important}');
+        expect(guestHtml).toContain('data-pilot-initial-loading');
+        expect(guestHtml).not.toContain('id="guest-name"');
 
         // DATA_DUPLICATE is a separate GET grant: public readers need neither a
         // profile nor detail admission, while creation remains account-only.
@@ -132,10 +133,11 @@ test('preserves native packing HTML 404s, standalone guest entry and public dupl
         expect(duplicate.status()).toBe(nativeDuplicate.status());
         expect(duplicate.status()).toBe(200);
         const duplicateHtml = await duplicate.text();
-        expect(duplicateHtml).toContain('value="E2E Core Packing List"');
+        expect(pilotDocumentState(duplicateHtml).packingDuplicate).toMatchObject({title: list.title});
+        expect(duplicateHtml).not.toContain('id="create-title"');
         expect(duplicateHtml).toContain('Two person tent');
-        expect(duplicateHtml).toContain('Für diese Seite ist JavaScript erforderlich.');
-        expect(duplicateHtml.indexOf('</noscript>')).toBeLessThan(duplicateHtml.indexOf('<div id="surveyor-pilot">'));
+        expect(duplicateHtml).toContain('Interaktive Funktionen dieser Website benötigen JavaScript.');
+        expect(duplicateHtml).toContain('id="surveyor-pilot-javascript-required"');
         const anonymous = await bootstrap(request);
         expect((await request.get(`/api/v1/packing-lists/${list.id}/duplicate`, {headers: headersFor(anonymous)})).status()).toBe(200);
         const detailEntry = await request.get(`/api/v1/packing-lists/${list.id}/entry?view=detail`, {headers: headersFor(anonymous)});
@@ -392,38 +394,46 @@ test('keeps exact native and SPA duplicate destinations including query context 
         });
         expect(new URL((await forbidden.json()).entry.url, baseURL).searchParams.get('next')).toBe('/frontend-pilot');
 
-        // Exercise native POST/redirect/GET through the actual client entry. SSR-only notice
-        // assertions miss a browser decoder that discards the consumed one-time feedback.
-        const signedIn = await anonymous.request.post('/frontend-pilot/users/login', {maxRedirects: 0, form: {
-            ...createE2ELogin(), next: pilotReturn, locale: 'de', _context: session.context,
-            _csrf: session.csrfToken, _compatibility: session.deployment.apiCompatibility,
-        }});
-        expect(signedIn.status()).toBe(303);
-        const returned = new URL(signedIn.headers().location!, baseURL);
-        expect(returned.pathname + returned.search).toBe(pilotReturn);
+        // Use the actual mounted identity owner: the declared API command
+        // returns the prepared identity, and the client retains its exact next/notice.
         const nativePage = await anonymous.newPage();
-        const document = await nativePage.goto(returned.pathname + returned.search);
-        expect(await document!.text()).toContain('"pageNotice":{"kind":"success","messageKey":"auth.loginDone"}');
+        await nativePage.goto(`/frontend-pilot/users/login?next=${encodeURIComponent(pilotReturn)}&locale=de`);
         await waitForPilotHydration(nativePage);
-        await expect(nativePage.locator('#pilot-locale')).toBeEnabled();
+        const credentials = createE2ELogin();
+        await nativePage.locator('#username').fill(credentials.username);
+        await nativePage.locator('#password').fill(credentials.password);
+        const signedIn = nativePage.waitForResponse(response => response.request().method() === 'POST'
+            && new URL(response.url()).pathname === '/api/v1/auth/login');
+        await nativePage.locator('#pilot-main form').first().locator('button[type="submit"]').click();
+        const loginResponse = await signedIn;
+        expect(loginResponse.status()).toBe(200);
+        const loginResult = await loginResponse.json() as components['schemas']['IdentityResult'];
+        expect(loginResult.session.locale).toBe(loginResponse.request().headers()['x-surveyor-locale']);
+        await expect(nativePage).toHaveURL(new URL(pilotReturn, baseURL).href);
+
+        // The command receipt uses its explicit presentation header. Identity
+        // adoption then reads the authoritative cookie session without an old
+        // locale header, so that read owns the settled notice's selected language.
+        const loggedIn = await bootstrap(anonymous.request);
+        expect(loggedIn).toMatchObject({kind: 'account', context: loginResult.session.context, locale: 'en'});
+        await expect(nativePage.locator('#pilot-locale')).toHaveValue(loggedIn.locale);
+        await expect(nativePage.getByText('Login successful', {exact: true})).toBeVisible();
+        await nativePage.locator('#pilot-locale').selectOption('de');
         await expect(nativePage.getByText('Erfolgreich angemeldet.', {exact: true})).toBeVisible();
         await nativePage.locator('#pilot-locale').selectOption('en');
         await expect(nativePage.getByText('Login successful', {exact: true})).toBeVisible();
 
-        const loggedIn = await bootstrap(anonymous.request);
-        const logoutReturn = '/frontend-pilot/help?doc=packing_lists';
-        const loggedOut = await anonymous.request.post('/frontend-pilot/users/logout', {maxRedirects: 0, form: {
-            next: logoutReturn, locale: 'en', _context: loggedIn.context,
-            _csrf: loggedIn.csrfToken, _compatibility: loggedIn.deployment.apiCompatibility,
-        }});
-        expect(loggedOut.status()).toBe(303);
-        const logoutDestination = new URL(loggedOut.headers().location!, baseURL);
-        expect(logoutDestination.pathname).toBe('/frontend-pilot/help');
-        expect(logoutDestination.searchParams.get('doc')).toBe('packing_lists');
-        await nativePage.goto(logoutDestination.pathname + logoutDestination.search);
+        const logoutReturn = '/frontend-pilot/help?doc=packing_lists&locale=en';
+        await nativePage.goto(logoutReturn);
         await waitForPilotHydration(nativePage);
-        await expect(nativePage.locator('#pilot-locale')).toBeEnabled();
+        await nativePage.locator('header .dropdown-toggle').filter({hasText: loggedIn.activeProfile!.name}).click();
+        const loggedOut = nativePage.waitForResponse(response => response.request().method() === 'POST'
+            && new URL(response.url()).pathname === '/api/v1/auth/logout');
+        await nativePage.getByRole('button', {name: 'Logout', exact: true}).click();
+        expect((await loggedOut).status()).toBe(200);
+        await expect(nativePage).toHaveURL(new URL(logoutReturn, baseURL).href);
         await expect(nativePage.getByText('Logout successful', {exact: true})).toBeVisible();
+        expect((await bootstrap(anonymous.request)).kind).toBe('anonymous');
     } finally {
         await anonymous.close();
     }
@@ -488,23 +498,41 @@ test('runs the native expiry/logout document journey before invalid stored ident
     }
 });
 
-test('shows the localized JavaScript fallback outside hidden interactive controls while keeping help readable', async ({browser, baseURL}) => {
+test('JavaScript-disabled interactive pages expose skeletons and notices while static Help navigation and GET search stay usable', async ({browser, baseURL}) => {
     const context = await browser.newContext({baseURL, javaScriptEnabled: false});
     try {
         await loginForE2E(context.request, createE2ELogin());
         const page = await context.newPage();
         for (const locale of ['en', 'de']) {
             await page.goto(`/frontend-pilot/packing/create?locale=${locale}`);
-            await expect(page.locator('noscript [role="alert"]')).toContainText(locale === 'de'
-                ? 'Für diese Seite ist JavaScript erforderlich.' : 'JavaScript is required to use this page.');
-            await expect(page.locator('#surveyor-pilot')).toBeHidden();
-            await page.getByRole('link', {name: locale === 'de' ? 'Hilfe' : 'Help', exact: true}).click();
-            await expect(page.locator('#surveyor-pilot')).toBeVisible();
+            await expect(page.locator('#surveyor-pilot-javascript-required')).toContainText(locale === 'de'
+                ? 'Interaktive Funktionen dieser Website benötigen JavaScript.' : 'Interactive features on this site require JavaScript.');
+            await expect(page.locator('[data-pilot-initial-loading]')).toBeHidden();
+            await expect(page.locator('#create-title')).toHaveCount(0);
+            await expect(page.locator('#pilot-locale')).toBeDisabled();
+            await expect(page.locator('header button[type="submit"]')).toHaveCount(0);
+
+            // This is real anchor navigation on the built application. Static Help
+            // also submits its real GET form without a client-side API substitute.
+            await page.locator('#surveyor-pilot-javascript-required').getByRole('link',
+                {name: locale === 'de' ? 'Hilfe' : 'Help', exact: true}).click();
             await expect(page.locator('.help-content')).toBeVisible();
+            const article = page.locator('main a[href*="doc="]').first();
+            const target = new URL((await article.getAttribute('href'))!, baseURL);
+            await article.click();
+            await expect(page).toHaveURL(target.href);
+            await expect(page.locator('.help-content')).toBeVisible();
+            const query = `absent-${randomUUID()}`;
+            await page.getByRole('searchbox').fill(query);
+            await page.getByRole('button', {name: locale === 'de' ? 'Hilfe durchsuchen' : 'Search help', exact: true}).click();
+            expect(new URL(page.url()).searchParams.get('q')).toBe(query);
+            await expect(page.getByRole('searchbox')).toHaveValue(query);
+            await expect(page.locator('#pilot-locale')).toBeDisabled();
+
             await page.goto(`/frontend-pilot/users/login?locale=${locale}`);
-            await expect(page.locator('noscript [role="alert"]')).toBeVisible();
-            await expect(page.locator('#surveyor-pilot')).toBeHidden();
-            await expect(page.locator('#surveyor-pilot main form:visible')).toHaveCount(0);
+            await expect(page.locator('#surveyor-pilot-javascript-required')).toBeVisible();
+            await expect(page.locator('[data-pilot-initial-loading]')).toBeHidden();
+            await expect(page.locator('#pilot-main form')).toHaveCount(0);
         }
     } finally {
         await context.close();

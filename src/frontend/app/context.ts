@@ -7,17 +7,44 @@ import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import type {PilotContext, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale, MessageKey} from '../../types/LocalizationTypes';
 import type {components} from '../../types/api/v1';
-import type {Router} from 'vue-router';
+import type {RouteLocationNormalized, Router} from 'vue-router';
 import {createLocalizationInstance, createTranslator, resolveLocale} from '../../modules/localization/translator';
 import {PilotApi} from './api';
 import {ApiFailure, isTerminalReadFailure, ObsoleteRequestError} from './transport';
 import {createUpdateCoordinator} from './updateCoordinator';
-import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import {frontendDocumentUrl, frontendIdentityMessageFeedback} from '../../modules/lib/frontendIdentity';
 import {belongsToLocalizedQueryFamily} from './queryKeys';
 
 // Development SSR can invalidate the context module between app construction and a lazy route
 // import. A stable key spans those module generations; the provided value remains app/request-local.
 export const pilotContextKey: InjectionKey<PilotContext> = Symbol.for('Surveyor pilot context');
+
+/** JS-only reusable controls share the application's initialization boundary.
+ * Standalone controls keep their established behavior without requiring a pilot
+ * context; real HTML navigation/search never uses this interaction gate. */
+export function useClientInitialization() {
+    const context = inject(pilotContextKey, null);
+    return computed(() => !context || context.hydrated.value);
+}
+
+/** Route metadata owns interactive delivery. An admitted error or completed
+ * message can remain immediately readable; ordinary form feedback cannot make
+ * an otherwise interactive page expose controls before browser initialization. */
+export function requiresClientInitialization(route: Pick<RouteLocationNormalized, 'meta' | 'fullPath'>,
+                                             initial?: FrontendPilotBootstrap): boolean {
+    // A completion belongs only to its admitted actor and canonical destination.
+    // Retired initial-document evidence must not authorize a later visit.
+    const completion = initial?.pageCompletion;
+    const completed = (!!initial?.identityFeedback && frontendIdentityMessageFeedback.includes(initial.identityFeedback))
+        || (!!completion && completion.context === initial?.session.context
+            && frontendDocumentUrl(completion.destination) === frontendDocumentUrl(route.fullPath));
+
+    // These server-admitted results contain only readable feedback/navigation.
+    // All other interactive route content starts with the same shared skeleton.
+    const readableResult = initial?.pageEntry?.kind === 'denied' || !!initial?.packingError
+        || !!initial?.identityProblem || !!(initial?.passwordReset && 'status' in initial.passwordReset) || completed;
+    return route.meta.javascriptRequired === true && !readableResult;
+}
 
 export function usePilot(): PilotContext {
     const context = inject(pilotContextKey);
@@ -56,6 +83,10 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     const initialDocumentActive = ref(true);
     const initialDocumentUrl = bootstrap.initialUrl === undefined ? undefined : frontendDocumentUrl(bootstrap.initialUrl);
     const hydrated = ref(false);
+    // Mounting feature owners is distinct from proving initialization succeeded.
+    // Only hydrated enables client controls/reads; this signal releases the initial
+    // skeleton while the entry owner still captures setup/render/mounted failures.
+    const initialContentReady = ref(false);
     const notice = ref<MessageKey | null>(bootstrap.identityFeedback === 'auth.logoutDone' ? bootstrap.identityFeedback : null);
     // Entry feedback is a typed one-time page notice. Session/read conditions keep their
     // existing independent lifetime and must not replace an admission notice's severity.
@@ -121,7 +152,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             locale: locale.value, epoch: epoch.value};
     }
 
-    /** Bootstrap is evidence of the initial request, including POST errors and messages.
+    /** Bootstrap is evidence of the initial GET's admission and authorized feedback.
      * A later visit to the same URL is a new GET-style journey and must obtain fresh admission.
      * The reactive eligibility flag prevents reused views from reviving an old response. */
     function initialDocumentFor(url: string): FrontendPilotBootstrap | undefined {
@@ -416,7 +447,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         };
     }
 
-    return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, ready, readsReady, sessionRead, notice, pageNotice, pageCompletion, personalLink, messages, pageTitle, updates,
+    return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, initialContentReady, ready, readsReady, sessionRead, notice, pageNotice, pageCompletion, personalLink, messages, pageTitle, updates,
         capture, initialDocumentFor, retireInitialDocument, isCurrent, mayRead, mayObserve, refreshSession, acceptIdentity, registerIdentityGuard, mayChangeIdentity,
         changeLocale, invalidateIdentity, start};
 }

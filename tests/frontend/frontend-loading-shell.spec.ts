@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {createSSRApp, defineComponent, h, ref} from 'vue';
+import {createSSRApp, defineComponent, h, onMounted, ref} from 'vue';
 import type {Component} from 'vue';
 import {renderToString} from 'vue/server-renderer';
 import {createMemoryHistory, createRouter, isNavigationFailure} from 'vue-router';
@@ -9,8 +9,11 @@ import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import App from '../../src/frontend/app/App.vue';
 import LoadingSkeleton from '../../src/frontend/components/LoadingSkeleton.vue';
+import ActionButton from '../../src/frontend/components/ActionButton.vue';
+import StatusNotice from '../../src/frontend/components/StatusNotice.vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {render} from '../../src/frontend/app/entry-server';
+import {createPilotApp, initializePilotApp} from '../../src/frontend/app/createApp';
 import type {components} from '../../src/types/api/v1';
 
 const session: components['schemas']['SessionView'] = {
@@ -70,6 +73,53 @@ async function mountedApp() {
 }
 
 describe('shared skeleton accessibility', () => {
+    it('gates contextual retry and dismiss controls until initialization while keeping standalone controls usable', async () => {
+        const context = createPilotContext({session}, false);
+        const view = defineComponent({components: {ActionButton, StatusNotice}, template:
+            '<ActionButton>Retry</ActionButton><StatusNotice inline transient>Notice</StatusNotice>'});
+        const wrapper = mount(view, {global: {
+            plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context},
+        }});
+        const standalone = mount(ActionButton);
+        cleanups.push(() => { wrapper.unmount(); standalone.unmount(); context.start()(); });
+        expect(wrapper.findAll('button')).toHaveLength(2);
+        expect(wrapper.findAll('button').every(button => button.attributes('disabled') !== undefined)).toBe(true);
+        expect(standalone.attributes('disabled')).toBeUndefined();
+        context.hydrated.value = true;
+        await flushPromises();
+        expect(wrapper.findAll('button').every(button => button.attributes('disabled') === undefined)).toBe(true);
+    });
+
+    it('renders interactive account entry as a skeleton and keeps mobile navigation usable before initialization', async () => {
+        const result = await render('/frontend-pilot/users/login', {session});
+        const host = document.createElement('div');
+        host.innerHTML = result.html;
+        expect(host.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(host.querySelector('main form, main input, main button')).toBeNull();
+        expect(host.querySelector('#pilot-navbar-main')?.classList.contains('show')).toBe(true);
+        expect(host.querySelector('.navbar-toggler')).toBeNull();
+        expect(host.querySelector<HTMLSelectElement>('#pilot-locale')?.disabled).toBe(true);
+        expect(host.querySelector('details a[href="/survey/create"]')).not.toBeNull();
+        expect(host.querySelector('details summary')?.hasAttribute('aria-expanded')).toBe(false);
+    }, 30_000);
+
+    it('hydrates a scoped readable completion at an initial fragment without changing it into a skeleton', async () => {
+        const url = '/frontend-pilot/guest/recovery';
+        const rendered = await render(url, {session, pageCompletion: {context: session.context,
+            destination: url, messageKey: 'auth.recoverySent', kind: 'success'}});
+        document.body.innerHTML = `<div id="surveyor-pilot">${rendered.html}</div>`;
+        window.history.replaceState({}, '', url + '#pilot-main');
+        const application = createPilotApp(JSON.parse(rendered.state), true);
+        await application.router.isReady();
+        const container = document.getElementById('surveyor-pilot')!;
+        expect(container.querySelector('[data-pilot-initial-loading]')).toBeNull();
+        const stop = await initializePilotApp(application, container);
+        cleanups.push(() => { application.app.unmount(); stop(); });
+        expect(container.querySelector('[data-pilot-initial-loading]')).toBeNull();
+        expect(container.querySelector('main')!.textContent).toContain('guest account(s) have been sent');
+        expect(application.router.currentRoute.value.hash).toBe('#pilot-main');
+    }, 30_000);
+
     it('accepts a region-specific translated status without duplicating an announcement', () => {
         const context = createPilotContext({session: {...session, locale: 'de'}}, false);
         const wrapper = mount(LoadingSkeleton, {props: {label: 'Inhalt wird geladen'}, global: {
@@ -117,6 +167,43 @@ describe('shared skeleton accessibility', () => {
 });
 
 describe('lazy route delivery', () => {
+    it.each(['setup', 'mounted'] as const)('rejects actual initial Vue %s failure before enabling controls or retiring protection', async phase => {
+        const url = '/frontend-pilot/users/login';
+        const rendered = await render(url, {session});
+        document.body.innerHTML = `<div id="surveyor-pilot">${rendered.html}</div>`;
+        window.history.replaceState({}, '', url);
+        const initialReloadGuard = vi.fn(() => false);
+        const application = createPilotApp(JSON.parse(rendered.state), true, initialReloadGuard);
+        const previousHandler = vi.fn();
+        application.app.config.errorHandler = previousHandler;
+        await application.router.isReady();
+        const failure = new Error('Controlled initial lifecycle failure');
+        const brokenFeature = defineComponent({
+            setup() {
+                if (phase === 'setup') throw failure;
+                onMounted(function failInitialMount(): never { throw failure; });
+                return () => h('input', {name: 'retained-partial-draft', value: 'Partial owner value'});
+            },
+        });
+        // Substitute only the delivered component, then use the production startup
+        // orchestration and real Vue lifecycle/error boundary. No readiness marker
+        // or application/core owner is mocked to manufacture this rejection.
+        application.router.currentRoute.value.matched[0]!.components!.default = brokenFeature;
+        const container = document.getElementById('surveyor-pilot')!;
+        cleanups.push(() => { application.app.unmount(); application.context.start()(); });
+        await expect(initializePilotApp(application, container)).rejects.toBe(failure);
+        expect(application.context.hydrated.value).toBe(false);
+        expect(application.app.config.errorHandler).toBe(previousHandler);
+        expect(previousHandler).not.toHaveBeenCalled();
+        expect(container.getAttribute('data-pilot-hydrated')).toBeNull();
+        expect(container.querySelector<HTMLSelectElement>('#pilot-locale')!.disabled).toBe(true);
+        expect(application.context.updates.requestRecoveryReload()).toBe(false);
+        expect(initialReloadGuard).toHaveBeenCalled();
+        if (phase === 'mounted') {
+            expect(container.querySelector<HTMLInputElement>('[name="retained-partial-draft"]')!.value).toBe('Partial owner value');
+        }
+    }, 30_000);
+
     it('retains mounted input, selection and focus while showing progress until delivery commits', async () => {
         const {wrapper, router} = await mountedApp();
         const pending = deferred<Component>();

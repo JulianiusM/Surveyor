@@ -2,7 +2,6 @@ import type {Request, Response} from 'express';
 import type {SessionData} from 'express-session';
 import {randomUUID} from 'node:crypto';
 import nodemailer from 'nodemailer';
-import flashMiddleware from 'express-flash';
 import type {Transporter} from 'nodemailer';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import * as userController from '../../src/controller/userController';
@@ -16,14 +15,11 @@ import email from "../../src/modules/email";
 import * as emailOwner from '../../src/modules/email';
 import {createSessionStore, persistSession, readStoredSession} from '../../src/modules/lib/session';
 import {ensureFrontendSessionContext} from '../../src/modules/lib/frontendSession';
-import {prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, sessionView, stagedSessionView} from '../../src/modules/api/session';
-import {prepareValidatedJson} from '../../src/modules/api/transport';
-import {prepareFrontendPilot, sendPreparedFrontendPilot} from '../../src/modules/frontendPilotRenderer';
+import {prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, sessionView} from '../../src/modules/api/session';
+import {prepareValidatedJson, sendPreparedJson} from '../../src/modules/api/transport';
 import type {PreparedApiJsonResponse} from '../../src/types/ApiTransportTypes';
 import type {AccountRegistrationTransactionOptions, GuestRegistrationTransactionOptions, IdentityCompletionOptions} from '../../src/types/IdentityTypes';
 import type {components} from '../../src/types/api/v1';
-import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
-import type {EntityManager} from 'typeorm';
 import {persistIntegrationProfile, registerLocalAccount,} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
@@ -156,29 +152,19 @@ async function ordinaryLogoutFixture(kind: Exclude<OrdinaryIdentityKind, 'profil
     return {req, options};
 }
 
-/** Capture only the response transport seam; the actual SSR renderer still prepares every byte. */
-function documentResponse() {
+/** Capture only HTTP delivery; the production generated API preparer owns validation and serialization. */
+function preparedResponse() {
     const headers = new Map<string, string>();
     let body: string | null = null;
+    let statusCode: number | null = null;
     const res = {
         set: function setHeader(name: string, value: string) { headers.set(name, value); return res; },
         type: function setType(value: string) { headers.set('Content-Type', value); return res; },
+        status: function setStatus(value: number) { statusCode = value; return res; },
+        vary: function varyHeader(_name: string) { return res; },
         send: function sendBody(value: string) { body = value; return res; },
     } as unknown as Response;
-    return {res, headers, get body() { return body; }};
-}
-
-/** Prepare the submitted reset URL's real completion tree using only manager-bound admitted evidence. */
-async function resetDocument(req: Request, staged: Request['session'], manager: EntityManager,
-    token: string, response: Response, invalid = false) {
-    const url = `/frontend-pilot/users/reset-password/${token}`;
-    const session = await stagedSessionView(req, staged, manager);
-    const state: FrontendPilotBootstrap = {session, initialUrl: url,
-        pageCompletion: {context: session.context, destination: url, messageKey: 'auth.resetDone', kind: 'success'}};
-    // Exercise the real JSON serializer rather than browser-only validation. An
-    // enumerable self-reference survives the SSR entry's bootstrap spread.
-    if (invalid) Object.defineProperty(state, 'serializationCycle', {value: state, enumerable: true});
-    return prepareFrontendPilot(response, url, state);
+    return {res, headers, get body() { return body; }, get statusCode() { return statusCode; }};
 }
 
 describe('atomic versioned guest registration', () => {
@@ -601,27 +587,18 @@ describe('atomic ordinary pilot logout completion', () => {
         expect(JSON.parse(committed.result.json).session.context).toBe(reply.session.context);
     });
 
-    it.each(['generated response', 'document notice'] as const)('rolls back ordinary logout when its %s cannot prepare', async mode => {
+    it('rolls back ordinary logout when its generated response cannot prepare', async () => {
         const {req, options} = await ordinaryLogoutFixture('account');
         const original = req.session;
         const originalJson = JSON.stringify(original);
-        flashMiddleware()(req, {} as Response, function installNoticeOwner() {});
         function rejectCompletion(staged: Request['session']) {
-            if (mode === 'generated response') staged.frontendCsrfToken = '';
-            else {
-                // Keep the actual connect-flash owner. Its first detached queue
-                // read rejects this notice before any stored authority changes.
-                Object.defineProperty(staged, 'flash', {enumerable: true,
-                    get: function rejectNoticeQueue(): never { throw new TypeError('Document notice fixture rejected'); }});
-                req.flash.call({session: staged} as Request, 'frontend-pilot-notice',
-                    JSON.stringify({kind: 'success', messageKey: 'auth.logoutDone'}));
-            }
+            // The retained API requires a complete anonymous projection before
+            // the stored actor changes; the retired document adapter is not exercised.
+            staged.frontendCsrfToken = '';
             return prepareIdentityReply(req, staged, 'logoutIdentity');
         }
         options.prepareResult = rejectCompletion;
-        const completion = userController.logoutUserWithSession(req, options);
-        if (mode === 'generated response') await expect(completion).rejects.toMatchObject({code: 'INTERNAL_ERROR'});
-        else await expect(completion).rejects.toBeInstanceOf(TypeError);
+        await expect(userController.logoutUserWithSession(req, options)).rejects.toMatchObject({code: 'INTERNAL_ERROR'});
 
         expect(req.session).toBe(original);
         expect(JSON.stringify(req.session)).toBe(originalJson);
@@ -632,26 +609,6 @@ describe('atomic ordinary pilot logout completion', () => {
         expect(stored?.frontendCsrfToken).toBe(original.frontendCsrfToken);
         expect(stored?.frontendAuthReturn).toBe(original.frontendAuthReturn);
         expect(JSON.stringify(stored)).not.toContain('auth.logoutDone');
-    });
-
-    it('commits the ordinary logout document notice and prepared 303 with its anonymous authority', async () => {
-        const {req} = await ordinaryLogoutFixture('guest');
-        flashMiddleware()(req, {} as Response, function installNoticeOwner() {});
-        const destination = '/frontend-pilot?locale=en';
-        function prepareDocument(staged: Request['session']) {
-            req.flash.call({session: staged} as Request, 'frontend-pilot-notice',
-                JSON.stringify({kind: 'success', messageKey: 'auth.logoutDone'}));
-            return Object.freeze({status: 303 as const, destination});
-        }
-        const committed = await userController.logoutUserWithSession(req,
-            {context: req.apiActor!.context, prepareResult: prepareDocument});
-        expect(committed.result).toEqual({status: 303, destination});
-        expect(req.session.auth?.guest).toBeTruthy();
-        const stored = await readStoredSession(req.sessionStore, req.sessionID);
-        expect(stored?.auth).toBeUndefined();
-        expect(stored?.profile).toBeUndefined();
-        expect(stored?.frontendContext).toBe(committed.session.frontendContext);
-        expect(JSON.stringify(stored)).toContain('auth.logoutDone');
     });
 
     it('rejects stale ordinary logout before mutating request authority or a later stored guest', async () => {
@@ -727,21 +684,28 @@ describe('atomic pilot password-reset consumption', () => {
         expect(second.session.auth).toBeUndefined();
     });
 
-    it('rolls back password and token consumption when the actual SSR completion cannot serialize its bootstrap', async () => {
-        const account = await registerLocalAccount('render-failed-reset');
+    it('rolls back password and token consumption when the actual API completion cannot serialize', async () => {
+        const account = await registerLocalAccount('serialization-failed-reset');
         const token = await userService.generatePasswordResetToken(account.username);
         const req = await atomicGuestRequest();
         const originalJson = JSON.stringify(req.session);
-        const response = documentResponse();
-        function prepareInvalidDocument(staged: Request['session'], manager: EntityManager) {
-            return resetDocument(req, staged, manager, token, response.res, true);
+        const response = preparedResponse();
+        function prepareInvalidReply(staged: Request['session']) {
+            const result: components['schemas']['MutationResult'] = {changed: true};
+            // The real generated validator admits the ordinary wire fields. A
+            // non-enumerable serializer fault then proves output preparation still
+            // precedes password/token commit without mocking persistence or locks.
+            Object.defineProperty(result, 'toJSON', {value: function rejectSerialization(): never {
+                throw new TypeError('Reset completion serialization failed');
+            }});
+            return prepareValidatedJson(req, 'resetAccountPassword', 200, result, staged.frontendContext);
         }
         // Capture only the error so an unexpected fulfilled receipt cannot print
-        // its private bootstrap or capability URL in the assertion output.
+        // its private capability URL in the assertion output.
         let preparationFailure: unknown;
         try {
             await userController.resetPasswordWithSession(token, {password: 'uncommitted-secret', confirmPassword: 'uncommitted-secret'}, req,
-                {context: req.apiActor!.context, persistCompletion: true, prepareResult: prepareInvalidDocument});
+                {context: req.apiActor!.context, prepareResult: prepareInvalidReply});
         } catch (failure) { preparationFailure = failure; }
         expect(preparationFailure).toBeInstanceOf(TypeError);
         expect(await userService.verifyPassword(account.id, 'initial-secret')).toBe(true);
@@ -750,24 +714,22 @@ describe('atomic pilot password-reset consumption', () => {
         expect(response.body).toBeNull();
     });
 
-    it('prepares the full submitted-URL success document without unchanged session writes or later actor resaves', async () => {
-        const account = await registerLocalAccount('prepared-reset-document');
+    it('prepares the API success receipt without unchanged session writes or later actor resaves', async () => {
+        const account = await registerLocalAccount('prepared-reset-reply');
         const token = await userService.generatePasswordResetToken(account.username);
         const req = await atomicGuestRequest();
         const original = req.session;
         const before = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
-        const response = documentResponse();
-        function prepareDocument(staged: Request['session'], manager: EntityManager) {
-            return resetDocument(req, staged, manager, token, response.res);
+        const response = preparedResponse();
+        function prepareReply(staged: Request['session']) {
+            return prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true}, staged.frontendContext);
         }
         const committed = await userController.resetPasswordWithSession(token,
             {password: 'confirmed-reset-secret', confirmPassword: 'confirmed-reset-secret'}, req,
-            {context: req.apiActor!.context, persistCompletion: true, prepareResult: prepareDocument});
-        expect(committed.result.html).toContain('Your password has been successfully reset');
-        expect(committed.result.html).not.toContain('type="password"');
+            {context: req.apiActor!.context, prepareResult: prepareReply});
+        expect(JSON.parse(committed.result.json)).toEqual({changed: true});
+        expect(committed.result.context).toBe(req.apiActor!.context);
         expect(response.body).toBeNull();
-        expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-        expect(response.headers.get('Content-Language')).toBe('en');
         expect(await userService.verifyPassword(account.id, 'confirmed-reset-secret')).toBe(true);
         expect(await userService.verifyPasswordResetToken(token)).toBeNull();
         const after = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
@@ -778,8 +740,12 @@ describe('atomic pilot password-reset consumption', () => {
         await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(later)});
         req.session = committed.session;
         await persistSession(req.session);
-        sendPreparedFrontendPilot(response.res, committed.result);
-        expect(response.body).toBe(committed.result.html);
+        sendPreparedJson(req, response.res, committed.result);
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toBe(committed.result.json);
+        expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+        expect(response.headers.get('Content-Language')).toBe('en');
+        expect(response.headers.get('X-Surveyor-Context')).toBe(committed.result.context);
         expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe('later-reset-actor');
     });
 
@@ -876,7 +842,7 @@ describe('authentication user stories', () => {
         const {id, username} = await registerLocalAccount('frontend-failed-identity-save');
         await userService.activateUser(id);
         const req = await atomicGuestRequest();
-        /** Model the document's admitted notice and fail the actual store JSON writer. */
+        /** Model pending session feedback and fail the actual store JSON writer. */
         async function prepareFailingSave(): Promise<void> {
             Object.defineProperty(req.session, 'flash', {value: {
                 'frontend-pilot-notice': [JSON.stringify({kind: 'success', messageKey: 'auth.loginDone'})],
@@ -886,8 +852,8 @@ describe('authentication user stories', () => {
         await expect(userController.loginUser({username, password: 'initial-secret'}, req.session,
             {beforeTransition: prepareFailingSave})).rejects.toBeInstanceOf(TypeError);
 
-        // The document rejection path clears its admitted actor, then bootstrap
-        // invokes this exact fresh-store owner before consuming any flash data.
+        // Fresh admission reloads stored authority before consuming feedback.
+        // A failed earlier save must not turn in-memory identity into evidence.
         req.apiActor = undefined;
         const reloaded = await sessionView(req);
         expect(reloaded.kind).toBe('anonymous');

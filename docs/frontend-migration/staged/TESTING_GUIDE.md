@@ -6,7 +6,7 @@ owner: application maintainers
 status: migration-pending
 last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit strict E2E/client/source-integration classification and component-value/commit-finality boundaries reconciled with current owners; executed results remain in paired review
+verification-scope: strict E2E/client/source-integration classification retained; refined Req6A skeleton/static startup, failure notice and API completion assertions reconciled; executed results remain in paired review
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tsconfig.test.json; tsconfig.server.json; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tests/support/database.ts; tests/support/env.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; .github/workflows/ci.yml; docs/TESTING_GUIDE.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/TESTING_GUIDE.md
@@ -178,14 +178,30 @@ replacement cross separate boundaries. Exercise them when affected; ordinary fea
 rehearsal repeated. Keep current-release/chunk recovery and mounted drafts under D5.
 
 SSR checks prove request-local identity/locale, escaped bootstrap, same-tree hydration and absence of private leaks.
-Read-only Help retains no-JavaScript GET/search. Interactive routes have the approved message/read-only contract.
+Under the [refined initial-delivery amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-interactive-startup-delivery-clarification-2026-10-13),
+interactive initial pages show the shared skeleton; successful initialization reveals the existing controls. Readable
+denials/completions and Help retain static output, native GET search, links and anchors. Verify JavaScript-dependent
+shell selectors/actions/Retry/dismiss are unavailable before initialization while native links/mobile disclosures work.
+The localized JavaScript-required notice must remain independent of the module it diagnoses: disabled JavaScript,
+missing/blocked entry delivery and failed initialization cannot leave normal-looking dead controls or navigation.
+Exercise actual initial Vue setup/mounted and first-readiness failure, including a partially attached application: initialization stays
+unconfirmed, the notice remains visible, genuine native links/Help GET search still work and edited-control recovery
+keeps its consent. Do not broaden those initial checks into a redesign of later component-error handling.
+Retained SSR artifacts and same-tree hydration still need their ordinary production build and browser boundaries.
 
-Startup checks cover the interval before mounted guards exist: hold or reject actual route loading, edit SSR controls
-and verify they survive failure and cancelled recovery. Automatic reload needs clean-state evidence and a working
+Startup checks cover the interval before mounted guards exist: hold or reject actual route loading, edit a genuinely
+static control such as Help search and verify it survives failure and cancelled recovery. Earlier edited login/create
+SSR cases describe the superseded interactive markup and cannot certify this contract. Automatic reload needs
+clean-state evidence and a working
 loop marker; unavailable storage must expose localized deliberate recovery. Explicit recovery may bypass an automatic
 attempt marker but still requires edited-control consent and preserves pending/unknown command guards. Verify the
 initial guard is released only after mount restoration; a helper test without the actual entry consumer is insufficient.
 Neither browser storage nor recovery may persist secrets/files or replay commands.
+
+Retired interactive pilot POST adapters need built-application checks that they cannot create identities or perform
+commands. Existing APIs, capability/admission GETs and native routes retain their respective behavior. Test current
+API completion through the real generated validator/serializer and captured delivery rather than preserving an unused
+document callback solely for a test. Retain unique earlier document results as historical receipts in the paired review.
 
 Mounted header checks distinguish confirmation from rejection/unknown delivery and background refresh. Confirmed
 upload releases the feature-owned file and clears the same native input, including saved-plus-failed-refresh; the

@@ -4,8 +4,8 @@ import type {MessageKey} from './LocalizationTypes';
 /** Native packing admission has its own HTTP outcomes, independently of API problem statuses. */
 export type PackingPageError = 'packing.notFound' | 'packing.eventRegistrationRequired' | 'common.notAllowed';
 
-/** A confirmed message result belongs to one actor and canonical destination. The same
- * declaration seeds native POST rendering and scopes in-memory SPA completion receipts. */
+/** A confirmed message result belongs to one actor and canonical destination;
+ * it scopes the in-memory SPA completion receipt independently of later admission. */
 export interface FrontendPageCompletion {
     context: string;
     destination: string;
@@ -32,16 +32,13 @@ export interface FrontendPilotBootstrap {
     pageEntry?: components['schemas']['PageEntryOutcome'];
     /** One-time native redirect feedback, rendered before and after hydration. */
     pageNotice?: components['schemas']['EntryNotice'];
-    /** Initial confirmed POST presentation is consumed once by the shared context owner. */
+    /** An explicitly supplied completion is consumed once by the shared context owner. */
     pageCompletion?: FrontendPageCompletion;
     help?: components['schemas']['HelpPageData'];
     /** Initial reset-link admission shares its successful or denied API contract with Vue navigation. */
     passwordReset?: components['schemas']['PasswordResetCheck'] | components['schemas']['Problem'];
     /** Local-account setting denials on initial identity pages use the same localized API errors. */
     identityProblem?: components['schemas']['Problem'];
-    /** Native and hydrated forms share safe redisplay values; passwords are never serialized. */
-    identityFields?: Partial<Pick<components['schemas']['RegistrationInput'], 'username' | 'displayname' | 'email'>>;
-    identityFormProblem?: components['schemas']['Problem'];
     identityFeedback?: MessageKey;
     guestEntry?: components['schemas']['GuestEntry'];
     packingError?: PackingPageError;
@@ -61,7 +58,7 @@ export interface FrontendPilotRenderResult {
     title: string;
     /** Escaped for the contents of an application/json script element. */
     state: string;
-    /** The renderer supplies an explicit fallback outside the tree that Vue hydrates. */
+    /** Shared route/admission classification identifies content awaiting client initialization. */
     javascriptRequired: boolean;
 }
 

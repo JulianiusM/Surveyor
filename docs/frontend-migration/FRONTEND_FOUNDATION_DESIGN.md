@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original design and prior dated amendments retained; subsequent explicit test-layer, value-lifetime, permission-watcher and final-commit requirements recorded; actual execution and its limits owned by paired review
+verification-scope: original design and dated amendments retained; refined Req6A interactive skeleton/static delivery and failure boundaries recorded without changing SSR technology; actual adoption and execution owned by paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -33,7 +33,7 @@ passing tests or an implementation spike cannot authorize a technology substitut
 | i18next with i18next-vue | Retained. The original thin provide/inject alternative was conditional on the selected binding failing its proof; D1 restores the primary binding after an unapproved substitution. |
 | Authored OpenAPI 3.1; generated declarations and Ajv standalone validators | Retained. One root package/lockfile; no handwritten copies of wire shapes, second validation language or runtime schema compilation. |
 | Reusable Bootstrap-compatible controls with suitable Reka primitives | Retained. Dialogs/tabs use Reka; mixed native navigation disclosures have a documented fit assessment in the framework record. |
-| Same-component scoped SSR/hydration for established fallbacks | Retained as the rendering architecture. The Oct8 amendment supersedes mandatory interactive no-JavaScript operation; Help remains readable/searchable without JavaScript. |
+| Same-component scoped SSR/hydration for established fallbacks | SSR/hydration remains the rendering architecture. Oct8 supersedes mandatory interactive no-JavaScript operation; the refined Req6A amendment below replaces initial interactive controls with shared skeletons while preserving genuinely functional static content. |
 | Monotonic Packing revision and retained old fingerprinted assets | Revisions detected changes away and back; retained assets let loaded clients fetch earlier release chunks. D2 and D5 below explicitly supersede those choices and retain their bounded tradeoffs. |
 | Existing controller/business owners and pure DBAL | Retained and strengthened by the current shared-backend correction. Transport adapters must not become separate policy owners. |
 | Enable a complete interface catalog without requiring a translated Help corpus | The earlier pilot required complete localized Help instead. The direct Oct12 decision restores English fallback for missing localized content and requires visible disclosure; complete localized Help remains the preferred outcome. |
@@ -69,6 +69,9 @@ guarantees. D5 cannot promise every old browser can submit indefinitely after re
   retaining server cooldowns, visibility and observer disposal rather than the earlier generic two-minute delay.
 
 ### Authorized progressive delivery amendment (2026-10-08)
+
+This original delivery choice remains recorded. The refined Req6A amendment below replaces its initial interactive
+shell with a skeleton until initialization; independently scoped reads and mounted background behavior remain.
 
 Overview SSR waits for session bootstrap and renders the interactive shell. Independent active regions read in
 parallel and render as ready; a slow region cannot withhold a ready sibling. Closed hidden regions start on opening.
@@ -252,8 +255,9 @@ Account signup prepares User/profile/token and validated mail/transport results 
 API caller's identity or returning its activation token. Activation prepares its API receipt or document redirect/flash
 before consuming the token. SMTP runs after registration commits and selects an already prepared outcome; acceptance
 does not promise inbox delivery. The existing native registration/activation compatibility paths remain unchanged.
-The pilot signup-document adapter has not adopted the account transaction. The later JavaScript-only instruction
-supersedes the proposed neutral wording, but its conflict with the original rendering design requires explicit resolution.
+The refined Req6A decision supersedes the proposed neutral signup-document wording by authorizing retirement of the
+unused interactive pilot POST adapters. The API account transaction remains; current adoption and verification of
+that adapter retirement belong to the paired review.
 The earlier pilot's ordinary identity guard checked stored context before a separate
 save; the explicit finality requirement replaces that boundary for login, private guest-link login and profile switching.
 `loginUserWithSession`, `loginGuestWithSession` and `changeActiveProfileWithSession` prepare validated replies or existing
@@ -300,6 +304,28 @@ mixed activation acknowledgement into separate general-defect backlog entries. T
 the migration. The centralized [development policy](../policies/DEVELOPMENT_POLICY.md#authorization-and-task-boundaries)
 owns the explicit migration limit: preserve native visual/behavioral parity and defer general defects, large changes
 and backend behavior changes to separately authorized work. Earlier bounded approvals retain their recorded scope.
+
+### Authorized interactive startup delivery clarification (2026-10-13)
+
+The maintainer explicitly refines and resolves Req6A: interactive initial content uses loading skeletons, genuinely
+noninteractive content may remain static, and failed JavaScript loading or initialization must show a clear localized
+JavaScript-required notice. No normal-looking dead controls or navigation may remain available after that failure.
+
+Vue SSR and same-tree hydration remain. The existing context classifies initial content through route metadata and
+admission/completion state; interactive content stays in the shared skeleton until client initialization completes.
+Read-only Help retains working native GET search, article links and anchors. Static messages, native links and
+disclosures remain usable, while JavaScript-dependent selectors, actions, Retry and dismissal controls wait for
+initialization. Failure presentation exists independently of the client entry module. SSR outputs/dependencies,
+request-local state, authorization and the shared/native backend remain unchanged by this delivery decision.
+
+The approved retirement covers the eight unused interactive pilot POST fallback adapters; initialized consumers
+already use the existing APIs. Identity/capability/provider admission GETs and native adapters remain. This replaces
+the earlier complete interactive-SSR document shape, without rolling back its accepted backend operations.
+Existing reload/consent, unknown-command and draft owners continue protecting genuine static early input and mounted
+work; warm navigation and background refresh do not discard initialized views or drafts.
+
+This is the single delivery amendment; the paired review owns actual source adoption and executed acceptance.
+Earlier interactive-SSR document/startup receipts retain their historical scope and do not certify the new shape.
 
 ## Architecture and logical ownership
 

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, ref, shallowRef} from 'vue';
-import {RouterLink, RouterView, useRouter} from 'vue-router';
+import {computed, onBeforeUnmount, onMounted, ref, shallowRef} from 'vue';
+import {RouterLink, RouterView, useRoute, useRouter} from 'vue-router';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
-import {usePilot} from './context';
+import {requiresClientInitialization, usePilot} from './context';
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import StatusNotice from '../components/StatusNotice.vue';
@@ -21,6 +21,11 @@ const sessionRetryAvailable = useReadRetry(() => context.sessionRead.value.error
 const sessionRetryAt = useReadRetryAt(() => context.sessionRead.value.error, sessionRetryAvailable);
 const localeError = ref(false);
 const router = useRouter();
+const route = useRoute();
+// SSR and the first browser render contain the identical skeleton. Feature owners
+// mount only after initialization; later lazy navigation preserves mounted drafts.
+const interactiveContent = computed(() => requiresClientInitialization(route, context.initialDocumentFor(route.fullPath)));
+const initialLoading = computed(() => !context.hydrated.value && !context.initialContentReady.value && interactiveContent.value);
 // Header commands and routed editors share one whole-page departure decision.
 // Their fields stay with their own component; this shell contributes no draft.
 useDraftProtection({dirty: noShellDraft, unknownMessage: 'draft.leaveUnknown'});
@@ -44,7 +49,33 @@ onBeforeUnmount(() => {
     removeNavigationStart();
     removeNavigationFinish();
     removeNavigationError();
+    document.removeEventListener('click', keepInitialNativeNavigation, true);
+    document.removeEventListener('submit', keepInitialNativeSubmission, true);
 });
+onMounted(() => {
+    // A partially initialized tree can already have Vue handlers attached. Capture
+    // first so readable Help/anchors keep their real browser behavior until success.
+    document.addEventListener('click', keepInitialNativeNavigation, true);
+    document.addEventListener('submit', keepInitialNativeSubmission, true);
+});
+
+/** Preserve ordinary href navigation before initialization and after startup
+ * failure. Do not prevent browser defaults or bypass its existing leave guards. */
+function keepInitialNativeNavigation(event: MouseEvent): void {
+    if (context.hydrated.value || !(event.target instanceof Element) || !event.target.closest('a[href]')) return;
+    event.stopImmediatePropagation();
+}
+
+/** Only explicitly declared HTML GET forms are usable without initialized JS.
+ * Client-only forms have no native submit contract; their omitted method must
+ * never turn partially mounted credentials into a browser-default GET request. */
+function keepInitialNativeSubmission(event: Event): void {
+    if (context.hydrated.value || !(event.target instanceof HTMLFormElement)) return;
+    // Stop Vue's prevent/submit handler while retaining real Help GET behavior.
+    // Every other submission waits for the same successful readiness boundary.
+    event.stopImmediatePropagation();
+    if (event.target.getAttribute('method')?.toLowerCase() !== 'get') event.preventDefault();
+}
 
 function beginNavigation(to: RouteLocationNormalized, from: RouteLocationNormalized): void {
     // Query/fragment updates have their own already mounted resource owners.
@@ -99,7 +130,8 @@ function dismissPersonalLink(): void {
 <template>
     <div class="pilot-app d-flex flex-column min-vh-100 bg-secondary">
         <AppHeader @locale-error="localeError = true" @locale-recovered="localeError = false" />
-        <main id="pilot-main" class="container-fluid flex-grow-1 py-3" tabindex="-1">
+        <main id="pilot-main" class="container-fluid flex-grow-1 py-3" tabindex="-1"
+            :data-pilot-interactive="interactiveContent ? '' : undefined">
             <!-- Initial native flashes precede the sticky inline-alert destination.
                  Keep both in the existing shell owner with their distinct spacing. -->
             <div class="pilot-page-notices">
@@ -141,7 +173,8 @@ function dismissPersonalLink(): void {
             <!-- Delivery progress supplements the current route. Replacing RouterView here
                  would discard mounted edits and turn navigation latency into input loss. -->
             <LoadingSkeleton v-if="ready && pendingNavigation" class="pilot-navigation-loading mb-3" :rows="1" />
-            <RouterView v-if="ready" :key="epoch" />
+            <LoadingSkeleton v-if="ready && initialLoading" data-pilot-initial-loading variant="form" />
+            <RouterView v-else-if="ready" :key="epoch" />
             <section v-else class="card bg-dark text-white p-4">
                 <p>{{ messages.t('state.sessionChanged') }}</p>
                 <RouterLink class="btn btn-primary align-self-start" to="/frontend-pilot/users/login">

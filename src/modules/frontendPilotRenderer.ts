@@ -18,13 +18,65 @@ function escapeHtml(value: string): string {
     return value.replace(/[&<>"']/g, function replaceCharacter(character) {return entities[character]!;});
 }
 
-/** Keep unsupported interactive pages explicit, without changing Vue's hydration input. */
-function javascriptFallback(locale: string): string {
+/** Keep JavaScript failure visible independently of the module that initializes
+ * Vue. The safe default also survives disabled scripts or a blocked inline monitor;
+ * ordinary Help content/navigation remains available beside this notice. */
+function javascriptInitializationNotice(locale: string): string {
     const messages = createTranslator(locale);
     const helpUrl = `/frontend-pilot/help?locale=${encodeURIComponent(locale)}`;
-    return `<noscript><style>#surveyor-pilot{display:none!important}</style>
-<main class="container py-4"><div class="alert alert-warning" role="alert">${escapeHtml(messages.t('state.javascriptRequired'))}</div>
-<a class="btn btn-outline-light" href="${helpUrl}">${escapeHtml(messages.t('app.help'))}</a></main></noscript>`;
+    // A definite failure hides the initial skeleton or partially mounted
+    // interactive content. Static Help, GET search and real links stay available.
+    return `<style>#surveyor-pilot-javascript-required:not([hidden]) ~ #surveyor-pilot #pilot-main[data-pilot-interactive] > :not(.pilot-page-notices){display:none!important}</style>
+<section id="surveyor-pilot-javascript-required" class="container-fluid py-3">
+<div class="alert alert-warning" role="alert"><p>${escapeHtml(messages.t('state.javascriptRequired'))}</p>
+<p data-pilot-startup-failure hidden>${escapeHtml(messages.t('state.startupFailed'))}</p>
+<a class="btn btn-outline-light" href="${helpUrl}">${escapeHtml(messages.t('app.help'))}</a></div></section>`;
+}
+
+/** This deliberately independent classic script has no imports, authority, form
+ * reads, storage or reload behavior. It observes the entry owner's success/failure
+ * marker and bounded module delivery; recovery consent remains with that owner. */
+function javascriptInitializationMonitor(): string {
+    // Execute beside the rendered notice before loading the module entry. Hide the
+    // safe default only once this monitor has actually begun observing startup.
+    return `<script>(function monitorPilotStartup() {
+    var container = document.getElementById('surveyor-pilot');
+    var notice = document.getElementById('surveyor-pilot-javascript-required');
+    if (!container || !notice) return;
+    var timeout;
+    var observer = new MutationObserver(observeInitialization);
+
+    function showInitializationFailure() {
+        if (container.getAttribute('data-pilot-hydrated') === 'true') return;
+        notice.hidden = false;
+        notice.querySelector('[data-pilot-startup-failure]').hidden = false;
+    }
+
+    function observeInitialization() {
+        if (container.getAttribute('data-pilot-hydrated') === 'true') {
+            clearTimeout(timeout);
+            notice.hidden = true;
+            observer.disconnect();
+            window.removeEventListener('error', failedEntryModule, true);
+        } else if (container.getAttribute('data-pilot-startup-failed') === 'true') {
+            clearTimeout(timeout);
+            showInitializationFailure();
+        }
+    }
+
+    function failedEntryModule(event) {
+        if (event.target instanceof HTMLScriptElement && event.target.hasAttribute('data-pilot-entry')) {
+            clearTimeout(timeout);
+            showInitializationFailure();
+        }
+    }
+
+    notice.hidden = true;
+    observer.observe(container, {attributes: true, attributeFilter: ['data-pilot-hydrated', 'data-pilot-startup-failed']});
+    window.addEventListener('error', failedEntryModule, true);
+    timeout = window.setTimeout(showInitializationFailure, 15000);
+    observeInitialization();
+}());</script>`;
 }
 
 /** Resolve only build-authored manifest paths, without importing Vite into production startup. */
@@ -54,9 +106,9 @@ function clientAssets(): {script: string; styles: string[]} {
 }
 
 /**
- * Prepare the complete existing SSR document before a commit-sensitive operation
- * becomes final. Keep asset selection, headers, shell assembly and development
- * transforms in this same owner; no response body is sent during preparation.
+ * Prepare one coherent SSR/static/skeleton document without sending a response.
+ * Shared controllers own preceding admission/business operations; this renderer
+ * owns asset selection, headers, shell assembly and development transforms.
  */
 export async function prepareFrontendPilot(res: Response, url: string, bootstrap: FrontendPilotBootstrap): Promise<FrontendPreparedDocument> {
     const development = frontendDevelopmentServer();
@@ -79,9 +131,10 @@ export async function prepareFrontendPilot(res: Response, url: string, bootstrap
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <link rel="stylesheet" href="/style/style.css"><link rel="stylesheet" href="/style/help.css">`;
-    const fallback = rendered.javascriptRequired ? javascriptFallback(locale) : '';
-    const body = `${fallback}<div id="surveyor-pilot">${rendered.html}</div>
-<script id="surveyor-pilot-state" type="application/json">${rendered.state}</script>`;
+    // All shells contain JS-only enhancements, including otherwise static Help.
+    // Keep the notice outside Vue's hydration tree and its default safe without JS.
+    const body = `${javascriptInitializationNotice(locale)}<div id="surveyor-pilot">${rendered.html}</div>
+<script id="surveyor-pilot-state" type="application/json">${rendered.state}</script>${javascriptInitializationMonitor()}`;
     // Express owns static assets, help content, and all rendered navigation. Vite must
     // see only its source assets: transforming the SSR tree would prefix /app onto
     // those independent URLs and make the native DOM disagree with client hydration.
@@ -91,7 +144,7 @@ export async function prepareFrontendPilot(res: Response, url: string, bootstrap
 <html lang="${locale}" dir="${direction}" data-bs-theme="dark">
 <head>${headMarker}${assets.styles.map(style => `<link rel="stylesheet" href="${style}">`).join('')}
 </head><body class="d-flex flex-column min-vh-100 bg-secondary">${bodyMarker}
-<script type="module" src="${assets.script}"></script></body></html>`;
+<script type="module" data-pilot-entry src="${assets.script}"></script></body></html>`;
     const transformed = development ? await development.transformIndexHtml(url, shell) : shell;
     // Replacement callbacks insert strings literally; user content containing $& or
     // other replacement tokens must not be interpreted as String.replace syntax.

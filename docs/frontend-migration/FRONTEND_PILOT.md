@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented pilot and approved shared-controller/permission/runtime-Help corrections retained; explicit whole-article same-language asset amendment reconciled; scoped execution and remaining limits owned by paired review
+verification-scope: pilot/shared-controller/permission/runtime-Help decisions retained; refined Req6A initial skeleton/static delivery, failure notice and retired interactive POST boundaries reconciled; execution owned by paired review
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -126,13 +126,14 @@ and `dist/` remain ignored. Exact scripts and dependency versions belong to exec
 
 ## Progressive loading (2026-10-08)
 
-Overview SSR waits for session bootstrap, then each active region loads independently in parallel. Hidden regions
-start on opening. Unknown membership never renders zero/count/empty assertions; a ready region need not wait for a
+Refined Req6A adds the initial interactive skeleton until client initialization; the following data-loading policy
+continues after that boundary. Overview waits for session bootstrap, then each active region loads independently in
+parallel. Hidden regions start on opening. Unknown membership never renders zero/count/empty assertions; a ready region need not wait for a
 slow sibling. Help retains complete server content.
 
 `LoadingSkeleton` supplies shared field/table/card/article/line shapes, a localized status, responsive geometry and
-reduced-motion behavior. Use it for missing pending data only. Background reads retain scoped confirmed content and
-drafts; validated denial clears protected content. Lazy navigation can show shared progress without discarding work.
+reduced-motion behavior. Use it for client initialization or missing pending data. Background reads retain scoped
+confirmed content and drafts; validated denial clears protected content. Lazy navigation can show shared progress without discarding work.
 
 ## Identity, refresh and edits
 
@@ -174,9 +175,15 @@ earlier individual-figure fallback; authored local references and asset requests
 The chosen interface locale remains selected and actual article language is explicit.
 Unsafe existing translated content still fails validation. The direct decision is retained in the foundation ledger.
 
-Read-only Help GET/search works without JavaScript and hydrates the same Vue components. Interactive Packing,
-Overview and identity/guest pages require JavaScript and show the shared localized message/help link when disabled.
-SSR does not promise an operative interactive fallback.
+Read-only Help GET/search, article links and anchors work without JavaScript and hydrate the same Vue components.
+Under the [refined Req6A delivery amendment](FRONTEND_FOUNDATION_DESIGN.md#authorized-interactive-startup-delivery-clarification-2026-10-13),
+initial interactive Packing, Overview and identity/guest content uses shared skeletons until client initialization.
+Genuinely functional static content/messages remain available; JavaScript-only shell controls wait for initialization.
+Disabled JavaScript or failed loading/initialization exposes an independent localized JavaScript-required notice,
+with no normal-looking dead controls or navigation. Existing mounted drafts and warm recovery behavior remain.
+The eight unused interactive pilot POST fallback adapters retire while API commands, native/shared backend operations
+and identity/capability/provider admission GETs remain. Actual adoption and current verification belong to the review;
+SSR technology/build/dependencies remain, with no operative interactive fallback promised.
 
 ## Verification and further migration
 

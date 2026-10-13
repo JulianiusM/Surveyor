@@ -148,7 +148,7 @@ describe('help and overview progressive content', () => {
         expect(wrapper.get('.help-content').text()).toContain('English article authority');
     });
 
-    it('keeps complete help readable in SSR and renders only missing overview regions as placeholders', async () => {
+    it('keeps complete Help readable in SSR and withholds interactive Overview controls until initialization', async () => {
         const request = vi.fn(() => { throw new Error('SSR must not call its own HTTP server'); });
         vi.stubGlobal('fetch', request);
         const help = await render('/frontend-pilot/help', {session, help: article()});
@@ -157,7 +157,10 @@ describe('help and overview progressive content', () => {
         expect(help.javascriptRequired).toBe(false);
 
         const overview = await render('/frontend-pilot', {session});
-        expect(overview.html.match(/data-loading-skeleton="cards"/gu)).toHaveLength(2);
+        expect(overview.html.match(/data-pilot-initial-loading/gu)).toHaveLength(1);
+        expect(overview.html).toContain('data-loading-skeleton="form"');
+        expect(overview.html).not.toContain('data-collection=');
+        expect(overview.html).not.toContain('Owner authority ready');
         expect(overview.html).not.toContain('badge bg-secondary ms-2">0');
         expect(overview.javascriptRequired).toBe(true);
         expect(request).not.toHaveBeenCalled();
