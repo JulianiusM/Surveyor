@@ -5,6 +5,8 @@
  */
 
 import type {EntityType} from './UtilTypes';
+import type {EntityManager} from 'typeorm';
+import type {ArchivePresentation, ArchiveTarget} from './ArchiveTypes';
 
 /** Explicit edit surface; omitted values are never made available to unauthorized forms. */
 export type EntityPropertyField = 'title' | 'description' | 'startDate' | 'endDate' | 'location'
@@ -34,6 +36,24 @@ export interface EntityPropertyPresentation {
 export interface BasicEntityPropertyPatch {
     title?: string;
     description?: string | null;
+}
+
+/** Locked mutation evidence describes the resulting root, never a later mutable page read. */
+export interface EntityMutationOutcome {
+    readonly root: ArchiveTarget;
+    readonly changed: boolean;
+}
+
+/** Feature adapters prepare their own receipt on the shared mutation's connection before commit. */
+export interface EntityMutationCompletion<Result> {
+    prepare(manager: EntityManager, outcome: EntityMutationOutcome): Result | Promise<Result>;
+}
+
+/** Native reassociation retains its existing postcommit archive presentation and navigation choice. */
+export interface EntityEventChangeResult {
+    archive: ArchivePresentation | undefined;
+    redirectUrl: string | undefined;
+    changed: boolean;
 }
 
 export interface EntityCommand {

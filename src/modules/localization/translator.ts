@@ -23,10 +23,16 @@ export function helpSourceDirectory(requestedLocale?: string | null): string {
     return manifest.helpSources[resolveLocale(requestedLocale)];
 }
 
-/** Keep script subtags intact; an unsupported script must not silently select a different script's catalog. */
-function findSupportedLocale(value?: string | null): Locale | undefined {
+/**
+ * Resolve a supported catalog, including its regional hints, without an English
+ * default. Strict source callers distinguish unsupported input from actual English;
+ * request negotiation adds its existing fallback separately. Script subtags stay intact.
+ */
+export function resolveSupportedLocale(value?: string | null): Locale | undefined {
     try {
         if (typeof value === 'string' && value) {
+            // Match an exact regional catalog first, then its supported script or
+            // language. All candidates use the same generated registry.
             const requested = new Intl.Locale(value);
             const candidates = [requested.baseName, requested.script ? `${requested.language}-${requested.script}` : requested.language];
             for (const candidate of candidates) {
@@ -41,7 +47,7 @@ function findSupportedLocale(value?: string | null): Locale | undefined {
 }
 
 export function resolveLocale(value?: string | null): Locale {
-    return findSupportedLocale(value) ?? 'en';
+    return resolveSupportedLocale(value) ?? 'en';
 }
 
 /** Read receipts and server retry deadlines are instants, independent of an entity's civil date or deadline
@@ -56,7 +62,7 @@ export function formatReadTime(timestamp: number, locale: Locale): string {
 /** Negotiate all ordered hints before falling back; an unsupported first hint is not an English preference. */
 export function resolvePreferredLocale(values: readonly string[]): Locale {
     for (const value of values) {
-        const locale = findSupportedLocale(value);
+        const locale = resolveSupportedLocale(value);
         if (locale) return locale;
     }
     return 'en';

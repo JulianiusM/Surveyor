@@ -15,6 +15,7 @@
  */
 
 import type {ActivityPlan} from "../modules/database/entities/activity/ActivityPlan";
+import type {EntityManager} from 'typeorm';
 import type {DriversList} from "../modules/database/entities/drivers/DriversList";
 import type {Event} from "../modules/database/entities/event/Event";
 import type {PackingList} from "../modules/database/entities/packing/PackingList";
@@ -113,6 +114,18 @@ export type Entity = EntityBase & {
 
 export type OverviewCollection = 'participant' | 'owner';
 export type OverviewRegion = 'main' | 'hidden';
+
+/** Personal placement remains distinct from the target's shared lifecycle and capabilities. */
+export interface PersonalVisibilityResult {
+    archive: ArchivePresentation | undefined;
+    visibility: PersonalVisibility;
+    overviewHidden: boolean;
+}
+
+/** Prepare an adapter's receipt on the visibility write's connection before its final commit. */
+export interface PersonalVisibilityCompletion<Result> {
+    prepare(manager: EntityManager, result: PersonalVisibilityResult): Result | Promise<Result>;
+}
 
 /** Validated navigation input. Page size and the acting profile are always server-owned. */
 export interface OverviewQuery {

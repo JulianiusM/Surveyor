@@ -29,7 +29,7 @@ import {APIError} from '../modules/lib/errors';
 import {getPresetMask, PERM, toMask} from "../modules/lib/permissions";
 import {requireSessionProfileId} from '../modules/lib/session';
 import {evaluateEntities, evaluateSubject} from '../modules/permissionEngine';
-import type {BasicEntityPropertyPatch, EntityPropertyField, EntityPropertyPresentation} from '../types/EntityPropertyTypes';
+import type {BasicEntityPropertyPatch, EntityEventChangeResult, EntityMutationCompletion, EntityPropertyField, EntityPropertyPresentation} from '../types/EntityPropertyTypes';
 import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, ArchiveState, ArchiveTarget, LockedArchiveContext} from '../types/ArchiveTypes';
 import type {EntityAdministratorCommand, EntityAdministratorOutcome, EntityDescriptor, PermType, PermView, SessionLike} from '../types/PermissionTypes';
 import type {Entity, EntityBase, EntityViewAdmission} from '../types/UserTypes';
@@ -216,7 +216,17 @@ export function requireLockedArchiveRoot(context: LockedArchiveContext): Archive
  * acknowledge a no-op before comparison; actual changes additionally require the
  * captured relationship and any versioned reviewed-token callback. Native errors,
  * post-change archival presentation and view-admission redirects remain intact. */
-export async function changeEntityEvent(type: EntityType, entity: EntityBase, body: unknown, session: SessionLike, invalidateContext?: (id: string) => void, validateReviewedContext?: (manager: EntityManager) => Promise<void>) {
+export function changeEntityEvent(type: EntityType, entity: EntityBase, body: unknown, session: SessionLike,
+    invalidateContext?: (id: string) => void, validateReviewedContext?: (manager: EntityManager) => Promise<void>): Promise<EntityEventChangeResult>;
+/** A feature receipt replaces only postcommit presentation, sharing the same locked business operation. */
+export function changeEntityEvent<Result>(type: EntityType, entity: EntityBase, body: unknown, session: SessionLike,
+    invalidateContext: ((id: string) => void) | undefined,
+    validateReviewedContext: ((manager: EntityManager) => Promise<void>) | undefined,
+    completion: EntityMutationCompletion<Result>): Promise<Result>;
+/** Keep native presentation compatible while preparing an explicit feature completion before its final commit. */
+export async function changeEntityEvent<Result>(type: EntityType, entity: EntityBase, body: unknown, session: SessionLike,
+    invalidateContext?: (id: string) => void, validateReviewedContext?: (manager: EntityManager) => Promise<void>,
+    completion?: EntityMutationCompletion<Result>): Promise<EntityEventChangeResult | Result> {
     // Admit the existing profile/feature contract and normalize the explicit
     // relationship command before asking the DBAL to choose its parent locks.
     requireSessionProfileId(session);
@@ -243,22 +253,36 @@ export async function changeEntityEvent(type: EntityType, entity: EntityBase, bo
         // An authorized unchanged choice performs no write. Native and v1 both
         // retain this harmless outcome before expected-parent/token comparison;
         // only an actual relationship change needs the reviewed precondition.
-        if (root.eventId === value.eventId) return {changed: false, root};
-        if (root.eventId !== value.expectedEventId) throw new APIError('The linked event changed. Reload and try again.', {}, 409);
+        const changed = root.eventId !== value.eventId;
+        let resultingRoot = root;
+        if (changed) {
+            if (root.eventId !== value.expectedEventId) throw new APIError('The linked event changed. Reload and try again.', {}, 409);
 
-        // Versioned adapters can require a reviewed settings token inside these same locks.
-        await validateReviewedContext?.(manager);
-        // Invalidating under the plan lock prevents an old job from surviving A-to-B-to-A.
-        // If persistence later rolls back, conservative cancellation cannot corrupt saved work.
-        invalidateContext?.(root.id);
-        await lifecycleService.updateEventAssociation(manager, reference, value.eventId);
-        if (type === 'activity') await invalidateGeneratedRecommendations(manager, root.id);
-        return {changed: true, root: {...root, eventId: value.eventId}};
+            // Versioned adapters can require a reviewed settings token inside these same locks.
+            await validateReviewedContext?.(manager);
+            // Invalidating under the plan lock prevents an old job from surviving A-to-B-to-A.
+            // If persistence later rolls back, conservative cancellation cannot corrupt saved work.
+            invalidateContext?.(root.id);
+            await lifecycleService.updateEventAssociation(manager, reference, value.eventId);
+            if (type === 'activity') await invalidateGeneratedRecommendations(manager, root.id);
+            resultingRoot = {...root, eventId: value.eventId};
+        }
+
+        // A prepared receipt uses the resulting association on this same manager.
+        // Failure still rolls back the write; an authorized no-op reaches this step
+        // without examining expected-parent or comparison evidence above.
+        const outcome = {changed, root: resultingRoot};
+        const prepared = completion ? await completion.prepare(manager, outcome) : undefined;
+        return {...outcome, prepared};
     }
 
-    // Project the committed outcome through the established lifecycle and page
-    // admission owners; this does not grant navigation merely from attachment.
-    const {changed, root} = await lifecycleService.withLockedArchiveTarget(reference, changeLocked, value.eventId ? [value.eventId] : []);
+    // The DBAL commits only after the locked action and any explicit receipt
+    // preparation finish. Native callers retain their existing later projection.
+    const {changed, root, prepared} = await lifecycleService.withLockedArchiveTarget(reference, changeLocked, value.eventId ? [value.eventId] : []);
+    // The supplied callback has already prepared its exact result, including a
+    // legitimate undefined result. No later query can reject that completed write.
+    if (completion) return prepared as Result;
+
     const archive = (await getArchivePresentations([reference], session)).get(archiveKey(reference));
     // Re-evaluate the resulting relationship, including unlink, using the same admission
     // contract as the page route. Stored old-event grants no longer describe the new page.
@@ -566,16 +590,35 @@ function hasIndependentSchedule(reference: ArchiveReference, root: ArchiveTarget
 }
 
 /** Set only direct archival; retries preserve the first timestamp and never copy it to children. */
-export async function archiveEntity(reference: ArchiveReference, body: unknown, session: SessionLike, now: Date = new Date()) {
+export function archiveEntity(reference: ArchiveReference, body: unknown, session: SessionLike,
+    now?: Date): Promise<ArchivePresentation | undefined>;
+/** A feature can prepare its receipt under the existing archive lock without requesting native presentation. */
+export function archiveEntity<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
+    now: Date | undefined, completion: EntityMutationCompletion<Result>): Promise<Result>;
+/** Share archival policy and persistence, selecting prepared completion only when explicitly requested. */
+export async function archiveEntity<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
+    now: Date = new Date(), completion?: EntityMutationCompletion<Result>): Promise<ArchivePresentation | undefined | Result> {
+    // Preserve command/profile/clock admission before the DBAL obtains lifecycle locks.
     validateArchiveBody(Joi.object({}).unknown(false), body);
     requireSessionProfileId(session);
     if (!Number.isFinite(now.getTime())) throw new APIError('Invalid archival time.', {}, 400);
-    async function archiveLocked(manager: EntityManager, context: LockedArchiveContext): Promise<void> {
+
+    /** Authorize the current root and prepare a requested receipt before the direct marker commits. */
+    async function archiveLocked(manager: EntityManager, context: LockedArchiveContext): Promise<Result | undefined> {
         const root = requireLockedArchiveRoot(context);
         await requireArchiveManagement(reference, root, session, manager);
-        if (!root.archivedAt) await lifecycleService.updateLifecycleMetadata(manager, reference, {archivedAt: now});
+
+        // Repeated archive commands retain the first timestamp and perform no additional write.
+        const changed = !root.archivedAt;
+        if (changed) await lifecycleService.updateLifecycleMetadata(manager, reference, {archivedAt: now});
+        const outcome = {changed, root: changed ? {...root, archivedAt: now} : root};
+        return completion ? completion.prepare(manager, outcome) : undefined;
     }
-    await lifecycleService.withLockedArchiveTarget(reference, archiveLocked);
+    const prepared = await lifecycleService.withLockedArchiveTarget(reference, archiveLocked);
+
+    // Explicit feature receipts already passed their fallible preparation before commit.
+    // The original presentation read remains the default for native archive callers.
+    if (completion) return prepared as Result;
     return (await getArchivePresentations([reference], session)).get(archiveKey(reference));
 }
 
@@ -583,18 +626,34 @@ export async function archiveEntity(reference: ArchiveReference, body: unknown, 
  * A child cannot undo its parent's archive. Restoration also pauses an independent automatic
  * schedule in the same write, so the next sweep cannot immediately undo this explicit action.
  */
-export async function restoreEntity(reference: ArchiveReference, body: unknown, session: SessionLike) {
+export function restoreEntity(reference: ArchiveReference, body: unknown, session: SessionLike): Promise<ArchivePresentation | undefined>;
+/** Prepare an explicit feature receipt inside the shared restoration transaction. */
+export function restoreEntity<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
+    completion: EntityMutationCompletion<Result>): Promise<Result>;
+/** Keep native restoration presentation compatible while allowing precommit feature completion. */
+export async function restoreEntity<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
+    completion?: EntityMutationCompletion<Result>): Promise<ArchivePresentation | undefined | Result> {
+    // Restoration accepts only its existing narrow command and an admitted profile.
     validateArchiveBody(Joi.object({}).unknown(false), body);
     requireSessionProfileId(session);
-    async function restoreLocked(manager: EntityManager, context: LockedArchiveContext): Promise<void> {
+
+    /** Recheck parent inheritance, perform the established patch and prepare its receipt under the lock. */
+    async function restoreLocked(manager: EntityManager, context: LockedArchiveContext): Promise<Result | undefined> {
         const root = requireLockedArchiveRoot(context);
         await requireArchiveManagement(reference, root, session, manager);
         const parent = root.eventId ? context.parents.get(root.eventId) : null;
         if (parent?.archivedAt) throw new APIError('Restore the linked event before restoring this entity.', {eventId: parent.id}, 409);
+
+        // Preserve the existing restoration write, including an independent schedule's pause.
+        // Receipt preparation uses the resulting root before this transaction can commit.
         const patch = hasIndependentSchedule(reference, root) ? {archivedAt: null, autoArchivePaused: true} : {archivedAt: null};
         await lifecycleService.updateLifecycleMetadata(manager, reference, patch);
+        return completion ? completion.prepare(manager, {changed: true, root: {...root, ...patch}}) : undefined;
     }
-    await lifecycleService.withLockedArchiveTarget(reference, restoreLocked);
+    const prepared = await lifecycleService.withLockedArchiveTarget(reference, restoreLocked);
+
+    // The explicit completion replaces only unused postcommit presentation; native defaults remain intact.
+    if (completion) return prepared as Result;
     return (await getArchivePresentations([reference], session)).get(archiveKey(reference));
 }
 

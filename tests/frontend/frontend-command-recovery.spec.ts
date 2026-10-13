@@ -267,6 +267,78 @@ describe('reconcile-only commands', () => {
         expect(command.notice.value).toBeNull();
     });
 
+    it('does not start a new command after its owner retires', async function retiredOwnerAdmission() {
+        const {context, command, visible} = await mountedRetirableCommand();
+        const operation = vi.fn(async function submitRetiredOperation(): Promise<void> { throw new TypeError('Fixture response lost'); });
+        visible.value = false;
+        await nextTick();
+
+        // The same actor is still current, but this form has already closed. A
+        // newly invoked run must not dispatch or invent an invisible uncertainty lease.
+        try {
+            expect(await command.run(operation, false)).toBeUndefined();
+            expect(operation).not.toHaveBeenCalled();
+            expect(command.outcome.value).toBeNull();
+            expect(command.pending.value).toBe(false);
+            expect(command.uncertain.value).toBe(false);
+            expect(context.mayChangeIdentity()).toBe(true);
+            expect(unloadAttempt().defaultPrevented).toBe(false);
+        } finally { command.acknowledge(); }
+    });
+
+    it('lets an admitted deferred operation dispatch after retirement and protects it until settlement', async function admittedDeferredOperation() {
+        let releasePrerequisite!: () => void;
+        let finishRequest!: (result: {changed: boolean}) => void;
+        const prerequisite = new Promise<void>(function holdPrerequisite(resolve) { releasePrerequisite = resolve; });
+        const response = new Promise<{changed: boolean}>(function holdExternalResult(resolve) { finishRequest = resolve; });
+        const {context, command, router, visible} = await mountedRetirableCommand();
+        const request = vi.fn(function submitAdmittedRequest(_scope: PilotRequestScope) { return response; });
+        const confirm = vi.fn(() => true);
+        vi.stubGlobal('confirm', confirm);
+
+        /** The public command is admitted while mounted. Its own operation may
+         * legitimately wait before reaching the external request boundary. */
+        async function submitAfterPrerequisite(scope: PilotRequestScope) {
+            await prerequisite;
+            return request(scope);
+        }
+        const running = command.run(submitAfterPrerequisite, false);
+        try {
+            visible.value = false;
+            await nextTick();
+            expect(request).not.toHaveBeenCalled();
+            expect(command.pending.value).toBe(true);
+            expect(context.mayChangeIdentity()).toBe(false);
+            expect(unloadAttempt().defaultPrevented).toBe(true);
+            await router.push('/away');
+            expect(router.currentRoute.value.path).toBe('/');
+
+            // Closure does not cancel previously admitted work or release its
+            // captured-actor protection while the later request is outstanding.
+            releasePrerequisite();
+            await flushPromises();
+            expect(request).toHaveBeenCalledOnce();
+            expect(request.mock.calls[0][0].context).toBe(session.context);
+            expect(command.pending.value).toBe(true);
+            expect(context.mayChangeIdentity()).toBe(false);
+            expect(unloadAttempt().defaultPrevented).toBe(true);
+
+            finishRequest({changed: true});
+            expect(await running).toEqual({changed: true});
+            expect(command.outcome.value).toEqual({confirmation: 'confirmed', refresh: 'not-requested'});
+            expect(command.pending.value).toBe(false);
+            expect(context.mayChangeIdentity()).toBe(true);
+            expect(unloadAttempt().defaultPrevented).toBe(false);
+            await router.push('/away');
+            expect(router.currentRoute.value.path).toBe('/away');
+            expect(confirm).not.toHaveBeenCalled();
+        } finally {
+            releasePrerequisite();
+            finishRequest({changed: true});
+            await running;
+        }
+    });
+
     it('keeps a retired command root protected through its write and following read, then releases it', async () => {
         let finishWrite!: (value: {changed: boolean}) => void;
         let finishRead!: () => void;

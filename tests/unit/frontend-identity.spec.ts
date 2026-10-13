@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {frontendIdentityPageEntry, safeFrontendReturn} from '../../src/modules/lib/frontendIdentity';
+import {frontendIdentityPageEntry, readGuestLinkHandoff, safeFrontendReturn} from '../../src/modules/lib/frontendIdentity';
 import {createTranslator} from '../../src/modules/localization/translator';
 import {ApiProblem, validatedProblemBody} from '../../src/modules/api/problem';
 
@@ -15,6 +15,23 @@ describe('frontend identity destinations', () => {
         '/frontend-pilot/\r\nLocation: https://outside.invalid', 'javascript:alert(1)'])
     ('keeps an unsafe or unrelated return inside the frontend: %j', value => {
         expect(safeFrontendReturn(value)).toBe('/frontend-pilot');
+    });
+});
+
+describe('committed guest-link document handoff', () => {
+    const handoff = {context: 'committed-guest-context',
+        personalLink: 'https://surveyor.example/frontend-pilot/guest/example/login/private-token'};
+
+    it('discloses the existing private-link feedback only to its admitted committed context', () => {
+        const stored = JSON.stringify(handoff);
+        expect(readGuestLinkHandoff(stored, handoff.context)).toEqual(handoff);
+        expect(readGuestLinkHandoff(stored, 'later-account-context')).toBeUndefined();
+    });
+
+    it.each([undefined, handoff.personalLink, '{malformed', JSON.stringify({...handoff, context: 'another-context'}),
+        JSON.stringify({...handoff, personalLink: 123}), JSON.stringify({personalLink: handoff.personalLink})])
+    ('discards unscoped or malformed flash data without admitting a private link: %j', value => {
+        expect(readGuestLinkHandoff(value, handoff.context)).toBeUndefined();
     });
 });
 

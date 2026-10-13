@@ -2,11 +2,12 @@ import {Router, type Request, type Response} from 'express';
 import * as userController from '../../../controller/userController';
 import {readPackingGuestEntry} from '../../../controller/packingController';
 import {ApiProblem} from '../../../modules/api/problem';
-import {identityTransitionGuard, requireApiContext, sessionView} from '../../../modules/api/session';
-import {sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+import {committedSessionView, prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, requireApiContext} from '../../../modules/api/session';
+import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import settings from '../../../modules/settings';
-import type {ApiOperationId} from '../../../types/ApiTransportTypes';
+import type {ApiOperationId, PreparedApiJsonResponse} from '../../../types/ApiTransportTypes';
+import type {RegistrationEmailDelivery} from '../../../types/IdentityTypes';
 import type {components} from '../../../types/api/v1';
 
 const router = Router();
@@ -21,29 +22,51 @@ async function admit(req: Request, res: Response, operation: ApiOperationId): Pr
     validateOperationRequest(req, operation);
 }
 
-/** Rehydrate after the controller persisted the transition; bind the reply to its NEW context. */
-async function sendIdentity(req: Request, res: Response, operation: 'loginIdentity' | 'logoutIdentity'
-    | 'loginGuestIdentity' | 'switchIdentityProfile' | 'registerPackingGuest',
+/** Reply from the completed transition's own evidence, without reloading a later tab's actor. */
+async function sendIdentity(req: Request, res: Response, operation: 'logoutIdentity',
     personalLink: string | null = null, redirect: string | null = null): Promise<void> {
-    const committedContext = req.session.frontendContext;
-    req.apiActor = undefined;
-    const session = await sessionView(req);
-    // An intervening tab may already have replaced the just-written identity. Never attach
-    // its session projection to a private guest link belonging to this command's actor.
-    if (session.context !== committedContext) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+    // Provider logout currently persists its authoritative transition before its
+    // receipt. A later store read belongs to another actor and cannot replace it.
+    const session = committedSessionView(req);
     const result: components['schemas']['IdentityResult'] = {session, personalLink, redirect};
+    req.apiActor = {context: session.context, auth: req.session.auth, profile: req.session.profile};
     sendValidatedJson(req, res, operation, 200, result);
 }
 
+/** Confirm validated account login only after its prepared public receipt and stored identity commit together. */
 router.post('/auth/login', asyncHandler(async function loginIdentity(req, res) {
     await admit(req, res, 'loginIdentity');
     requireLocalLogin();
-    await userController.loginUser(req.body, req.session, {frontend: true, next: req.body.next, beforeTransition: identityTransitionGuard(req)});
-    await sendIdentity(req, res, 'loginIdentity');
+    // Credential validation and result preparation finish before the locked
+    // identity write. Adopt only its committed detached receipt for delivery.
+    function prepareLoginReply(staged: Request['session']) {
+        return prepareIdentityReply(req, staged, 'loginIdentity');
+    }
+    const committed = await userController.loginUserWithSession(req.body, req,
+        {frontend: true, next: req.body.next, context: req.apiActor!.context, prepareResult: prepareLoginReply});
+    req.session = committed.session;
+    sendPreparedJson(req, res, committed.result);
 }));
 
+/** Ordinary logout prepares its anonymous receipt before commit; provider sessions retain their existing owner. */
 router.post('/auth/logout', asyncHandler(async function logoutIdentity(req, res) {
     await admit(req, res, 'logoutIdentity');
+    // Classification follows the existing logout owner, including truthy empty
+    // token objects. Account/guest kind never selects a provider workflow.
+    if (!req.session.tokens) {
+        /** Validate and serialize anonymous confirmation before clearing stored authority becomes final. */
+        function prepareLogoutReply(staged: Request['session']) {
+            return prepareIdentityReply(req, staged, 'logoutIdentity');
+        }
+        const committed = await userController.logoutUserWithSession(req,
+            {context: req.apiActor!.context, prepareResult: prepareLogoutReply});
+        req.session = committed.session;
+        sendPreparedJson(req, res, committed.result);
+        return;
+    }
+
+    // Provider preparation/failure and its completed receipt keep their existing
+    // ordering until the separate behavior decision is resolved.
     const redirect = await userController.logoutUserOidc(req.session);
     // Local logout completes in the SPA. Only the provider's authoritative end-session URL
     // requires a full navigation; oidc.logout otherwise returns the application's own root.
@@ -53,16 +76,29 @@ router.post('/auth/logout', asyncHandler(async function logoutIdentity(req, res)
 router.post('/auth/register', asyncHandler(async function registerAccount(req, res) {
     await admit(req, res, 'registerAccount');
     requireLocalLogin();
-    await userController.registerUser(req.body, undefined, {frontend: true, next: req.body.next});
-    sendValidatedJson(req, res, 'registerAccount', 200, {changed: true});
+
+    /** Bind the request's transport metadata to precommit signup confirmation only. */
+    function prepareSignupReply(staged: Request['session']) {
+        return prepareAccountRegistrationReplies(req, staged);
+    }
+    const committed = await userController.registerUserWithSession(req.body, req,
+        {frontend: true, next: req.body.next, context: req.apiActor!.context, prepareResult: prepareSignupReply});
+
+    // Signup does not log in or mutate the active session. Its prevalidated
+    // receipt excludes tokens and cannot reload/reject another tab's identity.
+    sendPreparedJson(req, res, committed.result);
 }));
 
 router.post('/auth/forgot-password', asyncHandler(async function requestPasswordReset(req, res) {
     await admit(req, res, 'requestPasswordReset');
     requireLocalLogin();
-    await userController.sendPasswordForgotMail(req.body.username, {frontend: true, next: req.body.next});
-    // Account discovery remains private: an unknown address has exactly the same response.
-    sendValidatedJson(req, res, 'requestPasswordReset', 200, {changed: true});
+    /** Prepare identical generic confirmation for known and unknown account requests. */
+    function prepareRecoveryReply(staged: Request['session']) {
+        return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true}, staged.frontendContext);
+    }
+    const committed = await userController.requestPasswordResetWithSession(req.body.username, req,
+        {frontend: true, next: req.body.next, context: req.apiActor!.context, prepareResult: prepareRecoveryReply});
+    sendPreparedJson(req, res, committed.result);
 }));
 
 router.get('/auth/reset-password', asyncHandler(async function checkPasswordReset(req, res) {
@@ -77,21 +113,43 @@ router.get('/auth/reset-password', asyncHandler(async function checkPasswordRese
 router.post('/auth/reset-password', asyncHandler(async function resetAccountPassword(req, res) {
     await admit(req, res, 'resetAccountPassword');
     requireLocalLogin();
-    await userController.resetPassword(req.body.token, req.body);
-    sendValidatedJson(req, res, 'resetAccountPassword', 200, {changed: true});
+    /** Prepare confirmation before password/token consumption becomes final. */
+    function prepareResetReply(staged: Request['session']) {
+        return prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true}, staged.frontendContext);
+    }
+    const committed = await userController.resetPasswordWithSession(req.body.token, req.body, req,
+        {context: req.apiActor!.context, prepareResult: prepareResetReply});
+    // Reset does not change the active actor or need unchanged Session JSON.
+    sendPreparedJson(req, res, committed.result);
 }));
 
 router.post('/auth/activate', asyncHandler(async function activateIdentity(req, res) {
     await admit(req, res, 'activateIdentity');
     requireLocalLogin();
-    await userController.activateAccount(req.body.token);
-    sendValidatedJson(req, res, 'activateIdentity', 200, {changed: true});
+    /** Validate and serialize completion before consuming this one-time token. */
+    function prepareActivationReply(staged: Request['session']) {
+        return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true}, staged.frontendContext);
+    }
+    const committed = await userController.activateAccountWithSession(req.body.token, req,
+        {context: req.apiActor!.context, prepareResult: prepareActivationReply});
+
+    // Activation preserves the actor and needs no session JSON write/adoption.
+    // Only its prepared receipt is delivered after token consumption commits.
+    sendPreparedJson(req, res, committed.result);
 }));
 
+/** Bind guest-token login to the admitted context and deliver its prevalidated identity receipt after commit. */
 router.post('/auth/guest-login', asyncHandler(async function loginGuestIdentity(req, res) {
     await admit(req, res, 'loginGuestIdentity');
-    await userController.loginGuest(req.body.guestId, req.body.token, req.session, {beforeTransition: identityTransitionGuard(req)});
-    await sendIdentity(req, res, 'loginGuestIdentity');
+    // Reuse token admission on the locked connection; output failure cannot
+    // rotate the original request or leak authority into Express autosave.
+    function prepareGuestLoginReply(staged: Request['session']) {
+        return prepareIdentityReply(req, staged, 'loginGuestIdentity');
+    }
+    const committed = await userController.loginGuestWithSession(req.body.guestId, req.body.token, req,
+        {context: req.apiActor!.context, prepareResult: prepareGuestLoginReply});
+    req.session = committed.session;
+    sendPreparedJson(req, res, committed.result);
 }));
 
 router.post('/auth/guest-recovery', asyncHandler(async function recoverGuestIdentity(req, res) {
@@ -105,10 +163,18 @@ router.post('/auth/guest-email-exists', asyncHandler(async function findGuestEma
     sendValidatedJson(req, res, 'findGuestEmail', 200, {exists: await userController.hasGuestAccountForEmail(req.body.email.trim().toLowerCase())});
 }));
 
+/** Shared profile ownership rules and prepared presentation complete before the stored actor rotates. */
 router.put('/auth/profile', asyncHandler(async function switchIdentityProfile(req, res) {
     await admit(req, res, 'switchIdentityProfile');
-    await userController.changeActiveProfile(req.session, req.body.profileId, identityTransitionGuard(req));
-    await sendIdentity(req, res, 'switchIdentityProfile');
+    // Profile ownership, public projection and the stored rotation share one
+    // completion; there is no postcommit mutable-actor read or second save.
+    function prepareProfileReply(staged: Request['session']) {
+        return prepareIdentityReply(req, staged, 'switchIdentityProfile');
+    }
+    const committed = await userController.changeActiveProfileWithSession(req.body.profileId, req,
+        {context: req.apiActor!.context, prepareResult: prepareProfileReply});
+    req.session = committed.session;
+    sendPreparedJson(req, res, committed.result);
 }));
 
 router.get('/packing-lists/:listId/guest', asyncHandler(async function getPackingGuestEntry(req, res) {
@@ -120,9 +186,20 @@ router.post('/packing-lists/:listId/guest', asyncHandler(async function register
     await admit(req, res, 'registerPackingGuest');
     const list = await readPackingGuestEntry(String(req.params.listId));
     const body = req.body as components['schemas']['GuestRegistrationInput'];
-    const personalLink = await userController.registerGuest(body.username, body.email ?? undefined, req.session,
-        {frontend: true, next: `/frontend-pilot/packing/${list.id}`, beforeTransition: identityTransitionGuard(req)});
-    await sendIdentity(req, res, 'registerPackingGuest', personalLink);
+    /** Prepare every SMTP outcome while creation and stored-session writes can still roll back. */
+    function prepareGuestReply(staged: Request['session'], personalLink: string): Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {
+        // Bind this request's locale/transport metadata to the transaction's
+        // isolated identity, using the common production receipt projection.
+        return prepareGuestIdentityReplies(req, staged, personalLink);
+    }
+
+    const committed = await userController.registerGuestWithSession(body.username, body.email ?? undefined, req,
+        {frontend: true, next: `/frontend-pilot/packing/${list.id}`, context: req.apiActor!.context, prepareResult: prepareGuestReply});
+
+    // Adopt only the committed detached session. Its response-local save
+    // acknowledges existing persistence, preventing a second write after commit.
+    req.session = committed.session;
+    sendPreparedJson(req, res, committed.result);
 }));
 
 export default router;

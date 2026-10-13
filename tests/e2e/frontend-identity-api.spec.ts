@@ -1,8 +1,10 @@
 import {test, expect, type APIRequestContext, type APIResponse, type Response, type Request} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
+import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import {createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E, waitForPilotHydration, withPasswordResetAccountForE2E} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, loginForE2E, readAccountRegistrationCountsForE2E, readGuestRegistrationCountsForE2E, withPasswordResetAccountForE2E} from '../keywords/e2eCoreKeywords';
+import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 
 type SessionView = components['schemas']['SessionView'];
 
@@ -40,6 +42,21 @@ function passwordInputValidity(input: HTMLElement) {
     const field = input as HTMLInputElement;
     return {length: field.value.length, minimum: field.minLength,
         tooShort: field.validity.tooShort, valid: field.checkValidity()};
+}
+
+/** Use the ordinary native creation route to supply a publicly readable guest-entry list. */
+async function createGuestEntryList(request: APIRequestContext) {
+    await loginForE2E(request, createE2ELogin());
+    const input = createE2EPackingList();
+    Object.assign(input.form, {'defaultPerms[public][0]': 'ACCESS_VIEW'});
+    return createResourceViaForm(request, input);
+}
+
+/** Select the actual rendered document's bootstrap, without a synthetic success fixture. */
+function documentBootstrap(html: string): FrontendPilotBootstrap {
+    const serialized = html.match(/<script id="surveyor-pilot-state" type="application\/json">([^<]+)<\/script>/u)?.[1];
+    expect(serialized).toBeTruthy();
+    return JSON.parse(serialized!) as FrontendPilotBootstrap;
 }
 
 test('disabled authentication configuration preserves native document outcomes and authored API problems', async ({request}) => {
@@ -280,10 +297,7 @@ test('identity commands bind old admission and new results while retaining local
 });
 
 test('guest creation and emailed personal URLs stay in the frontend and authenticate on their initial GET', async ({request, browser, baseURL}) => {
-    await loginForE2E(request, createE2ELogin());
-    const input = createE2EPackingList();
-    Object.assign(input.form, {'defaultPerms[public][0]': 'ACCESS_VIEW'});
-    const list = await createResourceViaForm(request, input);
+    const list = await createGuestEntryList(request);
     const guestBrowser = await browser.newContext({baseURL});
     try {
         const anonymous = await session(guestBrowser.request);
@@ -313,6 +327,167 @@ test('guest creation and emailed personal URLs stay in the frontend and authenti
         } finally { await recovered.close(); }
     } finally { await guestBrowser.close(); }
 });
+
+test('parallel guest registrations commit exactly one identity and restore its persisted profile from the winning link',
+    async function concurrentGuestFinality({request, browser, baseURL}) {
+        const list = await createGuestEntryList(request);
+        const guest = await browser.newContext({baseURL});
+        const suffix = randomUUID().slice(0, 12);
+        const usernames = [`Final guest A ${suffix}`, `Final guest B ${suffix}`];
+        try {
+            const anonymous = await session(guest.request);
+            expect(anonymous.kind).toBe('anonymous');
+            expect(await readGuestRegistrationCountsForE2E(usernames)).toEqual({guests: 0, profiles: 0});
+
+            // Both writes carry the same originally admitted cookie/context. No
+            // SMTP address, request retry or test-only persistence shortcut is used.
+            const path = `/api/v1/packing-lists/${list.id}/guest`;
+            const responses = await Promise.all([
+                guest.request.post(path, {headers: headers(anonymous), data: {username: usernames[0], email: null}}),
+                guest.request.post(path, {headers: headers(anonymous), data: {username: usernames[1], email: null}}),
+            ]);
+            const statuses = [];
+            for (const response of responses) statuses.push(response.status());
+            expect([...statuses].sort()).toEqual([200, 409]);
+            const winnerIndex = statuses.indexOf(200);
+            const created = await identity(responses[winnerIndex], anonymous);
+            const rejected = responses[1 - winnerIndex];
+            expect(await rejected.json()).toMatchObject({status: 409, code: 'SESSION_CONTEXT_CHANGED'});
+            expect(created).toMatchObject({emailDelivery: 'not-requested', redirect: null,
+                session: {kind: 'guest', activeProfile: {name: usernames[winnerIndex]}}});
+
+            // Independent real Guest/Profile counts reveal duplicate or orphan
+            // rows even when a stale HTTP response alone looks correctly rejected.
+            expect(await readGuestRegistrationCountsForE2E(usernames)).toEqual({guests: 1, profiles: 1});
+            const stored = await session(guest.request);
+            expect(stored).toMatchObject({kind: 'guest', context: created.session.context,
+                activeProfile: created.session.activeProfile});
+            const personalLink = new URL(created.personalLink!);
+            expect(personalLink.pathname).toMatch(/^\/frontend-pilot\/guest\/[^/]+\/login\/[^/]+$/u);
+            expect(personalLink.searchParams.get('next')).toBe(`/frontend-pilot/packing/${list.id}`);
+
+            const restored = await browser.newContext({baseURL});
+            try {
+                const before = await session(restored.request);
+                const login = await restored.request.get(personalLink.pathname + personalLink.search, {maxRedirects: 0});
+                expect(login.status()).toBe(302);
+                expect(new URL(login.headers().location, 'http://fixture').pathname).toBe(`/frontend-pilot/packing/${list.id}`);
+                const after = await session(restored.request);
+                expect(after).toMatchObject({kind: 'guest', activeProfile: created.session.activeProfile});
+                expect(after.context).not.toBe(before.context);
+            } finally {
+                await restored.close();
+            }
+        } finally {
+            await guest.close();
+        }
+    });
+
+test('pilot guest document POST commits its 303 and exposes the one-time link only to its matching identity context',
+    async function documentGuestFinality({request, browser, baseURL}) {
+        const list = await createGuestEntryList(request);
+        const suffix = randomUUID().slice(0, 12);
+        const usernames = [`Document guest A ${suffix}`, `Document guest B ${suffix}`];
+        expect(await readGuestRegistrationCountsForE2E(usernames)).toEqual({guests: 0, profiles: 0});
+
+        // Separate registrations keep the second handoff unconsumed until another
+        // actor takes the session; consuming a link first could conceal a scope leak.
+        for (const changeActor of [false, true]) {
+            const guest = await browser.newContext({baseURL});
+            try {
+                const anonymous = await session(guest.request);
+                const username = usernames[Number(changeActor)];
+                const post = await guest.request.post(`/frontend-pilot/packing/${list.id}/guest`, {
+                    form: {username, ...nativeIdentityControls(anonymous)}, maxRedirects: 0,
+                });
+                expect(post.status()).toBe(303);
+                const destination = new URL(post.headers().location, 'http://fixture');
+                expect(destination.pathname).toBe(`/frontend-pilot/packing/${list.id}`);
+                expect(destination.searchParams.get('locale')).toBe('en');
+                const committed = await session(guest.request);
+                expect(committed).toMatchObject({kind: 'guest', activeProfile: {name: username}});
+                expect(committed.context).not.toBe(anonymous.context);
+
+                let current = committed;
+                if (changeActor) {
+                    // Ordinary account login changes the stored context without
+                    // consuming the guest's pilot-only flash channel.
+                    await loginForE2E(guest.request, createE2ELogin());
+                    current = await session(guest.request);
+                    expect(current.kind).toBe('account');
+                    expect(current.context).not.toBe(committed.context);
+                }
+
+                // Native guest feedback is actor-global: the first admitted pilot
+                // GET can consume it even before the prepared canonical destination.
+                const landing = await guest.request.get('/frontend-pilot?locale=en', {maxRedirects: 0});
+                expect(landing.status()).toBe(200);
+                const html = await landing.text();
+                const rendered = documentBootstrap(html);
+                expect(rendered.session.context).toBe(current.context);
+                expect(rendered.session.kind).toBe(current.kind);
+                if (changeActor) {
+                    expect(rendered.personalLink).toBeUndefined();
+                    expect(html).not.toContain('Login successful. Use ');
+                } else {
+                    expect(rendered.personalLink).toBeTruthy();
+                    expect(new URL(rendered.personalLink!).searchParams.get('next')).toBe(`/frontend-pilot/packing/${list.id}`);
+                    expect(html).toContain('Login successful. Use ');
+                    // No email was requested: confirmation never claims mail delivery.
+                    expect(html).not.toContain('auth.guestEmailFailed');
+                }
+
+                const next = await guest.request.get(destination.pathname + destination.search, {maxRedirects: 0});
+                expect(next.status()).toBe(200);
+                expect(documentBootstrap(await next.text()).personalLink).toBeUndefined();
+            } finally {
+                await guest.close();
+            }
+        }
+
+        expect(await readGuestRegistrationCountsForE2E(usernames)).toEqual({guests: 2, profiles: 2});
+    });
+
+test('account signup commits its profile and activation token before controlled SMTP failure without exposing the token or changing identity',
+    async function accountSignupFinality({request}) {
+        const before = await session(request);
+        expect(before.kind).toBe('anonymous');
+        const suffix = randomUUID().slice(0, 12);
+        const username = `final-account-${suffix}`;
+        const rejectedUsername = `rejected-account-${suffix}`;
+        const usernames = [username, rejectedUsername];
+        const password = 'Signup-finality!A1';
+        expect(await readAccountRegistrationCountsForE2E(usernames)).toEqual({accounts: 0, profiles: 0, activationReady: 0});
+
+        // The managed E2E server owns the built mailer and an explicitly refused
+        // local SMTP socket. No interceptor, external mailbox or backend mock
+        // turns a mail-delivery failure into a synthetic registration result.
+        const completed = await request.post('/api/v1/auth/register', {
+            headers: {...headers(before), 'X-Surveyor-Locale': 'en'},
+            data: {username, displayname: username, email: `${username}@example.invalid`,
+                password, password_repeat: password, next: '/frontend-pilot'},
+        });
+        expect(completed.status()).toBe(200);
+        expect(completed.headers()['cache-control']).toContain('no-store');
+        expect(completed.headers()['x-surveyor-context']).toBe(before.context);
+        expect(await completed.json()).toEqual({changed: true, emailDelivery: 'failed'});
+        const after = await session(request);
+        expect(after).toMatchObject({kind: 'anonymous', context: before.context, csrfToken: before.csrfToken});
+        expect(await readAccountRegistrationCountsForE2E(usernames)).toEqual({accounts: 1, profiles: 1, activationReady: 1});
+
+        // Native business rejection still happens before persistence. Counts for
+        // both names distinguish a finalized account from an accidental partial
+        // account/profile/token left by the deliberately mismatched submission.
+        const rejected = await request.post('/api/v1/auth/register', {
+            headers: {...headers(after), 'X-Surveyor-Locale': 'en'},
+            data: {username: rejectedUsername, displayname: rejectedUsername,
+                email: `${rejectedUsername}@example.invalid`, password, password_repeat: 'Different-password!A1'},
+        });
+        expect(rejected.status()).toBe(400);
+        expect(await rejected.json()).toMatchObject({code: 'PASSWORD_MISMATCH'});
+        expect(await readAccountRegistrationCountsForE2E(usernames)).toEqual({accounts: 1, profiles: 1, activationReady: 1});
+        expect((await session(request)).context).toBe(before.context);
+    });
 
 test('invalid password-reset links are denied before rendering a form, with scoped localized uncached preflight', async ({request, browser, baseURL}) => {
     const anonymous = await session(request);

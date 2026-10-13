@@ -39,7 +39,7 @@ import type {LockedArchiveContext} from '../types/ArchiveTypes';
 import type {EventLinkOption} from '../types/EventTypes';
 import type {Event} from '../modules/database/entities/event/Event';
 import type {PackingAssignment} from '../modules/database/entities/packing/PackingAssignment';
-import type {BasicEntityPropertyPatch} from '../types/EntityPropertyTypes';
+import type {BasicEntityPropertyPatch, EntityMutationOutcome} from '../types/EntityPropertyTypes';
 import Joi from 'joi';
 import {PackingItem} from "../modules/database/entities/packing/PackingItem";
 import {PackingList} from "../modules/database/entities/packing/PackingList";
@@ -1171,7 +1171,7 @@ export async function readPackingDuplicate(id: string, session: SessionLike, eve
 
         // Copy the native form surface only. Assignments, administrators, header,
         // archive state and event membership remain associated with the source.
-        const {items} = await packingService.getPackingSnapshotRows(manager, id);
+        const items = await packingService.getPackingSnapshotItems(manager, id);
         const selected = await readEventLinkSelection(eventId, session);
         return {title: list.title, description: list.description ?? null, eventId: null,
             items: items.map(item => ({title: item.title, description: item.description ?? null, maxAssignees: item.maxAssignees ?? null, requiredByAll: Boolean(item.requiredByAll)})),
@@ -1340,7 +1340,7 @@ export async function reorderPackingItems(
         if (!mayPerformPackingMethod(permissions, 'reorderItems')) throw new ApiProblem('FORBIDDEN');
 
         // Retain every compared child lock through the shared per-row writes.
-        const {items} = await packingService.getPackingSnapshotRows(manager, id, true);
+        const items = await packingService.getPackingSnapshotItems(manager, id, true);
         requireEditToken(token, orderEditToken(list, items, session));
 
         // Versioned ordering requires one complete reviewed row set. The API locks
@@ -1521,8 +1521,15 @@ export async function changePackingEvent(
             const permissions = await packingPermissions(manager, current, session);
             requireFieldComparison(token, await settingsEditToken(manager, current, session), ['eventId']);
         }
-        const result = await changeEntityEvent('packing', list, body, session, undefined, validateContext);
-        return {changed: result.changed, canView: !result.redirectUrl};
+
+        /** Use the shared admission owner and this transaction's resulting association for the exact v1 receipt. */
+        async function prepareEventCompletion(manager: EntityManager, outcome: EntityMutationOutcome): Promise<components['schemas']['PackingEventChanged']> {
+            // Membership and grants must be read on the mutation's connection, so a failed
+            // projection still rolls back the relink rather than rejecting a committed write.
+            const canView = await getEntityViewAdmission('packing', outcome.root, session, manager) === 'render';
+            return {changed: outcome.changed, canView};
+        }
+        return await changeEntityEvent('packing', list, body, session, undefined, validateContext, {prepare: prepareEventCompletion});
     } catch (error) {
         if (error instanceof APIError && error.status === 409) throw new ApiProblem('RESOURCE_CONFLICT');
         throw error;
@@ -1537,11 +1544,17 @@ export async function changePackingEvent(
  */
 export async function setPackingArchived(id: string, archived: boolean, session: SessionLike): Promise<components['schemas']['MutationResult']> {
     actorId(session);
-    try {
-        // The shared owner performs the action and its business checks in one transaction.
-        if (archived) await archiveEntity({type: 'packing', id}, {}, session);
-        else await restoreEntity({type: 'packing', id}, {}, session);
+
+    /** Preserve the existing command acknowledgement, including harmless repeated archive requests. */
+    function prepareArchiveCompletion(): components['schemas']['MutationResult'] {
         return {changed: true};
+    }
+    try {
+        // The shared owner performs its original business checks/write and prepares
+        // this invariant receipt before commit. Packing needs no later archive DTO.
+        const completion = {prepare: prepareArchiveCompletion};
+        if (archived) return await archiveEntity({type: 'packing', id}, {}, session, undefined, completion);
+        return await restoreEntity({type: 'packing', id}, {}, session, completion);
     } catch (error) {
         if (error instanceof APIError && error.status === 409) {
             // The shared restore owner supplies eventId only for inherited archival; a

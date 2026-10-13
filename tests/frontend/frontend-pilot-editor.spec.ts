@@ -12,6 +12,7 @@ import MetadataFields from '../../src/frontend/features/packing/MetadataFields.v
 import OverviewRegion from '../../src/frontend/features/overview/OverviewRegion.vue';
 import AppDialog from '../../src/frontend/components/AppDialog.vue';
 import InlineCell from '../../src/frontend/components/InlineCell.vue';
+import EntityHeaderEditor from '../../src/frontend/components/EntityHeaderEditor.vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {packingKeys} from '../../src/frontend/app/queryKeys';
 import {useAuthorizedImage} from '../../src/frontend/composables/authorizedImage';
@@ -243,6 +244,215 @@ async function mountPackingView(view: components['schemas']['PackingListView'],
     }
     return {wrapper, context, request, router, dispose};
 }
+
+/** Select real browser-owned bytes on the existing input. The production change
+ * event synchronizes PackingSettings rather than a test-only file draft. */
+function selectHeaderFile(input: HTMLInputElement): File {
+    const selection = new DataTransfer();
+    const file = new File(['synthetic header'], 'selected.png', {type: 'image/png'});
+    selection.items.add(file);
+    input.files = selection.files;
+    input.dispatchEvent(new Event('change', {bubbles: true}));
+    return file;
+}
+
+describe('mounted Packing creation file selection', () => {
+    const secondId = '33333333-3333-4333-8333-333333333333';
+    const defaults = {participant: 0, guest: 0, authenticated: 0, public: 0};
+
+    /** Supply admitted read projections only. Navigation and draft retirement
+     * execute through the production router/component; this fixture refuses writes. */
+    function readDuplicate(request: Request): Promise<Response> {
+        if (request.method !== 'GET') throw new Error('Creation navigation must not send a command.');
+        const path = new URL(request.url).pathname;
+        if (path.endsWith('/events')) return Promise.resolve(json({items: [], nextCursor: null, selected: null}));
+        return Promise.resolve(json({title: path.includes(secondId) ? 'Second admitted copy' : 'First admitted copy',
+            description: null, eventId: null,
+            items: [{title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false}],
+            defaultPermissions: defaults, formContext: {defaults, permissions: [], presets: []}}));
+    }
+
+    it.each(['warm', 'cold'] as const)('releases the old chooser after accepted departure to a %s duplicate', async function releaseCommittedSelection(state) {
+        const mounted = await mountPackingView(list, readDuplicate, `/frontend-pilot/packing/${listId}/duplicate`);
+        const consent = vi.fn(() => true);
+        vi.stubGlobal('confirm', consent);
+        try {
+            // A cached target initializes in the same render turn, retaining the
+            // form node. A cold target is the control: its pending form unmounts.
+            if (state === 'warm') {
+                await mounted.router.push(`/frontend-pilot/packing/${secondId}/duplicate`);
+                await flushPromises();
+                await mounted.router.push(`/frontend-pilot/packing/${listId}/duplicate`);
+                await flushPromises();
+            }
+            const input = mounted.wrapper.get<HTMLInputElement>('#create-header').element;
+            selectHeaderFile(input);
+            await flushPromises();
+
+            await mounted.router.push(`/frontend-pilot/packing/${secondId}/duplicate`);
+            await flushPromises();
+            const nextInput = mounted.wrapper.get<HTMLInputElement>('#create-header').element;
+            expect(mounted.wrapper.get<HTMLInputElement>('#create-title').element.value).toBe('Second admitted copy');
+            expect(nextInput.files).toHaveLength(0);
+            if (state === 'warm') expect(nextInput).toBe(input);
+            expect(consent).toHaveBeenCalledTimes(1);
+
+            // The new form has no retained file draft or invisible departure
+            // work. Returning again requires no additional discard confirmation.
+            await mounted.router.push(`/frontend-pilot/packing/${listId}/duplicate`);
+            await flushPromises();
+            expect(consent).toHaveBeenCalledTimes(1);
+            expect(mounted.request.mock.calls.every(([incoming]) => (incoming as Request).method === 'GET')).toBe(true);
+        } finally { await mounted.dispose(); }
+    });
+
+    it('retains the selected bytes after canceled departure, background reads and fragment movement', async function preserveLocalSelection() {
+        const path = `/frontend-pilot/packing/${listId}/duplicate`;
+        const mounted = await mountPackingView(list, readDuplicate, path);
+        const consent = vi.fn(() => false);
+        vi.stubGlobal('confirm', consent);
+        try {
+            const input = mounted.wrapper.get<HTMLInputElement>('#create-header').element;
+            const file = selectHeaderFile(input);
+            await mounted.wrapper.get('#create-title').setValue('Entered copy title');
+            await mounted.router.push(`/frontend-pilot/packing/${secondId}/duplicate`);
+            await flushPromises();
+            expect(mounted.router.currentRoute.value.fullPath).toBe(path);
+            expect(consent).toHaveBeenCalledTimes(1);
+
+            // New definitions are read authority, not consent to discard copied
+            // inputs. The same feature draft/FileList survives ordinary refresh.
+            await mounted.context.queryClient.invalidateQueries({queryKey: packingKeys.duplicate(session.context, listId, undefined)});
+            await flushPromises();
+            await mounted.router.push(path + '#create-header');
+            await flushPromises();
+            expect(mounted.wrapper.get<HTMLInputElement>('#create-header').element).toBe(input);
+            expect(input.files?.[0]).toBe(file);
+            expect(mounted.wrapper.get<HTMLInputElement>('#create-title').element.value).toBe('Entered copy title');
+            expect(consent).toHaveBeenCalledTimes(1);
+            expect(mounted.request.mock.calls.every(([incoming]) => (incoming as Request).method === 'GET')).toBe(true);
+        } finally { await mounted.dispose(); }
+    });
+});
+
+describe('mounted Packing header upload selection', () => {
+    it.each(['healthy', 'failed'] as const)('clears confirmed bytes on the same input after a %s follow-up read',
+        async function confirmedHeaderSelection(followUp) {
+            let writes = 0;
+            const headerSettings = {...settings, editableFields: [],
+                capabilities: {...settings.capabilities, editHeader: true}};
+            const mounted = await mountPackingView(list, async function headerUploadResponse(request): Promise<Response> {
+                const path = new URL(request.url).pathname;
+                if (request.method === 'PUT' && path.endsWith('/header')) {
+                    writes++;
+                    return json({changed: true});
+                }
+                if (path.endsWith('/settings')) {
+                    if (writes && followUp === 'failed') return new Response(JSON.stringify({type: 'about:blank',
+                        title: 'Read unavailable', status: 503, detail: 'Saved header needs a later read.', requestId: 'header-follow-up'}),
+                        {status: 503, headers: {'Content-Type': 'application/problem+json',
+                            'X-Surveyor-Context': session.context, 'Retry-After': '3600'}});
+                    return json({...headerSettings, headerUrl: writes ? `/packing/${listId}/header` : null,
+                        headerVersion: writes ? `saved-header-${writes}` : null});
+                }
+                return json(path.endsWith('/metadata') ? metadata : list);
+            });
+            try {
+                await mounted.wrapper.findAll('button').find(button => button.text() === 'Entity settings')!.trigger('click');
+                await flushPromises();
+                const editor = mounted.wrapper.findComponent(EntityHeaderEditor);
+                const input = editor.get<HTMLInputElement>('input[type="file"]').element;
+                const file = selectHeaderFile(input);
+                await nextTick();
+                expect(input.files?.[0]).toBe(file);
+
+                // The real settings command confirms the upload. Read failure
+                // cannot make its saved bytes another selected upload draft.
+                await editor.findAll('button').find(button => button.text() === 'Upload')!.trigger('click');
+                await flushPromises();
+                expect(writes).toBe(1);
+                expect(editor.get('input[type="file"]').element).toBe(input);
+                expect(input.files?.length).toBe(0);
+                expect(input.value).toBe('');
+
+                if (followUp === 'healthy') {
+                    // A cleared chooser and its feature draft agree: another
+                    // Upload explains the missing choice without sending bytes.
+                    await editor.findAll('button').find(button => button.text() === 'Upload')!.trigger('click');
+                    await flushPromises();
+                    expect(writes).toBe(1);
+                    expect(document.body.textContent).toContain(mounted.context.messages.value.t('metadata.chooseImage'));
+
+                    // The same filename can be deliberately selected again on
+                    // this same input; only that new choice admits another upload.
+                    selectHeaderFile(input);
+                    await nextTick();
+                    await editor.findAll('button').find(button => button.text() === 'Upload')!.trigger('click');
+                    await flushPromises();
+                    expect(writes).toBe(2);
+                    expect(input.files?.length).toBe(0);
+                } else {
+                    expect(document.body.textContent).toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
+                }
+            } finally { await mounted.dispose(); }
+        },
+    );
+
+    it.each(['rejected', 'unknown'] as const)('retains selected bytes through background reads and a %s upload',
+        async function retainedHeaderSelection(outcome) {
+            let writes = 0;
+            let settingsToken = '"edit-original-header"';
+            const mounted = await mountPackingView(list, async function retainedHeaderResponse(request): Promise<Response> {
+                const path = new URL(request.url).pathname;
+                if (request.method === 'PUT' && path.endsWith('/header')) {
+                    writes++;
+                    if (outcome === 'unknown') throw new TypeError('The upload response was lost');
+                    return new Response(JSON.stringify({type: 'about:blank', title: 'Rejected', status: 400,
+                        detail: 'The image was rejected.', requestId: 'rejected-header', code: 'VALIDATION_FAILED',
+                        messageKey: 'api:errors.VALIDATION_FAILED', params: {}}), {status: 400,
+                        headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+                }
+                if (path.endsWith('/settings')) return json({...settings, settingsToken, editableFields: [],
+                    capabilities: {...settings.capabilities, editHeader: true}});
+                return json(path.endsWith('/metadata') ? metadata : list);
+            });
+            try {
+                await mounted.wrapper.findAll('button').find(button => button.text() === 'Entity settings')!.trigger('click');
+                await flushPromises();
+                const editor = mounted.wrapper.findComponent(EntityHeaderEditor);
+                const input = editor.get<HTMLInputElement>('input[type="file"]').element;
+                const file = selectHeaderFile(input);
+                await nextTick();
+
+                // A newer settings receipt retains the selected bytes and their
+                // original submission token. It is not upload confirmation.
+                settingsToken = '"edit-background-header"';
+                await mounted.context.queryClient.refetchQueries({queryKey: packingKeys.settings(session.context, listId)});
+                await flushPromises();
+                expect(editor.get('input[type="file"]').element).toBe(input);
+                expect(input.files?.[0]).toBe(file);
+
+                await editor.findAll('button').find(button => button.text() === 'Upload')!.trigger('click');
+                await flushPromises();
+                expect(writes).toBe(1);
+                const upload = mounted.request.mock.calls.map(call => call[0] as Request)
+                    .find(request => request.method === 'PUT');
+                expect(upload?.headers.get('If-Match')).toBe('"edit-original-header"');
+                expect(editor.get('input[type="file"]').element).toBe(input);
+                expect(input.files?.[0]).toBe(file);
+
+                await mounted.context.queryClient.refetchQueries({queryKey: packingKeys.settings(session.context, listId)});
+                await flushPromises();
+                expect(input.files?.[0]).toBe(file);
+                expect(writes).toBe(1);
+                if (outcome === 'unknown') {
+                    expect(document.body.textContent).toContain(mounted.context.messages.value.t('state.unknownOutcome'));
+                    expect(editor.findAll('button').find(button => button.text() === 'Upload')!.attributes('disabled')).toBeDefined();
+                }
+            } finally { await mounted.dispose(); }
+        },
+    );
+});
 
 /** Build an ordinary production row for browser-local checklist tests. The
  * Everyone color makes loss of a checked value visible independently of input state. */

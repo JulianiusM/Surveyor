@@ -500,6 +500,8 @@ async function upload(source?: Event): Promise<void> {
         api.uploadHeader(props.listId, image.value!, imageToken.value!, scope),
         true, false, {initiator: source, presentation: 'inline', success: 'metadata.imageUpdated'},
     );
+    // The shared chooser observes this explicit draft release. Clear its visible
+    // FileList after confirmation as well, including a saved-but-stale read result.
     if (result) image.value = null;
 }
 
@@ -855,7 +857,7 @@ function permissionLabel(key: string): string {
                 />
             </section>
             <EntityHeaderEditor v-if="data?.capabilities.editHeader"
-                input-id="pilot-header-image" :labels="headerLabels" :image-name="image?.name"
+                input-id="pilot-header-image" :labels="headerLabels" :selected-file="image"
                 :has-image="!!data.headerUrl" :expanded="!data.editableFields.length"
                 :conflict="headerConflict" :disabled="!!blocked" :reading="settings.isFetching.value"
                 @choose="chooseImage" @review="reviewHeader" @upload="upload" @remove="removeImage" />

@@ -1,8 +1,28 @@
 import type {MessageKey} from '../../types/LocalizationTypes';
 import type {components} from '../../types/api/v1';
 import type {FrontendIdentityOperation, IdentityLoginSettings} from '../../types/IdentityTypes';
+import type {FrontendGuestLinkHandoff} from '../../types/FrontendPilotTypes';
 
 type IdentityProblemCode = components['schemas']['Problem']['code'];
+
+/**
+ * Decode the existing guest-link flash boundary without carrying another identity's
+ * private recovery link into a newly admitted document. Old unscoped strings and
+ * malformed records provide no matching context and are deliberately discarded.
+ */
+export function readGuestLinkHandoff(value: unknown, context: string): FrontendGuestLinkHandoff | undefined {
+    if (typeof value !== 'string') return;
+    try {
+        // Flash storage is untyped. Preserve the existing actor-global first-GET
+        // feedback while requiring this link's committed identity context.
+        const data = JSON.parse(value) as Partial<FrontendGuestLinkHandoff> | null;
+        if (!data || data.context !== context || typeof data.personalLink !== 'string') return;
+        return {context, personalLink: data.personalLink};
+    } catch {
+        // A legacy or damaged flash is not document authority or an error state.
+        return;
+    }
+}
 
 /**
  * Pilot registration projects the native password criteria without importing its

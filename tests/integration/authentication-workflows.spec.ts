@@ -1,10 +1,29 @@
-import type {Request} from 'express';
+import type {Request, Response} from 'express';
+import type {SessionData} from 'express-session';
+import {randomUUID} from 'node:crypto';
+import nodemailer from 'nodemailer';
+import flashMiddleware from 'express-flash';
+import type {Transporter} from 'nodemailer';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import * as userController from '../../src/controller/userController';
 import {AppDataSource} from '../../src/modules/database/dataSource';
 import {User} from '../../src/modules/database/entities/user/User';
+import {Guest} from '../../src/modules/database/entities/user/Guest';
+import {Profile} from '../../src/modules/database/entities/user/Profile';
+import {Session} from '../../src/modules/database/entities/session/Session';
 import * as userService from '../../src/modules/database/services/UserService';
 import email from "../../src/modules/email";
+import * as emailOwner from '../../src/modules/email';
+import {createSessionStore, persistSession, readStoredSession} from '../../src/modules/lib/session';
+import {ensureFrontendSessionContext} from '../../src/modules/lib/frontendSession';
+import {prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, sessionView, stagedSessionView} from '../../src/modules/api/session';
+import {prepareValidatedJson} from '../../src/modules/api/transport';
+import {prepareFrontendPilot, sendPreparedFrontendPilot} from '../../src/modules/frontendPilotRenderer';
+import type {PreparedApiJsonResponse} from '../../src/types/ApiTransportTypes';
+import type {AccountRegistrationTransactionOptions, GuestRegistrationTransactionOptions, IdentityCompletionOptions} from '../../src/types/IdentityTypes';
+import type {components} from '../../src/types/api/v1';
+import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
+import type {EntityManager} from 'typeorm';
 import {persistIntegrationProfile, registerLocalAccount,} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
@@ -16,7 +35,870 @@ afterAll(async () => {
     await closeIntegrationDatabase();
 });
 
+/** Persist a real anonymous cookie session through the production configured store. */
+async function atomicGuestRequest(): Promise<Request> {
+    const store = createSessionStore(AppDataSource.manager);
+    const req = {sessionID: randomUUID(), sessionStore: store,
+        get: function getHeader(name: string) { return name.toLowerCase() === 'x-surveyor-locale' ? 'en' : undefined; },
+    } as unknown as Request;
+    store.createSession(req, {cookie: {expires: new Date(Date.now() + 86_400_000), originalMaxAge: 86_400_000,
+        httpOnly: true, secure: false, path: '/', sameSite: 'lax'}} as SessionData);
+    ensureFrontendSessionContext(req.session);
+    await persistSession(req.session);
+    req.apiActor = {context: req.session.frontendContext!};
+    return req;
+}
+
+/** Bind the same production response preparer used by the versioned route. */
+function atomicGuestOptions(req: Request): GuestRegistrationTransactionOptions<PreparedApiJsonResponse> {
+    function prepareResult(staged: Request['session'], personalLink: string) {
+        return prepareGuestIdentityReplies(req, staged, personalLink);
+    }
+    return {frontend: true, next: '/frontend-pilot', context: req.apiActor!.context, prepareResult};
+}
+
+/** Check both real related tables after a rollback, rather than mocking creation repositories. */
+async function expectGuestAbsent(username: string): Promise<void> {
+    expect(await AppDataSource.getRepository(Guest).countBy({username})).toBe(0);
+    expect(await AppDataSource.getRepository(Profile).countBy({name: username})).toBe(0);
+}
+
+/** Signup uses the production generated reply owner while preserving this anonymous actor. */
+function atomicAccountOptions(req: Request): AccountRegistrationTransactionOptions<PreparedApiJsonResponse> {
+    function prepareResult(staged: Request['session']) {
+        return prepareAccountRegistrationReplies(req, staged);
+    }
+    return {frontend: true, next: '/frontend-pilot', context: req.apiActor!.context, prepareResult};
+}
+
+/** Keep valid credentials private to the production registration call and its real ORM fixture. */
+function accountRegistrationInput(username: string) {
+    return {username, displayname: username, email: `${username}@example.test`,
+        password: 'initial-secret', password_repeat: 'initial-secret'};
+}
+
+/** Replace only SMTP; recipient validation and both actual activation templates still run. */
+function activationDelivery(accepted: boolean) {
+    const render = emailOwner.prepareActivationEmail;
+    const deliver = vi.fn().mockResolvedValue(accepted);
+    const prepared = vi.spyOn(emailOwner, 'prepareActivationEmail').mockImplementation(function prepareMail(recipient, link) {
+        render(recipient, link);
+        return {deliver};
+    });
+    return {prepared, deliver};
+}
+
+/** Use the actual activation contract before token consumption and optional document persistence. */
+function activationOptions(req: Request, persistCompletion = false): IdentityCompletionOptions<PreparedApiJsonResponse> {
+    function prepareResult(staged: Request['session']) {
+        return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true}, staged.frontendContext);
+    }
+    return {context: req.apiActor!.context, persistCompletion, prepareResult};
+}
+
+type OrdinaryIdentityKind = 'account' | 'guest' | 'profile';
+
+/** Actual owned identity records drive the three production completion adapters; repositories are never mocked. */
+async function ordinaryIdentityFixture(kind: OrdinaryIdentityKind) {
+    const req = await atomicGuestRequest();
+    let username = '';
+    let guestId = '';
+    let guestToken = '';
+    let profileId = '';
+    if (kind === 'guest') {
+        const guest = await userService.createGuest(`Existing guest ${randomUUID().slice(0, 8)}`);
+        guestId = guest.id;
+        guestToken = guest.token;
+    } else {
+        const account = await registerLocalAccount(`ordinary-${kind}`);
+        username = account.username;
+        await userService.activateUser(account.id);
+        if (kind === 'profile') {
+            const user = await userService.getUserById(account.id);
+            const second = await AppDataSource.getRepository(Profile).save({name: 'Second owned profile',
+                defaultForOwner: false, user: user!});
+            const current = await userService.getUserById(account.id);
+            req.session.auth = {user: current!};
+            req.session.profile = userController.getDefaultProfile(current!.profiles);
+            await persistSession(req.session);
+            req.apiActor = {context: req.session.frontendContext!, auth: req.session.auth, profile: req.session.profile};
+            profileId = second.id;
+        }
+    }
+    const operation: Parameters<typeof prepareIdentityReply>[2] = kind === 'account' ? 'loginIdentity'
+        : kind === 'guest' ? 'loginGuestIdentity' : 'switchIdentityProfile';
+    function prepareResult(staged: Request['session']) {
+        return prepareIdentityReply(req, staged, operation);
+    }
+    const options: IdentityCompletionOptions<PreparedApiJsonResponse> = {context: req.apiActor!.context, prepareResult};
+    function run(selected = options) {
+        if (kind === 'account') return userController.loginUserWithSession({username, password: 'initial-secret'}, req, selected);
+        if (kind === 'guest') return userController.loginGuestWithSession(guestId, guestToken, req, selected);
+        return userController.changeActiveProfileWithSession(profileId, req, selected);
+    }
+    return {req, options, run, operation};
+}
+
+/** Begin logout from real persisted account/guest authority with the normal writable store session. */
+async function ordinaryLogoutFixture(kind: Exclude<OrdinaryIdentityKind, 'profile'>) {
+    const {req, run} = await ordinaryIdentityFixture(kind);
+    await run();
+    const stored = await readStoredSession(req.sessionStore, req.sessionID);
+    req.sessionStore.createSession(req, stored!);
+    req.session.frontendAuthReturn = '/frontend-pilot/packing/return-after-login';
+    await persistSession(req.session);
+    req.apiActor = {context: req.session.frontendContext!, auth: req.session.auth, profile: req.session.profile};
+
+    function prepareResult(staged: Request['session']) {
+        return prepareIdentityReply(req, staged, 'logoutIdentity');
+    }
+    const options: IdentityCompletionOptions<PreparedApiJsonResponse> = {context: req.apiActor.context, prepareResult};
+    return {req, options};
+}
+
+/** Capture only the response transport seam; the actual SSR renderer still prepares every byte. */
+function documentResponse() {
+    const headers = new Map<string, string>();
+    let body: string | null = null;
+    const res = {
+        set: function setHeader(name: string, value: string) { headers.set(name, value); return res; },
+        type: function setType(value: string) { headers.set('Content-Type', value); return res; },
+        send: function sendBody(value: string) { body = value; return res; },
+    } as unknown as Response;
+    return {res, headers, get body() { return body; }};
+}
+
+/** Prepare the submitted reset URL's real completion tree using only manager-bound admitted evidence. */
+async function resetDocument(req: Request, staged: Request['session'], manager: EntityManager,
+    token: string, response: Response, invalid = false) {
+    const url = `/frontend-pilot/users/reset-password/${token}`;
+    const session = await stagedSessionView(req, staged, manager);
+    const state: FrontendPilotBootstrap = {session, initialUrl: url,
+        pageCompletion: {context: session.context, destination: url, messageKey: 'auth.resetDone', kind: 'success'}};
+    // Exercise the real JSON serializer rather than browser-only validation. An
+    // enumerable self-reference survives the SSR entry's bootstrap spread.
+    if (invalid) Object.defineProperty(state, 'serializationCycle', {value: state, enumerable: true});
+    return prepareFrontendPilot(response, url, state);
+}
+
+describe('atomic versioned guest registration', () => {
+    it('commits guest, profile and stored identity together with a prevalidated private receipt', async () => {
+        const req = await atomicGuestRequest();
+        const original = req.session;
+        const context = original.frontendContext;
+        const username = `Atomic ${randomUUID().slice(0, 8)}`;
+        const committed = await userController.registerGuestWithSession(username, undefined, req, atomicGuestOptions(req));
+        const reply = JSON.parse(committed.result.json) as components['schemas']['IdentityResult'];
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+
+        expect(req.session).toBe(original);
+        expect(req.session.auth).toBeUndefined();
+        expect(stored?.frontendContext).not.toBe(context);
+        expect(reply).toMatchObject({emailDelivery: 'not-requested', session: {kind: 'guest', context: stored!.frontendContext,
+            activeProfile: {id: stored!.profile!.id, name: username}}});
+        expect(committed.result.context).toBe(reply.session.context);
+        expect(await userService.getGuestInternal(stored!.auth.guest!.id)).toMatchObject({username, profile: {id: stored!.profile!.id}});
+        expect(reply.personalLink).toContain(`/guest/${stored!.auth.guest!.id}/login/`);
+        expect(committed.result.json).not.toContain('"token"');
+    });
+
+    it('rolls back both new rows when output validation rejects before session persistence', async () => {
+        const req = await atomicGuestRequest();
+        const original = JSON.stringify(req.session);
+        const username = `Invalid receipt ${randomUUID().slice(0, 8)}`;
+        const options = atomicGuestOptions(req);
+        function prepareInvalidResult(staged: Request['session'], personalLink: string) {
+            staged.frontendCsrfToken = '';
+            return prepareGuestIdentityReplies(req, staged, personalLink);
+        }
+        options.prepareResult = prepareInvalidResult;
+
+        await expect(userController.registerGuestWithSession(username, undefined, req, options))
+            .rejects.toMatchObject({code: 'INTERNAL_ERROR'});
+        await expectGuestAbsent(username);
+        expect(JSON.stringify(req.session)).toBe(original);
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(req.apiActor!.context);
+    });
+
+    it('rolls back guest and profile when the configured store cannot serialize the staged session', async () => {
+        const req = await atomicGuestRequest();
+        const original = JSON.stringify(req.session);
+        const username = `Invalid stored ${randomUUID().slice(0, 8)}`;
+        const options = atomicGuestOptions(req);
+        function prepareUnserializableSession(staged: Request['session'], personalLink: string) {
+            const replies = prepareGuestIdentityReplies(req, staged, personalLink);
+            // The actual store's JSON writer rejects this cycle after the valid
+            // wire replies exist, exercising rollback at persistence preparation.
+            Object.defineProperty(staged, 'serializationCycle', {value: staged, enumerable: true});
+            return replies;
+        }
+        options.prepareResult = prepareUnserializableSession;
+
+        await expect(userController.registerGuestWithSession(username, undefined, req, options)).rejects.toBeInstanceOf(TypeError);
+        await expectGuestAbsent(username);
+        expect(JSON.stringify(req.session)).toBe(original);
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(req.apiActor!.context);
+    });
+
+    it.each(['stale', 'expired', 'destroyed', 'missing', 'malformed'] as const)('rejects %s stored admission without creating an identity', async condition => {
+        const req = await atomicGuestRequest();
+        const username = `Rejected ${condition} ${randomUUID().slice(0, 8)}`;
+        const repo = AppDataSource.getRepository(Session);
+        if (condition === 'stale') {
+            const changed = {...JSON.parse(JSON.stringify(req.session)), frontendContext: 'another-context'};
+            await repo.update({id: req.sessionID}, {json: JSON.stringify(changed)});
+        } else if (condition === 'expired') await repo.update({id: req.sessionID}, {expiredAt: Date.now() - 1});
+        else if (condition === 'destroyed') await repo.softDelete({id: req.sessionID});
+        else if (condition === 'missing') await repo.delete({id: req.sessionID});
+        else await repo.update({id: req.sessionID}, {json: '{malformed'});
+
+        const operation = userController.registerGuestWithSession(username, undefined, req, atomicGuestOptions(req));
+        if (condition === 'malformed') await expect(operation).rejects.toBeInstanceOf(SyntaxError);
+        else await expect(operation).rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+        await expectGuestAbsent(username);
+        expect(req.session.auth).toBeUndefined();
+        expect(req.session.frontendContext).toBe(req.apiActor!.context);
+    });
+
+    it('retains the committed guest receipt and never resaves over a later session actor', async () => {
+        const req = await atomicGuestRequest();
+        const username = `Final commit ${randomUUID().slice(0, 8)}`;
+        const committed = await userController.registerGuestWithSession(username, undefined, req, atomicGuestOptions(req));
+        const completed = JSON.parse(committed.result.json) as components['schemas']['IdentityResult'];
+        const later = {...JSON.parse(JSON.stringify(req.session)), frontendContext: 'later-actor-context'};
+        await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(later)});
+
+        // The adapter adopts this exact receipt only after commit. Express uses
+        // its nonenumerable save acknowledgement rather than a second DB write.
+        req.session = committed.session;
+        await persistSession(req.session);
+        expect(Object.keys(req.session)).not.toContain('save');
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe('later-actor-context');
+        expect(completed.session.context).not.toBe('later-actor-context');
+        expect(await AppDataSource.getRepository(Guest).countBy({username})).toBe(1);
+    });
+
+    it('serializes a later identity write behind guest creation until its atomic commit', async () => {
+        const req = await atomicGuestRequest();
+        const username = `Locked identity ${randomUUID().slice(0, 8)}`;
+        const options = atomicGuestOptions(req);
+        let enterPreparation!: () => void;
+        let releasePreparation!: () => void;
+        const entered = new Promise<void>(function captureEntry(resolve) { enterPreparation = resolve; });
+        const released = new Promise<void>(function captureRelease(resolve) { releasePreparation = resolve; });
+        async function prepareUnderLock(staged: Request['session'], personalLink: string) {
+            const results = prepareGuestIdentityReplies(req, staged, personalLink);
+            enterPreparation();
+            await released;
+            return results;
+        }
+        options.prepareResult = prepareUnderLock;
+
+        const registering = userController.registerGuestWithSession(username, undefined, req, options);
+        await entered;
+        const writer = AppDataSource.createQueryRunner();
+        try {
+            await writer.connect();
+            await writer.startTransaction();
+            const later = {...JSON.parse(JSON.stringify(req.session)), frontendContext: 'queued-later-context'};
+            const changing = writer.manager.update(Session, {id: req.sessionID}, {json: JSON.stringify(later)});
+
+            // This real second transaction targets the row still locked by
+            // registration. Release output preparation so creation can commit.
+            releasePreparation();
+            const committed = await registering;
+            await changing;
+            await writer.commitTransaction();
+            expect(JSON.parse(committed.result.json).session.kind).toBe('guest');
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe('queued-later-context');
+            expect(await AppDataSource.getRepository(Guest).countBy({username})).toBe(1);
+        } finally {
+            releasePreparation();
+            if (writer.isTransactionActive) await writer.rollbackTransaction();
+            await writer.release();
+        }
+    });
+
+    it('rolls back before commit when the actual guest-mail renderer rejects its recipient', async () => {
+        const req = await atomicGuestRequest();
+        const username = '  \r\n  ';
+        await expect(userController.registerGuestWithSession(username, 'invalid-recipient@example.test', req, atomicGuestOptions(req)))
+            .rejects.toThrow('recipients require a name');
+        await expectGuestAbsent(username);
+        expect(req.session.auth).toBeUndefined();
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(req.apiActor!.context);
+    });
+
+    it.each([true, false])('keeps committed creation when prepared SMTP acceptance is %s', async accepted => {
+        const req = await atomicGuestRequest();
+        const username = `Mail receipt ${randomUUID().slice(0, 8)}`;
+        const render = emailOwner.prepareGuestLinkEmail;
+        const deliver = vi.fn().mockResolvedValue(accepted);
+        const prepared = vi.spyOn(emailOwner, 'prepareGuestLinkEmail').mockImplementation(function prepareMail(recipient, link) {
+            // Keep actual recipient/template preparation; replace only the opaque
+            // external SMTP delivery boundary after the transaction has committed.
+            render(recipient, link);
+            return {deliver};
+        });
+        try {
+            const committed = await userController.registerGuestWithSession(username, 'atomic-guest@example.test', req, atomicGuestOptions(req));
+            const result = JSON.parse(committed.result.json) as components['schemas']['IdentityResult'];
+            expect(result.emailDelivery).toBe(accepted ? 'sent' : 'failed');
+            expect(result.personalLink).toBeTruthy();
+            expect(result.session.kind).toBe('guest');
+            expect(await AppDataSource.getRepository(Guest).countBy({username})).toBe(1);
+            expect(deliver).toHaveBeenCalledOnce();
+            expect(prepared).toHaveBeenCalledOnce();
+        } finally { prepared.mockRestore(); }
+    });
+});
+
+describe('atomic versioned account registration', () => {
+    it.each([true, false])('commits account/profile/activation together and reports SMTP acceptance %s without changing actor', async accepted => {
+        const req = await atomicGuestRequest();
+        const original = req.session;
+        const originalJson = JSON.stringify(original);
+        const username = `atomic-account-${randomUUID().slice(0, 8)}`;
+        const {prepared, deliver} = activationDelivery(accepted);
+        try {
+            const committed = await userController.registerUserWithSession(accountRegistrationInput(username), req, atomicAccountOptions(req));
+            const result = JSON.parse(committed.result.json) as components['schemas']['RegistrationResult'];
+            const account = await AppDataSource.getRepository(User).findOneOrFail({where: {username}, relations: {profiles: true}});
+            // This established tinyint column hydrates as 0/1 in the MariaDB
+            // driver; test its business meaning without changing native metadata.
+            expect(Boolean(account.isActive)).toBe(false);
+            expect(account).toMatchObject({profiles: [{name: username, defaultForOwner: true}]});
+            expect(account.activationToken).toBeTruthy();
+            expect(account.activationTokenExpiration!.getTime()).toBeGreaterThan(Date.now());
+            expect(result).toEqual({changed: true, emailDelivery: accepted ? 'sent' : 'failed'});
+            expect(committed.result.context).toBe(req.apiActor!.context);
+            expect(committed.result.json).not.toContain(account.activationToken!);
+            expect(committed.result.json).not.toContain('activationToken');
+            expect(req.session).toBe(original);
+            expect(JSON.stringify(req.session)).toBe(originalJson);
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(req.apiActor!.context);
+            expect(deliver).toHaveBeenCalledOnce();
+            expect(prepared).toHaveBeenCalledOnce();
+        } finally { prepared.mockRestore(); }
+    });
+
+    it('rolls back account, default profile and activation token when its generated completion is invalid', async () => {
+        const req = await atomicGuestRequest();
+        const originalJson = JSON.stringify(req.session);
+        const username = `invalid-account-${randomUUID().slice(0, 8)}`;
+        const {prepared, deliver} = activationDelivery(true);
+        const options = atomicAccountOptions(req);
+        function prepareInvalidResult(staged: Request['session']) {
+            // Exercise the production generated validator after record/token
+            // preparation, without substituting DBAL or transaction behavior.
+            const replies = prepareAccountRegistrationReplies(req, staged);
+            const malformed = {changed: 'yes'} as unknown as components['schemas']['RegistrationResult'];
+            const invalid = prepareValidatedJson(req, 'registerAccount', 200, malformed, staged.frontendContext);
+            return {...replies, sent: invalid};
+        }
+        options.prepareResult = prepareInvalidResult;
+        try {
+            await expect(userController.registerUserWithSession(accountRegistrationInput(username), req, options))
+                .rejects.toMatchObject({code: 'INTERNAL_ERROR'});
+            expect(await AppDataSource.getRepository(User).countBy({username})).toBe(0);
+            expect(await AppDataSource.getRepository(Profile).countBy({name: username})).toBe(0);
+            expect(JSON.stringify(req.session)).toBe(originalJson);
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(req.apiActor!.context);
+            expect(deliver).not.toHaveBeenCalled();
+        } finally { prepared.mockRestore(); }
+    });
+
+    it('rolls back the prepared account and token when the actual activation renderer rejects its recipient', async () => {
+        const req = await atomicGuestRequest();
+        const username = `invalid-mail-${randomUUID().slice(0, 8)}`;
+        const input = {...accountRegistrationInput(username), email: '   '};
+        await expect(userController.registerUserWithSession(input, req, atomicAccountOptions(req)))
+            .rejects.toThrow('recipients require a name and an address');
+        expect(await AppDataSource.getRepository(User).countBy({username})).toBe(0);
+        expect(await AppDataSource.getRepository(Profile).countBy({name: username})).toBe(0);
+        expect(req.session.auth).toBeUndefined();
+    });
+
+    it('rejects a later stored actor before allocating an account or preparing activation mail', async () => {
+        const req = await atomicGuestRequest();
+        const username = `stale-account-${randomUUID().slice(0, 8)}`;
+        const later = {...JSON.parse(JSON.stringify(req.session)), frontendContext: 'later-account-context'};
+        await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(later)});
+        const {prepared, deliver} = activationDelivery(true);
+        try {
+            await expect(userController.registerUserWithSession(accountRegistrationInput(username), req, atomicAccountOptions(req)))
+                .rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+            expect(await AppDataSource.getRepository(User).countBy({username})).toBe(0);
+            expect(await AppDataSource.getRepository(Profile).countBy({name: username})).toBe(0);
+            expect(prepared).not.toHaveBeenCalled();
+            expect(deliver).not.toHaveBeenCalled();
+        } finally { prepared.mockRestore(); }
+    });
+});
+
+describe('atomic pilot activation completion', () => {
+    it('consumes its token with a prevalidated receipt and staged document feedback without a later session save', async () => {
+        const {id} = await registerLocalAccount('atomic-activation');
+        const token = await userService.generateActivationToken(id);
+        const req = await atomicGuestRequest();
+        const original = req.session;
+        const options = activationOptions(req, true);
+        function prepareDocumentCompletion(staged: Request['session']) {
+            // The document adapter writes this same connect-flash shape only on
+            // isolated staging; private activation tokens never enter feedback.
+            Object.defineProperty(staged, 'flash', {value: {'frontend-pilot': ['auth.activated']}, enumerable: true});
+            return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true}, staged.frontendContext);
+        }
+        options.prepareResult = prepareDocumentCompletion;
+        const committed = await userController.activateAccountWithSession(token, req, options);
+        expect(JSON.parse(committed.result.json)).toEqual({changed: true});
+        expect(committed.result.json).not.toContain(token);
+        expect(req.session).toBe(original);
+        expect(JSON.stringify(original)).not.toContain('auth.activated');
+        const user = await AppDataSource.getRepository(User).findOneByOrFail({id});
+        expect(Boolean(user.isActive)).toBe(true);
+        expect(user).toMatchObject({activationToken: null, activationTokenExpiration: null});
+        expect(JSON.stringify(await readStoredSession(req.sessionStore, req.sessionID))).toContain('auth.activated');
+
+        // A later actor remains authoritative even when Express acknowledges this
+        // older completed document response after the activation transaction.
+        const later = {...JSON.parse(JSON.stringify(original)), frontendContext: 'later-activation-actor'};
+        await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(later)});
+        req.session = committed.session;
+        await persistSession(req.session);
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe('later-activation-actor');
+    });
+
+    it('retains the usable activation token when staged document serialization fails', async () => {
+        const {id} = await registerLocalAccount('rolled-back-activation');
+        const token = await userService.generateActivationToken(id);
+        const req = await atomicGuestRequest();
+        const originalJson = JSON.stringify(req.session);
+        const options = activationOptions(req, true);
+        function prepareUnserializableCompletion(staged: Request['session']) {
+            const reply = prepareValidatedJson(req, 'activateIdentity', 200, {changed: true}, staged.frontendContext);
+            Object.defineProperty(staged, 'serializationCycle', {value: staged, enumerable: true});
+            return reply;
+        }
+        options.prepareResult = prepareUnserializableCompletion;
+        await expect(userController.activateAccountWithSession(token, req, options)).rejects.toBeInstanceOf(TypeError);
+        const retained = await userService.verifyActivationToken(token);
+        expect(retained?.id).toBe(id);
+        expect(Boolean(retained?.isActive)).toBe(false);
+        expect(JSON.stringify(req.session)).toBe(originalJson);
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(req.apiActor!.context);
+    });
+
+    it('allows only one activation when two independently admitted sessions consume the same token', async () => {
+        const {id} = await registerLocalAccount('concurrent-activation');
+        const token = await userService.generateActivationToken(id);
+        const first = await atomicGuestRequest();
+        const second = await atomicGuestRequest();
+        const outcomes = await Promise.allSettled([
+            userController.activateAccountWithSession(token, first, activationOptions(first)),
+            userController.activateAccountWithSession(token, second, activationOptions(second)),
+        ]);
+        const confirmed = outcomes.filter(result => result.status === 'fulfilled');
+        const rejected = outcomes.find(result => result.status === 'rejected');
+        expect(confirmed).toHaveLength(1);
+        expect(rejected?.status === 'rejected' && rejected.reason).toMatchObject({cause: 'TOKEN_INVALID'});
+        expect(await userService.verifyActivationToken(token)).toBeNull();
+        expect(Boolean((await AppDataSource.getRepository(User).findOneByOrFail({id})).isActive)).toBe(true);
+        expect(first.session.auth).toBeUndefined();
+        expect(second.session.auth).toBeUndefined();
+    });
+});
+
+describe('atomic ordinary pilot identity completion', () => {
+    it.each(['account', 'guest', 'profile'] as const)('rolls back %s authority when its generated completion rejects after inner deferred save', async kind => {
+        const {req, options, run, operation} = await ordinaryIdentityFixture(kind);
+        const original = req.session;
+        const originalJson = JSON.stringify(original);
+        function rejectGeneratedCompletion(staged: Request['session']) {
+            // Existing controller logic has already called persistSession on
+            // isolated staging. That inner save must not write before validation.
+            staged.frontendCsrfToken = '';
+            return prepareIdentityReply(req, staged, operation);
+        }
+        options.prepareResult = rejectGeneratedCompletion;
+        await expect(run()).rejects.toMatchObject({code: 'INTERNAL_ERROR'});
+        expect(req.session).toBe(original);
+        expect(JSON.stringify(req.session)).toBe(originalJson);
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        expect(stored?.frontendContext).toBe(original.frontendContext);
+        expect(stored?.profile?.id).toBe(original.profile?.id);
+        expect(stored?.auth?.user?.id).toBe(original.auth?.user?.id);
+        expect(stored?.auth?.guest?.id).toBe(original.auth?.guest?.id);
+    });
+
+    it.each(['account', 'guest', 'profile'] as const)('returns prepared %s confirmation without overwriting a later actor', async kind => {
+        const {req, run} = await ordinaryIdentityFixture(kind);
+        const original = req.session;
+        const committed = await run();
+        const reply = JSON.parse(committed.result.json) as components['schemas']['IdentityResult'];
+        expect(reply).toMatchObject({session: {kind: kind === 'guest' ? 'guest' : 'account'}, personalLink: null, redirect: null});
+        expect(reply.session.context).not.toBe(original.frontendContext);
+        expect(committed.result.context).toBe(reply.session.context);
+        expect(req.session).toBe(original);
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(reply.session.context);
+
+        const later = {...JSON.parse(JSON.stringify(original)), frontendContext: `later-${kind}-actor`};
+        await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(later)});
+        req.session = committed.session;
+        await persistSession(req.session);
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(`later-${kind}-actor`);
+        expect(JSON.parse(committed.result.json).session.context).toBe(reply.session.context);
+    });
+
+    it('preserves inactive-login activation resend before rejection without rolling its token back or mutating authority', async () => {
+        const account = await registerLocalAccount('ordinary-inactive');
+        const req = await atomicGuestRequest();
+        const originalJson = JSON.stringify(req.session);
+        const prepareResult = vi.fn();
+        const sent = vi.spyOn(email, 'sendActivationEmail').mockImplementation(async function acceptPreparedNativeMail(recipient, link) {
+            // Keep actual template/recipient preparation; suppress only external
+            // delivery so this known native rejection sends no real email.
+            emailOwner.prepareActivationEmail(recipient, link);
+        });
+        try {
+            await expect(userController.loginUserWithSession({username: account.username, password: 'initial-secret'}, req,
+                {frontend: true, context: req.apiActor!.context, prepareResult})).rejects.toMatchObject({cause: 'ACTIVATION_RESENT'});
+            const link = new URL(sent.mock.calls[0][1]);
+            const token = link.pathname.split('/').at(-1)!;
+            expect(await userService.verifyActivationToken(token)).toMatchObject({id: account.id});
+            expect(prepareResult).not.toHaveBeenCalled();
+            expect(JSON.stringify(req.session)).toBe(originalJson);
+            expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(req.apiActor!.context);
+        } finally { sent.mockRestore(); }
+    });
+});
+
+describe('atomic ordinary pilot logout completion', () => {
+    it.each(['account', 'guest'] as const)('commits anonymous %s logout and its prepared receipt without a later actor resave', async kind => {
+        const {req, options} = await ordinaryLogoutFixture(kind);
+        const original = req.session;
+        const committed = await userController.logoutUserWithSession(req, options);
+        const reply = JSON.parse(committed.result.json) as components['schemas']['IdentityResult'];
+        expect(reply).toMatchObject({session: {kind: 'anonymous', activeProfile: null, profiles: []}, personalLink: null, redirect: null});
+        expect(reply.session.context).not.toBe(original.frontendContext);
+        expect(reply.session.csrfToken).not.toBe(original.frontendCsrfToken);
+        expect(req.session).toBe(original);
+        expect(original.auth?.[kind === 'account' ? 'user' : 'guest']).toBeTruthy();
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        expect(stored?.frontendContext).toBe(reply.session.context);
+        expect(stored?.auth).toBeUndefined();
+        expect(stored?.profile).toBeUndefined();
+        expect(stored?.tokens).toBeUndefined();
+        expect(stored?.frontendAuthReturn).toBeUndefined();
+
+        // A later admitted identity remains authoritative. Adopting this completed
+        // logout acknowledges its stored write rather than saving its old JSON again.
+        const later = {...JSON.parse(JSON.stringify(original)), frontendContext: `later-${kind}-after-logout`};
+        await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(later)});
+        req.session = committed.session;
+        await persistSession(req.session);
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe(later.frontendContext);
+        expect(JSON.parse(committed.result.json).session.context).toBe(reply.session.context);
+    });
+
+    it.each(['generated response', 'document notice'] as const)('rolls back ordinary logout when its %s cannot prepare', async mode => {
+        const {req, options} = await ordinaryLogoutFixture('account');
+        const original = req.session;
+        const originalJson = JSON.stringify(original);
+        flashMiddleware()(req, {} as Response, function installNoticeOwner() {});
+        function rejectCompletion(staged: Request['session']) {
+            if (mode === 'generated response') staged.frontendCsrfToken = '';
+            else {
+                // Keep the actual connect-flash owner. Its first detached queue
+                // read rejects this notice before any stored authority changes.
+                Object.defineProperty(staged, 'flash', {enumerable: true,
+                    get: function rejectNoticeQueue(): never { throw new TypeError('Document notice fixture rejected'); }});
+                req.flash.call({session: staged} as Request, 'frontend-pilot-notice',
+                    JSON.stringify({kind: 'success', messageKey: 'auth.logoutDone'}));
+            }
+            return prepareIdentityReply(req, staged, 'logoutIdentity');
+        }
+        options.prepareResult = rejectCompletion;
+        const completion = userController.logoutUserWithSession(req, options);
+        if (mode === 'generated response') await expect(completion).rejects.toMatchObject({code: 'INTERNAL_ERROR'});
+        else await expect(completion).rejects.toBeInstanceOf(TypeError);
+
+        expect(req.session).toBe(original);
+        expect(JSON.stringify(req.session)).toBe(originalJson);
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        expect(stored?.auth?.user?.id).toBe(original.auth?.user?.id);
+        expect(stored?.profile?.id).toBe(original.profile?.id);
+        expect(stored?.frontendContext).toBe(original.frontendContext);
+        expect(stored?.frontendCsrfToken).toBe(original.frontendCsrfToken);
+        expect(stored?.frontendAuthReturn).toBe(original.frontendAuthReturn);
+        expect(JSON.stringify(stored)).not.toContain('auth.logoutDone');
+    });
+
+    it('commits the ordinary logout document notice and prepared 303 with its anonymous authority', async () => {
+        const {req} = await ordinaryLogoutFixture('guest');
+        flashMiddleware()(req, {} as Response, function installNoticeOwner() {});
+        const destination = '/frontend-pilot?locale=en';
+        function prepareDocument(staged: Request['session']) {
+            req.flash.call({session: staged} as Request, 'frontend-pilot-notice',
+                JSON.stringify({kind: 'success', messageKey: 'auth.logoutDone'}));
+            return Object.freeze({status: 303 as const, destination});
+        }
+        const committed = await userController.logoutUserWithSession(req,
+            {context: req.apiActor!.context, prepareResult: prepareDocument});
+        expect(committed.result).toEqual({status: 303, destination});
+        expect(req.session.auth?.guest).toBeTruthy();
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        expect(stored?.auth).toBeUndefined();
+        expect(stored?.profile).toBeUndefined();
+        expect(stored?.frontendContext).toBe(committed.session.frontendContext);
+        expect(JSON.stringify(stored)).toContain('auth.logoutDone');
+    });
+
+    it('rejects stale ordinary logout before mutating request authority or a later stored guest', async () => {
+        const {req, options} = await ordinaryLogoutFixture('account');
+        const originalJson = JSON.stringify(req.session);
+        const guest = await userService.createGuest(`Later logout actor ${randomUUID().slice(0, 8)}`);
+        const later = {...JSON.parse(originalJson), auth: {guest}, profile: guest.profile,
+            frontendContext: 'later-guest-before-logout'};
+        await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(later)});
+        const prepare = vi.fn(options.prepareResult);
+        options.prepareResult = prepare;
+
+        await expect(userController.logoutUserWithSession(req, options)).rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+        expect(prepare).not.toHaveBeenCalled();
+        expect(JSON.stringify(req.session)).toBe(originalJson);
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        expect(stored?.frontendContext).toBe(later.frontendContext);
+        expect(stored?.auth?.guest?.id).toBe(guest.id);
+        expect(stored?.profile?.id).toBe(guest.profile.id);
+    });
+
+    it.each([
+        {name: 'empty', kind: 'account', tokens: {}},
+        {name: 'populated', kind: 'guest', tokens: {access_token: 'provider-fixture', token_type: 'Bearer'}},
+    ] as const)('rejects fresh $name provider tokens without provider requests or completion', async fixture => {
+        const {req, options} = await ordinaryLogoutFixture(fixture.kind);
+        const originalJson = JSON.stringify(req.session);
+        const storedProvider = {...JSON.parse(originalJson), tokens: fixture.tokens};
+        // The earlier request remains token-free. This actual stored evidence
+        // proves the wrapper repeats classification under its Session lock.
+        await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(storedProvider)});
+        const providerRequest = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Unexpected external provider request'));
+        const prepare = vi.fn(options.prepareResult);
+        options.prepareResult = prepare;
+        try {
+            await expect(userController.logoutUserWithSession(req, options)).rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+            expect(providerRequest).not.toHaveBeenCalled();
+            expect(prepare).not.toHaveBeenCalled();
+            expect(JSON.stringify(req.session)).toBe(originalJson);
+            const stored = await readStoredSession(req.sessionStore, req.sessionID);
+            expect(stored?.tokens).toEqual(fixture.tokens);
+            expect(stored?.frontendContext).toBe(req.apiActor!.context);
+            expect(stored?.profile?.id).toBe(req.session.profile?.id);
+        } finally { providerRequest.mockRestore(); }
+    });
+});
+
+describe('atomic pilot password-reset consumption', () => {
+    it('allows only one of two independent pilot sessions to consume a reset token and write its password', async () => {
+        const account = await registerLocalAccount('concurrent-reset');
+        const token = await userService.generatePasswordResetToken(account.username);
+        const first = await atomicGuestRequest();
+        const second = await atomicGuestRequest();
+        function options(req: Request): IdentityCompletionOptions<PreparedApiJsonResponse> {
+            function prepareResult(staged: Request['session']) {
+                return prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true}, staged.frontendContext);
+            }
+            return {context: req.apiActor!.context, prepareResult};
+        }
+        const passwords = ['first-reset-secret', 'second-reset-secret'];
+        const outcomes = await Promise.allSettled([
+            userController.resetPasswordWithSession(token, {password: passwords[0], confirmPassword: passwords[0]}, first, options(first)),
+            userController.resetPasswordWithSession(token, {password: passwords[1], confirmPassword: passwords[1]}, second, options(second)),
+        ]);
+        const winner = outcomes.findIndex(result => result.status === 'fulfilled');
+        expect(outcomes.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+        const rejected = outcomes.find(result => result.status === 'rejected');
+        expect(rejected?.status === 'rejected' && rejected.reason).toMatchObject({cause: 'TOKEN_INVALID'});
+        expect(await userService.verifyPassword(account.id, passwords[winner])).toBe(true);
+        expect(await userService.verifyPassword(account.id, passwords[1 - winner])).toBe(false);
+        expect(await userService.verifyPasswordResetToken(token)).toBeNull();
+        expect(first.session.auth).toBeUndefined();
+        expect(second.session.auth).toBeUndefined();
+    });
+
+    it('rolls back password and token consumption when the actual SSR completion cannot serialize its bootstrap', async () => {
+        const account = await registerLocalAccount('render-failed-reset');
+        const token = await userService.generatePasswordResetToken(account.username);
+        const req = await atomicGuestRequest();
+        const originalJson = JSON.stringify(req.session);
+        const response = documentResponse();
+        function prepareInvalidDocument(staged: Request['session'], manager: EntityManager) {
+            return resetDocument(req, staged, manager, token, response.res, true);
+        }
+        // Capture only the error so an unexpected fulfilled receipt cannot print
+        // its private bootstrap or capability URL in the assertion output.
+        let preparationFailure: unknown;
+        try {
+            await userController.resetPasswordWithSession(token, {password: 'uncommitted-secret', confirmPassword: 'uncommitted-secret'}, req,
+                {context: req.apiActor!.context, persistCompletion: true, prepareResult: prepareInvalidDocument});
+        } catch (failure) { preparationFailure = failure; }
+        expect(preparationFailure).toBeInstanceOf(TypeError);
+        expect(await userService.verifyPassword(account.id, 'initial-secret')).toBe(true);
+        expect(await userService.verifyPasswordResetToken(token)).toMatchObject({id: account.id});
+        expect(JSON.stringify(req.session)).toBe(originalJson);
+        expect(response.body).toBeNull();
+    });
+
+    it('prepares the full submitted-URL success document without unchanged session writes or later actor resaves', async () => {
+        const account = await registerLocalAccount('prepared-reset-document');
+        const token = await userService.generatePasswordResetToken(account.username);
+        const req = await atomicGuestRequest();
+        const original = req.session;
+        const before = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+        const response = documentResponse();
+        function prepareDocument(staged: Request['session'], manager: EntityManager) {
+            return resetDocument(req, staged, manager, token, response.res);
+        }
+        const committed = await userController.resetPasswordWithSession(token,
+            {password: 'confirmed-reset-secret', confirmPassword: 'confirmed-reset-secret'}, req,
+            {context: req.apiActor!.context, persistCompletion: true, prepareResult: prepareDocument});
+        expect(committed.result.html).toContain('Your password has been successfully reset');
+        expect(committed.result.html).not.toContain('type="password"');
+        expect(response.body).toBeNull();
+        expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+        expect(response.headers.get('Content-Language')).toBe('en');
+        expect(await userService.verifyPassword(account.id, 'confirmed-reset-secret')).toBe(true);
+        expect(await userService.verifyPasswordResetToken(token)).toBeNull();
+        const after = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+        expect(after.json).toBe(before.json);
+        expect(after.expiredAt).toBe(before.expiredAt);
+
+        const later = {...JSON.parse(JSON.stringify(original)), frontendContext: 'later-reset-actor'};
+        await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(later)});
+        req.session = committed.session;
+        await persistSession(req.session);
+        sendPreparedFrontendPilot(response.res, committed.result);
+        expect(response.body).toBe(committed.result.html);
+        expect((await readStoredSession(req.sessionStore, req.sessionID))?.frontendContext).toBe('later-reset-actor');
+    });
+
+    it('preserves native and pilot mismatch-before-invalid-token diagnostics', async () => {
+        const req = await atomicGuestRequest();
+        const body = {password: 'first-value', confirmPassword: 'other-value'};
+        await expect(userController.resetPassword('invalid-token', body)).rejects.toMatchObject({cause: 'PASSWORD_MISMATCH'});
+        function unusedResult(): PreparedApiJsonResponse { throw new Error('Mismatch must precede preparation'); }
+        await expect(userController.resetPasswordWithSession('invalid-token', body, req,
+            {context: req.apiActor!.context, prepareResult: unusedResult})).rejects.toMatchObject({cause: 'PASSWORD_MISMATCH'});
+    });
+});
+
+describe('atomic pilot password-reset mail preparation', () => {
+    it('rolls back a known account token when cached SMTP setup fails before commit', async () => {
+        const account = await registerLocalAccount('reset-setup-failed');
+        const oldToken = await userService.generatePasswordResetToken(account.username);
+        const req = await atomicGuestRequest();
+        const failedSetup = new Error('Controlled SMTP setup failure');
+        const create = vi.spyOn(nodemailer, 'createTransport').mockImplementation(function failSetup(): never { throw failedSetup; });
+        function prepareReply(staged: Request['session']) {
+            return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true}, staged.frontendContext);
+        }
+        try {
+            await expect(userController.requestPasswordResetWithSession(account.username, req,
+                {context: req.apiActor!.context, prepareResult: prepareReply})).rejects.toBe(failedSetup);
+            expect(await userService.verifyPasswordResetToken(oldToken)).toMatchObject({id: account.id});
+            expect(create).toHaveBeenCalledOnce();
+            expect(req.session.auth).toBeUndefined();
+        } finally { create.mockRestore(); }
+    });
+
+    it('keeps identical generic unknown/SMTP-failed receipts and never overwrites a later session actor', async () => {
+        const transport = nodemailer.createTransport({streamTransport: true, buffer: true, newline: 'unix'});
+        const create = vi.spyOn(nodemailer, 'createTransport').mockReturnValue(transport as unknown as Transporter);
+        const send = vi.spyOn(transport, 'sendMail');
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const account = await registerLocalAccount('reset-smtp-failed');
+        const unknown = await atomicGuestRequest();
+        const known = await atomicGuestRequest();
+        function options(req: Request): IdentityCompletionOptions<PreparedApiJsonResponse> {
+            function prepareResult(staged: Request['session']) {
+                return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true}, staged.frontendContext);
+            }
+            return {frontend: true, context: req.apiActor!.context, prepareResult};
+        }
+        try {
+            const absent = await userController.requestPasswordResetWithSession('missing-reset-account', unknown, options(unknown));
+            expect(create).not.toHaveBeenCalled();
+            expect(send).not.toHaveBeenCalled();
+            send.mockImplementationOnce(async function failDeliveryAfterCommit() {
+                const target = await AppDataSource.getRepository(User).findOneByOrFail({id: account.id});
+                expect(target.resetToken).toBeTruthy();
+                const later = {...JSON.parse(JSON.stringify(known.session)), frontendContext: 'later-reset-mail-actor'};
+                await AppDataSource.getRepository(Session).update({id: known.sessionID}, {json: JSON.stringify(later)});
+                throw new Error('Controlled SMTP refusal');
+            });
+            const result = await userController.requestPasswordResetWithSession(account.email, known, options(known));
+            expect(result.result.json).toBe(absent.result.json);
+            expect(JSON.parse(result.result.json)).toEqual({changed: true});
+            expect(result.result.context).toBe(known.apiActor!.context);
+            expect(create).toHaveBeenCalledOnce();
+            expect(send).toHaveBeenCalledOnce();
+            expect((await readStoredSession(known.sessionStore, known.sessionID))?.frontendContext).toBe('later-reset-mail-actor');
+            expect(known.session.auth).toBeUndefined();
+        } finally { create.mockRestore(); send.mockRestore(); log.mockRestore(); transport.close(); }
+    });
+
+    it('retains the committed generic confirmation if the opaque delivery boundary unexpectedly rejects', async () => {
+        const account = await registerLocalAccount('reset-opaque-rejection');
+        const req = await atomicGuestRequest();
+        const prepare = emailOwner.preparePasswordResetEmail;
+        const delivery = vi.fn().mockRejectedValue(new Error('Controlled opaque delivery rejection'));
+        const replacement = vi.spyOn(emailOwner, 'preparePasswordResetEmail').mockImplementation(function prepareCapturedMail(recipient, link) {
+            prepare(recipient, link);
+            return {deliver: delivery};
+        });
+        function prepareReply(staged: Request['session']) {
+            return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true}, staged.frontendContext);
+        }
+        try {
+            const committed = await userController.requestPasswordResetWithSession(account.username, req,
+                {context: req.apiActor!.context, prepareResult: prepareReply});
+            expect(JSON.parse(committed.result.json)).toEqual({changed: true});
+            const target = await AppDataSource.getRepository(User).findOneByOrFail({id: account.id});
+            expect(await userService.verifyPasswordResetToken(target.resetToken!)).toMatchObject({id: account.id});
+            expect(delivery).toHaveBeenCalledOnce();
+        } finally { replacement.mockRestore(); }
+    });
+});
+
 describe('authentication user stories', () => {
+    it('reloads stored authority and discards uncommitted completion feedback when an identity save fails', async () => {
+        const {id, username} = await registerLocalAccount('frontend-failed-identity-save');
+        await userService.activateUser(id);
+        const req = await atomicGuestRequest();
+        /** Model the document's admitted notice and fail the actual store JSON writer. */
+        async function prepareFailingSave(): Promise<void> {
+            Object.defineProperty(req.session, 'flash', {value: {
+                'frontend-pilot-notice': [JSON.stringify({kind: 'success', messageKey: 'auth.loginDone'})],
+            }, enumerable: true});
+            Object.defineProperty(req.session, 'serializationCycle', {value: req.session, enumerable: true});
+        }
+        await expect(userController.loginUser({username, password: 'initial-secret'}, req.session,
+            {beforeTransition: prepareFailingSave})).rejects.toBeInstanceOf(TypeError);
+
+        // The document rejection path clears its admitted actor, then bootstrap
+        // invokes this exact fresh-store owner before consuming any flash data.
+        req.apiActor = undefined;
+        const reloaded = await sessionView(req);
+        expect(reloaded.kind).toBe('anonymous');
+        expect(req.session.auth).toBeUndefined();
+        expect(JSON.stringify(req.session)).not.toContain('auth.loginDone');
+        await persistSession(req.session);
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        expect(stored?.auth).toBeUndefined();
+        expect(JSON.stringify(stored)).not.toContain('auth.loginDone');
+    });
+
     it('rechecks transport admission after credential verification before replacing an identity', async () => {
         const {id, username} = await registerLocalAccount('frontend-stale-login');
         await userService.activateUser(id);

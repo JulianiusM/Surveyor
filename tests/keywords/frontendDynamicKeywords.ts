@@ -1,3 +1,4 @@
+import type {Page} from '@playwright/test';
 import type {DriversItem} from '../../src/modules/database/entities/drivers/DriversItem';
 import type {PackingItem} from '../../src/modules/database/entities/packing/PackingItem';
 import type {SurveyCombination} from '../../src/modules/database/entities/surveys/SurveyCombination';
@@ -35,6 +36,31 @@ export interface InvoiceLedgerFixture {
     next: InvoiceLedgerControl;
     summary: InvoiceLedgerControl;
     empty: InvoiceLedgerControl;
+}
+
+/** Wait for client event ownership before interacting with server-rendered SPA controls.
+ * The completed-hydration marker establishes readiness only; callers still assert observable
+ * behavior. Visible SSR content and enabled controls do not establish hydration readiness. */
+export async function waitForPilotHydration(page: Page): Promise<void> {
+    await page.waitForFunction(pilotMounted);
+}
+
+/** Playwright executes this callback in the browser, independently of the test process. */
+function pilotMounted(): boolean {
+    const container = document.getElementById('surveyor-pilot');
+    return container?.getAttribute('data-pilot-hydrated') === 'true';
+}
+
+/** Hold browser delivery until the test explicitly releases it. Callers keep
+ * genuine responses/modules intact instead of inventing data or product delays. */
+export function createBrowserReadGate(): {promise: Promise<void>; release: () => void} {
+    let release!: () => void;
+    const promise = new Promise<void>(rememberRelease);
+    return {promise, release};
+
+    function rememberRelease(resolve: () => void): void {
+        release = resolve;
+    }
 }
 
 export function createInput(value: string, checked = false): InputLike {

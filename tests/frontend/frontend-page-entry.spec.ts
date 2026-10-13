@@ -517,6 +517,82 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(confirm).toHaveBeenCalledOnce();
     });
 
+    it.each([false, true])('admits a guest registration after its held advisory read only while the form remains mounted (retired=%s)',
+        async function heldGuestAdvisoryRead(retireForm) {
+            const path = `/frontend-pilot/packing/${firstId}/guest`;
+            const heldLookup = deferredResponse();
+            let denied = false;
+            let registrations = 0;
+            const {wrapper, context, router, request} = await mounted(path, async function readGuestAdmission(input) {
+                const pathname = new URL(input.url).pathname;
+                if (pathname === '/api/v1/auth/guest-email-exists') return heldLookup.response;
+                if (input.method === 'POST' && pathname.endsWith('/guest')) {
+                    registrations++;
+                    if (denied) throw new TypeError('Fixture stale registration response lost');
+                    // A confirmed validation rejection isolates dispatch admission
+                    // from the identity-completion journeys covered below.
+                    return json({type: 'about:blank', title: 'Rejected', status: 400, detail: 'Fixture input rejected.',
+                        requestId: 'delayed-guest-rejection', code: 'VALIDATION_FAILED', messageKey: 'api:errors.VALIDATION_FAILED', params: {}}, 400);
+                }
+                if (pathname === '/api/v1/session') return json(session);
+                return json({entry: denied ? {kind: 'denied', status: 404, messageKey: 'packing.notFound'} : {kind: 'render'},
+                    guest: denied ? null : {id: firstId, title: 'Guest advisory fixture'}});
+            }, true);
+            const acceptIdentity = vi.spyOn(context, 'acceptIdentity');
+            const confirm = vi.fn(() => false);
+            vi.stubGlobal('confirm', confirm);
+
+            // The mounted submit has started only its advisory email lookup. No
+            // registration command is admitted until that preliminary read finishes.
+            await wrapper.get('#guest-name').setValue('Delayed guest');
+            await wrapper.get('#guest-email').setValue('delayed@example.test');
+            await wrapper.get('form[action$="/guest"]').trigger('submit');
+            await flushPromises();
+            expect(registrations).toBe(0);
+            expect(request.mock.calls.filter(([input]) => new URL((input as Request).url).pathname === '/api/v1/auth/guest-email-exists'))
+                .toHaveLength(1);
+            const actor = context.capture();
+
+            if (retireForm) {
+                // A same-actor authoritative 404 closes the form independently of
+                // ordinary departure guards while the external lookup is still held.
+                denied = true;
+                await context.queryClient.refetchQueries({queryKey: packingKeys.entry(session.context, firstId, 'guest')});
+                await flushPromises();
+                expect(wrapper.find('#guest-name').exists()).toBe(false);
+                expect(wrapper.get('h1').text()).toBe('Error');
+                expect(context.isCurrent(actor)).toBe(true);
+                expect(router.currentRoute.value.fullPath).toBe(path);
+            }
+
+            // The exact same delayed read remains compatible with a live form. If
+            // admission retired it instead, its continuation cannot start a new POST.
+            heldLookup.resolve(json({exists: false}));
+            await flushPromises();
+            if (retireForm) {
+                expect(registrations).toBe(0);
+                expect(acceptIdentity).not.toHaveBeenCalled();
+                expect(context.personalLink.value).toBeNull();
+                expect(context.pageCompletion.value).toBeNull();
+                expect(wrapper.find('#guest-name').exists()).toBe(false);
+                expect(wrapper.text()).not.toContain(context.messages.value.t('state.unknownOutcome'));
+                expect(wrapper.text()).not.toContain(context.messages.value.t('auth.unconfirmedRequest'));
+                expect(context.mayChangeIdentity()).toBe(true);
+                const unload = new Event('beforeunload', {cancelable: true});
+                window.dispatchEvent(unload);
+                expect(unload.defaultPrevented).toBe(false);
+                expect(confirm).not.toHaveBeenCalled();
+                expect(router.currentRoute.value.fullPath).toBe(path);
+            } else {
+                expect(registrations).toBe(1);
+                expect(acceptIdentity).not.toHaveBeenCalled();
+                expect(wrapper.find('#guest-name').exists()).toBe(true);
+                expect(wrapper.get<HTMLInputElement>('#guest-name').element.value).toBe('Delayed guest');
+                expect(wrapper.text()).not.toContain(context.messages.value.t('state.unknownOutcome'));
+                expect(router.currentRoute.value.fullPath).toBe(path);
+            }
+        });
+
     it('recovers a confirmed guest identity and its private link through Retry without replaying registration', async () => {
         const path = `/frontend-pilot/packing/${firstId}`;
         const personalLink = 'https://example.test/guest/edit/confirmed-token';

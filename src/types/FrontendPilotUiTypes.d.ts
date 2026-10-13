@@ -159,8 +159,8 @@ export interface PilotOverviewCountRead {
     updatedAt: number;
 }
 
-/** Guards cover mounted drafts and unresolved operation status after an editor retires.
- * No recovery data or old release assets are persisted. */
+/** Guards cover initial DOM drafts, mounted drafts and unresolved status after an editor retires.
+ * Only the automatic-attempt marker is persisted; form values/files and old assets are not. */
 export interface PilotUpdateCoordinator {
     available: Ref<boolean>;
     incompatible: Ref<boolean>;
@@ -169,6 +169,8 @@ export interface PilotUpdateCoordinator {
     observe(deployment: components['schemas']['DeploymentView']): void;
     chunkFailed(): void;
     requestReload(): boolean;
+    /** Deliberate recovery can retry startup or a consumed marker; live guards always apply. */
+    requestRecoveryReload(): boolean;
     dispose(): void;
 }
 

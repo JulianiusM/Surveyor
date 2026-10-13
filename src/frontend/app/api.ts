@@ -5,6 +5,7 @@ import {PilotTransport, ObsoleteRequestError, UnconfirmedResponseError} from './
 import {validateSessionView} from '../../../.generated/api/v1/browser/validateSessionView.mjs';
 import {validatePasswordResetCheck} from '../../../.generated/api/v1/browser/validatePasswordResetCheck.mjs';
 import {validateIdentityResult} from '../../../.generated/api/v1/browser/validateIdentityResult.mjs';
+import {validateRegistrationResult} from '../../../.generated/api/v1/browser/validateRegistrationResult.mjs';
 import {validateMutationResult} from '../../../.generated/api/v1/browser/validateMutationResult.mjs';
 import {validateGuestEmailExists} from '../../../.generated/api/v1/browser/validateGuestEmailExists.mjs';
 
@@ -78,7 +79,7 @@ export class PilotApi extends PilotTransport {
     }
 
     async register(input: components['schemas']['RegistrationInput'], scope: PilotRequestScope) {
-        return this.read("registerAccount", await this.client.POST('/auth/register', {params: {header: this.headers(scope)}, body: input, cache: 'no-store'}), validateMutationResult, scope).data;
+        return this.read("registerAccount", await this.client.POST('/auth/register', {params: {header: this.headers(scope)}, body: input, cache: 'no-store'}), validateRegistrationResult, scope).data;
     }
 
     async forgotPassword(input: components['schemas']['UsernameInput'], scope: PilotRequestScope) {

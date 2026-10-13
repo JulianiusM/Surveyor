@@ -28,8 +28,14 @@ export function contractValidator(schemaName: string): ValidateFunction {
     return validator;
 }
 
+/** Resolve the authored status, message key and parameter policy for one known
+ * problem code. Missing declarations are implementation/configuration failures;
+ * a caller cannot introduce a new wire error through an arbitrary code. */
 export function problemContract(code: string): ApiProblemContract {
+    // The generated manifest owns problem policy; adapters consume that same
+    // declaration rather than maintaining another status/message mapping.
     const problem = apiContract.problems.find(candidate => candidate.code === code);
     if (!problem) throw new Error(`Undeclared API problem: ${code}`);
+
     return problem;
 }

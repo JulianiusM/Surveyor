@@ -66,3 +66,8 @@ export interface RenderedEmail {
     text: string;
     html: string;
 }
+
+/** Rendered before creation commits; the sender owns its private options and reports SMTP acceptance only. */
+export interface PreparedIdentityEmail {
+    deliver(): Promise<boolean>;
+}

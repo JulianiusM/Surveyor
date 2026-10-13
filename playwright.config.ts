@@ -42,9 +42,18 @@ export default defineConfig({
     webServer: {
         command: 'npm run e2e:init',
         // Historical fixtures must only change lifecycle when a test requests it.
-        env: {AUTO_ARCHIVE_ENABLED: 'false'},
+        // E2E owns the built server. A selected dotenv file or inherited HMR flag
+        // must not replace its production assets with a source-development renderer.
+        env: {
+            AUTO_ARCHIVE_ENABLED: 'false', NODE_ENV: 'e2e', SURVEYOR_FRONTEND_DEV: '0',
+            // Exercise production delivery failure against a refused local socket.
+            // System fixtures must never send activation/recovery mail externally.
+            E2E_SMTP_HOST: '127.0.0.1', E2E_SMTP_PORT: '1', E2E_SMTP_SECURE: 'false', E2E_SMTP_POOL: 'false',
+        },
         url: `${BASE_URL}/healthz`,
-        reuseExistingServer: !IS_CI,
+        // Reusing an arbitrary local process would lose proof of the system-test
+        // boundary. Source-server checks use playwright.integration.config.ts.
+        reuseExistingServer: false,
         timeout: 180_000,
         stderr: 'pipe',
         stdout: 'pipe',

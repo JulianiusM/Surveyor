@@ -60,16 +60,16 @@ function inspectHelpFile(corpusRoot, relativePath) {
     return {present: true, filePath: valid ? filePath : null};
 }
 
-/** Match runtime source selection without importing the application or compiled output.
- * Native Help remains rooted here; localized missing topics/figures borrow only adjacent
- * reviewed English. Reports disclose those omissions as warnings, never invented errors. */
+/** Check logical topic destinations without importing application code. A missing
+ * translated topic may open a complete English article; this never selects an
+ * English figure for an otherwise translated article. */
 function resolveCorpusFile(corpus, relativePath, authoredFile) {
     const selected = inspectHelpFile(corpus.root, relativePath);
     if (selected.present) return selected.filePath;
     if (!corpus.locale || corpus.locale === 'en') return null;
     const english = inspectHelpFile(path.join(helpRoot, 'en'), relativePath);
     if (english.filePath) {
-        addWarning(authoredFile, `Localized ${relativePath} is absent; the runtime visibly falls back to reviewed English`);
+        addWarning(authoredFile, `Localized ${relativePath} is absent; navigation may open its complete reviewed English article`);
     }
     return english.filePath;
 }
@@ -161,7 +161,7 @@ function parseMarkdownTarget(rawTarget) {
 }
 
 /** Review the authored subset without executing application code: metadata is stripped,
- * code examples stay literal, and links/figures use this corpus's containment/fallback.
+ * code examples stay literal, and each article references only its own language.
  * All findings remain advisory; this regex report does not replace runtime token validation. */
 function validateHelpFile(filePath, corpus) {
     const markdown = fs.readFileSync(filePath, 'utf8');
@@ -192,6 +192,9 @@ function validateHelpFile(filePath, corpus) {
         if (!validateUri(filePath, target)) {
             continue;
         }
+        // Explicit language overrides in local Help references must agree with the
+        // article's corpus. Do not silently rewrite a cross-language authored URL.
+        if (!validateReferenceLocale(filePath, target, corpus)) continue;
         if (!isImage) {
             const targetWithoutSuffix = target.split(/[?#]/u, 1)[0].replaceAll('\\', '/');
             if (targetWithoutSuffix.toLowerCase().endsWith('.md')) {
@@ -200,8 +203,12 @@ function validateHelpFile(filePath, corpus) {
                     || !resolveCorpusFile(corpus, targetWithoutSuffix, filePath)) {
                     addError(filePath, `In-app Markdown link must target a maintained guide in ${relative(corpus.root)}: ${target}`);
                 }
-            } else if (targetWithoutSuffix.startsWith('assets/') || targetWithoutSuffix.startsWith('/help/assets/')) {
-                validateAssetReference(filePath, targetWithoutSuffix.replace(/^\/help\//u, ''), corpus);
+            } else if (!/^[a-z][a-z0-9+.-]*:/iu.test(targetWithoutSuffix)
+                && /(?:^|\/)assets\//u.test(targetWithoutSuffix)) {
+                // Full-size links obey the same closed asset path as images.
+                // Detect traversal before checking existence in another corpus.
+                const assetReference = targetWithoutSuffix.replace(/^\/(?:frontend-pilot\/)?help\//u, '');
+                validateAssetReference(filePath, assetReference, corpus);
             }
             continue;
         }
@@ -217,24 +224,85 @@ function validateHelpFile(filePath, corpus) {
     }
 }
 
+/** Local article/figure URLs cannot select another language through a query string.
+ * External web links keep their ordinary query semantics and native Help is unchanged. */
+function validateReferenceLocale(filePath, target, corpus) {
+    if (!corpus.locale) return true;
+    const base = target.split(/[?#]/u, 1)[0].replaceAll('\\', '/');
+    const localHelp = base.toLowerCase().endsWith('.md') || base.startsWith('assets/')
+        || base === '/help' || base.startsWith('/help/')
+        || base === '/frontend-pilot/help' || base.startsWith('/frontend-pilot/help/');
+    if (!localHelp || /^[a-z][a-z0-9+.-]*:/iu.test(base)) return true;
+
+    // Check every occurrence: a second locale parameter must not smuggle in an
+    // alternate source after the first, otherwise valid, same-language value.
+    const locales = new URL(target, 'https://surveyor.invalid').searchParams.getAll('locale');
+    if (locales.some(locale => resolveReferenceLocale(locale, corpus.catalogLocales) !== corpus.locale)) {
+        addError(filePath, `Localized Help references must retain their own language (${corpus.locale}): ${target}`);
+        return false;
+    }
+    return true;
+}
+
+/** Independently check authored hints against the discovered catalog tags. This
+ * offline report cannot import the application; runtime source selection remains
+ * exclusively in the localization owner and is protected by application tests. */
+function resolveReferenceLocale(value, catalogLocales) {
+    try {
+        const requested = new Intl.Locale(value);
+        const candidates = [requested.baseName, requested.script ? `${requested.language}-${requested.script}` : requested.language];
+        for (const candidate of candidates) {
+            const found = catalogLocales.find(locale => locale.toLowerCase() === candidate.toLowerCase());
+            if (found) return found;
+        }
+    } catch {
+        // Invalid authored hints are findings, never passive English negotiation.
+    }
+    return undefined;
+}
+
+/** Corpus fixtures may omit UI catalogs; real catalog filenames follow the same
+ * canonical tags checked by generation. Discover names instead of maintaining
+ * another language registry or depending on ignored generated application output. */
+function reportCatalogLocales(corpora) {
+    const locales = new Set(corpora.map(corpus => corpus.locale).filter(Boolean));
+    const catalogRoot = path.join(repositoryRoot, 'src', 'locales');
+    if (fs.existsSync(catalogRoot)) {
+        for (const entry of fs.readdirSync(catalogRoot, {withFileTypes: true})) {
+            if (entry.isFile() && entry.name.endsWith('.json')) locales.add(entry.name.slice(0, -5));
+        }
+    }
+    return [...locales];
+}
+
 /** Images and full-size figure links share one format/source/reference owner. */
 function validateAssetReference(filePath, target, corpus) {
+    if (!/^assets\/[^/]+$/iu.test(target)) {
+        addError(filePath, `Help figures must use a local packaged asset under assets/: ${target}`);
+        return;
+    }
     const assetName = target.slice('assets/'.length);
     const extension = path.extname(assetName).toLowerCase();
     if (!allowedAssetExtensions.has(extension)) {
         addError(filePath, `Unsupported help image type "${extension}": ${target}`);
         return;
     }
-    if (!/^assets\/[^/]+$/iu.test(target)) {
-        addError(filePath, `Help figures must use a local packaged asset under assets/: ${target}`);
-        return;
+    const selected = inspectHelpFile(corpus.root, target);
+    if (!selected.present && corpus.locale && corpus.locale !== 'en') {
+        // A missing figure makes this entire translated article incomplete. Its
+        // English counterpart is reported independently with all its own assets;
+        // never count an English filename as a reference from translated prose.
+        const counterpart = inspectHelpFile(path.join(helpRoot, 'en'), path.basename(filePath));
+        if (counterpart.filePath) {
+            addWarning(filePath, `Localized ${target} is absent; the complete article must fall back to reviewed English`);
+            return;
+        }
     }
-    const assetPath = resolveCorpusFile(corpus, target, filePath);
-    if (!assetPath) {
+    if (!selected.filePath) {
         addError(filePath, `Referenced help image is missing or is not a regular reviewed file: ${target}`);
         return;
     }
-    const sourcePath = relative(assetPath);
+    const sourcePath = relative(selected.filePath);
     referencedAssets.set(sourcePath, (referencedAssets.get(sourcePath) ?? 0) + 1);
 }
 
@@ -249,7 +317,7 @@ function validateAssets(corpus) {
         if (error.code !== 'ENOENT') throw error;
     }
     if (!directory) {
-        if (corpus.locale && corpus.locale !== 'en') addWarning(assetRoot, 'Localized asset directory is absent; referenced figures may use visible English fallback');
+        if (corpus.locale && corpus.locale !== 'en') addWarning(assetRoot, 'Localized asset directory is absent; incomplete articles require complete English article fallback');
         else addError(assetRoot, 'Help asset directory is missing');
         return [];
     }
@@ -302,10 +370,12 @@ if (!fs.existsSync(helpRoot) || !fs.statSync(helpRoot).isDirectory()) {
     process.exitCode = 0;
 } else {
     const corpora = helpCorpora();
+    const catalogLocales = reportCatalogLocales(corpora);
     const helpFiles = [];
-    // Validate every article first so English assets referenced by a partial locale
-    // are counted before any corpus's unreferenced-asset report is calculated.
+    // Collect every corpus's own references before reporting unused assets. Missing
+    // translated bundles never lend English figures to translated article bodies.
     for (const corpus of corpora) {
+        corpus.catalogLocales = catalogLocales;
         corpus.files = [];
         for (const entry of fs.readdirSync(corpus.root, {withFileTypes: true})) {
             if (!entry.name.toLowerCase().endsWith('.md')) continue;

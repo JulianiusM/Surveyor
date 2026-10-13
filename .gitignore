@@ -287,5 +287,6 @@ src.zip
 /src/types/LocalizationTypes.d.ts
 /src/modules/localization/generated/
 /uploads/
-/artifacts/documentation/
+# Generated application-test and advisory documentation reports.
+/artifacts/
 test_output.txt

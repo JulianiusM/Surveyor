@@ -232,6 +232,13 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
 
             if (confirmedIdentity) {
                 personalLink.value = confirmedIdentity.personalLink;
+                // Registration is already committed when optional mail delivery
+                // fails. Publish that advisory outcome through the existing scoped
+                // notice before navigation, retaining the identity/link and never
+                // turning destination recovery into another registration attempt.
+                if (confirmedIdentity.emailDelivery === 'failed') {
+                    pageNotice.value = {kind: 'info', messageKey: 'auth.guestEmailFailed'};
+                }
                 notice.value = null;
                 channel?.postMessage({kind: 'identity'});
             }

@@ -1,11 +1,15 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type {Request} from 'express';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import eventController from '../../src/controller/eventController';
 import * as userController from '../../src/controller/userController';
 import * as entityAdminController from '../../src/controller/entityAdminController';
 import {archiveKey} from '../../src/modules/archive/policy';
+import {contractValidator} from '../../src/modules/api/contracts';
+import {prepareValidatedJson} from '../../src/modules/api/transport';
+import {setOverviewVisibility} from '../../src/modules/overview/api';
 import {AppDataSource} from '../../src/modules/database/dataSource';
 import {EntityVisibilityPreference} from '../../src/modules/database/entities/archive/EntityVisibilityPreference';
 import {Event} from '../../src/modules/database/entities/event/Event';
@@ -23,6 +27,8 @@ import * as surveyService from '../../src/modules/database/services/SurveyServic
 import * as userService from '../../src/modules/database/services/UserService';
 import {PERM} from '../../src/modules/lib/permissions';
 import type {ArchiveReference, PersonalVisibility} from '../../src/types/ArchiveTypes';
+import type {SessionLike} from '../../src/types/PermissionTypes';
+import type {components} from '../../src/types/api/v1';
 import {createActivitySlotEntity, createPackingItemEntity, createProfileEntity} from '../factories/integrationEntityFactory';
 import {persistIntegrationProfile, registerEventAttendance} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
@@ -49,6 +55,12 @@ async function setVisibility(profileId: string, reference: ArchiveReference, vis
     const profile = (await userService.getProfileById(profileId))!;
     const auth = profile.userId ? {user: {id: profile.userId}} : {guest: {id: profile.guestId!}};
     return userController.setPersonalVisibility(reference.type, reference.id, {visibility}, {profile, auth});
+}
+
+/** Supply only the actual response preparer's request metadata; business reads and writes stay real. */
+function visibilityApiRequest(session: SessionLike): Request {
+    return {apiActor: {...session, context: 'visibility-completion-context'},
+        get: function localeHeader() { return 'en'; }} as unknown as Request;
 }
 
 // Create through the existing domain service so IDs, defaults, and ownership match
@@ -244,6 +256,72 @@ describe('authoritative archival and personal overview visibility', () => {
         await userController.setPersonalVisibility('event', event.id.toUpperCase(), {visibility: 'default'}, session);
         expect(await userService.getVisibilityPreferences(owner.id, [event])).toEqual(new Map());
         expect(await card(owner, event)).toMatchObject({visibility: 'default', overviewHidden: true});
+    });
+
+    it('rolls back a pilot preference when the actual archival permission projection fails', async () => {
+        const event = await createEvent('Visibility projection rollback');
+        await registerEventAttendance(event.id, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        await setVisibility(participant.id, event, 'shown');
+        const projectionFailure = new Error('Visibility projection fixture failed');
+        // Admission and membership need this existing profile's ID. The ordinary
+        // permission evaluator later reads its audience relation during projection;
+        // this failing input leaves that actual pipeline and its DBAL queries intact.
+        const session: SessionLike = {auth: {user: participant.user!}, profile: {
+            id: participant.id, get user(): never { throw projectionFailure; },
+        }};
+
+        await expect(setOverviewVisibility('event', event.id, {visibility: 'hidden'}, session)).rejects.toBe(projectionFailure);
+        expect(await userService.getVisibilityPreferences(participant.id, [event])).toEqual(new Map([[archiveKey(event), 'shown']]));
+        expect(await card(participant, event, 'participant')).toMatchObject({visibility: 'shown', overviewHidden: false});
+    });
+
+    it('rolls back a pilot preference when the generated response preparation rejects its completion', async () => {
+        const event = await createEvent('Visibility output rollback');
+        const session = {profile: owner, auth: {user: owner.user!}};
+        await setVisibility(owner.id, event, 'shown');
+        const req = visibilityApiRequest(session);
+        let projected: components['schemas']['OverviewVisibilityResult'] | undefined;
+        function prepareInvalidResponse(result: components['schemas']['OverviewVisibilityResult']) {
+            projected = {...result};
+            // Exercise the real closed output validator after the real preference
+            // write/projection. No repository, core service or validator is replaced.
+            Object.defineProperty(result, 'unexpectedField', {value: true, enumerable: true});
+            return prepareValidatedJson(req, 'setOverviewVisibility', 200, result);
+        }
+
+        await expect(setOverviewVisibility('event', event.id, {visibility: 'hidden'}, session, prepareInvalidResponse))
+            .rejects.toMatchObject({code: 'INTERNAL_ERROR'});
+        expect(projected).toEqual({visibility: 'hidden', overviewHidden: true, archived: false});
+        expect(await userService.getVisibilityPreferences(owner.id, [event])).toEqual(new Map([[archiveKey(event), 'shown']]));
+        expect(await card(owner, event)).toMatchObject({visibility: 'shown', overviewHidden: false});
+    });
+
+    it('preserves native visibility presentation and the exact pilot DTO while preparing immutable transport output', async () => {
+        const event = await createEvent('Visibility completion values');
+        await archiveAsOwner(event);
+        const session = {profile: owner, auth: {user: owner.user!}};
+        const native = await userController.setPersonalVisibility('event', event.id, {visibility: 'shown'}, session);
+        expect(native).toMatchObject({visibility: 'shown', overviewHidden: false,
+            archive: {archived: true, directArchived: true, canRestore: true}});
+        expect(await setOverviewVisibility('event', event.id, {visibility: 'hidden'}, session))
+            .toEqual({visibility: 'hidden', overviewHidden: true, archived: true});
+
+        const req = visibilityApiRequest(session);
+        function prepareResponse(result: components['schemas']['OverviewVisibilityResult']) {
+            return prepareValidatedJson(req, 'setOverviewVisibility', 200, result);
+        }
+        const prepared = await setOverviewVisibility('event', event.id, {visibility: 'default'}, session, prepareResponse);
+        expect(await userService.getVisibilityPreferences(owner.id, [event])).toEqual(new Map());
+        // A later shared restoration or request actor cannot change the already
+        // prepared completion, trigger another projection or reopen the command.
+        await restoreAsOwner(event);
+        req.apiActor!.context = 'later-visibility-context';
+        const result = JSON.parse(prepared.json);
+        expect(result).toEqual({visibility: 'default', overviewHidden: true, archived: true});
+        expect(contractValidator('OverviewVisibilityResult')(result)).toBe(true);
+        expect(prepared).toMatchObject({status: 200, locale: 'en', context: 'visibility-completion-context'});
+        expect(Object.isFrozen(prepared)).toBe(true);
+        expect(await state(event)).toMatchObject({archived: false});
     });
 
     it('retains guest preferences when their profile transfers to a registered account', async () => {

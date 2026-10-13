@@ -25,6 +25,7 @@ import {AppDataSource} from '../dataSource';
 import {Guest} from '../entities/user/Guest';
 import {Profile} from "../entities/user/Profile";
 import {User} from '../entities/user/User';
+import {Session} from '../entities/session/Session';
 import {EntityVisibilityPreference} from '../entities/archive/EntityVisibilityPreference';
 import {BaseEntity} from '../entities/abstract/BaseEntity';
 import {getActivityParticipationQuery} from './ActivityService';
@@ -35,8 +36,12 @@ import {getEventParticipationQuery} from './EventService';
 import {getPackingParticipationQuery} from './PackingService';
 import {getSurveyParticipationQuery} from './SurveyService';
 
-export async function registerUser(username: string, name: string, password: string, email: string) {
-    return await AppDataSource.transaction(async (em: EntityManager) => {
+/** Persist the account/default profile using native transaction scope or the supplied registration manager. */
+export async function registerUser(username: string, name: string, password: string, email: string, manager?: EntityManager) {
+    /** Retain existing password storage and both related writes within the caller's persistence unit. */
+    async function saveUser(em: EntityManager) {
+        // Password storage and identifiers retain their existing DBAL owner;
+        // controller validation/activation preparation remain outside this module.
         const repo = em.getRepository(User);
         const hashed = await bcrypt.hash(password, 10);
 
@@ -47,11 +52,12 @@ export async function registerUser(username: string, name: string, password: str
         const profile = profileRepo.create({name, defaultForOwner: true, user: result});
         await profileRepo.save(profile);
         return result.id;
-    });
+    }
+    return manager ? saveUser(manager) : AppDataSource.transaction(saveUser);
 }
 
-export async function getUserByUsername(username: string) {
-    const repo = AppDataSource.getRepository(User);
+export async function getUserByUsername(username: string, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(User);
     return await repo.findOne({
         where: {username},
         select: {
@@ -67,8 +73,8 @@ export async function getUserByUsername(username: string) {
     });
 }
 
-export async function getUserByEmail(email: string) {
-    return await AppDataSource.getRepository(User).findOne({
+export async function getUserByEmail(email: string, manager: EntityManager = AppDataSource.manager) {
+    return await manager.getRepository(User).findOne({
         where: {email},
         select: {
             id: true,
@@ -94,8 +100,8 @@ export async function verifyPassword(userId: number, password: string) {
     return bcrypt.compare(password, user.password);
 }
 
-export async function generateActivationToken(userId: number) {
-    const repo = AppDataSource.getRepository(User);
+export async function generateActivationToken(userId: number, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(User);
     const token = generateUniqueToken();
     const expiration = new Date(Date.now() + 3_600_000);
     await repo.update({id: userId}, {
@@ -105,25 +111,30 @@ export async function generateActivationToken(userId: number) {
     return token;
 }
 
-export async function verifyActivationToken(token: string) {
-    const repo = AppDataSource.getRepository(User);
+/** Read current token evidence, optionally locking its row in a pilot completion transaction. */
+export async function verifyActivationToken(token: string, manager: EntityManager = AppDataSource.manager, lock = false) {
+    const repo = manager.getRepository(User);
     return await repo.findOne({
         where: {
             activationToken: token,
             activationTokenExpiration: MoreThan(new Date())
         },
+        // Atomic pilot completion holds the token row as well as its session.
+        // Distinct sessions therefore cannot both consume the same capability.
+        ...(lock ? {lock: {mode: 'pessimistic_write' as const}} : {}),
         select: {
             id: true,
             name: true,
             username: true,
             email: true,
-            isActive: true
+            isActive: true,
+            ...(lock ? {activationTokenExpiration: true as const} : {}),
         }
     });
 }
 
-export async function activateUser(userId: number) {
-    const repo = AppDataSource.getRepository(User);
+export async function activateUser(userId: number, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(User);
     await repo.update({id: userId}, {
         isActive: true,
         activationToken: null,
@@ -131,8 +142,8 @@ export async function activateUser(userId: number) {
     });
 }
 
-export async function generatePasswordResetToken(username: string) {
-    const repo = AppDataSource.getRepository(User);
+export async function generatePasswordResetToken(username: string, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(User);
     const token = generateUniqueToken();
     const expiration = new Date(Date.now() + 3_600_000);
     await repo.update({username}, {
@@ -142,25 +153,30 @@ export async function generatePasswordResetToken(username: string) {
     return token;
 }
 
-export async function verifyPasswordResetToken(token: string) {
-    const repo = AppDataSource.getRepository(User);
+/** Read reset-token evidence, optionally holding its user row throughout pilot consumption. */
+export async function verifyPasswordResetToken(token: string, manager: EntityManager = AppDataSource.manager, lock = false) {
+    const repo = manager.getRepository(User);
     return await repo.findOne({
         where: {
             resetToken: token,
             resetTokenExpiration: MoreThan(new Date())
         },
+        // Native reads keep their current projection; locked callers also need
+        // expiry evidence to recheck a token after waiting for another consumer.
+        ...(lock ? {lock: {mode: 'pessimistic_write' as const}} : {}),
         select: {
             id: true,
             name: true,
             username: true,
             email: true,
-            isActive: true
+            isActive: true,
+            ...(lock ? {resetTokenExpiration: true as const} : {}),
         }
     });
 }
 
-export async function resetPassword(username: string, newPassword: string) {
-    const repo = AppDataSource.getRepository(User);
+export async function resetPassword(username: string, newPassword: string, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(User);
     const hashed = await bcrypt.hash(newPassword, 10);
     await repo.update({username}, {
         password: hashed,
@@ -171,13 +187,23 @@ export async function resetPassword(username: string, newPassword: string) {
 
 // Guests
 
-export async function createGuest(username: string, email: string | null = null) {
-    return await AppDataSource.transaction(async (em) => {
+/**
+ * Persist one guest and its profile together. Native callers keep the existing
+ * transaction; a controller already holding a guest/session transaction supplies
+ * that same manager so all three records share its eventual commit or rollback.
+ */
+export async function createGuest(username: string, email: string | null = null, manager?: EntityManager) {
+    /** Insert both related rows on this caller's transaction without selecting identity policy. */
+    async function saveGuest(em: EntityManager) {
+        // The controller has selected the name/contact details. This DBAL owns
+        // identifiers and both related inserts, without any identity admission.
         const repo = em.getRepository(Guest);
         const token = generateUniqueToken();
         const guest = repo.create({username, email, token});
         const result = await repo.save(guest);
 
+        // A guest's ordinary default profile is part of this same persistence
+        // unit; return its existing relation for either session adapter.
         const profileRepo = em.getRepository(Profile);
         const profile = profileRepo.create({name: username, defaultForOwner: true, guest: guest});
         const profileRes = await profileRepo.save(profile);
@@ -187,11 +213,34 @@ export async function createGuest(username: string, email: string | null = null)
         }
 
         return result;
-    });
+    }
+
+    // Never open a second transaction/connection for a caller's atomic workflow.
+    return manager ? saveGuest(manager) : AppDataSource.transaction(saveGuest);
 }
 
-export async function getGuestByToken(token: string, guestId: string) {
-    const repo = AppDataSource.getRepository(Guest);
+/**
+ * Hold the existing session row before invoking the controller's identity operation.
+ * Nullable evidence keeps expiry/context/error decisions in the controller/store;
+ * READ COMMITTED allows the bound store to inspect current committed evidence.
+ */
+export async function withIdentitySessionTransaction<Result>(sessionId: string,
+    operation: (manager: EntityManager, session: Session | null) => Promise<Result>): Promise<Result> {
+    /** Acquire the session first and keep the supplied operation on that same connection. */
+    async function createWithSession(manager: EntityManager): Promise<Result> {
+        // Session writers use this same SQL row. Retain its lock through the
+        // account/guest/profile or token writes, output preparation and optional session write.
+        const stored = await manager.getRepository(Session).findOne({
+            where: {id: sessionId}, lock: {mode: 'pessimistic_write'},
+        });
+        return operation(manager, stored);
+    }
+
+    return AppDataSource.transaction('READ COMMITTED', createWithSession);
+}
+
+export async function getGuestByToken(token: string, guestId: string, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(Guest);
     return await repo.findOne({
         where: {id: guestId, token: token},
         select: {
@@ -1006,8 +1055,8 @@ export async function deleteGuest(guestId: string) {
     return deleted;
 }
 
-export async function getProfilesForUser(userId: number) {
-    const repo = AppDataSource.getRepository(Profile);
+export async function getProfilesForUser(userId: number, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(Profile);
     return await repo.findBy({user: {id: userId}});
 }
 

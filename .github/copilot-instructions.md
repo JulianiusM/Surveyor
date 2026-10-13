@@ -4,9 +4,9 @@ documentation-metadata
 audience: GitHub Copilot; maintainers
 owner: project maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: mandatory central policy routing and explicit approval/conflict/delegation enforcement; no competing engineering rules
+verification-scope: mandatory central policy routing and meaningful individual approval/semantic delegation-review routing; no competing engineering rules
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; package.json; repository-tree
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -27,6 +27,14 @@ Apply the concrete [agent enforcement procedure](../docs/policies/DEVELOPMENT_PO
 request/canonical/design sources before editing, obtain explicit conflict resolution, run scoped measurable checks
 and review semantic boundaries and readability. A newer conflicting name and a clean checker result do not replace
 approval or human review. Apply the procedure to every delegated agent and review its actual output.
+
+Follow the exact labeled [required change explanation](../docs/policies/DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13)
+separately before each individual approval question, including its meaningful-content requirements, prohibition on
+bundling and semantic delegation/root review. Correct labels alone are insufficient. This routing summary does not
+define an alternative format or grant approval.
+
+For migration work, apply the central [frontend migration boundary](../docs/policies/DEVELOPMENT_POLICY.md#frontend-migration-boundary-2026-10-13)
+in task classification, delegated handoffs and actual source review.
 
 ## Canonical references
 

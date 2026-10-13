@@ -18,13 +18,16 @@ import nodemailer, {Transporter} from 'nodemailer';
 import {MailOptions} from 'nodemailer/lib/smtp-pool';
 import type {GuestLinkData} from '../types/UserTypes';
 import type {EmailAction, EmailContent, EmailDetail, EmailFormula, EmailRecipient, EmailSection,
-    EmailSectionGroup, RenderedEmail, StructuredEmailContent} from '../types/EmailTypes';
+    EmailSectionGroup, PreparedIdentityEmail, RenderedEmail, StructuredEmailContent} from '../types/EmailTypes';
 import {Guest} from './database/entities/user/Guest';
 import {Profile} from './database/entities/user/Profile';
 import {User} from './database/entities/user/User';
 import settings from './settings';
 
 let transporter: Transporter | undefined;
+const LINK_EMAIL_SUBJECT = 'Your personal editing link';
+const ACTIVATION_EMAIL_SUBJECT = 'Activate your account';
+const PASSWORD_RESET_SUBJECT = 'Reset your password';
 
 function init(): void {
     const transportOptions = {
@@ -382,48 +385,124 @@ export function createMailOptions(to: EmailRecipient, subject: string, content: 
     };
 }
 
-export async function sendEmail(to: EmailRecipient, subject: string, content: EmailContent): Promise<void> {
-    const mailOptions = createMailOptions(to, subject, content);
-    init();
-
+/**
+ * Share actual SMTP delivery while retaining native error handling. Only the
+ * committed registration workflow opts into a bounded acceptance/failure receipt;
+ * neither receipt value promises that the recipient's inbox received the mail.
+ */
+async function sendMailOptions(mailOptions: MailOptions, reportDelivery = false, preparedTransport?: Transporter): Promise<boolean> {
+    // Native initialization errors retain their existing rejection behavior.
+    // A committed registration cannot fail creation because SMTP init failed.
+    if (!reportDelivery && !preparedTransport) init();
     try {
-        await transporter!.sendMail(mailOptions);
+        if (reportDelivery && !preparedTransport) init();
+        // Reset-mail preparation captures this process's existing sender before
+        // commit. Its delivery must never reinitialize or rerender afterward.
+        await (preparedTransport ?? transporter!).sendMail(mailOptions);
+        return true;
     } catch (error) {
-        console.error('Error sending email:', error);
+        if (reportDelivery) {
+            // Transport errors can contain private recipients, credentials and
+            // links. The opted-in receipt logs only a bounded exception category.
+            const category = error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,63}$/u.test(error.name)
+                ? error.name : 'UnexpectedError';
+            console.error('[identity-mail]', {category});
+        } else {
+            console.error('Error sending email:', error);
+        }
+        return false;
     }
 }
 
-async function sendActivationEmail(userEmail: EmailRecipient, activationLink: string): Promise<void> {
-    await sendEmail(userEmail, 'Activate your account', {
+export async function sendEmail(to: EmailRecipient, subject: string, content: EmailContent): Promise<void> {
+    const mailOptions = createMailOptions(to, subject, content);
+    await sendMailOptions(mailOptions);
+}
+
+/** Native dispatch and atomic registration preparation share the activation message. */
+function activationContent(activationLink: string): StructuredEmailContent {
+    return {
         eyebrow: 'Account setup',
         heading: `Welcome to ${settings.value.appName}`,
         preheader: 'Activate your account to finish signing up.',
         paragraphs: ['Thanks for signing up. Confirm your email address to activate your account and get started.'],
         action: {label: 'Activate account', url: activationLink},
         notice: 'This activation link expires in 1 hour. If you did not create this account, you can ignore this email.',
-    });
+    };
 }
 
-async function sendPasswordResetEmail(userEmail: EmailRecipient, resetLink: string): Promise<void> {
-    await sendEmail(userEmail, 'Reset your password', {
+async function sendActivationEmail(userEmail: EmailRecipient, activationLink: string): Promise<void> {
+    await sendEmail(userEmail, ACTIVATION_EMAIL_SUBJECT, activationContent(activationLink));
+}
+
+/** Render activation mail before its account/profile/token transaction commits, without exposing its token. */
+export function prepareActivationEmail(userEmail: EmailRecipient, activationLink: string): PreparedIdentityEmail {
+    return prepareIdentityDelivery(createMailOptions(userEmail, ACTIVATION_EMAIL_SUBJECT, activationContent(activationLink)));
+}
+
+/** Keep native dispatch and precommit reset-mail preparation on one unchanged message definition. */
+function passwordResetContent(resetLink: string): StructuredEmailContent {
+    return {
         eyebrow: 'Account security',
         heading: 'Choose a new password',
         preheader: 'Use this secure link to reset your password.',
         paragraphs: ['We received a request to reset the password for your account. Use the button below to choose a new one.'],
         action: {label: 'Reset password', url: resetLink},
         notice: 'This link expires in 1 hour. If you did not request a password reset, no action is required.',
-    });
+    };
 }
 
-async function sendLinkEmail(userEmail: EmailRecipient, surveyLink: string): Promise<void> {
-    await sendEmail(userEmail, 'Your personal editing link', {
+async function sendPasswordResetEmail(userEmail: EmailRecipient, resetLink: string): Promise<void> {
+    await sendEmail(userEmail, PASSWORD_RESET_SUBJECT, passwordResetContent(resetLink));
+}
+
+/**
+ * Preserve reset-mail setup rejection before its token commit. Creating the
+ * cached Nodemailer sender performs no connection/verification; the opaque
+ * receipt captures it and sends only after commit with the existing SMTP catch.
+ */
+export function preparePasswordResetEmail(userEmail: EmailRecipient, resetLink: string): PreparedIdentityEmail {
+    const options = createMailOptions(userEmail, PASSWORD_RESET_SUBJECT, passwordResetContent(resetLink));
+    init();
+    return prepareIdentityDelivery(options, transporter!, false);
+}
+
+/** The native sender and transactional preparation share the exact personal-link message. */
+function personalLinkContent(surveyLink: string): StructuredEmailContent {
+    return {
         eyebrow: 'Personal access',
         heading: 'Your editing link is ready',
         preheader: 'Keep this private link to return to your answers.',
         paragraphs: ['Use this personal link whenever you need to review or update your answers.'],
         action: {label: 'Open my answers', url: surveyLink},
         notice: 'This link provides access to your information. Keep it private and do not forward it to anyone else.',
-    });
+    };
+}
+
+async function sendLinkEmail(userEmail: EmailRecipient, surveyLink: string): Promise<void> {
+    await sendEmail(userEmail, LINK_EMAIL_SUBJECT, personalLinkContent(surveyLink));
+}
+
+/**
+ * Render the private guest-link email while its creation can still roll back.
+ * The returned opaque receipt performs SMTP work only after commit, without a
+ * second rendering/configuration projection that could reject completed creation.
+ */
+export function prepareGuestLinkEmail(userEmail: EmailRecipient, personalLink: string): PreparedIdentityEmail {
+    // Preparation validates the recipient and renders both message forms now;
+    // no SMTP connection or external delivery occurs during the DB transaction.
+    return prepareIdentityDelivery(createMailOptions(userEmail, LINK_EMAIL_SUBJECT, personalLinkContent(personalLink)));
+}
+
+/** Capture private options and an optional preflighted sender; only the SMTP boundary remains afterward. */
+function prepareIdentityDelivery(mailOptions: MailOptions, preparedTransport?: Transporter, reportDelivery = true): PreparedIdentityEmail {
+
+    /** Report delivery without reopening registration or disclosing SMTP details. */
+    function deliver(): Promise<boolean> {
+        return sendMailOptions(mailOptions, reportDelivery, preparedTransport);
+    }
+
+    return Object.freeze({deliver});
 }
 
 function formatGuestCreatedAt(value: Date): string {

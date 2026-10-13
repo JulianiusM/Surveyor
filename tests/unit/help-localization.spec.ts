@@ -87,9 +87,8 @@ describe('localized fixed-source help documents', () => {
         expect(search.fallbackToEnglish).toBe(true);
         expect(search.searchResults).toHaveLength(2);
         expect(search.searchResults?.every(result => result.contentLocale === 'en' && result.url.includes('locale=nl'))).toBe(true);
-        expect(resolveHelpAssetSource('figure.png', 'nl')).toEqual({
-            filePath: path.join(helpSources.en, 'assets', 'figure.png'), locale: 'en',
-        });
+        expect(resolveHelpAssetSource('figure.png', 'nl')).toBeNull();
+        expect(resolveHelpAssetSource('figure.png', 'en')).toEqual({filePath: path.join(helpSources.en, 'assets', 'figure.png'), locale: 'en'});
     });
 
     it('merges absent translated topics into navigation and search without duplicating available articles', () => {
@@ -236,14 +235,14 @@ describe('localized fixed-source help documents', () => {
         } finally { files.clear(); }
     });
 
-    it('keeps article, image and full-size links in the selected language despite authored locale queries', () => {
+    it('keeps same-language article, image and full-size references in their selected corpus', () => {
         const english = helpSources.en;
         const german = helpSources.de;
         files.set(path.join(english, 'assets', 'figure.png'), 'English figure');
         files.set(path.join(german, 'assets', 'figure.png'), 'Deutsche Abbildung');
         files.set(path.join(german, 'PACKING_LISTS.md'), '# Packen');
         try {
-            const rendered = renderTrustedHelpMarkdown('# Anleitung\n\n![Abbildung](assets/figure.png?locale=en)\n\n[Vollbild](/help/assets/figure.png?locale=en) [Weiter](/help/packing_lists?locale=en#take-an-item) [Datei](PACKING_LISTS.md?locale=en#take-an-item)',
+            const rendered = renderTrustedHelpMarkdown('# Anleitung\n\n![Abbildung](assets/figure.png?locale=de)\n\n[Vollbild](/help/assets/figure.png?locale=de) [Weiter](/help/packing_lists?locale=de#take-an-item) [Datei](PACKING_LISTS.md?locale=de#take-an-item)',
                 'synthetic translation', 'de');
             expect(rendered.content).toContain('src="/frontend-pilot/help/assets/figure.png?locale=de"');
             expect(rendered.content).toContain('href="/frontend-pilot/help/assets/figure.png?locale=de"');
@@ -252,12 +251,10 @@ describe('localized fixed-source help documents', () => {
             expect(resolveHelpAssetPath('figure.png', 'de')).toBe(path.join(german, 'assets', 'figure.png'));
             expect(resolveHelpAssetPath('../assets/figure.png', 'de')).toBeNull();
             files.delete(path.join(german, 'assets', 'figure.png'));
-            expect(resolveHelpAssetPath('figure.png', 'de')).toBe(path.join(english, 'assets', 'figure.png'));
-            expect(resolveHelpAssetSource('figure.png', 'de')).toEqual({filePath: path.join(english, 'assets', 'figure.png'), locale: 'en'});
-            const fallback = renderTrustedHelpMarkdown('# Anleitung\n\n![Abbildung](assets/figure.png)\n\n[Vollbild](/help/assets/figure.png?locale=de)', 'synthetic translation', 'de');
-            expect(fallback.fallbackToEnglish).toBe(true);
-            expect(fallback.content).toContain('src="/frontend-pilot/help/assets/figure.png?locale=en"');
-            expect(fallback.content).toContain('href="/frontend-pilot/help/assets/figure.png?locale=en"');
+            expect(resolveHelpAssetPath('figure.png', 'de')).toBeNull();
+            expect(resolveHelpAssetSource('figure.png', 'de')).toBeNull();
+            expect(() => renderTrustedHelpMarkdown('# Anleitung\n\n![Abbildung](assets/figure.png)\n\n[Vollbild](/help/assets/figure.png?locale=de)',
+                'synthetic translation', 'de')).toThrow(/packaged file/u);
             files.delete(path.join(english, 'assets', 'figure.png'));
             expect(resolveHelpAssetPath('figure.png', 'de')).toBeNull();
             expect(() => validateTrustedHelpMarkdown('# Anleitung\n\n![Abbildung](assets/figure.png)', 'synthetic translation', 'de')).toThrow(/packaged file/u);
@@ -272,5 +269,131 @@ describe('localized fixed-source help documents', () => {
             expect(() => validateTrustedHelpMarkdown('# Anleitung\n\n[Andere Anleitung](../README.md)', 'synthetic translation', 'de')).toThrow(/selected help language/u);
             expect(() => validateTrustedHelpMarkdown('# Anleitung\n\n![Andere Abbildung](../assets/figure.png)', 'synthetic translation', 'de')).toThrow(/packaged file/u);
         } finally { files.clear(); }
+    });
+
+    it.each([
+        '![Abbildung](assets/figure.png?locale=en)',
+        '[Vollbild](/help/assets/figure.png?locale=en)',
+        '[Vollbild](/frontend-pilot/help/assets/figure.png?locale=en)',
+        '[Weiter](/help/packing_lists?locale=en#task)',
+        '[Datei](PACKING_LISTS.md?locale=en#task)',
+        '[Index](/help?locale=en)',
+        '[Index](/frontend-pilot/help?locale=en)',
+        '[Suche](/help/search?locale=en&q=packing)',
+    ])('rejects explicitly authored other-language Help references: %s', reference => {
+        files.set(path.join(helpSources.de, 'PACKING_LISTS.md'), '# Packen');
+        files.set(path.join(helpSources.de, 'assets', 'figure.png'), 'Deutsche Abbildung');
+        files.set(path.join(helpSources.en, 'assets', 'figure.png'), 'English figure');
+        expect(() => validateTrustedHelpMarkdown(`# Anleitung\n\n${reference}`, 'synthetic translation', 'de'))
+            .toThrow(/only their own language/u);
+    });
+
+    it.each([
+        ['de', 'de-DE'],
+        ['en', 'en-US'],
+    ] as const)('retains supported same-corpus regional hints in %s authored references', (locale, hint) => {
+        files.set(path.join(helpSources[locale], 'PACKING_LISTS.md'), '# Guide');
+        files.set(path.join(helpSources[locale], 'assets', 'figure.png'), 'Reviewed same-language figure');
+        const markdown = `# Guide\n\n![Figure](assets/figure.png?locale=${hint}) [Full size](/help/assets/figure.png?locale=${hint})`
+            + ` [Next](PACKING_LISTS.md?locale=${hint}) [Index](/frontend-pilot/help?locale=${hint})`;
+        const rendered = renderTrustedHelpMarkdown(markdown, 'synthetic regional hint', locale);
+        expect(rendered.content).toContain(`/frontend-pilot/help/assets/figure.png?locale=${locale}`);
+        expect(rendered.content).toContain(`/help/packing_lists?locale=${locale}`);
+        expect(rendered.fallbackToEnglish).toBe(false);
+        expect(resolveHelpAssetSource('figure.png', locale)).toMatchObject({locale});
+    });
+
+    it.each(['fr', 'not_a_locale', ''])('rejects unsupported or malformed authored English hints instead of defaulting them: %s', hint => {
+        files.set(path.join(helpSources.en, 'assets', 'figure.png'), 'Reviewed English figure');
+        expect(() => validateTrustedHelpMarkdown(`# Guide\n\n![Figure](assets/figure.png?locale=${hint})`, 'synthetic unsupported hint', 'en'))
+            .toThrow(/only their own language/u);
+    });
+
+    it.each([
+        '![Abbildung](assets/figure.png)',
+        '[Vollbild](/help/assets/figure.png?locale=de)',
+    ])('selects a complete English article for a missing translated figure dependency: %s', reference => {
+        files.set(path.join(helpSources.native, 'README.md'), '# Native reference\n\nOriginal native body.');
+        files.set(path.join(helpSources.en, 'README.md'), article('English overview', 'Bring bottles', '1:overview; 2:bring-bottles',
+            'English bottles. ![English figure](assets/english-figure.png) [Full size](/help/assets/english-figure.png?locale=en) [Next](PACKING_LISTS.md)'));
+        files.set(path.join(helpSources.en, 'PACKING_LISTS.md'), '# Packing');
+        files.set(path.join(helpSources.en, 'assets', 'english-figure.png'), 'Reviewed English figure');
+        files.set(path.join(helpSources.de, 'README.md'), article('Deutsche Übersicht', 'Flaschen mitbringen', '1:overview; 2:bring-bottles',
+            `Deutsche Flaschen. ${reference}`));
+
+        const page = fetchHelpIndex('de');
+        const topic = fetchHelpDoc('readme', 'de');
+        for (const result of [page, topic]) {
+            expect(result).toMatchObject({locale: 'de', contentLocale: 'en', fallbackToEnglish: true, title: 'English overview'});
+            expect(result.content).toContain('English bottles.');
+            expect(result.content).not.toContain('Deutsche Flaschen.');
+            expect(result.content).toContain('src="/frontend-pilot/help/assets/english-figure.png?locale=en"');
+            expect(result.content).toContain('href="/frontend-pilot/help/assets/english-figure.png?locale=en"');
+            expect(result.content).toContain('/help/packing_lists?locale=de');
+            expect(result.toc).toEqual([{id: 'bring-bottles', title: 'Bring bottles', level: 2}]);
+            expect(result.docsList.find(doc => doc.path === 'readme')).toMatchObject({title: 'English overview', contentLocale: 'en', url: '/help?locale=de'});
+        }
+        expect(fetchHelpSearch('Flaschen', 'de').searchResults).toEqual([]);
+        expect(fetchHelpSearch('bottles', 'de').searchResults).toEqual([expect.objectContaining({
+            title: 'English overview', contentLocale: 'en', url: '/help?locale=de#bring-bottles',
+        })]);
+        expect(resolveHelpAssetSource('figure.png', 'de')).toBeNull();
+        expect(resolveHelpAssetSource('english-figure.png', 'de')).toBeNull();
+        expect(fetchHelpIndex().content).toContain('Original native body.');
+    });
+
+    it.each([
+        '<script>alert(1)</script>',
+        '[Unsafe](javascript:alert(1))',
+        '[Other language](/help/packing_lists?locale=en)',
+        '[Other figure](../en/assets/figure.png)',
+    ])('never hides unsafe translated content behind a missing-figure fallback: %s', unsafe => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        files.set(path.join(helpSources.en, 'README.md'), '# English overview\n\nReviewed English.');
+        files.set(path.join(helpSources.en, 'assets', 'figure.png'), 'Reviewed English figure');
+        files.set(path.join(helpSources.de, 'README.md'), `# Deutsche Übersicht\n\n![Fehlende Abbildung](assets/figure.png)\n\n${unsafe}`);
+        expect(() => fetchHelpDoc('readme', 'de')).toThrow('Die Anleitung konnte nicht geladen werden');
+        expect(() => fetchHelpIndex('de')).toThrow('Die Anleitung konnte nicht geladen werden');
+        // General search retains its existing invalid-matching-article skip,
+        // instead of selecting or indexing a replacement English body.
+        expect(fetchHelpSearch('Übersicht', 'de').searchResults).toEqual([]);
+    });
+
+    it('requires valid translated anchors and a complete English replacement before falling back', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const localizedPath = path.join(helpSources.de, 'README.md');
+        const englishPath = path.join(helpSources.en, 'README.md');
+        files.set(localizedPath, article('Deutsche Übersicht', 'Aufgabe', '1:overview; 3:wrong-level', '![Abbildung](assets/figure.png)'));
+        files.set(englishPath, '# English overview\n\nReviewed English.');
+        expect(() => fetchHelpDoc('readme', 'de')).toThrow('Die Anleitung konnte nicht geladen werden');
+
+        files.set(localizedPath, article('Deutsche Übersicht', 'Aufgabe', '1:overview; 2:task', '![Abbildung](assets/figure.png)'));
+        files.set(englishPath, '# English overview\n\n![Missing English figure](assets/figure.png)');
+        expect(() => fetchHelpDoc('readme', 'de')).toThrow('Die Anleitung konnte nicht geladen werden');
+        files.set(path.join(helpSources.en, 'assets', 'figure.png'), 'Reviewed English figure');
+        expect(fetchHelpDoc('readme', 'de')).toMatchObject({contentLocale: 'en', title: 'English overview'});
+    });
+
+    it('rejects malformed or unreadable translated figure files even when complete English exists', () => {
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        files.set(path.join(helpSources.en, 'README.md'), '# English overview\n\nReviewed English.');
+        files.set(path.join(helpSources.de, 'README.md'), '# Deutsche Übersicht\n\n![Abbildung](assets/figure.png)');
+        const figurePath = path.join(helpSources.de, 'assets', 'figure.png');
+        files.set(figurePath, 'Translated figure');
+        const inspectFile = fs.lstatSync;
+        vi.spyOn(fs, 'lstatSync').mockImplementation(function rejectFigureReleaseEntry(file) {
+            if (String(file) === figurePath) throw Object.assign(new Error('Synthetic inaccessible figure'), {code: 'EACCES'});
+            return inspectFile(file);
+        });
+        expect(() => resolveHelpAssetSource('figure.png', 'de')).toThrow('Synthetic inaccessible figure');
+        expect(() => fetchHelpDoc('readme', 'de')).toThrow('Die Anleitung konnte nicht geladen werden');
+        vi.restoreAllMocks();
+        vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        vi.spyOn(fs, 'lstatSync').mockImplementation(function rejectFigureSymlink(file) {
+            if (String(file) === figurePath) return {...inspectFile(file), isSymbolicLink: () => true} as ReturnType<typeof fs.lstatSync>;
+            return inspectFile(file);
+        });
+        expect(() => resolveHelpAssetSource('figure.png', 'de')).toThrow(/regular file/u);
+        expect(() => fetchHelpDoc('readme', 'de')).toThrow('Die Anleitung konnte nicht geladen werden');
     });
 });

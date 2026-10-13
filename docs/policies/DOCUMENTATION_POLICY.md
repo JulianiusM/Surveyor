@@ -5,10 +5,10 @@ documentation-metadata
 audience: maintainers; documentation contributors; AI agents
 owner: documentation maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-ci-repair
-verification-scope: explicit 2026-10-12 maintainer restoration of canonical classifications, adjacent native/localized user docs and prior-approval rules; existing advisory reporting and native Help trust remain unchanged
-source-anchors: scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts
+verification-scope: prior canonical classifications, locale corpus decisions, advisory reporting and native Help trust retained; per-decision approval routing includes meaningful-content and semantic delegation review
+source-anchors: docs/policies/DEVELOPMENT_POLICY.md; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts
 next-review: documentation-pipeline-or-help-trust-boundary-change
 -->
 
@@ -48,6 +48,11 @@ Every policy or design decision change requires explicit approval in the convers
 decision, infer approval from a cleanup request, or bury implementation plans or approval requests in documentation.
 After approval, retain the original choice and record one concise dated amendment with its scope and provenance.
 Editorial corrections and authorized relocation do not reopen unchanged technical decisions.
+
+Before each individual approval question, apply the complete
+[required change explanation](DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13).
+That section owns the per-decision format, meaningful-content requirements and semantic delegation review.
+Correct labels alone do not make an unclear request valid; this policy does not maintain another template.
 
 All AI agents must read this policy and the [development policy](DEVELOPMENT_POLICY.md) at task start and apply them
 to every touched boundary. The delegating agent passes the actual authorized scope and unresolved conflicts to each

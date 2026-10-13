@@ -430,10 +430,15 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     /** Execute once in the captured identity scope, protecting its status through
      * any requested follow-up read. Only the operation's admitted result confirms
      * a write; refresh failure cannot undo it, and unknown delivery never replays.
-     * Return that confirmed result even when its follow-up remains stale. */
+     * Return that confirmed result even when its follow-up remains stale. New
+     * operations require a mounted owner; already admitted work can outlive it. */
     async function run<T>(operation: (scope: PilotRequestScope) => Promise<T>, refreshAfter = true,
                           reviewUnknown = requireUnknownReview, feedback?: PilotCommandFeedback): Promise<T | undefined> {
-        if (pending.value || recovering.value || uncertain.value) return;
+        // A delayed preflight can finish after admission retires its form. Reject
+        // that new submission before capturing authority or retaining a status lease.
+        // Work admitted before unmount keeps its existing deferred steps and settlement.
+        if (!mounted || pending.value || recovering.value || uncertain.value) return;
+
         // Capture the DOM presentation boundary synchronously. Event currentTarget
         // expires after dispatch, while feedback can arrive after the write and its
         // follow-up read. Recovery retains this same host instead of moving it to a

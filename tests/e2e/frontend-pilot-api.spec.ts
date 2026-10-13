@@ -3,7 +3,8 @@ import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E, waitForPilotHydration} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
+import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 
 /** Exercise cookie/session admission through the built application, without a test-only identity shortcut. */
 async function bootstrap(request: APIRequestContext): Promise<components['schemas']['SessionView']> {

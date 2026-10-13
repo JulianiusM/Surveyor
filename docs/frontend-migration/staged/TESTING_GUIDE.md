@@ -6,8 +6,8 @@ owner: application maintainers
 status: migration-pending
 last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: frontend test-layer, compiler-scope and risk/cost delta retained; readiness admission/privacy/locale/contract, visible Packed fallback and source/replacement verification boundaries clarified; current results belong to paired review
-source-anchors: package.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tsconfig.server.json; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tests/support/database.ts; tests/support/env.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; .github/workflows/ci.yml; docs/TESTING_GUIDE.md
+verification-scope: explicit strict E2E/client/source-integration classification and component-value/commit-finality boundaries reconciled with current owners; executed results remain in paired review
+source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tsconfig.test.json; tsconfig.server.json; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tests/support/database.ts; tests/support/env.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; .github/workflows/ci.yml; docs/TESTING_GUIDE.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/TESTING_GUIDE.md
 production-reference: 2dfa257 native documentation; not evidence of the installed production commit
@@ -28,9 +28,15 @@ Historical counts/timings do not establish acceptance of changed inputs.
 | Layer | Observable behavior requiring it |
 |---|---|
 | Unit | Pure production logic with no database, HTTP app, external service or real browser. |
-| Frontend | Browser helpers/DOM/mounted Vue behavior using explicit restored globals and real production owners. |
+| Frontend/client | Browser helpers/DOM/mounted Vue under Vitest; isolated built-browser workflows under the client Playwright runner. |
 | Integration | TypeORM metadata/relationships, locked controller orchestration and persistence against guarded disposable MariaDB. |
-| E2E | Critical route/middleware/session/rendering/database workflow, real focus/browser validation or source/hydration integration. |
+| E2E | Built application with a fully prepared database, exercising the integrated routes, middleware, sessions, rendering and persistence. |
+
+The explicit 2026-10-13 decision reaffirms the original E2E boundary. Earlier staged wording also called isolated
+focus/source/hydration checks E2E; that classification is superseded, not evidence that such fixtures exercise a
+production system. A server/database running alongside a manufactured document does not change the tested boundary.
+Source development workflows requiring a live server/schema belong to integration coverage; isolated browser
+fixtures belong only to the client layer. Classification changes preserve their assertions rather than deleting them.
 
 Add another layer only when risk crosses that boundary. A shared helper assertion cannot prove a feature adopted it.
 Repository/service mocks cannot establish transaction behavior. Replace only a true external side effect when the
@@ -60,6 +66,22 @@ npx vitest run --config vitest.config.mts tests/frontend/frontend-command-recove
 
 Adding a filename to a script that already selects the whole directory may still run that directory.
 Use named test filters only when their actual selection is appropriate; report filtered/unexecuted cases honestly.
+
+`npm run test:frontend:browser` builds the required native/client/SSR artifacts through its normal pre-hook, then
+selects only `tests/frontend/browser/` with `playwright.frontend.config.ts`. It loads no E2E environment, starts no
+server and initializes no database. After a current normal build, `--ignore-scripts` skips only that repeated build.
+Vitest excludes this Playwright directory rather than attempting to execute its browser tests.
+
+`npm run test:integration:browser` selects `tests/integration/browser/` with `playwright.integration.config.ts`.
+It requires the already-owned source server and fully prepared disposable schema described by that suite. The legacy
+`E2E_FRONTEND_DEVELOPMENT=true` selector remains compatible; its name does not classify these source checks as E2E.
+The command neither builds/starts a server nor resets a database. Vitest's ORM project excludes this directory.
+
+The E2E runner owns `dist/server.js`, its schema initialization and built assets. It explicitly disables the frontend
+development renderer and refuses to reuse an arbitrary local server; a busy selected port must be resolved before
+running it. This enforces the 2026-10-13 system-test decision rather than trusting a process already listening there.
+The managed system server also uses a refused local SMTP socket for deterministic delivery-failure coverage without
+external email. Application mail preparation and transport still run; live-provider delivery remains separate evidence.
 
 ## Static checking
 
@@ -140,9 +162,11 @@ native transport outcomes and verify every factory/preflight consumer of shared 
 
 ## Browser, visual and source boundaries
 
-Use E2E for direct URLs, Back/forward/fragments, native-equivalent admission/destinations, duplicate return,
-keyboard/focus, pending dismissal locks and real browser validity. Exercise required usable controls, not only a
-hydration marker. Configuration-dependent skips are unrun modes unless executed separately.
+Use E2E for critical direct-URL, Back/forward/fragment, admission/destination, duplicate-return and browser-validity
+journeys which exercise the built application and fully prepared database together. Isolated focus, hydration and
+native-template/built-module checks use the client browser runner. Source-loader/HMR workflows with real server
+persistence use the selected browser integration runner. Exercise usable controls, not only a hydration marker.
+Configuration-dependent skips are unrun modes unless executed separately.
 
 Paired visual checks use the same synthetic records, actors and desktop/mobile sizes. Inspect original-resolution
 screenshots and affected controls; capture success or a contact sheet alone is not visual approval.
@@ -155,6 +179,30 @@ rehearsal repeated. Keep current-release/chunk recovery and mounted drafts under
 
 SSR checks prove request-local identity/locale, escaped bootstrap, same-tree hydration and absence of private leaks.
 Read-only Help retains no-JavaScript GET/search. Interactive routes have the approved message/read-only contract.
+
+Startup checks cover the interval before mounted guards exist: hold or reject actual route loading, edit SSR controls
+and verify they survive failure and cancelled recovery. Automatic reload needs clean-state evidence and a working
+loop marker; unavailable storage must expose localized deliberate recovery. Explicit recovery may bypass an automatic
+attempt marker but still requires edited-control consent and preserves pending/unknown command guards. Verify the
+initial guard is released only after mount restoration; a helper test without the actual entry consumer is insufficient.
+Neither browser storage nor recovery may persist secrets/files or replay commands.
+
+Mounted header checks distinguish confirmation from rejection/unknown delivery and background refresh. Confirmed
+upload releases the feature-owned file and clears the same native input, including saved-plus-failed-refresh; the
+other outcomes retain both. Verify reselection of the same file and preserve input identity/focus rather than using
+an unmount/remount as a test substitute. Add real-browser coverage only for a boundary the mounted evidence cannot prove.
+
+Review all reused/restored controls against their current use-case: should this admitted form still contain the value?
+Compare rendered text/select/checkbox/file values, feature-owned drafts and submitted inputs after warm/cold navigation,
+actor changes, hydration and completion. Preserve intended drafts, but released values must clear the actual controls.
+In particular, a warm creation/duplicate route must not display an old FileList when its new draft submits no file.
+Do not silently discard a user action or apply a blanket reset to controls whose live drafts remain intentional.
+
+Committed identity creation requires real-ORM Guest/Profile/session atomicity and the actual HTTP adoption path.
+Context/expiry/validation/persistence failures before commit leave none of those writes; a prepared completion receipt
+must not rehydrate or reject against a later mutable actor after commit. SMTP failure is a delivery outcome, not failed
+creation or permission to replay it. Exercise opposing transitions, rollback, response autosave and committed receipt
+privacy; a helper-only guard test cannot establish these boundaries.
 
 ## Help security versus maintained prose
 
@@ -198,7 +246,8 @@ fixtures already provide unique detection. Do not add another broad cross-produc
 ## CI and reporting
 
 Executable CI currently separates database-free, serial integration and browser stages, with isolated runner setup.
-Report merging does not rerun suites. Preserve distinct application checks and configured diagnostics.
+The browser stage retains separate client and E2E runner/report boundaries after its normal build. Report merging
+does not rerun suites. Preserve distinct application checks and configured diagnostics.
 Node/MariaDB versions, worker limits, stage timeout and exact preparation order belong to workflow/runner files,
 rather than duplicated command matrices.
 

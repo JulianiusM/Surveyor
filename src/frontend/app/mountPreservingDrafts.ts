@@ -60,6 +60,18 @@ function captureOption(option: HTMLOptionElement): {option: HTMLOptionElement; v
     return {option, value: option.value, selected: option.selected};
 }
 
+/** Read initial draft eligibility through the same owner used by hydration.
+ * Startup guards retain no values, secrets or files: each decision examines the
+ * currently editable original controls, including opted-in non-text selections. */
+export function hasHydrationDrafts(container: Element): boolean {
+    // Do not maintain another dirty-field definition for release recovery. The
+    // temporary capture is discarded immediately and never enters browser storage.
+    for (const field of container.querySelectorAll<DraftField>('input, textarea, select')) {
+        if (captureDraft(field)) return true;
+    }
+    return false;
+}
+
 /** Restore only the original, still-admitted control and synchronize its existing draft model. */
 function restoreDraft(draft: CapturedDraft, container: Element): void {
     const {field, state} = draft;

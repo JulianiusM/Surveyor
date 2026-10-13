@@ -1175,6 +1175,10 @@ components:
       $ref: ./auth.yaml#/schemas/GuestEmailExists
     IdentityResult:
       $ref: ./auth.yaml#/schemas/IdentityResult
+    EmailDelivery:
+      $ref: ./auth.yaml#/schemas/EmailDelivery
+    RegistrationResult:
+      $ref: ./auth.yaml#/schemas/RegistrationResult
     DecimalId:
       $ref: ./common.yaml#/schemas/DecimalId
     DeploymentView:

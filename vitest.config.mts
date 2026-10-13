@@ -33,6 +33,9 @@ export default defineConfig({
                 test: {
                     name: 'database-free',
                     include: ['tests/unit/**/*.spec.ts', 'tests/frontend/**/*.spec.ts'],
+                    // Real-browser client fixtures share this layer's directory but
+                    // run through their own Playwright configuration and built assets.
+                    exclude: ['tests/frontend/browser/**'],
                     fileParallelism: true,
                     sequence: {groupOrder: 0},
                 },
@@ -42,6 +45,9 @@ export default defineConfig({
                 test: {
                     name: 'integration',
                     include: ['tests/integration/**/*.spec.ts'],
+                    // The explicitly selected source-runtime browser integration
+                    // uses its existing owned server/schema, rather than this resetter.
+                    exclude: ['tests/integration/browser/**'],
                     // Every file rebuilds the same disposable schema. This project
                     // must own a single worker, after the independent files finish;
                     // no suite may reset rows while another suite uses them.

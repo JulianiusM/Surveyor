@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import type {Response} from 'express';
-import type {FrontendPilotBootstrap, FrontendPilotRenderResult} from '../types/FrontendPilotTypes';
+import type {FrontendPilotBootstrap, FrontendPilotRenderResult, FrontendPreparedDocument} from '../types/FrontendPilotTypes';
 import {createTranslator, localeManifest} from './localization/translator';
 import {frontendDevelopmentServer} from './frontendDevelopment';
 
@@ -34,8 +34,15 @@ function clientAssets(): {script: string; styles: string[]} {
     if (!entry) throw new Error('Frontend pilot client entry is missing from its build manifest');
     const styles = new Set<string>();
     const seen = new Set<string>();
+
+    /** Traverse each build-authored dependency once and retain stylesheet order.
+     * Shared imports and cycles must neither duplicate links nor recurse forever. */
     function collectStyles(chunk: AssetChunk): void {
+        // Set insertion order preserves the manifest's first encountered styles.
         for (const css of chunk.css ?? []) styles.add(`/app/${css}`);
+
+        // Mark dependencies before descending so a shared/cyclic edge is visited
+        // once. A missing build-authored chunk remains an ordinary build error.
         for (const imported of chunk.imports ?? []) {
             if (seen.has(imported)) continue;
             seen.add(imported);
@@ -46,8 +53,12 @@ function clientAssets(): {script: string; styles: string[]} {
     return {script: `/app/${entry.file}`, styles: [...styles]};
 }
 
-/** Same Vue component tree for native responses and hydration; each renderer invocation owns its request state. */
-export async function renderFrontendPilot(res: Response, url: string, bootstrap: FrontendPilotBootstrap): Promise<void> {
+/**
+ * Prepare the complete existing SSR document before a commit-sensitive operation
+ * becomes final. Keep asset selection, headers, shell assembly and development
+ * transforms in this same owner; no response body is sent during preparation.
+ */
+export async function prepareFrontendPilot(res: Response, url: string, bootstrap: FrontendPilotBootstrap): Promise<FrontendPreparedDocument> {
     const development = frontendDevelopmentServer();
     // Vite's HTML transform applies its configured base to source URLs exactly once.
     // Installed-release manifest paths already include that base and skip the transform.
@@ -85,5 +96,16 @@ export async function renderFrontendPilot(res: Response, url: string, bootstrap:
     // Replacement callbacks insert strings literally; user content containing $& or
     // other replacement tokens must not be interpreted as String.replace syntax.
     const html = transformed.replace(headMarker, () => head).replace(bodyMarker, () => body);
-    res.type('html').send(html);
+    return Object.freeze({html});
+}
+
+/** Send already prepared HTML; delivery cannot trigger another renderer, bootstrap or token operation. */
+export function sendPreparedFrontendPilot(res: Response, prepared: FrontendPreparedDocument): void {
+    res.type('html').send(prepared.html);
+}
+
+/** Ordinary responses reuse the exact same preparation owner and hydration tree. */
+export async function renderFrontendPilot(res: Response, url: string, bootstrap: FrontendPilotBootstrap): Promise<void> {
+    const prepared = await prepareFrontendPilot(res, url, bootstrap);
+    sendPreparedFrontendPilot(res, prepared);
 }

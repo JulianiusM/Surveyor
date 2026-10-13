@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import {TypeormStore} from "connect-typeorm";
 import cookieParser from 'cookie-parser';
 import express, {NextFunction, Request, Response} from 'express';
 import flash from 'express-flash';
@@ -27,7 +26,7 @@ import {logoutUserOidc, validateSession} from "./controller/userController";
 import {handleGenericError} from './middleware/genericErrorHandler';
 import {resolveContextualHelpUrl} from './modules/lib/helpNavigation';
 import {AppDataSource} from "./modules/database/dataSource";
-import {Session} from "./modules/database/entities/session/Session";
+import {createSessionStore} from './modules/lib/session';
 import {asyncHandler} from "./modules/lib/asyncHandler";
 import settings from './modules/settings';
 import {frontendDevelopmentMiddleware} from './modules/frontendDevelopment';
@@ -63,7 +62,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/app', express.static(path.resolve(__dirname, '../dist/public/app')));
 
 // ensure dataSource is initialized before this
-const sessionRepository = AppDataSource.getRepository(Session);
+const sessionStore = createSessionStore(AppDataSource.manager);
 
 // If behind a proxy (Heroku/NGINX), enable this so secure cookies work:
 app.set("trust proxy", 1);
@@ -79,11 +78,7 @@ app.use(
             secure: process.env.NODE_ENV === "production", // HTTPS only in prod
             sameSite: "lax",
         },
-        store: new TypeormStore({
-            cleanupLimit: 2,          // prune expired sessions periodically
-            limitSubquery: false,
-            ttl: 60 * 60 * 24,        // seconds (1 day)
-        }).connect(sessionRepository),
+        store: sessionStore,
     })
 );
 

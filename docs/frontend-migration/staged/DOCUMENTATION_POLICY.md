@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; documentation contributors; operators; AI agents
 owner: documentation maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved canonical-tree restoration and visible locale fallback reconciled with implementation; common classification/trust/approval authority remains in live policies
+verification-scope: explicit canonical user-guide and whole-article same-language asset decisions recorded; common classification/trust/approval authority remains in live policies
 source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; src/controller/helpController.ts; docs/user-guide/en/; docs/user-guide/de/; tests/unit/help-documentation.spec.ts; tests/unit/help-localization.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/policies/DOCUMENTATION_POLICY.md
@@ -26,8 +26,11 @@ The trust model is unchanged: release-shipped source review, permitted metadata 
 and fixed containment. No user/tenant/editor/upload/database/network/plugin content is admitted. Enabling an untrusted
 source still requires reopening DEC-004 and implementing the corresponding threat model, sanitization and URI policy.
 
-Complete localized Help is preferred. A missing locale corpus, article or referenced figure may fall back only to the
-reviewed pilot English corpus. Preserve the selected interface locale, label actual article/TOC language, and display
+Complete localized Help is preferred. The Oct12 amendment allowed individual figure fallback. The explicit Oct13
+Req. 2A/2B decision confirms this canonical path and replaces that partial-page behavior: a missing locale corpus,
+article or required figure may select only the complete corresponding reviewed English article with its own assets.
+Each article's authored local references stay in its language; asset requests cannot independently choose English.
+Preserve the selected interface locale, label actual article/TOC language, and display
 the localized fallback notice and English navigation/search markers. Missing topics enter results once; available
 translations remain preferred. Unsafe, malformed or unreadable existing translated source fails instead of falling
 back. Native source/presentation behavior is unchanged.

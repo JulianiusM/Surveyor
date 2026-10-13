@@ -17,23 +17,44 @@ export function createUpdateCoordinator(initial: components['schemas']['Deployme
     let disposed = false;
     let nextBuild = initial.buildId;
 
-    /** Reload only when every mounted draft/command permits departure. The build
-     * marker limits retries across this document's replacement recovery; it is
-     * neither a command receipt nor permission to discard unresolved work. */
-    function requestReload(): boolean {
-        if (!browser || disposed || reloading || !available.value || commands > 0
+    /** Apply the same draft/command protection to automatic and deliberate recovery.
+     * Only automatic attempts require a persisted marker: deliberate recovery is
+     * a new user action, never permission to bypass another owner's live guard. */
+    function reloadWhenAllowed(deliberate: boolean): boolean {
+        // Startup can register a DOM-draft guard before the component tree exists.
+        // Mounted guards and admitted commands keep their existing lifetime too.
+        if (!browser || disposed || reloading || !deliberate && !available.value || commands > 0
             || [...guards].some(guard => !guard())) return false;
 
-        // A failed chunk on an unchanged build may have another cause (offline, corrupt cache).
-        // Remember only the attempted build, so repeated errors cannot cause a reload loop.
+        // A failed chunk can have another cause, including an offline browser. An
+        // automatic attempt must prove its cross-document loop protection works;
+        // an unavailable getter/read/write therefore leaves explicit recovery only.
         const marker = `surveyor:reload:${initial.buildId}:${nextBuild}`;
         try {
-            if (sessionStorage.getItem(marker)) return false;
+            if (!deliberate && sessionStorage.getItem(marker)) return false;
             sessionStorage.setItem(marker, '1');
-        } catch { /* Restricted storage still permits one attempt in this mounted application. */ }
+        } catch {
+            if (!deliberate) return false;
+            // The user can deliberately retry even when no marker can be stored.
+            // Guards were checked above; no automatic attempt is queued here.
+        }
+
+        // Limit both paths to one dispatch in this instance. Only an automatic
+        // attempt is also limited across replacement documents by its marker.
         reloading = true;
         reload();
         return true;
+    }
+
+    /** Automatic recovery requires an available update and a working attempt marker. */
+    function requestReload(): boolean {
+        return reloadWhenAllowed(false);
+    }
+
+    /** A deliberate retry can recover an initial loading failure or an exhausted
+     * automatic attempt, while every draft/pending/unknown guard still applies. */
+    function requestRecoveryReload(): boolean {
+        return reloadWhenAllowed(true);
     }
 
     function observe(deployment: components['schemas']['DeploymentView']): void {
@@ -77,7 +98,7 @@ export function createUpdateCoordinator(initial: components['schemas']['Deployme
     }
 
     return {
-        available, incompatible, observe, requestReload, registerGuard, commandStarted,
+        available, incompatible, observe, requestReload, requestRecoveryReload, registerGuard, commandStarted,
         chunkFailed() { available.value = true; queueMicrotask(requestReload); },
         dispose() { disposed = true; guards.clear(); },
     };

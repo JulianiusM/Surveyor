@@ -3,23 +3,58 @@ import type {Page, Route, TestInfo} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import * as pug from 'pug';
-import {invoicePresentation} from '../../src/modules/invoice/presentation';
+import {invoicePresentation} from '../../../src/modules/invoice/presentation';
 
 /**
  * Use the same shipped stylesheet as the built browser module below. Compiling
  * Sass separately for each viewport both repeats build work and can hide stale
- * distribution assets. E2E requires a coherent build; do not substitute source
+ * distribution assets. Client layout coverage requires a coherent build; do not substitute source
  * styles when that build is absent.
  */
 function loadInvoiceStyles(): string {
     try {
         return readFileSync(resolve('dist/public/style/style.css'), 'utf8');
     } catch (error) {
-        throw new Error('Invoice layout tests require the built stylesheet; run npm run build before E2E.', {cause: error});
+        throw new Error('Invoice layout tests require the built stylesheet; run npm run build before client browser coverage.', {cause: error});
     }
 }
 
 const invoiceStyles = loadInvoiceStyles();
+const blockedCommands = new WeakMap<Page, string[]>();
+
+// Isolated layout evidence has no application server. Only build-authored client
+// modules are readable; no fixture interaction can reach an API or mutate data.
+test.beforeEach(async function prepareClientAssets({page}) {
+    const commands: string[] = [];
+    blockedCommands.set(page, commands);
+    await page.route('**/*', deliverClientAsset);
+
+    /** Resolve shipped JavaScript within its built directory and refuse every
+     * other network request. Fixture documents have their own later route owner. */
+    async function deliverClientAsset(route: Route): Promise<void> {
+        const request = route.request();
+        if (request.method() !== 'GET') {
+            commands.push(request.method() + ' ' + request.url());
+            await route.abort('failed');
+            return;
+        }
+
+        // Native browser modules retain nested direct imports. Permit only their
+        // authored path segments, never traversal or an arbitrary workspace file.
+        const url = new URL(request.url());
+        const asset = url.pathname.startsWith('/js/') ? url.pathname.slice('/js/'.length) : '';
+        if (url.origin === 'http://surveyor-client.test' && /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_.-]+\.js$/u.test(asset)) {
+            await route.fulfill({contentType: 'text/javascript', body: readFileSync(resolve('dist/public/js', asset))});
+            return;
+        }
+        await route.fulfill({status: 404, contentType: 'text/plain', body: 'No client layout fixture for this request.'});
+    }
+});
+
+test.afterEach(async function verifyNoClientCommands({page}) {
+    expect(blockedCommands.get(page) ?? [], 'Layout interactions must not dispatch commands').toEqual([]);
+    blockedCommands.delete(page);
+});
 
 // This layout test uses shipped templates and styles without an application, session, or database.
 test.use({viewport: {width: 1280, height: 900}, deviceScaleFactor: 1.25});

@@ -18,7 +18,7 @@ import {marked} from 'marked';
 import fs from 'node:fs';
 import path from 'node:path';
 import {ExpectedError} from '../modules/lib/errors';
-import {createTranslator, helpSourceDirectory, resolveLocale} from '../modules/localization/translator';
+import {createTranslator, helpSourceDirectory, resolveLocale, resolveSupportedLocale} from '../modules/localization/translator';
 import {localizedHelpUrl} from '../modules/lib/helpNavigation';
 import type {HelpAssetSource, HelpDocumentSummary, HelpNavigationGroup, HelpTocEntry, HelpSearchResult, HelpPageData} from '../types/HelpTypes';
 
@@ -49,6 +49,9 @@ interface HelpFileSource {
     filePath: string;
     locale?: string;
 }
+
+/** Only absent valid localized figures permit complete-article English selection. */
+class MissingLocalizedHelpAssetsError extends Error {}
 
 interface HeadingInfo extends HelpTocEntry {
     renderedIndex: number;
@@ -129,21 +132,21 @@ export function resolveHelpAssetPath(assetName: string, locale?: string): string
     return resolveHelpAssetSource(assetName, locale)?.filePath ?? null;
 }
 
-/** Asset responses and authored figure links use the actual reviewed source language.
- * Validate names before either source lookup so fallback cannot weaken containment. */
+/** Keep the same closed raster-name policy at authored-reference and asset-response boundaries. */
+function isHelpAssetName(assetName: string): boolean {
+    return HELP_ASSET_NAME_RE.test(assetName) && path.basename(assetName) === assetName
+        && HELP_ASSET_EXTENSIONS.has(path.extname(assetName).toLowerCase());
+}
+
+/** Asset responses use only the requested reviewed language. A complete English
+ * article supplies its own English URLs; an asset request never borrows another corpus. */
 export function resolveHelpAssetSource(assetName: string, locale?: string): HelpAssetSource | null {
-    if (!HELP_ASSET_NAME_RE.test(assetName) || path.basename(assetName) !== assetName) {
-        return null;
-    }
-    if (!HELP_ASSET_EXTENSIONS.has(path.extname(assetName).toLowerCase())) {
-        return null;
-    }
+    // Reject unsafe names before deriving a path. Existing malformed release
+    // files still fail their strict lookup; only actual absence returns null.
+    if (!isHelpAssetName(assetName)) return null;
     const sourceLocale = locale === undefined ? undefined : resolveLocale(locale);
     const filePath = resolveRegularFile(getHelpAssetsBasePath(sourceLocale), assetName, sourceLocale !== undefined);
-    if (filePath) return {filePath, locale: sourceLocale};
-    if (sourceLocale === undefined || sourceLocale === 'en') return null;
-    const englishPath = resolveRegularFile(getHelpAssetsBasePath('en'), assetName, true);
-    return englishPath ? {filePath: englishPath, locale: 'en'} : null;
+    return filePath ? {filePath, locale: sourceLocale} : null;
 }
 
 function stripDocumentationMetadata(markdown: string): string {
@@ -192,16 +195,51 @@ function splitUriSuffix(href: string): { base: string; suffix: string } {
         : {base: href.slice(0, cutIndex), suffix: href.slice(cutIndex)};
 }
 
-/** Recognize only a packaged visual's basename under the canonical assets path.
- * URI suffixes stay outside source lookup; the shared resolver validates the selected corpus. */
-function managedAssetName(href: string, locale?: string): string | null {
+/** Recognize only a permitted visual's basename under the canonical assets path.
+ * Source lookup is separate so an absent valid figure is distinct from an unsafe reference. */
+function managedAssetBasename(href: string, locale?: string): string | null {
     const {base} = splitUriSuffix(href);
-    const normalized = base.replaceAll('\\', '/').replace(/^\/help\//u, '');
+    // Native authoring keeps its original /help spelling. Localized references
+    // may also use their actual pilot endpoint without changing that native contract.
+    const reference = locale === undefined ? base : base.replace(/^\/frontend-pilot\/help\//u, '/help/');
+    const normalized = reference.replaceAll('\\', '/').replace(/^\/help\//u, '');
     if (!normalized.startsWith('assets/') || normalized.slice('assets/'.length).includes('/')) {
         return null;
     }
     const assetName = normalized.slice('assets/'.length);
-    return resolveHelpAssetPath(assetName, locale) ? assetName : null;
+    return isHelpAssetName(assetName) ? assetName : null;
+}
+
+/** An authored asset is usable only when its own article language supplies that exact raster. */
+function managedAssetName(href: string, locale?: string): string | null {
+    const assetName = managedAssetBasename(href, locale);
+    return assetName && resolveHelpAssetPath(assetName, locale) ? assetName : null;
+}
+
+/** Local figure links must use this article's canonical assets path; external links retain their URI policy. */
+function isHelpAssetReference(href: string): boolean {
+    const {base} = splitUriSuffix(href);
+    const normalized = base.replaceAll('\\', '/');
+    return !/^[a-z][a-z0-9+.-]*:/iu.test(normalized) && /(?:^|\/)assets\//u.test(normalized);
+}
+
+/** Reject another language in authored Help links instead of silently rewriting its choice. */
+function assertAuthoredHelpLocale(href: string, sourceName: string, locale?: string): void {
+    if (locale === undefined) return;
+    const {base, suffix} = splitUriSuffix(href);
+    // External links retain their ordinary URI contract. Only Help topic/asset
+    // references belong to this article's release language. Regional hints use
+    // the shared matcher; an unsupported hint cannot pass through its English default.
+    const helpReference = base === '/help' || base.startsWith('/help/') || base === '/frontend-pilot/help' || base.startsWith('/frontend-pilot/help/')
+        || isHelpAssetReference(href) || (!base.includes('/') && base.toLowerCase().endsWith('.md'));
+    if (!helpReference || !suffix.startsWith('?')) return;
+    const query = new URLSearchParams(suffix.split('#', 1)[0].slice(1));
+    const sourceLocale = resolveLocale(locale);
+    for (const authoredLocale of query.getAll('locale')) {
+        if (resolveSupportedLocale(authoredLocale) !== sourceLocale) {
+            throw new Error(`${sourceName} Help links must reference only their own language`);
+        }
+    }
 }
 
 /** Recognize only adjacent maintained articles, excluding query/fragment suffixes
@@ -248,16 +286,18 @@ function visitTokenTree(value: unknown, visitor: (token: Record<string, any>) =>
 export function validateTrustedHelpMarkdown(markdown: string, sourceName = 'Help document', locale?: string): void {
     const authoredMarkdown = stripDocumentationMetadata(markdown);
     const tokens = marked.lexer(authoredMarkdown, {gfm: true});
+    let missingAssetMessage: string | undefined;
 
     /** Validate nested links/images in the same authored source context. Native and
-     * pilot callers retain their own corpus rules; missing translations may borrow
-     * reviewed English, while malformed or unsafe existing content remains a failure. */
+     * pilot callers retain their own corpus rules. Defer only valid absent figures
+     * until all tokens have passed; a later unsafe token must prevent fallback. */
     function validateHelpToken(token: Record<string, any>): void {
         if (token.type === 'html') {
             throw new Error(`${sourceName} contains raw HTML outside the permitted documentation metadata comment`);
         }
         if ((token.type === 'link' || token.type === 'image') && typeof token.href === 'string') {
             assertSafeHelpUri(token.href, sourceName);
+            assertAuthoredHelpLocale(token.href, sourceName, locale);
         }
         if (token.type === 'link' && typeof token.href === 'string') {
             const {base} = splitUriSuffix(token.href);
@@ -265,16 +305,22 @@ export function validateTrustedHelpMarkdown(markdown: string, sourceName = 'Help
                 throw new Error(locale === undefined ? `${sourceName} links may reference only maintained Markdown files in docs/user-guide`
                     : `${sourceName} links may reference only maintained Markdown files in the selected help language`);
             }
-            if (locale !== undefined && (base.startsWith('assets/') || base.startsWith('/help/assets/')) && !managedAssetName(token.href, locale)) {
-                throw new Error(`${sourceName} asset links must reference a packaged file in the selected help language`);
-            }
         }
-        if (token.type === 'image' && typeof token.href === 'string' && !managedAssetName(token.href, locale)) {
-            throw new Error(locale === undefined ? `${sourceName} images must reference a packaged file under docs/user-guide/assets`
-                : `${sourceName} images must reference a packaged file in the selected help language's assets directory`);
+        if (typeof token.href === 'string') {
+            const assetLink = locale !== undefined && token.type === 'link' && isHelpAssetReference(token.href);
+            if ((token.type === 'image' || assetLink) && !managedAssetName(token.href, locale)) {
+                const message = assetLink ? `${sourceName} asset links must reference a packaged file in the selected help language`
+                    : locale === undefined ? `${sourceName} images must reference a packaged file under docs/user-guide/assets`
+                        : `${sourceName} images must reference a packaged file in the selected help language's assets directory`;
+                // Only a closed, safe basename with an absent own-language file
+                // qualifies. Invalid paths/formats and malformed existing files reject.
+                if (locale !== undefined && locale !== 'en' && managedAssetBasename(token.href, locale)) missingAssetMessage ??= message;
+                else throw new Error(message);
+            }
         }
     }
     visitTokenTree(tokens, validateHelpToken);
+    if (missingAssetMessage) throw new MissingLocalizedHelpAssetsError(missingAssetMessage);
 }
 
 /** Rewrite links to maintained Markdown documents into their in-app routes. */
@@ -419,21 +465,12 @@ export function renderTrustedHelpMarkdown(markdown: string, sourceName = 'Help d
     const authoredMarkdown = stripDocumentationMetadata(markdown);
     const headings = extractHeadings(authoredMarkdown);
     if (locale !== undefined) applyAuthoredHeadingAnchors(markdown, headings, sourceName);
-    // Article text and figures may have different available translations. The page
-    // announces any English borrowing; image URLs always select the actual corpus,
-    // while article navigation retains the reader's chosen interface language.
-    let fallbackToEnglish = interfaceLocale !== undefined && interfaceLocale !== 'en' && locale === 'en';
+    // A selected article and all its figures share one content language. The
+    // caller decides complete-article fallback; navigation retains the UI locale.
+    const fallbackToEnglish = interfaceLocale !== undefined && interfaceLocale !== 'en' && locale === 'en';
 
-    /** Rewrite already validated links in their article's source context. Figure
-     * fallback contributes to the page disclosure, while article URLs retain the UI locale. */
+    /** Rewrite validated own-language figures and logical article URLs without mixing their responsibilities. */
     function rewriteToken(token: any): void {
-        if ((token?.type === 'link' || token?.type === 'image') && typeof token.href === 'string') {
-            const assetName = managedAssetName(token.href, locale);
-            if (assetName && interfaceLocale !== undefined && interfaceLocale !== 'en'
-                && resolveHelpAssetSource(assetName, locale)?.locale === 'en') {
-                fallbackToEnglish = true;
-            }
-        }
         if (token?.type === 'link' && typeof token.href === 'string') {
             token.href = rewriteDocHrefToHelpRoute(token.href, locale, interfaceLocale);
         }
@@ -468,6 +505,43 @@ function readMarkdownFile(filePath: string, locale?: string, interfaceLocale = l
     } catch (error) {
         console.error('Error reading trusted help document:', error);
         return null;
+    }
+}
+
+/**
+ * Select an indivisible article/figure bundle for every localized reader. Only
+ * valid absent localized figures permit replacement with complete reviewed English.
+ * Link-existence lookup remains separate, preventing cycles between linked articles.
+ * Existing unrelated read/validation failures stay with each caller's prior error boundary.
+ */
+function resolveCompleteDocSource(fileName: string, locale?: string): HelpFileSource | null {
+    const source = resolveDocSource(fileName, locale);
+    if (!source || source.locale === undefined || source.locale === 'en') return source;
+
+    try {
+        const markdown = fs.readFileSync(source.filePath, 'utf-8');
+        let missingFigures = false;
+        try {
+            validateTrustedHelpMarkdown(markdown, path.basename(source.filePath), source.locale);
+        } catch (error) {
+            if (!(error instanceof MissingLocalizedHelpAssetsError)) return source;
+            missingFigures = true;
+        }
+        // Missing figures cannot conceal mismatched anchors. Both checks belong
+        // to the original translated article before any English selection occurs.
+        applyAuthoredHeadingAnchors(markdown, extractHeadings(stripDocumentationMetadata(markdown)), path.basename(source.filePath));
+        if (!missingFigures) return source;
+
+        const englishPath = resolveDocPath(fileName, 'en');
+        if (!englishPath) return source;
+        const english = fs.readFileSync(englishPath, 'utf-8');
+        validateTrustedHelpMarkdown(english, path.basename(englishPath), 'en');
+        applyAuthoredHeadingAnchors(english, extractHeadings(stripDocumentationMetadata(english)), path.basename(englishPath));
+        return {filePath: englishPath, locale: 'en'};
+    } catch {
+        // Do not add a general navigation/search hardening change. Their existing
+        // summary/reader still handles the invalid source, without hiding it by fallback.
+        return source;
     }
 }
 
@@ -526,7 +600,7 @@ function getLocalizedDocsCatalog(locale: string): HelpDocumentSummary[] {
     }
     const catalog: HelpDocumentSummary[] = [];
     for (const name of names) {
-        const source = resolveDocSource(name, locale);
+        const source = resolveCompleteDocSource(name, locale);
         if (!source) continue;
         catalog.push(summarizeHelpDoc(source.filePath, name, locale, source.locale));
     }
@@ -611,7 +685,7 @@ export function searchHelpDocuments(rawQuery: string, requestedLocale?: string):
     const results: Array<HelpSearchResult & { score: number }> = [];
 
     for (const doc of getDocsCatalog(locale)) {
-        const source = resolveDocSource(doc.name, locale);
+        const source = resolveCompleteDocSource(doc.name, locale);
         if (!source) {
             continue;
         }
@@ -655,7 +729,7 @@ export function searchHelpDocuments(rawQuery: string, requestedLocale?: string):
 export function fetchHelpIndex(requestedLocale?: string): HelpPageData {
     const locale = requestedLocale === undefined ? undefined : resolveLocale(requestedLocale);
     const common = commonPageData('readme', locale);
-    const source = resolveDocSource('README.md', locale);
+    const source = resolveCompleteDocSource('README.md', locale);
     const parsed = source ? readMarkdownFile(source.filePath, source.locale, locale) : null;
     // Preserve the native home's established empty-content recovery, while a broken
     // existing pilot article must surface a load error rather than look like fallback.
@@ -697,7 +771,7 @@ export function fetchHelpDoc(docName: string, requestedLocale?: string): HelpPag
     }
 
     const fileName = `${docName.toUpperCase()}.md`;
-    const source = resolveDocSource(fileName, locale);
+    const source = resolveCompleteDocSource(fileName, locale);
     if (!source) {
         throw new ExpectedError(locale === undefined ? 'Documentation not found' : t('help.notFound'), 'error', 404);
     }
@@ -707,7 +781,7 @@ export function fetchHelpDoc(docName: string, requestedLocale?: string): HelpPag
         throw new ExpectedError(locale === undefined ? 'Error loading documentation' : t('help.loadError'), 'error', 500);
     }
 
-    // Article and navigation/figure fallback share one visible disclosure. Language
+    // Article and navigation fallback share one visible disclosure. Language
     // metadata identifies the rendered body, while common page state retains the UI locale.
     const common = commonPageData(docName.toLowerCase(), locale);
     return {

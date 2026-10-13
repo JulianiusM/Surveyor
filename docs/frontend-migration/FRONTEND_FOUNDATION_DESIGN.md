@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original design and dated approved shared-backend/Help/permission corrections retained; explicit 2026-10-13 same-event no-op and temporary Packed-state decisions recorded; actual readiness execution and its limits owned by paired review
+verification-scope: original design and prior dated amendments retained; subsequent explicit test-layer, value-lifetime, permission-watcher and final-commit requirements recorded; actual execution and its limits owned by paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -34,7 +34,7 @@ passing tests or an implementation spike cannot authorize a technology substitut
 | Authored OpenAPI 3.1; generated declarations and Ajv standalone validators | Retained. One root package/lockfile; no handwritten copies of wire shapes, second validation language or runtime schema compilation. |
 | Reusable Bootstrap-compatible controls with suitable Reka primitives | Retained. Dialogs/tabs use Reka; mixed native navigation disclosures have a documented fit assessment in the framework record. |
 | Same-component scoped SSR/hydration for established fallbacks | Retained as the rendering architecture. The Oct8 amendment supersedes mandatory interactive no-JavaScript operation; Help remains readable/searchable without JavaScript. |
-| Monotonic Packing revision and retained old fingerprinted assets | Superseded by D2 and D5 below. Original rationale remains historical; no silent rewriting of those decisions. |
+| Monotonic Packing revision and retained old fingerprinted assets | Revisions detected changes away and back; retained assets let loaded clients fetch earlier release chunks. D2 and D5 below explicitly supersede those choices and retain their bounded tradeoffs. |
 | Existing controller/business owners and pure DBAL | Retained and strengthened by the current shared-backend correction. Transport adapters must not become separate policy owners. |
 | Enable a complete interface catalog without requiring a translated Help corpus | The earlier pilot required complete localized Help instead. The direct Oct12 decision restores English fallback for missing localized content and requires visible disclosure; complete localized Help remains the preferred outcome. |
 
@@ -127,7 +127,8 @@ The maintainer authorizes the full reviewed implementation sequence and resolves
   remain staged until authorized cutover. Native guide prose/assets remain the visual and behavioral comparator.
 - Complete localized Help is preferred for each additional interface language. Missing locale corpora, articles or
   figures fall back to the reviewed pilot English corpus with a visible localized notice and English result markers.
-  Keep the chosen interface language; expose the actual content language. Unsafe existing translated source fails
+  Keep the chosen interface language; expose the actual content language. The later whole-article amendment below
+  supersedes the independent missing-figure fallback. Unsafe existing translated source fails
   validation and is never hidden by fallback. This supersedes the prior implementation's complete-corpus requirement.
 
 This authorization covers the bounded corrections and editorial cleanup; final implementation/evidence is recorded
@@ -184,6 +185,121 @@ writes remain outstanding. Retire the fallback on list/context change, unmount o
 the persisted keys remain profile-independent. It introduces no server persistence, automatic write replay or
 promised restoration of unsaved changes after departure. The [refresh owner](REFRESH_CONFLICT_DESIGN.md#state-ownership)
 describes its lifetime, and the [paired review](PILOT_PARITY_REVIEW.md) owns executed evidence.
+
+### Authorized command admission clarification (2026-10-13)
+
+The original command contract preserves already admitted work for its captured actor; pending/unknown status may
+outlive its editor, and abort is not rollback. The maintainer conditionally approved rejecting a new
+`useCommand.run` after its owning component unmounts only if review established a stale-callback defect rather than
+a deliberately deferred submission. The production-consumer audit found no supported new dispatch from an unmounted
+owner. The existing shared command owner therefore checks its mounted lifetime before capturing feedback, authority
+or a new status lease and before invoking the operation.
+
+This admission check does not interrupt work admitted before unmount, including a deferred request, settlement,
+follow-up read, unknown-outcome protection or confirmed navigation. Closing a child dialog may leave its command
+owner mounted; those deliberate continuations keep their existing checks. History identifies the original missing
+guard and the later status-retention correction, but does not establish a deliberate rationale for admitting a new
+write from a retired owner. Native behavior, server authorization and existing completion guarantees remain unchanged;
+the paired review owns the actual regression evidence and verification scope.
+
+### Authorized startup recovery clarification (2026-10-13)
+
+After the full pilot review and a direct explanation of the startup consequences, the maintainer explicitly instructed
+"Implement your full plan" and approved startup recovery. The original same-component SSR contract preserves input
+typed before hydration; D5 permits one automatic reload only for a clean idle view. The review found that an initial
+route-chunk failure could occur before mounted draft guards and usable recovery controls existed. A consumed reload
+marker could prevent deliberate recovery, while ignored attempt-storage failures allowed repeated automatic reloads.
+The review reproduced initial input loss and repeating attempts without working storage. No deliberate exception for
+losing such input was established by the reviewed history.
+
+The existing startup, mount and update owners protect SSR controls before route loading and keep that protection until
+draft restoration finishes. Automatic reload requires demonstrably clean state and working loop protection. If storage
+cannot provide that protection, show localized explicit recovery instead. Deliberate recovery may bypass the automatic
+attempt marker, but confirms before discarding edited SSR controls and retains pending/unknown command guards.
+Recovery reloads the document; it neither persists secrets/files, restores unknown commands nor replays a write.
+
+The same approved plan clears the browser's file input when the feature acknowledges a confirmed header upload;
+rejection, unknown delivery and ordinary refresh retain the chosen file. These bounded corrections preserve native
+behavior, shared backend owners and prior completion guarantees. They grant no default-route cutover, broader automatic
+retry or new framework/service. The [paired review](PILOT_PARITY_REVIEW.md) owns their actual verification and limits.
+
+### Authorized review follow-up requirements (2026-10-13)
+
+The maintainer's subsequent instructions explicitly require strict test-layer ownership, an audit of component value
+lifetimes, complete serialized authored-input observation and final mutation commits. These are separate bounded
+requirements; they do not erase the original choices or authorize unrelated native changes.
+
+- E2E retains the built application and full setup/database boundary. An isolated real-browser fixture belongs to
+  the client layer; using Playwright alone cannot broaden E2E's definition. This resolves the conflict between the
+  central layer rule and the staged wording that had admitted isolated source/hydration cases as E2E.
+- Reused component controls and feature drafts share an explicit logical value lifetime. The review reproduced a
+  creation/duplicate file selection surviving its draft reset; confirmation releases both owners, while a canceled
+  departure or unresolved command preserves the live scope's input.
+- `src/modules/lib/permissions.ts` is an exact locale-generation dependency. Observe it through its parent alongside
+  contracts/catalogs, serialize API then locale generation, and restart Express only after the successful current batch's
+  ready marker. Unrelated library changes keep their existing restart behavior. The original omission's rationale is
+  undocumented; actual generator consumption establishes the dependency.
+- Guest registration must commit the Guest/profile rows, stored guest session and serialized success receipt as one final
+  mutation boundary. The maintainer rejects a remedy that checks the session before creation but still leaves a later
+  creation-to-session-save failure race. Original reconcile-only and unknown-outcome protections remain required;
+  this does not authorize unrelated session redesign, automatic command replay or changed guest expiry/deletion policy.
+
+The same final-commit requirement applies to pilot account creation and one-time activation. The existing
+`UserService.withIdentitySessionTransaction` owns the locked connection; the user controller's private
+`commitIdentityCompletion` supplies captured-context admission, isolated staging and result preparation.
+`registerUserWithSession`, `registerGuestWithSession` and `activateAccountWithSession` reuse that boundary.
+Account signup prepares User/profile/token and validated mail/transport results before commit, without changing the
+API caller's identity or returning its activation token. Activation prepares its API receipt or document redirect/flash
+before consuming the token. SMTP runs after registration commits and selects an already prepared outcome; acceptance
+does not promise inbox delivery. The existing native registration/activation compatibility paths remain unchanged.
+The pilot signup-document adapter has not adopted the account transaction. The later JavaScript-only instruction
+supersedes the proposed neutral wording, but its conflict with the original rendering design requires explicit resolution.
+The earlier pilot's ordinary identity guard checked stored context before a separate
+save; the explicit finality requirement replaces that boundary for login, private guest-link login and profile switching.
+`loginUserWithSession`, `loginGuestWithSession` and `changeActiveProfileWithSession` prepare validated replies or existing
+document notices/redirects inside the same locked completion owner. Native inactive-account resend remains before the
+identity transaction so its refreshed activation token survives the intended login rejection. Their final executed
+pilot scopes are owned by the paired review; no universal session compare-and-swap guarantee is established.
+
+Explicit token-free pilot logout now uses `logoutUserWithSession` through the same completion owner. Classification
+requires the absence of any truthy `session.tokens` object, including an empty object, and repeats on fresh locked
+staging before authority is cleared. Its generated API receipt or document success notice/303 is prepared before the
+stored anonymous identity commits, then adopted without another save. Native defaults and every token-bearing
+provider path remain unchanged; Req. 7 defers provider failure remediation as a separate general defect. The paired
+review owns executed ORM/source acceptance, renewed system evidence and the limits of this bounded adoption.
+
+Token locking currently protects cooperating pilot reset/activation consumers. Independent source scheduling finds
+that an earlier native token read can still finish its username-only password update after a pilot commit, or acknowledge
+activation through an ID-only update after consumption/reissue. The direct subsequent Req. 8/9 decisions defer those
+general behavioral defects to separately authorized backlog work; they are not migration blockers or permission to
+change native writers. The existing finality requirement does not approve those native consequences.
+
+`resetPasswordWithSession` prepares API or full SSR completion before its locked password/token commit; the document
+preserves the submitted URL and 200 success response. `requestPasswordResetWithSession` prepares token, mail/templates,
+cached sender and generic output/optional flash before commit, then settles captured delivery afterward. Setup does
+not connect to SMTP, and the reply adds no account-discovery/delivery metadata. The existing native defaults remain;
+the paired review owns the executed pilot-only concurrency, rollback, mail and delivery scopes and their limits.
+
+The defect register retains the implementation findings once, and the [paired review](PILOT_PARITY_REVIEW.md) owns actual execution,
+independent review and remaining limits. These requirements grant no default-route cutover or new documentation destination.
+
+### Authorized whole-article Help fallback and migration scope (2026-10-13)
+
+The maintainer explicitly confirms `docs/user-guide/` in Req. 2A. Native root files/assets remain the comparison
+reference; new Help stays entirely within its language directories. Req. 2B retains the disclosed English fallback
+while superseding the Oct12 permission to replace an individual missing figure: select one complete localized
+Markdown article and its own assets, or its complete reviewed English counterpart and that article's English assets.
+Never combine translated article text with another language's images. Authored local links cannot explicitly select
+another language; logical topic navigation retains the chosen interface locale and may select a whole English article
+at its destination. Asset requests never independently fall back. Actual article language and fallback remain visible.
+Unsafe, malformed or unreadable existing source still fails through its established caller boundary rather than being
+hidden behind a substitute. The same complete-source selection supplies article titles, navigation and search.
+
+The maintainer's Req. 7–9 decisions place provider logout preparation failure, mixed native/pilot password reset and
+mixed activation acknowledgement into separate general-defect backlog entries. Their remedies are not approved by
+the migration. The centralized [development policy](../policies/DEVELOPMENT_POLICY.md#authorization-and-task-boundaries)
+owns the explicit migration limit: preserve native visual/behavioral parity and defer general defects, large changes
+and backend behavior changes to separately authorized work. Earlier bounded approvals retain their recorded scope.
 
 ## Architecture and logical ownership
 

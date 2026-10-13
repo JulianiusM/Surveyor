@@ -1,8 +1,9 @@
 import {expect, test, type Page} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
-import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E, waitForPilotHydration} from '../keywords/e2eCoreKeywords';
-import type {components} from '../../src/types/api/v1';
+import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../../factories/e2eCoreFactory';
+import {createResourceViaForm, loginForE2E} from '../../keywords/e2eCoreKeywords';
+import {waitForPilotHydration} from '../../keywords/frontendDynamicKeywords';
+import type {components} from '../../../src/types/api/v1';
 
 type SessionView = components['schemas']['SessionView'];
 

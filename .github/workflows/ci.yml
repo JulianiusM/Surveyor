@@ -151,6 +151,7 @@ jobs:
           done
 
       - name: Build application
+        id: application-build
         if: matrix.stage == 'browser'
         run: npm run build
 
@@ -166,13 +167,29 @@ jobs:
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers
+        id: playwright-install
         if: matrix.stage == 'browser' && steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
-      - name: Run focused Playwright E2E suite with JUnit report
+      - name: Run isolated client browser checks with their own report
         if: matrix.stage == 'browser'
         env:
           CI: true
+          PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright-frontend.xml
+          PLAYWRIGHT_HTML_OUTPUT_DIR: artifacts/playwright-frontend-report
+        # The application build above supplies native/client/SSR assets. This
+        # client runner starts no server, prepares no schema and is not E2E evidence.
+        run: npm run test:frontend:browser --ignore-scripts -- --workers=2
+
+      - name: Run focused Playwright E2E suite with JUnit report
+        # A client assertion failure must not suppress the independent system
+        # boundary. Retain its diagnostics while the job still fails overall.
+        if: ${{ !cancelled() && matrix.stage == 'browser' && steps.application-build.outcome == 'success' && (steps.playwright-cache.outputs.cache-hit == 'true' || steps.playwright-install.outcome == 'success') }}
+        env:
+          CI: true
+          # The fixture guard accepts this explicitly prepared integration schema
+          # alongside the selected E2E schema, both owned by the same CI user.
+          TEST_DB_NAME: surveyor_test
           PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright.xml
           PLAYWRIGHT_HTML_OUTPUT_DIR: artifacts/playwright-report
         run: |
@@ -189,7 +206,9 @@ jobs:
           path: |
             artifacts/junit-vitest.xml
             artifacts/junit-playwright.xml
+            artifacts/junit-playwright-frontend.xml
             artifacts/playwright-report/
+            artifacts/playwright-frontend-report/
             coverage/lcov.info
             coverage/coverage-final.json
             artifacts/vitest-blobs/
@@ -252,7 +271,9 @@ jobs:
           path: |
             artifacts/junit-vitest.xml
             artifacts/junit-playwright.xml
+            artifacts/junit-playwright-frontend.xml
             artifacts/playwright-report/
+            artifacts/playwright-frontend-report/
             coverage/lcov.info
             coverage/coverage-final.json
             artifacts/vitest-stages/

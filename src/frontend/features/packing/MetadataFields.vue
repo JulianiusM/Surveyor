@@ -129,8 +129,8 @@ watch(metadata.error, (failure) => {
     if (isReadDenial(failure)) emit('accessLost');
 });
 
-// Language changes refetch this same machine-state projection. Keep the latest field authority
-// while that read is pending; an older language cache must never restore a revoked field.
+// Language changes retain this machine-state projection. Prefer current admitted
+// field authority; a retained draft baseline cannot restore a revoked field.
 const fields = computed(
     () => metadata.data.value?.data.editableFields ?? draft.value?.baseline.editableFields ?? [],
 );

@@ -13,6 +13,18 @@ export interface FrontendPageCompletion {
     kind: 'success' | 'info';
 }
 
+/** Existing one-time guest-link flash data is admitted only for its committed identity context. */
+export interface FrontendGuestLinkHandoff {
+    context: string;
+    personalLink: string;
+}
+
+/** A document identity command prepares this redirect before its final persistence. */
+export interface FrontendIdentityRedirect {
+    readonly status: 303;
+    readonly destination: string;
+}
+
 /** Request-safe renderer input. API payload shapes belong exclusively to the generated contract. */
 export interface FrontendPilotBootstrap {
     session: components['schemas']['SessionView'];
@@ -51,4 +63,9 @@ export interface FrontendPilotRenderResult {
     state: string;
     /** The renderer supplies an explicit fallback outside the tree that Vue hydrates. */
     javascriptRequired: boolean;
+}
+
+/** The complete SSR document already exists; its owning response only sends these immutable bytes. */
+export interface FrontendPreparedDocument {
+    readonly html: string;
 }

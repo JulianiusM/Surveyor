@@ -5,7 +5,7 @@ import {createSSRApp, defineComponent, h, nextTick, onMounted, ref} from 'vue';
 import {renderToString} from 'vue/server-renderer';
 import {render} from '../../src/frontend/app/entry-server';
 import {createPilotApp} from '../../src/frontend/app/createApp';
-import {mountPreservingDrafts} from '../../src/frontend/app/mountPreservingDrafts';
+import {hasHydrationDrafts, mountPreservingDrafts} from '../../src/frontend/app/mountPreservingDrafts';
 import FormField from '../../src/frontend/components/FormField.vue';
 import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import type {components} from '../../src/types/api/v1';
@@ -63,6 +63,37 @@ async function nativeApplication(url: string, bootstrap: FrontendPilotBootstrap)
 }
 
 describe('drafts entered before hydration', () => {
+    it('uses the same admitted DOM draft rules for initial reload protection', () => {
+        document.body.innerHTML = `<div id="surveyor-pilot">
+            <input name="username" value="server value"><textarea>server text</textarea>
+            <input type="number" data-hydration-draft value="1">
+            <input type="checkbox" data-hydration-draft>
+            <input type="file" data-hydration-draft>
+            <select data-hydration-draft><option selected>first</option><option>second</option></select>
+            <input type="hidden" data-hydration-draft value="context">
+            <input readonly value="read-only"><input disabled value="disabled">
+        </div>`;
+        const container = document.getElementById('surveyor-pilot')!;
+        const fields = container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input, textarea, select');
+        expect(hasHydrationDrafts(container)).toBe(false);
+
+        for (const field of Array.from(fields).slice(0, 6)) {
+            if (field instanceof HTMLSelectElement) field.selectedIndex = 1;
+            else if (field instanceof HTMLInputElement && field.type === 'file') selectEarlyImage(field);
+            else if (field instanceof HTMLInputElement && field.type === 'checkbox') field.checked = true;
+            else field.value += '2';
+            expect(hasHydrationDrafts(container)).toBe(true);
+            if (field instanceof HTMLSelectElement) field.selectedIndex = 0;
+            else if (field instanceof HTMLInputElement && field.type === 'file') field.value = '';
+            else if (field instanceof HTMLInputElement && field.type === 'checkbox') field.checked = false;
+            else field.value = field.defaultValue;
+            expect(hasHydrationDrafts(container)).toBe(false);
+        }
+
+        for (const field of Array.from(fields).slice(6)) field.value = 'unadmitted change';
+        expect(hasHydrationDrafts(container)).toBe(false);
+    });
+
     it('keeps visible English Help fallback, actual content language and chosen interface across SSR and hydration', async () => {
         const request = vi.fn(() => { throw new Error('Hydration must not submit or read'); });
         vi.stubGlobal('fetch', request);

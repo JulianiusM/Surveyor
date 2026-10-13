@@ -11,14 +11,15 @@ import * as userService from '../../src/modules/database/services/UserService';
 import * as packing from '../../src/controller/packingController';
 import {readOverview, setOverviewVisibility} from '../../src/modules/overview/api';
 import packingController from '../../src/controller/packingController';
-import {archiveEntity, changeEntityEvent} from '../../src/controller/entityAdminController';
+import {archiveEntity, changeEntityEvent, getEntityViewAdmission, restoreEntity} from '../../src/controller/entityAdminController';
 import {readEventLinkSelection} from '../../src/controller/eventController';
 import {randomUUID} from 'node:crypto';
-import {QueryFailedError} from 'typeorm';
+import {QueryFailedError, type EntityManager} from 'typeorm';
 import {contractValidator} from '../../src/modules/api/contracts';
 import {DEFAULT_PERM, PERM} from '../../src/modules/lib/permissions';
 import type {components} from '../../src/types/api/v1';
 import type {SessionLike} from '../../src/types/PermissionTypes';
+import type {EntityMutationOutcome} from '../../src/types/EntityPropertyTypes';
 import {createApiRequest} from '../factories/apiActionFactory';
 import {createEventActivityPlan, createIntegrationEvent, createPackingListWithItem, createSurveyWithCombinations, persistIntegrationProfile} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
@@ -668,6 +669,97 @@ describe('complete versioned packing management', () => {
         const view = (await packing.readPackingList(copied.id, actor(owner))).data;
         expect(view).toMatchObject({headerUrl: null, archived: false, inheritedArchived: false});
         expect(view.items.every(row => row.assignedCount === 0)).toBe(true);
+    });
+
+    it('rolls back a relink when preparing its resulting admission receipt fails', async function rejectedRelinkCompletion() {
+        const id = await fixture();
+        const eventId = await createIntegrationEvent(owner.id, 'Packing completion rollback parent');
+        const session = actor(owner);
+        const before = (await packingService.getPackingListById(id))!;
+        const failure = new Error('Controlled completion failure');
+
+        // Use the public feature-completion boundary with real reads on the supplied
+        // ORM manager. The association is visible here, but must never escape a rejection.
+        async function rejectPreparedAdmission(manager: EntityManager, outcome: EntityMutationOutcome): Promise<never> {
+            expect(manager.queryRunner?.isTransactionActive).toBe(true);
+            expect(outcome).toMatchObject({changed: true, root: {id, eventId}});
+            expect((await packingService.getPackingSnapshotRoot(manager, id))?.eventId).toBe(eventId);
+            expect(await getEntityViewAdmission('packing', outcome.root, session, manager)).toBe('render');
+            throw failure;
+        }
+        await expect(changeEntityEvent('packing', before, {eventId, expectedEventId: null}, session,
+            undefined, undefined, {prepare: rejectPreparedAdmission})).rejects.toBe(failure);
+        expect(await packingService.getPackingListById(id)).toEqual(before);
+    });
+
+    it('prepares the Packing relink receipt for the resulting association and retains authorized no-op order', async function resultingRelinkReceipt() {
+        const session = actor(editor);
+        const eventId = await createIntegrationEvent(owner.id, 'Packing receipt without event membership');
+        const input = creation();
+        input.defaultPermissions.public = 0;
+        const id = (await packing.createPackingList(input, undefined, actor(owner))).id;
+        await adminService.addAdmin('packing', id, editor.id, PERM.EDIT_META);
+        await adminService.addAdmin('event', eventId, editor.id, PERM.MANAGE_ASSIGNMENTS);
+        const settings = await packing.readPackingSettings(id, session);
+
+        // EDIT_META permits relinking without granting the resulting attached page's
+        // ACCESS_VIEW. The reply describes the new association, not the old standalone one.
+        const changed = await packing.changePackingEvent(id, {eventId, expectedEventId: null}, session, settings.settingsToken);
+        expect(changed).toEqual({changed: true, canView: false});
+        expect(contractValidator('PackingEventChanged')(changed)).toBe(true);
+        expect((await packingService.getPackingListById(id))?.eventId).toBe(eventId);
+
+        // Same-target acknowledgement still precedes stale/absent comparison evidence.
+        const beforeNoOp = (await packingService.getPackingListById(id))!;
+        await expect(packing.changePackingEvent(id, {eventId, expectedEventId: null}, session))
+            .resolves.toEqual({changed: false, canView: false});
+        expect(await packingService.getPackingListById(id)).toEqual(beforeNoOp);
+
+        // Unlinking restores the existing standalone admission rule on the same receipt path.
+        const linkedSettings = await packing.readPackingSettings(id, session);
+        await expect(packing.changePackingEvent(id, {eventId: null, expectedEventId: eventId}, session, linkedSettings.settingsToken))
+            .resolves.toEqual({changed: true, canView: true});
+    });
+
+    it('rolls back archive and restore completion failures and preserves repeated command acknowledgements', async function lifecycleCompletionFinality() {
+        const id = await fixture();
+        const reference = {type: 'packing' as const, id};
+        const session = actor(owner);
+        const failure = new Error('Controlled lifecycle completion failure');
+        const archivedAt = new Date('2026-10-13T12:00:00.000Z');
+        const before = (await packingService.getPackingListById(id))!;
+
+        // A receipt failure occurs after the real direct-marker write on this manager.
+        // The transaction must roll back that marker and its timestamp completely.
+        async function rejectPreparedArchive(manager: EntityManager, outcome: EntityMutationOutcome): Promise<never> {
+            expect(manager.queryRunner?.isTransactionActive).toBe(true);
+            expect(outcome).toMatchObject({changed: true, root: {id, archivedAt}});
+            expect((await packingService.getPackingSnapshotRoot(manager, id))?.archivedAt).toEqual(archivedAt);
+            throw failure;
+        }
+        await expect(archiveEntity(reference, {}, session, archivedAt, {prepare: rejectPreparedArchive})).rejects.toBe(failure);
+        expect(await packingService.getPackingListById(id)).toEqual(before);
+
+        // The native overload retains its archive DTO. Packing's receipt remains the
+        // established acknowledgement even when retrying an already archived root.
+        expect(await archiveEntity(reference, {}, session, archivedAt)).toMatchObject({archived: true, directArchived: true});
+        const archived = (await packingService.getPackingListById(id))!;
+        await expect(packing.setPackingArchived(id, true, session)).resolves.toEqual({changed: true});
+        expect(await packingService.getPackingListById(id)).toEqual(archived);
+
+        // Restoration also prepares before commit; a rejection must retain the
+        // previously committed direct marker rather than falsely reporting a rollback.
+        async function rejectPreparedRestore(manager: EntityManager, outcome: EntityMutationOutcome): Promise<never> {
+            expect(manager.queryRunner?.isTransactionActive).toBe(true);
+            expect(outcome).toMatchObject({changed: true, root: {id, archivedAt: null}});
+            expect((await packingService.getPackingSnapshotRoot(manager, id))?.archivedAt).toBeNull();
+            throw failure;
+        }
+        await expect(restoreEntity(reference, {}, session, {prepare: rejectPreparedRestore})).rejects.toBe(failure);
+        expect(await packingService.getPackingListById(id)).toEqual(archived);
+        await expect(packing.setPackingArchived(id, false, session)).resolves.toEqual({changed: true});
+        expect((await packingService.getPackingListById(id))?.archivedAt).toBeNull();
+        expect(await restoreEntity(reference, {}, session)).toMatchObject({archived: false, directArchived: false});
     });
 
     it('checks event relink drafts under the shared lock and retains inherited archive management without a restore action', async () => {

@@ -9,6 +9,7 @@ import {usePilot} from '../../app/context';
 import {isReadDenial} from '../../app/transport';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
 import {useCommand} from '../../composables/command';
+import {useFileSelectionRelease} from '../../composables/fileSelection';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {frontendDocumentUrl} from '../../../modules/lib/frontendIdentity';
 import {useConfirmedNavigation, usePageEntry} from '../../composables/pageEntry';
@@ -59,6 +60,9 @@ const description = ref('');
 const eventId = ref<string | null>(null);
 const selectedEvent = ref<components['schemas']['EventPickerOption'] | null>(null);
 const image = ref<File | null>(null);
+// Warm creation/duplicate routes can retain the same form node. Its chooser must
+// release old bytes when the committed route releases this feature-owned draft.
+const imageInput = useFileSelectionRelease(() => image.value);
 const rows = ref<Row[]>([]);
 const defaults = ref<components['schemas']['PermissionDefaults'] | null>(null);
 const baseline = ref<string | null>(null);
@@ -421,6 +425,7 @@ async function create(): Promise<void> {
                                 ><i class="bi bi-card-image me-1" aria-hidden="true"></i
                                 >{{ messages.t('packing.headerOptional') }}</label
                             ><input
+                                ref="imageInput"
                                 id="create-header"
                                 class="form-control text-bg-dark"
                                 type="file"

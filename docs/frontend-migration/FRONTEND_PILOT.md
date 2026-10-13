@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented pilot and approved shared-controller/permission/runtime-Help corrections; completed scoped execution and remaining visual/provider/deployment limits owned by paired review
+verification-scope: implemented pilot and approved shared-controller/permission/runtime-Help corrections retained; explicit whole-article same-language asset amendment reconciled; scoped execution and remaining limits owned by paired review
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -168,8 +168,10 @@ Pilot articles/images are reviewed runtime content under `docs/user-guide/<local
 `help.directory`. Each language owns its content, stable anchors, search snippets, captions and raster assets.
 Native English Help remains unchanged. Staged maintainer documents are never selected, searched, served or packaged
 as runtime Help. Adding a language requires a complete catalog and generation. Complete localized Help is preferred;
-missing corpora/articles/figures fall back to reviewed pilot English with visible localized disclosure and English
-navigation/search markers. The chosen interface locale remains selected and actual article language is explicit.
+missing corpora/articles/required figures select the complete reviewed English article with all its own assets,
+visible localized disclosure and English navigation/search markers. The explicit Oct13 amendment supersedes the
+earlier individual-figure fallback; authored local references and asset requests stay within one language.
+The chosen interface locale remains selected and actual article language is explicit.
 Unsafe existing translated content still fails validation. The direct decision is retained in the foundation ledger.
 
 Read-only Help GET/search works without JavaScript and hydrates the same Vue components. Interactive Packing,

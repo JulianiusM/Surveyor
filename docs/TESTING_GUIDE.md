@@ -6,17 +6,22 @@ owner: test maintainers
 status: current
 last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Native test-layer and database-safety contracts retained; narrow editorial correction of executable pre-hooks, isolated runner projects, coverage and CI routing; advisory corpus checks unchanged.
-source-anchors: tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
+verification-scope: shared strict built-application/database E2E and client/source-integration classification clarified by explicit 2026-10-13 decision; native setup/database safety and advisory reporting retained; pilot runtime detail stays staged
+source-anchors: tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
 next-review: test-layout-command-or-help-validation-change
 -->
 
 Surveyor uses two runners with four test layers:
 
 - **Vitest unit tests** for isolated server-side production logic.
-- **Vitest frontend tests** for deterministic browser helpers and DOM-adjacent behavior without starting the application.
+- **Client tests** under Vitest for deterministic browser helpers/DOM behavior, or Playwright for isolated browser behavior using built assets.
 - **Vitest integration tests** for production services and selected controllers against a real disposable MariaDB schema.
-- **Playwright E2E tests** for critical HTTP, session, route, render, and browser-facing workflows against the built application.
+- **Playwright E2E tests** for critical system workflows against the built application and its fully prepared real database.
+
+The explicit 2026-10-13 decision retains this E2E boundary. Isolated built-browser fixtures belong to the client
+layer even when another runner happens to start a server/database. Source-server browser workflows with real
+persistence belong to integration coverage; they are not built-application E2E. Exact runner selection comes from
+configuration and package scripts, with prospective frontend details in the staged testing amendment.
 
 The test file suffix is `*.spec.ts`. Runner configuration and the repository tree are the source of truth for inventory; do not hard-code test counts in documentation.
 
@@ -157,7 +162,11 @@ Prefer production inputs/outputs over private helper call sequences.
 
 ### Frontend tests
 
-Use `tests/frontend/` for browser TypeScript that can be tested deterministically without navigation through a running server. The Vitest environment is still Node, so tests install only the minimal `window`, `document`, storage, element, or event stubs required by the production helper.
+Use `tests/frontend/` for deterministic client behavior. Vitest tests install only the browser globals needed by the
+production helper. Isolated real-browser tests live in `tests/frontend/browser/` and use the separate client
+Playwright runner; Vitest excludes that directory. They exercise built modules, controls, templates or hydration
+without claiming the integrated server/session/database boundary. Their normal package command prepares its build;
+direct runner invocations require current artifacts. They do not initialize a database or start an app server.
 
 Good subjects include:
 
@@ -207,7 +216,9 @@ Narrow spies are appropriate at an external side-effect boundary when the databa
 
 ### E2E tests
 
-Use `tests/e2e/` for a critical journey that requires the actual built server, middleware order, cookies/session state, redirects, Pug rendering, or public route/API behavior.
+Use `tests/e2e/` only for a critical journey through the actual built application with its fully prepared database,
+routes, middleware, sessions and rendering integrated as in the production setup. A manufactured document or fully
+intercepted client fixture is client coverage, regardless of whether an unused database/server is running.
 
 Playwright is configured for Chromium. Its managed web server runs:
 
@@ -336,7 +347,9 @@ before either rehearsal. Documentation reports remain advisory and are not subst
 | `npm run test:unit` | No | No | No | Isolated server logic. |
 | `npm run test:frontend` | No | No | Stubbed globals only | Browser helper logic. |
 | `npm run test:quick` | No | No | Stubbed globals only | Fast local regression pass. |
+| `npm run test:frontend:browser` | No | Yes, through its pre-hook | Chromium | Isolated client behavior with built assets. |
 | `npm run test:integration` | Disposable MariaDB | No | No | Persistence and production-service workflows. |
+| `npm run test:integration:browser` | Caller-owned disposable schema | Caller supplies source server | Chromium | Source-runtime integration; no runner-owned initialization. |
 | `npm test` | Disposable MariaDB | No | Stubbed globals only | All Vitest layers. |
 | `npm run test:ci` | Disposable MariaDB | No | Stubbed globals only | Vitest coverage and JUnit output for CI. |
 | `npm run e2e:prepare` | Destructive E2E schema reset | Existing `dist/` not used | No | Initialize and seed only. |
@@ -351,7 +364,8 @@ writes `tests/.env.test` and `.env.e2e` for those guarded disposable targets.
 
 The two Vitest stages generate inputs, then select their respective project with coverage, JUnit and mergeable
 reports. The database-free stage also runs the Vue-aware test compiler; integration files remain serialized.
-The browser stage builds the application, installs or restores Chromium and runs the configured Playwright suite.
+The browser stage builds the application, installs or restores Chromium and runs the isolated client and integrated
+system Playwright suites with separate reports. A client assertion failure does not suppress the independent E2E run.
 Runner/workflow files own exact worker limits, timeouts and preparation order.
 
 Reports are uploaded even after failures. A separate collection job replays the Vitest reports and merges coverage

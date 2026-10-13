@@ -1,5 +1,5 @@
 import type {Request, Response} from 'express';
-import type {ApiOperationId, ApiSuccessStatus, ApiResponseBody} from '../../types/ApiTransportTypes';
+import type {ApiOperationId, ApiSuccessStatus, ApiResponseBody, PreparedApiJsonResponse} from '../../types/ApiTransportTypes';
 import {contractValidator, operationContract} from './contracts';
 import {ApiProblem, requestLocale} from './problem';
 
@@ -81,10 +81,42 @@ export function validateOperationRequest(req: Request, operationId: ApiOperation
 }
 
 /** All successful API representations share the same private cache and locale boundary. */
-function privateResponse(req: Request, res: Response): void {
-    res.set('Cache-Control', 'private, no-store').set('Content-Language', requestLocale(req))
+function privateResponse(req: Request, res: Response, locale = requestLocale(req)): void {
+    res.set('Cache-Control', 'private, no-store').set('Content-Language', locale)
         .vary('Cookie').vary('X-Surveyor-Context').vary('X-Surveyor-Locale');
     if (req.apiActor) res.set('X-Surveyor-Context', req.apiActor.context);
+}
+
+/** Validate the common JSON boundary once for ordinary replies and commit-sensitive receipts. */
+function jsonResponseContract(operationId: ApiOperationId, status: number, data: unknown) {
+    const operation = operationContract(operationId);
+    const schema = operation.responseSchemas[String(status)];
+    if (!schema || !contractValidator(schema)(data)) throw new ApiProblem('INTERNAL_ERROR');
+    return operation;
+}
+
+/**
+ * Validate, serialize and capture response metadata while a controller can still
+ * roll back. The immutable string cannot acquire another actor's data or fail a
+ * second projection after the transaction commits.
+ */
+export function prepareValidatedJson<Operation extends ApiOperationId, Status extends ApiSuccessStatus<NoInfer<Operation>>>(
+    req: Request, operationId: Operation, status: Status, data: ApiResponseBody<NoInfer<Operation>, NoInfer<Status>>,
+    context = req.apiActor?.context): PreparedApiJsonResponse {
+    // Generated shape/status admission precedes serialization. Locale/context
+    // are captured with this receipt rather than resolved from a later session.
+    const operation = jsonResponseContract(operationId, status, data);
+    return Object.freeze({status, mediaType: operation.responseMediaTypes[String(status)] ?? 'application/json',
+        locale: requestLocale(req), context, json: JSON.stringify(data)});
+}
+
+/** Deliver a prepared commit receipt without another read, validation or serialization. */
+export function sendPreparedJson(req: Request, res: Response, prepared: PreparedApiJsonResponse): void {
+    // Only HTTP delivery remains fallible. An interrupted response cannot undo
+    // the transaction and must not create a second command or identity check.
+    privateResponse(req, res, prepared.locale);
+    if (prepared.context) res.set('X-Surveyor-Context', prepared.context);
+    res.status(prepared.status).type(prepared.mediaType).send(prepared.json);
 }
 
 /** Binary validation concerns declared transport and authorized byte ownership, not JSON string coercion. */
@@ -114,9 +146,7 @@ export function sendValidatedText<Operation extends ApiOperationId, Status exten
 export function sendValidatedJson<Operation extends ApiOperationId, Status extends ApiSuccessStatus<NoInfer<Operation>>>(
     req: Request, res: Response, operationId: Operation, status: Status,
     data: ApiResponseBody<NoInfer<Operation>, NoInfer<Status>>, etag?: string): void {
-    const operation = operationContract(operationId);
-    const schema = operation.responseSchemas[String(status)];
-    if (!schema || !contractValidator(schema)(data)) throw new ApiProblem('INTERNAL_ERROR');
+    const operation = jsonResponseContract(operationId, status, data);
     privateResponse(req, res);
     if (etag) {
         res.set('ETag', etag);

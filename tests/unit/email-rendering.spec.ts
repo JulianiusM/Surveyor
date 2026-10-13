@@ -1,6 +1,7 @@
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import nodemailer from 'nodemailer';
-import {createMailOptions, renderEmail, resolveEmailRecipientName} from '../../src/modules/email';
+import type {Transporter} from 'nodemailer';
+import {createMailOptions, prepareGuestLinkEmail, renderEmail, resolveEmailRecipientName, sendEmail} from '../../src/modules/email';
 import settings from '../../src/modules/settings';
 import {createStructuredEmailContent} from '../factories/emailFactory';
 
@@ -212,5 +213,40 @@ describe('transactional email rendering', () => {
         {name: 'Taylor', address: '\r\ntaylor@example.com'},
     ])('rejects incomplete or injected named recipients', (invalid) => {
         expect(() => createMailOptions(invalid, 'Event details', 'Details')).toThrow('recipients require a name');
+    });
+
+    it('prepares guest mail before SMTP and reports acceptance/failure without changing native send behavior', async () => {
+        // Use Nodemailer's existing local stream transport and intercept only its
+        // external send boundary. No network or real mailbox participates here.
+        const transport = nodemailer.createTransport({streamTransport: true, buffer: true, newline: 'unix'});
+        const create = vi.spyOn(nodemailer, 'createTransport').mockReturnValue(transport as unknown as Transporter);
+        const send = vi.spyOn(transport, 'sendMail');
+        const log = vi.spyOn(console, 'error').mockImplementation(function quietDeliveryLog() {});
+        const privateLink = 'https://surveyor.example/frontend-pilot/guest/example/login/private-token';
+        try {
+            const prepared = prepareGuestLinkEmail(recipient, privateLink);
+            expect(create).not.toHaveBeenCalled();
+            expect(send).not.toHaveBeenCalled();
+            await expect(prepared.deliver()).resolves.toBe(true);
+            expect(send.mock.calls[0][0]).toMatchObject({to: recipient, subject: 'Your personal editing link'});
+            expect(send.mock.calls[0][0].text).toContain(privateLink);
+
+            // A committed delivery receipt excludes arbitrary SMTP text and
+            // private data, while preserving the known successful registration.
+            const smtpError = new Error(`Failed recipient ${recipient.address} ${privateLink}`);
+            send.mockRejectedValueOnce(smtpError);
+            await expect(prepareGuestLinkEmail(recipient, privateLink).deliver()).resolves.toBe(false);
+            expect(log.mock.calls).toEqual([['[identity-mail]', {category: 'Error'}]]);
+
+            log.mockClear();
+            send.mockRejectedValueOnce(smtpError);
+            await expect(sendEmail(recipient, 'Native behavior', 'Details')).resolves.toBeUndefined();
+            expect(log).toHaveBeenCalledWith('Error sending email:', smtpError);
+        } finally {
+            create.mockRestore();
+            send.mockRestore();
+            log.mockRestore();
+            transport.close();
+        }
     });
 });

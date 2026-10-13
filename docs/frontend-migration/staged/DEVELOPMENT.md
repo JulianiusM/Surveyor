@@ -6,7 +6,7 @@ owner: application maintainers
 status: migration-pending
 last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: existing migration recipe extended with approved readiness read admission, derived privacy, scoped locale recovery, shared action adoption, generated comparison constraints, settings ownership and visible temporary Packed-state fallback; execution owned by review
+verification-scope: approved migration recipe/startup/file-release boundaries retained; meaningful individual approval/semantic delegation-review routing, exact registry dependency and locked pilot completion/serializer boundaries clarified; execution owned by review
 source-anchors: package.json; src/controller/packingController.ts; src/modules/database/services/; contracts/api/v1/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/watch-frontend-inputs.mjs; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/DEVELOPMENT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/DEVELOPMENT.md
@@ -33,8 +33,13 @@ final acceptance remains in the review. Subsequent modules reuse these owners ra
 ## Normal development and generated sources
 
 Use the root `npm run server` workflow: initial build, Express/Vite middleware and HMR, native browser watcher,
-and serialized contract/catalog regeneration. Authored-input completion triggers Express restart; generated outputs
-must not restart it mid-generation. Source serving explicitly uses `vite.config.mts` and the project root.
+and serialized contract/catalog regeneration. The authored inputs include `contracts/api/v1/`, `src/locales/` and
+the exact permission registry `src/modules/lib/permissions.ts`. Watch the registry's parent with an exact filename
+filter so editor replacement retains observation; unrelated library files keep ordinary server restart behavior.
+API generation precedes locale generation, which derives permission keys and includes registry bytes in its version.
+Authored-input completion triggers Express restart only through `.generated/frontend-ready.json`; generated outputs
+and that registry must not independently restart it mid-generation. A newer save queues another complete batch,
+and failed or superseded batches do not publish readiness. Source serving explicitly uses `vite.config.mts` and the project root.
 Production runs matching built artifacts through Express without a Vite server.
 
 Authored OpenAPI/YAML and catalog JSON are single sources. Package generation creates declaration files, validators,
@@ -59,6 +64,9 @@ Use one authorized route family and the [behavior/edge-case baseline](../FRONTEN
 Help/Packing are the current complete slice; other scaffolds remain future increments.
 Resolve conflicting instructions and potentially unintended consequences directly before dependent implementation.
 A document, test expectation or implementation result cannot supply user permission.
+Use the exact labeled [required change explanation](../../policies/DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13)
+separately for every individual approval, including its meaningful-content requirements, prohibition on bundling and
+semantic delegation/root review before asking the maintainer. Correct labels alone are insufficient.
 
 | Handoff | Existing owner |
 |---|---|
@@ -68,7 +76,7 @@ A document, test expectation or implementation result cannot supply user permiss
 | DTO → browser operation | `features/<feature>/api.ts`, shared `app/transport.ts`, generated operation/feature validators. |
 | Entry/read → authorized view | `composables/pageEntry.ts`, `app/queryKeys.ts`, `app/queryCache.ts`; feature supplies policy/dependencies. |
 | Snapshot → draft/command/recovery | `metadataDraft.ts`, `command.ts`, shared feedback/confirmed-navigation/read owners. |
-| Route → SSR/hydration | Existing Express pilot route/renderer and `app/createApp.ts`, `mountPreservingDrafts.ts`. |
+| Route → SSR/hydration | Existing Express pilot route/renderer, `app/serializeBootstrap.ts`, `createApp.ts` and `mountPreservingDrafts.ts`. |
 | Repeated interaction → presentation | Shared components/composables; explicit props/events and injected operations. |
 | Language → UI/server/Help | Catalog, shared translator, i18next-vue and reviewed runtime corpus. |
 
@@ -96,6 +104,11 @@ actor/page/action grants, normalization, no-op outcomes, lock/check location, re
 Mark intentional native/v1 protocol differences and inherited defects explicitly. The current map in
 [Test Coverage](../TEST_COVERAGE.md#pilot-baseline-to-implementation-assertions) links this handoff to precise assertions;
 the review owns actual execution and remaining limits. Do not leave duplicated backend operations for a later cleanup.
+
+General defects, large changes and backend behavior changes discovered during a slice belong in the existing defect
+backlog and a separately authorized effort, even when their remedy includes small frontend edits. Apply the central
+[migration scope rule](../../policies/DEVELOPMENT_POLICY.md#frontend-migration-boundary-2026-10-13); earlier bounded approvals
+remain limited to their recorded outcome. Migration completion means native visual and behavioral parity.
 
 1. **Trace the native contract.** Follow page GET, form POST, collectors, controller, DBAL and rendered controls.
    Compare the complete native delta against `2dfa257`, including committed drift. Identify each approved exception.
@@ -257,6 +270,14 @@ Use application-root draft protection with feature/dialog subtrees. Dialog close
 identity/update and whole-page destructive departures resolve every affected descendant.
 Pending/unknown command state may outlive an editor; retiring a component does not certify delivery.
 
+Admit a new `useCommand.run` only while its owning component remains mounted. Reject a retained callback after
+unmount before capturing presentation/actor scope, retaining a status lease or invoking its operation. Retained
+completion state protects an already admitted command; it cannot grant another submission from a retired owner.
+Preserve legitimate deferrals: a child chooser can close while its command owner stays mounted, and an operation
+admitted before unmount can defer its request or finish settlement, follow-up reads and confirmed navigation under
+its captured scope. Do not replace this admission check with cancellation of in-flight work or treat every dialog
+close as owner retirement.
+
 Obtain whole-page deletion consent before writing. Retain confirmed deletion/creation destination and one-time
 receipt through failed navigation. Do not discard other drafts because a button was hidden or capability changed.
 Field write loss disables saving while readable drafts remain cancelable; actor/read denial retires protected state.
@@ -264,6 +285,63 @@ Field write loss disables saving while readable drafts remain cancelable; actor/
 Unknown outcomes are reviewed through reads. Reconcile-only recovery never retries automatically or proves an
 unknown creation failed. Financial/recommendation commands preserve their specific revision/fingerprint protocol.
 A saved command followed by failed refresh is saved, not a failed mutation.
+
+Pilot guest registration, API account signup and activation use the existing user controller's
+`commitIdentityCompletion` through `UserService.withIdentitySessionTransaction`. The controller owns expiry/context
+checks, staged identity and result preparation; pure DBAL owns the manager, row lock and persistence. Prepare all
+required projections and serialized replies before the final commit through the existing session/transport owners.
+API result envelopes cross their generated validators; full SSR preparation completes rendering and serialization.
+A precommit session check followed by a separate session save leaves a partial mutation and does not satisfy this
+boundary. Use `registerGuestWithSession` for Guest/profile plus stored identity, `registerUserWithSession` for the
+inactive User/profile/activation token, and `activateAccountWithSession` for token consumption. API account signup
+preserves the current actor and never returns its activation token; document activation stages its existing redirect
+and flash in the token transaction. Adopt only the completed detached receipt, without a later response-time session
+read/write which can substitute another tab's actor or reject an already committed operation.
+
+After registration commits, SMTP only selects an already prepared delivery outcome. Guest email failure remains
+explicit advisory feedback with the confirmed personal link; account failure uses its existing completion surface
+and keeps activation required. SMTP acceptance does not guarantee inbox delivery. Never recreate the identity,
+replay registration or treat network uncertainty as proof of rollback. Native compatibility paths and the unresolved
+pilot account document decision remain distinct. Do not generalize this boundary to every session/provider operation;
+keep exact database/session schedules and client adoption/retirement assertions separate from helper-only evidence.
+
+Login, private guest-link login and profile switching use `loginUserWithSession`, `loginGuestWithSession` and
+`changeActiveProfileWithSession` with that same completion owner. API projection through `prepareIdentityReply` and
+document notice/redirect preparation finish before the locked identity save commits; delivery adopts the prepared
+receipt outside rejection handling. Native credential, profile ownership and return-path decisions remain shared.
+An inactive account's established activation resend belongs before the identity transaction: its refreshed token
+must survive the intended login rejection. Keep provider logout's separately backlogged failure boundary distinct.
+
+Explicit pilot logout uses `logoutUserWithSession` only when `session.tokens` is not truthy; an empty object still
+selects the protected provider path. Recheck that classification on locked staging before clearing authority.
+Prepare its generated anonymous API receipt or existing document success notice and 303 in the same transaction,
+then adopt the detached completion without a later session save. Preserve bounded explicit return precedence and
+the locale's pilot-root default. Native logout and all token-bearing provider paths keep their existing owner/order;
+its preparation-failure defect is deferred as separate `IMP-056`. Authored cases do not substitute for executed acceptance.
+
+Pilot password reset uses `resetPasswordWithSession` to check the token under its account lock and prepare the API
+receipt or full SSR success document before password/token mutation commits. `prepareFrontendPilot` and
+`sendPreparedFrontendPilot` share the existing renderer: the document remains a 200 response at the submitted token
+URL. Serialization failure leaves the original token/password state intact. This lock covers cooperating pilot
+consumers; native mixed-writer defects `IMP-051`/`IMP-057` are deferred to separately authorized general-defect work.
+
+Pilot reset-mail uses `requestPasswordResetWithSession` with shared username-first account resolution. Prepare the
+token, private link/templates, cached sender, generic result and optional document flash on the same transaction.
+Cached sender setup makes no SMTP connection; captured delivery follows commit through the existing mail owner.
+Keep known/unknown accounts' generic confirmation and original errors, without account-found/delivery metadata.
+Native forgot-mail and inactive-login resend retain their existing owners/order. No result preparation or later
+session read/write may reinterpret that completed pilot operation.
+
+Shared relink/archive/restore owners accept typed `EntityMutationCompletion` preparation inside their original
+locked transaction. Packing relink evaluates resulting view admission through the existing manager-aware owner,
+including authorized unchanged/unlink outcomes; archive/restore prepare their invariant acknowledgement without an
+unused later archive DTO. Omission retains native defaults and presentation. Do not copy lifecycle business checks
+into an adapter or treat every static typed response as another database projection.
+
+Personal visibility uses the existing user controller's optional typed completion and manager-aware archive
+projection. The Overview adapter maps visibility, archived and overviewHidden once under the lock, then its route
+uses `prepareValidatedJson`/`sendPreparedJson`. Membership/private preference and shared archival remain separate.
+Native callers omit that completion and retain their established presentation; the paired review owns actual acceptance.
 
 No-op validation/feedback precedes confirmation, cross-form discard and writes where native forms do.
 Preserve empty/null/false/omission independently. Machine/raw number drafts must survive framework coercion:
@@ -332,10 +410,23 @@ The deadline timer changes availability, never starts a GET or renews unrelated 
 Each SSR request owns app, router, query client, translator and authorized bootstrap.
 Escape script delimiters in bootstrap JSON. Do not serialize persistence/session/private edit data through convenience
 objects. Locale/request state cannot live in a singleton that leaks between users.
+When adding a bootstrap field, update its declaration contract and the exhaustive field-validator map in
+`app/serializeBootstrap.ts`. Validate the complete wire object before it enters reactive state; generated lazy
+feature validators remain the schema owners rather than duplicated checks in the renderer or page.
+`decodeBootstrap` owns that exhaustive browser validation. `serializeBootstrap` only serializes and escapes inert
+script-element JSON; successful SSR serialization is not proof that every browser bootstrap field has been validated.
 
 The shared mount preserves pre-hydration drafts on their original controls; explicitly opted-in non-text/file controls
 use `data-hydration-draft`. Hydration recovery does not upload files or submit commands.
 An SSR seed is eligible only for its live document/actor at use time, not because a captured closure once matched.
+
+Startup protection precedes asynchronous route loading and mounted router guards. Retain edited SSR controls through
+a failed initial chunk or bootstrap, and keep the initial guard until mount restoration finishes. The
+[approved startup amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-startup-recovery-clarification-2026-10-13)
+distinguishes automatic reload from deliberate recovery: automatic departure needs demonstrably clean state and a
+working loop marker; unavailable storage leaves visible localized recovery. A deliberate recovery can bypass the
+automatic-attempt marker, but must confirm edited-control loss and retain pending/unknown command protections.
+Reuse the existing startup, mount and update owners; do not persist secrets/files or replay commands to recover startup.
 
 SSR parent aggregates use the same admitted QueryClient projections as child regions. Seed only the currently eligible
 initial document before parent badges render; Page/Region share `overviewQueryParameters` from the existing Overview
@@ -377,6 +468,20 @@ engine, forwarding controller or backend service.
 their props contracts live in `src/types/FrontendEntitySettingsTypes.d.ts`. Packing supplies admitted state, independent
 file/relationship drafts, lifecycle commands, injected event discovery, tokens and labels.
 
+Audit the logical lifetime of every component value, including controls reused during warm navigation. Feature drafts
+and their native controls must agree after accepted departure, target changes and confirmed resets; ordinary reads,
+fragment movement and canceled departure retain the live form's values. A mounted component's lifetime alone cannot
+identify the current form scope. Use the existing `composables/fileSelection.ts` release owner for file controls:
+it holds only a DOM ref and clears the same input when the feature actually releases its File to null. Its watcher
+is not immediate, so initial setup cannot erase a pre-hydration browser selection before restoration. Keep the release
+decision, dirty checks, command state and comparison tokens in their existing feature owners.
+
+For header uploads, pass the feature-owned `selectedFile` through the existing declaration contract. A confirmed
+upload releases that draft even if the follow-up read fails; the shared header editor then clears the same native file
+input through that same release owner so the same file can be selected again. Rejection, unknown delivery and background
+reads keep the selected bytes and input. Do not infer release from a changed header URL, token or translated filename,
+and do not recreate the input or emit another selection event merely to reset it.
+
 Match native feedback per operation. Inline notices own Close/focus/scroll placement and a live fallback when their
 initiator detaches/hides. Full flashes keep native presentation. Capture initiating elements before awaits.
 Receipt identity controls dismissal/renewal: repeated outcomes renew, locale/render changes do not revive notices.
@@ -408,9 +513,13 @@ read, served or selected by the application. Runtime source/security tests use i
 fixtures rather than maintained prose or expectations taken from the source selector under test.
 
 Prefer complete localized articles, stable anchors, search text and raster images/captions/alt descriptions.
-Missing corpora/articles/figures use reviewed pilot English with the localized fallback notice, English navigation/search
-markers and actual `contentLocale`; retain the selected interface locale. Invalid existing localized content fails
+Missing corpora/articles/required figures select the complete reviewed English article and its own English assets,
+with the localized fallback notice, English navigation/search markers and actual `contentLocale`; retain the selected
+interface locale. Never resolve an individual missing figure from another language or author a cross-language local
+reference. Article, navigation and search projections share complete-source selection. Invalid existing localized content fails
 rather than fall back. Source directories stay fixed and staging cannot supply missing content.
+Authored locale hints use the existing localization owner's `resolveSupportedLocale`: a regional hint may name
+the same corpus, but an unsupported or other-corpus hint cannot pass through passive English negotiation.
 Keep user-facing prose/pixels task-focused; provenance/framework/API/storage/permission internals belong in maintainer
 records. Any changed picture requires individual full-resolution and reduced-size inspection.
 Persisted principal preferences, email/PDF and application-wide localization remain future work.

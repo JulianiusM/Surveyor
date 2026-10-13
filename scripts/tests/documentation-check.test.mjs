@@ -335,7 +335,7 @@ test('unreferenced help assets remain visible findings', t => {
     assert.ok(report.errors.some(error => error.message.includes('not referenced')));
 });
 
-test('help report scans native and localized articles together and discloses supported English fallback', t => {
+test('help report scans each corpus and discloses whole-article English fallback without borrowing figures', t => {
     const root = helpFixture(t);
     write(root, 'docs/user-guide/en/README.md', `# English Help\n${metadata}\n\n![English figure](assets/english.png)\n`);
     write(root, 'docs/user-guide/en/TASK.md', `# English task\n${metadata}\n\nTake an item.\n`);
@@ -348,19 +348,49 @@ test('help report scans native and localized articles together and discloses sup
     assert.deepEqual(report.corpora.map(corpus => corpus.directory), ['docs/user-guide', 'docs/user-guide/de', 'docs/user-guide/en']);
     assert.ok(report.warnings.some(warning => warning.message.includes('TASK.md')));
     assert.ok(report.warnings.some(warning => warning.message.includes('assets/english.png')));
-    assert.equal(report.referencedAssets['docs/user-guide/en/assets/english.png'], 2);
+    assert.ok(report.warnings.some(warning => warning.message.includes('complete article must fall back')));
+    assert.equal(report.referencedAssets['docs/user-guide/en/assets/english.png'], 1);
+});
+
+test('localized article and figure queries cannot reference another language', t => {
+    const root = helpFixture(t);
+    write(root, 'docs/user-guide/en/README.md', `# Help\n${metadata}\n`);
+    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n[Weiter](README.md?locale=en)\n![Abbildung](assets/test.png?locale=de&locale=en)\n[Vollbild](/help/assets/test.png?locale=en)\n[Index](/help?locale=en)\n[Suche](/help?search=1&q=task&locale=en)\n[Pilot](/frontend-pilot/help?locale=en)\n`);
+    write(root, 'docs/user-guide/de/assets/test.png', Buffer.from([1]));
+    const {result, report} = inspectHelp(root);
+    assert.equal(result.status, 0);
+    assert.equal(report.ok, false);
+    assert.equal(report.errors.filter(error => error.message.includes('retain their own language')).length, 6);
+});
+
+test('same-corpus regional hints remain valid while unsupported or distinct catalog hints reject', t => {
+    const root = helpFixture(t);
+    write(root, 'docs/user-guide/en/README.md', `# Help\n${metadata}\n\n[Index](/help?locale=en-US)\n![Figure](assets/test.png?locale=en-US)\n`);
+    write(root, 'docs/user-guide/en/assets/test.png', Buffer.from([1]));
+    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n[Index](/help?locale=de-DE)\n![Abbildung](assets/test.png?locale=de-DE)\n`);
+    write(root, 'docs/user-guide/de/assets/test.png', Buffer.from([1]));
+    const valid = inspectHelp(root).report;
+    assert.equal(valid.ok, true, JSON.stringify(valid.errors));
+
+    // A supported regional catalog is its own source even before its Help exists;
+    // an unsupported tag must not pass merely because passive negotiation uses EN.
+    write(root, 'src/locales/en-US.json', '{}');
+    write(root, 'docs/user-guide/en/README.md', `# Help\n${metadata}\n\n[Regional](/help?locale=en-US)\n[Autre](/help?locale=fr)\n![Figure](assets/test.png)\n`);
+    const invalid = inspectHelp(root).report;
+    assert.equal(invalid.errors.filter(error => error.message.includes('retain their own language')).length, 2);
 });
 
 test('unsafe localized content and cross-corpus traversal remain findings even when English exists', t => {
     const root = helpFixture(t);
     write(root, 'docs/user-guide/en/README.md', `# English Help\n${metadata}\n`);
     write(root, 'docs/user-guide/en/assets/english.png', Buffer.from([1]));
-    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n<script>unsafe()</script>\n[Andere](../README.md)\n`);
+    write(root, 'docs/user-guide/de/README.md', `# Hilfe\n${metadata}\n\n<script>unsafe()</script>\n[Andere](../README.md)\n[Vollbild](../en/assets/english.png)\n`);
     const {result, report} = inspectHelp(root);
     assert.equal(result.status, 0);
     assert.equal(report.ok, false);
     assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/README.md' && error.message.includes('Raw HTML')));
     assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/README.md' && error.message.includes('maintained guide')));
+    assert.ok(report.errors.some(error => error.file === 'docs/user-guide/de/README.md' && error.message.includes('local packaged asset')));
 });
 
 test('malformed localized entries remain findings rather than silently borrowing English', t => {

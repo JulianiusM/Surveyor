@@ -859,6 +859,454 @@ implementation_defects:
       - The focused production-consumer selection passed two files and 114 tests, including local Retry, EN/DE notice,
         healthy rereads, retirement, detached controls and retained authorized 503 behavior. Exact commands and broader
         current verification are owned by docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+  - id: IMP-044
+    status: closed
+    closed_on: 2026-10-13
+    severity: medium
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Retired pilot forms can start a new command after an advisory read
+    evidence:
+      - A held guest-email lookup can resume after same-actor admission removes its form and submit registration.
+        A lost response then retains an unknown-command lease without visible recovery controls.
+      - The direct retired-owner and mounted retired-guest regressions failed before correction; the live-form and
+        already-admitted deferred-operation controls passed.
+    authorization: The maintainer conditionally approved the bounded guard on 2026-10-13 if this was a real bug.
+      Review of all 27 production call sites and the design/history found no deliberate new submission from an
+      unmounted owner; existing valid deferrals remain supported. The foundation ledger records this clarification.
+    documentation_contract: Admit new commands only from a mounted owner. Preserve already-admitted deferred work,
+      settlement, follow-up reads, unknown-outcome protection and confirmed navigation for the captured actor.
+    closure_evidence:
+      - The existing command owner rejects new run calls after unmount before acquiring authority or a status lease;
+        its admitted-operation body remains unchanged. Native and backend sources are unchanged.
+      - Three focused production-consumer files passed all 136 tests, including both new regressions and both valid
+        deferred-work controls. Exact commands and final verification are owned by the paired pilot review.
+  - id: IMP-045
+    status: closed
+    closed_on: 2026-10-13
+    severity: high
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Pilot startup can discard edited SSR controls and reload repeatedly without attempt storage
+    evidence:
+      - The reviewed entry-client.ts awaited bootstrap decoding and router readiness before mount restoration and
+        application readiness; initial route failure could reload before mounted guards protected edited SSR controls.
+        The review reproduced pre-hydration input loss at that boundary.
+      - The prior update owner continued an automatic reload after attempt-storage errors. The review reproduced
+        repeated automatic attempts when browser storage could not retain the loop marker.
+      - A consumed automatic-attempt marker also blocked the only reload action instead of preserving a distinct
+        guarded deliberate recovery path for the unmounted document.
+    authorization: The maintainer explicitly approved the full reviewed plan and startup recovery on 2026-10-13.
+      The single dated amendment in docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md records the exact boundary.
+    documentation_contract: Protect edited SSR controls before route loading until mount restoration finishes.
+      Automatic reload requires demonstrably clean state and working loop protection. Unavailable storage exposes
+      localized deliberate recovery; it may bypass the automatic marker but retains edited-control consent and
+      pending/unknown command guards, without persisting secrets/files or replaying writes.
+    closes_when:
+      - Actual startup/update consumers preserve edited controls during failed route/bootstrap loading and cancelled recovery.
+      - Clean automatic recovery uses working loop protection, while storage failure and a consumed marker retain deliberate recovery.
+      - Production review verifies guard installation before loading and release after mount restoration, with existing command protection intact.
+    closure_evidence:
+      - Five initial-startup browser cases passed against real built SSR,
+        manifest and client assets with wholly intercepted synthetic HTTP. They preserve edited username/password nodes,
+        opted-in creation text/FileList and canceled recovery; accepted discard uses one prompt, pristine startup reloads
+        once, a stored marker admits deliberate recovery and unavailable storage exposes localized recovery without looping.
+        Their retained source is now tests/frontend/browser/frontend-startup.spec.ts under the explicit client-layer
+        requirement; this wholly intercepted receipt is not full-application E2E evidence.
+      - Current update/hydration owner assertions cover attempt-storage getter/read/write failures, working automatic
+        loop protection and retained draft/pending guards. Existing quick-suite command assertions and independent
+        semantic review protect unknown-outcome leases; new manual-marker cases do not independently certify that
+        boundary. Source review verifies early guard installation and normal mount-restoration handoff, with no
+        secret/file persistence or command replay.
+      - Exact current commands, results and no-database/arbitrary-mount limitations are owned by the paired pilot review.
+  - id: IMP-046
+    status: closed
+    closed_on: 2026-10-13
+    severity: medium
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Confirmed pilot header upload leaves the native file chooser holding released bytes
+    evidence:
+      - The reviewed PackingSettings upload acknowledged confirmation by setting its feature-owned image to null,
+        while the extracted EntityHeaderEditor received a filename without resetting the browser's file input.
+      - The stale native selection could disagree with the released draft and prevent a new change event when the
+        same file was selected again.
+    authorization: The maintainer explicitly approved the full reviewed plan on 2026-10-13, including confirmation-only file release.
+    documentation_contract: The feature owns the File and releases it on confirmed upload even when the follow-up
+      read fails; the existing shared header editor clears the same native input. Rejection, unknown delivery and
+      ordinary refresh retain the selected file and input, without another upload or an input remount.
+    closes_when:
+      - Mounted production-consumer assertions prove confirmed and saved-plus-failed-read reset and same-file reselection.
+      - Rejected, unknown and background-read cases preserve the file, native input identity and usable recovery.
+    closure_evidence:
+      - tests/frontend/frontend-pilot-editor.spec.ts mounts actual PackingSettings and EntityHeaderEditor through the
+        production command/API owners; healthy and failed follow-up reads clear the same input, while rejected and
+        unknown uploads plus background reads retain its File. Deliberate same-filename reselection permits another upload.
+      - The four mounted header cases and independent source review accept feature-owned release and preservation
+        of native/backend behavior. Latest executed selection, commands and practical browser/persistence limits are
+        owned by docs/frontend-migration/PILOT_PARITY_REVIEW.md; a superseded aggregate quick count is not current proof.
+  - id: IMP-047
+    status: closed
+    closed_on: 2026-10-13
+    severity: medium
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Warm creation and duplicate navigation retain a file outside its released draft lifetime
+    evidence:
+      - Independent mounted review reproduced reuse of the same native file input and FileList after the creation
+        owner's image draft reset during warm creation or duplicate navigation.
+      - PackingCreatePage route/draft resets did not align the retained DOM selection with the next form's value scope.
+    authorization: The maintainer's 2026-10-13 requirement 3 explicitly requires auditing and correcting component
+      value lifetimes, including unchanged controls reused across creation and duplicate contexts.
+    documentation_contract: A form's values and native file selection share one explicit logical scope. Preserve
+      unsaved values while that scope remains live; an acknowledged reset or confirmed scope departure releases
+      both feature state and the same control without another command or selection event.
+    closes_when:
+      - Actual creation/duplicate consumers prove file and text behavior through warm route changes and confirmed resets.
+      - Canceled departure, failed or unknown commands and same-scope updates retain the appropriate values.
+      - Independent source review verifies actual component adoption and preservation of native/backend behavior.
+    closure_evidence:
+      - The shared null-release owner is adopted by actual PackingCreatePage and EntityHeaderEditor; it keeps only
+        the DOM ref and is not immediate, preserving eligible early hydration values.
+      - Actual mounted warm/cold accepted departure, canceled departure, background read and fragment cases are
+        included in the passing focused/full quick consumer selections; rejected/unknown header commands retain their
+        selection. Independent source review accepts actual adoption and unchanged native/backend behavior.
+        Exact execution and browser/OS chooser limits belong to the paired pilot review.
+  - id: IMP-048
+    status: closed
+    closed_on: 2026-10-13
+    severity: high
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Guest registration can commit before its stored identity and final response are safely established
+    evidence:
+      - Source review found a creation followed by guest session adoption; a failure or stale actor at that later
+        boundary could leave committed work without the identity or delivery needed to reach it.
+      - Checking the session immediately before creation alone cannot close the creation-to-session-save race.
+        The original reason for accepting that partial workflow is not established by reviewed history.
+    authorization: The maintainer's 2026-10-13 requirement 5 explicitly requires mutation commits to be final.
+      The proposed residual creation-to-session-save race was rejected for this operation.
+    documentation_contract: Guest registration establishes the Guest/profile rows, authorized stored guest session
+      and serialized success receipt as one final mutation boundary. Failure before final commit rolls back those
+      records; confirmed completion retains existing navigation and unknown-outcome protections.
+    closes_when:
+      - Production controller and pure DBAL owners implement the approved atomic commit-last workflow without
+        duplicating native business rules or inventing new expiry, deletion or permission semantics.
+      - Real persistence and concurrent-session evidence protects success, rollback and stale-context outcomes.
+      - Independent review verifies finality at the actual commit and response boundary, not a precommit check alone.
+    closure_evidence:
+      - UserService.withIdentitySessionTransaction holds the existing stored-session row and supplies one manager;
+        the user controller's commitIdentityCompletion checks current context/expiry, stages the isolated session and
+        prepares output before Guest/profile and session commit. Business errors remain outside pure DBAL.
+      - Selected real ORM cases pass success, preparation/serialization rollback, stale/expired/missing/malformed
+        session and later-actor schedules. New built-system parallel old-context registration and document-handoff
+        assertions pass through the real built backend, including one winning Guest/Profile, persisted identity,
+        restorable personal link, native actor-global first-GET flash and retirement after another context.
+      - Independent semantic review accepts the actual final commit/response boundary. Exact ORM/system execution
+        and remaining non-guest scope limits are owned once by the paired pilot review.
+  - id: IMP-049
+    status: closed
+    closed_on: 2026-10-13
+    severity: medium
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Permission registry changes bypass serialized frontend input generation
+    evidence:
+      - generate-locales.mjs derives permission keys and hashes src/modules/lib/permissions.ts, but the watcher
+        observed only contracts/api/v1 and src/locales. The server could restart directly on the omitted registry.
+      - A later deterministic real-watcher fixture held the awaited readiness write, delivered a known newer invalid
+        permission save and then released the write. It reproduced readiness publication despite the queued invalid
+        batch. The earlier six passing cases and source review had not exercised that final publication window.
+    authorization: The maintainer's 2026-10-13 requirement 4 explicitly includes the exact permission registry in
+      serialized generation and the dependent ready-marker restart boundary.
+    documentation_contract: Observe the exact registry through its parent directory alongside existing contract/catalog
+      inputs. Generate API then locale outputs; successful current batches publish the restart marker, while invalid
+      edits and known newer queued saves retain another pass without advertising partial readiness.
+    closes_when:
+      - A real isolated watcher/generator regression proves atomic registry replacement changes emitted keys and
+        catalog version before readiness, preserves the marker after validation failure and recovers after correction.
+      - The normal server watcher excludes this exact dependency from direct restart and retains unrelated native restarts.
+      - Independent review accepts named callback control flow, generator output compatibility and the shared ready owner.
+    closure_evidence:
+      - The production watcher observes exact permissions.ts replacements through its parent, serializes API then
+        locale generation and stages its process-owned readiness file. After the awaited write it rechecks queued/stopped
+        state, then renames synchronously with no intervening await; cleanup targets only that exact temporary file.
+      - The final existing frontend-generation selection passes. Its copied-tree real watcher/generator fixture held
+        the actual marker write, observed a newer registry callback, and proved no obsolete
+        readiness or abandoned temporary marker before subsequent successful generation, failure preservation and recovery.
+        The earlier implementation failed that deterministic publication-window reproduction.
+      - Root independently accepts the final publication/adoption and exact Nodemon exclusion. Named generator/watcher
+        control flow and output compatibility were manually reviewed; non-src scripts/tests remain outside the source
+        engineering checker's supported inventory. The detached fixture changes no maintained input, app server or DB.
+  - id: IMP-050
+    status: open
+    severity: high
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Pilot account signup commits before activation-token persistence and message preparation
+    evidence:
+      - Independent source review found registerAccount and the pilot document signup calling registerUser, whose
+        User/profile transaction completes before activation-token persistence and email rendering.
+      - A later token or preparation failure can reject signup while leaving an inactive account. The pilot
+        ordinary-form confirmation currently claims an activation email was sent. Neutral feedback was proposed
+        for that adapter but not approved or implemented.
+    authorization: The maintainer's 2026-10-13 requirement 5 authorizes commit-last creation and dependent activation
+      persistence. Subsequent request 6 requires JavaScript-only skeleton delivery with no frontend fallback,
+      superseding the subject of the earlier neutral-document wording proposal. Its conflict with the recorded
+      server-rendering/no-JavaScript design is awaiting the separate direct resolution before dependent edits.
+    documentation_contract: Pilot account creation prepares its activation token, required persistence and final
+      transport result before committing. Delivery is separate from creation; native reference behavior remains
+      unchanged. The API scope is implemented; the remaining ordinary-form adapter disposition depends on the
+      explicitly resolved delivery design, not permission to change its wording or native backend behavior.
+    closes_when:
+      - Shared controller and existing DBAL owners establish User/profile/token and prepared output atomically.
+      - Real persistence and built-system evidence verifies rollback, success and no postcommit replay.
+      - The conflicting delivery designs are explicitly resolved and the authorized ordinary-form adapter disposition
+        is verified without changing native behavior.
+      - Independent semantic review accepts actual production adoption and native preservation.
+    implementation_evidence:
+      - The API uses registerUserWithSession through the existing shared controller/DBAL locked completion owner.
+        User/profile/activation token plus mail and validated transport variants are prepared before the final commit;
+        signup keeps its captured actor and exposes no activation token or link. SMTP runs after commit.
+      - Real ORM assertions cover complete signup and activation, rollback before commit, document activation flash
+        serialization and concurrent token consumption. The existing API signup consumer distinguishes failed SMTP
+        from confirmed account creation, releases credentials and refuses retained completed-form replay.
+      - Pilot signup document adoption and neutral confirmation remain unapplied; the subsequent JavaScript-only
+        instruction requires a different delivery disposition once its existing-design conflict is resolved.
+        The built API signup case passes complete account/profile/token persistence after controlled local SMTP failure,
+        with no token exposure or actor change. Exact scoped execution belongs to the paired pilot review; this finding
+        stays open only for that delivery disposition; general shared native token defects are separate IMP-051/057.
+  - id: IMP-051
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    out_of_scope_for_frontend_migration: true
+    title: Native password reset can overwrite a completed pilot reset after an earlier token read
+    second_pass_review:
+      date: 2026-10-13
+      disposition: General application defect; backlog only for a separate effort, not frontend migration remediation.
+      authority: Explicit maintainer decision on request 8; no native or pilot token-write change is authorized.
+      history: This ID originally tracked inherited pilot reset-token consumption and postwrite document preparation.
+        The separately approved pilot correction and its passing evidence remain intact. The mixed activation
+        consequence originally recorded alongside this finding is now tracked separately as IMP-057.
+    evidence:
+      - src/controller/userController.ts resetPassword verifies the token before UserService.resetPassword awaits
+        bcrypt and updates by username alone. The conditional token is not part of that shared write's predicate.
+      - Independent source scheduling shows native reset reading valid token T, pilot reset locking its account,
+        writing and clearing T before commit, then the native bcrypt continuation overwriting the pilot password.
+        Cooperating pilot consumers are protected by their lock; the native continuation does not share that admission.
+    authorization: The maintainer's explicit 2026-10-13 request 8 disposition authorizes recording this general
+      defect for a separate effort only. Earlier requirements 3 and 5 separately approved the completed pilot
+      correction; neither that work nor this backlog disposition authorizes changing native token-write defaults.
+    documentation_contract: A reset link should not let an earlier native continuation overwrite a completed reset.
+      The accepted pilot lock/prepared-completion contract remains; general shared-writer remediation is separate.
+    closes_when:
+      - An independently authorized separate effort establishes the shared-writer working contract and verifies
+        that mixed native/pilot consumption cannot overwrite an already completed password reset.
+      - Actual mixed-writer evidence and independent review preserve ordinary validation, responses, destinations
+        and the previously accepted pilot completion without duplicating business responsibilities.
+    implementation_evidence:
+      - Cooperating pilot reset consumers now use locked token admission and prepared API/full SSR completion.
+        Real ORM concurrency, serialization rollback, old password/token/session preservation and same-URL 200
+        completion pass; built-system reset workflows also pass in the proper owned configuration.
+      - Independent review accepts that bounded pilot adoption. The original inherited postwrite preparation finding
+        and unknown rationale remain historical context, not a claim that the corrected pilot path still has that defect.
+    evidence_limit: The mixed native/pilot schedule is source-inferred and was not reproduced against the database.
+      No general token-write remedy is implemented or approved. Exact accepted pilot scopes belong to the paired
+      review; reset-mail issuance remains separately closed as IMP-052 and activation is separately open as IMP-057.
+  - id: IMP-052
+    status: closed
+    closed_on: 2026-10-13
+    severity: high
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Pilot reset-mail issuance commits its token before fallible mail and completion preparation
+    evidence:
+      - Original pilot requestPasswordReset API and forgot-password document adapters called shared sendPasswordForgotMail.
+        The controller persisted resetToken before computing identityLink and invoking sendPasswordResetEmail.
+      - The email sender validates its recipient, renders the message and performs synchronous sender initialization
+        outside the native catch; API result validation or document flash/redirect preparation follows that call.
+        Link, template, setup, result or session failure can therefore reject after token persistence commits.
+    authorization: The maintainer's explicit 2026-10-13 requirement 5 authorizes this bounded pilot finality correction.
+      Native ordering and existing generic confirmation/error responses remain protected; no account-found or delivery
+      metadata is authorized. Shared native token-write defects are deferred to separate general-defect work.
+    documentation_contract: The existing locked pilot completion transaction prepares mail, cached sender, output and
+      optional document flash before token commit, then delivers through the captured sender. Cached setup does not
+      connect to SMTP. Known and unknown accounts retain generic normal confirmation and original error responses.
+    closes_when:
+      - Existing controller, pure DBAL, mail and completion owners implement precommit preparation without duplicating
+        native validation, creating another sender or changing token expiry/default behavior.
+      - Actual regressions prove link/template/setup/result/session preparation failure preserves prior token state,
+        and known/unknown account confirmation remains indistinguishable at the authored response boundary.
+      - Built-system and independent source review verify actual API/document adoption, postcommit captured delivery,
+        original errors and native preservation; closure names this pilot scope only.
+    closure_evidence:
+      - Actual pilot requestPasswordResetWithSession prepares token/link/templates/cached sender and generic result
+        or optional flash within the existing locked completion transaction; captured delivery follows its commit.
+      - Real ORM cases pass cached setup rollback, generic known/unknown and failed/unexpected delivery, private
+        result preparation and later-actor preservation. The built API/document workflows and independent nonauthor
+        semantic review accept production adoption; current exact scopes are owned by the paired pilot review.
+      - Closure is pilot-only. Native ordering, inactive-login resend, existing confirmation/error responses and
+        no-account-discovery contract remain protected; no live SMTP or mixed-writer guarantee is inferred.
+    evidence_limit: Native reset-mail ordering remains unchanged. Mixed native/pilot token-consumption decisions
+      8 and 9 are separate general-defect backlog work in IMP-051/057. This finding does not establish complete shared-writer
+      token finality or new SMTP/provider behavior.
+  - id: IMP-053
+    status: closed
+    closed_on: 2026-10-13
+    severity: high
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Pilot relink and archive commands can reject through queries after their mutation commits
+    evidence:
+      - Source review verifies changeEntityEvent commits withLockedArchiveTarget before getArchivePresentations and
+        canAccessEntityView query the committed relationship. Packing adapts that later outcome, so either read failure
+        can reject a completed pilot relink.
+      - archiveEntity and restoreEntity likewise query getArchivePresentations after their lifecycle transaction.
+        The pilot setPackingArchived ignores that presentation and returns only changed true, yet a failure in the
+        unused query can reject the already committed archive/restore operation.
+    authorization: The maintainer's explicit 2026-10-13 requirement 5 authorizes bounded pilot completion in the
+      existing shared controller owners. Native defaults, lifecycle policy, permissions and relationship semantics
+      remain protected; no wider lifecycle or header-cleanup remedy is inferred.
+    documentation_contract: Pilot relink prepares its required post-association admission and completion within the
+      locked transaction. Pilot archive/restore do not depend on an unused postcommit presentation query. Preserve
+      shared business checks and native defaults; delivery cannot reject these commits through later projection reads.
+    closes_when:
+      - Existing shared controller and pure DBAL owners prepare the pilot result before commit without duplicating
+        relink/lifecycle checks or changing native defaults.
+      - Actual persistence/system assertions prove preparation failure rolls back, changed and no-op relink admission
+        is preserved, and pilot archive/restore do not perform the unused postcommit query.
+      - Independent semantic review accepts actual API adoption and protected native/shared policy; final affected
+        build, compiler and source checks pass in their disclosed scopes.
+    closure_evidence:
+      - Existing entity administrator owners prepare typed completion on their original locked manager. Actual
+        Packing relink reads resulting view admission before commit; archive/restore return their invariant receipt
+        without an unused postcommit archive DTO. Native omitted-completion defaults remain unchanged.
+      - Real ORM preparation rollback, changed/no-op/unlink admission and native/pilot repeated lifecycle receipts
+        pass; actual built-system workflows, final build/source checks and root independent semantic review accept
+        the bounded production adoption. Exact execution is owned once by the paired pilot review.
+    evidence_limit: Closure covers only pilot relink/access/archive completion dependencies. It does not infer a
+      header-cleanup defect, certify every lifecycle writer or alter native postcommit presentation defaults.
+  - id: IMP-054
+    status: closed
+    closed_on: 2026-10-13
+    severity: high
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Pilot personal visibility can reject through archive projection after its preference commits
+    evidence:
+      - Source review verifies setPersonalVisibility checks locked root/membership and persists the preference inside
+        withLockedArchiveTarget, then queries getArchivePresentations after commit to derive archive and overviewHidden.
+      - The adopted modules/overview/api setOverviewVisibility consumes that projection for the versioned route.
+        A required presentation read failure can therefore reject an already committed pilot visibility write.
+    authorization: The maintainer's explicit 2026-10-13 requirement 5 authorizes the bounded pilot precommit completion
+      through existing user/overview controllers and manager-aware archive presentation. Native defaults and existing
+      DBAL membership/check/write boundaries remain protected; no new module, service or broader visibility policy.
+    documentation_contract: Pilot visibility prepares its existing preference/archive/overviewHidden receipt on the
+      same locked manager before commit. Required projection failure rolls back the preference; native presentation
+      and private/shared visibility distinctions remain unchanged.
+    closes_when:
+      - Existing shared owners adopt the optional typed completion without duplicating membership/lifecycle decisions
+        or changing native default behavior.
+      - Real ORM rollback and native/versioned receipt assertions protect the admitted preference and placement meanings.
+      - Independent semantic review and affected build/compiler/system checks verify actual pilot production adoption.
+    closure_evidence:
+      - The actual pilot Overview adapter adopts the shared typed manager-bound completion, maps its three public
+        fields once, and the existing route prepares validated JSON before commit then delivers immutable bytes.
+      - Real ORM projection/generated-response rejection roll back the preference; native/pilot DTO and captured
+        output assertions preserve placement/archive distinctions across later archive/context changes. Built-system
+        workflows, final source/build checks and independent nonauthor semantic review accept the production path.
+        Current execution scopes are owned by the paired pilot review.
+    evidence_limit: Closure covers the pilot required archive projection and prepared response only. Native default
+      presentation, locale-cookie behavior and other visibility/lifecycle writers remain outside this assertion.
+  - id: IMP-055
+    status: closed
+    closed_on: 2026-10-13
+    severity: high
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Token-free pilot logout persists anonymous authority before preparing its required completion
+    evidence:
+      - Source review found explicit pilot logout using the ordinary owner to save cleared authority before the API
+        projection/generated result or document success notice and later session save completed.
+      - Those fallible preparation steps can reject after stored logout commits. The original rationale or a deliberate
+        exception is not established; token-bearing provider discovery/failure ordering is a separate pending decision.
+    authorization: The maintainer's explicit 2026-10-13 requirement 5 authorizes this bounded token-free pilot
+      completion in existing owners. Native defaults and all truthy-token provider paths remain protected; no
+      provider consequence or new policy/design decision is inferred.
+    documentation_contract: Explicit token-free pilot logout prepares its anonymous result or document notice/303
+      with the stored authority transition under the existing locked completion owner, then adopts the detached
+      result without another save. Recheck absence of truthy tokens under the lock; even an empty object stays outside.
+    closes_when:
+      - Existing controller/API/document owners adopt prepared completion before the stored authority commit.
+      - Actual ORM rollback, account/guest success, document notice/303, stale-actor and fresh-token classification
+        assertions pass; built-system and independent source review accept the bounded production path.
+      - Native/provider defaults remain unchanged; the provider failure defect is separate backlog-only IMP-056.
+    closure_evidence:
+      - logoutUserWithSession rechecks fresh locked staging before the shared ordinary logout mutation; inner saves
+        remain deferred until generated API preparation or document notice/303 completes.
+      - API and document adapters classify absence of any truthy tokens object, preserving every truthy provider path,
+        including an empty object. Their delivery adopts the prepared result outside business rejection handling.
+      - All eight added real ORM cases pass in the renewed authentication selection, with normal build/compilers,
+        complete source checks and independent nonauthor semantic acceptance. Exact execution belongs to the paired review.
+      - Renewed actual built-system API logout and JavaScript-disabled document logout/locale 303 pass against the
+        fully prepared owned database; the prepared authority/result and actual adapters are independently accepted.
+    evidence_limit: Closure covers only explicit token-free pilot logout. Native logout, invalid-session middleware,
+      every truthy-token provider path and its separately backlogged general defect IMP-056 remain unchanged.
+  - id: IMP-056
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    out_of_scope_for_frontend_migration: true
+    title: Provider logout can clear stored local identity before preparing a fallible provider destination
+    evidence:
+      - src/modules/oidc.ts logout captures whether tokens exist, clears auth/profile/tokens, rotates frontend context
+        and persists the session before lazy provider discovery and end-session URL construction.
+      - Native logout and token-bearing pilot API/document logout call this same owner. A discovery/metadata/URL
+        preparation failure can therefore reject the journey after local logout has already been saved.
+    authorization: The maintainer's explicit 2026-10-13 request 7 disposition records this general defect in the
+      backlog for a separate effort only. No provider failure behavior or native/pilot implementation change is approved.
+    history: Independent review established the ordering from the shared production source; its original rationale
+      is unknown. The separately approved token-free pilot correction remains closed as IMP-055 and excludes every
+      truthy token object, including an empty object. That correction does not resolve this provider path.
+    documentation_contract: Provider logout requires a separately established failure contract which distinguishes
+      local identity clearing from provider termination and gives coherent feedback and navigation.
+    closes_when:
+      - An independently authorized separate effort establishes and verifies the intended provider failure outcome
+        through the shared owner for native and pilot callers, including preparation and stored-authority boundaries.
+      - Actual failure evidence and independent review preserve the accepted token-free path and deliberate
+        provider return behavior without adding another implementation of the same responsibility.
+    evidence_limit: This failure consequence is source-inferred, not a runtime-reproduced provider or discovery case.
+      Provider ordering remains unchanged; recording this defect is not an implementation plan or approval request.
+  - id: IMP-057
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    out_of_scope_for_frontend_migration: true
+    title: Native activation can acknowledge a consumed or reissued token after an earlier token read
+    evidence:
+      - src/controller/userController.ts activateAccount reads verifyActivationToken before UserService.activateUser
+        updates by account ID alone and clears activationToken. That update does not test the submitted token again.
+      - Independent source scheduling shows native activation reading T, a cooperating pilot activation consuming T
+        under its account lock, then the earlier native continuation acknowledging activation through its ID-only write.
+        A later token reissue can similarly be cleared after the older read without current-token admission.
+    authorization: The maintainer's explicit 2026-10-13 request 9 disposition records this general defect in the
+      backlog for a separate effort only. No shared native/pilot conditional activation write is approved or implemented.
+    history: The shared-writer limitation was originally recorded alongside IMP-051. It is separated here without
+      erasing that discovery or the approved pilot account/token/completion work. The original rationale for the
+      native ID-only write or a deliberate repeated-acknowledgement exception is unknown.
+    documentation_contract: Single-use activation acknowledgement should reflect the submitted token's current
+      authority. The final active-account state is idempotent; that alone does not prove single-use acknowledgement.
+    closes_when:
+      - An independently authorized separate effort establishes and verifies current-token admission for mixed
+        native/pilot acknowledgements while preserving ordinary activation feedback and the approved pilot completion.
+      - Actual mixed-writer/reissue evidence and independent review protect the shared business responsibility;
+        an idempotent active flag alone is not acceptance evidence.
+    evidence_limit: The mixed-writer/reissue consequences are source-inferred and were not runtime reproduced.
+      Accepted cooperating-pilot concurrency does not certify native continuations; no general remedy is approved.
 findings:
   - id: DOC-PERMISSION-POLICY-REVIEW
     status: open

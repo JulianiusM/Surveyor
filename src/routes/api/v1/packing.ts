@@ -63,12 +63,23 @@ router.post('/', asyncHandler(async function createPackingList(req, res) {
     let committed = false;
     try {
         await readImageUpload(req, res);
+        /** Decode the multipart metadata field before generated validation.
+         * Uploaded bytes come only from Multer's admitted file; submitted names
+         * never substitute for a file or authorize its persistence. */
         validateOperationRequest(req, 'createPackingList', function decodeCreateForm(body) {
             const form = body as Record<string, unknown>;
+            // A claimed image field without an admitted upload is invalid. Keep
+            // that diagnostic distinct from malformed serialized metadata.
             if (Object.hasOwn(form, 'image') && !req.file) throw new ApiProblem('UPLOAD_INVALID');
+
+            // Multipart carries data as JSON text, while already decoded values
+            // still cross the same generated closed-shape validator afterward.
             let data: unknown;
             try { data = typeof form.data === 'string' ? JSON.parse(form.data) : form.data; }
             catch { throw new ApiProblem('VALIDATION_FAILED'); }
+
+            // Preserve all submitted fields for unknown-field rejection and add
+            // only the actual upload's name for the declared multipart shape.
             return {...form, data, ...(req.file ? {image: req.file.originalname} : {})};
         });
         const form = req.body as components['schemas']['PackingCreateForm'];
@@ -289,17 +300,29 @@ router.delete('/:listId/header', asyncHandler(async function deletePackingHeader
     sendValidatedJson(req, res, 'deletePackingHeader', 200, await packingApi.setPackingHeader(String(req.params.listId), undefined, actor, req.get('If-Match')));
 }));
 
+/** Serve header bytes only after current full-detail admission. Stored references
+ * stay server-side, are confined to the configured image directory, and retain
+ * the established missing-file response and generated binary transport policy. */
 router.get('/:listId/header', asyncHandler(async function getPackingHeader(req, res) {
+    // A method-only upload grant is insufficient for image disclosure. The
+    // controller applies the current detail policy before returning a stored path.
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'getPackingHeader');
     const storedPath = await packingApi.readPackingHeaderPath(String(req.params.listId), actor);
+
+    // Normalize both paths against the application directory, then reject a
+    // reference outside the configured upload root before touching the filesystem.
     const directory = path.resolve(process.cwd(), settings.value.headerImgDir);
     const fullPath = path.resolve(process.cwd(), storedPath);
     const relative = path.relative(directory, fullPath);
     if (relative.startsWith('..') || path.isAbsolute(relative)) throw new ApiProblem('NOT_FOUND');
+
+    // Keep the existing read-failure outcome free of filesystem paths/details;
+    // successful bytes leave through the common private binary response owner.
     let bytes: Buffer;
     try { bytes = await fs.readFile(fullPath); }
     catch { throw new ApiProblem('NOT_FOUND'); }
+
     sendValidatedBinary(req, res, 'getPackingHeader', 200, bytes);
 }));
 

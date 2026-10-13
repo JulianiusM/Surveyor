@@ -176,6 +176,19 @@ schemas:
     properties:
       exists:
         type: "boolean"
+  EmailDelivery:
+    description: SMTP acceptance is distinct from committed registration and does not guarantee inbox delivery.
+    type: string
+    enum: [not-requested, sent, failed]
+  RegistrationResult:
+    type: object
+    additionalProperties: false
+    required: [changed]
+    properties:
+      changed:
+        "$ref": ./packing.yaml#/schemas/MutationResult/properties/changed
+      emailDelivery:
+        "$ref": '#/schemas/EmailDelivery'
   IdentityResult:
     type: "object"
     additionalProperties: false
@@ -194,6 +207,9 @@ schemas:
         type:
           - "string"
           - "null"
+      emailDelivery:
+        description: Guest registration is committed independently of recovery-mail delivery; a failed delivery retains the confirmed personal link.
+        "$ref": '#/schemas/EmailDelivery'
 paths:
   "/auth/login":
     post:
@@ -273,7 +289,7 @@ paths:
           content:
             "application/json":
               schema:
-                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+                "$ref": "./openapi.yaml#/components/schemas/RegistrationResult"
         default:
           "$ref": "./openapi.yaml#/components/responses/Problem"
   "/auth/forgot-password":

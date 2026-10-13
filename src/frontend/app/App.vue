@@ -132,7 +132,7 @@ function dismissPersonalLink(): void {
                 <StatusNotice v-if="localeError" kind="danger">{{ messages.t('common.error') }}</StatusNotice>
                 <StatusNotice v-if="context.updates.available.value" kind="warning">
                     {{ messages.t('state.updateAvailable') }}
-                    <ActionButton class="btn-sm ms-2" variant="outline-light" @click="context.updates.requestReload">
+                    <ActionButton class="btn-sm ms-2" variant="outline-light" @click="context.updates.requestRecoveryReload">
                         {{ messages.t('state.refreshPage') }}
                     </ActionButton>
                 </StatusNotice>

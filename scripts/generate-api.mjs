@@ -25,6 +25,9 @@ const banner = '// Generated from contracts/api/v1; do not edit.\n';
 /** Reject remote and escaping references before handing any document to a resolver. */
 function inspectReferences(value, sourceFile) {
     if (!value || typeof value !== 'object') return;
+
+    // Check each reference before resolving or executing a third-party bundler.
+    // Empty filenames refer to the current authored document, never another root.
     if (typeof value.$ref === 'string') {
         const [file] = value.$ref.split('#');
         if (/^[a-z][a-z\d+.-]*:/i.test(file) || path.isAbsolute(file)) throw new Error(`External reference in ${sourceFile}`);
@@ -32,6 +35,7 @@ function inspectReferences(value, sourceFile) {
         const relative = path.relative(sourceDirectory, target);
         if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`Reference leaves contract directory: ${value.$ref}`);
     }
+    // References can occur in nested schemas as well as at an operation boundary.
     for (const nested of Object.values(value)) inspectReferences(nested, sourceFile);
 }
 
@@ -39,6 +43,8 @@ function inspectReferences(value, sourceFile) {
 function resolve(document, value) {
     if (!value?.$ref) return value;
     if (!value.$ref.startsWith('#/')) throw new Error(`Unbundled reference: ${value.$ref}`);
+
+    // Follow escaped JSON Pointer members inside the verified bundled document.
     let found = document;
     for (const part of value.$ref.slice(2).split('/')) found = found?.[part.replace(/~1/g, '/').replace(/~0/g, '~')];
     if (!found) throw new Error(`Missing bundled reference: ${value.$ref}`);
@@ -47,7 +53,12 @@ function resolve(document, value) {
 
 /** Ajv receives exactly the contract vocabulary; only reference destinations are rewritten. */
 function validatorSchema(value, id, additive = false, insideParameters = false) {
-    if (Array.isArray(value)) return value.map(item => validatorSchema(item, id, additive, insideParameters));
+    // Preserve arrays and scalar vocabulary before rewriting object/reference nodes.
+    if (Array.isArray(value)) {
+        const result = [];
+        for (const item of value) result.push(validatorSchema(item, id, additive, insideParameters));
+        return result;
+    }
     if (!value || typeof value !== 'object') return value;
     const result = {};
     for (const [key, nested] of Object.entries(value)) {
@@ -58,8 +69,13 @@ function validatorSchema(value, id, additive = false, insideParameters = false) 
             // New response fields are compatible. Never weaken known error parameter contracts.
             result[key] = true;
         } else if (key === 'properties') {
-            result[key] = Object.fromEntries(Object.entries(nested).map(([name, schema]) =>
-                [name, validatorSchema(schema, id, additive, insideParameters || name === 'params')]));
+            // Error parameters keep their strict authored shape even inside an
+            // additive browser response graph. Other fields inherit their graph.
+            const properties = [];
+            for (const [name, schema] of Object.entries(nested)) {
+                properties.push([name, validatorSchema(schema, id, additive, insideParameters || name === 'params')]);
+            }
+            result[key] = Object.fromEntries(properties);
         } else {
             result[key] = validatorSchema(nested, id, additive, insideParameters);
         }
@@ -67,12 +83,14 @@ function validatorSchema(value, id, additive = false, insideParameters = false) 
     return result;
 }
 
+/** Require operations to name shared authored schemas rather than invent inline DTOs. */
 function schemaName(schema) {
     const prefix = '#/components/schemas/';
     if (!schema?.$ref?.startsWith(prefix)) throw new Error('Operations must reference a named schema');
     return schema.$ref.slice(prefix.length);
 }
 
+/** Derive a validator identifier from the already validated nonempty operation name. */
 function upperFirst(value) { return value[0].toUpperCase() + value.slice(1); }
 
 /**
@@ -100,15 +118,23 @@ function utf16MinimumParameters({schemaCode}) {
 function parameterSchema(parameters) {
     const properties = {};
     for (const group of ['path', 'query', 'header']) {
-        const members = parameters.filter(parameter => parameter.in === group
-            && !(group === 'header' && policyHeaders.has(parameter.name.toLowerCase())));
+        // Common policy headers are checked by their owning middleware, not copied
+        // into each feature's transport parameter validator.
+        const members = [];
+        const required = [];
+        for (const parameter of parameters) {
+            if (parameter.in !== group || group === 'header' && policyHeaders.has(parameter.name.toLowerCase())) continue;
+            members.push([parameter.name, parameter.schema]);
+            if (parameter.required) required.push(parameter.name);
+        }
         properties[group] = {type: 'object', additionalProperties: false,
-            properties: Object.fromEntries(members.map(parameter => [parameter.name, parameter.schema])),
-            required: members.filter(parameter => parameter.required).map(parameter => parameter.name)};
+            properties: Object.fromEntries(members), required};
     }
     return {type: 'object', additionalProperties: false, required: ['path', 'query', 'header'], properties};
 }
 
+// Stable authored ordering makes clean-tree generation reproducible. Parse every
+// YAML input before bundling so duplicate keys or external references fail visibly.
 const files = (await fs.readdir(sourceDirectory)).filter(file => file.endsWith('.yaml')).sort();
 const sourceHash = createHash('sha256');
 for (const file of files) {
@@ -209,12 +235,13 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
     }
 }
 
-const problems = schemas.Problem.oneOf.map(variant => ({
-    code: variant.properties.code.const,
-    status: variant.properties.status.const,
-    messageKey: variant.properties.messageKey.const,
-    paramsSchema: variant.properties.params,
-}));
+// Localization derives problem parameters from these authored variants; it must
+// not maintain another handwritten error inventory.
+const problems = [];
+for (const variant of schemas.Problem.oneOf) {
+    problems.push({code: variant.properties.code.const, status: variant.properties.status.const,
+        messageKey: variant.properties.messageKey.const, paramsSchema: variant.properties.params});
+}
 const apiCompatibility = document['x-surveyor-api-compatibility'];
 if (typeof apiCompatibility !== 'string' || !/^[a-zA-Z0-9-]{1,128}$/u.test(apiCompatibility)) throw new Error('Missing API compatibility family');
 const manifest = {sourceHash: sourceHash.digest('hex'), apiCompatibility, schemas: Object.keys(schemas), operations, problems};
@@ -243,8 +270,12 @@ output.set('src/types/api/validation-v1.d.ts', declarations);
 // A request may reach shared shapes through multipart metadata or another named object.
 // Follow those references for direct validator exports, while keeping response traversal
 // separate: the same authored shape can be strict in a request and additive in a response.
+/** Include transitive request schemas without weakening their response counterparts. */
 function includeRequestReferences(value) {
     if (!value || typeof value !== 'object') return;
+
+    // Mark before traversing so recursive schema graphs terminate and each named
+    // request shape receives the strict browser validation graph.
     if (typeof value.$ref === 'string' && value.$ref.startsWith('#/components/schemas/')) {
         const name = value.$ref.slice('#/components/schemas/'.length);
         if (!requestSchemas.has(name)) {
@@ -255,6 +286,23 @@ function includeRequestReferences(value) {
     for (const nested of Object.values(value)) includeRequestReferences(nested);
 }
 for (const name of [...requestSchemas]) includeRequestReferences(allSchemas[name]);
+
+/** Bundle one lazy browser validator using the same compiled schema graph.
+ * These independent builds may run concurrently; all results are collected before
+ * the normal output/check phase publishes or compares any generated artifact. */
+async function bundleBrowserValidator(exportName, reference, ajv, output) {
+    // Standalone code carries its own referenced shapes and helpers. No Ajv compiler
+    // enters the application runtime or needs to run during feature navigation.
+    const single = standaloneCode(ajv, {[exportName]: reference});
+    const result = await build({stdin: {contents: single, resolveDir: root, sourcefile: `${exportName}.mjs`},
+        bundle: true, write: false, platform: 'browser', format: 'esm', target: 'es2020', legalComments: 'none'});
+
+    // Keep the lazy runtime and its declaration paired under the existing owner.
+    output.set(`${artifactDirectory}/browser/${exportName}.mjs`, banner + result.outputFiles[0].text);
+    output.set(`${artifactDirectory}/browser/${exportName}.d.mts`, banner
+        + `import type {ValidatorSet} from '../../../../src/types/api/validation-v1.js';\n`
+        + `export const ${exportName}: ValidatorSet['${exportName}'];\n`);
+}
 
 for (const browser of [false, true]) {
     const id = `urn:surveyor:api:v1:${browser ? 'browser' : 'server'}`;
@@ -269,9 +317,11 @@ for (const browser of [false, true]) {
     ajv.addFormat('binary', true);
     for (const graphId of browser ? [id, requestId] : [id]) {
         const additive = browser && graphId === id;
-        const definitions = Object.fromEntries(Object.entries(allSchemas).map(([name, schema]) =>
-            [name, validatorSchema(schema, graphId, additive)]));
-        ajv.addSchema({$id: graphId, $defs: definitions});
+        const definitions = [];
+        for (const [name, schema] of Object.entries(allSchemas)) {
+            definitions.push([name, validatorSchema(schema, graphId, additive)]);
+        }
+        ajv.addSchema({$id: graphId, $defs: Object.fromEntries(definitions)});
     }
     const exportMap = {};
     for (const name of Object.keys(allSchemas)) {
@@ -292,15 +342,11 @@ for (const browser of [false, true]) {
     if (browser) {
         // A standalone module per schema lets Vite load only a route's validation graph. Each module
         // bundles its referenced shapes and helpers, with no Ajv compiler in the application runtime.
-        await Promise.all(Object.entries(exportMap).map(async ([exportName, reference]) => {
-            const single = standaloneCode(ajv, {[exportName]: reference});
-            const result = await build({stdin: {contents: single, resolveDir: root, sourcefile: `${exportName}.mjs`},
-                bundle: true, write: false, platform: 'browser', format: 'esm', target: 'es2020', legalComments: 'none'});
-            output.set(`${artifactDirectory}/browser/${exportName}.mjs`, banner + result.outputFiles[0].text);
-            output.set(`${artifactDirectory}/browser/${exportName}.d.mts`, banner
-                + `import type {ValidatorSet} from '../../../../src/types/api/validation-v1.js';\n`
-                + `export const ${exportName}: ValidatorSet['${exportName}'];\n`);
-        }));
+        const builds = [];
+        for (const [exportName, reference] of Object.entries(exportMap)) {
+            builds.push(bundleBrowserValidator(exportName, reference, ajv, output));
+        }
+        await Promise.all(builds);
     }
 }
 

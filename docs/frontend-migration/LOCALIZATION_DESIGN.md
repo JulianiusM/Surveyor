@@ -59,7 +59,7 @@ this relocation and belongs to the [review](PILOT_PARITY_REVIEW.md).
 | Translator/resolver/formatting | Shared localization module; typed immutable request/recipient/app context. |
 | Vue reactive binding | i18next-vue around that shared core, not a Vue-only catalog. |
 | Long Help articles/anchors/search | Reviewed locale corpus under `docs/user-guide/<locale>/`. |
-| Figures/captions/alt text | Reviewed locale corpus/assets and labels; a missing figure can use reviewed English with visible fallback disclosure. |
+| Figures/captions/alt text | Reviewed assets/labels belong to the article's language; an incomplete translated article selects the entire English article and its own assets with visible disclosure. |
 | Generated key/parameter/locale contracts | Ignored `src/types/LocalizationTypes.d.ts` and generated runtime manifest. |
 
 Catalog assets contain application text, not user records/secrets. DTO fields containing user-authored text are never
@@ -86,7 +86,8 @@ To add a supported language:
 
 1. Add a complete catalog with matching logical keys/parameters, supported locale metadata and its fixed Help directory.
 2. Prefer reviewed complete runtime articles with stable anchor metadata and equivalent localized assets/captions/alt
-   text. A missing corpus/article/figure may use the reviewed English fallback; verify the localized notice/English
+   text. A missing corpus/article or required figure may select the complete reviewed English article and its own
+   assets; an individual figure cannot borrow another language. Verify the localized notice/English
    markers rather than require untranslated placeholder files.
 3. Generate through the normal package workflow and verify typed/core/actual-consumer scope appropriate to the change.
 4. Inspect every changed image independently; keep provenance outside user prose/pixels.
@@ -160,8 +161,12 @@ another registry of language-owned data.
 Each available translated article owns its complete body/headings/titles/TOC/search snippets and stable fragment IDs.
 Translated heading anchors are declared/validated from that article, not derived by loading another language.
 Authored links/assets retain the selected locale and native/pilot URL family.
-The direct Oct12 decision supersedes the earlier complete-corpus-only implementation. Missing localized corpora,
-articles or referenced raster figures use only the reviewed `docs/user-guide/en/` fallback. The selected interface
+The direct Oct12 decision superseded the earlier complete-corpus-only implementation and permitted individual figure
+fallback. The explicit Oct13 Req. 2B amendment retains fallback but supersedes that partial-page choice: a missing
+localized corpus, article or referenced raster figure selects the complete corresponding article from
+`docs/user-guide/en/`, with every asset resolved only from that article's own language. An English replacement must
+itself be complete. Authored local references cannot name another language; asset responses never choose one.
+The selected interface
 locale remains unchanged. Help page data declares the actual `contentLocale` and `fallbackToEnglish`; navigation/search
 summaries mark English entries. The localized fallback notice is visible in SSR, hydration and client navigation,
 and article/TOC language and asset URLs identify the actual source. Mixed navigation/search includes absent translated

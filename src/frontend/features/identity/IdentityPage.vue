@@ -39,6 +39,12 @@ const fields = reactive({
     email: nativeInitial?.identityFields?.email ?? '',
 });
 const finished = ref(!!nativeInitial?.identityFeedback && frontendIdentityMessageFeedback.includes(nativeInitial.identityFeedback));
+// Signup completion stays on this visit's existing message surface. SMTP failure
+// changes its advisory text, never its confirmed account-creation outcome.
+const registrationEmailFailed = ref(false);
+const finishedMessage = computed(() => mode.value === 'register'
+    ? registrationEmailFailed.value ? 'auth.registeredEmailFailed' : 'auth.registered'
+    : mode.value === 'forgot' ? 'auth.resetSent' : 'auth.resetDone');
 const identityConfigurationProblem = shallowRef<components['schemas']['Problem'] | null>(null);
 // A URL is not evidence that a command succeeded. Enhanced completion is an in-memory
 // receipt scoped to its actor and exact destination. Native POST seeds that same receipt
@@ -78,6 +84,7 @@ function resetForm(): void {
     command.acknowledge();
     clearFields();
     finished.value = false;
+    registrationEmailFailed.value = false;
     identityConfigurationProblem.value = null;
     showPasswordCriteria.value = false;
     if (mode.value === 'activate' && context.browser && !identityDenial.value) void submit();
@@ -261,7 +268,7 @@ const submitIcon = computed(() => presentation.value.submitIcon);
 async function submit(source?: Event): Promise<void> {
     // A confirmed command awaiting destination delivery can only retry navigation.
     // The shared receipt survives the private view's identity-driven remount.
-    if (blocked.value) return;
+    if (blocked.value || finished.value) return;
     if (identityDenial.value || needsOidc.value || mode.value === 'reset' && !resetAllowed.value) return;
     if (mode.value === 'register' && (!isRegistrationPasswordValid(fields.password)
         || fields.password !== fields.passwordRepeat)) {
@@ -287,6 +294,11 @@ async function submit(source?: Event): Promise<void> {
     }
     const result = await command.run(submitIdentityForm, false);
     if (result) {
+        // The generated receipt confirms registration independently of mail
+        // acceptance. Release credentials once and never replay a completed form.
+        if (mode.value === 'register') {
+            registrationEmailFailed.value = 'emailDelivery' in result && result.emailDelivery === 'failed';
+        }
         finished.value = mode.value !== 'activate';
         clearFields();
         if (mode.value === 'activate') {
@@ -385,8 +397,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
         <ActionButton v-if="resetReadFailure && !identityDenial" variant="outline-light"
             :disabled="!resetRetryAvailable" @click="retryResetAdmission">{{ messages.t('common.retry') }}</ActionButton>
     </PageMessage>
-    <PageMessage v-else-if="finished" :kind="mode === 'register' ? 'info' : 'success'" :message="messages.t(mode === 'register'
-         ? 'auth.registered' : mode === 'forgot' ? 'auth.resetSent' : 'auth.resetDone')" />
+    <PageMessage v-else-if="finished" :kind="mode === 'register' ? 'info' : 'success'" :message="messages.t(finishedMessage)" />
     <PageMessage v-else-if="pageCompleted" kind="success" :renewal="context.pageCompletion.value"
         :message="messages.t(mode === 'reset' ? 'auth.resetDone' : 'auth.recoverySent')" />
     <LoadingSkeleton v-else-if="mode === 'recovery'" variant="form" />

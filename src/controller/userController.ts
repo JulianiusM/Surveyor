@@ -15,24 +15,28 @@
  */
 
 import {Request} from "express";
+import type {EntityManager} from 'typeorm';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
 import {requireLockedArchiveRoot} from './entityAdminController';
 import Joi from 'joi';
 import {Guest} from "../modules/database/entities/user/Guest";
+import type {Session} from '../modules/database/entities/session/Session';
 import {Profile} from "../modules/database/entities/user/Profile";
 import {User} from "../modules/database/entities/user/User";
 import * as userService from "../modules/database/services/UserService";
-import mailer, {resolveEmailRecipientName} from "../modules/email";
+import mailer, {prepareActivationEmail, prepareGuestLinkEmail, preparePasswordResetEmail, resolveEmailRecipientName} from "../modules/email";
+import type {PreparedIdentityEmail} from '../types/EmailTypes';
 import {APIError, ExpectedError, ValidationError} from "../modules/lib/errors";
-import {persistSession, requireSessionProfileId} from "../modules/lib/session";
+import {createSessionStore, persistSession, readStoredSession, requireSessionProfileId, stageIdentitySession, writeStoredSession} from "../modules/lib/session";
 import {rotateFrontendSessionContext} from '../modules/lib/frontendSession';
 import {safeFrontendReturn} from '../modules/lib/frontendIdentity';
-import type {IdentityLinkOptions, IdentityTransitionOptions} from '../types/IdentityTypes';
+import type {AccountRegistrationTransactionOptions, RegistrationEmailDelivery, RegistrationReceipt, GuestRegistrationTransactionOptions, IdentityCompletionOptions, IdentityCompletionReceipt, IdentityLinkOptions, IdentityTransitionOptions} from '../types/IdentityTypes';
+import {ApiProblem} from '../modules/api/problem';
 import {buildGuestLink, ENTITIES} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
 import settings from "../modules/settings";
-import type {Entity, GuestLinkData, OverviewCollection, OverviewPageView, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView} from "../types/UserTypes";
-import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, PersonalVisibility} from "../types/ArchiveTypes";
+import type {Entity, GuestLinkData, OverviewCollection, OverviewPageView, OverviewQuery, OverviewReadResult, OverviewRegion, OverviewRegionView, PersonalVisibilityCompletion, PersonalVisibilityResult} from "../types/UserTypes";
+import type {ArchivePresentation, ArchiveReference, ArchiveSnapshotEntry, LockedArchiveContext, PersonalVisibility} from "../types/ArchiveTypes";
 import type {SessionLike} from "../types/PermissionTypes";
 import {archiveKey, isHiddenInOverview} from "../modules/archive/policy";
 import {getArchivePresentations} from "./entityAdminController";
@@ -72,15 +76,19 @@ function identityLink(path: string, options?: IdentityLinkOptions): string {
 }
 
 /**
- * Validate registration once, retain native renderer data and wording, then create
- * the account before issuing its activation mail. Stable causes let the versioned
- * error adapter localize the same outcome without changing native diagnostics.
+ * Validate registration fields once while retaining native diagnostic order and
+ * renderer data. Stable causes let pilot adapters localize the same outcome;
+ * credentials are never returned as form-error presentation data.
  */
-export async function registerUser(body: any, next?: string, options?: IdentityLinkOptions) {
+function validateUserRegistration(body: any) {
+    // Resolve the shared recipient/display name first. Native form errors retain
+    // only username and email; submitted credentials never become render data.
     const {username, displayname, password, password_repeat, email} = body;
     const name = resolveEmailRecipientName(typeof displayname === 'string' ? displayname : undefined, typeof username === 'string' ? username : undefined);
     const returnInfo = {username, email};
 
+    // Required-field diagnostics precede repetition checks, preserving the native
+    // rejection order for both adapters before either allocates identity records.
     if (!username || !name || !password || !password_repeat || !email) {
         throw new ValidationError(CREATE_TEMPLATE, 'Not all fields were filled out.', returnInfo);
     }
@@ -89,10 +97,21 @@ export async function registerUser(body: any, next?: string, options?: IdentityL
         throw new ValidationError(CREATE_TEMPLATE, 'Passwords do not match.', returnInfo, {cause: 'PASSWORD_MISMATCH'});
     }
 
-    const existingUser = await userService.getUserByUsername(username);
+    return {username, name, password, email};
+}
+
+/** Preserve the common username diagnostic while selecting the caller's current persistence scope. */
+async function requireAvailableUsername(username: string, email: string, manager?: EntityManager): Promise<void> {
+    const existingUser = await userService.getUserByUsername(username, manager);
     if (existingUser) {
-        throw new ValidationError(CREATE_TEMPLATE, 'This username is already taken.', returnInfo, {cause: 'USERNAME_TAKEN'});
+        throw new ValidationError(CREATE_TEMPLATE, 'This username is already taken.', {username, email}, {cause: 'USERNAME_TAKEN'});
     }
+}
+
+/** Native registration keeps its established persistence, activation and default mail error ordering. */
+export async function registerUser(body: any, next?: string, options?: IdentityLinkOptions) {
+    const {username, name, password, email} = validateUserRegistration(body);
+    await requireAvailableUsername(username, email);
 
     // Benutzer registrieren
     let userId = await userService.registerUser(username, name, password, email);
@@ -105,12 +124,54 @@ export async function registerUser(body: any, next?: string, options?: IdentityL
 }
 
 /**
+ * Prepare a pilot account, default profile and activation token in one registration
+ * transaction. Signup preserves the current actor; only document completion opts
+ * into an atomic staged flash write. Tokens remain inside the prepared mail owner.
+ */
+export async function registerUserWithSession<Result>(body: any, req: Request,
+    options: AccountRegistrationTransactionOptions<Result>): Promise<RegistrationReceipt<Result>> {
+    const input = validateUserRegistration(body);
+
+    /** Create the inactive account and prepare all fallible activation/completion work before commit. */
+    async function createAccount(manager: EntityManager, session: Request['session']) {
+        // Reuse native validation under this transaction. Database uniqueness
+        // remains authoritative when separate sessions submit the same username.
+        await requireAvailableUsername(input.username, input.email, manager);
+        const id = await userService.registerUser(input.username, input.name, input.password, input.email, manager);
+        const token = await userService.generateActivationToken(id, manager);
+
+        // Activation link and both message forms are private preparation data.
+        // A token update, renderer or response failure rolls back both new rows.
+        const activationLink = identityLink(`/users/activate/${encodeURIComponent(token)}`, options);
+        const emailReceipt = prepareActivationEmail({name: input.name, address: input.email}, activationLink);
+        const results = await options.prepareResult(session, manager);
+        return {results, emailReceipt};
+    }
+
+    return commitRegistration(req, options.context, createAccount, Boolean(options.persistCompletion));
+}
+
+/**
  * Share credential and activation checks between native and versioned login.
  * An API caller may recheck its admitted session immediately before identity
  * mutation; only an active account reaches that hook and rotates the context.
  * Native validation prose and renderer values remain owned by this controller.
  */
 export async function loginUser(body: any, session: Request["session"], options?: IdentityTransitionOptions) {
+    // Credential rejection and inactive-account resend preserve native ordering.
+    const user = await resolveLoginUser(body, options);
+    await options?.beforeTransition?.();
+    await saveAccountIdentity(session, user);
+}
+
+/**
+ * Share credential/activation diagnostics before any identity mutation. Inactive
+ * login may refresh and mail an activation token before rejecting; keep that
+ * established workflow outside an identity transaction that would roll it back.
+ */
+async function resolveLoginUser(body: any, options?: IdentityLinkOptions) {
+    // Keep credentials inside this check; rejected native forms redisplay only
+    // the submitted username and retain their common invalid-login diagnostic.
     const {username, password} = body;
     const returnInfo = {username};
 
@@ -118,7 +179,9 @@ export async function loginUser(body: any, session: Request["session"], options?
         throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
     }
 
-    const user = (await userService.getUserByUsername(username)) ?? (await userService.getUserByEmail(username));
+    // Preserve username-first resolution and indistinguishable missing-user /
+    // invalid-password errors, rather than adding another frontend's auth policy.
+    const user = await resolveNamedAccount(username);
     if (!user) {
         throw new ValidationError(LOGIN_TEMPLATE, 'Invalid username/email or password', returnInfo, {cause: 'INVALID_CREDENTIALS'});
     }
@@ -146,16 +209,30 @@ export async function loginUser(body: any, session: Request["session"], options?
         throw new ValidationError(LOGIN_TEMPLATE, errorMsg, returnInfo, {cause});
     }
 
-    // Credential verification may have waited while another tab changed identity. The API
-    // supplies a fresh admission check; native callers retain their existing controller path.
-    await options?.beforeTransition?.();
+    return user;
+}
 
-    // Save the authoritative account/profile together with a new frontend context.
-    // Existing drafts and commands from the previous identity can no longer apply.
+/** Native saves immediately; isolated pilot saves defer to their enclosing completion transaction. */
+async function saveAccountIdentity(session: Request['session'], user: User): Promise<void> {
+    // Save the validated account/default profile with one new frontend scope.
+    // A staged session cannot leak into request autosave if preparation rejects.
     session.auth = {user};
     session.profile = getDefaultProfile(user.profiles);
     rotateFrontendSessionContext(session);
     await persistSession(session);
+}
+
+/** Complete a validated pilot account login and its transport result in one stored-session commit. */
+export async function loginUserWithSession<Result>(body: any, req: Request,
+    options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
+    // Resolve credentials/resend before locking, without mutating request authority.
+    const user = await resolveLoginUser(body, options);
+    /** Apply shared authority mutation, then prepare completion while rollback is still possible. */
+    async function prepareLogin(_manager: EntityManager, session: Request['session']): Promise<Result> {
+        await saveAccountIdentity(session, user);
+        return options.prepareResult(session, _manager);
+    }
+    return commitIdentityCompletion(req, options.context, prepareLogin, true);
 }
 
 /**
@@ -417,7 +494,13 @@ export async function getOverviewRegion(session: SessionLike, query: unknown): P
  * serializes the check/write with a concurrent database deletion. A visible card from an old
  * page is not sufficient authority to save a preference after membership has been removed.
  */
-export async function setPersonalVisibility(entityType: string, id: string, body: unknown, session: SessionLike) {
+export function setPersonalVisibility(entityType: string, id: string, body: unknown, session: SessionLike): Promise<PersonalVisibilityResult>;
+/** An explicit adapter completion replaces only the native postcommit presentation read. */
+export function setPersonalVisibility<Result>(entityType: string, id: string, body: unknown, session: SessionLike,
+    completion: PersonalVisibilityCompletion<Result>): Promise<Result>;
+/** Share admission and membership policy while preparing requested completion under the existing target lock. */
+export async function setPersonalVisibility<Result>(entityType: string, id: string, body: unknown, session: SessionLike,
+    completion?: PersonalVisibilityCompletion<Result>): Promise<PersonalVisibilityResult | Result> {
     // Resolve identity before interpreting route input. Both account and guest sessions use
     // profiles; no route parameter or payload field may select a different acting profile.
     const profileId = requireSessionProfileId(session);
@@ -443,16 +526,35 @@ export async function setPersonalVisibility(entityType: string, id: string, body
     // references use the app's canonical lowercase spelling.
     const reference: ArchiveReference = {type: target.value.type, id: target.value.id.toLowerCase()};
     const visibility = preference.value.visibility;
-    await lifecycleService.withLockedArchiveTarget(reference, async function saveVisibility(manager, context) {
+    /** Check current membership and prepare any explicit adapter receipt on this locked transaction. */
+    async function saveVisibility(manager: EntityManager, context: LockedArchiveContext) {
         // A page rendered earlier does not authorize a write after deletion or membership loss.
         // The controller checks both against the transaction holding the current root lock.
         requireLockedArchiveRoot(context);
         if (!await userService.isOverviewMember(profileId, reference, manager)) throw new APIError('This entity is not in your overview', {}, 403);
         await userService.setVisibility(profileId, reference, visibility, manager);
-    });
+
+        // Explicit completions use this transaction's lifecycle and grants. Any
+        // projection or receipt failure still rolls back the private preference.
+        if (completion) {
+            const result = await personalVisibilityResult(reference, visibility, session, manager);
+            return completion.prepare(manager, result);
+        }
+    }
+    const prepared = await lifecycleService.withLockedArchiveTarget(reference, saveVisibility);
+
+    // The supplied completion has already prepared its exact result. Native
+    // callers retain their original presentation read after the preference commit.
+    if (completion) return prepared as Result;
+    return personalVisibilityResult(reference, visibility, session);
+}
+
+/** Project personal placement once, using a supplied transaction or the native ordinary read. */
+async function personalVisibilityResult(reference: ArchiveReference, visibility: PersonalVisibility, session: SessionLike,
+    manager?: EntityManager): Promise<PersonalVisibilityResult> {
     // Recompute placement against current authoritative state after the private write.
     // The response preserves both concepts instead of presenting "shown" as a shared restore.
-    const presentations = await getArchivePresentations([reference], session);
+    const presentations = await getArchivePresentations([reference], session, undefined, manager);
     const archive = presentations.get(archiveKey(reference));
     return {
         archive,
@@ -464,7 +566,7 @@ export async function setPersonalVisibility(entityType: string, id: string, body
 /** Share native/pilot recovery mail while keeping an unknown account a quiet
  * no-op. Only the trusted link option selects the destination frontend route. */
 export async function sendPasswordForgotMail(username: string, options?: IdentityLinkOptions) {
-    const user = (await userService.getUserByUsername(username)) || (await userService.getUserByEmail(username));
+    const user = await resolveNamedAccount(username);
     if (!user) {
         return;
     }
@@ -477,34 +579,103 @@ export async function sendPasswordForgotMail(username: string, options?: Identit
     await mailer.sendPasswordResetEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, resetLink);
 }
 
+/** Own native/pilot username-first account resolution, retaining the caller's optional persistence scope. */
+async function resolveNamedAccount(username: string, manager?: EntityManager) {
+    // An exact username wins over the email fallback. Locked callers pass the
+    // same manager for both reads; native callers keep their default DBAL scope.
+    const user = await userService.getUserByUsername(username, manager);
+    return user ?? await userService.getUserByEmail(username, manager);
+}
+
+/**
+ * Prepare pilot recovery's existing generic confirmation and optional token/mail
+ * on the locked completion transaction. Unknown accounts stay a quiet no-op;
+ * setup errors roll back, while caught SMTP failure retains normal confirmation.
+ * Native forgot-mail and inactive-login resend keep their original owners/order.
+ */
+export async function requestPasswordResetWithSession<Result>(username: string, req: Request,
+    options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
+    /** Reuse username-first discovery without another connection or an account-found result. */
+    async function prepareRecovery(manager: EntityManager, session: Request['session']) {
+        const user = await resolveNamedAccount(username, manager);
+        let emailReceipt: PreparedIdentityEmail | null = null;
+        if (user) {
+            // Token persistence, recipient/templates and cached sender setup can
+            // still fail here. No private link or discovery flag enters the reply.
+            const token = await userService.generatePasswordResetToken(user.username, manager);
+            const link = identityLink(`/users/reset-password/${encodeURIComponent(token)}`, options);
+            emailReceipt = preparePasswordResetEmail({name: resolveEmailRecipientName(user.name, user.username), address: user.email}, link);
+        }
+        const result = await options.prepareResult(session, manager);
+        return {result, emailReceipt};
+    }
+    const committed = await commitIdentityCompletion(req, options.context, prepareRecovery, Boolean(options.persistCompletion));
+
+    // The operation is final. Existing SMTP catch semantics keep generic success;
+    // delivery cannot reopen admission, rerender output or overwrite another actor.
+    if (committed.result.emailReceipt) {
+        await settleIdentityDelivery(committed.result.emailReceipt);
+    }
+    return Object.freeze({session: committed.session, result: committed.result.result});
+}
+
 /** Token-page admission uses the existing verification owner and native message;
  * TOKEN_INVALID supplies the versioned adapter's stable, private-data-free cause. */
 export async function checkPasswordForgotToken(token: string) {
-    // Überprüfe, ob der Token gültig ist
-    const user = await userService.verifyPasswordResetToken(token);
-    if (!user) {
-        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
-    }
+    // Admission and consumption share the same token diagnostic owner.
+    await requirePasswordResetToken(token);
 }
 
 /** Preserve the native reset form's mismatch-before-token diagnostic order.
  * A successful command re-verifies the token before delegating the password write;
  * page admission is not a lasting authorization to submit an expired token. */
 export async function resetPassword(token: string, body: any) {
-    const {password, confirmPassword} = body;
-
-    if (password !== confirmPassword) {
-        throw new ValidationError('users/reset-password', 'Passwords do not match!', {token}, {cause: 'PASSWORD_MISMATCH'})
-    }
+    const password = validatePasswordResetInput(token, body);
 
     // Überprüfe den Token und setze das Passwort zurück
-    const user = await userService.verifyPasswordResetToken(token);
-    if (!user) {
-        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
-    }
+    const user = await requirePasswordResetToken(token);
 
     // Setze das Passwort zurück
     await userService.resetPassword(user.username, password);
+}
+
+/** Preserve the native mismatch-before-token check and renderer data for both completion paths. */
+function validatePasswordResetInput(token: string, body: any) {
+    const {password, confirmPassword} = body;
+    if (password !== confirmPassword) {
+        throw new ValidationError('users/reset-password', 'Passwords do not match!', {token}, {cause: 'PASSWORD_MISMATCH'});
+    }
+    return password;
+}
+
+/** Share reset-token diagnostics; only a locked pilot read rechecks expiry after its wait. */
+async function requirePasswordResetToken(token: string, manager?: EntityManager, lock = false) {
+    const user = await userService.verifyPasswordResetToken(token, manager, lock);
+    // Native queries retain their existing expiry predicate. A pilot lock can
+    // wait past that query timestamp, so validate its returned expiry again.
+    if (!user || lock && (!user.resetTokenExpiration || user.resetTokenExpiration <= new Date())) {
+        throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
+    }
+    return user;
+}
+
+/**
+ * Consume a pilot reset capability exactly once with its prepared API/document
+ * completion. Native reset remains unchanged above. The session/token locks and
+ * password update share one manager; unchanged actor state needs no JSON write.
+ */
+export async function resetPasswordWithSession<Result>(token: string, body: any, req: Request,
+    options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
+    const password = validatePasswordResetInput(token, body);
+    /** Recheck the locked capability, prepare output and update password/token before final commit. */
+    async function consumeReset(manager: EntityManager, session: Request['session']): Promise<Result> {
+        const user = await requirePasswordResetToken(token, manager, true);
+
+        const result = await options.prepareResult(session, manager);
+        await userService.resetPassword(user.username, password, manager);
+        return result;
+    }
+    return commitIdentityCompletion(req, options.context, consumeReset, Boolean(options.persistCompletion));
 }
 
 /** Activation submission verifies current token evidence again before the shared
@@ -518,6 +689,33 @@ export async function activateAccount(token: string) {
 
     // Aktiviere den Benutzer
     await userService.activateUser(user.id);
+}
+
+/**
+ * Commit a pilot token consumption with its prepared API/document completion.
+ * Session and token locks share one connection; native activation keeps its
+ * original owner above. No mutable-context check, flash save or token projection
+ * follows this commit, and the public receipt never contains the capability.
+ */
+export async function activateAccountWithSession<Result>(token: string, req: Request,
+    options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
+    /** Admit the currently valid locked token and prepare feedback before either write. */
+    async function activateWithinSession(manager: EntityManager, session: Request['session']): Promise<Result> {
+        const user = await userService.verifyActivationToken(token, manager, true);
+        // Acquiring the token lock can wait behind another transaction. Its
+        // unchanged expiry rule must still hold when that wait actually ends.
+        if (!user || !user.activationTokenExpiration || user.activationTokenExpiration <= new Date()) {
+            throw new ExpectedError('Invalid or expired token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
+        }
+
+        // Preparation can still reject without consuming the token. The update
+        // and optional staged document flash belong to this same final commit.
+        const result = await options.prepareResult(session, manager);
+        await userService.activateUser(user.id, manager);
+        return result;
+    }
+
+    return commitIdentityCompletion(req, options.context, activateWithinSession, Boolean(options.persistCompletion));
 }
 
 /**
@@ -544,31 +742,89 @@ export async function logoutUserOidc(session: Request['session']) {
     return oidc.logout(session);
 }
 
+/**
+ * Complete only ordinary pilot logout on fresh locked session evidence. Every
+ * truthy token object belongs to the existing provider workflow, including an
+ * empty object; its preparation/failure ordering is deliberately untouched.
+ * Anonymous authority and the prepared completion share this operation's commit.
+ */
+export async function logoutUserWithSession<Result>(req: Request,
+    options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
+    /** Reuse the existing logout mutation only after excluding the protected provider path under the lock. */
+    async function prepareLogout(manager: EntityManager, session: Request['session']): Promise<Result> {
+        // The request's earlier token-free classification is not enduring proof.
+        // Abort before clearing authority if fresh stored evidence needs its provider.
+        if (session.tokens) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+        await logoutUserOidc(session);
+
+        // The inner save is deferred on staging. Fallible output or document
+        // notice preparation still precedes the outer owner's only durable write.
+        return options.prepareResult(session, manager);
+    }
+    return commitIdentityCompletion(req, options.context, prepareLogout, true);
+}
+
 // Guests
-export async function loginGuest(guestId: string, token: string, session: Request["session"], options?: IdentityTransitionOptions) {
-    const guest = await userService.getGuestByToken(token, guestId);
+/** Replace guest authority and rotate its scope identically for native and guarded transitions. */
+function setGuestIdentity(session: Request['session'], guest: Guest): void {
+    session.auth = {guest};
+    session.profile = guest.profile;
+    rotateFrontendSessionContext(session);
+}
+
+/**
+ * Resolve a private guest login token before replacing the active identity. An API
+ * caller rechecks its captured context after the lookup; native callers keep the
+ * same invalid-token diagnostic and session persistence without that extra guard.
+ */
+export async function loginGuest(guestId: string, token: string, session: Request["session"], options?: IdentityTransitionOptions,
+    manager?: EntityManager) {
+    // Token verification returns the persisted guest and its profile. Submitted
+    // profile identifiers never choose the identity attached to this session.
+    const guest = await userService.getGuestByToken(token, guestId, manager);
     if (!guest) {
         throw new ExpectedError('Invalid or mismatched token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
     }
-    // switch to guest session
+    // The lookup may have yielded to another tab. Finish the optional admission
+    // check before changing authority, then persist the rotated identity together.
     await options?.beforeTransition?.();
-    session.auth = {guest};
-    session.profile = guest.profile;
-    rotateFrontendSessionContext(session);
+    setGuestIdentity(session, guest);
     await persistSession(session);
 }
 
-/** Registration is shared by all native feature entry pages and the versioned API. */
-export async function registerGuest(username: string, email: string | undefined, session: Request['session'],
-    options?: IdentityTransitionOptions, createGuest: typeof userService.createGuest = userService.createGuest): Promise<string> {
+/** Reuse guest-token admission under the locked completion transaction, without a second connection. */
+export async function loginGuestWithSession<Result>(guestId: string, token: string, req: Request,
+    options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
+    /** Native validation/authority logic runs only on isolated staging until its result is ready. */
+    async function prepareGuestLogin(manager: EntityManager, session: Request['session']): Promise<Result> {
+        await loginGuest(guestId, token, session, undefined, manager);
+        return options.prepareResult(session, manager);
+    }
+    return commitIdentityCompletion(req, options.context, prepareGuestLogin, true);
+}
+
+/** Normalize the common registration input without changing native name/email acceptance. */
+function normalizeGuestContact(username: string, email: string | undefined): string | undefined {
     if (!username) throw new ValidationError('users/register-guest', 'Username required', {username, email});
-    const normalizedEmail = email?.trim().toLowerCase();
-    await options?.beforeTransition?.();
+    return email?.trim().toLowerCase();
+}
+
+/**
+ * Preserve native feature registration and its injectable persistence hook. The
+ * guarded versioned workflow below uses this same input and guest/profile DBAL,
+ * but owns atomic stored-session persistence and an immutable completion receipt.
+ */
+export async function registerGuest(username: string, email: string | undefined, session: Request['session'],
+    options?: IdentityLinkOptions, createGuest: typeof userService.createGuest = userService.createGuest): Promise<string> {
+    // Native factories supply their existing creator; preserve its ordering and
+    // link destination options without introducing a new native transaction scope.
+    const normalizedEmail = normalizeGuestContact(username, email);
+
     const guest = await createGuest(username, normalizedEmail);
-    await options?.beforeTransition?.();
-    session.auth = {guest};
-    session.profile = guest.profile;
-    rotateFrontendSessionContext(session);
+
+    // Persist native authority before delivering its existing private link/mail.
+    // The atomic API operation never enters this post-creation session-save path.
+    setGuestIdentity(session, guest);
     await persistSession(session);
     const link = options?.frontend
         ? identityLink(`/guest/${encodeURIComponent(guest.id)}/login/${encodeURIComponent(guest.token)}`, options)
@@ -577,7 +833,116 @@ export async function registerGuest(username: string, email: string | undefined,
     return link;
 }
 
+/**
+ * Commit a versioned guest, profile and stored session together under the original
+ * session row lock. Prepare every response/mail variant before that final commit;
+ * a rollback leaves request authority untouched, while later delivery cannot turn
+ * completed creation into a rejection or reopen it against another tab's actor.
+ */
+export async function registerGuestWithSession<Result>(username: string, email: string | undefined,
+    req: Request, options: GuestRegistrationTransactionOptions<Result>): Promise<RegistrationReceipt<Result>> {
+    const normalizedEmail = normalizeGuestContact(username, email);
+
+    /** Create the guest on the shared locked transaction and prepare its private completion. */
+    async function createGuestRegistration(manager: EntityManager, session: Request['session']) {
+        const guest = await userService.createGuest(username, normalizedEmail, manager);
+        setGuestIdentity(session, guest);
+
+        // Token/link projection, every validated serialized API outcome and both
+        // email renderings can still fail here and roll back all new records.
+        const personalLink = identityLink(`/guest/${encodeURIComponent(guest.id)}/login/${encodeURIComponent(guest.token)}`, options);
+        const results = await options.prepareResult(session, personalLink);
+        const emailReceipt = normalizedEmail ? prepareGuestLinkEmail({
+            name: resolveEmailRecipientName(guest.username, guest.profile?.name), address: normalizedEmail,
+        }, personalLink) : null;
+
+        return {results, emailReceipt};
+    }
+
+    return commitRegistration(req, options.context, createGuestRegistration, true);
+}
+
+/** Private preparation data stays in this owner; neither API DTOs nor SMTP details enter DBAL policy. */
+interface PreparedRegistration<Result> {
+    results: Record<RegistrationEmailDelivery, Result>;
+    emailReceipt: PreparedIdentityEmail | null;
+}
+
+/**
+ * Share registration's captured-context admission, isolated staging and commit
+ * finality. Feature callbacks own their records and response/mail preparation;
+ * DBAL owns the session lock and transaction, while SMTP remains postcommit delivery.
+ */
+async function commitRegistration<Result>(req: Request, context: string,
+    prepare: (manager: EntityManager, session: Request['session']) => Promise<PreparedRegistration<Result>>,
+    persistSessionState: boolean): Promise<RegistrationReceipt<Result>> {
+    // The shared owner finishes all locked persistence before external mail can
+    // run. Registration's variant selection is a delivery outcome only.
+    const completed = await commitIdentityCompletion(req, context, prepare, persistSessionState);
+    const committed = completed.result;
+
+    let emailDelivery: RegistrationEmailDelivery = 'not-requested';
+    if (committed.emailReceipt) {
+        emailDelivery = await settleIdentityDelivery(committed.emailReceipt) ? 'sent' : 'failed';
+    }
+    return Object.freeze({session: completed.session, result: committed.results[emailDelivery], emailDelivery});
+}
+
+/** A prepared SMTP receipt can report failure after commit, never reject or replay its finished business operation. */
+async function settleIdentityDelivery(receipt: PreparedIdentityEmail): Promise<boolean> {
+    // Setup, persistence and result validation have already finished. Catch only
+    // this opaque external boundary, including an unexpected delivery rejection.
+    try { return await receipt.deliver(); }
+    catch { return false; }
+}
+
+/**
+ * Prepare a captured pilot identity operation on fresh locked session evidence.
+ * Callbacks own business checks and completion data; DBAL owns the transaction.
+ * Original request authority stays untouched until a successful adapter adopts
+ * the receipt, preventing Express autosave from leaking rolled-back state.
+ */
+async function commitIdentityCompletion<Result>(req: Request, context: string,
+    prepare: (manager: EntityManager, session: Request['session']) => Promise<Result>,
+    persistSessionState: boolean): Promise<IdentityCompletionReceipt<Result>> {
+    const sessionId = req.sessionID;
+
+    /** Keep every prepared write and optional completion session on the locked connection. */
+    async function prepareLocked(manager: EntityManager, lockedSession: Session | null) {
+        // The library remains the owner of expiry, destroyed-row and JSON
+        // semantics; only matching current stored context permits allocation.
+        if (!lockedSession) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+        const store = createSessionStore(manager);
+        const stored = await readStoredSession(store, sessionId);
+        if (!stored || stored.frontendContext !== context) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+
+        // No staged authority/completion reaches request autosave on rollback.
+        // Account API signup has no identity change and needs no session write.
+        // Capture before staging: Cookie construction and flash consumption can
+        // share nested objects with this decoded store value. Compare snapshots,
+        // never two aliases after preparation has already mutated them.
+        const originalJson = persistSessionState ? JSON.stringify(stored) : undefined;
+        const session = stageIdentitySession(req, stored);
+        const result = await prepare(manager, session);
+        if (persistSessionState && JSON.stringify(session) !== originalJson) {
+            await writeStoredSession(store, sessionId, session);
+        }
+        return Object.freeze({session, result});
+    }
+
+    // Serialization, SQL and ambiguous commit errors propagate unchanged. Only
+    // an actually completed transaction may acknowledge registration success.
+    return userService.withIdentitySessionTransaction(sessionId, prepareLocked);
+}
+
+/**
+ * Deliver every matching guest's existing recovery link through the selected
+ * native or pilot destination. An unknown email remains a quiet no-op; this
+ * operation neither creates identities nor exposes recovery tokens in its reply.
+ */
 export async function recoverGuestAccount(email: string, options?: IdentityLinkOptions) {
+    // Resolve persisted matches once, then build each private link through its
+    // established destination owner. The email owns those links, not an API DTO.
     const guests = await userService.getGuestByEmail(email);
     const guestLinkData: GuestLinkData[] = [];
     for (let guest of guests) {
@@ -587,6 +952,8 @@ export async function recoverGuestAccount(email: string, options?: IdentityLinkO
         guestLinkData.push({...guest, link});
     }
 
+    // Mail only when matches exist, while the requesting surface keeps the same
+    // public confirmation for known and unknown addresses.
     if (guestLinkData.length > 0) {
         const recipientNames = [...new Set(guestLinkData.map(guest => resolveEmailRecipientName(guest.username, guest.profile?.name)))].filter(Boolean).join(' / ');
         await mailer.sendGuestRecoveryEmail({name: recipientNames, address: email}, guestLinkData);
@@ -692,19 +1059,27 @@ export async function deactivateProfile(body: any, session: Request['session']) 
     return `Profile successfully deactivated. ${handleAnswer}`;
 }
 
-export async function changeActiveProfile(session: Request['session'], profileId?: string, beforeTransition?: () => Promise<void>) {
+/**
+ * Select an account-owned profile, or its existing default, before replacing the
+ * active profile. The optional API guard rechecks the originally admitted context
+ * after persistence reads; native selection and diagnostics remain unchanged.
+ */
+export async function changeActiveProfile(session: Request['session'], profileId?: string, beforeTransition?: () => Promise<void>,
+    manager?: EntityManager) {
+    // Guest profiles belong to a separate identity and cannot use account profile
+    // selection. A submitted identifier must belong to this account in the DB.
     if (!session.auth?.user) {
         throw new ExpectedError("Not logged in as user!", "error", 401);
     }
 
     let profile;
     if (profileId) {
-        profile = await userService.getProfileById(profileId);
+        profile = await userService.getProfileById(profileId, manager);
         if (profile?.userId !== session.auth.user.id) {
             throw new ExpectedError("Invalid profile id", "error", 400);
         }
     } else {
-        const profiles = await userService.getProfilesForUser(session.auth.user.id);
+        const profiles = await userService.getProfilesForUser(session.auth.user.id, manager);
         if (profiles.length > 0) {
             profile = getDefaultProfile(profiles);
         } else {
@@ -712,10 +1087,23 @@ export async function changeActiveProfile(session: Request['session'], profileId
         }
     }
 
+    // Reads may have waited while another tab changed identity. Only current
+    // admission permits replacing the profile and rotating/persisting its context.
     await beforeTransition?.();
     session.profile = profile;
     rotateFrontendSessionContext(session);
     await persistSession(session);
+}
+
+/** Commit an account-owned profile selection with its prepared pilot completion, preserving native rules. */
+export async function changeActiveProfileWithSession<Result>(profileId: string, req: Request,
+    options: IdentityCompletionOptions<Result>): Promise<IdentityCompletionReceipt<Result>> {
+    /** Keep profile ownership reads and the eventual session write on the same locked manager. */
+    async function prepareProfileChange(manager: EntityManager, session: Request['session']): Promise<Result> {
+        await changeActiveProfile(session, profileId, undefined, manager);
+        return options.prepareResult(session, manager);
+    }
+    return commitIdentityCompletion(req, options.context, prepareProfileChange, true);
 }
 
 export async function validateSession(session: Request['session']) {

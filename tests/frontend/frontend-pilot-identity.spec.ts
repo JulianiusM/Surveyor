@@ -600,6 +600,77 @@ describe('identity forms and packing overview navigation', () => {
         expect(context.personalLink.value).toBe('https://example.test/guest/edit');
     });
 
+    it.each([false, true])('retains committed guest identity and warns about failed mail without replay (bootstrap failure=%s)', async function retainCommittedIdentity(failBootstrap) {
+        const anonymous: components['schemas']['SessionView'] = {...session, kind: 'anonymous',
+            activeProfile: null, profiles: [], logoutUrl: null};
+        const guest = {...session, kind: 'guest' as const, context: 'email-failure-guest-context-1234567890'};
+        const origin = `/frontend-pilot/packing/${eventId}/guest`;
+        const destination = `/frontend-pilot/packing/${eventId}`;
+        const link = 'https://example.test/guest/committed-personal-link';
+        let registrations = 0;
+        let unavailable = failBootstrap;
+        let authoritative: components['schemas']['SessionView'] = guest;
+        const {wrapper, context, router} = await mounted(origin, async function guestMailFixture(request) {
+            const path = new URL(request.url).pathname;
+            if (path === '/api/v1/auth/guest-email-exists') return json({exists: false}, 200, anonymous.context);
+            if (request.method === 'POST') {
+                registrations++;
+                return json({session: guest, personalLink: link, redirect: null, emailDelivery: 'failed'}, 200, guest.context);
+            }
+            if (path === '/api/v1/session') {
+                if (unavailable) throw new TypeError('Confirmed identity bootstrap is temporarily unavailable.');
+                return json(authoritative, 200, authoritative.context);
+            }
+            return json({id: eventId, title: 'Guest email fixture'}, 200, registrations ? guest.context : anonymous.context);
+        }, {session: anonymous}, true);
+        let rejectDestination = true;
+        router.beforeResolve(function holdCommittedGuestDestination(to): void {
+            if (to.path === destination && rejectDestination) throw new Error('Failed to fetch dynamically imported module');
+        });
+        router.onError(() => {});
+
+        await wrapper.get('#guest-name').setValue('Committed guest');
+        await wrapper.get('#guest-email').setValue('guest@example.test');
+        await wrapper.get('main form').trigger('submit');
+        await flushPromises();
+        expect(registrations).toBe(1);
+        if (failBootstrap) {
+            // A retained confirmation cannot disclose its private link before
+            // an authoritative matching actor arrives. Retry reads only session.
+            expect(context.ready.value).toBe(false);
+            expect(context.personalLink.value).toBeNull();
+            unavailable = false;
+            const retry = wrapper.findAll('main button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+            await retry.trigger('click');
+            await flushPromises();
+        }
+        expect(context.session.value?.context).toBe(guest.context);
+        expect(context.personalLink.value).toBe(link);
+        expect(context.pageNotice.value).toEqual({kind: 'info', messageKey: 'auth.guestEmailFailed'});
+        expect(wrapper.findAll('.alert-info').some(notice => notice.text().includes(context.messages.value.t('auth.guestEmailFailed')))).toBe(true);
+        expect(router.currentRoute.value.path).toBe(origin);
+
+        // Failed navigation owns one confirmed destination. A programmatic form
+        // submission is blocked, and Retry delivers that destination without POST.
+        await wrapper.get('main form').trigger('submit');
+        expect(registrations).toBe(1);
+        rejectDestination = false;
+        const retry = wrapper.findAll('main button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        await retry.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe(destination);
+        expect(context.personalLink.value).toBe(link);
+        expect(context.pageNotice.value).toEqual({kind: 'info', messageKey: 'auth.guestEmailFailed'});
+        expect(registrations).toBe(1);
+
+        // A different authoritative actor retires both private link and advisory
+        // feedback rather than carrying the old registration into another scope.
+        authoritative = session;
+        await context.acceptIdentity({session, personalLink: null, redirect: null});
+        expect(context.personalLink.value).toBeNull();
+        expect(context.pageNotice.value).toBeNull();
+    });
+
     it('returns confirmed account login to the exact entity duplicate path and its query context', async () => {
         const destination = `/frontend-pilot/packing/${eventId}/duplicate?eventId=${profileId}`;
         const authenticated = {...session, context: 'confirmed-login-context-1234567890'};
@@ -1095,6 +1166,50 @@ describe('identity forms and packing overview navigation', () => {
         expect(wrapper.get<HTMLInputElement>('#password').element.value).toBe('');
         expect(wrapper.get<HTMLInputElement>('#recovery-email').element.value).toBe('');
         expect(wrapper.find('.alert-success').exists()).toBe(false);
+    });
+
+    it('confirms account creation separately from failed activation-mail delivery and releases credentials without replay', async () => {
+        const {wrapper, context, router, request} = await mounted('/frontend-pilot/users/register',
+            async () => json({changed: true, emailDelivery: 'failed'}));
+        await wrapper.get('#username').setValue('delivery-failed-account');
+        await wrapper.get('#displayname').setValue('New organizer');
+        await wrapper.get('#email').setValue('delivery-failed@example.test');
+        await wrapper.get('#password').setValue('correct password1');
+        await wrapper.get('#password-repeat').setValue('correct password1');
+        const completedForm = wrapper.get('form');
+        await completedForm.trigger('submit');
+        await flushPromises();
+
+        // A valid 200 receipt is confirmed creation even when SMTP failed. The
+        // existing message page replaces the credential form and uncertainty UI.
+        expect(wrapper.get('.alert-info').text()).toBe(context.messages.value.t('auth.registeredEmailFailed'));
+        expect(wrapper.find('form').exists()).toBe(false);
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.unknownOutcome'));
+        expect(request).toHaveBeenCalledOnce();
+        expect(await (request.mock.calls[0][0] as Request).json()).toMatchObject({
+            username: 'delivery-failed-account', password: 'correct password1',
+        });
+
+        // Cached form events and refused completion-page navigation cannot repeat
+        // creation. A later real visit reuses the component with a clean draft.
+        await completedForm.trigger('submit');
+        const stopRefusal = router.beforeEach(to => to.path === '/frontend-pilot' ? false : undefined);
+        await wrapper.get('a.btn-primary').trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/register');
+        expect(wrapper.get('.alert-info').text()).toContain('was registered');
+        expect(request).toHaveBeenCalledOnce();
+        stopRefusal();
+        await router.push('/frontend-pilot/users/login');
+        await flushPromises();
+        expect(wrapper.get<HTMLInputElement>('#username').element.value).toBe('');
+        expect(wrapper.get<HTMLInputElement>('#password').element.value).toBe('');
+        await router.push('/frontend-pilot/users/register');
+        await flushPromises();
+        expect(wrapper.get<HTMLInputElement>('#password-repeat').element.value).toBe('');
+        expect(wrapper.get<HTMLInputElement>('#email').element.value).toBe('');
+        expect(wrapper.text()).not.toContain(context.messages.value.t('auth.registeredEmailFailed'));
+        expect(request).toHaveBeenCalledOnce();
     });
 
     it('clears a completed reset when the reused route receives another token', async () => {

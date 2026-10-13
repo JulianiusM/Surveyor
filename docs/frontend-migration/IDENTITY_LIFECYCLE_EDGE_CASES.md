@@ -4,9 +4,9 @@ documentation-metadata
 audience: frontend migration implementers; backend maintainers; reviewers
 owner: project maintainers
 status: migration-pending
-last-verified: 2026-10-04
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: second-pass source review of identity, authorization, lifecycle, overview and entity-property implementation and actual test assertions; no application tests, browser execution or database writes performed for this audit
+verification-scope: original second-pass source/assertion review retained; editorial clarification separates historical first-slice gaps from current pilot evidence; no application execution or database writes performed for this document update
 source-anchors: src/app.ts; src/routes/users.ts; src/routes/guests.ts; src/routes/api/users.ts; src/controller/userController.ts; src/controller/entityAdminController.ts; src/controller/eventController.ts; src/modules/permissionEngine.ts; src/modules/oidc.ts; src/modules/database/services/UserService.ts; src/modules/database/services/EntityAdminService.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/archive/policy.ts; src/public/js/modules/entity-cards-overview.ts; tests/integration/authentication-workflows.spec.ts; tests/integration/entity-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/integration/entity-properties.spec.ts; tests/frontend/entity-overview-navigation.spec.ts; tests/e2e/entity-properties.spec.ts; tests/e2e/archival.spec.ts
 next-review: frontend-migration-identity-and-first-overview-slice
 -->
@@ -93,7 +93,7 @@ explicitly as gaps rather than attributed to the current implementation.
 | **EC-ID-39** | A picker cursor is reused under another profile/filter, tampered with, or submitted after server restart; a previously selected event is no longer authorized. | [Event cursor](../../src/controller/eventController.ts) is authenticated encrypted process-local navigation state, scoped to profile and normalized filters. Restart invalidates its key; this is recoverable search expiry, not logout. A selected ID is reauthorized independently and returns null rather than its private label when denied. Dates are validated as actual calendar dates and reversed ranges rejected. | Properties integration asserts another profile/filter gets `400` and continuation does not contain a plaintext candidate identity. **Gap:** restart/tamper and revoked selected-label cases are established by source branches, not named assertion results in the reviewed suite. Shared retry/reset/draft UI belongs to [EDGE_CASES](EDGE_CASES.md); the API must not treat a cursor as authorization. |
 | **EC-ID-40** | Creation GET preselects event A but the submitted form chooses B, clears the choice, or changes profiles before submission. | [Creation factory](../../src/middleware/guestFlowFactory.ts) treats query `eventId` only as preselection. It authorizes the actual body `event_id` and overrides parsed association with that result, including explicit none. Recovery rendering uses server-authorized selected labels and excludes forbidden labels. Fresh uploads rejected at target authorization are discarded without deleting persisted images. Survey creation does not gain an event relationship from query context. | [Properties E2E](../../tests/e2e/entity-properties.spec.ts), `authorizes the submitted creation destination independently of query context and account identity`, asserts forbidden actual destination/profile changes are denied. [Archival E2E](../../tests/e2e/archival.spec.ts) checks an authorized archived selection and validation rerender retain the title/picker inheritance explanation. Preserve these cases when replacing native multipart forms with SPA submission. |
 
-## What the first migrated slice still needs to prove
+## Original focused acceptance gaps and current coverage
 
 Existing tests provide strong persisted archival, membership and relinking evidence. They do not establish a
 long-lived client's identity invalidation, universal concurrent edit resolution or periodic refresh policy.
@@ -105,7 +105,12 @@ Following the [Testing Guide](../TESTING_GUIDE.md), use the cheapest boundary th
   and membership checks across the write's real locking boundary. Keep existing lifecycle/property transactions.
 - **HTTP/browser:** one full-account and guest audience/session journey, one remote profile/permission invalidation,
   one two-client conflicting edit, and the actual supported private-link/return routes. A source fixture with rich
-  profile relations is insufficient evidence for a real session's audience qualification.
+   profile relations is insufficient evidence for a real session's audience qualification.
+
+These are the original source-review gaps, not a claim that every case remains untested. Use the
+[current assertion map](TEST_COVERAGE.md#pilot-baseline-to-implementation-assertions) for retained pilot boundaries
+and the [paired review](PILOT_PARITY_REVIEW.md) for actual execution, resolutions and remaining limits. Preserve the
+original IDs and native evidence; a later focused pass does not certify every identity or unmigrated workflow.
 
 This audit changed documentation only. It ran no application tests, builds, browser sessions, database reset,
 migration or data writes. The separate visual baseline is evidence for its recorded capture scenarios only.

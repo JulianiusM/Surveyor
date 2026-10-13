@@ -9,6 +9,19 @@ export type ApiResponseBody<Operation extends ApiOperationId, Status extends Api
     operations[Operation]['responses'][Status] extends {content: infer Content}
         ? Content[keyof Content] : never;
 
+/** Prepare one declared adapter response before its controller's transaction commits. */
+export type ApiResponsePreparer<Operation extends ApiOperationId, Status extends ApiSuccessStatus<Operation>, Result> =
+    (data: ApiResponseBody<Operation, Status>) => Result | Promise<Result>;
+
+/** Validated and serialized before a transaction commits; sending this receipt performs no new projection. */
+export interface PreparedApiJsonResponse {
+    readonly status: number;
+    readonly mediaType: string;
+    readonly locale: string;
+    readonly context?: string;
+    readonly json: string;
+}
+
 export interface ApiOperationContract {
     operationId: ApiOperationId;
     method: string;

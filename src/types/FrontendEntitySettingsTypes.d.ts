@@ -13,7 +13,9 @@ export interface EntityHeaderLabels {
 export interface EntityHeaderEditorProps {
     inputId: string;
     labels: EntityHeaderLabels;
-    imageName?: string;
+    /** The feature owns selected bytes. Null explicitly releases the chooser;
+     * background reads and uncertain commands keep the same File reference. */
+    selectedFile: File | null;
     hasImage: boolean;
     expanded: boolean;
     conflict: boolean;

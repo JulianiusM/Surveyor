@@ -27,8 +27,10 @@ Promotion preserves existing image bytes; it is not new generation or visual acc
 
 Prefer complete equivalent localized images, captions, non-empty alt text and full-size links.
 Each available `visual-labels.json` owns diagram copy; actual UI text comes from the shared catalog.
-Missing localized figures use reviewed pilot English only with visible localized fallback disclosure. Asset URLs
-identify the actual English source; existing invalid localized figures/content still fail their normal checks.
+The explicit Oct13 Req. 2B amendment replaces the earlier individual-figure fallback: a missing required localized
+figure selects the entire reviewed English article with all its own English assets and visible fallback disclosure.
+Translated article text never borrows English images. Asset URLs identify the article's actual source language and
+asset requests never independently choose another corpus. Existing invalid source still fails its normal checks.
 
 | Asset in each language | Task and source to compare |
 |---|---|

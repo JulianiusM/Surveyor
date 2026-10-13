@@ -26,8 +26,13 @@ function isRouteModuleLoadFailure(error: unknown): boolean {
 }
 
 /** Server and browser construct the same component tree with separate application-owned state. */
-export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boolean) {
+export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boolean,
+                               initialReloadGuard?: () => boolean) {
     const context = createPilotContext(bootstrap, browser);
+    // Register initial DOM protection before Router can start a failing import.
+    // The browser entry releases it only after mounted draft restoration finishes.
+    const releaseInitialReloadGuard = initialReloadGuard
+        ? context.updates.registerGuard(initialReloadGuard) : () => {};
     const app = createSSRApp(App);
     // TODO (docs/frontend-migration/FRONTEND_PILOT.md): Add the remaining native feature/account routes in
     // their migration increments before default-route cutover. This route table covers
@@ -80,5 +85,5 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             context.updates.chunkFailed();
         }
     });
-    return {app, router, context};
+    return {app, router, context, releaseInitialReloadGuard};
 }

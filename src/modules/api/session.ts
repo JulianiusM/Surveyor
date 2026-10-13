@@ -1,8 +1,12 @@
 import type {Request, Response} from 'express';
+import type {EntityManager} from 'typeorm';
 import {timingSafeEqual} from 'node:crypto';
 import {version} from '../../../package.json';
 import type {ApiActor} from '../../types/ApiTypes';
 import type {components} from '../../types/api/v1';
+import type {RegistrationEmailDelivery} from '../../types/IdentityTypes';
+import type {PreparedApiJsonResponse} from '../../types/ApiTransportTypes';
+import {prepareValidatedJson} from './transport';
 import * as userService from '../database/services/UserService';
 import {ensureFrontendSessionContext, rotateFrontendSessionContext} from '../lib/frontendSession';
 import {persistSession} from '../lib/session';
@@ -103,12 +107,30 @@ export async function requireApiContext(req: Request, res: Response, requireProf
 /** Project the admitted actor into public identity choices and the established common shell. */
 export async function sessionView(req: Request): Promise<components['schemas']['SessionView']> {
     const actor = await captureApiActor(req);
-    const kind = actor.auth?.user ? 'account' : actor.auth?.guest ? 'guest' : 'anonymous';
     const profiles = actor.auth?.user ? await userService.getProfilesForUser(actor.auth.user.id)
         : actor.profile ? [actor.profile] : [];
 
+    return projectSessionView(actor, req.session.frontendCsrfToken!, requestLocale(req), profiles);
+}
+
+/** Project an actor-preserving completion from admitted authority and manager-bound roster reads. */
+export async function stagedSessionView(req: Request, staged: Request['session'], manager: EntityManager): Promise<components['schemas']['SessionView']> {
+    // The enclosing controller locked/rechecked this exact context. Reuse its
+    // already validated actor instead of reloading the globally mutable store.
+    const actor = req.apiActor!;
+    const profiles = actor.auth?.user ? await userService.getProfilesForUser(actor.auth.user.id, manager)
+        : actor.profile ? [actor.profile] : [];
+    return projectSessionView({...actor, context: staged.frontendContext!}, staged.frontendCsrfToken!, requestLocale(req), profiles);
+}
+
+/** Project explicit admitted session evidence without reading a mutable store or serializing ORM objects. */
+export function projectSessionView(actor: ApiActor, csrfToken: string, locale: string,
+    profiles: NonNullable<ApiActor['profile']>[]): components['schemas']['SessionView'] {
+    // Admission/transaction owners supply these rows and the corresponding token.
+    // This common projection selects only browser-needed identity and shell data.
+    const kind = actor.auth?.user ? 'account' : actor.auth?.guest ? 'guest' : 'anonymous';
     return {
-        kind, context: actor.context, csrfToken: req.session.frontendCsrfToken!, locale: requestLocale(req),
+        kind, context: actor.context, csrfToken, locale,
         activeProfile: actor.profile ? {id: actor.profile.id, name: actor.profile.name ?? ''} : null,
         profiles: profiles.map(profile => ({id: profile.id, name: profile.name ?? ''})),
         loginUrl: '/users/login', logoutUrl: kind === 'anonymous' ? null : '/users/logout',
@@ -123,17 +145,68 @@ export async function sessionView(req: Request): Promise<components['schemas']['
     } as components['schemas']['SessionView'];
 }
 
-/** Credential work can be slow. Native and API identity commands recheck the originally
- * admitted actor immediately before persisting a transition, without replacing its session object. */
-export function identityTransitionGuard(req: Request): () => Promise<void> {
-    const admittedContext = req.apiActor!.context;
-    return function requireUnchangedIdentity(): Promise<void> {
-        return new Promise(function readStoredIdentity(resolve, reject) {
-            req.sessionStore.get(req.sessionID, function checkStoredIdentity(error, stored) {
-                if (error) return reject(error);
-                if (!stored || stored.frontendContext !== admittedContext) return reject(new ApiProblem('SESSION_CONTEXT_CHANGED'));
-                resolve();
-            });
-        });
-    };
+/**
+ * Capture the current provider-logout adapter's own completed evidence. Its
+ * reply must not reload a later tab's identity. Other pilot transitions prepare
+ * this same projection before their locked completion commits.
+ */
+export function committedSessionView(req: Request): components['schemas']['SessionView'] {
+    return transitionSessionView(req, req.session);
+}
+
+/** Project the same admitted roster from detached staging or a completed ordinary session. */
+function transitionSessionView(req: Request, staged: Request['session']): components['schemas']['SessionView'] {
+    // Login supplies its newly checked account; a same-account profile selection
+    // reuses the authoritative account/profile roster captured at request admission.
+    const auth = staged.auth;
+    const account = auth?.user && req.apiActor?.auth?.user?.id === auth.user.id
+        ? req.apiActor.auth.user : auth?.user;
+    const actor: ApiActor = {context: staged.frontendContext!, auth: auth ? {user: account, guest: auth.guest} : undefined,
+        profile: staged.profile};
+    const profiles = account?.profiles ?? (actor.profile ? [actor.profile] : []);
+    return projectSessionView(actor, staged.frontendCsrfToken!, requestLocale(req), profiles);
+}
+
+/** Prepare ordinary identity confirmation before its sole locked session write and commit. */
+export function prepareIdentityReply(req: Request, staged: Request['session'],
+    operation: 'loginIdentity' | 'loginGuestIdentity' | 'switchIdentityProfile' | 'logoutIdentity'): PreparedApiJsonResponse {
+    // Explicit public projection excludes ORM credentials/capabilities. Validate
+    // and serialize this resulting scope before any durable identity transition.
+    const session = transitionSessionView(req, staged);
+    const result: components['schemas']['IdentityResult'] = {session, personalLink: null, redirect: null};
+    return prepareValidatedJson(req, operation, 200, result, session.context);
+}
+
+/**
+ * Prepare every mail-delivery outcome from the same isolated guest identity.
+ * The controller calls this before its guest/profile/session transaction commits;
+ * postcommit SMTP work selects a finished immutable string without projecting again.
+ */
+export function prepareGuestIdentityReplies(req: Request, staged: Request['session'], personalLink: string):
+    Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {
+    // Only the new guest/profile supplied by this transaction contributes data.
+    // Neither the original actor nor a later session-store generation is a source.
+    const session = projectSessionView({context: staged.frontendContext!, auth: staged.auth, profile: staged.profile},
+        staged.frontendCsrfToken!, requestLocale(req), staged.profile ? [staged.profile] : []);
+    const result: components['schemas']['IdentityResult'] = {session, personalLink, redirect: null};
+
+    // Validate/serialize all alternatives now; delivery only chooses their key.
+    return Object.freeze({
+        'not-requested': prepareValidatedJson(req, 'registerPackingGuest', 200, {...result, emailDelivery: 'not-requested'}, session.context),
+        sent: prepareValidatedJson(req, 'registerPackingGuest', 200, {...result, emailDelivery: 'sent'}, session.context),
+        failed: prepareValidatedJson(req, 'registerPackingGuest', 200, {...result, emailDelivery: 'failed'}, session.context),
+    });
+}
+
+/** Prepare signup delivery variants without exposing an activation token/link or changing the actor. */
+export function prepareAccountRegistrationReplies(req: Request, staged: Request['session']):
+    Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {
+    // Signup returns only creation/delivery confirmation. Its captured context
+    // is unchanged; private activation material remains inside the email owner.
+    const result: components['schemas']['RegistrationResult'] = {changed: true};
+    return Object.freeze({
+        'not-requested': prepareValidatedJson(req, 'registerAccount', 200, result, staged.frontendContext),
+        sent: prepareValidatedJson(req, 'registerAccount', 200, {...result, emailDelivery: 'sent'}, staged.frontendContext),
+        failed: prepareValidatedJson(req, 'registerAccount', 200, {...result, emailDelivery: 'failed'}, staged.frontendContext),
+    });
 }
