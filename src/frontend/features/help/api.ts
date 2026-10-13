@@ -28,8 +28,18 @@ export class HelpApi {
 
 // The transport is application/request-local and survives each component's usePilot wrapper.
 const owners = new WeakMap<PilotApi, HelpApi>();
+
+/** Reuse this application/request's Help adapter through component-local translation
+ * wrappers. Its shared transport identity keeps actors from sharing another app's owner. */
 export function useHelpApi(context: PilotContext): HelpApi {
     let owner = owners.get(context.api);
-    if (!owner) { owner = new HelpApi(context.api); owners.set(context.api, owner); }
+
+    // Construct only for a new transport. Remounts retain the same adapter while
+    // the WeakMap lets disposal release an otherwise unreachable application owner.
+    if (!owner) {
+        owner = new HelpApi(context.api);
+        owners.set(context.api, owner);
+    }
+
     return owner;
 }

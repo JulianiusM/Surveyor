@@ -2,6 +2,7 @@ import {computed, inject, ref, shallowRef, watch} from 'vue';
 import type {InjectionKey} from 'vue';
 import {useTranslation} from 'i18next-vue';
 import {QueryClient} from '@tanstack/vue-query';
+import type {QueryCacheNotifyEvent} from '@tanstack/vue-query';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import type {PilotContext, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale, MessageKey} from '../../types/LocalizationTypes';
@@ -9,9 +10,10 @@ import type {components} from '../../types/api/v1';
 import type {Router} from 'vue-router';
 import {createLocalizationInstance, createTranslator, resolveLocale} from '../../modules/localization/translator';
 import {PilotApi} from './api';
-import {ApiFailure, ObsoleteRequestError} from './transport';
+import {ApiFailure, isTerminalReadFailure, ObsoleteRequestError} from './transport';
 import {createUpdateCoordinator} from './updateCoordinator';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import {belongsToLocalizedQueryFamily} from './queryKeys';
 
 // Development SSR can invalidate the context module between app construction and a lazy route
 // import. A stable key spans those module generations; the provided value remains app/request-local.
@@ -45,6 +47,9 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     const stopLanguage = watch(locale, next => { void i18next.changeLanguage(next); }, {flush: 'sync'});
     const visible = ref(browser && document.visibilityState !== 'hidden');
     const ready = ref(true);
+    // The validated document initially admits reads. A later session check can pause
+    // dispatch while the same authorized tree, server snapshot and local drafts remain.
+    const readsReady = ref(true);
     // Construction accepts the validated initial document's session receipt,
     // matching query initialData. A failed later GET must retain that observation.
     const sessionRead = shallowRef<PilotContext['sessionRead']['value']>({error: null, updatedAt: Date.now(), pending: false});
@@ -77,6 +82,15 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         },
         mutations: {retry: false},
     }});
+    const queryStateRevision = ref(0);
+    const stopQueryState = queryClient.getQueryCache().subscribe(receiveQueryState);
+
+    /** Query state changes renew observer eligibility after explicit recovery.
+     * Options/observer notifications do not change read policy and must not form
+     * a reactive options-update loop. No server data is stored in this signal. */
+    function receiveQueryState(event: QueryCacheNotifyEvent): void {
+        if (event.type === 'updated') queryStateRevision.value++;
+    }
     let bootstrapRequest: Promise<void> | undefined;
     let localeRequest: Promise<void> | undefined;
     let desiredLocale: Locale | null = null;
@@ -97,6 +111,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         return () => { identityGuards.delete(guard); };
     }
 
+    /** Every mounted draft and retained command must admit an intentional actor switch. */
     function mayChangeIdentity(): boolean {
         return [...identityGuards].every(guard => guard());
     }
@@ -129,6 +144,22 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             && (!checkLocale || scope.locale === locale.value);
     }
 
+    /** Session checks control new read dispatch, not the lifetime of admitted writes
+     * or already captured responses. Visibility/hydration remain each observer's policy. */
+    function mayRead(scope?: PilotRequestScope, checkLocale = false): boolean {
+        return !disposed && readsReady.value && ready.value && (!scope || isCurrent(scope, checkLocale));
+    }
+
+    /** Resuming an enabled observer can itself dispatch a stale query. Preserve the
+     * read's terminal rejection policy through session checks; explicit Retry uses
+     * mayRead instead and can deliberately recover the same observed query. */
+    function mayObserve(key: readonly unknown[], firstRead = false): boolean {
+        // QueryClient remains the source of this endpoint's current failure state.
+        queryStateRevision.value;
+        const state = queryClient.getQueryState(key);
+        return mayRead() && (firstRead || state?.fetchStatus === 'fetching' || !isTerminalReadFailure(state?.error));
+    }
+
     /** Close the old actor's entire presentation before admitting another cookie
      * context. Advancing the epoch also fences still-pending responses; canceling
      * HTTP alone cannot prevent a completed response from restoring private state. */
@@ -142,6 +173,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         // identity. The bootstrap promise is still drained by its existing owner.
         sessionRead.value = {error: null, pending: false};
         ready.value = false;
+        readsReady.value = false;
         epoch.value++;
         void queryClient.cancelQueries();
         queryClient.clear();
@@ -153,7 +185,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         void refreshSession().catch(() => { /* Keep the private view closed until bootstrap succeeds. */ });
     }
 
-    const api = new PilotApi(isCurrent, invalidateIdentity, requestFetch);
+    const api = new PilotApi(isCurrent, invalidateIdentity, requestFetch, mayRead);
 
     /** Publish one coherent session/language projection while retaining the server's actor evidence. */
     function receiveSession(current: components['schemas']['SessionView'], selectedLocale: Locale): void {
@@ -166,6 +198,10 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
 
     /** One bootstrap gate precedes focus/reconnect reads, preventing automatic fetches with an old cookie scope. */
     function refreshSession(): Promise<void> {
+        // Close dispatch synchronously, before visibility can re-enable a stale query.
+        // Failure and server cooldown retain this barrier; presentation stays mounted.
+        readsReady.value = false;
+        if (disposed) return Promise.reject(new ObsoleteRequestError());
         if (bootstrapRequest) return bootstrapRequest;
         // Every session caller shares the existing server deadline. Reject with
         // the retained failure rather than implying that a skipped GET succeeded.
@@ -190,6 +226,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
                 ? resolveLocale(current.locale) : locale.value;
             receiveSession(current, selectedLocale);
             ready.value = true;
+            readsReady.value = true;
             sessionRead.value = {error: null, updatedAt: Date.now(), pending: false};
             pendingIdentity = undefined;
 
@@ -220,8 +257,19 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             // An identity hint can obsolete an already pending bootstrap. Its result is ignored,
             // but a second check must follow rather than leaving recovery stalled until the next timer.
             if (!disposed && !ready.value && generation !== epoch.value) {
-                queueMicrotask(() => { void refreshSession().catch(() => {}); });
+                queueMicrotask(resumeRetiredBootstrap);
             }
+        }
+
+        /** Drain the retired generation before dispatching replacement bootstrap.
+         * Its failure remains the session owner's recovery state, never a new toast. */
+        function resumeRetiredBootstrap(): void {
+            // A newer bootstrap may already have restored admission before this microtask.
+            if (!disposed && !ready.value) void refreshSession().catch(keepBootstrapRecovery);
+        }
+
+        function keepBootstrapRecovery(): void {
+            // refreshSession already publishes the current failure and cooldown.
         }
 
         bootstrapRequest = api.bootstrap().then(receiveBootstrap).catch(rejectBootstrap).finally(finishBootstrap);
@@ -251,8 +299,15 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
                 // Increment only on confirmation: a failed preference must not silence a valid read.
                 localeGeneration++;
                 receiveSession(current, resolveLocale(current.locale));
-                await queryClient.cancelQueries();
-                await queryClient.invalidateQueries();
+                // Machine projections have locale-free keys and keep their current reads.
+                // Retire translated families only; their new keys receive selected-language data.
+                const translated = {predicate: isTranslatedQuery};
+                await queryClient.cancelQueries(translated);
+                await queryClient.invalidateQueries(translated);
+
+                function isTranslatedQuery(query: Parameters<typeof belongsToLocalizedQueryFamily>[0]): boolean {
+                    return belongsToLocalizedQueryFamily(query, scope.context);
+                }
             }
         }
 
@@ -284,6 +339,8 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     function start(): () => void {
         if (!browser) return () => {
             disposed = true;
+            readsReady.value = false;
+            stopQueryState();
             epoch.value++;
             stopLanguage();
             updates.dispose();
@@ -296,12 +353,14 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
          * old cookie context. The interval checks identity only; active resource
          * observers retain their own polling and server-imposed retry deadlines. */
         async function revalidate(refreshReads = true): Promise<void> {
-            if (checking || document.visibilityState === 'hidden') return;
+            if (disposed || checking || document.visibilityState === 'hidden') return;
             checking = true;
             try {
                 await refreshSession();
+                // Reopening admission can already start stale observers. Join those
+                // reads; ordinary focus recovery must not cancel and issue them twice.
                 if (ready.value && refreshReads) await queryClient.refetchQueries({type: 'active',
-                    predicate: query => canRetryRead(query.state.error)});
+                    predicate: query => canRetryRead(query.state.error)}, {cancelRefetch: false});
             } catch {
                 // The bootstrap owner records only a current failure. A retired
                 // request must never create another actor's warning here.
@@ -309,7 +368,11 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         }
 
         function visibilityChanged(): void {
-            visible.value = document.visibilityState !== 'hidden';
+            const resumed = document.visibilityState !== 'hidden';
+            // Synchronous image/disclosure watchers can dispatch in this assignment.
+            // Close admission before publishing visibility, then bootstrap normally.
+            if (resumed) readsReady.value = false;
+            visible.value = resumed;
             if (visible.value) void revalidate();
         }
         function identityHint(): void {
@@ -327,6 +390,8 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         const timer = window.setInterval(() => { void revalidate(false); }, 30_000);
         return () => {
             disposed = true;
+            readsReady.value = false;
+            stopQueryState();
             // Retained operation statuses observe actor generations. Retire every
             // scope on application disposal too, so detached guards release even
             // when an unresolved HTTP operation never settles after page departure.
@@ -344,8 +409,8 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         };
     }
 
-    return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, ready, sessionRead, notice, pageNotice, pageCompletion, personalLink, messages, pageTitle, updates,
-        capture, initialDocumentFor, retireInitialDocument, isCurrent, refreshSession, acceptIdentity, registerIdentityGuard, mayChangeIdentity,
+    return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, ready, readsReady, sessionRead, notice, pageNotice, pageCompletion, personalLink, messages, pageTitle, updates,
+        capture, initialDocumentFor, retireInitialDocument, isCurrent, mayRead, mayObserve, refreshSession, acceptIdentity, registerIdentityGuard, mayChangeIdentity,
         changeLocale, invalidateIdentity, start};
 }
 
@@ -367,7 +432,7 @@ export function refreshInterval(error: Error | null, failures: number, jitter: n
         // Only a validated rejection can make a client/input error terminal. An
         // unusable proxy response retains ordinary bounded read recovery instead
         // of leaving a visible shared view permanently stale after its raw 4xx.
-        if (error.confirmedRejection && error.status < 500 && error.status !== 429) return false;
+        if (isTerminalReadFailure(error)) return false;
     }
     return error ? Math.min(30_000 * 2 ** Math.min(failures, 1), 60_000) : 30_000 + jitter;
 }

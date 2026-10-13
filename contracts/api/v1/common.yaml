@@ -1,4 +1,15 @@
 schemas:
+  ComparisonToken:
+    description: Bounded opaque current-value precondition. Its owning controller checks strong-tag syntax and current authorization before comparison.
+    type: string
+    minLength: 1
+    maxLength: 4096
+  FieldComparisonToken:
+    description: A field-comparison response uses the same wire bound as If-Match, with its stricter emitted token syntax.
+    allOf:
+      - $ref: '#/schemas/ComparisonToken'
+      - type: string
+        pattern: '^"edit-[A-Za-z0-9_-]+"$'
   EventPickerQuery:
     description: Shared bounded event-discovery filters. Each consuming endpoint owns its authorization and selected-event visibility.
     type: object

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; AI coding agents
 owner: application maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: migration recipe reconciled with approved public-method admission and filtered baselines, native shared-root assignment coordination and single-tree Help fallback; execution owned by review
+verification-scope: existing migration recipe extended with approved readiness read admission, derived privacy, scoped locale recovery, shared action adoption, generated comparison constraints, settings ownership and visible temporary Packed-state fallback; execution owned by review
 source-anchors: package.json; src/controller/packingController.ts; src/modules/database/services/; contracts/api/v1/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/watch-frontend-inputs.mjs; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/DEVELOPMENT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/DEVELOPMENT.md
@@ -41,6 +41,12 @@ Authored OpenAPI/YAML and catalog JSON are single sources. Package generation cr
 operation policy, typed translation keys/parameters and runtime resources. Generated output stays ignored.
 Use `npm run prepare:frontend` for the contract/catalog boundary and the exact build/type/test scripts in
 `package.json`; do not hand-edit generated files or assume a direct runner invocation prepares them.
+
+Normal locale generation retires only its known compiled `permissions.js`/`.js.map` siblings before publishing current
+`permissions.ts`; extensionless imports must not select a stale emitted copy. Exact output-root paths, entry types and
+real parent containment are checked before removal. `--check` reports a collision without rewriting/deleting it.
+Preserve the whole authored-tree collision regression and unrelated generated neighbors; do not add an exclusion or
+general directory cleanup to obtain a pass.
 
 Keep browser, native assets, server and SSR outputs separate. Client and SSR use the same release/compilation mode.
 Production dependencies must include packages externalized by SSR; standalone validators include runtime helpers
@@ -79,6 +85,11 @@ when v1 coordinates more than one write. `eventController.authorizeEventLink` ch
 `entityAdminController.applyEntityAdministrator` returns domain outcomes for each adapter's own response mapping.
 These are owning operations, not forwarding wrappers or business rules in DBAL. A next feature follows its own native
 policy and contracts rather than copying Packing's grants or persistence shapes.
+
+The existing `entityAdminController.entityMethodPermission` supplies common header, event-link, permission-management
+and duplication requirements. Native header/duplicate factories, administrator middleware and Packing's method map
+consume this owner. Keep actor/profile admission and feature exceptions alongside their established consumers; a
+shared grant does not imply a shared page-admission rule.
 
 For each mutation, keep a short compatibility account in the feature's contract/test evidence: native decoding,
 actor/page/action grants, normalization, no-op outcomes, lock/check location, response/feedback and destinations.
@@ -149,6 +160,11 @@ The production coexistence cases exercise both arrival orders, parallel native i
 native self/admin removal and later item overwrite. Preserve those schedules when touching these owners. Copying the
 root lock to every writer would change native concurrency; a new module needs its own inspected writers and approval.
 
+The approved [same-event no-op decision](../FRONTEND_FOUNDATION_DESIGN.md#authorized-same-event-no-op-clarification-2026-10-13)
+is an operation-specific exception. Current source/target permissions still precede a harmless result; reviewed
+comparison is required only when that association actually changes. Preserve the native adapter's no-op outcome and
+do not generalize this exception into a command retry or precondition bypass.
+
 ### Worked extension: one metadata field
 
 Adding an editable field follows one coherent path:
@@ -178,6 +194,17 @@ The approved shared-backend target uses central method permission definitions in
 Native/v1 entry points consult those definitions. They may decode/coerce differently, return different envelopes or
 apply v1 preconditions, but must not independently decide capacity, ownership, deletion or access policy.
 Page membership must not silently narrow a separately granted native action; edit-token projections remain private.
+
+Follow each policy definition to its production consumers, including generic factories, header preflight/write,
+duplicate entry, administrator changes and relinking. Shared operations alone do not remove a copied permission
+literal. Derive the rule through its existing controller owner and pass it into a factory when needed; preserve other
+features' defaults, actor requirements and deliberate exceptions. Generic middleware must not import a feature's
+controller merely to discover its policy, and no DBAL owner may choose the grant.
+
+Conditional-header limits are authored contract constraints, including the full token emitted by metadata/settings
+reads. Reuse generated schema/operation validation through the existing transport and comparison owner. A decoder's
+safety bound must agree with the wire shape rather than silently reject the application's own issued token. Verify
+generated input/output consumers with a realistic full token and an oversized rejected token.
 
 The [approved 2026-10-12 amendment](../FRONTEND_FOUNDATION_DESIGN.md#explicit-canonical-location-and-action-decisions-2026-10-12)
 replaces the initial pilot's blanket profile requirement only where existing native methods permit public grants:
@@ -244,10 +271,41 @@ inline capacity acceptance, creation bounds and SQL persistence are different po
 
 ## Read authority and recovery
 
+Packing's checklist keeps its native browser-local keys and remains separate from query snapshots and server
+assignments. Follow the [approved temporary fallback](../FRONTEND_FOUNDATION_DESIGN.md#authorized-temporary-packed-state-fallback-2026-10-13)
+when browser storage is unavailable or throws: preserve checks only for the mounted actor/list visit. Show a
+persistent localized notice explaining the load/save failure and possible loss of unsaved changes on leave/reload
+or account/profile change. Failed reads cannot establish that previously stored or successfully written checks
+are unpersisted. Successful rereads still observe external changes; a real missing key is unchecked unless a failed
+toggle write still owns that item's selected value. Explicit Retry reattempts outstanding browser-storage writes
+and reads only; keep the notice while reads fail or writes remain outstanding. Background reads never replay them.
+Before a retained local callback writes, check its mounted actor, admitted current list and live/rendered row;
+Retry prunes removed rows before retrying. Dispose fallback and pending writes on list/context change, unmount or
+admitted-resource retirement. Preserve profile-independent persisted keys and keep this state outside the server.
+
 Authorized cache data is presentation, not perpetual command permission. Controller admission rechecks every write.
 Identity/profile/resource/route generations retire reads, caches and tokens; a late response cannot repopulate them.
 Language-independent machine state uses one authority across languages. Locale-owned Help/Overview projections have
 their own locale keys; a prior-language grant cannot restore revoked edit authority.
+
+Presentation readiness and automatic-read admission are separate. Focus, visibility and reconnect recovery first
+require a current successful session bootstrap before private queries resume. A pending, failed or cooldown-blocked
+bootstrap cannot reopen those queries. Retain mounted readable data and drafts during ordinary revalidation;
+validated identity change still retires the old actor. Apply this admission to every automatic query consumer, not
+only the explicit refetch continuation, and keep server Retry-After and observer disposal intact.
+The existing app context's `readsReady`/`mayRead` contract supplies that gate; `ready`/`isCurrent` retain their
+presentation/result-generation responsibilities. Automatic query consumers use `useQueryAdmission` in the existing
+query-cache owner. It applies `mayObserve(key, firstRead)` per mounted logical-key visit: a fresh visit gets its own
+GET despite a cached terminal failure, while a dispatched or joined pending read consumes that first admission.
+An equal recreated key does not start another visit. Later session resumes keep terminal failures paused.
+Deliberate manual recovery uses `mayRead` within its read deadline.
+The shared transport also checks dispatch admission, while an already admitted image/picker operation retains its
+captured lifetime during ordinary bootstrap pause. Actual actor/input/visibility retirement still disposes it.
+
+Explicit command-dependency refresh uses each actual observer's key-bound `surveyorRead` metadata, with current
+eligibility and disposal rechecked after cancellation. A terminal-paused readable observer can recover through its
+own authored query function; hidden, closed, retired and changed-key observers cannot. Do not select query-level
+last-writer options or create a parallel query-policy registry.
 
 Forward cancellation through decoding and classification. A fulfilled TanStack observer refetch can contain canceled
 retained data; fresh continuation uses the existing query-cache owner (`refetchFreshQuery`/`refetchFreshQueries`).
@@ -257,6 +315,12 @@ Equal successful data can restore authority; object identity, timestamps or idle
 Temporary errors retain confirmed readable data and raw drafts with the last successful scoped receipt.
 Validated denial retires private projections/entry variants. Only another admitted read restores them; cache aliases
 and stale SSR seeds cannot. Review readable-data loss separately from write loss.
+
+Retire derived membership totals, hidden badges and related counts with the projection that supplied them. A denied
+region must not leave its previous private aggregates visible after its cards/cache disappear. Derive current
+presentation from admitted source scopes/receipts through the existing feature owner; do not mirror server counts in
+a second store. Temporary failure retains confirmed scoped evidence, while independently admitted siblings retain
+only their own evidence. Unknown membership has no zero/count/empty assertion.
 
 Healthy active shared queries use the 30-second cadence and eligible recovery within roughly one minute.
 Honor Retry-After, hidden-tab pause and observer disposal. Safe reads may retry; commands do not.
@@ -272,6 +336,11 @@ objects. Locale/request state cannot live in a singleton that leaks between user
 The shared mount preserves pre-hydration drafts on their original controls; explicitly opted-in non-text/file controls
 use `data-hydration-draft`. Hydration recovery does not upload files or submit commands.
 An SSR seed is eligible only for its live document/actor at use time, not because a captured closure once matched.
+
+SSR parent aggregates use the same admitted QueryClient projections as child regions. Seed only the currently eligible
+initial document before parent badges render; Page/Region share `overviewQueryParameters` from the existing Overview
+API owner so their generated query keys identify the same data. This does not turn an old seed or manual cache write
+into fresh post-command authority.
 
 Express serves native static/Help resources; Vite transforms entry/style URLs before inserting the Vue tree.
 Test the actual emitted URLs and mounted usable controls, not a hydration marker. Keep HMR and authored-input restart
@@ -298,6 +367,16 @@ Shared controls have explicit data/capability/value/event contracts. Generic con
 owners or choose private query families; inject the operation and let the feature name its affected resources.
 Keep feature-specific validation and financial semantics out of generic form/inline/action components.
 
+Extract a settings composite when an actual repeated interaction can share its data, events and injected operations.
+The composite shares repeated presentation and local interaction, preserving focus through established controls and
+dialog owners; the feature retains query dependencies,
+authorization inputs, draft reconciliation and command orchestration. Preserve independent tab/panel drafts and native
+layout. File size alone does not establish a new module boundary, and extraction must not create a universal CRUD
+engine, forwarding controller or backend service.
+`EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions` demonstrate this presentation/event boundary;
+their props contracts live in `src/types/FrontendEntitySettingsTypes.d.ts`. Packing supplies admitted state, independent
+file/relationship drafts, lifecycle commands, injected event discovery, tokens and labels.
+
 Match native feedback per operation. Inline notices own Close/focus/scroll placement and a live fallback when their
 initiator detaches/hides. Full flashes keep native presentation. Capture initiating elements before awaits.
 Receipt identity controls dismissal/renewal: repeated outcomes renew, locale/render changes do not revive notices.
@@ -316,6 +395,12 @@ image; access denial cannot be repaired by a retained URL or foreign-scope resul
 One catalog per language supplies UI/API text, generated keys/parameters and fixed `help.directory`.
 Use the shared typed translator and request/application-local i18next-vue binding; no second frontend/backend dictionary.
 Plain interpolation remains escaped; locale changes preserve drafts, focus and machine-value parsing.
+
+Cancel/invalidate only named language-owned query families from the existing query-key owner after a confirmed locale
+change. Machine values, user-authored titles, event options and edit authority retain their existing language-independent
+keys and in-flight reads. Avoid tuple-position matching or a second family registry. A locale change must not cancel
+the fresh post-command read that restores metadata/settings authority merely because labels were translated.
+`belongsToLocalizedQueryFamily` selects the existing Help/Overview families from the query-key owner.
 
 One fixed `docs/user-guide/` tree contains native English and adjacent pilot EN/DE catalog directories, reviewed and
 packaged with the application. Native guide prose/images remain the reference. Staged maintainer drafts are never searched,

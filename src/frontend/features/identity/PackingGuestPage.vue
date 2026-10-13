@@ -9,6 +9,7 @@ import {usePackingApi} from '../packing/api';
 import {useCommand} from '../../composables/command';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {packingKeys} from '../../app/queryKeys';
+import {useQueryAdmission} from '../../app/queryCache';
 import {usePageTitle} from '../../composables/pageTitle';
 import {completeIdentityEntry, completePageEntry, useConfirmedNavigation} from '../../composables/pageEntry';
 import FormField from '../../components/FormField.vue';
@@ -32,9 +33,12 @@ const nativeInitial = context.initialDocumentFor(route.fullPath);
 const fields = reactive({name: nativeInitial?.identityFields?.username ?? '', email: nativeInitial?.identityFields?.email ?? ''});
 const choiceOpen = ref(false);
 const checkingEmail = ref(false);
+const entryKey = computed(() => packingKeys.guest(context.session.value?.context, listId.value));
+const readAdmission = useQueryAdmission(context, entryKey,
+    computed(() => context.hydrated.value && !props.entry));
 const entry = useQuery({
-    queryKey: computed(() => packingKeys.guest(context.session.value?.context, listId.value)),
-    enabled: computed(() => context.ready.value && context.hydrated.value && !props.entry),
+    queryKey: entryKey,
+    ...readAdmission,
     queryFn: ({signal}) => api.guestEntry(listId.value, context.capture(), signal),
     initialData: () => props.entry ?? (nativeInitial?.guestEntry?.id === listId.value ? nativeInitial.guestEntry : undefined),
 });
@@ -78,7 +82,7 @@ async function refreshIdentityState(): Promise<void> {
 /** The public title read is independent of guest identity commands. Recover only
  * that current query, preserving the mounted name/email and any command receipt. */
 async function retryGuestTitle(): Promise<void> {
-    if (props.entry || !context.ready.value || !context.hydrated.value || !titleRetryAvailable.value || entry.isFetching.value) return;
+    if (props.entry || !context.mayRead() || !context.hydrated.value || !titleRetryAvailable.value || entry.isFetching.value) return;
     await entry.refetch();
 }
 

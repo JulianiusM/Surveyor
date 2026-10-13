@@ -245,6 +245,18 @@ describe('typed pilot transport', () => {
         expect(invalidate).not.toHaveBeenCalled();
     });
 
+    it.each([undefined, 'W/"stale"', '"' + 'a'.repeat(5000) + '"'])(
+        'rejects unusable metadata comparison headers after reads and confirmed writes: %s', async etag => {
+            // Headers are outside the metadata DTO. A valid body cannot renew editing
+            // authority when its reviewed token violates the shared authored contract.
+            const api = new PackingApi(new PilotApi(() => true, () => {}, vi.fn(async () =>
+                response(metadata(), 200, etag === undefined ? {} : {ETag: etag}))));
+            await expect(api.metadata(listId, scope)).rejects.toBeInstanceOf(UnconfirmedResponseError);
+            await expect(api.saveMetadata(listId, {title: 'Saved'}, '"reviewed"', scope))
+                .rejects.toBeInstanceOf(UnconfirmedResponseError);
+        },
+    );
+
     it('sends captured identity, locale, CSRF and edit token with the narrow metadata patch', async () => {
         let request!: Request;
         const api = new PackingApi(new PilotApi(() => true, vi.fn(), vi.fn(async (input: RequestInfo | URL) => {
@@ -708,12 +720,18 @@ describe('identity, refresh and local state boundaries', () => {
         const storage = {getItem: (key: string) => values.get(key) ?? null,
             setItem: (key: string, value: string) => { values.set(key, value); },
             removeItem: (key: string) => { values.delete(key); }};
-        expect(readPacked(storage, listId, itemId)).toBe(true);
-        writePacked(storage, listId, itemId, false);
+        expect(readPacked(storage, listId, itemId)).toEqual({packed: true, available: true});
+        expect(writePacked(storage, listId, itemId, false)).toBe(true);
         expect(values.size).toBe(0);
-        writePacked(storage, listId, itemId, true);
+        expect(readPacked(storage, listId, itemId)).toEqual({packed: false, available: true});
+        expect(writePacked(storage, listId, itemId, true)).toBe(true);
         expect([...values.keys()]).toEqual([`packed_${listId}_${itemId}`]);
-        expect(readPacked({getItem: () => { throw new Error('blocked'); }}, listId, itemId)).toBe(false);
+        expect(readPacked({getItem: () => { throw new Error('blocked'); }}, listId, itemId))
+            .toEqual({packed: false, available: false});
+        expect(readPacked(undefined, listId, itemId)).toEqual({packed: false, available: false});
+        expect(writePacked(undefined, listId, itemId, true)).toBe(false);
+        expect(writePacked({setItem: () => { throw new Error('blocked'); }, removeItem: vi.fn()}, listId, itemId, true)).toBe(false);
+        expect(writePacked({setItem: vi.fn(), removeItem: () => { throw new Error('blocked'); }}, listId, itemId, false)).toBe(false);
     });
 
     it('suppresses obsolete/confirmed-denial polling and honors server retry delay', () => {

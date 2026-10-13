@@ -1,6 +1,6 @@
 schema_version: 1
 maintenance:
-  reviewed_on: 2026-10-12
+  reviewed_on: 2026-10-13
   authority: Explicit maintainer authorization to consolidate completed documentation history; live guidance continues to
     describe native behavior.
   policy: docs/policies/DOCUMENTATION_POLICY.md
@@ -837,6 +837,28 @@ implementation_defects:
         exactly one affected row across repeated concurrent sweeps; these cases passed in the guarded full suite.
       - Independent source review confirms exactly one primary lock read per candidate before its conditional write,
         with inclusive-UTC cutoff, pause, relationship, affected-row and separate deletion/retention contracts preserved.
+  - id: IMP-043
+    status: closed
+    closed_on: 2026-10-13
+    severity: medium
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Pilot Packed checks silently lose unsaved browser-local state
+    evidence:
+      - The prior pilot treated unavailable or throwing checklist reads as unchecked and rebuilt row state during
+        membership/order refresh, erasing current selections without a persistence warning.
+      - Four mounted storage-failure cases reproduced the original loss before the correction.
+    authorization: The maintainer explicitly approved the current-visit Packed fallback on 2026-10-13 and required
+      visible failure disclosure; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md retains the bounded amendment.
+    documentation_contract: Preserve native keys, successful external rereads and missing-key false. Retain unsaved
+      checks only in the admitted actor/list visit, disclose load/save failure and departure loss, and offer explicit
+      local Retry without server persistence or automatic write replay.
+    closure_evidence:
+      - Existing Packed owners distinguish storage availability, retain failed writes per live row, and reject retired
+        actor/resource/DOM callbacks. Removed rows, denied resources and changed context retire local fallback.
+      - The focused production-consumer selection passed two files and 114 tests, including local Retry, EN/DE notice,
+        healthy rereads, retirement, detached controls and retained authorized 503 behavior. Exact commands and broader
+        current verification are owned by docs/frontend-migration/PILOT_PARITY_REVIEW.md.
 findings:
   - id: DOC-PERMISSION-POLICY-REVIEW
     status: open

@@ -4,17 +4,17 @@ import {isNavigationFailure, useRoute, useRouter} from 'vue-router';
 import type {LocationQuery, NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components, paths} from '../../../types/api/v1';
-import type {PilotOverviewCardInteraction, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import {useOverviewApi} from './api';
+import type {PilotOverviewCardInteraction, PilotOverviewCountRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import {overviewQueryParameters, useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
 import {usePilot, refreshInterval} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {isOrdinaryNavigation, useConfirmedNavigation} from '../../composables/pageEntry';
 import {useDebouncedValue} from '../../composables/debounced';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
-import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../../app/transport';
+import {ApiFailure, isReadDenial, isTerminalReadFailure, ObsoleteRequestError} from '../../app/transport';
 import {overviewKeys} from '../../app/queryKeys';
-import {observeQueryReads, refetchFreshQueries, retireQueryFamily} from '../../app/queryCache';
+import {observeQueryReads, refetchFreshQueries, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<{
     region: components['schemas']['OverviewRegion']['region'];
     active?: boolean;
 }>(), {active: true});
-const emit = defineEmits<{counts: [total: number, hidden: number]}>();
+const emit = defineEmits<{counts: [source: PilotOverviewCountRead | null, scope: PilotRequestScope]}>();
 const context = usePilot();
 const api = useOverviewApi(context);
 const packingApi = usePackingApi(context);
@@ -97,9 +97,7 @@ function parameter(name: string, values = route.query): string | undefined {
     return typeof value === 'string' ? value : undefined;
 }
 function regionParameters(values: LocationQuery): Query {
-    return {collection: props.collection, region: props.region, q: parameter('q', values),
-        type: parameter('type', values) as Query['type'], page: parameter('page', values),
-        childPage: parameter('childPage', values), eventId: parameter('event', values)};
+    return overviewQueryParameters(values, props.collection, props.region);
 }
 const query = computed<Query>(() => regionParameters(route.query));
 const search = ref(query.value.q ?? '');
@@ -113,15 +111,17 @@ watch(
     },
 );
 const overviewKey = computed(() => overviewKeys.region(context.session.value?.context, context.locale.value, query.value));
+const readAdmission = useQueryAdmission(context, overviewKey,
+    computed(() => props.active !== false && context.hydrated.value && context.visible.value));
 const overview = useQuery({
     queryKey: overviewKey,
-    enabled: computed(() => props.active !== false && context.hydrated.value && context.ready.value && context.visible.value),
+    ...readAdmission,
     queryFn: ({signal}) => loadOverview(signal),
     initialData: () => context.initialDocumentFor(route.fullPath)?.session.locale === context.locale.value
         ? context.initialDocumentFor(route.fullPath)?.overview?.find(value => value.collection === props.collection && value.region === props.region) : undefined,
     refetchOnMount: 'always',
     refetchInterval: (value) =>
-        props.active !== false && context.visible.value
+        props.active !== false && context.mayRead() && context.visible.value
             ? refreshInterval(value.state.error, value.state.fetchFailureCount, jitter) : false,
 });
 // A navigation failure retains readable cards, never new edit authority. Keep only this
@@ -174,6 +174,9 @@ function finishOverviewRead(value: components['schemas']['OverviewRegion'], upda
     // Equal JSON can retain the same object, so the data watcher alone cannot
     // record a later successful refresh. Count emissions still belong to that watcher.
     lastConfirmed.value = {scope, data: value, updatedAt};
+    // Parent badges use the same actual successful receipt, including equal reads.
+    // Only its key/lifetime crosses this boundary; no numeric snapshot is duplicated.
+    emit('counts', {scope, key: overviewKey.value, updatedAt}, scope);
     imageReadRevision.value++;
 }
 
@@ -186,7 +189,10 @@ watch(overview.data, (value) => {
         if (!searchPending.value && !pendingRead.value && search.value === (query.value.q ?? '')
             && search.value !== value.q) search.value = value.q;
         lastConfirmed.value = {scope: context.capture(), data: value, updatedAt: overview.dataUpdatedAt.value};
-        emit('counts', value.totalEntities, value.hiddenEntities);
+        // Initial SSR/cached delivery is already admitted by this observer's scope.
+        // Subsequent network receipts advance independently through finishOverviewRead.
+        const scope = context.capture();
+        emit('counts', {scope, key: overviewKey.value, updatedAt: overview.dataUpdatedAt.value}, scope);
     }
 }, {immediate: true});
 watch([overview.dataUpdatedAt, overview.isFetching, overview.error], restoreCommittedFocus, {flush: 'post'});
@@ -198,6 +204,12 @@ watch([context.epoch, context.locale], retirePresentation, {flush: 'sync'});
 async function refresh(): Promise<void> {
     const scope = context.capture();
     const generation = readGeneration;
+    // A terminal rejection suspends automatic observation. Explicit recovery
+    // still admits this exact mounted region, without reviving closed siblings.
+    if (isTerminalReadFailure(overview.error.value)) {
+        await refetchFreshQuery(context.queryClient, overviewKey.value, refetchRegion, mayRead);
+        return;
+    }
     await refetchFreshQueries(context.queryClient,
         {
             queryKey: overviewKeys.all(context.session.value?.context),
@@ -207,8 +219,12 @@ async function refresh(): Promise<void> {
     );
 
     function mayRead(): boolean {
-        return context.ready.value && mayPresentRead(scope, generation);
+        return context.mayRead(scope) && mayPresentRead(scope, generation);
     }
+}
+
+function refetchRegion(): Promise<unknown> {
+    return overview.refetch({throwOnError: true});
 }
 const command = useCommand(refresh);
 const blocked = computed(() => command.pending.value || command.recovering.value || command.uncertain.value
@@ -260,6 +276,9 @@ function retireDeniedRegion(scope: PilotRequestScope, error: ApiFailure): void {
     lastConfirmed.value = null;
     returnPosition = undefined;
     deniedRead.value = {scope, error};
+    // This region's aggregate authority disappears with its cards. A sibling
+    // region can retain its own independently admitted receipt in the parent.
+    emit('counts', null, scope);
 
     // Preserve unrelated collection/region observations and their independent reads.
     void retireQueryFamily(context.queryClient,
@@ -378,7 +397,7 @@ function filterKey(parameters: Query): string {
  * leaves its cards, focus and browser history unchanged; Retry retains the exact target. */
 async function navigate(values: Record<string, string | undefined>, history: 'push' | 'replace' = 'push',
                         action: NavigationAction = 'filter'): Promise<void> {
-    if (blocked.value || props.active === false || !context.ready.value || !retryAvailable.value) return;
+    if (blocked.value || props.active === false || !context.mayRead() || !retryAvailable.value) return;
     const parameters = regionParameters(navigationQuery(values));
     searchPending.value = false;
     retireReads();
@@ -389,7 +408,7 @@ async function navigate(values: Record<string, string | undefined>, history: 'pu
  * client retains server cooldown/retry policy; the descriptor holds request data and delivery policy only. */
 async function retryNavigation(): Promise<void> {
     const failed = failedRead.value;
-    if (!failed || blocked.value || !context.isCurrent(failed.scope, true) || !retryAvailable.value) return;
+    if (!failed || blocked.value || !context.mayRead(failed.scope, true) || !retryAvailable.value) return;
     retireReads();
     await deliverNavigation({...failed, generation: readGeneration});
 }
@@ -446,7 +465,9 @@ async function deliverNavigation(read: NavigationRead): Promise<void> {
     }
 }
 
+/** Commit this region's admitted target while preserving the latest sibling URL fields. */
 function targetQuery(parameters: Query): LocationQuery {
+    // Start from current/pending whole-page navigation, then replace only this prefix.
     const result = navigationQuery({});
     const values = {q: parameters.q, type: parameters.type, page: parameters.page,
         childPage: parameters.childPage, event: parameters.eventId};

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original design and dated approved shared-backend/Help/permission corrections consolidated; completed scoped execution and its limits owned by paired review
+verification-scope: original design and dated approved shared-backend/Help/permission corrections retained; explicit 2026-10-13 same-event no-op and temporary Packed-state decisions recorded; actual readiness execution and its limits owned by paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -152,6 +152,38 @@ v1 profile-minimum requirement. Minimal method baselines and admitted context bi
 projections; principal-required native operations retain that requirement. Broader permission review/rework is backlog
 scope, not authorization to change native policy during this correction. Execution and remaining limits belong to the
 [paired review](PILOT_PARITY_REVIEW.md).
+
+### Authorized same-event no-op clarification (2026-10-13)
+
+The maintainer directly resolves the relink-precondition choice raised in the readiness review. Native and v1
+requests selecting the already linked event retain the harmless `changed: false` outcome after current source and
+target permissions are checked. Comparison-header presence/value is ignored for this no-op, including empty, stale,
+weak, wildcard or oversized evidence; it performs no write.
+Changed associations still require the expected current relationship and v1 reviewed comparison inside the locks.
+
+This is a bounded exception to the original general required-precondition rule in the
+[API design](API_CONTRACT_DESIGN.md#current-value-comparisons-and-conditional-reads). It does not relax authorization,
+change native request fields, broaden another no-op policy or authorize default-route cutover. The approved readiness
+corrections preserve the native comparator and shared controller/DBAL owners; actual implementation and checks belong
+to the [paired review](PILOT_PARITY_REVIEW.md).
+
+### Authorized temporary Packed-state fallback (2026-10-13)
+
+After the pilot review, the maintainer explicitly approved the implementation and current-tab fallback for failed
+Packed checklist storage, requiring problems to remain visible. The original native contract remains
+`packed_<list UUID>_<item UUID>` with checked value `1`; successful reads still observe external changes and an
+actually missing key means unchecked. Native source and behavior remain the comparison reference.
+
+For the pilot only, unavailable or throwing storage retains the last observed or selected check in the mounted
+actor/list visit, including outstanding failed toggle writes. Healthy unrelated keys retain their normal reread
+behavior. A persistent localized notice explains that some checks could not be loaded or saved and unsaved changes
+may be lost when leaving/reloading the list or changing the account/active profile. A failed read does not prove
+that its last observed value or a successful write was unpersisted. Explicit Retry reattempts outstanding
+browser-storage writes and reads only; background reads never replay them. Keep the notice while reads fail or
+writes remain outstanding. Retire the fallback on list/context change, unmount or admitted-resource retirement;
+the persisted keys remain profile-independent. It introduces no server persistence, automatic write replay or
+promised restoration of unsaved changes after departure. The [refresh owner](REFRESH_CONFLICT_DESIGN.md#state-ownership)
+describes its lifetime, and the [paired review](PILOT_PARITY_REVIEW.md) owns executed evidence.
 
 ## Architecture and logical ownership
 

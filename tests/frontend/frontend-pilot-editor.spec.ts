@@ -215,14 +215,15 @@ describe('shared dialog focus', () => {
 /** Mount the real packing view with an HTTP-boundary fixture; state and rendering stay production code. */
 async function mountPackingView(view: components['schemas']['PackingListView'],
                                 handler?: (request: Request) => Promise<Response>,
-                                path = `/frontend-pilot/packing/${listId}`) {
+                                path = `/frontend-pilot/packing/${listId}`,
+                                locale: components['schemas']['SessionView']['locale'] = 'en') {
     const request = vi.fn(async function readPackingFixture(input: RequestInfo | URL) {
         if (handler) return handler(input as Request);
         if (new URL((input as Request).url).pathname.endsWith('/header')) return new Response(new Blob(['image']), {
             headers: {'Content-Type': 'image/png', 'X-Surveyor-Context': session.context}});
         return json(view);
     });
-    const context = createPilotContext({session}, true, request);
+    const context = createPilotContext({session: {...session, locale}}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
         {path: '/frontend-pilot/packing/:listId', component: PackingPage},
@@ -240,8 +241,394 @@ async function mountPackingView(view: components['schemas']['PackingListView'],
         await context.queryClient.cancelQueries();
         context.queryClient.clear();
     }
-    return {wrapper, context, request, dispose};
+    return {wrapper, context, request, router, dispose};
 }
+
+/** Build an ordinary production row for browser-local checklist tests. The
+ * Everyone color makes loss of a checked value visible independently of input state. */
+function checklistItem(id = '33333333-3333-4333-8333-333333333333', position = 0): components['schemas']['PackingItemView'] {
+    return {id, title: 'Everyone checklist item', description: null, position, requiredByAll: true,
+        maxAssignees: 1, assignedCount: 0, selfAssigned: false, assignees: [], editToken: '"edit-checklist"',
+        capabilities: {editTitle: false, editDescription: false, editCapacity: false, showTitleEdit: false,
+            showCapacityEdit: false, editRequired: false, removeItem: false, removeAssignments: false}};
+}
+
+describe('mounted Packing checklist persistence', () => {
+    it.each([
+        {failure: 'getter', locale: 'en'},
+        {failure: 'read', locale: 'de'},
+    ] as const)('retains temporary Packed checks after a $failure failure and list refresh in $locale',
+        async function unavailableChecklist({failure, locale}) {
+            const item = checklistItem();
+            let current = {...list, items: [item]};
+            const storage = {getItem: vi.fn(function rejectStoredCheck(): never { throw new Error('Fixture storage blocked'); }),
+                setItem: vi.fn(), removeItem: vi.fn()};
+            const getter = vi.spyOn(window, 'localStorage', 'get');
+            if (failure === 'getter') getter.mockImplementation(function rejectStorageAccess(): never { throw new Error('Fixture getter blocked'); });
+            else getter.mockReturnValue(storage as unknown as Storage);
+
+            // Only the HTTP boundary is replaced. The mounted production page owns
+            // checkbox state, refresh adoption, row colors and localized feedback.
+            const mounted = await mountPackingView(current, async function readChecklist() { return json(current); },
+                `/frontend-pilot/packing/${listId}`, locale);
+            try {
+                const selector = `[data-item-id="${item.id}"]`;
+                expect(mounted.wrapper.get(selector).classes()).toContain('table-info');
+                expect(mounted.wrapper.get('[data-packed-storage-warning]').text())
+                    .toContain(mounted.context.messages.value.t('packing.packedStorageUnavailable'));
+                await mounted.wrapper.get(`${selector} input[type="checkbox"]`).setValue(true);
+                expect(mounted.wrapper.get(selector).classes()).toContain('table-success');
+
+                // A new/reordered row triggers the actual list reconciliation that
+                // previously replaced the local selection with a failed-read false.
+                const newcomer = checklistItem('44444444-4444-4444-8444-444444444444');
+                current = {...list, items: [{...item, position: 1}, newcomer]};
+                await mounted.wrapper.get(`button[aria-label="${mounted.context.messages.value.t('common.refresh')}"]`).trigger('click');
+                await flushPromises();
+                expect(mounted.wrapper.findAll('tbody tr')[0].attributes('data-item-id')).toBe(newcomer.id);
+                expect(mounted.wrapper.get<HTMLInputElement>(`${selector} input[type="checkbox"]`).element.checked).toBe(true);
+                expect(mounted.wrapper.get(selector).classes()).toContain('table-success');
+                const warning = mounted.wrapper.get('.status-notice.alert-warning');
+                expect(warning.attributes('role')).toBe('status');
+                expect(warning.text()).toContain(mounted.context.messages.value.t('packing.packedStorageUnavailable'));
+                expect(warning.text()).toContain(locale === 'de' ? 'Dein Browser' : 'Your browser');
+                expect(mounted.request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+            } finally { await mounted.dispose(); }
+        });
+
+    it.each([
+        {operation: 'setItem', initial: null, selected: true, locale: 'en'},
+        {operation: 'removeItem', initial: '1', selected: false, locale: 'de'},
+    ] as const)('retains temporary Packed selection after failed $operation despite a healthy stale read in $locale',
+        async function failedChecklistWrite({operation, initial, selected, locale}) {
+            const item = checklistItem();
+            let current = {...list, items: [item]};
+            const packedKey = `packed_${listId}_${item.id}`;
+            const values = new Map<string, string>();
+            if (initial !== null) values.set(packedKey, initial);
+            const storage = {getItem: vi.fn((key: string) => values.get(key) ?? null),
+                setItem: vi.fn(function saveChecklist(key: string, value: string) { values.set(key, value); }),
+                removeItem: vi.fn(function clearChecklist(key: string) { values.delete(key); })};
+            storage[operation].mockImplementation(function rejectChecklistWrite(): never { throw new Error('Fixture persistence blocked'); });
+            vi.spyOn(window, 'localStorage', 'get').mockReturnValue(storage as unknown as Storage);
+            const mounted = await mountPackingView(current, async function readChecklist() { return json(current); },
+                `/frontend-pilot/packing/${listId}`, locale);
+            try {
+                const selector = `[data-item-id="${item.id}"]`;
+                expect(mounted.wrapper.get<HTMLInputElement>(`${selector} input[type="checkbox"]`).element.checked).toBe(!selected);
+                await mounted.wrapper.get(`${selector} input[type="checkbox"]`).setValue(selected);
+                expect(storage[operation]).toHaveBeenCalledOnce();
+                expect(mounted.wrapper.get('[data-packed-storage-warning]').text())
+                    .toContain(mounted.context.messages.value.t('packing.packedStorageUnavailable'));
+
+                // A readable old key cannot prove the failed write succeeded or
+                // replace the explicit current choice during membership refresh.
+                current = {...list, items: [checklistItem('44444444-4444-4444-8444-444444444444'), {...item, position: 1}]};
+                await mounted.wrapper.get(`button[aria-label="${mounted.context.messages.value.t('common.refresh')}"]`).trigger('click');
+                await flushPromises();
+                expect(mounted.wrapper.get<HTMLInputElement>(`${selector} input[type="checkbox"]`).element.checked).toBe(selected);
+                expect(mounted.wrapper.get(selector).classes()).toContain(selected ? 'table-success' : 'table-info');
+                expect(mounted.wrapper.get('.status-notice.alert-warning').text())
+                    .toContain(mounted.context.messages.value.t('packing.packedStorageUnavailable'));
+                expect(mounted.wrapper.get('.status-notice.alert-warning').text()).toContain(locale === 'de' ? 'Dein Browser' : 'Your browser');
+                expect(mounted.request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+                expect(storage[operation]).toHaveBeenCalledOnce();
+
+                // A rejected local Retry remains a visible unresolved problem and
+                // keeps the same choice; it never falls through to a shared command.
+                const requestsBeforeFailedRetry = mounted.request.mock.calls.length;
+                await mounted.wrapper.get('[data-packed-storage-warning] button').trigger('click');
+                await flushPromises();
+                expect(storage[operation]).toHaveBeenCalledTimes(2);
+                expect(mounted.wrapper.get<HTMLInputElement>(`${selector} input[type="checkbox"]`).element.checked).toBe(selected);
+                expect(mounted.wrapper.find('[data-packed-storage-warning]').exists()).toBe(true);
+                expect(mounted.request.mock.calls).toHaveLength(requestsBeforeFailedRetry);
+
+                // Recovery is an explicit local action. Restoring storage alone
+                // never replays a write during automatic shared-data refresh.
+                if (operation === 'setItem') storage.setItem.mockImplementation(function saveRecoveredChecklist(key, value) { values.set(key, value); });
+                else storage.removeItem.mockImplementation(function clearRecoveredChecklist(key) { values.delete(key); });
+                const requestsBeforeRetry = mounted.request.mock.calls.length;
+                const warning = mounted.wrapper.get('[data-packed-storage-warning]');
+                expect(warning.get('button').text()).toBe(mounted.context.messages.value.t('common.retry'));
+                await warning.get('button').trigger('click');
+                await flushPromises();
+                expect(storage[operation]).toHaveBeenCalledTimes(3);
+                expect(values.get(packedKey) ?? null).toBe(selected ? '1' : null);
+                expect(mounted.wrapper.get<HTMLInputElement>(`${selector} input[type="checkbox"]`).element.checked).toBe(selected);
+                expect(mounted.wrapper.find('[data-packed-storage-warning]').exists()).toBe(false);
+                expect(mounted.request.mock.calls).toHaveLength(requestsBeforeRetry);
+            } finally { await mounted.dispose(); }
+        });
+
+    it('rereads healthy external Packed changes and treats a missing native key as unchecked', async function healthyChecklistReads() {
+        const item = checklistItem();
+        const other = checklistItem('44444444-4444-4444-8444-444444444444');
+        const key = `packed_${listId}_${item.id}`;
+        const values = new Map([[key, '1']]);
+        const storage = {getItem: vi.fn((storageKey: string) => values.get(storageKey) ?? null), setItem: vi.fn(), removeItem: vi.fn()};
+        vi.spyOn(window, 'localStorage', 'get').mockReturnValue(storage as unknown as Storage);
+        let current = {...list, items: [item]};
+        const mounted = await mountPackingView(current, async function readChecklist() { return json(current); });
+        try {
+            const selector = `[data-item-id="${item.id}"]`;
+            expect(mounted.wrapper.get<HTMLInputElement>(`${selector} input[type="checkbox"]`).element.checked).toBe(true);
+
+            // Simulate another tab removing the persisted choice before a real
+            // membership read. A successful missing-key read is authoritative false.
+            values.delete(key);
+            current = {...list, items: [item, {...other, position: 1}]};
+            await mounted.wrapper.get('button[aria-label="Refresh"]').trigger('click');
+            await flushPromises();
+            expect(mounted.wrapper.get<HTMLInputElement>(`${selector} input[type="checkbox"]`).element.checked).toBe(false);
+            expect(mounted.wrapper.get(selector).classes()).toContain('table-info');
+
+            // A subsequent healthy order refresh adopts an external stored check,
+            // preserving existing cross-tab rereads rather than freezing local values.
+            values.set(key, '1');
+            current = {...list, items: [{...item, position: 1}, other]};
+            await mounted.wrapper.get('button[aria-label="Refresh"]').trigger('click');
+            await flushPromises();
+            expect(mounted.wrapper.get<HTMLInputElement>(`${selector} input[type="checkbox"]`).element.checked).toBe(true);
+            expect(mounted.wrapper.get(selector).classes()).toContain('table-success');
+            expect(mounted.wrapper.find('.status-notice.alert-warning').exists()).toBe(false);
+            expect(storage.setItem).not.toHaveBeenCalled();
+            expect(storage.removeItem).not.toHaveBeenCalled();
+        } finally { await mounted.dispose(); }
+    });
+
+    it('clears temporary Packed checks when leaving a resource and on remount', async function temporaryChecklistLifetime() {
+        const item = checklistItem();
+        const otherListId = '55555555-5555-4555-8555-555555555555';
+        const storageGetter = vi.spyOn(window, 'localStorage', 'get').mockImplementation(function rejectStorageAccess(): never { throw new Error('Fixture getter blocked'); });
+        let retiredCheckbox!: HTMLInputElement;
+        const mounted = await mountPackingView({...list, items: [item]}, async function readResource(request) {
+            const resource = new URL(request.url).pathname.split('/').at(-1)!;
+            return json({...list, id: resource, items: [item]});
+        });
+        try {
+            const selector = `[data-item-id="${item.id}"] input[type="checkbox"]`;
+            await mounted.wrapper.get(selector).setValue(true);
+            expect(mounted.wrapper.get<HTMLInputElement>(selector).element.checked).toBe(true);
+
+            // Vue Router reuses the actual page instance for another list. Even an
+            // identical row identifier must not carry the previous list's fallback.
+            await mounted.router.push(`/frontend-pilot/packing/${otherListId}`);
+            await flushPromises();
+            expect(mounted.wrapper.get<HTMLInputElement>(selector).element.checked).toBe(false);
+            await mounted.router.push(`/frontend-pilot/packing/${listId}`);
+            await flushPromises();
+            expect(mounted.wrapper.get<HTMLInputElement>(selector).element.checked).toBe(false);
+            retiredCheckbox = mounted.wrapper.get<HTMLInputElement>(selector).element;
+        } finally { await mounted.dispose(); }
+
+        // An unmounted control can retain its DOM listener. Late delivery must
+        // not probe storage or start work after the owning page has retired.
+        const getterCallsAfterUnmount = storageGetter.mock.calls.length;
+        const requestsAfterUnmount = mounted.request.mock.calls.length;
+        expect(retiredCheckbox.isConnected).toBe(false);
+        retiredCheckbox.checked = true;
+        retiredCheckbox.dispatchEvent(new Event('change', {bubbles: true}));
+        await flushPromises();
+        expect(storageGetter.mock.calls).toHaveLength(getterCallsAfterUnmount);
+        expect(mounted.request.mock.calls).toHaveLength(requestsAfterUnmount);
+
+        // The fallback is limited to the mounted list; a clean visit cannot invent
+        // persistence after the browser rejected the earlier write.
+        const remounted = await mountPackingView({...list, items: [item]});
+        try {
+            expect(remounted.wrapper.get<HTMLInputElement>(`[data-item-id="${item.id}"] input[type="checkbox"]`).element.checked).toBe(false);
+        } finally { await remounted.dispose(); }
+    });
+
+    it('retires failed Packed writes when their row disappears and ignores its detached controls', async function removedChecklistRow() {
+        const item = checklistItem();
+        const other = checklistItem('44444444-4444-4444-8444-444444444444');
+        const storage = {getItem: vi.fn(() => null),
+            setItem: vi.fn(function rejectRemovedRowWrite(): never { throw new Error('Fixture persistence blocked'); }),
+            removeItem: vi.fn()};
+        vi.spyOn(window, 'localStorage', 'get').mockReturnValue(storage as unknown as Storage);
+        let current = {...list, items: [item, other]};
+        const mounted = await mountPackingView(current, async function readChecklist() { return json(current); });
+        try {
+            const checkbox = mounted.wrapper.get<HTMLInputElement>(`[data-item-id="${item.id}"] input[type="checkbox"]`);
+            await checkbox.setValue(true);
+            expect(storage.setItem).toHaveBeenCalledOnce();
+            const retiredRetry = mounted.wrapper.get<HTMLButtonElement>('[data-packed-storage-warning] button').element;
+
+            // A fresh complete list no longer contains this row. Retire its pending
+            // local write rather than preserving an invisible preference to replay.
+            current = {...list, items: [other]};
+            await mounted.wrapper.get('button[aria-label="Refresh"]').trigger('click');
+            await flushPromises();
+            expect(checkbox.element.isConnected).toBe(false);
+            expect(mounted.wrapper.find(`[data-item-id="${item.id}"]`).exists()).toBe(false);
+            expect(mounted.wrapper.find('[data-packed-storage-warning]').exists()).toBe(false);
+
+            // Removed DOM nodes can retain a listener. Dispatch its actual event and
+            // old Retry rather than invoking an implementation-private method.
+            const requestsBeforeRetiredEvents = mounted.request.mock.calls.length;
+            checkbox.element.checked = true;
+            checkbox.element.dispatchEvent(new Event('change', {bubbles: true}));
+            retiredRetry.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+            await flushPromises();
+            expect(storage.setItem).toHaveBeenCalledOnce();
+            expect(storage.removeItem).not.toHaveBeenCalled();
+            expect(mounted.wrapper.find('[data-packed-storage-warning]').exists()).toBe(false);
+            expect(mounted.request.mock.calls).toHaveLength(requestsBeforeRetiredEvents);
+        } finally { await mounted.dispose(); }
+    });
+
+    it('ignores a detached Packed checkbox from another list even when its row ID exists in the new list', async function retiredChecklistResource() {
+        const item = checklistItem();
+        const otherListId = '55555555-5555-4555-8555-555555555555';
+        const values = new Map<string, string>();
+        const storage = {getItem: vi.fn((key: string) => values.get(key) ?? null),
+            setItem: vi.fn(function rejectForeignChecklistWrite(_key: string, _value: string): void { throw new Error('Fixture foreign write rejected'); }),
+            removeItem: vi.fn()};
+        const storageGetter = vi.spyOn(window, 'localStorage', 'get').mockReturnValue(storage as unknown as Storage);
+        let releaseOther!: (response: Response) => void;
+        const mounted = await mountPackingView({...list, items: [item]}, async function readResource(request) {
+            const resource = new URL(request.url).pathname.split('/').at(-1)!;
+            if (resource === otherListId) return new Promise<Response>(function holdOtherList(resolve) { releaseOther = resolve; });
+            return json({...list, items: [item]});
+        });
+        try {
+            const selector = `[data-item-id="${item.id}"] input[type="checkbox"]`;
+            const oldCheckbox = mounted.wrapper.get<HTMLInputElement>(selector).element;
+            await mounted.wrapper.get(selector).setValue(true);
+            expect(storage.setItem).toHaveBeenCalledOnce();
+            const oldRetry = mounted.wrapper.get<HTMLButtonElement>('[data-packed-storage-warning] button').element;
+
+            // Hold the real new-resource read until Vue retires the old row. The
+            // replacement deliberately has the same row ID, so membership alone
+            // cannot certify that this detached event belongs to the current list.
+            await mounted.router.push(`/frontend-pilot/packing/${otherListId}`);
+            await flushPromises();
+            expect(oldCheckbox.isConnected).toBe(false);
+            expect(releaseOther).toBeTypeOf('function');
+            releaseOther(json({...list, id: otherListId, items: [item]}));
+            await flushPromises();
+            const currentCheckbox = mounted.wrapper.get<HTMLInputElement>(selector).element;
+            expect(currentCheckbox).not.toBe(oldCheckbox);
+            oldCheckbox.checked = true;
+            oldCheckbox.dispatchEvent(new Event('change', {bubbles: true}));
+            await flushPromises();
+
+            expect(storage.setItem).toHaveBeenCalledOnce();
+            expect(storage.removeItem).not.toHaveBeenCalled();
+            expect(currentCheckbox.checked).toBe(false);
+            expect(mounted.wrapper.find('[data-packed-storage-warning]').exists()).toBe(false);
+
+            // Give B its own unsaved choice, then restore persistence. A detached
+            // warning from A must not become permission to retry B's newer work.
+            await mounted.wrapper.get(selector).setValue(true);
+            expect(storage.setItem).toHaveBeenCalledTimes(2);
+            storage.setItem.mockImplementation(function saveCurrentChecklist(key: string, value: string) { values.set(key, value); });
+            const getterCalls = storageGetter.mock.calls.length;
+            const readCalls = storage.getItem.mock.calls.length;
+            const requestsBeforeRetiredRetry = mounted.request.mock.calls.length;
+            expect(oldRetry.isConnected).toBe(false);
+            oldRetry.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+            await flushPromises();
+            expect(storageGetter.mock.calls).toHaveLength(getterCalls);
+            expect(storage.getItem.mock.calls).toHaveLength(readCalls);
+            expect(storage.setItem).toHaveBeenCalledTimes(2);
+            expect(values.size).toBe(0);
+            expect(currentCheckbox.checked).toBe(true);
+            expect(mounted.wrapper.find('[data-packed-storage-warning]').exists()).toBe(true);
+            expect(mounted.request.mock.calls).toHaveLength(requestsBeforeRetiredRetry);
+
+            // Only B's connected current warning can recover that local change.
+            // Explicit preference recovery has no shared assignment/API side effect.
+            await mounted.wrapper.get('[data-packed-storage-warning] button').trigger('click');
+            await flushPromises();
+            expect(storage.setItem).toHaveBeenCalledTimes(3);
+            expect(values.get(`packed_${otherListId}_${item.id}`)).toBe('1');
+            expect(currentCheckbox.checked).toBe(true);
+            expect(mounted.wrapper.find('[data-packed-storage-warning]').exists()).toBe(false);
+            expect(mounted.request.mock.calls).toHaveLength(requestsBeforeRetiredRetry);
+        } finally {
+            releaseOther?.(json({...list, id: otherListId, items: [item]}));
+            await mounted.dispose();
+        }
+    });
+
+    it('ignores old Packed checkbox and Retry events after the captured actor retires', async function retiredChecklistActor() {
+        const item = checklistItem();
+        const storage = {getItem: vi.fn(() => null),
+            setItem: vi.fn(function rejectRetiredChecklistWrite(): never { throw new Error('Fixture persistence blocked'); }),
+            removeItem: vi.fn()};
+        const storageGetter = vi.spyOn(window, 'localStorage', 'get').mockReturnValue(storage as unknown as Storage);
+        const mounted = await mountPackingView({...list, items: [item]}, async function readActorScope(request) {
+            if (new URL(request.url).pathname === '/api/v1/session') throw new TypeError('Fixture identity recovery remains unavailable');
+            return json({...list, items: [item]});
+        });
+        try {
+            const oldCheckbox = mounted.wrapper.get<HTMLInputElement>(`[data-item-id="${item.id}"] input[type="checkbox"]`);
+            await oldCheckbox.setValue(true);
+            expect(storage.setItem).toHaveBeenCalledOnce();
+            const oldRetry = mounted.wrapper.get<HTMLButtonElement>('[data-packed-storage-warning] button').element;
+
+            // Retire through the real identity owner. Dispatch before Vue removes
+            // the old DOM so captured actor admission, rather than DOM absence,
+            // must prevent this event from writing an unchecked preference.
+            mounted.context.invalidateIdentity();
+            oldCheckbox.element.checked = false;
+            oldCheckbox.element.dispatchEvent(new Event('change', {bubbles: true}));
+            await flushPromises();
+            expect(mounted.context.ready.value).toBe(false);
+            expect(storage.removeItem).not.toHaveBeenCalled();
+            expect(mounted.wrapper.find('[data-packed-storage-warning]').exists()).toBe(false);
+
+            // A later click from the retired warning must not even probe storage,
+            // and detached old checkbox events remain harmless after presentation closes.
+            const getterCalls = storageGetter.mock.calls.length;
+            oldRetry.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+            oldCheckbox.element.dispatchEvent(new Event('change', {bubbles: true}));
+            await flushPromises();
+            expect(storageGetter.mock.calls).toHaveLength(getterCalls);
+            expect(storage.setItem).toHaveBeenCalledOnce();
+            expect(storage.removeItem).not.toHaveBeenCalled();
+        } finally { await mounted.dispose(); }
+    });
+
+    it('keeps current-scope Packed checks usable while a temporary list read retains admitted rows', async function retainedChecklistRead() {
+        const item = checklistItem();
+        const key = `packed_${listId}_${item.id}`;
+        const values = new Map<string, string>();
+        const storage = {getItem: vi.fn((storageKey: string) => values.get(storageKey) ?? null),
+            setItem: vi.fn(function saveRetainedChecklist(storageKey: string, value: string) { values.set(storageKey, value); }),
+            removeItem: vi.fn()};
+        vi.spyOn(window, 'localStorage', 'get').mockReturnValue(storage as unknown as Storage);
+        let unavailable = false;
+        const mounted = await mountPackingView({...list, items: [item]}, async function readRetainedChecklist() {
+            if (!unavailable) return json({...list, items: [item]});
+            // Valid safe 503 plus a server cooldown supplies a temporary read
+            // failure without arbitrary timers or authorization-loss inference.
+            return new Response(JSON.stringify({type: 'about:blank', title: 'Temporarily unavailable', status: 503,
+                detail: 'Retry after the server deadline.', requestId: 'retained-checklist-read'}),
+                {status: 503, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context, 'Retry-After': '3600'}});
+        });
+        try {
+            unavailable = true;
+            await mounted.context.queryClient.refetchQueries({queryKey: packingKeys.detail(session.context, listId)});
+            await flushPromises();
+            expect(mounted.context.queryClient.getQueryState(packingKeys.detail(session.context, listId))?.error).toMatchObject({status: 503});
+            expect(mounted.context.ready.value).toBe(true);
+            expect(mounted.wrapper.text()).toContain(mounted.context.messages.value.t('state.stale'));
+            const requestsBeforeCheck = mounted.request.mock.calls.length;
+
+            // This browser-local action still belongs to the same admitted row
+            // and actor. A failed shared read must not disable its healthy storage.
+            await mounted.wrapper.get(`[data-item-id="${item.id}"] input[type="checkbox"]`).setValue(true);
+            expect(values.get(key)).toBe('1');
+            expect(mounted.wrapper.get(`[data-item-id="${item.id}"]`).classes()).toContain('table-success');
+            expect(mounted.wrapper.find('[data-packed-storage-warning]').exists()).toBe(false);
+            expect(mounted.request.mock.calls).toHaveLength(requestsBeforeCheck);
+        } finally { await mounted.dispose(); }
+    });
+});
 
 describe('packing presentation compatibility', () => {
     it.each([
@@ -439,6 +826,117 @@ describe('packing presentation compatibility', () => {
             expect(request).toHaveBeenCalledOnce();
         } finally { wrapper.unmount(); context.start()(); }
     });
+
+    it('waits for session admission before synchronous image resume and preserves admitted binary reads during bootstrap',
+        async function preservesAdmittedImageRead() {
+            const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+            let resolveFirst!: (value: Response) => void;
+            let resolveSecond!: (value: Response) => void;
+            const first = new Promise<Response>(resolve => { resolveFirst = resolve; });
+            const second = new Promise<Response>(resolve => { resolveSecond = resolve; });
+            let sessions = 0;
+            const request = vi.fn(() => ++sessions === 1 ? first : second);
+            const context = createPilotContext({session}, true, request);
+            vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:admitted-during-bootstrap');
+            vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+            let resolveImage!: (value: Blob) => void;
+            let imageSignal: AbortSignal | undefined;
+            const image = new Promise<Blob>(resolve => { resolveImage = resolve; });
+            const read = vi.fn(function readAdmittedImage(_id: string, _scope: unknown, signal: AbortSignal): Promise<Blob> {
+                imageSignal = signal;
+                return image;
+            });
+            const host = defineComponent({
+                setup: function bindAdmittedImage() {
+                    return {image: useAuthorizedImage(ref(listId), ref('same-version'), read).source};
+                },
+                template: '<img v-if="image" :src="image" alt="Admitted image" />',
+            });
+            const wrapper = mount(host, {global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
+                provide: {[pilotContextKey as symbol]: context}}});
+            const stop = context.start();
+            try {
+                visibility.mockReturnValue('visible');
+                document.dispatchEvent(new Event('visibilitychange'));
+                await flushPromises();
+                expect(request).toHaveBeenCalledOnce();
+                expect(read).not.toHaveBeenCalled();
+
+                // A flush:sync visibility owner waits behind bootstrap. Once admitted,
+                // its captured binary read can finish while another session check pauses
+                // new dispatch; slow images must not restart every session interval.
+                resolveFirst(json(session));
+                await flushPromises();
+                expect(read).toHaveBeenCalledOnce();
+                const checking = context.refreshSession();
+                await flushPromises();
+                expect(imageSignal?.aborted).toBe(false);
+                resolveImage(new Blob(['image'], {type: 'image/png'}));
+                await flushPromises();
+                expect(wrapper.get('img').attributes('src')).toBe('blob:admitted-during-bootstrap');
+                resolveSecond(json(session));
+                await checking;
+                await flushPromises();
+                expect(read).toHaveBeenCalledOnce();
+            } finally {
+                resolveFirst(json(session));
+                resolveSecond(json(session));
+                resolveImage(new Blob());
+                wrapper.unmount();
+                stop();
+            }
+        });
+
+    it('keeps terminal image denial paused across session resumes until an admitted feature refresh',
+        async function preservesTerminalImagePolicy() {
+            const context = createPilotContext({session}, true, vi.fn(async () => json(session)));
+            vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:feature-readmitted');
+            vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+            let readable = false;
+            const disclosed = ref(true);
+            let owner!: PilotAuthorizedImage;
+            const read = vi.fn(async function readProtectedImage(): Promise<Blob> {
+                if (!readable) throw new ApiFailure(403, {type: 'about:blank', title: 'Forbidden', status: 403,
+                    detail: 'Image access changed.', requestId: 'terminal-image-denial', code: 'FORBIDDEN',
+                    messageKey: 'api:errors.FORBIDDEN', params: {}});
+                return new Blob(['image'], {type: 'image/png'});
+            });
+            const host = defineComponent({
+                setup: function bindProtectedImage() {
+                    owner = useAuthorizedImage(ref(listId), ref('same-version'), read, disclosed);
+                    return {image: owner.source};
+                },
+                template: '<img v-if="image" :src="image" alt="Readmitted image" />',
+            });
+            const wrapper = mount(host, {global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
+                provide: {[pilotContextKey as symbol]: context}}});
+            try {
+                await flushPromises();
+                expect(read).toHaveBeenCalledOnce();
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    await context.refreshSession();
+                    await flushPromises();
+                }
+                expect(read).toHaveBeenCalledOnce();
+                expect(wrapper.find('img').exists()).toBe(false);
+                // Revealing the same mounted owner supplies no new projection or
+                // binary grant. Its prior terminal failure still suspends automatic reads.
+                disclosed.value = false;
+                disclosed.value = true;
+                await flushPromises();
+                expect(read).toHaveBeenCalledOnce();
+
+                // A session receipt cannot infer restored binary authority. The
+                // existing feature-success callback explicitly requests recovery.
+                readable = true;
+                await context.refreshSession();
+                await flushPromises();
+                expect(read).toHaveBeenCalledOnce();
+                await owner.refresh();
+                expect(read).toHaveBeenCalledTimes(2);
+                expect(wrapper.get('img').attributes('src')).toBe('blob:feature-readmitted');
+            } finally { wrapper.unmount(); context.start()(); }
+        });
 
     it('recovers only failed images with bounded read cadence and retains a healthy same-version URL', async () => {
         vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'Date']});

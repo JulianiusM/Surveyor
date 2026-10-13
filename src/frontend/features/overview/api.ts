@@ -1,9 +1,27 @@
 import type {components, paths} from '../../../types/api/v1';
 import type {PilotContext, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
+import type {LocationQuery} from 'vue-router';
 import {validateOverviewRegion} from '../../../../.generated/api/v1/browser/validateOverviewRegion.mjs';
 import {validateOverviewVisibilityResult} from '../../../../.generated/api/v1/browser/validateOverviewVisibilityResult.mjs';
 
+/** Decode one region's durable URL into its generated read parameters. SSR seeds
+ * and mounted navigation must use the exact same key, including omitted fields;
+ * another collection's query fields never enter this feature request. */
+export function overviewQueryParameters(values: LocationQuery, collection: components['schemas']['OverviewRegion']['collection'],
+                                        region: components['schemas']['OverviewRegion']['region']): NonNullable<paths['/overview']['get']['parameters']['query']> {
+    const prefix = collection + '_' + region + '_';
+
+    // Native bookmarked values admit only a single string. The server remains
+    // responsible for type validation, normalization, paging and canonical results.
+    function field(name: string): string | undefined {
+        const value = values[prefix + name];
+        return typeof value === 'string' ? value : undefined;
+    }
+
+    return {collection, region, q: field('q'), type: field('type') as components['schemas']['OverviewRegion']['type'] | undefined,
+        page: field('page'), childPage: field('childPage'), eventId: field('event')};
+}
 
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class OverviewApi {
@@ -32,6 +50,7 @@ export class OverviewApi {
 
 // The transport is application/request-local and survives each component's usePilot wrapper.
 const owners = new WeakMap<PilotApi, OverviewApi>();
+/** Reuse the request/application transport owner through component-local translation bindings. */
 export function useOverviewApi(context: PilotContext): OverviewApi {
     let owner = owners.get(context.api);
     if (!owner) { owner = new OverviewApi(context.api); owners.set(context.api, owner); }

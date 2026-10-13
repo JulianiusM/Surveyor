@@ -4,10 +4,10 @@ documentation-metadata
 audience: packing-list participants; packing-list organizers
 owner: packing-list feature maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
-source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/en/assets/packing-shared-vs-local.png; docs/frontend-migration/staged/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/packing/packing-create.pug; src/views/packing/packing-view.pug; src/public/js/packing-create.ts; src/public/js/packing.ts; src/routes/packing.ts; src/routes/api/packing.ts; src/controller/packingController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/packing/PackingList.ts; src/modules/database/entities/packing/PackingItem.ts; src/modules/database/entities/packing/PackingAssignment.ts; src/modules/database/services/PackingService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/packing-management-api.spec.ts; tests/integration/packing-api.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; src/controller/helpController.ts
+verification-scope: Pilot Packed checklist warning and explicit Retry checked against mounted behavior; other article sections, declared anchors and image bytes retain their prior reviewed scope.
+source-anchors: src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; src/locales/en.json; tests/frontend/frontend-pilot-editor.spec.ts; src/controller/packingController.ts; src/views/packing/packing-view.pug; docs/user-guide/en/assets/packing-shared-vs-local.png
 next-review: packing-visible-UI-or-behavior-change
 production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->
@@ -125,6 +125,8 @@ The check mark:
 - is not associated with a Surveyor account or profile.
 
 The mark normally remains when you close and reopen the page in the same browser. It can disappear when you use another browser or device, browse privately, or clear site data. A duplicated list starts with its own unchecked items. Another person using the same browser profile can see the same check marks, even after the active Surveyor profile changes.
+
+If your browser cannot load or save some checks, a warning appears above the list. Your current changes remain while this list stays open for the same account and active profile, including when its items refresh. Select **Retry** in that warning to try saving them again. Until the warning clears, leaving or reloading the page or changing your account or active profile can lose unsaved checks. Shared assignments are unaffected.
 
 Do not use **Packed?** as proof that the group has completed a task. Use shared assignments and direct communication for group accountability.
 

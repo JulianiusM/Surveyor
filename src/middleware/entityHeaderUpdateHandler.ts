@@ -23,6 +23,7 @@ import settings from "../modules/settings";
 import type {EntityGetter, GetResource} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
 import {requirePermissionApi} from "./permissionMiddleware";
+import {entityMethodPermission} from '../controller/entityAdminController';
 
 const fileUploader = prepareFileUploader(settings.value.headerImgDir);
 
@@ -40,7 +41,7 @@ export function createEntityHeaderUpdateRouter(
 ) {
     // Reject missing method authority before the uploader writes a new file.
     app.put("/:id/header",
-        requirePermissionApi(permFct, PERM.EDIT_META),
+        requirePermissionApi(permFct, PERM[entityMethodPermission('editHeader')]),
         fileUploader.single("image"),
         asyncHandler(async (req: Request, res: Response) => {
             const msg = await setImg(resFct(req), req.file);
@@ -49,7 +50,7 @@ export function createEntityHeaderUpdateRouter(
 
     // Removal needs the same method authority but has no multipart side effect.
     app.delete("/:id/header",
-        requirePermissionApi(permFct, PERM.EDIT_META),
+        requirePermissionApi(permFct, PERM[entityMethodPermission('editHeader')]),
         asyncHandler(async (req: Request, res: Response) => {
             const msg = await delImg(resFct(req));
             renderer.respondWithSuccessJson(res, msg);

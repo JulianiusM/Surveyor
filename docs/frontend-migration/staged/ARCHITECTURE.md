@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; developers; migration reviewers
 owner: application maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented shared-operation/method-policy, request-local frontend and canonical Help boundaries; completed scoped execution and approved coexistence remedy tracked in review
+verification-scope: shared-operation/method-policy, request-local frontend and canonical Help boundaries retained; approved readiness admission, derived privacy, scoped locale and settings ownership clarified; execution tracked in review
 source-anchors: src/controller/packingController.ts; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/controller/helpController.ts; contracts/api/v1/; src/locales/; docs/ARCHITECTURE.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/ARCHITECTURE.md
@@ -60,6 +60,12 @@ inconsistency is tracked as `IMP-022`; preserve native behavior until a separate
 UI visibility never authorizes a command. Native/v1 transport differences do not justify duplicated capacity,
 ownership, permission or lifecycle decisions.
 
+Shared action declarations also feed generic native factories and v1 preflight/capability consumers through explicit
+arguments or existing owner accessors. A shared controller write must not leave duplicate header, duplicate-entry,
+administrator or event-link grants elsewhere. Preserve deliberate feature exceptions and actor admission.
+The existing administration controller's `entityMethodPermission` supplies those common action requirements;
+Packing's method map derives them without making generic middleware depend on the Packing controller.
+
 Shared archival, personal visibility, deletion and file retention retain their canonical owners.
 The bounded archival deadlock repair is an explicit exception, not a broad transaction redesign.
 Native/v1 coexistence changes require real scheduling evidence and unchanged business outcomes.
@@ -85,6 +91,27 @@ Resource keys capture actor/profile/resource/filters and locale only for languag
 Late responses, stale SSR seeds and cache aliases cannot restore retired authority after context/permission changes.
 Machine/user-authored data keeps one authority across locale changes; image reads inject a feature-owned operation.
 
+Automatic private reads have a session-admission boundary separate from presentation readiness. A current successful
+bootstrap precedes focus/visibility/reconnect recovery; pending or failed bootstrap keeps those reads paused while
+ordinary mounted content/drafts remain. Validated actor retirement still clears the old private scope. Locale changes
+retire only named language-owned query families, leaving machine projections and their authority reads intact.
+`PilotContext.readsReady` and `mayRead` supply dispatch admission separately from `ready`/`isCurrent`; the transport
+checks it as well as the consuming queries. Existing `useQueryAdmission` applies `mayObserve(key, firstRead)` for each
+mounted logical-key visit. Actual dispatch or joining an existing pending read consumes first admission; a new visit
+can recheck a cached terminal denial, while later automatic resumes remain paused. Key-bound metadata stays with the
+actual observer, so explicit dependency recovery uses its eligible query function without reopening hidden or retired
+consumers or relying on query-level last-writer options. Manual recovery remains separate.
+Admitted image/picker operations retain captured lifetimes through an
+ordinary session pause, while real scope/input/visibility changes still retire them.
+`belongsToLocalizedQueryFamily` supplies the existing locale-family match.
+
+Derived Overview totals/badges belong to the admitted projection that supplies them. Validated source denial retires
+those aggregates with private cards/cache; temporary errors retain their confirmed evidence. Independent regions
+retain only their own admitted evidence, with unknown membership represented as unknown rather than zero. The feature
+derives this presentation through its existing query owner without another server-data store.
+`PilotOverviewCountRead` holds only the source scope/key/read receipt; displayed numbers come from that QueryClient
+projection rather than a separate remembered count.
+
 Healthy shared reads use 30-second refresh and bounded eligible recovery, honoring Retry-After, hidden tabs,
 cancellation and observer disposal. A successful admitted read supplies its scoped receipt.
 Canceled observer refetch fulfillment with retained data is not fresh authority.
@@ -101,6 +128,13 @@ retains canonical destination and one-time receipt through failed delivery.
 Generic controls receive values/capabilities/events/injected operations. They own presentation/accessibility,
 not feature endpoints or business permission policy. Feature API/query owners select private dependencies.
 Comments and `.d.ts` contracts explain these boundaries; renderer feature state uses `data` and explicit mixin arguments.
+
+Repeated settings composites share presentation and preserve focus through established controls/dialog owners,
+using explicit data, events and injected operations. Feature
+owners retain their independent drafts, command orchestration, query dependencies and permission inputs; extraction
+does not introduce a universal form engine or a new backend cleanup layer.
+Packing uses `EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions` with declaration contracts in
+`src/types/FrontendEntitySettingsTypes.d.ts`; event discovery remains caller-supplied through the existing picker source.
 
 ## Runtime Help sources
 

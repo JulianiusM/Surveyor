@@ -1,6 +1,7 @@
 import {computed, onBeforeUnmount, ref, watch, type Ref} from 'vue';
 import type {PilotAuthorizedImage, PilotImageRead} from '../../types/FrontendPilotUiTypes';
 import {canRetryRead, refreshInterval, usePilot} from '../app/context';
+import {isTerminalReadFailure} from '../app/transport';
 
 /** Bind a feature-owned binary read to the same captured actor as its JSON projection.
  * Resource/version changes retire the previous image immediately. The owning feature
@@ -27,7 +28,7 @@ export function useAuthorizedImage(id: Ref<string>, version: Ref<string | null |
     }
 
     function mayRead(): boolean {
-        return active && context.browser && context.ready.value && visible.value && !!version.value;
+        return active && context.browser && context.mayRead() && visible.value && !!version.value;
     }
 
     /** Release both a pending read and any browser URL before replacing its authority. */
@@ -117,12 +118,29 @@ export function useAuthorizedImage(id: Ref<string>, version: Ref<string | null |
             controller = null;
             return;
         }
-        void refresh().then(scheduleRecovery);
+        resumeMissingImage();
+    }
+
+    /** Neither session nor disclosure proves restored binary access. Automatic
+     * resumes honor terminal rejection; a successful feature projection can still
+     * explicitly refresh, and a new version clears its own prior failure. */
+    function resumeMissingImage(): void {
+        if (!isTerminalReadFailure(error)) void refresh().then(scheduleRecovery);
+    }
+
+    /** Session admission controls new dispatch only. Preserve an already admitted
+     * slow image read through ordinary bootstrap, and resume a missing image after
+     * successful recovery without bypassing its server deadline or retry owner. */
+    function receiveReadAdmission(admitted: boolean): void {
+        // Session success does not regrant this binary endpoint. Terminal failures
+        // recover only through a later feature projection's deliberate refresh.
+        if (admitted) resumeMissingImage();
     }
 
     watch([id, version, () => context.session.value?.context, context.epoch, context.ready],
         receiveImage, {immediate: true, flush: 'sync'});
     watch(visible, receiveVisibility, {flush: 'sync'});
+    watch(context.readsReady, receiveReadAdmission, {flush: 'sync'});
     onBeforeUnmount(function retireImage(): void {
         active = false;
         clear();

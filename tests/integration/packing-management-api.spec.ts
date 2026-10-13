@@ -11,7 +11,7 @@ import * as userService from '../../src/modules/database/services/UserService';
 import * as packing from '../../src/controller/packingController';
 import {readOverview, setOverviewVisibility} from '../../src/modules/overview/api';
 import packingController from '../../src/controller/packingController';
-import {archiveEntity} from '../../src/controller/entityAdminController';
+import {archiveEntity, changeEntityEvent} from '../../src/controller/entityAdminController';
 import {readEventLinkSelection} from '../../src/controller/eventController';
 import {randomUUID} from 'node:crypto';
 import {QueryFailedError} from 'typeorm';
@@ -723,6 +723,54 @@ describe('pilot mixed overview projection', () => {
         await setOverviewVisibility('packing', id, {visibility: 'hidden'}, session);
         const hidden = await readOverview({collection: 'owner', region: 'hidden'}, session);
         expect(hidden.items[0]).toMatchObject({id, capabilities: {duplicate: true, remove: true}});
+    });
+
+    it('accepts production metadata and settings tokens through the shared authored comparison contract', async function emittedComparisonTokens() {
+        const id = await fixture();
+        const session = actor(owner);
+        const metadata = await packing.readPackingMetadata(id, session);
+        const settings = await packing.readPackingSettings(id, session);
+
+        // Exercise actual controller projections, including private access-field
+        // hashes. These usable baselines exceed the retired request-only limit.
+        expect(metadata.etag.length).toBeGreaterThan(512);
+        expect(settings.settingsToken.length).toBeGreaterThan(512);
+        expect(contractValidator('ComparisonToken')(metadata.etag)).toBe(true);
+        expect(contractValidator('FieldComparisonToken')(settings.settingsToken)).toBe(true);
+        await expect(packing.patchPackingMetadata(id, {title: 'Shared token accepted'}, metadata.etag, session)).resolves.toBeDefined();
+        await expect(packing.updatePackingDefaults(id, {guest: PERM.ACCESS_VIEW}, session, settings.settingsToken)).resolves.toEqual({changed: true});
+
+        // Oversized comparison evidence remains a 412 after authorization, with
+        // no persisted change. Missing evidence retains its separate 428 outcome.
+        await expect(packing.patchPackingMetadata(id, {title: 'Must not save'}, 'x'.repeat(4097), session)).rejects.toMatchObject({status: 412});
+        await expect(packing.patchPackingMetadata(id, {title: 'Must not save'}, undefined, session)).rejects.toMatchObject({status: 428});
+        expect((await packingService.getPackingListById(id))!.title).toBe('Shared token accepted');
+    });
+
+    it('preserves authorized native and versioned same-event no-ops without comparing or writing', async function unchangedEventCommands() {
+        const id = await fixture();
+        const eventId = await createIntegrationEvent(owner.id, 'Unchanged Packing parent');
+        const session = actor(owner);
+        const settings = await packing.readPackingSettings(id, session);
+        await packing.changePackingEvent(id, {eventId, expectedEventId: null}, session, settings.settingsToken);
+        const before = (await packingService.getPackingListById(id))!;
+
+        // A repeated desired relationship is harmless even if the reviewed
+        // old-parent/token is absent or stale. The real owner still authorizes
+        // both the source and selected target before acknowledging the no-op.
+        for (const token of [undefined, settings.settingsToken, '*', `W/${settings.settingsToken}`]) {
+            await expect(packing.changePackingEvent(id, {eventId, expectedEventId: null}, session, token)).resolves.toEqual({changed: false, canView: true});
+        }
+        const native = await changeEntityEvent('packing', before, {eventId, expectedEventId: null}, session);
+        expect(native.changed).toBe(false);
+        expect(await packingService.getPackingListById(id)).toEqual(before);
+
+        // The no-op is never an authorization bypass; an ungranted profile
+        // remains denied, while an actual changed relationship needs review.
+        await expect(packing.changePackingEvent(id, {eventId, expectedEventId: null}, actor(editor))).rejects.toMatchObject({status: 403});
+        await expect(packing.changePackingEvent(id, {eventId: null, expectedEventId: eventId}, session)).rejects.toMatchObject({status: 428});
+        await expect(packing.changePackingEvent(id, {eventId: null, expectedEventId: eventId}, session, settings.settingsToken)).rejects.toMatchObject({status: 412});
+        expect(await packingService.getPackingListById(id)).toEqual(before);
     });
 
     it('keeps event containers, private placement and actor membership in the shared overview path', async () => {

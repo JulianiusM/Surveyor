@@ -43,6 +43,13 @@ export function isReadDenial(error: unknown): error is ApiFailure {
     return error instanceof ApiFailure && error.confirmedRejection && [401, 403, 404].includes(error.status);
 }
 
+/** A validated ordinary client rejection has no automatic read retry. Explicit
+ * recovery remains available, while an authored server deadline keeps its own policy. */
+export function isTerminalReadFailure(error: unknown): error is ApiFailure {
+    return error instanceof ApiFailure && error.confirmedRejection && error.retryAt === null
+        && error.status < 500 && error.status !== 429;
+}
+
 export class UnconfirmedResponseError extends Error {
     constructor() { super('The server response did not confirm the requested operation.'); }
 }
@@ -59,7 +66,8 @@ export class PilotTransport {
     private nextAllowedRead = new Map<string, number>();
 
     constructor(protected isCurrent: (scope: PilotRequestScope, checkLocale?: boolean) => boolean,
-                protected identityLost: () => void, requestFetch: typeof fetch = globalThis.fetch) {
+                protected identityLost: () => void, requestFetch: typeof fetch = globalThis.fetch,
+                private mayRead?: (scope: PilotRequestScope) => boolean) {
         this.client = createClient<paths>({baseUrl: `${globalThis.location?.origin ?? 'http://localhost'}/api/v1`, fetch: requestFetch});
     }
 
@@ -140,7 +148,9 @@ export class PilotTransport {
     async allowedRead<T>(resource: string, scope: PilotRequestScope | undefined, operation: () => Promise<T>,
                          signal?: AbortSignal): Promise<T> {
         this.checkReadCancellation(signal);
-        if (scope && !this.isCurrent(scope)) throw new ObsoleteRequestError();
+        // Observer enabled state cannot protect explicit refetches or image reads.
+        // Enforce the same session dispatch barrier here without expiring admitted commands.
+        if (scope && (!this.isCurrent(scope) || this.mayRead?.(scope) === false)) throw new ObsoleteRequestError();
         const key = scope ? `${scope.context}:${scope.epoch}:${resource}` : resource;
         const now = Date.now();
         for (const [stored, deadline] of this.nextAllowedRead) if (deadline <= now) this.nextAllowedRead.delete(stored);

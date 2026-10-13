@@ -16,6 +16,20 @@ export interface PilotRequestScope {
 
 export interface PilotRead<T> { data: T; etag: string | null; }
 
+/** Query metadata describes the owning observer's current dispatch eligibility.
+ * It contains no DTO, grants or draft fields; the cache owner checks each actual
+ * observer independently when a confirmed command names a read dependency. */
+export interface PilotQueryReadPolicy {
+    mayRead(key: readonly unknown[]): boolean;
+}
+
+/** Automatic terminal suspension belongs to one mounted key visit. A fresh visit
+ * still obtains GET admission; explicit reads consult the same observer's eligibility. */
+export interface PilotQueryAdmission {
+    enabled: ComputedRef<boolean>;
+    meta: {surveyorRead: PilotQueryReadPolicy};
+}
+
 /** Features supply their own authorized binary endpoint; the shared image owner
  * manages only actor/version lifetime, cancellation and object URL disposal. */
 export type PilotImageRead = (id: string, scope: PilotRequestScope, signal: AbortSignal) => Promise<Blob>;
@@ -137,6 +151,14 @@ export interface PilotOverviewCardInteraction {
     duplicateUrl?: string;
 }
 
+/** A parent collection derives membership aggregates from this admitted query.
+ * The receipt carries lifetime/key evidence only; the authorized DTO stays in QueryClient. */
+export interface PilotOverviewCountRead {
+    scope: PilotRequestScope;
+    key: readonly unknown[];
+    updatedAt: number;
+}
+
 /** Guards cover mounted drafts and unresolved operation status after an editor retires.
  * No recovery data or old release assets are persisted. */
 export interface PilotUpdateCoordinator {
@@ -161,6 +183,9 @@ export interface PilotContext {
     visible: Ref<boolean>;
     hydrated: Ref<boolean>;
     ready: Ref<boolean>;
+    /** Session revalidation pauses new reads without unmounting admitted presentation
+     * or drafts. Only a current successful bootstrap restores this admission. */
+    readsReady: Readonly<Ref<boolean>>;
     /** The existing bootstrap owner keeps one current read receipt. Actor retirement
      * clears its error, deadline and successful timestamp together. */
     sessionRead: Readonly<ShallowRef<{error: Error | null; updatedAt?: number; pending: boolean}>>;
@@ -177,6 +202,10 @@ export interface PilotContext {
     initialDocumentFor(url: string): FrontendPilotBootstrap | undefined;
     retireInitialDocument(destination?: string): void;
     isCurrent(scope: PilotRequestScope, checkLocale?: boolean): boolean;
+    /** Check dispatch admission separately from a previously captured response's lifetime. */
+    mayRead(scope?: PilotRequestScope, checkLocale?: boolean): boolean;
+    /** Automatic observer resume also respects its current terminal read rejection. */
+    mayObserve(key: readonly unknown[], firstRead?: boolean): boolean;
     refreshSession(): Promise<void>;
     acceptIdentity(result: components['schemas']['IdentityResult']): Promise<void>;
     registerIdentityGuard(guard: () => boolean): () => void;

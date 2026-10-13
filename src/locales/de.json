@@ -341,6 +341,7 @@
         "capacity": "Zusagen / Maximum",
         "everyone": "Alle",
         "packed": "Eingepackt?",
+        "packedStorageUnavailable": "Dein Browser konnte einige „Eingepackt?“-Häkchen nicht laden oder speichern. Ungespeicherte Änderungen können beim Verlassen oder Neuladen dieser Liste oder beim Wechsel des Kontos oder aktiven Profils verloren gehen.",
         "assign": "Übernehmen",
         "unassign": "Zurücknehmen",
         "full": "Voll",

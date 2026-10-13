@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original query/draft/command choices and D2/D4/D5/Oct8 refresh amendments consolidated; completed scoped execution and its limits owned by paired review
+verification-scope: original query/draft/command choices and D2/D4/D5/Oct8 amendments retained; approved session-read admission, source-owned aggregate retirement and temporary Packed-state lifetime clarified; execution owned by paired review
 source-anchors: src/frontend/app/context.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/overview/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
 next-review: next-refresh-migration-or-authorized-cutover
 -->
@@ -40,6 +40,19 @@ Persistence reuse must not leave duplicated business policy or impose page membe
 | Locale/identity/update | App context and shared translator; transitions retire private generations. |
 | Packed? checklist | Existing Packing browser-local storage contract, not generic/profile server state. |
 
+The [approved Packed fallback](FRONTEND_FOUNDATION_DESIGN.md#authorized-temporary-packed-state-fallback-2026-10-13)
+preserves the native key/value contract. Healthy checklist rereads observe external changes and a missing key returns
+unchecked, except where an outstanding failed toggle still owns that item's selected value. Failed reads/writes
+retain the mounted actor/list visit's observed or selected checks. A persistent localized notice explains that some
+checks could not be loaded or saved and unsaved changes may be lost on leave/reload or account/profile change.
+A failed read alone does not classify a previously stored or successfully written value as unpersisted.
+Explicit Retry reattempts only outstanding local writes and reads; background reads do not replay writes.
+Keep the notice while reads fail or writes remain outstanding. Retire fallback and pending local writes on list/
+context change, unmount or validated resource retirement; persisted keys remain profile-independent. Local callbacks
+check their mounted actor, admitted list and live/rendered row before writing; Retry prunes departed rows first.
+Neither grants a server write, automatic replay or restoration promise for unsaved changes after departure.
+Shared item commands and polling remain independent of local storage.
+
 Generic cache/command/feedback owners accept caller-selected families/policy rather than importing feature endpoints.
 Capabilities are display guidance; controllers authorize every write.
 
@@ -65,6 +78,21 @@ arbitrary age-based command prohibition.
 Honor Retry-After and per-client jitter. Safe reads can retry with bounded shared backoff; commands default to zero.
 Do not run independent interval/retry timers against the same failed endpoint.
 Hidden polling is off; focus/reconnect refresh follows authoritative session revalidation.
+
+Automatic-read admission is distinct from mounted presentation readiness. Pause private query dispatch while session
+bootstrap is pending, failed or blocked by its server cooldown; only a current successful bootstrap reopens that
+admission. Ordinary revalidation retains confirmed readable content and drafts. Validated actor changes still retire
+the old private scope. Gate every automatic consumer, including visibility-triggered enabled queries, rather than
+only awaiting bootstrap before an explicit refetch.
+The existing app context exposes `readsReady`/`mayRead` for dispatch and retains `ready`/`isCurrent` for presentation
+and result-generation checks. Existing `useQueryAdmission` applies `mayObserve(key, firstRead)` per mounted logical-key
+visit. A fresh visit can recheck a cached terminal denial; actual dispatch or joining an existing pending read consumes
+first admission, and later automatic resumes keep the failure paused. Explicit dependency refresh selects the actual
+eligible observer and rechecks its key-bound metadata after cancellation, without reading hidden or retired regions.
+Deliberate manual recovery remains eligible through `mayRead` and its own deadline. Transport checks the same dispatch
+admission. Already admitted image/picker reads retain their captured lifetime during ordinary bootstrap pause, while
+actual actor/input/visibility retirement still disposes them. Focus recovery shares an observer read already started
+by successful admission instead of canceling/restarting it.
 
 Conditional GET, where supported, can retain equal DTOs and refresh receipts without moving focus.
 It still requires authorization before 304 and does not eliminate query cost.
@@ -98,6 +126,11 @@ old SSR closures/back navigation cannot replay a seed after eviction or actor re
 Features name dependencies when access disappears: detail/editor/picker/card/parent appearances can differ from
 public guest/copy policy. Retire late responses within selected families, not every actor/resource indiscriminately.
 Field write loss disables saving while readable drafts remain explicit; actor/read loss clears protected state.
+
+An aggregate's lifetime follows the admitted projection that supplied it. When a validated Overview-region denial
+retires its cards/cache, retire its private totals and hidden/membership badges too. A temporary failure retains the
+successful scoped evidence; independently admitted siblings may retain only their own aggregates. Derive this from
+existing source scopes/receipts rather than a second server-count store, and never interpret lost authority as zero.
 
 ## Identity changes and multiple tabs
 

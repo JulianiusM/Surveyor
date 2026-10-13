@@ -6,6 +6,7 @@ import {InvalidInputError, ObsoleteRequestError, UnconfirmedResponseError} from 
 import {validatePackingListView} from '../../../../.generated/api/v1/browser/validatePackingListView.mjs';
 import {validatePackingMetadata} from '../../../../.generated/api/v1/browser/validatePackingMetadata.mjs';
 import {validatePackingMetadataPatch} from '../../../../.generated/api/v1/browser/validatePackingMetadataPatch.mjs';
+import {validateComparisonToken} from '../../../../.generated/api/v1/browser/validateComparisonToken.mjs';
 import {validatePackingAssignmentResult} from '../../../../.generated/api/v1/browser/validatePackingAssignmentResult.mjs';
 import {validatePackingSettings} from '../../../../.generated/api/v1/browser/validatePackingSettings.mjs';
 import {validatePackingCreateContext} from '../../../../.generated/api/v1/browser/validatePackingCreateContext.mjs';
@@ -25,6 +26,17 @@ import {validatePackingResourceEntry} from '../../../../.generated/api/v1/browse
 type List = components['schemas']['PackingListView'];
 type Metadata = components['schemas']['PackingMetadata'];
 type Assignment = components['schemas']['PackingAssignmentResult'];
+
+/** Admit an opaque strong metadata ETag using the same authored token bound as commands.
+ * The response header sits outside the DTO validator. Its private field evidence is
+ * interpreted by the locked controller; the browser never decodes it into authority. */
+function requireMetadataComparison(etag: string | null | undefined): asserts etag is string {
+    // Preserve strong-tag admission while consuming the generated length contract.
+    // Missing, oversized or malformed header evidence cannot make the editor writable.
+    if (!validateComparisonToken(etag) || typeof etag !== 'string' || !/^"[^"\r\n]+"$/u.test(etag)) {
+        throw new UnconfirmedResponseError();
+    }
+}
 
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class PackingApi {
@@ -66,17 +78,23 @@ export class PackingApi {
             return transport.read('getPackingMetadata', {...response, signal}, validatePackingMetadata, scope, previous);
         }
         const result = await transport.allowedRead(`packing/${listId}/metadata`, scope, readMetadata, signal);
-        if (!result.etag || !/^"[^"\r\n]+"$/u.test(result.etag)) throw new UnconfirmedResponseError();
+        requireMetadataComparison(result.etag);
         return result;
     }
 
+    /** Submit a sparse generated metadata patch against its reviewed token.
+     * A confirmed response must include newly admitted header evidence as well as
+     * valid field data; neither the previous token nor saved values renew authority. */
     async saveMetadata(listId: string, patch: components['schemas']['PackingMetadataPatch'], etag: string,
                        scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
+        // Structural validation precedes transport; business/field checks remain server-owned.
         if (!validatePackingMetadataPatch(patch)) throw new InvalidInputError('Invalid metadata patch.');
+
         const result = this.transport.read('updatePackingMetadata', await this.transport.client.PATCH('/packing-lists/{listId}/metadata', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': etag}}, body: patch, cache: 'no-store',
         }), validatePackingMetadata, scope);
-        if (!result.etag || !/^"[^"\r\n]+"$/u.test(result.etag)) throw new UnconfirmedResponseError();
+        // Response headers use the same generated bound as every field-token body.
+        requireMetadataComparison(result.etag);
         return result;
     }
 
@@ -159,12 +177,22 @@ export class PackingApi {
         return transport.allowedRead(`packing/${listId}/duplicate/${eventId ?? ''}`, scope, readDuplicate, signal);
     }
 
+    /** Submit the generated creation contract and optional image as one multipart command.
+     * The JSON field retains its authored shape; file bytes use the existing upload boundary.
+     * Only a validated creation receipt confirms success, and uncertain delivery is left to
+     * the shared command owner without replaying this non-idempotent request. */
     async createPacking(input: components['schemas']['PackingCreateInput'], image: File | null,
                         scope: PilotRequestScope): Promise<components['schemas']['PackingCreated']> {
+        // Validate machine data before adapting it to the established multipart envelope.
+        // The image is a separate part rather than a second handwritten creation schema.
         if (!validatePackingCreateInput(input)) throw new InvalidInputError('Invalid packing creation.');
+
         const form = new FormData();
         form.append('data', JSON.stringify(input));
         if (image) form.append('image', image);
+
+        // Preserve captured actor/CSRF context through upload and response classification.
+        // A lost response cannot be treated as proof that no list was created.
         return this.transport.read('createPackingList', await this.transport.client.POST('/packing-lists', {
             params: {header: this.transport.headers(scope)}, body: {data: input}, bodySerializer: () => form, cache: 'no-store',
         }), validatePackingCreated, scope).data;
@@ -289,9 +317,18 @@ export class PackingApi {
         return transport.allowedRead(`packing/${listId}/header`, scope, readHeader, signal);
     }
 
+    /** Replace the header using the file draft's reviewed comparison token.
+     * Multipart serialization transports bytes while generated operation metadata still
+     * identifies the request. The controller owns image admission, locked comparison and
+     * committed cleanup; this adapter confirms only a validated mutation receipt. */
     async uploadHeader(listId: string, image: File, token: string, scope: PilotRequestScope) {
+        // Keep the chosen bytes separate from their generated filename placeholder.
+        // The serializer supplies the actual multipart body without copying upload policy.
         const form = new FormData();
         form.append('image', image);
+
+        // Send the token captured when this file was chosen, never a newer settings token
+        // obtained while the draft was waiting. The shared command owner handles recovery.
         return this.transport.read('uploadPackingHeader', await this.transport.client.PUT('/packing-lists/{listId}/header', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: {image: image.name}, bodySerializer: () => form, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -337,11 +374,16 @@ export class PackingApi {
     }
 }
 
-// usePilot creates a translation binding per component. Its API transport is stable for
-// the application/request, so wrappers reuse one owner without sharing it between requests or apps.
 const owners = new WeakMap<PilotApi, PackingApi>();
+
+/** Reuse one Packing transport wrapper for this application/request's API owner.
+ * Component-local translation bindings may create context wrappers, but they retain the
+ * same transport. A WeakMap preserves that ownership without sharing actors across apps. */
 export function usePackingApi(context: PilotContext): PackingApi {
     let owner = owners.get(context.api);
+
+    // Construct lazily for this transport identity; component remounts reuse the wrapper
+    // while disposal releases it when the application-local API is no longer referenced.
     if (!owner) {
         owner = new PackingApi(context.api);
         owners.set(context.api, owner);

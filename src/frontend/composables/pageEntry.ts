@@ -9,7 +9,7 @@ import {frontendDocumentUrl, safeFrontendReturn} from '../../modules/lib/fronten
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import {canRetryRead, usePilot} from '../app/context';
 import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../app/transport';
-import {retireQueryFamily} from '../app/queryCache';
+import {retireQueryFamily, useQueryAdmission} from '../app/queryCache';
 
 /** Admit SPA navigation only for an ordinary primary click. Modified clicks, downloads
  * and explicit targets retain their captured href and native tab/window behavior. */
@@ -284,8 +284,10 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         event.returnValue = '';
     }
 
+    /** Consume retained delivery only after an accepted departure from its origin. */
     function retireDepartedReceipt(_to: RouteLocationNormalized, _from: RouteLocationNormalized,
                                    failure?: unknown): void {
+        // Failed/canceled navigation still belongs to the form that confirmed the write.
         if (!failure && receipt.value
             && frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(receipt.value.origin)) {
             receipt.value = undefined;
@@ -350,7 +352,9 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         return retry(confirmed.owner);
     }
 
+    /** Track each mounted logical consumer so one instance cannot retire another's receipt. */
     function retain(owner: unknown): () => void {
+        // Publish a fresh count map for reactive fallback delivery, retaining no form values.
         owners++;
         const counts = new Map(mountedOwners.value);
         counts.set(owner, (counts.get(owner) ?? 0) + 1);
@@ -532,9 +536,11 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
             && context.session.value?.context === initialContext && context.locale.value === initialLocale ? source.initial : undefined;
     }
 
+    const readAdmission = useQueryAdmission(context, queryKey,
+        computed(() => context.hydrated.value && source.enabled?.value !== false));
     const query = useQuery<T>({
         queryKey,
-        enabled: computed(() => context.ready.value && context.hydrated.value && source.enabled?.value !== false),
+        ...readAdmission,
         queryFn: readCurrentEntry,
         initialData,
     });
@@ -610,7 +616,7 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
      * captured actor/route/generation. An explicit retry must still honor enabled
      * state and the transport's server deadline even though refetch bypasses it. */
     async function retry(): Promise<void> {
-        if (!active || navigation.pending() || !context.ready.value || !context.hydrated.value
+        if (!active || navigation.pending() || !context.mayRead() || !context.hydrated.value
             || source.enabled?.value === false || query.isFetching.value || !canRetryRead(error.value)) return;
         await query.refetch();
     }

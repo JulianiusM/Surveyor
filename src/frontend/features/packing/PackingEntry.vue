@@ -71,13 +71,24 @@ function readEntry(scope: PilotRequestScope, signal: AbortSignal): Promise<compo
 // A typed server denial keeps its native wording. Transport failure instead
 // offers read recovery, and neither case exposes a private detail payload merely
 // because an earlier admission query retained data in the cache.
-const admissionError = computed(() => {
+const admissionError = computed(admissionErrorText);
+
+/** Present the server-owned denial separately from a recoverable admission read
+ * failure. Neither outcome inherits access from an earlier cached detail payload. */
+function admissionErrorText(): string | undefined {
     const entry = admission.outcome.value;
+
+    // Known parameter-free labels retain native wording. Unexpected label contracts
+    // fall back to the ordinary error rather than entering the typed translator.
     if (entry?.kind === 'denied') {
         return context.messages.value.t(isPlainMessageKey(entry.messageKey) ? entry.messageKey : 'common.error');
     }
+
+    // A temporary failure keeps an already admitted render mounted. Show the full
+    // load failure only when this visit has no render admission to preserve.
     return admission.error.value && entry?.kind !== 'render' ? context.messages.value.t('state.loadFailed') : undefined;
-});
+}
+
 // A transport failure is recoverable without changing the typed native denial
 // outcome. Keep one deadline owner; Retry repeats only this resource admission GET.
 const recoverableRead = computed(() => !!admission.error.value && admission.outcome.value?.kind !== 'denied');

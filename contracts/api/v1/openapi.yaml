@@ -705,12 +705,13 @@ paths:
       operationId: changePackingEvent
       x-surveyor-command: {retryPolicy: reconcile-only, precondition: settings}
       summary: change Packing Event
+      description: Current authorization is always required. An already selected event returns unchanged without writing, even with an absent or stale comparison; an actual relationship change requires the reviewed If-Match and expectedEventId.
       parameters:
         - $ref: "#/components/parameters/Context"
         - $ref: "#/components/parameters/Locale"
         - $ref: "#/components/parameters/ListId"
         - $ref: "#/components/parameters/Csrf"
-        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/EventIfMatch"
       responses:
         "200":
           description: Authorized operation result
@@ -1065,9 +1066,14 @@ components:
       name: If-Match
       required: true
       schema:
+        $ref: "#/components/schemas/ComparisonToken"
+    EventIfMatch:
+      in: header
+      name: If-Match
+      required: false
+      description: Ignored for an authorized unchanged choice, which returns without comparing or writing. An actual relationship change requires a ComparisonToken and current-value comparison under the existing locks.
+      schema:
         type: string
-        minLength: 1
-        maxLength: 512
     IfNoneMatch:
       in: header
       name: If-None-Match
@@ -1175,6 +1181,10 @@ components:
       $ref: ./session.yaml#/schemas/DeploymentView
     Uuid:
       $ref: ./common.yaml#/schemas/Uuid
+    ComparisonToken:
+      $ref: ./common.yaml#/schemas/ComparisonToken
+    FieldComparisonToken:
+      $ref: ./common.yaml#/schemas/FieldComparisonToken
     NullableUuid:
       $ref: ./common.yaml#/schemas/NullableUuid
     LocaleTag:

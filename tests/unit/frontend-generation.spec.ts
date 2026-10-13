@@ -55,6 +55,45 @@ describe('contract and catalog generation', () => {
         expect(collisions.sort()).toEqual([]);
     });
 
+    it('reports compiled permission siblings without mutation and retires only those known outputs during generation', async function retiresCompiledPermissionSiblings() {
+        const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
+        try {
+            const destination = path.join(temporary, 'output');
+            generate('generate-locales.mjs', ['--output-root', destination]);
+            const generated = path.join(destination, 'src/modules/localization/generated');
+            const sourcePath = path.join(generated, 'permissions.ts');
+            const sourceBefore = await fs.readFile(sourcePath, 'utf8');
+            const sourceModifiedBefore = (await fs.stat(sourcePath)).mtimeMs;
+            const compiled = path.join(generated, 'permissions.js');
+            const sourceMap = path.join(generated, 'permissions.js.map');
+            const unrelated = path.join(generated, 'unrelated.js');
+
+            // Reproduce the real extension-resolution collision in the generator's
+            // own temporary output tree, with an unrelated file beside it.
+            await fs.writeFile(compiled, '// Stale compiled permission source\n');
+            await fs.writeFile(sourceMap, '{"version":3}\n');
+            await fs.writeFile(unrelated, '// Preserve this unrelated generated neighbor\n');
+            expect(() => generate('generate-locales.mjs', ['--output-root', destination, '--check']))
+                .toThrow(/compiled permission siblings/);
+            expect(await fs.readFile(compiled, 'utf8')).toBe('// Stale compiled permission source\n');
+            expect(await fs.readFile(sourceMap, 'utf8')).toBe('{"version":3}\n');
+            expect(await fs.readFile(sourcePath, 'utf8')).toBe(sourceBefore);
+            expect((await fs.stat(sourcePath)).mtimeMs).toBe(sourceModifiedBefore);
+
+            // Normal generation uses its exact-file retirement before publishing
+            // current TypeScript. It must not replace a broad directory cleanup.
+            generate('generate-locales.mjs', ['--output-root', destination]);
+            await expect(fs.access(compiled)).rejects.toMatchObject({code: 'ENOENT'});
+            await expect(fs.access(sourceMap)).rejects.toMatchObject({code: 'ENOENT'});
+            expect(await fs.readFile(unrelated, 'utf8')).toBe('// Preserve this unrelated generated neighbor\n');
+            expect(await fs.readFile(sourcePath, 'utf8')).toBe(sourceBefore);
+            generate('generate-locales.mjs', ['--output-root', destination, '--check']);
+        } finally {
+            // The established guard verifies the mkdtemp root before recursive fixture cleanup.
+            await removeTemporary(temporary);
+        }
+    }, 20_000);
+
     it('generates identical artifacts from two clean trees and verifies them without rewriting', async () => {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {

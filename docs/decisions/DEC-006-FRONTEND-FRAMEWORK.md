@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original technology comparison, primary choices and dated rendering/development amendments consolidated; current execution belongs to the paired review
+verification-scope: original technology comparison, primary choices and dated rendering/development amendments retained; shared-operation status and shared-action/factory source adoption reconciled; execution belongs to paired review
 source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; src/views/layout.pug; docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: expanded-feature-migration
 -->
@@ -149,7 +149,8 @@ small-screen behavior.
 [Vue accessibility](https://vuejs.org/guide/best-practices/accessibility.html)
 
 Compare affected native/pilot scenes with equal data/actors/viewport and disclose intended amendments.
-Source relocation into the existing controller is applied; meaningful shared-operation/method-policy consolidation
-remains pending. Current scope-specific results are in the
+Named shared operations and controller-owned method policy are implemented. Existing shared-action declarations
+also feed native factories and v1 policy/capability consumers, rather than retaining separate copied grants.
+Current source disposition and scope-specific results are in the
 [review](../frontend-migration/PILOT_PARITY_REVIEW.md). No bundle-size/framework benchmark, complete migration or production cutover is claimed.
 Documentation reports remain advisory.

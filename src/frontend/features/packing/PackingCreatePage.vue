@@ -13,6 +13,7 @@ import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {frontendDocumentUrl} from '../../../modules/lib/frontendIdentity';
 import {useConfirmedNavigation, usePageEntry} from '../../composables/pageEntry';
 import {packingKeys} from '../../app/queryKeys';
+import {useQueryAdmission} from '../../app/queryCache';
 import {usePageTitle} from '../../composables/pageTitle';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -123,10 +124,13 @@ function retireDeniedCreationContext(): void {
     retainedContext.value = null;
     selectedEvent.value = null;
 }
+const duplicateKey = computed(() => packingKeys.duplicate(context.session.value?.context, sourceId.value, initialEventId.value));
+const duplicateAdmission = useQueryAdmission(context, duplicateKey,
+    computed(() => context.hydrated.value && !!sourceId.value && !bootstrapError.value));
 const duplicate = useQuery({
-    queryKey: computed(() => packingKeys.duplicate(context.session.value?.context, sourceId.value, initialEventId.value)),
+    queryKey: duplicateKey,
     initialData: initialDuplicate,
-    enabled: computed(() => context.hydrated.value && context.ready.value && !!sourceId.value && !bootstrapError.value),
+    ...duplicateAdmission,
     queryFn: ({signal}) => api.duplicate(sourceId.value!, context.capture(), signal, initialEventId.value),
 });
 
@@ -167,10 +171,10 @@ const reading = computed(() => sourceId.value ? duplicate.isFetching.value : cre
 /** Retry only the current admission read, respecting the shared server backoff.
  * Query state owns progress and recovered errors; this operation never submits the form. */
 async function retryRead(): Promise<void> {
-    if (reading.value || !retryAvailable.value) return;
-    const queryKey = sourceId.value ? packingKeys.duplicate(context.session.value?.context, sourceId.value, initialEventId.value)
-        : packingKeys.creation(context.session.value?.context, initialEventId.value);
-    await context.queryClient.refetchQueries({queryKey, type: 'active'}, {cancelRefetch: false});
+    if (!context.mayRead() || reading.value || !retryAvailable.value) return;
+    // Explicit recovery remains available when terminal errors disable observation.
+    if (sourceId.value) await duplicate.refetch({cancelRefetch: false});
+    else await creation.retry();
 }
 
 function snapshot(): string {
@@ -232,6 +236,7 @@ function chooseImage(event: Event): void {
 /** A duplicate grant admits its form independently of creation. The server projects the
  * account-login journey and exact duplicate return; the browser does not duplicate that policy. */
 async function admitSubmission(purpose: 'submission' | 'recovery'): Promise<boolean> {
+    if (!context.mayRead()) return false;
     const scope = context.capture();
     // Fragments move within this document and cannot cancel a submitted form.
     // Path/query, actor and locale changes still retire the admission receipt.
@@ -271,7 +276,7 @@ async function admitSubmission(purpose: 'submission' | 'recovery'): Promise<bool
 /** Recover only account admission. A successful GET leaves this form intact and
  * requires a separate explicit Create before collecting and sending its draft. */
 async function retrySubmissionAdmission(): Promise<void> {
-    if (submitted.value || admittingSubmission.value || !context.ready.value || !submissionRetryAvailable.value) return;
+    if (submitted.value || admittingSubmission.value || !context.mayRead() || !submissionRetryAvailable.value) return;
     await admitSubmission('recovery');
 }
 

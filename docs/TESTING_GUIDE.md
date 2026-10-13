@@ -4,9 +4,9 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: test maintainers
 status: current
-last-verified: 2026-09-16
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Native test-layer and database-safety contracts, executable runner/script routing and advisory corpus checks.
+verification-scope: Native test-layer and database-safety contracts retained; narrow editorial correction of executable pre-hooks, isolated runner projects, coverage and CI routing; advisory corpus checks unchanged.
 source-anchors: tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
 next-review: test-layout-command-or-help-validation-change
 -->
@@ -91,7 +91,10 @@ npm test
 
 `npm test` runs every Vitest layer, including MariaDB integration tests. It is not a database-free shortcut. `npm run test:quick` is the database-free unit-plus-frontend command.
 
-The package `pretest`, `pretest:integration`, and `pretest:ci` hooks regenerate `src/modules/database/__index__.ts` before their corresponding commands. The layer-specific unit and frontend scripts do not have dedicated pre-hooks, but those suites do not initialize the database.
+The normal Vitest package scripts have pre-hooks that run `npm run generate`, including the unit, frontend and quick
+commands. Generation prepares `src/modules/database/__index__.ts` and authored API/localization consumers without
+connecting to a database. Direct runner invocations bypass package hooks; prepare current inputs after checkout or an
+authored input change. The scripts in `package.json` own the exact preparation sequence.
 
 ## Vitest configuration
 
@@ -103,15 +106,24 @@ tests/frontend/**/*.spec.ts
 tests/integration/**/*.spec.ts
 ```
 
-The configuration uses the Node environment, loads `tests/support/env.ts`, and keeps file-level parallelism disabled. Sequential test files are required because integration suites independently rebuild the same disposable schema.
+The configuration uses the Node environment and loads `tests/support/env.ts`. The `database-free` project runs isolated
+unit/frontend files with bounded thread workers; the `integration` project serializes files because each rebuilds the
+same disposable schema. A full local Vitest run orders those projects so database resets do not overlap independent
+files. Keep database-backed fixture resets serialized; their requirement does not prohibit isolated database-free
+parallelism. Exact worker limits and project order belong to `vitest.config.mts`.
 
-Coverage uses V8 and includes `src/**/*.ts`, excluding migrations, generated database metadata, and declaration-only type files. The CI command writes text, LCOV, JSON, and JUnit outputs.
+Coverage uses V8 over the configured TypeScript/Vue source inventory, excluding migrations, generated database
+metadata and declaration contracts. It does not measure template/Sass visual parity. The CI command writes text,
+LCOV, JSON and JUnit outputs; `vitest.config.mts` owns the exact inclusion/exclusion inventory.
 
 ## Layer contracts
 
 ### Unit tests
 
-Use `tests/unit/` when the subject can be exercised without MariaDB, an Express application, filesystem mutation, SMTP, OIDC discovery, or a real browser.
+Use `tests/unit/` when the subject can be exercised without MariaDB, an Express application, application/user filesystem
+side effects, SMTP, OIDC discovery or a real browser. Established offline generator/Help tooling fixtures may use
+isolated temporary trees with guarded cleanup; they do not write application or user storage. The centralized
+[development policy](policies/DEVELOPMENT_POLICY.md#test-selection-and-evidence) owns the test-layer boundary.
 
 Good subjects include:
 
@@ -333,17 +345,18 @@ before either rehearsal. Documentation reports remain advisory and are not subst
 
 ## CI contract
 
-`.github/workflows/ci.yml` uses Node.js 24.15.0 and MariaDB 10.11. It:
+`.github/workflows/ci.yml` uses Node.js 24.15.0 and MariaDB 10.11. Database-free, integration and browser stages run on
+separate runners with their own MariaDB service and dedicated schemas. Each installs the lockfile with `npm ci` and
+writes `tests/.env.test` and `.env.e2e` for those guarded disposable targets.
 
-1. Installs the lockfile with `npm ci`.
-2. Creates and grants dedicated `surveyor_test` and `surveyor_e2e` schemas.
-3. Writes `tests/.env.test` and `.env.e2e`.
-4. Runs `npm run test:ci` with application Vitest coverage and JUnit output.
-5. Builds the application.
-6. Installs or restores Chromium.
-7. Runs `npm run e2e` with application Playwright reports.
-8. Uploads reports and coverage artifacts.
-9. Runs the configured SonarQube scan.
+The two Vitest stages generate inputs, then select their respective project with coverage, JUnit and mergeable
+reports. The database-free stage also runs the Vue-aware test compiler; integration files remain serialized.
+The browser stage builds the application, installs or restores Chromium and runs the configured Playwright suite.
+Runner/workflow files own exact worker limits, timeouts and preparation order.
+
+Reports are uploaded even after failures. A separate collection job replays the Vitest reports and merges coverage
+without rerunning application suites, then performs the configured analysis after successful verification. Separate
+stages retain the same application boundaries; their independence does not permit parallel resets within one schema.
 
 Documentation checks and tooling regressions are absent from this required sequence. Tests of maintained prose,
 images, guide search examples, or documentation completeness live outside application test discovery.
@@ -358,7 +371,9 @@ Confirm that `TEST_DB_NAME` contains `test`, points to a disposable schema, and 
 
 ### Integration suites interfere with one another
 
-Do not enable Vitest file parallelism. Each suite rebuilds the shared schema; the committed configuration deliberately serializes files.
+Do not enable file parallelism for the `integration` project. Its suites rebuild one shared disposable schema and
+the committed configuration serializes them. Database-free files have independent isolates and may use their
+configured bounded workers. Concurrent database-backed runs require genuinely separate disposable targets.
 
 ### E2E initialization refuses the database
 
@@ -370,7 +385,9 @@ Run `npm run build`, verify `.env.e2e`, confirm MariaDB is reachable, and check 
 
 ### A unit/frontend-only command cannot import generated database metadata
 
-Prefer importing the production module actually under test without crossing the database bootstrap boundary. When a test legitimately needs entity metadata or the full package pre-hook, run `npm run generate` first or use `npm test`.
+Prefer importing the production module actually under test without crossing the database bootstrap boundary.
+Normal unit/frontend package scripts prepare generated inputs through their own pre-hooks. If a direct runner
+legitimately needs generated metadata/contracts, run `npm run generate` first; generation is not a database test.
 
 ### CI passes a layer that fails locally
 

@@ -9,8 +9,13 @@ import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import * as pug from 'pug';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
-import {overviewKeys} from '../../src/frontend/app/queryKeys';
-import {ApiFailure} from '../../src/frontend/app/transport';
+import {helpKeys, overviewKeys, packingKeys} from '../../src/frontend/app/queryKeys';
+import {refetchFreshQueries} from '../../src/frontend/app/queryCache';
+import {ApiFailure, ObsoleteRequestError} from '../../src/frontend/app/transport';
+import {useHelpApi} from '../../src/frontend/features/help/api';
+import {useOverviewApi} from '../../src/frontend/features/overview/api';
+import HelpPage from '../../src/frontend/features/help/HelpPage.vue';
+import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
 import EventPicker from '../../src/frontend/components/EventPicker.vue';
 import OverviewRegion from '../../src/frontend/features/overview/OverviewRegion.vue';
 import OverviewPage from '../../src/frontend/features/overview/OverviewPage.vue';
@@ -39,6 +44,14 @@ const card: components['schemas']['OverviewCard'] = {
     archived: false, inheritedArchived: false, visibility: 'default', overviewHidden: false,
     capabilities: {archive: false, restore: false, duplicate: false, remove: false},
 };
+const packing: components['schemas']['PackingListView'] = {
+    entityType: 'packing', id: eventId, title: 'Shared equipment', description: null,
+    headerUrl: null, headerVersion: null, orderToken: '"order"', currentEventId: null, currentEventUrl: null,
+    archived: false, inheritedArchived: false,
+    capabilities: {editTitle: false, editDescription: false, selfAssign: true, addItem: true,
+        reorder: false, manageSettings: false},
+    counters: {participants: 0, open: 0, empty: 0}, items: [],
+};
 // Compile the immutable native oracle once per isolated file. Every comparison
 // still renders current fixture membership into a new DOM; no output or locals
 // are cached, and the migrated component never supplies its expected markup.
@@ -54,8 +67,8 @@ afterEach(async () => {
     document.body.innerHTML = '';
 });
 
-function json(value: unknown): Response {
-    return new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json',
+function json(value: unknown, status = 200): Response {
+    return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
         'X-Surveyor-Context': session.context}});
 }
 
@@ -131,13 +144,16 @@ function filterChoices(element: ParentNode) {
  * lifecycle and rendered controls remain their production implementations. */
 async function mounted(component: Component, props: Record<string, unknown>,
     handler: (request: Request) => Promise<Response> = async request => json(region(request)),
-    path = '/frontend-pilot', previous = '/before', shell?: Component) {
+    path = '/frontend-pilot', previous = '/before', shell?: Component, prepare?: (context: ReturnType<typeof createPilotContext>) => void) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createPilotContext({session}, true, request);
     context.hydrated.value = true;
+    prepare?.(context);
     const componentProps = reactive({...props});
     const router = createRouter({history: createMemoryHistory(), routes: [
         {path: '/frontend-pilot', component, props: () => componentProps},
+        {path: '/frontend-pilot/packing/:listId', component, props: () => componentProps},
+        {path: '/frontend-pilot/help', component, props: () => componentProps},
         {path: '/before', component: defineComponent({template: '<p>Before overview</p>'})},
     ]});
     await router.push(previous);
@@ -162,6 +178,388 @@ async function mounted(component: Component, props: Record<string, unknown>,
 }
 
 describe('visible resource recovery', () => {
+    it('admits a new mounted GET after a cached terminal denial without waiting for cache expiry', async function admitsColdRead() {
+        let denied = true;
+        let reads = 0;
+        async function readColdRegion(request: Request): Promise<Response> {
+            reads++;
+            return denied ? readFailure(403, 'future') : json(region(request));
+        }
+        const {root, router, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, readColdRegion);
+        expect(reads).toBe(1);
+        expect(root.findComponent(OverviewCard).exists()).toBe(false);
+        await router.push('/before');
+        await flushPromises();
+        expect(context.queryClient.getQueryCache().findAll({queryKey: overviewKeys.all(session.context)})).toHaveLength(1);
+
+        // A new component visit must recheck native GET admission even while the
+        // old rejected query remains cached. Its former observer cannot suspend it.
+        denied = false;
+        await router.push('/frontend-pilot');
+        await flushPromises();
+        expect(reads).toBe(2);
+        expect(root.findComponent(OverviewCard).exists()).toBe(true);
+    });
+
+    it('rechecks a cached missing Help topic on cold Back in the reused route component', async function admitsHelpBack() {
+        let missing = true;
+        let rejectedTopicReads = 0;
+        const article: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Readmitted guide',
+            content: '<p>A readmitted task.</p>', docsList: [], docsGroups: [], currentDoc: 'fixture', toc: []};
+        async function readHelpTopic(request: Request): Promise<Response> {
+            if (new URL(request.url).searchParams.get('doc') === 'missing') {
+                rejectedTopicReads++;
+                if (missing) return json({type: 'about:blank', title: 'Not found', status: 404,
+                    detail: 'Missing topic.', requestId: 'cold-help-topic', code: 'NOT_FOUND',
+                    messageKey: 'api:errors.NOT_FOUND', params: {}}, 404);
+            }
+            return json(article);
+        }
+        const {root, router} = await mounted(HelpPage, {}, readHelpTopic, '/frontend-pilot/help?doc=missing');
+        expect(root.find('.pilot-page-message').exists()).toBe(true);
+        expect(rejectedTopicReads).toBe(1);
+        await router.push('/frontend-pilot/help?doc=index');
+        await flushPromises();
+        expect(root.get('.help-content').text()).toContain('A readmitted task.');
+        missing = false;
+        router.back();
+        await flushPromises();
+        expect(rejectedTopicReads).toBe(2);
+        expect(root.find('.pilot-page-message').exists()).toBe(false);
+        expect(root.get('.help-content').text()).toContain('A readmitted task.');
+    });
+
+    it('consumes a joined in-flight read before terminal session-resume suppression', async function consumesJoinedRead() {
+        const held = deferred<Response>();
+        let reads = 0;
+        let pending: Promise<unknown> | undefined;
+        async function readJoinedRegion(request: Request): Promise<Response> {
+            if (new URL(request.url).pathname === '/api/v1/session') return json(session);
+            reads++;
+            return held.promise;
+        }
+        const {root, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, readJoinedRegion,
+            '/frontend-pilot', '/before', undefined, function prepareJoinedRead(context): void {
+                const api = useOverviewApi(context);
+                const parameters = {collection: 'owner' as const, region: 'main' as const};
+                const scope = context.capture();
+                pending = context.queryClient.fetchQuery({queryKey: overviewKeys.region(scope.context, scope.locale, parameters),
+                    queryFn: ({signal}) => api.overview(parameters, scope, signal)}).catch(() => undefined);
+            });
+        expect(reads).toBe(1);
+        held.resolve(readFailure(403, 'future'));
+        await pending;
+        await flushPromises();
+        expect(root.findComponent(OverviewCard).exists()).toBe(false);
+        for (let attempt = 0; attempt < 3; attempt++) {
+            await context.refreshSession();
+            await flushPromises();
+        }
+        expect(reads).toBe(1);
+    });
+
+    it('refreshes a readable terminal-paused dependency after a confirmed visibility command without reading hidden queries',
+        async function refreshesCommittedDependencies() {
+            let denied = true;
+            let writes = 0;
+            const reads: string[] = [];
+            async function readDependentRegion(request: Request): Promise<Response> {
+                if (request.method === 'PUT') {
+                    writes++;
+                    denied = false;
+                    return json({visibility: 'shown', overviewHidden: false, archived: false});
+                }
+                const parameters = new URL(request.url).searchParams;
+                reads.push(parameters.get('collection') + ':' + parameters.get('region'));
+                if (denied && parameters.get('collection') === 'owner') return readFailure(403, 'future');
+                return json({...region(request), collection: parameters.get('collection'), region: parameters.get('region')});
+            }
+            const {wrapper, context} = await mounted(OverviewPage, {}, readDependentRegion);
+            // A closed cached variant has no eligible mounted observer and remains
+            // outside this command's active dependencies, despite sharing its family.
+            context.queryClient.setQueryData(overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'hidden'}),
+                {...region(new Request('http://localhost/overview')), region: 'hidden'});
+            expect(wrapper.get('[data-collection="owner"][data-region="main"]').findComponent(OverviewCard).exists()).toBe(false);
+            const participant = wrapper.get('[data-collection="participant"][data-region="main"]');
+            await participant.findAll('button').find(button => button.text() === context.messages.value.t('overview.show'))!.trigger('click');
+            await flushPromises();
+            expect(writes).toBe(1);
+            expect(wrapper.get('[data-collection="owner"][data-region="main"]').findComponent(OverviewCard).exists()).toBe(true);
+            expect(reads.filter(value => value === 'owner:main')).toHaveLength(2);
+            expect(reads).not.toContain('owner:hidden');
+        });
+
+    it('uses the readable observer when a hidden sibling last configured the same terminal query', async function selectsReadableObserver() {
+        let denied = true;
+        let reads = 0;
+        const siblings = defineComponent({components: {OverviewRegion}, template:
+            '<section><OverviewRegion collection="owner" region="main" /><OverviewRegion collection="owner" region="main" :active="false" /></section>'});
+        async function readSharedRegion(request: Request): Promise<Response> {
+            reads++;
+            return denied ? readFailure(403, 'future') : json(region(request));
+        }
+        const {root, context} = await mounted(siblings, {}, readSharedRegion);
+        expect(reads).toBe(1);
+        expect(root.findComponent(OverviewCard).exists()).toBe(false);
+
+        // Both real observers share one cache entry. Its last query options belong
+        // to the hidden sibling; the explicit dependency must use the readable
+        // observer's feature callback and keep the hidden callback undispatched.
+        denied = false;
+        await refetchFreshQueries(context.queryClient, {queryKey: overviewKeys.all(session.context), type: 'active'},
+            () => context.mayRead());
+        await flushPromises();
+        expect(reads).toBe(2);
+        expect(root.findAllComponents(OverviewRegion)[0].findComponent(OverviewCard).exists()).toBe(true);
+    });
+
+    it('waits for visibility-resume session admission and retains mounted drafts through failed bootstrap and cooldown', async function preservesReadAdmission() {
+        vi.useFakeTimers({toFake: ['Date']});
+        vi.setSystemTime(new Date('2026-10-13T08:00:00Z'));
+        const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        const bootstrap = deferred<Response>();
+        let recovered = false;
+        async function readPacking(request: Request): Promise<Response> {
+            if (new URL(request.url).pathname === '/api/v1/session') return recovered ? json(session) : bootstrap.promise;
+            return json(packing);
+        }
+        const {wrapper, context, request} = await mounted(PackingPage, {}, readPacking,
+            '/frontend-pilot/packing/' + eventId);
+        const stop = context.start();
+        cleanups.push(stop);
+        const input = wrapper.get<HTMLInputElement>('#quick-title');
+        await input.setValue('Retained packing draft');
+        input.element.focus();
+        input.element.setSelectionRange(2, 8);
+
+        // Resuming a stale observer must wait behind the real bootstrap promise.
+        visibility.mockReturnValue('hidden');
+        document.dispatchEvent(new Event('visibilitychange'));
+        await nextTick();
+        vi.setSystemTime(new Date('2026-10-13T08:00:31Z'));
+        visibility.mockReturnValue('visible');
+        document.dispatchEvent(new Event('visibilitychange'));
+        await flushPromises();
+        expect(request.mock.calls.map(([value]) => new URL((value as Request).url).pathname))
+            .toEqual(['/api/v1/packing-lists/' + eventId, '/api/v1/session']);
+        expect(context.ready.value).toBe(true);
+        expect(context.mayRead()).toBe(false);
+
+        // Explicit API callers cannot bypass observer enablement. Command/response
+        // scope stays valid while only new reads are paused.
+        const captured = context.capture();
+        await expect(context.api.checkPasswordReset('fixture-token', captured)).rejects.toBeInstanceOf(ObsoleteRequestError);
+        expect(context.isCurrent(captured)).toBe(true);
+        expect(request).toHaveBeenCalledTimes(2);
+        bootstrap.resolve(new Response(JSON.stringify({type: 'urn:future:unavailable', title: 'Unavailable',
+            status: 503, detail: 'Bootstrap is temporarily unavailable.', requestId: 'resume-session-cooldown'}),
+        {status: 503, headers: {'Content-Type': 'application/json', 'Retry-After': '60'}}));
+        await flushPromises();
+        window.dispatchEvent(new Event('focus'));
+        await flushPromises();
+        expect(context.mayRead()).toBe(false);
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(wrapper.get('#quick-title').element).toBe(input.element);
+        expect(input.element.value).toBe('Retained packing draft');
+        expect([input.element.selectionStart, input.element.selectionEnd]).toEqual([2, 8]);
+        expect(document.activeElement).toBe(input.element);
+
+        // Only a later admitted bootstrap restores automatic read dispatch.
+        recovered = true;
+        vi.setSystemTime(new Date('2026-10-13T08:01:32Z'));
+        await context.refreshSession();
+        await flushPromises();
+        expect(context.mayRead()).toBe(true);
+        expect(request.mock.calls.filter(([value]) => new URL((value as Request).url).pathname === '/api/v1/packing-lists/' + eventId))
+            .toHaveLength(2);
+        expect(wrapper.get('#quick-title').element).toBe(input.element);
+    });
+
+    it('changes locale without canceling or refetching a mounted machine projection', async function preservesMachineRead() {
+        const machine = deferred<Response>();
+        const translated = deferred<Response>();
+        let machineSignal: AbortSignal | undefined;
+        let translatedSignal: AbortSignal | undefined;
+        let reads = 0;
+        async function readSelectedProjection(request: Request): Promise<Response> {
+            const path = new URL(request.url).pathname;
+            if (path === '/api/v1/locale') return json({...session, locale: 'de'});
+            if (path === '/api/v1/help') { translatedSignal = request.signal; return translated.promise; }
+            if (++reads === 1) return json(packing);
+            machineSignal = request.signal;
+            return machine.promise;
+        }
+        const {wrapper, context, request} = await mounted(PackingPage, {}, readSelectedProjection,
+            '/frontend-pilot/packing/' + eventId);
+        const input = wrapper.get<HTMLInputElement>('#quick-title');
+        await input.setValue('Locale-independent draft');
+        input.element.focus();
+
+        // Hold real machine and language-owned operations across the same preference write.
+        const machineRead = context.queryClient.refetchQueries({queryKey: packingKeys.detail(session.context, eventId)});
+        const scope = context.capture();
+        const help = useHelpApi(context);
+        const helpRead = context.queryClient.fetchQuery({queryKey: helpKeys.page(session.context, 'en', {}),
+            queryFn: ({signal}) => help.help({}, scope, signal)}).catch(() => undefined);
+        await flushPromises();
+        await context.changeLocale('de');
+        await flushPromises();
+        expect(machineSignal?.aborted).toBe(false);
+        expect(translatedSignal?.aborted).toBe(true);
+        expect(reads).toBe(2);
+        expect(wrapper.get('#quick-title').element).toBe(input.element);
+        expect(input.element.value).toBe('Locale-independent draft');
+        expect(document.activeElement).toBe(input.element);
+
+        // The unchanged machine key receives its original admitted result once;
+        // the retired translated response can neither reenter the cache nor replay a write.
+        machine.resolve(json(packing));
+        translated.resolve(json({}));
+        await Promise.all([machineRead, helpRead]);
+        await flushPromises();
+        expect(reads).toBe(2);
+        expect(request.mock.calls.filter(([value]) => (value as Request).method !== 'GET')).toHaveLength(1);
+    });
+
+    it('shares the observer read started by focus admission with ordinary resource recovery', async function sharesFocusRead() {
+        vi.useFakeTimers({toFake: ['Date']});
+        vi.setSystemTime(new Date('2026-10-13T09:00:00Z'));
+        const fresh = deferred<Response>();
+        let reads = 0;
+        let signal: AbortSignal | undefined;
+        async function readFocusedPacking(request: Request): Promise<Response> {
+            if (new URL(request.url).pathname === '/api/v1/session') return json(session);
+            if (++reads === 1) return json(packing);
+            signal = request.signal;
+            return fresh.promise;
+        }
+        const {context} = await mounted(PackingPage, {}, readFocusedPacking, '/frontend-pilot/packing/' + eventId);
+        const stop = context.start();
+        cleanups.push(stop);
+        vi.setSystemTime(new Date('2026-10-13T09:00:31Z'));
+        window.dispatchEvent(new Event('focus'));
+        await flushPromises();
+        // Session success re-enables the stale observer. The same focus continuation
+        // joins its promise rather than aborting it and dispatching another request.
+        expect(reads).toBe(2);
+        expect(signal?.aborted).toBe(false);
+        fresh.resolve(json(packing));
+        await flushPromises();
+        expect(reads).toBe(2);
+    });
+
+    it('preserves admitted picker reads during bootstrap and keeps terminal discovery explicitly recoverable',
+        async function preservesPickerReadLifetime() {
+            const options = deferred<components['schemas']['EventPickerOptions']>();
+            const bootstrap = deferred<Response>();
+            let signal: AbortSignal | undefined;
+            let denied = false;
+            let sessionReads = 0;
+            const search = vi.fn<PilotEventPickerSource['search']>(async function readAdmittedOptions(_query, _scope, currentSignal) {
+                signal = currentSignal;
+                if (search.mock.calls.length === 1) return options.promise;
+                if (denied) throw new ApiFailure(403, {type: 'about:blank', title: 'Forbidden', status: 403,
+                    detail: 'Discovery access changed.', requestId: 'picker-terminal-rejection', code: 'FORBIDDEN',
+                    messageKey: 'api:errors.FORBIDDEN', params: {}});
+                return {items: [event], selected: null, nextCursor: null};
+            });
+            const {wrapper, context} = await mounted(EventPicker,
+                {prefix: 'session-admitted-options', inline: true, modelValue: null, source: pickerSource(search)},
+                async () => ++sessionReads === 1 ? bootstrap.promise : json(session));
+            const checking = context.refreshSession();
+            await flushPromises();
+            expect(signal?.aborted).toBe(false);
+            options.resolve({items: [event], selected: null, nextCursor: null});
+            await flushPromises();
+            expect(wrapper.get('[data-event-id="' + eventId + '"]').text()).toContain(event.title);
+            bootstrap.resolve(json(session));
+            await checking;
+            await flushPromises();
+            expect(search).toHaveBeenCalledOnce();
+
+            // A terminal error suppresses automatic session resume but the visible
+            // discovery Retry can still admit its result against feature eligibility.
+            denied = true;
+            await context.queryClient.refetchQueries({queryKey: ['selection-fixture'], type: 'active'});
+            await flushPromises();
+            await context.refreshSession();
+            await flushPromises();
+            expect(search).toHaveBeenCalledTimes(2);
+            denied = false;
+            await wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!.trigger('click');
+            await flushPromises();
+            expect(search).toHaveBeenCalledTimes(3);
+            expect(wrapper.get('[data-event-id="' + eventId + '"]').text()).toContain(event.title);
+        });
+
+    it('keeps terminal read rejection out of automatic session resumes and restores polling after explicit recovery',
+        async function preservesTerminalReadPolicy() {
+            vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+            let denied = false;
+            let reads = 0;
+            async function readRecoverableRegion(request: Request): Promise<Response> {
+                if (new URL(request.url).pathname === '/api/v1/session') return json(session);
+                reads++;
+                return denied ? readFailure(403, 'future') : json(region(request));
+            }
+            const {wrapper, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, readRecoverableRegion);
+            denied = true;
+            await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+            await flushPromises();
+            expect(reads).toBe(2);
+            for (let attempt = 0; attempt < 3; attempt++) {
+                await vi.advanceTimersByTimeAsync(30_000);
+                await context.refreshSession();
+                await flushPromises();
+            }
+            expect(reads).toBe(2);
+
+            // A user can recover the disabled observer through its existing control.
+            // Query state success must then restore its normal healthy polling lifetime.
+            denied = false;
+            await wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!.trigger('click');
+            await flushPromises();
+            expect(reads).toBe(3);
+            expect(wrapper.findComponent(OverviewCard).exists()).toBe(true);
+            await vi.advanceTimersByTimeAsync(34_000);
+            await flushPromises();
+            expect(reads).toBe(4);
+        });
+
+    it.each([false, true])('retires denied Overview aggregate sources while preserving independent sibling authority (hidden open=%s)',
+        async function retiresAggregateSources(hiddenOpen) {
+            let denyMain = false;
+            let denyHidden = false;
+            async function readCountRegion(request: Request): Promise<Response> {
+                const parameters = new URL(request.url).searchParams;
+                const selectedRegion = parameters.get('region');
+                if (parameters.get('collection') === 'owner' && (selectedRegion === 'main' ? denyMain : denyHidden))
+                    return readFailure(403, 'future');
+                return json({...region(request), collection: parameters.get('collection'), region: selectedRegion,
+                    totalEntities: 2, hiddenEntities: 1, regionEntities: 1, matchingEntities: 1,
+                    totalCards: 1, hasNext: false});
+            }
+            const {wrapper, context} = await mounted(OverviewPage, {}, readCountRegion,
+                '/frontend-pilot' + (hiddenOpen ? '?owner_hidden_open=1' : ''));
+            const ownerBadge = () => wrapper.get('[aria-controls="overview-owner"] .badge').text();
+            expect(ownerBadge()).toBe('2');
+            denyMain = true;
+            await context.queryClient.refetchQueries({queryKey: overviewKeys.regionAuthority(session.context, 'owner', 'main')});
+            await flushPromises();
+            expect(wrapper.get('[data-collection="owner"][data-region="main"]').findComponent(OverviewCard).exists()).toBe(false);
+            expect(ownerBadge()).toBe(hiddenOpen ? '2' : '…');
+            expect(wrapper.get('[aria-controls="overview-participant"] .badge').text()).toBe('2');
+            if (hiddenOpen) {
+                // The hidden region remains an independent admitted source until
+                // its own denial; losing the main region does not fabricate zero.
+                denyHidden = true;
+                await context.queryClient.refetchQueries({queryKey: overviewKeys.regionAuthority(session.context, 'owner', 'hidden')});
+                await flushPromises();
+                expect(ownerBadge()).toBe('…');
+                expect(wrapper.get('[aria-controls="overview-owner-hidden"] .badge').text()).toBe('…');
+            } else expect(wrapper.find('[aria-controls="overview-owner-hidden"]').exists()).toBe(false);
+        });
+
     it('keeps the real shell draft mounted through failed session Retry and healthy recovery', async () => {
         vi.useFakeTimers({toFake: ['Date']});
         const successfulTime = new Date('2026-10-11T08:20:00Z');
@@ -691,7 +1089,6 @@ describe('native overview search and history', () => {
         const initialKey = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main',
             q: undefined, type: undefined, page: undefined, childPage: undefined, eventId: undefined});
         const snapshot = context.queryClient.getQueryData(initialKey);
-        const counts = wrapper.emitted('counts')?.length;
         vi.setSystemTime(new Date('2026-10-11T07:00:20Z'));
         unavailable = true;
         await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
@@ -700,14 +1097,13 @@ describe('native overview search and history', () => {
         expect(wrapper.get('[data-last-successful-refresh] time').attributes('datetime')).toBe(initialTime.toISOString());
 
         // Structural sharing retains the data object. A later successful read still
-        // advances its receipt time without manufacturing another membership count.
+        // advances its receipt time without changing membership data.
         const recoveredTime = new Date('2026-10-11T07:00:40Z');
         vi.setSystemTime(recoveredTime);
         unavailable = false;
         await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
         await flushPromises();
         expect(context.queryClient.getQueryData(initialKey)).toBe(snapshot);
-        expect(wrapper.emitted('counts')?.length).toBe(counts);
         expect(wrapper.find('[data-last-successful-refresh]').exists()).toBe(false);
 
         // A committed history/header destination has no admitted data when its own

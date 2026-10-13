@@ -8,6 +8,7 @@ import {usePageTitle} from '../../composables/pageTitle';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {helpKeys} from '../../app/queryKeys';
+import {useQueryAdmission} from '../../app/queryCache';
 import {ApiFailure} from '../../app/transport';
 import {pilotHelpUrl, resolvePilotHelpQuery} from '../../../modules/lib/helpNavigation';
 import {createTranslator} from '../../../modules/localization/translator';
@@ -27,13 +28,15 @@ const router = useRouter();
 const query = computed(() => resolvePilotHelpQuery(route.params.doc, route.query));
 const search = ref(query.value.q ?? '');
 watch(() => query.value.q, value => { search.value = value ?? ''; });
+const key = computed(() => helpKeys.page(context.session.value?.context, locale.value, query.value));
+const readAdmission = useQueryAdmission(context, key, computed(() => context.hydrated.value));
 const help = useQuery({
-    queryKey: computed(() => helpKeys.page(context.session.value?.context, locale.value, query.value)),
+    queryKey: key,
     queryFn: ({signal}) => api.help(query.value, context.capture(), signal),
     initialData: () => context.initialDocumentFor(route.fullPath)?.help?.locale === locale.value
         ? context.initialDocumentFor(route.fullPath)?.help : undefined,
     staleTime: Infinity,
-    enabled: computed(() => context.hydrated.value && context.ready.value),
+    ...readAdmission,
 });
 // A language switch must never display an old translated body under the new interface language.
 const page = computed(() => help.data.value?.locale === locale.value ? help.data.value : undefined);
@@ -82,7 +85,7 @@ function submitSearch(): void {
  * read-only recovery using the same server cooldown and current article/locale key.
  * Refetch retains the mounted search draft and never navigates or replays a command. */
 async function retryHelp(): Promise<void> {
-    if (!context.ready.value || !context.hydrated.value || !retryAvailable.value || help.isFetching.value) return;
+    if (!context.mayRead() || !context.hydrated.value || !retryAvailable.value || help.isFetching.value) return;
     await help.refetch();
 }
 /** Enhance ordinary reviewed article links only. Modified clicks and packaged
@@ -114,7 +117,12 @@ watch(() => [pageTitle.value, route.hash], async () => {
 </script>
 
 <template>
-    <PageMessage v-if="notFound" kind="error" renewal="help.notFound" :message="messages.t('help.notFound')" />
+    <PageMessage v-if="notFound" kind="error" renewal="help.notFound" :message="messages.t('help.notFound')">
+        <!-- A confirmed missing document suspends automatic observation. Retain
+             native Error/Home presentation while offering deliberate read recovery. -->
+        <ActionButton variant="outline-light" :pending="help.isFetching.value"
+            :disabled="!context.mayRead() || !retryAvailable" @click="retryHelp">{{ messages.t('common.retry') }}</ActionButton>
+    </PageMessage>
     <section v-else class="card bg-dark text-white mb-3">
         <div class="card-header d-flex justify-content-between align-items-center gap-2">
             <h1 class="card-title mb-0" :lang="contentLocale"><i class="bi bi-question-circle me-2" aria-hidden="true"></i>{{ pageTitle }}</h1>

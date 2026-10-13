@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import {ref, watch} from 'vue';
+import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
+import type {LocationQuery} from 'vue-router';
 import {usePilot} from '../../app/context';
 import {usePageTitle} from '../../composables/pageTitle';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
+import type {components} from '../../../types/api/v1';
+import type {PilotOverviewCountRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import {overviewKeys} from '../../app/queryKeys';
+import {overviewQueryParameters} from './api';
 import OverviewRegion from './OverviewRegion.vue';
 const context = usePilot();
 const {messages} = context;
@@ -12,22 +17,86 @@ const router = useRouter();
 usePageTitle(() => messages.value.t('app.overview'));
 const hidden = ref<Record<string, boolean>>({});
 const open = ref<Record<string, boolean>>({participant: true, owner: true});
-const counts = ref<Record<string, {total: number; hidden: number}>>(Object.fromEntries(
-    (context.initialDocumentFor(route.fullPath)?.overview ?? [])
-        .map(region => [region.collection, {total: region.totalEntities, hidden: region.hiddenEntities}])));
-watch(
-    () => route.query,
-    (query) => {
-        for (const collection of ['participant', 'owner']) {
-            hidden.value[collection] =
-                query[collection + '_hidden_open'] === '1' ||
-                typeof query[collection + '_hidden_event'] === 'string';
+type Region = components['schemas']['OverviewRegion'];
+// Retain only admission receipts. Numeric membership remains owned by QueryClient,
+// so denial/eviction cannot leave a second server snapshot alive in the parent.
+const countSources = ref<Partial<Record<Region['collection'], Partial<Record<Region['region'], PilotOverviewCountRead>>>>>({});
+const cacheRevision = ref(0);
+const stopCountCache = context.queryClient.getQueryCache().subscribe(refreshCountCache);
+onBeforeUnmount(stopCountCache);
+seedInitialCounts();
+const counts = computed(collectionCounts);
+watch([context.epoch, context.locale], retireCountSources, {flush: 'sync'});
+
+function refreshCountCache(): void {
+    cacheRevision.value++;
+}
+
+/** Seed only this validated initial document before SSR renders collection badges.
+ * Cache owns its DTOs; receipts reference the same keys later used by region observers.
+ * A later SPA visit cannot reuse this bootstrap after its document/actor retires. */
+function seedInitialCounts(): void {
+    const initial = context.initialDocumentFor(route.fullPath);
+    if (!initial || initial.session.locale !== context.locale.value) return;
+
+    // Sharing URL decoding prevents a second SSR-only key shape or numeric count store.
+    const scope = context.capture();
+    for (const projection of initial.overview ?? []) {
+        const parameters = overviewQueryParameters(route.query, projection.collection, projection.region);
+        const key = overviewKeys.region(scope.context, scope.locale, parameters);
+        context.queryClient.setQueryData(key, projection);
+        const updatedAt = context.queryClient.getQueryState(key)!.dataUpdatedAt;
+        updateCounts(projection.collection, projection.region, {scope, key, updatedAt}, scope);
+    }
+}
+
+/** Derive each collection from its newest still-admitted region receipt. Temporary
+ * errors retain readable cached data; denial or eviction removes that source. An
+ * independently admitted sibling remains usable, while missing authority stays unknown. */
+function collectionCounts(): Partial<Record<Region['collection'], {total: number; hidden: number}>> {
+    // Cache notifications make the otherwise nonreactive QueryClient lookup observable.
+    cacheRevision.value;
+    const result: Partial<Record<Region['collection'], {total: number; hidden: number}>> = {};
+    for (const collection of ['participant', 'owner'] as const) {
+        let newest: PilotOverviewCountRead | undefined;
+        let projection: Region | undefined;
+        for (const source of Object.values(countSources.value[collection] ?? {})) {
+            if (!context.isCurrent(source.scope, true) || newest && newest.updatedAt > source.updatedAt) continue;
+            const cached = context.queryClient.getQueryData<Region>(source.key);
+            if (!cached || cached.collection !== collection) continue;
+            newest = source;
+            projection = cached;
         }
-    },
-    {immediate: true},
-);
-function updateCounts(collection: string, total: number, hiddenCount: number): void {
-    counts.value[collection] = {total, hidden: hiddenCount};
+        if (projection) result[collection] = {total: projection.totalEntities, hidden: projection.hiddenEntities};
+    }
+    return result;
+}
+
+/** Actor/language replacement retires presentation references as well as their queries. */
+function retireCountSources(): void {
+    countSources.value = {};
+}
+watch(() => route.query, receiveHiddenNavigation, {immediate: true});
+
+/** Saved hidden-region links admit disclosure independently of main-region counts. */
+function receiveHiddenNavigation(query: LocationQuery): void {
+    // Each collection owns its own URL fields; a selected hidden event opens its region.
+    for (const collection of ['participant', 'owner']) {
+        hidden.value[collection] = query[collection + '_hidden_open'] === '1'
+            || typeof query[collection + '_hidden_event'] === 'string';
+    }
+}
+
+/** Accept only the current region's admitted read or denial. A late old actor/locale
+ * cannot remove a new receipt, and retiring one region preserves sibling authority. */
+function updateCounts(collection: Region['collection'], region: Region['region'],
+                      source: PilotOverviewCountRead | null, scope: PilotRequestScope): void {
+    if (!context.isCurrent(scope, true)) return;
+    // Store a reference to source authority, never the server's numeric membership.
+    const sources = countSources.value[collection] ?? {};
+    if (source) sources[region] = source;
+    else delete sources[region];
+    countSources.value[collection] = sources;
 }
 /** A disclosed region has an ordinary saved URL as well as an enhanced current-tab action. */
 async function toggleHidden(event: MouseEvent, collection: string): Promise<void> {
@@ -145,8 +214,8 @@ function hiddenHref(collection: string): string {
                                         region="main"
                                         :active="open[collection]"
                                         @counts="
-                                            (total, hiddenCount) =>
-                                                updateCounts(collection, total, hiddenCount)
+                                            (source, scope) =>
+                                                updateCounts(collection, 'main', source, scope)
                                         "
                                     />
                                     <!-- An explicitly opened hidden region may start before main-region
@@ -180,8 +249,8 @@ function hiddenHref(collection: string): string {
                                                 region="hidden"
                                                 :active="open[collection]"
                                                 @counts="
-                                                    (total, hiddenCount) =>
-                                                        updateCounts(collection, total, hiddenCount)
+                                                    (source, scope) =>
+                                                        updateCounts(collection, 'hidden', source, scope)
                                                 "
                                             />
                                         </div>

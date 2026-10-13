@@ -1,7 +1,58 @@
-import {matchQuery} from '@tanstack/vue-query';
+import {hashKey, matchQuery} from '@tanstack/vue-query';
 import type {QueryCacheNotifyEvent, QueryClient, QueryFilters} from '@tanstack/vue-query';
+import {computed, onBeforeUnmount, ref, watch} from 'vue';
+import type {ComputedRef} from 'vue';
+import type {PilotContext, PilotQueryAdmission, PilotQueryReadPolicy} from '../../types/FrontendPilotUiTypes';
 import {belongsToQueryFamily} from './queryKeys';
 import {UnconfirmedResponseError} from './transport';
+
+/** Admit a first GET for each mounted key visit, including cached terminal failure.
+ * Later automatic resumes use that visit's terminal policy. Eligibility stays with
+ * its actual observer so explicit command dependencies can read a paused terminal
+ * query without reopening hidden, retired or differently scoped consumers. */
+export function useQueryAdmission(context: PilotContext, key: ComputedRef<readonly unknown[]>,
+                                  eligible: ComputedRef<boolean>): PilotQueryAdmission {
+    // A second observer can join an already dispatched/paused read without another
+    // fetch action. That real pending operation consumes this visit's first admission.
+    const dispatched = ref(hasPendingRead());
+    let active = true;
+    // Reactive session objects can recreate an equal tuple during a locale command.
+    // Only the logical key starts another visit; an equal machine key keeps its failure policy.
+    watch(() => hashKey(key.value), beginVisit, {flush: 'sync'});
+    const stopReads = context.queryClient.getQueryCache().subscribe(receiveDispatch);
+    onBeforeUnmount(retireObserver);
+
+    /** A changed key is a fresh admission journey, not the old observer's failure. */
+    function beginVisit(): void {
+        dispatched.value = hasPendingRead();
+    }
+
+    function hasPendingRead(): boolean {
+        const status = context.queryClient.getQueryState(key.value)?.fetchStatus;
+        return status === 'fetching' || status === 'paused';
+    }
+
+    /** Actual fetch dispatch consumes first-read eligibility, never manual cache aliases. */
+    function receiveDispatch(event: QueryCacheNotifyEvent): void {
+        if (event.type === 'updated' && event.action.type === 'fetch'
+            && matchQuery({queryKey: key.value, exact: true}, event.query)) dispatched.value = true;
+    }
+
+    function mayRead(requestedKey: readonly unknown[]): boolean {
+        // A key transition can retain old observer options until Vue settles them.
+        // Those options never authorize another read of the retired key.
+        return active && eligible.value && context.mayRead() && hashKey(requestedKey) === hashKey(key.value);
+    }
+
+    /** Query metadata may outlive a component; its callback must retire before disposal. */
+    function retireObserver(): void {
+        active = false;
+        stopReads();
+    }
+
+    return {enabled: computed(() => active && eligible.value && context.mayObserve(key.value, !dispatched.value)),
+        meta: {surveyorRead: {mayRead}}};
+}
 
 /** Observe actual successful reads, including equal responses. Observer idle/data
  * changes are insufficient: cancellation can return retained data, and manual cache
@@ -45,19 +96,49 @@ export async function refetchFreshQuery<T>(client: QueryClient, key: readonly un
  * be presented; this owner hides the query library's retained-cancellation behavior. */
 export async function refetchFreshQueries(client: QueryClient, filter: QueryFilters, mayRead: () => boolean): Promise<void> {
     const reads: Promise<unknown>[] = [];
-    for (const query of client.getQueryCache().findAll(filter)) {
-        if (query.isDisabled() || query.isStatic()) continue;
+    // TanStack's active filter excludes a terminal-paused observer. Inspect its
+    // existing observer metadata instead; a closed region remains ineligible.
+    const selectedFamily = filter.type === 'active' ? {...filter, type: 'all' as const} : filter;
+    for (const query of client.getQueryCache().findAll(selectedFamily)) {
+        if (query.isStatic() || (filter.type === 'active' || query.isDisabled()) && !hasEligibleReadObserver(query)) continue;
         // A sibling can retire during cancellation. Preserve the caller's active
         // filter at dispatch instead of resurrecting that inactive cached observer.
         const selected = {...filter, queryKey: query.queryKey, exact: true};
-        reads.push(refetchFreshQuery(client, query.queryKey, function refetchSelectedQuery() {
-            return client.refetchQueries(selected, {throwOnError: true});
-        }, mayRead));
+        reads.push(refetchFreshQuery(client, query.queryKey, refetchSelectedQuery, mayReadSelected));
+
+        /** Explicit dependency reads use the already-authored query function even
+         * when terminal suspension disabled its automatic observer. */
+        function refetchSelectedQuery(): Promise<unknown> {
+            // Query-level options belong to the last writer. Select the actually
+            // eligible observer so a hidden/retired sibling's queryFn is never used.
+            const observer = eligibleReadObserver(query);
+            return observer ? observer.refetch({throwOnError: true}) : client.refetchQueries(selected, {throwOnError: true});
+        }
+
+        function mayReadSelected(): boolean {
+            return mayRead() && (filter.type !== 'active' && !query.isDisabled() || hasEligibleReadObserver(query));
+        }
     }
     // An empty/disabled family has performed no authority read. It must not
     // acknowledge an unknown command merely because Promise.all([]) resolves.
     if (!reads.length) throw new UnconfirmedResponseError();
     await Promise.all(reads);
+}
+
+/** Each actual observer owns its visibility/activity and disposal policy. Looking at
+ * observer options avoids the query's last-writer metadata overriding another mounted
+ * consumer. Existing enabled observers retain their ordinary QueryClient contract. */
+function eligibleReadObserver(query: Parameters<typeof matchQuery>[1]): Parameters<typeof matchQuery>[1]['observers'][number] | undefined {
+    // Select from actual observer options: the query-level metadata may belong
+    // to a later hidden consumer, and legacy enabled observers still participate.
+    for (const observer of query.observers) {
+        const policy = observer.options.meta?.surveyorRead as PilotQueryReadPolicy | undefined;
+        if (policy ? policy.mayRead(query.queryKey) : observer.getCurrentResult().isEnabled) return observer;
+    }
+}
+
+function hasEligibleReadObserver(query: Parameters<typeof matchQuery>[1]): boolean {
+    return eligibleReadObserver(query) !== undefined;
 }
 
 /** The public cache action distinguishes network success from setQueryData. */
@@ -102,7 +183,9 @@ export async function retireQueryFamily(client: QueryClient, family: readonly un
  * Choosing the resource and containing projections remains the caller's policy. */
 export async function evictQueryFamilies(client: QueryClient, families: readonly (readonly unknown[])[],
                                          type: 'all' | 'active' | 'inactive' = 'all'): Promise<void> {
+    /** Match only caller-selected resource families, preserving unrelated actors and endpoints. */
     function belongsToAffectedFamily(query: Parameters<typeof belongsToQueryFamily>[0]): boolean {
+        // Family prefixes keep this cache owner independent of feature tuple shapes.
         for (const family of families) {
             if (belongsToQueryFamily(query, family)) return true;
         }

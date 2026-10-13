@@ -5,7 +5,7 @@ import type {QueryFunctionContext} from '@tanstack/vue-query';
 import type {PilotEventPickerOption, PilotEventPickerQuery, PilotEventPickerSelection, PilotEventPickerSource} from '../../types/FrontendPilotUiTypes';
 import {usePilot, refreshInterval} from '../app/context';
 import {isReadDenial, ObsoleteRequestError} from '../app/transport';
-import {retireQueryFamily} from '../app/queryCache';
+import {retireQueryFamily, useQueryAdmission} from '../app/queryCache';
 import {useDebouncedValue} from '../composables/debounced';
 import {useReadRetry, useReadRetryAt} from '../composables/feedback';
 import ActionButton from './ActionButton.vue';
@@ -63,14 +63,25 @@ const query = computed<Query>(() => ({
 }));
 const key = computed(() => props.source.pageKey(context.session.value?.context, context.locale.value, filterKey.value, query.value));
 const disclosed = computed(() => props.active !== false && (!!props.inline || open.value));
-const enabled = computed(() => context.hydrated.value && context.ready.value && context.visible.value
+const readEligible = computed(() => context.hydrated.value && context.ready.value && context.visible.value
     && props.active !== false && !props.disabled && !invalidDates.value && !searchPending.value
     // A closed picker resolves an unknown selected ID once, including authoritative null.
     // Its current parent projection can retire that resolution; hidden tabs never search.
     && (disclosed.value || (!!props.modelValue && resolvedSelection.value !== props.modelValue)));
+// Automatic terminal-denial suppression must not hide explicit recovery controls.
+// Read completion uses feature eligibility, independently of the observer's old error.
+const readAdmission = useQueryAdmission(context, key, readEligible);
+const enabled = readAdmission.enabled;
+
+/** Explicit discovery shares session dispatch admission while already captured
+ * responses retain their ordinary input/disclosure/actor lifetime. */
+function mayReadOptions(): boolean {
+    return readEligible.value && context.mayRead();
+}
 const options = useQuery({
     queryKey: key,
     enabled,
+    meta: readAdmission.meta,
     queryFn: readOptions,
     gcTime: 0,
     refetchInterval: (state) => enabled.value && disclosed.value
@@ -122,7 +133,7 @@ async function readOptions({signal}: QueryFunctionContext<readonly unknown[]>): 
     const scope = context.capture();
     const visit = {generation, direction: direction.value, cursor: requestedCursor.value, page: requestedPage.value};
     const result = await props.source.search({...query.value}, scope, signal);
-    if (generation !== readGeneration || !context.isCurrent(scope) || !enabled.value) throw new ObsoleteRequestError();
+    if (generation !== readGeneration || !context.isCurrent(scope) || !readEligible.value) throw new ObsoleteRequestError();
     completedRead = visit;
     return result;
 }
@@ -156,12 +167,12 @@ function finishTypedSearch(): void {
     if (!searchPending.value) return;
     resetBrowsing();
     searchPending.value = false;
-    if (enabled.value) void options.refetch({cancelRefetch: false});
+    if (mayReadOptions()) void options.refetch({cancelRefetch: false});
 }
 
 watch(() => filters.q, editSearch, {flush: 'sync'});
 watch(family, resetBrowsing, {flush: 'sync'});
-watch(enabled, pauseDiscovery, {flush: 'sync'});
+watch(readEligible, pauseDiscovery, {flush: 'sync'});
 watch(() => props.modelValue, retireReads, {flush: 'sync'});
 watch([() => context.session.value?.context, context.epoch], retireIdentity, {flush: 'sync'});
 onBeforeUnmount(retireReads);
@@ -228,12 +239,12 @@ function choose(value: PilotEventPickerOption | null): void {
 }
 function next(): void {
     const cursor = displayed.value?.nextCursor;
-    if (!cursor || options.isFetching.value || !enabled.value || !retryAvailable.value) return;
+    if (!cursor || options.isFetching.value || !mayReadOptions() || !retryAvailable.value) return;
     requestPage('next', cursor, shownPage.value + 1);
 }
 function previous(): void {
     const prior = history.value.at(-2);
-    if (!prior || options.isFetching.value || !enabled.value || !retryAvailable.value) return;
+    if (!prior || options.isFetching.value || !mayReadOptions() || !retryAvailable.value) return;
     requestPage('previous', prior.cursor, prior.number);
 }
 
@@ -246,11 +257,11 @@ function requestPage(nextDirection: 'next' | 'previous', cursor: string | undefi
     requestedPage.value = number;
     // Retrying Next/Previous can reuse the failed query key. Keep query-owned automatic
     // delivery and this explicit retry on the same in-flight read rather than issuing twice.
-    if (enabled.value && JSON.stringify(key.value) === previousKey) void options.refetch({cancelRefetch: false});
+    if (mayReadOptions() && JSON.stringify(key.value) === previousKey) void options.refetch({cancelRefetch: false});
 }
 
 function retry(): void {
-    if (enabled.value && !options.isFetching.value && retryAvailable.value) void options.refetch();
+    if (mayReadOptions() && !options.isFetching.value && retryAvailable.value) void options.refetch();
 }
 /** Clear this browsing draft immediately without changing the selected event.
  * Reset the cursor/search generation together so delayed typing cannot restore
@@ -263,7 +274,7 @@ function reset(): void {
     search.value = '';
     searchPending.value = false;
     resetBrowsing();
-    if (enabled.value) void options.refetch({cancelRefetch: false});
+    if (mayReadOptions()) void options.refetch({cancelRefetch: false});
 }
 
 /** Describe only the admitted option using its civil dates and server flags.

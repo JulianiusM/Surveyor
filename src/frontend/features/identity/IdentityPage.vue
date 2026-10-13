@@ -145,6 +145,13 @@ let usedInitialReset = false;
 // must obtain their own read, and an obsolete token response cannot reveal a form.
 watch(() => [mode.value, route.params.token, initialDocument.value, context.epoch.value, context.ready.value, resetAttempt.value, pageCompleted.value],
     refreshResetAdmission, {immediate: true});
+watch(context.readsReady, resumeResetAdmission);
+
+/** A route opened during bootstrap waits for dispatch admission. Existing token
+ * authority and its mounted password draft survive ordinary session revalidation. */
+function resumeResetAdmission(admitted: boolean): void {
+    if (admitted && mode.value === 'reset' && !resetAdmission.value && !resetReadFailure.value) resetAttempt.value++;
+}
 
 /** A reused reset route gets fresh admission; cleanup prevents an old token read reopening its form. */
 async function refreshResetAdmission(_value: unknown, _previous: unknown, onCleanup: Parameters<WatchCallback>[2]): Promise<void> {
@@ -167,7 +174,7 @@ async function refreshResetAdmission(_value: unknown, _previous: unknown, onClea
         resetAdmission.value = initialDocument.value.passwordReset;
         return;
     }
-    if (!context.browser || !context.ready.value) return;
+    if (!context.browser || !context.mayRead()) return;
 
     const scope = context.capture();
     try {
@@ -192,7 +199,7 @@ const blocked = computed(() => command.pending.value || reconciling.value || com
 /** Checking a token is read-only. Honor its existing cooldown and current actor before
  * requesting another admission; never consume the token or replay password submission. */
 function retryResetAdmission(): void {
-    if (context.ready.value && resetRetryAvailable.value && resetReadFailure.value) resetAttempt.value++;
+    if (context.mayRead() && resetRetryAvailable.value && resetReadFailure.value) resetAttempt.value++;
 }
 
 /** Check identity authority without replaying mail, registration or sign-in commands. */

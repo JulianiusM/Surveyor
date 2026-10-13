@@ -400,7 +400,7 @@ describe('native shell and help presentation contract', () => {
             // A later confirmed read resumes the ordinary article/title. No feature-owned
             // error cache or copied PageMessage implementation controls this transition.
             missing = false;
-            await context.queryClient.invalidateQueries();
+            await card.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!.trigger('click');
             await flushPromises();
             expect(wrapper.find('.pilot-page-message').exists()).toBe(false);
             expect(wrapper.get('.help-content').text()).toContain('A synthetic task');

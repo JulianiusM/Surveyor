@@ -341,7 +341,9 @@ describe('packing authority across language refreshes', () => {
             return json(projection());
         }
 
-        const {wrapper, context} = await mounted(component, kind === 'detail' ? {} : {listId: id}, readProjection);
+        const {wrapper, context, request} = await mounted(component, kind === 'detail' ? {} : {listId: id}, readProjection);
+        const authorityKey = kind === 'metadata' ? packingKeys.metadata(session.context, id)
+            : kind === 'settings' ? packingKeys.settings(session.context, id) : packingKeys.detail(session.context, id);
         const independentKey = packingKeys.metadata(session.context, otherId);
         const independentProjection = {unrelated: 'Preserve another resource'};
         context.queryClient.setQueryData(independentKey, independentProjection);
@@ -353,14 +355,19 @@ describe('packing authority across language refreshes', () => {
             description.focus();
         }
 
-        // A successful read narrows one field/action without denying the whole resource.
-        // Revisit the old locale while its fresh read is held: no cached grant may reappear.
+        // Authority changes through an admitted machine read. Language preference
+        // writes do not replace that snapshot or resurrect an earlier grant alias.
         narrowed = true;
+        await context.queryClient.refetchQueries({queryKey: authorityKey, exact: true});
+        await flushPromises();
+        const narrowedReads = request.mock.calls.filter(([value]) => (value as Request).method === 'GET').length;
         await context.changeLocale('de');
         await flushPromises();
         expect(wrapper.find(selector).exists()).toBe(false);
+        expect(request.mock.calls.filter(([value]) => (value as Request).method === 'GET')).toHaveLength(narrowedReads);
         holdReturningRead = true;
-        const returning = context.changeLocale('en');
+        await context.changeLocale('en');
+        const returning = context.queryClient.refetchQueries({queryKey: authorityKey, exact: true});
         try {
             await flushPromises();
             await flushPromises();
@@ -380,6 +387,7 @@ describe('packing authority across language refreshes', () => {
 
         // A subsequent successful authoritative read may deliberately grant the action again.
         narrowed = false;
+        await context.queryClient.refetchQueries({queryKey: authorityKey, exact: true});
         await context.changeLocale('de');
         await flushPromises();
         expect(wrapper.find(selector).exists()).toBe(true);
@@ -996,9 +1004,82 @@ describe('metadata conflict acknowledgement', () => {
         expect(metadata.text()).toContain(context.messages.value.t('state.savedRefreshFailed'));
     });
 
-    it('retains confirmed metadata until a real read succeeds after its warm follow-up is canceled by locale change', async () => {
+    it('retains a confirmed metadata save after an explicitly canceled warm follow-up until a fresh admitted GET', async function preservesCanceledWarmAuthority() {
+        const canceled = deferredResponse();
+        const recovery = deferredResponse();
+        const baseline: components['schemas']['PackingMetadata'] = {entityType: 'packing', id,
+            values: {title: 'Original'}, editableFields: ['title'], currentEventId: null,
+            archived: false, inheritedArchived: false};
+        let current = baseline;
+        let reads = 0;
+        let writes = 0;
+        let signal: AbortSignal | undefined;
+        const tokens: (string | null)[] = [];
+        const {wrapper, context} = await mounted(MetadataFields, {listId: id}, async function readMetadataAuthority(request): Promise<Response> {
+            if (request.method === 'PATCH') {
+                writes++;
+                tokens.push(request.headers.get('If-Match'));
+                current = {...current, values: {...current.values, ...await request.json() as components['schemas']['PackingMetadataPatch']}};
+                return json(current);
+            }
+            if (++reads === 2) { signal = request.signal; return canceled.response; }
+            if (reads === 3) return recovery.response;
+            const response = json(current);
+            response.headers.set('ETag', reads === 1 ? '"original"' : '"fresh"');
+            return response;
+        });
+        await wrapper.get('[name="title"]').setValue('Confirmed title');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(reads).toBe(2);
+        expect(writes).toBe(1);
+
+        // Cancel the actual warm query while its post-write transport waits. Saved
+        // values survive; canceled retained data never supplies new grants or token.
+        const key = packingKeys.metadata(session.context, id);
+        await context.queryClient.cancelQueries({queryKey: key, exact: true});
+        await flushPromises();
+        const metadata = wrapper.findComponent(MetadataFields);
+        expect(signal?.aborted).toBe(true);
+        expect(metadata.vm.awaitingAuthority).toBe(true);
+        expect(wrapper.get<HTMLInputElement>('[name="title"]').element.value).toBe('Confirmed title');
+        expect(wrapper.text()).toContain(context.messages.value.t('state.savedRefreshFailed'));
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.unknownOutcome'));
+        expect(wrapper.emitted('saved')).toHaveLength(1);
+        expect(wrapper.emitted('close')).toHaveLength(1);
+
+        // Neither a manual alias nor the late canceled response may release Save.
+        context.queryClient.setQueryData(key, {data: baseline, etag: '"alias"'});
+        canceled.resolve(json(baseline));
+        await flushPromises();
+        await wrapper.get('form').trigger('submit');
+        expect(writes).toBe(1);
+        expect(metadata.vm.awaitingAuthority).toBe(true);
+        expect(button(wrapper, context.messages.value.t('packing.saveProperties')).attributes('disabled')).toBeDefined();
+
+        await button(wrapper, 'Refresh').trigger('click');
+        await flushPromises();
+        expect(reads).toBe(3);
+        expect(metadata.vm.awaitingAuthority).toBe(true);
+        expect(writes).toBe(1);
+        const fresh = json(current);
+        fresh.headers.set('ETag', '"fresh"');
+        recovery.resolve(fresh);
+        await flushPromises();
+        expect(metadata.vm.awaitingAuthority).toBe(false);
+        expect(wrapper.get<HTMLInputElement>('[name="title"]').element.value).toBe('Confirmed title');
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.savedRefreshFailed'));
+
+        // Only another deliberate edit uses the fresh receipt; recovery never replays PATCH.
+        await wrapper.get('[name="title"]').setValue('Another deliberate title');
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(writes).toBe(2);
+        expect(tokens).toEqual(['"original"', '"fresh"']);
+    });
+
+    it('retains confirmed metadata and accepts its uncanceled warm follow-up across a locale change', async () => {
         const oldRead = deferredResponse();
-        const replacement = deferredResponse();
         const baseline: components['schemas']['PackingMetadata'] = {entityType: 'packing', id,
             values: {title: 'Original'}, editableFields: ['title'], currentEventId: null,
             archived: false, inheritedArchived: false};
@@ -1021,7 +1102,6 @@ describe('metadata conflict acknowledgement', () => {
             }
             reads++;
             if (reads === 2) { oldSignal = request.signal; return oldRead.response; }
-            if (reads === 3) return replacement.response;
             const response = json(current);
             response.headers.set('ETag', reads === 1 ? '"original"' : '"fresh"');
             return response;
@@ -1033,20 +1113,21 @@ describe('metadata conflict acknowledgement', () => {
         expect(writes).toBe(1);
 
         const changingLocale = context.changeLocale('de');
+        await changingLocale;
         await flushPromises();
-        expect(reads).toBe(3);
+        expect(reads).toBe(2);
         const metadata = wrapper.findComponent(MetadataFields);
-        expect(oldSignal?.aborted).toBe(true);
+        expect(oldSignal?.aborted).toBe(false);
         expect(wrapper.get<HTMLInputElement>('[name="title"]').element.value).toBe('Confirmed title');
         expect(metadata.vm.awaitingAuthority).toBe(true);
         expect(button(wrapper, context.messages.value.t('packing.saveProperties')).attributes('disabled')).toBeDefined();
-        expect(wrapper.text()).toContain(context.messages.value.t('state.savedRefreshFailed'));
-        expect(wrapper.emitted('saved')).toHaveLength(1);
-        expect(wrapper.emitted('close')).toHaveLength(1);
+        expect(wrapper.text()).not.toContain(context.messages.value.t('state.savedRefreshFailed'));
+        expect(wrapper.emitted('saved')).toBeUndefined();
+        expect(wrapper.emitted('close')).toBeUndefined();
         expect(wrapper.text()).not.toContain(context.messages.value.t('state.unknownOutcome'));
 
         // A manual cache alias is no network receipt. It cannot release the confirmed
-        // editor or replace its values/token while the actual replacement GET waits.
+        // editor or replace its values/token while the admitted follow-up GET waits.
         context.queryClient.setQueryData(packingKeys.metadata(session.context, id), {data: baseline, etag: '"alias"'});
         await flushPromises();
         expect(metadata.vm.awaitingAuthority).toBe(true);
@@ -1056,17 +1137,18 @@ describe('metadata conflict acknowledgement', () => {
 
         const fresh = json(current);
         fresh.headers.set('ETag', '"fresh"');
-        replacement.resolve(fresh);
-        await changingLocale;
-        oldRead.resolve(json(baseline));
+        oldRead.resolve(fresh);
         await flushPromises();
         expect(metadata.vm.awaitingAuthority).toBe(false);
         expect(wrapper.get<HTMLInputElement>('[name="title"]').element.value).toBe('Confirmed title');
         expect(wrapper.text()).not.toContain(context.messages.value.t('state.savedRefreshFailed'));
         expect(button(wrapper, context.messages.value.t('packing.saveProperties')).attributes('disabled')).toBeUndefined();
         expect(writes).toBe(1);
+        expect(reads).toBe(2);
+        expect(wrapper.emitted('saved')).toHaveLength(1);
+        expect(wrapper.emitted('close')).toHaveLength(1);
 
-        // Only a separate deliberate Save uses the replacement read's token. Recovery
+        // Only a separate deliberate Save uses the admitted follow-up's token. Recovery
         // has performed reads throughout and never replayed the confirmed PATCH.
         await wrapper.get('[name="title"]').setValue('Another deliberate title');
         await wrapper.get('form').trigger('submit');

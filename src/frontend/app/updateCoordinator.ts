@@ -44,19 +44,40 @@ export function createUpdateCoordinator(initial: components['schemas']['Deployme
         if (available.value) queueMicrotask(requestReload);
     }
 
+    /** Register one mounted owner's departure decision and return its cleanup.
+     * Removing that owner never implies consent from any remaining draft guard. */
+    function registerGuard(guard: () => boolean): () => void {
+        // Retain the live decision, not a captured clean/dirty result, until its
+        // owner retires. Set removal makes repeated cleanup harmless.
+        guards.add(guard);
+        return function unregisterGuard(): void {
+            guards.delete(guard);
+        };
+    }
+
+    /** Hold automatic release reloads for one admitted command until its owner
+     * finishes delivery. The returned completion releases this lease only once. */
+    function commandStarted(): () => void {
+        // Count the operation before dispatch so a detected release cannot replace
+        // the document while the command or its confirmed-result delivery is pending.
+        commands++;
+        let finished = false;
+
+        return function finishCommand(): void {
+            // Recovery/finally paths can share this completion. Duplicate calls
+            // must not release another command's outstanding protection.
+            if (finished) return;
+            finished = true;
+            commands--;
+
+            // Let the command owner finish publishing its result before evaluating
+            // every remaining draft guard through the existing reload boundary.
+            if (available.value) queueMicrotask(requestReload);
+        };
+    }
+
     return {
-        available, incompatible, observe, requestReload,
-        registerGuard(guard) { guards.add(guard); return () => { guards.delete(guard); }; },
-        commandStarted() {
-            commands++;
-            let finished = false;
-            return () => {
-                if (finished) return;
-                finished = true;
-                commands--;
-                if (available.value) queueMicrotask(requestReload);
-            };
-        },
+        available, incompatible, observe, requestReload, registerGuard, commandStarted,
         chunkFailed() { available.value = true; queueMicrotask(requestReload); },
         dispose() { disposed = true; guards.clear(); },
     };

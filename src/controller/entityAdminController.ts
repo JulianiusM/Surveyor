@@ -49,6 +49,23 @@ const eventPropertyPermissions: Partial<Record<EntityPropertyField, PermType>> =
     allowDietComment: 'MANAGE_REQUIREMENTS', allowRegDietUpdateAfterDeadline: 'MANAGE_REQUIREMENTS',
 };
 
+// These methods are already shared by native feature factories. Keep their grant
+// definitions in this controller so a migrated capability/command cannot drift
+// from the native adapter while retaining each method's distinct admission checks.
+const entityMethodPermissions = {
+    editHeader: 'EDIT_META',
+    changeEvent: 'EDIT_META',
+    managePermissions: 'MANAGE_PERMISSIONS',
+    duplicate: 'DATA_DUPLICATE',
+} as const;
+
+/** Return the existing shared method's grant without exposing mutable policy.
+ * Callers still own profile/page admission and the permission engine owns grant
+ * evaluation; choosing one method never grants another method's authority. */
+export function entityMethodPermission(method: keyof typeof entityMethodPermissions): PermType {
+    return entityMethodPermissions[method];
+}
+
 function propertyPermissions(type: EntityType): Partial<Record<EntityPropertyField, PermType>> {
     if (type === 'event') return eventPropertyPermissions;
     if (type === 'activity') return {...basicPropertyPermissions, startDate: 'EDIT_META', endDate: 'EDIT_META'};
@@ -152,7 +169,7 @@ export async function getEntityPropertyPresentation(type: EntityType, entity: En
         if (key === 'bindingDeadline') values[key] = deadlineInputValue(value, source.timezone);
         if (key === 'deadlineTz') values[key] = (value as string) || 'UTC';
     }
-    const canLinkEvent = !!session.profile && ['activity', 'packing', 'drivers'].includes(type) && permissions.has('EDIT_META');
+    const canLinkEvent = !!session.profile && ['activity', 'packing', 'drivers'].includes(type) && permissions.has(entityMethodPermission('changeEvent'));
     let currentEvent: EntityPropertyPresentation['currentEvent'] = null;
     if (session.profile && entity.eventId) {
         currentEvent = {id: entity.eventId};
@@ -171,9 +188,9 @@ export async function getEntityPropertyPresentation(type: EntityType, entity: En
             : type === 'event' && permissions.has('DATA_EXPORT') && permissions.has('ACCESS_PARTICIPANTS') ? `/event/${entity.id}/export/participants` : undefined,
         exportLabel: type === 'activity' ? 'Export schedule' : 'Export participants',
         values, editableFields, canEditProperties: editableFields.length > 0, canLinkEvent,
-        canEditHeader: !!session.profile && permissions.has('EDIT_META'),
-        canDuplicate: !!session.auth?.user && permissions.has('DATA_DUPLICATE'),
-        canDelete: owner, canManagePermissions: type !== 'survey' && !!session.profile && permissions.has('MANAGE_PERMISSIONS'), currentEvent,
+        canEditHeader: !!session.profile && permissions.has(entityMethodPermission('editHeader')),
+        canDuplicate: !!session.auth?.user && permissions.has(entityMethodPermission('duplicate')),
+        canDelete: owner, canManagePermissions: type !== 'survey' && !!session.profile && permissions.has(entityMethodPermission('managePermissions')), currentEvent,
     };
 }
 
@@ -193,26 +210,42 @@ export function requireLockedArchiveRoot(context: LockedArchiveContext): Archive
     return root;
 }
 
-/** Explicit association command; old-parent authority is checked inside the locking transaction. */
+/** Change one explicit association through the shared native/versioned owner.
+ * Normalize the submitted old/new parent first, then evaluate source/target
+ * authority under the DBAL's parent/root locks. Authorized unchanged choices
+ * acknowledge a no-op before comparison; actual changes additionally require the
+ * captured relationship and any versioned reviewed-token callback. Native errors,
+ * post-change archival presentation and view-admission redirects remain intact. */
 export async function changeEntityEvent(type: EntityType, entity: EntityBase, body: unknown, session: SessionLike, invalidateContext?: (id: string) => void, validateReviewedContext?: (manager: EntityManager) => Promise<void>) {
+    // Admit the existing profile/feature contract and normalize the explicit
+    // relationship command before asking the DBAL to choose its parent locks.
     requireSessionProfileId(session);
     if (!['activity', 'packing', 'drivers'].includes(type)) throw new APIError('This entity cannot be linked to an event.', {}, 400);
     const schema = Joi.object({eventId: Joi.string().uuid().lowercase().allow(null).required(), expectedEventId: Joi.string().uuid().lowercase().allow(null).required()}).unknown(false).required();
     const {value, error} = schema.validate(body);
     if (error) throw new APIError(error.message, {}, 400);
     const reference = {type, id: entity.id};
+
+    /** Decide against this transaction's locked relationship and current grants;
+     * persistence and any recommendation invalidation use the same manager. */
     async function changeLocked(manager: EntityManager, context: LockedArchiveContext) {
+        // Source and destination authority remain independent. A selected event
+        // must exist and permit attachment even for an unchanged relationship.
         const root = requireLockedArchiveRoot(context);
         const target = value.eventId ? context.parents.get(value.eventId) : null;
         if (value.eventId && !target) throw new APIError('Event not found.', {}, 404);
         const descriptors: EntityDescriptor[] = [{entityType: type, entityId: root.id, ownerId: root.ownerId, eventId: root.eventId}];
         if (target) descriptors.push({entityType: 'event', entityId: target.id, ownerId: target.ownerId, eventId: target.id});
         const permissions = await evaluateEntities(descriptors, session, manager);
-        if (!permissions.get(`${type}:${root.id}`)?.has('EDIT_META')) throw new APIError('Not allowed to change the linked event.', {}, 403);
+        if (!permissions.get(`${type}:${root.id}`)?.has(entityMethodPermission('changeEvent'))) throw new APIError('Not allowed to change the linked event.', {}, 403);
         if (target && !permissions.get(`event:${target.id}`)?.has('MANAGE_ASSIGNMENTS')) throw new APIError('Not allowed to attach entities to this event.', {}, 403);
-        // Retrying a committed choice is harmless but still requires current authority.
+
+        // An authorized unchanged choice performs no write. Native and v1 both
+        // retain this harmless outcome before expected-parent/token comparison;
+        // only an actual relationship change needs the reviewed precondition.
         if (root.eventId === value.eventId) return {changed: false, root};
         if (root.eventId !== value.expectedEventId) throw new APIError('The linked event changed. Reload and try again.', {}, 409);
+
         // Versioned adapters can require a reviewed settings token inside these same locks.
         await validateReviewedContext?.(manager);
         // Invalidating under the plan lock prevents an old job from surviving A-to-B-to-A.
@@ -222,6 +255,9 @@ export async function changeEntityEvent(type: EntityType, entity: EntityBase, bo
         if (type === 'activity') await invalidateGeneratedRecommendations(manager, root.id);
         return {changed: true, root: {...root, eventId: value.eventId}};
     }
+
+    // Project the committed outcome through the established lifecycle and page
+    // admission owners; this does not grant navigation merely from attachment.
     const {changed, root} = await lifecycleService.withLockedArchiveTarget(reference, changeLocked, value.eventId ? [value.eventId] : []);
     const archive = (await getArchivePresentations([reference], session)).get(archiveKey(reference));
     // Re-evaluate the resulting relationship, including unlink, using the same admission
@@ -255,10 +291,9 @@ export async function canAccessEntityView(type: EntityType, entity: Pick<EntityB
     return await getEntityViewAdmission(type, entity, session) === 'render';
 }
 
-const REQ_PERM = PERM.MANAGE_PERMISSIONS;
-
+/** Adapt the shared method declaration to the native middleware's bitmask input. */
 export function requiredAdminManagePerm() {
-    return REQ_PERM;
+    return PERM[entityMethodPermission('managePermissions')];
 }
 
 /** One controller-owned administrator operation for normalized native/v1 intent.

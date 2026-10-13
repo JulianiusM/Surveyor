@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: application maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: frontend test-layer, compiler-scope and risk/cost delta consolidated against executable configuration; current correction results belong to the paired review
+verification-scope: frontend test-layer, compiler-scope and risk/cost delta retained; readiness admission/privacy/locale/contract, visible Packed fallback and source/replacement verification boundaries clarified; current results belong to paired review
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; tsconfig.test.json; tsconfig.server.json; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tests/support/database.ts; tests/support/env.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; .github/workflows/ci.yml; docs/TESTING_GUIDE.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/TESTING_GUIDE.md
@@ -109,10 +109,34 @@ Retain actual-consumer checks where they uniquely detect:
 - Retained completion/destination/one-time feedback through canceled navigation and retired editors.
 - Receipt-owned expiry, repeated outcome renewal, reactive translation and detached initiating hosts.
 - Shared read Retry deadlines without automatic writes/GETs or unrelated-warning clearing.
+- Focus/visibility/reconnect waits for successful session bootstrap without unmounting readable drafts; failed or
+  cooldown-blocked bootstrap cannot dispatch private queries.
+- Session resume preserves terminal resource/image read rejection; deliberate recovery and an admitted projection
+  refresh remain distinct from automatic observers. Held admitted image/picker operations survive an ordinary pause,
+  and focus recovery shares the already-started read rather than canceling/restarting it.
+- A new mounted logical-key visit rechecks cached terminal rejection; joined pending reads consume that first
+  admission. Explicit dependencies recover readable terminal-paused observers through their own query functions,
+  including shared-key siblings, without reading hidden/closed/retired consumers or using last-writer options.
+- Validated region denial retires its derived totals/badges with cards/cache; temporary failure and independently
+  admitted siblings retain their own confirmed evidence without an invented zero count.
+- Confirmed locale change cancels only language-owned families and preserves an in-flight machine authority read.
+- Packed checks retain mounted-visit selections through unavailable/throwing storage and background reads, with a
+  persistent localized notice about load/save failure and unsaved-change loss on leave/reload/account/profile change.
+  Failed reads do not imply that previously stored or successfully written checks are unpersisted. Healthy rereads
+  still adopt external changes and missing keys as unchecked for items without outstanding failed writes. Explicit local
+  Retry reattempts only pending browser-storage writes/reads and clears the notice only after they succeed; polling
+  never replays writes. List/context change, remount or validated denial retires fallback without server commands.
+  Retained callbacks reject detached/foreign rows and changed actors; Retry prunes removed rows before writing.
 
 Use real query/cache/transport behavior for authority regressions. A fulfilled observer refetch may return retained
 pre-write data after cancellation; hold and cancel the actual mounted post-write read, prove one write, and restore
 authority through a new admitted read. Equal successful data is a valid receipt; object identity/idle flags are not.
+
+Generated comparison fixtures exercise realistic full metadata/settings tokens through the actual declared header,
+browser transport and owning decoder, including oversized rejection. Real persistence checks distinguish the approved
+same-event no-op from a changed association: current source/target authorization remains required, comparison data is
+ignored only for the harmless result, and changed relationships retain their expected/current preconditions. Preserve
+native transport outcomes and verify every factory/preflight consumer of shared action policy.
 
 ## Browser, visual and source boundaries
 

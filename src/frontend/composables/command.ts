@@ -54,7 +54,11 @@ export function useDraftProtection(draft: PilotCommandDraft) {
     let disposeRoot = () => {};
     provide<DraftOwner>(draftOwnerKey, {register, prepareDeparture, retainCommand});
 
+    /** Attach a child's live draft state to this owner until that child unmounts.
+     * Only its reader is retained; field values remain in the child component. */
     function register(read: () => PilotDraftState): () => void {
+        // Read current state at each departure decision instead of copying a
+        // dirty/pending snapshot that could outlive the child's actual work.
         children.add(read);
         return function unregister(): void { children.delete(read); };
     }
@@ -161,11 +165,21 @@ export function useDraftProtection(draft: PilotCommandDraft) {
         disposeIfRetired();
     }
 
+    /** Retire departure consent and obsolete command leases after actor/context
+     * replacement. Current retained commands still protect their own admitted work. */
     function clearDepartures(): void {
+        // Consent belongs to the retired visit/actor and cannot authorize discard
+        // under the replacement identity, even if this shell remains mounted.
         approvedDepartures.clear();
+
+        // A persistent root can also hold newer commands. Remove only leases whose
+        // captured scope retired, leaving current pending/unknown status intact.
         for (const command of commands) {
             if (!context.isCurrent(command.scope)) commands.delete(command);
         }
+
+        // An unmounted root releases its shared guards only after the final lease
+        // is gone; mounted roots continue aggregating their remaining children.
         disposeIfRetired();
     }
 

@@ -10,7 +10,7 @@ import {MetadataDraft} from '../../composables/metadataDraft';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {useCommand} from '../../composables/command';
 import {packingKeys} from '../../app/queryKeys';
-import {observeQueryReads, refetchFreshQuery} from '../../app/queryCache';
+import {observeQueryReads, refetchFreshQuery, useQueryAdmission} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
@@ -67,9 +67,11 @@ function metadataProblem(problem: components['schemas']['Problem']) {
 let discardAfterSettings = false;
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const key = computed(() => packingKeys.metadata(context.session.value?.context, props.listId));
+const readAdmission = useQueryAdmission(context, key,
+    computed(() => props.active !== false && context.hydrated.value && context.visible.value));
 const metadata = useQuery({
     queryKey: key,
-    enabled: computed(() => props.active !== false && context.hydrated.value && context.ready.value && context.visible.value),
+    ...readAdmission,
     queryFn: ({signal, queryKey}) =>
         api.metadata(
             props.listId,
@@ -78,7 +80,7 @@ const metadata = useQuery({
             context.queryClient.getQueryData<PilotRead<components['schemas']['PackingMetadata']>>(queryKey),
         ),
     refetchInterval: (query) =>
-        props.active !== false && context.visible.value
+        props.active !== false && context.mayRead() && context.visible.value
             ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter)
             : false,
     refetchIntervalInBackground: false,
@@ -215,7 +217,7 @@ async function readMetadata(): Promise<void> {
     }
 
     function mayRead(): boolean {
-        return active && resource === props.listId && context.ready.value && context.isCurrent(scope);
+        return active && resource === props.listId && context.mayRead(scope);
     }
 }
 

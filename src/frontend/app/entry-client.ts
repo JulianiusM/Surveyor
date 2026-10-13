@@ -4,7 +4,17 @@ import {decodeBootstrap} from './serializeBootstrap';
 import {createPilotApp} from './createApp';
 import {mountPreservingDrafts} from './mountPreservingDrafts';
 import {localeManifest} from '../../modules/localization/translator';
+import type {Locale} from '../../types/LocalizationTypes';
 import '../styles/pilot.css';
+
+/** Keep the browser document's language and reading direction aligned with the
+ * application locale, including the first hydrated render and later switches. */
+function updateDocumentLanguage(locale: Locale): void {
+    // Assistive technology reads the selected interface language from the document;
+    // direction comes from the same generated catalog rather than a second registry.
+    document.documentElement.lang = locale;
+    document.documentElement.dir = localeManifest.find(entry => entry.locale === locale)?.direction ?? 'ltr';
+}
 
 /** Validate the server bootstrap before creating any browser owner, then restore
  * pre-hydration controls before publishing readiness. Page lifecycle listeners
@@ -20,10 +30,7 @@ async function start(): Promise<void> {
     if (!container) throw new Error('The pilot application container is missing.');
     await mountPreservingDrafts(app, container);
 
-    watch(context.locale, locale => {
-        document.documentElement.lang = locale;
-        document.documentElement.dir = localeManifest.find(entry => entry.locale === locale)?.direction ?? 'ltr';
-    }, {immediate: true});
+    watch(context.locale, updateDocumentLanguage, {immediate: true});
     const stop = context.start();
     // Mount installs listeners before draft restoration finishes. Publish readiness only
     // after restored models and the ordinary request/identity lifecycle are both active.

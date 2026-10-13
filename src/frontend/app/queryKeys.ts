@@ -59,3 +59,11 @@ export const helpKeys = {
 export function belongsToQueryFamily(query: Parameters<typeof matchQuery>[1], family: readonly unknown[]): boolean {
     return matchQuery({queryKey: family}, query);
 }
+
+/** Only these existing projection owners include translated server content. Locale-free
+ * machine snapshots remain available during a language preference command. Future migrated
+ * language-owned projections extend this owner rather than invalidating the whole cache. */
+export function belongsToLocalizedQueryFamily(query: Parameters<typeof matchQuery>[1], context: string): boolean {
+    // Match complete actor families, including obsolete locale variants and inactive pages.
+    return belongsToQueryFamily(query, helpKeys.all(context)) || belongsToQueryFamily(query, overviewKeys.all(context));
+}

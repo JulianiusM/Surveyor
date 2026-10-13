@@ -715,6 +715,59 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
     expect((await unicodeVersioned.json()).values).toEqual(codePointValues);
 });
 
+test('preserves harmless event-link no-ops through native and versioned HTTP without weakening changed commands', async ({request}) => {
+    await loginForE2E(request, createE2ELogin());
+    const list = await createApiPackingList(request);
+    const event = await createResourceViaForm(request, createE2EEvent());
+    const actor = await bootstrap(request);
+    const headers = headersFor(actor);
+    const root = `/api/v1/packing-lists/${list.id}`;
+
+    try {
+        // Both adapters retain the native unchanged branch after current authorization.
+        // Required context/CSRF still applies; no missing or obsolete comparison writes data.
+        const initial = await request.get(`${root}/settings`, {headers});
+        const settings = await initial.json() as components['schemas']['PackingSettings'];
+        const oversized = '"edit-' + 'a'.repeat(5000) + '"';
+        for (const token of [undefined, '', '"obsolete"', 'W/"obsolete"', '*', oversized]) {
+            const unchanged = await request.put(`${root}/event`, {
+                headers: token === undefined ? headers : {...headers, 'If-Match': token},
+                data: {eventId: null, expectedEventId: null},
+            });
+            expect(unchanged.status()).toBe(200);
+            expect(await unchanged.json()).toMatchObject({changed: false});
+        }
+        expect((await request.post(`/api/packing/${list.id}/event`, {
+            data: {eventId: null, expectedEventId: null},
+        })).status()).toBe(200);
+        const afterNoOps = await request.get(`${root}/settings`, {headers});
+        expect(await afterNoOps.json()).toEqual(settings);
+
+        // A real relationship change still needs reviewed current values. Once it commits,
+        // repeating that choice is harmless even with the previous now-stale token.
+        const change = {eventId: event.id, expectedEventId: null};
+        await expectProblem(await request.put(`${root}/event`, {headers, data: change}), 428, 'PRECONDITION_REQUIRED');
+        await expectProblem(await request.put(`${root}/event`, {
+            headers: {...headers, 'If-Match': oversized}, data: change,
+        }), 412, 'PRECONDITION_FAILED');
+        expect((await request.put(`${root}/event`, {
+            headers: {...headers, 'If-Match': settings.settingsToken}, data: change,
+        })).status()).toBe(200);
+        const repeated = await request.put(`${root}/event`, {
+            headers: {...headers, 'If-Match': settings.settingsToken}, data: change,
+        });
+        expect(repeated.status()).toBe(200);
+        expect(await repeated.json()).toMatchObject({changed: false});
+        await expectProblem(await request.put(`${root}/event`, {
+            headers: {...headers, 'If-Match': settings.settingsToken},
+            data: {eventId: null, expectedEventId: event.id},
+        }), 412, 'PRECONDITION_FAILED');
+    } finally {
+        await request.post(`/packing/${list.id}/delete`);
+        await request.post(`/event/${event.id}/delete`);
+    }
+});
+
 test('serves usable item and order edit baselines independently of linked detail admission', async ({request}) => {
     await loginForE2E(request, createE2ELogin());
     const owner = await bootstrap(request);

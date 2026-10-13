@@ -4,9 +4,9 @@ documentation-metadata
 audience: documentation contributors; feature maintainers
 owner: product documentation maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved release-owned pilot corpus and unchanged native-asset boundary consolidated; historical export inspection retained; no new generation or final visual acceptance claimed
+verification-scope: approved release-owned pilot corpus and bounded native-asset cleanup reconciled; historical export inspection retained; no new generation or final visual acceptance claimed
 source-anchors: scripts/generate-help-visuals.mjs; src/locales/; docs/user-guide/en/; docs/user-guide/de/; src/frontend/components/AppHeader.vue; src/views/surveyor/survey-vote.pug; src/frontend/features/packing/; docs/features/help/HELP_VISUALS.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/features/help/HELP_VISUALS.md
@@ -38,7 +38,9 @@ identify the actual English source; existing invalid localized figures/content s
 
 Navigation combines a source-rendered real header with numbered explanations outside the crop and fictional account
 data. Do not redraw/relabel a remembered navbar. Other pictures are captioned explanatory diagrams.
-The native unused illustration stays in the frozen comparator; pilot ownership grants no removal authority.
+The explicitly approved 2026-10-12 cleanup removed the unused obsolete native controls illustration, as recorded in
+the [foundation ledger](../FRONTEND_FOUNDATION_DESIGN.md#explicit-canonical-location-and-action-decisions-2026-10-12).
+The remaining native images stay unchanged; that bounded exception grants no further asset removal or redesign.
 
 ## Authoring and individual inspection
 

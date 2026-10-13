@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; API developers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original authored-contract choices retained; approved 2026-10-12 public-method admission, minimal baselines, coexistence locking and canonical Help corrections reconciled with source; execution owned by paired review
+verification-scope: original authored-contract choices retained; approved method admission and explicit 2026-10-13 same-event no-op exception reconciled with owning guidance; actual readiness execution owned by paired review
 source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: next-contract-migration-or-authorized-cutover
 -->
@@ -196,6 +196,23 @@ native original-value submission or overlap feedback is not implemented or promi
 Missing required If-Match is 428; mismatched touched comparison is 412 without a write.
 Weak/wildcard tags do not bypass application comparison. This is an authored field protocol carried in If-Match,
 not a promise of monotonic history: change-away/change-back can match prior values.
+
+The [explicit 2026-10-13 amendment](FRONTEND_FOUNDATION_DESIGN.md#authorized-same-event-no-op-clarification-2026-10-13)
+preserves a narrow exception: selecting the already linked event returns `changed: false` after current source/target
+authorization, ignoring comparison-header presence/value entirely. This includes empty, stale, weak, wildcard or
+oversized supplied evidence. Native and v1 perform no association write in that case.
+A changed association retains the expected relationship and v1 reviewed-field comparison inside the existing locks.
+Do not apply this exception to unrelated commands or treat a no-op receipt as a fresh edit baseline.
+
+Authored `ComparisonToken` owns the accepted If-Match bound; `FieldComparisonToken` adds the existing field-token syntax.
+`EventIfMatch` is an optional transport string because the approved unchanged branch never examines that evidence;
+applying a token constraint there would reject a harmless native/v1 result. Actual changed-event callbacks still require
+the same bounded field comparison under locks. Generated comparison consumers must accept every token the corresponding
+admitted read can emit, including full metadata/settings projections. Preserve
+the same schema constraint through generated validation and the owning decoder; do not maintain an unrelated smaller
+header limit or duplicate the bound across adapters. The owning decoder uses generated `FieldComparisonToken` validation.
+Keep malformed, weak and wildcard input distinct from a missing required precondition, and verify both actual
+generated consumers and rejected oversized input.
 
 Dirty refresh preserves original/local/current. Unrelated remote changes can advance untouched fields; overlaps
 require explicit review/reapply. A 412 response cannot disclose hidden values.

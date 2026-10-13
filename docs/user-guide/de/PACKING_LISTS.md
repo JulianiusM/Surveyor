@@ -4,11 +4,11 @@ documentation-metadata
 audience: Packlistenteilnehmer; Packlistenorganisatoren
 owner: packing-list feature maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
+verification-scope: Pilot Packed checklist warning and explicit Retry checked against mounted behavior; other article sections, declared anchors and image bytes retain their prior reviewed scope.
 heading-anchors: 1:packing-lists; 2:choose-your-task; 2:understand-the-three-kinds-of-state; 2:open-and-read-a-packing-list; 3:read-the-summary-counters; 3:read-the-item-table; 2:take-an-item; 3:remove-yourself; 2:understand-everyone-items; 2:use-packed-as-your-personal-checklist; 2:open-a-list-as-a-guest; 2:create-a-packing-list; 3:1-open-the-creation-form; 3:2-enter-the-list-details; 3:3-add-the-initial-items; 3:4-select-create-list; 2:manage-list-content; 3:edit-the-list-title-or-description; 3:add-another-item; 3:edit-an-existing-item; 3:reorder-items; 3:remove-another-participant; 3:delete-an-item; 2:manage-the-header-image; 2:link-a-packing-list-to-an-event; 2:configure-sharing-and-permissions; 3:privacy-before-sharing; 2:duplicate-or-delete-a-packing-list; 3:duplicate-a-list; 3:delete-a-list; 2:capabilities-and-limits; 2:practical-examples; 3:shared-camping-equipment; 3:personal-essentials; 3:event-setup; 2:archive-or-restore-a-list; 2:troubleshooting; 3:the-list-cannot-be-created; 3:take-is-missing-or-does-not-work; 3:an-event-linked-list-says-registration-is-required; 3:the-list-is-missing-from-your-overview; 3:my-packed-marks-disappeared; 3:someone-else-can-see-my-packed-marks; 3:item-editing-or-organizer-controls-are-missing; 3:an-item-stays-at-the-top-of-the-list; 2:related-guides
-source-anchors: src/views/packing/packing-view.pug; src/controller/packingController.ts; src/locales/de.json; docs/user-guide/de/assets/packing-shared-vs-local.png; scripts/generate-help-visuals.mjs; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue
+source-anchors: src/views/packing/packing-view.pug; src/controller/packingController.ts; src/locales/de.json; docs/user-guide/de/assets/packing-shared-vs-local.png; scripts/generate-help-visuals.mjs; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; tests/frontend/frontend-pilot-editor.spec.ts
 next-review: packing-visible-UI-or-behavior-change
 production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->
@@ -126,6 +126,8 @@ Das Häkchen:
 - ist mit keinem Surveyor-Konto oder Profil verbunden.
 
 Normalerweise bleibt es nach Schließen und erneutem Öffnen im selben Browser erhalten. Es kann in einem anderen Browser oder Gerät, im privaten Modus oder nach dem Löschen von Websitedaten fehlen. Eine duplizierte Liste beginnt mit eigenen, unmarkierten Gegenständen. Eine andere Person im selben Browserprofil sieht dieselben Häkchen, auch nach einem Wechsel des aktiven Surveyor-Profils.
+
+Kann dein Browser einige Häkchen nicht laden oder speichern, erscheint eine Warnung über der Liste. Deine aktuellen Änderungen bleiben erhalten, solange diese Liste mit demselben Konto und aktiven Profil geöffnet ist, auch wenn ihre Gegenstände aktualisiert werden. Wähle in der Warnung **Erneut versuchen**, um sie erneut zu speichern. Solange die Warnung angezeigt wird, können ungespeicherte Häkchen beim Verlassen oder Neuladen der Seite oder beim Wechsel des Kontos oder aktiven Profils verloren gehen. Gemeinsame Zusagen bleiben davon unberührt.
 
 Verwende **Eingepackt?** nicht als Nachweis erledigter Gruppenaufgaben. Gemeinsame Zusagen und direkte Kommunikation eignen sich für Gruppenverantwortung.
 

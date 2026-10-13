@@ -23,6 +23,7 @@ import {
     assertEntityPropertyContext,
     changeEntityEvent,
     entityPropertyPermission,
+    entityMethodPermission,
     getArchivePresentations,
     getAuthorizedEventUrl,
     getEntityViewAdmission,
@@ -48,6 +49,7 @@ import * as lifecycleService from '../modules/database/services/EntityLifecycleS
 import * as adminService from '../modules/database/services/EntityAdminService';
 import * as userService from '../modules/database/services/UserService';
 import {ApiProblem} from '../modules/api/problem';
+import {contractValidator} from '../modules/api/contracts';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {performImageSwap} from "../modules/lib/fileCommons";
 import {checkNewImage, removeImage} from '../modules/lib/fileCommons';
@@ -384,16 +386,18 @@ export default {
  * capabilities. Preserve native asymmetries: attr accepts description through
  * EDIT_META, its dedicated description action uses EDIT_DESC, and ITEM_EDIT_META
  * does not grant Everyone. Display-only title/capacity grants remain independent.
+ * Cross-feature methods consume the existing administration controller's shared
+ * declarations, also used by native factories and the shared relink operation.
  */
 const packingMethodPermissions: Record<PackingMethod, PermissionFieldRule> = {
     selfAssignment: {permission: 'ACCESS_VIEW'},
     addItem: {permission: 'ITEM_ADD'},
     reorderItems: {permission: 'ITEM_EDIT'},
     editDescription: {permission: 'EDIT_DESC'},
-    editHeader: {permission: 'EDIT_META'},
-    changeEvent: {permission: 'EDIT_META'},
-    managePermissions: {permission: 'MANAGE_PERMISSIONS'},
-    duplicate: {permission: 'DATA_DUPLICATE'},
+    editHeader: {permission: entityMethodPermission('editHeader')},
+    changeEvent: {permission: entityMethodPermission('changeEvent')},
+    managePermissions: {permission: entityMethodPermission('managePermissions')},
+    duplicate: {permission: entityMethodPermission('duplicate')},
     editItemTitle: {permission: 'EDIT_META', parent: 'ITEM_EDIT'},
     editItemDescription: {permission: 'EDIT_DESC', parent: ['ITEM_EDIT', 'ITEM_EDIT_DESC']},
     editItemCapacity: {permission: 'EDIT_META', parent: 'ITEM_EDIT'},
@@ -448,14 +452,23 @@ function comparisonToken(scope: string, id: string, session: SessionLike, values
     return `"edit-${Buffer.from(JSON.stringify({context, fields})).toString('base64url')}"`;
 }
 
-/** Compare only submitted fields so independent edits can complete without overwriting one another. */
+/** Compare only submitted fields against the freshly authorized locked baseline.
+ * Missing review is 428; malformed, foreign-context or changed selected-field evidence
+ * is 412. Unrelated fields deliberately do not block an independent sparse edit. */
 function requireFieldComparison(expected: string | undefined, current: string, fields: string[]): void {
     if (!expected) throw new ApiProblem('PRECONDITION_REQUIRED');
+
+    /** Admit the generated bounded strong-tag envelope before decoding its private
+     * comparison shape. Invalid evidence remains a failed precondition, not a parser error. */
     function decode(token: string): {context: string; fields: Record<string, string>} | null {
-        // One operation's token has only a few hashes. Bound decoding before allocating or parsing
-        // user input, and accept only our single strong tag rather than wildcard/list/weak tags.
-        if (token.length > 4096 || !/^"edit-[A-Za-z0-9_-]+"$/.test(token)) return null;
+        // One operation's token has only a few hashes. The generated contract
+        // supplies its response/request bound and emitted strong-tag syntax before
+        // this owner allocates or parses the enclosed field-comparison evidence.
+        if (!contractValidator('FieldComparisonToken')(token)) return null;
+
         try {
+            // The wire envelope contains machine context and field hashes only. Validate
+            // that shape before indexing it; submitted values are never trusted baselines.
             const value = JSON.parse(Buffer.from(token.slice(6, -1), 'base64url').toString('utf8')) as unknown;
             if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
             const data = value as {context?: unknown; fields?: unknown};
@@ -465,6 +478,9 @@ function requireFieldComparison(expected: string | undefined, current: string, f
             return {context: data.context, fields: hashes as Record<string, string>};
         } catch { return null; }
     }
+
+    // Bind the evidence to this actor/resource, then compare only the fields selected
+    // by this operation. Current authorization was checked before exposing either token.
     const baseline = decode(expected);
     const latest = decode(current);
     if (!baseline || !latest || baseline.context !== latest.context
@@ -1004,8 +1020,13 @@ function headerProjection(list: PackingList) {
 /** Preserve native setup admission, including independent owner deletion and
  * account-only duplication. Opening setup does not grant its private ACL matrix. */
 function mayOpenSettings(list: PackingList, permissions: PermView, session: SessionLike): boolean {
-    // Settings expose profile-owned deletion independently of the account-only duplicate action.
-    return permissions.any('EDIT_TITLE', 'EDIT_DESC', 'EDIT_META', 'MANAGE_PERMISSIONS')
+    // Screen admission follows its existing field/method owners without copying their grants.
+    // Profile-owned deletion remains independent of the account-only duplicate action.
+    return mayEditMetadataField(permissions, 'title')
+        || mayEditMetadataField(permissions, 'description')
+        || mayPerformPackingMethod(permissions, 'editHeader')
+        || mayPerformPackingMethod(permissions, 'changeEvent')
+        || mayPerformPackingMethod(permissions, 'managePermissions')
         || isOwner(session, list.ownerId)
         || Boolean(session.auth?.user && mayPerformPackingMethod(permissions, 'duplicate'));
 }

@@ -112,9 +112,7 @@ schemas:
           removeAssignments:
             type: boolean
       editToken:
-        type: string
-        maxLength: 4096
-        pattern: '^"edit-[A-Za-z0-9_-]+"$'
+        $ref: ./common.yaml#/schemas/FieldComparisonToken
   PackingListView:
     type: object
     additionalProperties: false
@@ -639,9 +637,7 @@ schemas:
         type: integer
         minimum: 0
       editToken:
-        type: string
-        maxLength: 4096
-        pattern: '^"edit-[A-Za-z0-9_-]+"$'
+        $ref: ./common.yaml#/schemas/FieldComparisonToken
   PackingAdminInput:
     type: object
     additionalProperties: false
@@ -816,9 +812,7 @@ schemas:
           - "null"
         description: Opaque image version; changes when the image is replaced without exposing its storage path.
       settingsToken:
-        type: string
-        maxLength: 4096
-        pattern: '^"edit-[A-Za-z0-9_-]+"$'
+        $ref: ./common.yaml#/schemas/FieldComparisonToken
   PackingHeaderUpload:
     type: object
     additionalProperties: false

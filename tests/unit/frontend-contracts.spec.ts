@@ -6,6 +6,7 @@ import {isRegistrationPasswordValid} from '../../src/modules/lib/frontendIdentit
 import type {Request} from 'express';
 import {normalizePackingMetadataPatch} from '../../src/controller/packingController';
 import {validateOperationRequest} from '../../src/modules/api/transport';
+import {operationContract} from '../../src/modules/api/contracts';
 
 const listId = 'd506d78a-e2d7-4be9-bc95-04d83bbd22ec';
 const itemId = 'f092070d-07e3-461e-94bb-84b1d828dc38';
@@ -280,6 +281,34 @@ describe('generated v1 contract boundaries', () => {
             header: {'If-None-Match': 'a'.repeat(4096)}})).toBe(true);
         expect(server.validateGetPackingMetadataParameters({...parameters,
             header: {'If-None-Match': 'a'.repeat(4097)}})).toBe(false);
+    });
+
+    it('shares the authored comparison bound across requests and emitted field tokens', function sharedComparisonBound() {
+        // Full metadata/settings baselines carry several hashes, so valid tokens
+        // exceed the old request-only limit. Both standalone runtimes must admit
+        // the same finite wire values without compiling schemas at runtime.
+        const settingsToken = `"edit-${'a'.repeat(787)}"`;
+        const largestFieldToken = `"edit-${'a'.repeat(4089)}"`;
+        for (const validators of [server, browser]) {
+            expect(validators.validateComparisonToken(settingsToken)).toBe(true);
+            expect(validators.validateFieldComparisonToken(settingsToken)).toBe(true);
+            expect(validators.validateComparisonToken(largestFieldToken)).toBe(true);
+            expect(validators.validateFieldComparisonToken(largestFieldToken)).toBe(true);
+            expect(validators.validateComparisonToken(`${largestFieldToken}a`)).toBe(false);
+            expect(validators.validateFieldComparisonToken(`W/${settingsToken}`)).toBe(false);
+            expect(validators.validateComparisonToken('')).toBe(false);
+        }
+
+        // Only the explicitly approved event no-op makes header presence
+        // conditional. Real changed-event admission still invokes its controller
+        // comparison; the generated business-parameter validator does not own it.
+        const requiredHeader = operationContract('updatePackingMetadata').parameters.find(parameter => parameter.name === 'If-Match');
+        const eventHeader = operationContract('changePackingEvent').parameters.find(parameter => parameter.name === 'If-Match');
+        expect(requiredHeader?.required).toBe(true);
+        expect(eventHeader?.required).toBe(false);
+        // Event header admission is conditional on an actual change. No-op requests
+        // ignore even malformed supplied evidence; the changed command validates it.
+        expect(eventHeader?.schema).toEqual({type: 'string'});
     });
 
     it('accepts every native overview entity type and only explicit allowed filters', () => {

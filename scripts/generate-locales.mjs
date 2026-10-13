@@ -19,6 +19,49 @@ const catalogs = [];
 const sourceHash = createHash('sha256').update(api.sourceHash);
 const pluralSuffix = /_(zero|one|two|few|many|other)$/;
 
+/** Retire only compiled siblings of this generator's permission source.
+ * Extensionless imports can choose a stale permissions.js instead of permissions.ts.
+ * Validate exact lexical/real output paths and entry types before any unlink; check
+ * mode reports the collision without changing outputs or unrelated files. */
+async function retireCompiledPermissionSiblings() {
+    const generatedRelative = path.join('src', 'modules', 'localization', 'generated');
+    const generatedDirectory = path.resolve(outputRoot, generatedRelative);
+    const collisions = [];
+
+    // These two names belong to the emitted permissions source. Never discover
+    // arbitrary files for deletion or clean the generated directory recursively.
+    for (const filename of ['permissions.js', 'permissions.js.map']) {
+        const destination = path.resolve(generatedDirectory, filename);
+        if (path.relative(outputRoot, destination) !== path.join(generatedRelative, filename)) {
+            throw new Error('Refusing compiled permission cleanup outside the output root');
+        }
+
+        let entry;
+        try {
+            entry = await fs.lstat(destination);
+        } catch (error) {
+            if (error.code === 'ENOENT') continue;
+            throw error;
+        }
+        if (!entry.isFile()) throw new Error(`Refusing unexpected compiled permission entry: ${filename}`);
+        collisions.push(destination);
+    }
+    if (!collisions.length) return;
+
+    // A redirected parent directory must not turn an exact generated filename
+    // into removal outside the selected output tree. Validate before either unlink.
+    const realOutputRoot = await fs.realpath(outputRoot);
+    const realGeneratedDirectory = await fs.realpath(generatedDirectory);
+    if (path.relative(realOutputRoot, realGeneratedDirectory) !== generatedRelative) {
+        throw new Error('Refusing compiled permission cleanup through a redirected output directory');
+    }
+    if (check) throw new Error('Generated catalog has compiled permission siblings; run normal locale generation');
+
+    // Catalog/contract validation has already succeeded. Remove only these
+    // generator-owned stale files before publishing the current typed source.
+    for (const destination of collisions) await fs.unlink(destination);
+}
+
 /** Read keys from the authoritative permission declarations without executing their module or
  * copying a second permission inventory into the frontend. Unsupported registry structure fails visibly. */
 async function permissionRegistryKeys() {
@@ -194,6 +237,7 @@ const output = new Map([
         + "import type {MessageKey} from '../../../types/LocalizationTypes';\n"
         + `export const permissionMessageKeys = ${JSON.stringify(Object.fromEntries(permissionKeys.map(key => [key, `permissions.${key}`])), null, 2)} as const satisfies Record<string, MessageKey>;\n`],
 ]);
+await retireCompiledPermissionSiblings();
 for (const [relative, content] of output) {
     const destination = path.join(outputRoot, relative);
     if (check) {

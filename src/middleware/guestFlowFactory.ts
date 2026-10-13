@@ -17,7 +17,7 @@
 import express, {NextFunction, Request, Response} from 'express';
 import fs from "node:fs";
 import path from "node:path";
-import {canAccessEntityView, getArchivePresentations, getEntityPropertyPresentation} from "../controller/entityAdminController";
+import {canAccessEntityView, entityMethodPermission, getArchivePresentations, getEntityPropertyPresentation} from "../controller/entityAdminController";
 import {authorizeEventLink, readEventLinkSelection} from "../controller/eventController";
 import {archiveKey} from "../modules/archive/policy";
 import * as userService from "../modules/database/services/UserService";
@@ -235,7 +235,11 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                 guestRegistrationNags: getGuestRegistrationNags(entityType),
             });
         }))
+        /** Register this feature's native guest identity and deliver its private
+         * recovery link through the existing flash/canonical redirect contract. */
         .post(asyncHandler(async (req: Request, res: Response) => {
+            // Normalize optional contact information before shared registration;
+            // missing names retain the original guest form and submitted values.
             const entityId = resFct(req).id;
             const {username, email} = req.body;
             const normEmail = email?.trim().toLowerCase();
@@ -249,13 +253,16 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
                     email
                 });
             }
+
+            // The shared identity owner mutates the session only after admission.
+            // Native feedback and destination remain this HTTP adapter's concern.
             const link = await registerGuestIdentity(username, normEmail, req.session, undefined, registerGuest);
             req.flash('success', `Login successful. Use ${link} to edit later.`);
             res.redirect(buildRedirect(entityId));
         }));
 
     // GET /:id/duplicate
-    router.get('/:id/duplicate', requirePermission(permFct, PERM.DATA_DUPLICATE), asyncHandler(async (req: Request, res: Response) => {
+    router.get('/:id/duplicate', requirePermission(permFct, PERM[entityMethodPermission('duplicate')]), asyncHandler(async (req: Request, res: Response) => {
         const data = await fetchForDuplicate(resFct(req), req.session);
         // Duplicating copies form content, not lifecycle state. Any archive notice belongs
         // to the explicitly selected target event, independently of the source entity.
@@ -269,13 +276,18 @@ export function createGuestFlowRouter(cfg: GuestFlowConfig) {
         });
     }));
 
-    // POST /:id/delete
+    /** Delete through the existing owner check and feature lifecycle operation.
+     * Native header cleanup, success feedback and dashboard navigation stay intact. */
     router.post('/:id/delete', requireOwner(resFct), asyncHandler(async (req: Request, res: Response) => {
+        // The controller/DBAL completes record deletion before this adapter retires
+        // the old header file; this is distinct from archival and restoration.
         const entity: EntityBase = resFct(req);
         await deleteEntity(entity, req.session);
         if (entity.headerImg) {
             removeImage(entity.headerImg);
         }
+
+        // Deliver the existing native result after its persistence/file steps.
         req.flash('success', `${entityType} deleted`);
         res.redirect('/users/dashboard');
     }));

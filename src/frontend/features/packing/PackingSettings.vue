@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, ref, watch} from 'vue';
-import {RouterLink, useRouter} from 'vue-router';
+import {useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {MessageKey} from '../../../types/LocalizationTypes';
+import type {EntityHeaderLabels, EntityLifecycleLabels} from '../../../types/FrontendEntitySettingsTypes';
 import type {PilotMetadataSnapshot, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {permissionLabel as translatedPermissionLabel} from '../../../modules/localization/permissionLabels';
 import {usePackingApi} from './api';
@@ -15,14 +16,16 @@ import {useConfirmedNavigation} from '../../composables/pageEntry';
 import {useDebouncedValue} from '../../composables/debounced';
 import {MetadataDraft} from '../../composables/metadataDraft';
 import {packingKeys} from '../../app/queryKeys';
-import {observeQueryReads, refetchFreshQuery, retireQueryFamily} from '../../app/queryCache';
+import {observeQueryReads, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import AppTabList from '../../components/AppTabList.vue';
 import MetadataFields from './MetadataFields.vue';
-import EventPicker from '../../components/EventPicker.vue';
+import EntityHeaderEditor from '../../components/EntityHeaderEditor.vue';
+import EntityEventEditor from '../../components/EntityEventEditor.vue';
+import EntityLifecycleActions from '../../components/EntityLifecycleActions.vue';
 import AudiencePermissions from '../../components/permissions/AudiencePermissions.vue';
 import PermissionFields from '../../components/permissions/PermissionFields.vue';
 
@@ -33,6 +36,18 @@ const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
 const context = usePilot();
 const api = usePackingApi(context);
 const {messages} = context;
+// Shared panels receive catalog wording and admitted presentation. Packing retains
+// the draft/token and command owners, including each field's deliberate exceptions.
+const headerLabels = computed<EntityHeaderLabels>(() => ({
+    title: messages.value.t('packing.headerImage'), choose: messages.value.t('packing.chooseImage'),
+    hint: messages.value.t('packing.imageHint'), upload: messages.value.t('packing.upload'),
+    remove: messages.value.t('packing.removeImage'),
+}));
+const lifecycleLabels = computed<EntityLifecycleLabels>(() => ({
+    activeHint: messages.value.t('packing.activeHint'), archivedHint: messages.value.t('packing.archivedHint'),
+    inheritedHint: messages.value.t('packing.inheritedHint'), openEvent: messages.value.t('packing.openEvent'),
+    otherActions: messages.value.t('packing.otherActions'), deletePermanently: messages.value.t('packing.deletePermanently'),
+}));
 const router = useRouter();
 const destination = useConfirmedNavigation();
 let releaseDeparture: (() => void) | undefined;
@@ -70,12 +85,14 @@ const imageToken = ref<string | null>(null);
 const imageOriginal = ref<string | null>(null);
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const settingsKey = computed(() => packingKeys.settings(context.session.value?.context, props.listId));
+const settingsAdmission = useQueryAdmission(context, settingsKey,
+    computed(() => context.hydrated.value && context.visible.value));
 const settings = useQuery({
     queryKey: settingsKey,
-    enabled: computed(() => context.hydrated.value && context.ready.value && context.visible.value),
+    ...settingsAdmission,
     queryFn: ({signal}) => api.settings(props.listId, context.capture(), signal),
     refetchInterval: (query) =>
-        context.visible.value ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter) : false,
+        context.mayRead() && context.visible.value ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter) : false,
 });
 // Retain draft owners through same-key language refreshes, but remove authority immediately on a confirmed
 // denial. Each independently saved form keeps the token of the snapshot it actually edited.
@@ -175,7 +192,10 @@ watch(settings.error, (failure) => {
 const data = computed(() => settings.data.value ?? last.value);
 const initialLoading = computed(() => !data.value && settings.isPending.value);
 const showMetadata = computed(() => data.value ? !!data.value.editableFields.length : props.metadataAvailable === true);
+/** Present only settings panels admitted by this projection; their controls still
+ * use the feature's field/method capabilities and independent draft owners. */
 const panels = computed(() => {
+    // Missing settings are unknown admission, so do not invent an available tab.
     const state = data.value;
     if (!state) return [];
     return [
@@ -240,7 +260,7 @@ async function refreshAfterCommand(): Promise<void> {
     if (active && resource === props.listId && context.isCurrent(scope)) emit('saved');
 
     function mayRead(): boolean {
-        return active && resource === props.listId && context.ready.value && context.isCurrent(scope);
+        return active && resource === props.listId && context.mayRead(scope);
     }
 }
 const command = useCommand(refreshAfterCommand, false, {
@@ -292,7 +312,7 @@ async function metadataSaved(): Promise<void> {
         if (active && resource === props.listId && context.isCurrent(scope)) receiveSettings(result, true);
 
         function mayRead(): boolean {
-            return active && resource === props.listId && context.ready.value && context.isCurrent(scope);
+            return active && resource === props.listId && context.mayRead(scope);
         }
     } catch {
         command.notice.value = 'state.savedRefreshFailed';
@@ -306,10 +326,17 @@ const defaultsPatch = computed<components['schemas']['PermissionDefaultsPatch']>
 const defaultsConflict = computed(() => !!defaults.value?.overlappingChanges);
 const eventConflict = computed(() => !!event.value && event.value.original !== (data.value?.currentEvent?.id ?? null));
 const headerConflict = computed(() => !!image.value && imageOriginal.value !== (data.value?.headerVersion ?? null));
+/** Keep remote removal distinct from mask changes and an explicitly reviewed regrant.
+ * A removed row remains a conflict until reviewed; a row restored meanwhile invalidates
+ * that regrant review so its new saved grant cannot be overwritten accidentally. */
 function adminConflict(id: string): boolean {
     const current = data.value?.access?.admins.find(admin => admin.profileId === id);
     const draft = admins.value[id];
-    return !!draft && (current ? Boolean(draft.regrantReviewed) || draft.original !== current.mask : !draft.regrantReviewed);
+    if (!draft) return false;
+
+    // A current row compares its saved mask, whereas an absent row needs deliberate
+    // regrant review. Reviewing never writes or resurrects the administrator itself.
+    return current ? Boolean(draft.regrantReviewed) || draft.original !== current.mask : !draft.regrantReviewed;
 }
 
 /** Retry related reads explicitly; reconciliation never repeats the saved or uncertain write. */
@@ -330,14 +357,20 @@ async function refreshSettings(): Promise<void> {
         refreshingSettings.value = false;
     }
 }
+/** Retain a removed administrator's local draft beside current admitted rows so
+ * the user can review removal without silently losing or recreating the grant. */
 const displayedAdmins = computed(() => {
+    // Current rows supply authoritative display; only absent draft rows supplement
+    // them. Their retained original mask/token remains unavailable for blind saving.
     const current = data.value?.access?.admins ?? [];
     const active = new Set(current.map(admin => admin.profileId));
     return [...current, ...Object.entries(admins.value).filter(([id]) => !active.has(id))
         .map(([profileId, draft]) => ({profileId, name: draft.name, isGuest: draft.isGuest,
             mask: draft.original, editToken: draft.token}))];
 });
+/** Describe a retained draft's absence from the currently admitted ACL projection. */
 function adminRemoved(id: string): boolean {
+    // A local draft is not evidence that the saved administrator still exists.
     return !data.value?.access?.admins.some(admin => admin.profileId === id);
 }
 
@@ -379,11 +412,14 @@ const dirty = computed(
         Object.values(admins.value).some((draft) => draft.value !== (draft.confirmed ?? draft.original)
             || draft.regrantReviewed),
 );
+const profileKey = computed(() => packingKeys.profiles(context.session.value?.context, props.listId, profileSearch.value));
+const profileAdmission = useQueryAdmission(context, profileKey,
+    computed(() => addOpen.value && context.hydrated.value && context.visible.value && !!profileSearch.value));
 const profiles = useQuery({
-    queryKey: computed(() => packingKeys.profiles(context.session.value?.context, props.listId, profileSearch.value)),
-    enabled: computed(() => addOpen.value && context.ready.value && context.visible.value && !!profileSearch.value),
+    queryKey: profileKey,
+    ...profileAdmission,
     queryFn: ({signal}) => api.profiles(props.listId, profileSearch.value, context.capture(), signal),
-    refetchInterval: (query) => addOpen.value && context.visible.value
+    refetchInterval: (query) => addOpen.value && context.mayRead() && context.visible.value
         ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter) : false,
 });
 const profileRetryAvailable = useReadRetry(() => profiles.error.value);
@@ -402,7 +438,7 @@ function retireDeniedProfiles(failure: Error | null): void {
 }
 
 async function retryProfiles(): Promise<void> {
-    if (!active || !addOpen.value || !context.ready.value || profiles.isFetching.value || !profileRetryAvailable.value) return;
+    if (!active || !addOpen.value || !context.mayRead() || profiles.isFetching.value || !profileRetryAvailable.value) return;
     await profiles.refetch({cancelRefetch: false});
 }
 function profileOptionValue(profile: components['schemas']['PackingProfileOption']): string {
@@ -436,8 +472,9 @@ function close(): void {
     if (destination.target.value) return;
     if (command.mayLeave()) emit('close');
 }
-function chooseImage(event: Event): void {
-    image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
+/** Capture the shared panel's selected file against this feature's current header baseline. */
+function chooseImage(file: File | null): void {
+    image.value = file;
     imageToken.value = data.value?.settingsToken ?? null;
     imageOriginal.value = data.value?.headerVersion ?? null;
 }
@@ -727,7 +764,9 @@ async function deletePacking(scope: PilotRequestScope): Promise<string> {
     await api.deletePacking(props.listId, scope);
     return props.listId;
 }
+/** Preserve the native two-letter avatar derived from the admitted display name. */
 function initials(name: string): string {
+    // Normalize word separators, then use the first two initials for the compact badge.
     return name
         .split(/\s+/u)
         .map((word) => word.charAt(0))
@@ -815,49 +854,11 @@ function permissionLabel(key: string): string {
                     @access-lost="emit('accessLost')"
                 />
             </section>
-            <section v-if="data?.capabilities.editHeader" class="mb-4" data-entity-section="image" :aria-busy="settings.isFetching.value">
-                <details class="entity-property-group" :open="!data.editableFields.length">
-                    <summary class="fw-semibold">{{ messages.t('packing.headerImage') }}</summary>
-                    <div class="pt-3">
-                        <div data-command-feedback aria-live="polite"></div>
-                        <label class="form-label" for="pilot-header-image">{{
-                            messages.t('packing.chooseImage')
-                        }}</label
-                        ><input
-                            id="pilot-header-image"
-                            type="file"
-                            class="form-control"
-                            accept="image/jpeg,image/png,image/gif"
-                            :disabled="blocked"
-                            @change="chooseImage"
-                        />
-                        <p class="form-text">{{ messages.t('packing.imageHint') }}</p>
-                        <StatusNotice v-if="headerConflict" kind="warning"
-                            ><p>{{ messages.t('draft.readConflict') }}</p>
-                            <p>{{ messages.t('draft.mine') }}: {{ image?.name }}</p>
-                            <ActionButton
-                                variant="outline-warning"
-                                :disabled="blocked"
-                                @click="reviewHeader"
-                                >{{ messages.t('draft.review') }}</ActionButton
-                            ></StatusNotice
-                        >
-                        <div class="d-flex flex-wrap gap-2">
-                            <ActionButton
-                                :disabled="blocked || headerConflict"
-                                @click="upload"
-                                >{{ messages.t('packing.upload') }}</ActionButton
-                            ><ActionButton
-                                v-if="data.headerUrl"
-                                variant="outline-danger"
-                                :disabled="blocked"
-                                @click="removeImage"
-                                >{{ messages.t('packing.removeImage') }}</ActionButton
-                            >
-                        </div>
-                    </div>
-                </details>
-            </section>
+            <EntityHeaderEditor v-if="data?.capabilities.editHeader"
+                input-id="pilot-header-image" :labels="headerLabels" :image-name="image?.name"
+                :has-image="!!data.headerUrl" :expanded="!data.editableFields.length"
+                :conflict="headerConflict" :disabled="!!blocked" :reading="settings.isFetching.value"
+                @choose="chooseImage" @review="reviewHeader" @upload="upload" @remove="removeImage" />
         </div>
         <LoadingSkeleton v-if="initialLoading" variant="form" :rows="3" />
         <template v-if="data">
@@ -870,43 +871,11 @@ function permissionLabel(key: string): string {
                 aria-labelledby="pilot-settings-tab-event"
                 data-entity-section="event"
             >
-                <h3 class="fs-5">{{ messages.t('packing.linkedEvent') }}</h3>
-                <div data-command-feedback aria-live="polite"></div>
-                <form @submit.prevent="saveEvent">
-                    <EventPicker
-                        v-model="event.value"
-                        :source="api.eventPicker"
-                        :current="data.currentEvent"
-                        prefix="settings"
-                        inline
-                        :active="panel === 'event'"
-                        :disabled="blocked"
-                    />
-                    <p class="form-text">{{ messages.t('packing.eventHint') }}</p>
-                    <StatusNotice v-if="eventConflict" kind="warning"
-                        ><p>{{ messages.t('draft.readConflict') }}</p>
-                        <dl>
-                            <dt>{{ messages.t('draft.original') }}</dt>
-                            <dd>{{ event.original || messages.t('eventPicker.noEvent') }}</dd>
-                            <dt>{{ messages.t('draft.mine') }}</dt>
-                            <dd>{{ event.value || messages.t('eventPicker.noEvent') }}</dd>
-                            <dt>{{ messages.t('draft.current') }}</dt>
-                            <dd>
-                                {{
-                                    data.currentEvent?.title ||
-                                    data.currentEvent?.id ||
-                                    messages.t('eventPicker.noEvent')
-                                }}
-                            </dd>
-                        </dl>
-                        <ActionButton variant="outline-warning" :disabled="blocked" @click="reviewEvent">{{
-                            messages.t('draft.review')
-                        }}</ActionButton></StatusNotice
-                    >
-                    <ActionButton type="submit" :disabled="blocked || eventConflict">{{
-                        messages.t('packing.saveEvent')
-                    }}</ActionButton>
-                </form>
+                <EntityEventEditor v-model="event.value" :original="event.original"
+                    :current="data.currentEvent" :source="api.eventPicker" prefix="settings"
+                    :title="messages.t('packing.linkedEvent')" :hint="messages.t('packing.eventHint')"
+                    :submit-label="messages.t('packing.saveEvent')" :active="panel === 'event'"
+                    :conflict="eventConflict" :disabled="!!blocked" @review="reviewEvent" @save="saveEvent" />
             </section>
             <section
                 v-if="data.access && defaults"
@@ -1145,59 +1114,12 @@ function permissionLabel(key: string): string {
                 role="tabpanel"
                 aria-labelledby="pilot-settings-tab-actions"
             >
-                <section v-if="data.capabilities.manageArchive" class="mb-4" data-entity-section="archival">
-                    <h3 class="fs-5">{{ messages.t('common.archival') }}</h3>
-                    <div data-command-feedback aria-live="polite"></div>
-                    <p>
-                        {{
-                            messages.t(
-                                data.archive.inherited || data.archive.direct
-                                    ? 'packing.archivedHint'
-                                    : 'packing.activeHint',
-                            )
-                        }}
-                    </p>
-                    <p v-if="data.archive.inherited">
-                        {{ messages.t('packing.inheritedHint') }}
-                        <a v-if="data.archive.eventUrl" class="ms-1" :href="data.archive.eventUrl">{{
-                            messages.t('packing.openEvent')
-                        }}</a>
-                    </p>
-                    <div class="d-flex flex-wrap gap-2">
-                        <ActionButton
-                            v-if="data.capabilities.archive"
-                            class="btn-sm"
-                            variant="outline-light"
-                            :disabled="blocked"
-                            @click="archive(false, $event)"
-                            >{{ messages.t('common.archive') }}</ActionButton
-                        ><ActionButton
-                            v-if="data.capabilities.restore"
-                            class="btn-sm"
-                            variant="outline-light"
-                            :disabled="blocked"
-                            @click="archive(true, $event)"
-                            >{{ messages.t('common.restore') }}</ActionButton
-                        >
-                    </div>
-                </section>
-                <section v-if="data.capabilities.duplicate || data.capabilities.remove" data-entity-section="actions">
-                    <h3 class="fs-5">{{ messages.t('packing.otherActions') }}</h3>
-                    <div class="d-flex flex-wrap gap-2">
-                        <RouterLink
-                            v-if="data.capabilities.duplicate"
-                            class="btn btn-outline-light"
-                            :to="'/frontend-pilot/packing/' + listId + '/duplicate'"
-                            >{{ messages.t('common.duplicate') }}</RouterLink
-                        ><ActionButton
-                            v-if="data.capabilities.remove"
-                            variant="outline-danger"
-                            :disabled="blocked"
-                            @click="remove"
-                            >{{ messages.t('packing.deletePermanently') }}</ActionButton
-                        >
-                    </div>
-                </section>
+                <EntityLifecycleActions :labels="lifecycleLabels" :direct="data.archive.direct"
+                    :inherited="data.archive.inherited" :event-url="data.archive.eventUrl"
+                    :manage-archive="data.capabilities.manageArchive" :can-archive="data.capabilities.archive"
+                    :can-restore="data.capabilities.restore" :can-duplicate="data.capabilities.duplicate"
+                    :can-remove="data.capabilities.remove" :duplicate-to="'/frontend-pilot/packing/' + listId + '/duplicate'"
+                    :disabled="!!blocked" @archive="archive" @remove="remove" />
             </div>
         </template>
         <template #footer

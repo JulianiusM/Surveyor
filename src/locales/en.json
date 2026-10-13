@@ -341,6 +341,7 @@
         "capacity": "Assigned / Max",
         "everyone": "Everyone",
         "packed": "Packed?",
+        "packedStorageUnavailable": "Your browser could not load or save some Packed? checks. Unsaved changes may be lost when you leave or reload this list, or change your account or active profile.",
         "assign": "Take",
         "unassign": "Remove",
         "full": "Full",

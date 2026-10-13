@@ -4,9 +4,9 @@ documentation-metadata
 audience: operators; maintainers
 owner: application operators
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-13
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved frontend release/coexistence delta consolidated; no installed-folder or rollback rehearsal claimed
+verification-scope: approved frontend release delta and opt-in coexistence clarified against the cutover boundary; installed-folder and rollback evidence owned by paired review
 source-anchors: .github/workflows/release.yml; package.json; src/modules/frontendPilotRenderer.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/UPGRADING.md
 next-review: frontend-production-cutover
 canonical-merge-target: docs/UPGRADING.md
@@ -21,7 +21,8 @@ Runtime pilot Help is `docs/user-guide/<locale>/`; native `docs/user-guide/` sta
 Staged maintainer documents are never runtime resources. D5 adds no retained old-asset directory or external steps:
 compatible loaded edits may finish; clean idle views reload once; missing chunks/incompatible commands retain drafts.
 
-Initial cutover retains native destinations for workflows awaiting migration. The approved shared-backend target
+Opt-in coexistence retains native destinations for workflows awaiting migration. It is not a default-route cutover;
+default-route replacement requires complete feature parity and direct maintainer authorization. The shared backend
 keeps business policy in existing controllers/pure DBAL and lets native/v1 adapters retire independently.
 Use ordinary smoke verification plus emitted assets/hydration/required controls; SSR HTML alone proves neither.
 D3 corrects unreleased v1 in place; D2 adds no Packing revision schema/replacement migration.

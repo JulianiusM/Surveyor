@@ -8,7 +8,7 @@ import type {QueryFunctionContext} from '@tanstack/vue-query';
 import {usePackingApi} from './api';
 import {usePilot, refreshInterval} from '../../app/context';
 import {isReadDenial, ObsoleteRequestError} from '../../app/transport';
-import {evictQueryFamilies, observeQueryReads, refetchFreshQuery, retireQueryFamily} from '../../app/queryCache';
+import {evictQueryFamilies, observeQueryReads, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
 import {belongsToQueryFamily, overviewKeys, packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
 import {readPacked, writePacked} from './packed';
@@ -25,6 +25,9 @@ type Item = components['schemas']['PackingItemView'];
 type ListRead = PilotRead<components['schemas']['PackingListView']>;
 const route = useRoute();
 const context = usePilot();
+// Personal failure fallback still belongs to this mounted actor, even though its
+// successfully persisted native keys deliberately remain independent of profile.
+const packedScope = context.capture();
 const api = usePackingApi(context);
 const {messages} = context;
 const listId = computed(() => String(route.params.listId).toLowerCase());
@@ -38,8 +41,14 @@ onBeforeUnmount(retirePage);
  * query observer must not start a fresh read after denial or component retirement. */
 function retirePage(): void {
     active = false;
+    resetPacked();
 }
 const packed = ref<Record<string, boolean>>({});
+// Values stay in the existing personal checklist. This set records only which
+// explicit changes could not be persisted; it is not another copy of those values.
+const pendingPackedWrites = reactive(new Set<string>());
+const packedReadFailed = ref(false);
+const packedStorageUnavailable = computed(() => packedReadFailed.value || pendingPackedWrites.size > 0);
 const editing = ref(0);
 const accessRevoked = ref(false);
 const freshItem = reactive({title: '', description: '', maxAssignees: 1});
@@ -53,14 +62,14 @@ const previousList = shallowRef<{
     query: Parameters<typeof belongsToQueryFamily>[0];
     result: ListRead;
 } | null>(null);
+const readAdmission = useQueryAdmission(context, key,
+    computed(() => context.hydrated.value && context.visible.value && !accessRevoked.value));
 const list = useQuery({
     queryKey: key,
-    enabled: computed(
-        () => context.hydrated.value && context.ready.value && context.visible.value && !accessRevoked.value,
-    ),
+    ...readAdmission,
     queryFn: readList,
     refetchInterval: (query) =>
-        context.visible.value
+        context.mayRead() && context.visible.value
             ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter)
             : false,
     refetchIntervalInBackground: false,
@@ -144,13 +153,13 @@ async function refreshAfterCommand(): Promise<void> {
  * suspended by denial. The shared command owner retains any unknown status until
  * this actual GET succeeds; its normal post-write callback remains narrower. */
 async function refreshCurrentList(): Promise<void> {
-    if (!active || !context.ready.value) throw new ObsoleteRequestError();
+    if (!active || !context.mayRead()) throw new ObsoleteRequestError();
     const scope = context.capture();
     const resource = listId.value;
     await refetchFreshQuery<ListRead>(context.queryClient, key.value, refetchList, mayRead);
 
     function mayRead(): boolean {
-        return active && resource === listId.value && context.ready.value && context.isCurrent(scope);
+        return active && resource === listId.value && context.mayRead(scope);
     }
 }
 
@@ -175,8 +184,8 @@ const command = useCommand(refreshAfterCommand, false, {
 const blocked = computed(() => command.pending.value || command.recovering.value || command.uncertain.value);
 
 /** Packed state is optional browser-local presentation using the native keys.
- * SSR and browsers that reject even the localStorage getter use the same
- * unavailable-storage path; that failure must not disable shared item commands. */
+ * SSR never probes browser storage. A rejected getter becomes an unavailable
+ * receipt, keeping shared commands usable while the page visibly explains failure. */
 function storage(): Storage | undefined {
     try {
         return context.browser ? window.localStorage : undefined;
@@ -184,12 +193,85 @@ function storage(): Storage | undefined {
         return undefined;
     }
 }
+/** Reconcile admitted rows with readable storage while retaining only current-tab failure fallback.
+ * Healthy missing keys remain unchecked; outstanding failed writes keep the user's explicit value. */
 function loadPacked(): void {
-    packed.value = Object.fromEntries(
-        items.value.map((item) => [item.id, readPacked(storage(), listId.value, item.id)]),
-    );
+    if (!mayChangePacked()) return;
+    const currentStorage = storage();
+    const nextPacked: Record<string, boolean> = {};
+    const liveItems = new Set<string>();
+    let failed = !currentStorage;
+
+    // Read healthy keys even when another item has an outstanding failed write.
+    // A storage error supplies no new value, so preserve that row's current memory.
+    for (const item of items.value) {
+        liveItems.add(item.id);
+        const result = readPacked(currentStorage, listId.value, item.id);
+        failed ||= !result.available;
+        nextPacked[item.id] = pendingPackedWrites.has(item.id) || !result.available
+            ? packed.value[item.id] ?? false : result.packed;
+    }
+
+    // Removed rows leave no pending preference or warning behind. Background
+    // reconciliation performs reads only; it never replays a failed local write.
+    for (const itemId of pendingPackedWrites) {
+        if (!liveItems.has(itemId)) pendingPackedWrites.delete(itemId);
+    }
+    packed.value = nextPacked;
+    packedReadFailed.value = failed;
 }
 watch(() => items.value.map((item) => item.id).join('|'), loadPacked);
+watch([listId, context.epoch, () => context.session.value?.context], resetPacked, {flush: 'sync'});
+
+/** Temporary preference evidence belongs to this mounted actor/list visit only.
+ * Persisted keys retain their native cross-profile behavior after a fresh mount. */
+function resetPacked(): void {
+    packed.value = {};
+    pendingPackedWrites.clear();
+    packedReadFailed.value = false;
+}
+
+/** Admit personal preference work only for this live actor and currently rendered list/row.
+ * Detached DOM listeners can run after navigation, deletion or unmount without a visible notice. */
+function mayChangePacked(itemId?: string): boolean {
+    // Retained same-resource content stays usable during ordinary server-read
+    // failure. Actual actor retirement or denied/foreign data closes local mutation.
+    if (!context.browser || !active || !context.isCurrent(packedScope) || data.value?.id !== listId.value) return false;
+    return itemId === undefined || items.value.some(item => item.id === itemId);
+}
+
+/** Bind user-initiated preference work to its live rendered control as well as current admission.
+ * A retired checkbox or Retry must never act on a later list's pending personal choices. */
+function mayChangePackedFrom(event: Event, itemId?: string): boolean {
+    if (!mayChangePacked(itemId)) return false;
+
+    // currentTarget is the actual input/button even when the click starts in a
+    // child element. Removed controls keep listeners but lose this live ownership.
+    const control = event.currentTarget as HTMLElement | null;
+    return !!control?.isConnected && control.dataset.packedList === listId.value;
+}
+
+/** Explicit recovery retries only unsaved personal checks, then verifies readable storage.
+ * It makes no HTTP request and leaves the durable warning in place for any remaining failure. */
+function retryPackedStorage(event: MouseEvent): void {
+    if (!mayChangePackedFrom(event)) return;
+    // A pending DOM update may have removed a row since the last checklist watch.
+    // Prune through current admitted data before any failed preference is retried.
+    loadPacked();
+    const currentStorage = storage();
+
+    // Each failed change retains its current selected value. Do not save untouched
+    // rows or invent an automatic retry policy for ordinary background list reads.
+    for (const itemId of pendingPackedWrites) {
+        if (writePacked(currentStorage, listId.value, itemId, packed.value[itemId] ?? false)) {
+            pendingPackedWrites.delete(itemId);
+        }
+    }
+
+    // Successful writes alone cannot certify that reading preferences works again.
+    // Reuse the normal reconciliation owner to retire only actual recovered failures.
+    loadPacked();
+}
 watch(listId, () => {
     // The route guard has accepted leaving this resource. An unknown command belongs to
     // its previous list and must not block a fresh quick-add or assignment on the new list.
@@ -205,6 +287,9 @@ function revokeAccess(failure: Error): void {
     accessRevoked.value = true;
     previousList.value = null;
     editorOpen.value = false;
+    // A denied resource retires temporary personal choices immediately, before
+    // a later admitted recovery can restore only its actual persisted native keys.
+    resetPacked();
     // This feature owns the containing projections to retire. Cache lifetime is
     // shared, without teaching its generic owner any Packing or Overview policy.
     const actor = context.capture().context;
@@ -227,17 +312,24 @@ async function settingsAccessLost(): Promise<void> {
     await context.queryClient.cancelQueries(editors);
     context.queryClient.removeQueries(editors);
 
-    if (!context.ready.value || resource !== listId.value || actor !== context.session.value?.context) return;
+    if (!context.mayRead() || resource !== listId.value || actor !== context.session.value?.context) return;
     await refresh();
 }
 watch(list.error, (failure) => {
     if (isReadDenial(failure)) revokeAccess(failure);
 }, {flush: 'sync'});
 onMounted(loadPacked);
+/** Apply the personal checkbox immediately, retaining failed persistence as visible pending work. */
 function togglePacked(itemId: string, event: Event): void {
-    const selected = (event.target as HTMLInputElement).checked;
+    if (!mayChangePackedFrom(event, itemId)) return;
+    const checkbox = event.currentTarget as HTMLInputElement;
+    const selected = checkbox.checked;
+
+    // Shared assignments never change here. The local choice remains usable even
+    // when a quota/security failure prevents updating its established browser key.
     packed.value[itemId] = selected;
-    writePacked(storage(), listId.value, itemId, selected);
+    if (writePacked(storage(), listId.value, itemId, selected)) pendingPackedWrites.delete(itemId);
+    else pendingPackedWrites.add(itemId);
 }
 /** Preserve the native treatment of historical null capacities (IMP-025). */
 function isFull(item: Item): boolean {
@@ -309,6 +401,7 @@ async function toggleRequired(item: Item, event: Event): Promise<void> {
         true, false, {presentation: 'inline', success: 'common.updated'},
     );
 }
+/** Native item deletion needs deliberate confirmation before its independently authorized command. */
 async function removeItem(item: Item): Promise<void> {
     if (window.confirm(messages.value.t('packing.confirmDeleteItem'))) {
         await command.run((scope) => api.deleteItem(listId.value, item.id, scope), true, false,
@@ -477,6 +570,15 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                  Loaded rows and drafts remain mounted throughout background reads. -->
             <LoadingSkeleton v-if="initialLoading" variant="table" :rows="4" />
             <template v-if="data">
+                <!-- Storage failures are durable and cannot expire into silent loss.
+                     Retry touches only personal checks, keeping server commands independent. -->
+                <StatusNotice v-if="packedStorageUnavailable" kind="warning" data-packed-storage-warning>
+                    {{ messages.t('packing.packedStorageUnavailable') }}
+                    <ActionButton class="btn-sm ms-2" variant="outline-warning" :data-packed-list="listId"
+                        @click="retryPackedStorage">
+                        {{ messages.t('common.retry') }}
+                    </ActionButton>
+                </StatusNotice>
                 <StatusNotice v-if="data.archived || data.inheritedArchived" kind="info">{{
                     messages.t('packing.archived')
                 }}</StatusNotice>
@@ -573,6 +675,7 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                                     <input
                                         class="form-check-input"
                                         type="checkbox"
+                                        :data-packed-list="listId"
                                         :checked="packed[item.id] || false"
                                         :aria-label="messages.t('packing.packed') + ' ' + item.title"
                                         @change="togglePacked(item.id, $event)"
