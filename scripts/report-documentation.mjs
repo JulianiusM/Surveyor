@@ -51,7 +51,8 @@ function parseOptions(args) {
 function specifications(mode) {
     if (mode === 'tooling') {
         return [{name: 'tooling-tests', args: ['--test',
-            'scripts/tests/documentation-check.test.mjs', 'scripts/tests/documentation-advisory.test.mjs']}];
+            'scripts/tests/documentation-check.test.mjs', 'scripts/tests/documentation-advisory.test.mjs',
+            'scripts/tests/package-documentation.test.mjs']}];
     }
     if (mode === 'content') {
         return [{name: 'content-tests', args: ['node_modules/vitest/vitest.mjs', 'run',

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: prior scoped receipts retained; whole-article Help and general-defect deferrals reconciled; refined Req6A delivery and adapter retirement verified through current build, unit/client, real ORM and built-system scopes
+verification-scope: prior application/visual and complete-copy checkpoints retained as history; eight amendment-only guide sources and current reconciliation/context/publication boundaries reviewed separately without renewing application acceptance
 source-anchors: src/controller/packingController.ts; src/controller/entityAdminController.ts; src/controller/eventController.ts; src/controller/userController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/modules/lib/fileCommons.ts; src/modules/overview/api.ts; src/routes/api/v1/overview.ts; src/controller/helpController.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/unit/frontend-generation.spec.ts; tests/frontend/frontend-page-entry.spec.ts; tests/frontend/frontend-command-recovery.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/browser/; tests/integration/authentication-workflows.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/integration/packing-management-api.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; .gitignore; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml
 next-review: next-migration-slice-or-permission-policy-review
 -->
@@ -284,11 +284,138 @@ Help reads release-controlled files and Overview uses SELECT snapshots. No furth
 projection defect was found in those routes. Static typed delivery was distinguished from real DB/context/file work;
 this manual census is not a universal transport guarantee.
 
-Full migration/cutover, live provider/SMTP, renewed source-development/HMR, hosted CI, deployment rehearsal and a new
-visual matrix remain unverified by these current receipts. Their distinct older evidence is retained above.
+Full migration/cutover, live provider/SMTP, renewed source-development/HMR, hosted CI and deployment rehearsal remain
+unverified by these receipts. Their distinct older evidence is retained above; the bounded renewed visual scope is below.
 
 Startup protection covers initial route/bootstrap failure, same-tree mount and the first readiness render through
 bounded Vue error capture. A failed attempt retains partial draft/command guards and genuine native links/Help GET
 behavior; it does not promise restoration of controls already changed by an arbitrary exception or every later
 asynchronous feature failure. Later errors retain their existing owners. Native UI/Help, shared business behavior,
 original IDs, existing dirty changes and all prior amendments remain protected.
+
+## Current migration-readiness verification (2026-10-13)
+
+The maintainer authorized the reviewed readiness plan with two corrections: native preservation lasts only through
+coexistence, and approval explanations must be short and clear without quotations or proposed replacement text.
+An initial rollback restored ten outside-profile files after the freeze objection. The agent incorrectly included
+governance and runtime Help in that freeze; the explicit 2026-10-14 role clarification below corrects this
+interpretation. Complete future production guides are replaced verbatim at
+authorized cutover; the [single control inventory](FRONTEND_FOUNDATION_DESIGN.md#cutover-retirement-inventory) owns
+temporary obligations, shared dependency retirement and destination mapping. Original choices remain distinguishable
+from their dated amendments. No runtime, native UI/Help, shared backend, API contract, generated-input or default-route
+change was made by this readiness correction. Earlier passing application receipts below retain their source scope.
+
+| Executed check | Result and boundary |
+|---|---|
+| Real tied-position persistence | The existing `packing-management-api.spec.ts` now compares native service/view/duplicate reads with actual v1 detail/duplicate/minimal-order reads after native creation, Quick Add and partial tied reorder. All 35 tests passed on owned, schema-restricted MariaDB 10.11.14; generated result validation and the Vue-aware test compiler passed. These observed fixtures match without a sorting remedy or an invented equal-position contract. Inherited `IMP-023` remains separately scoped. |
+| Database-free regression | Fresh `npm run test:quick --ignore-scripts`: 61 files, 1,399 tests passed in 138.02 seconds using current generated inputs. An earlier review run had one watcher timeout; its unchanged isolated rerun and this full run passed. No watcher, timeout or source adjustment was made. |
+| Built system workflows | Nine selected `frontend-pilot.spec.ts` journeys passed through the managed compiled application and its fully prepared owned database. They cover independent loading, focused drafts, pristine settings, stale/unknown/confirmed outcomes, mobile keyboard/action reachability, shared entry/recovery and localized Help. All 42 original scene PNGs were individually inspected. The reporter warned that its report directory overlapped test output; retained original images were available, but that report layout should not be reused. |
+| Paired visual inspection | The maintained read-only capture produced 32 desktop/mobile images of native/pilot Help, Packing, Settings, missing pages and pilot no-JavaScript surfaces. Each original was inspected, with no new migration blocker. Pilot locale/Refresh controls, localized reviewed Help and the approved interactive skeleton notice are expected differences. Mobile counters crowd/wrap in both implementations; tables retain horizontal scrolling. This is bounded scene evidence, not an app-wide visual/accessibility certification. |
+| Recovery control reachability | A second 12-image capture repeated missing/recovery scenes and added four individually inspected desktop/mobile Review-control and retained-draft images. Actual scrolling/clicking of Review changes retained the title, enabled deliberate Save and issued no replay after an admitted unchanged 304 read. The two PATCHes were aborted before dispatch to simulate uncertainty; real committed-response-loss coverage belongs to the separate system assertion above. |
+| Engineering and advisory checks | `check:development` reported zero findings, with all 11 DBAL services inventoried and no touched runtime readability operations. `git diff --check` passed. Strict documentation reports have no broken-link, metadata, classification, script/path or stale-term findings; the historical source fingerprint mismatch remains without rebaselining. Help reports remain clean. These advisory checks do not certify semantics or gate delivery. |
+| Preservation and cleanup | At that rollback checkpoint, normalized outside-profile document diffs were empty and their worktree/index blobs matched the pre-task commit; this is historical evidence, superseded for active governance and approved guide-reference cleanup below. Runtime/native UI and shared backend sources were unchanged. Exact task container identity, labels and absence of bind mounts were verified before removing its anonymous volume; owned temporary credentials/helpers were removed through a workspace-contained path. Port 3109 had no verification listener. Ignored image/report evidence remains. |
+
+Visual manifests and originals remain in ignored `test-results/frontend-rectification-readonly/` runs
+`2026-10-13T21-18-15-869Z` and `2026-10-13T21-22-04-208Z`; neither reported browser errors or asset failures.
+Independent nonauthors reviewed the policy meaning, temporary retirement/shared dependencies, real persistence test
+and assigned original images; root reviewed their actual scope and evidence. Earlier coherent production build and
+17 client-browser receipts retain their earlier scope; neither was rerun for these documentation/test-only changes.
+General application defects remain backlog work, and other module migrations/default cutover require their own scope.
+
+## Production-document freeze correction (2026-10-13)
+
+The maintainer rejected unapproved production-guide edits and the partial-delta cutover procedure. The
+[dated control amendment](FRONTEND_FOUNDATION_DESIGN.md#production-documentation-freeze-and-verbatim-replacement-correction-2026-10-13)
+retains that history. The agent's resulting all-document freeze, ten-file rollback and nineteen-candidate map were
+an overbroad interpretation, explicitly corrected by the 2026-10-14 clarification below. Immutable pre-task commit
+`3b6091c` remains the guide comparison baseline; it is not a deployed-version claim.
+
+Complete staged guide replacements retain operating/development/security guidance, final destination-relative links
+and valid metadata, without staging/preservation/cutover instructions. Independent review corrected the v1 mount,
+component-input policy and English-corpus index routing against source. Redundant staged policy, ADR, AI and English
+Help copies from the earlier interpretation are removed; those active owners are no longer cutover replacements.
+
+The temporary boundary tool compares worktree and index independently with the immutable baseline, rejects vacuous
+scope and redirected ancestors, and optionally copies replacements unchanged into an isolated preview. It never writes
+production paths or executes cutover, and has no package/CI hook. The existing advisory checker runs on final preview
+destinations. The original checker interpreted staged links at their physical source paths; current optional-profile
+support resolves declared candidate links at final destinations. Human/source comparison remains required.
+
+### Historical broad-scope boundary evidence (2026-10-14)
+
+These receipts describe the earlier nineteen-candidate implementation, not certification of the corrected scope.
+
+| Executed check | Result and limit |
+|---|---|
+| Production and candidate boundaries | That guard run reported zero worktree/index findings and temporary references across its earlier 19 mapped candidates. Normalized outside-profile/source diffs were empty at that checkpoint. No package hook or application behavior was changed. |
+| Disposable real Git regressions | All 15 cases passed in 428.469 seconds for immutable/path/public-input validation and ignored-file discovery. Repository-wide ignored discovery then hit `ENOBUFS` on the actual checkout; restricting Git output to protected pathspecs corrected it without increasing buffers/timeouts. Five affected addition/rename/exact-preview cases passed again on the final source in 143.711 seconds. Syntax passed and all owned fixture trees were removed. No full 15-case rerun is claimed after that final argument-scope change. |
+| Exact-byte destination preview | Final run `.temp/frontend-documentation-preview-GucHCb` copies staged bytes unchanged into their mapped locations. The existing advisory checker reports 62 Markdown files, 587 links, zero broken links, metadata/classification errors, missing commands or stale terms. Three findings remain visible: the historical fingerprint and two expected-reference-count mismatches from the frozen reporting configuration. Those count findings concern `.env.e2e` and the generated database index, not missing generated files. No baseline/configuration is altered to suppress them. |
+| Independent semantic review | Nonauthor review checked 19 unique existing destinations and 250 authored links/heading anchors. Twenty unchanged setup/database/mail/operations/upgrade sections match their frozen sources after newline normalization. The complete Development replacement retains detailed reusable lessons and the worked field example; two transport descriptions were corrected against actual Packing/Overview generated operations. Review covers candidate guidance, not full application migration or an operational rehearsal. |
+| Help and cleanup | The two then-staged English article bodies matched runtime content after the metadata comment; those redundant copies are now removed. No images were edited or freshly accepted. Three owned superseded input snapshots were removed; preview and earlier ignored visual evidence remain. Earlier application/compiler/visual receipts retain their original scope. |
+
+The inherited-reference conflict question was independently reviewed after presentation; that review is not claimed
+as pre-presentation compliance or approval. The maintainer's explicit 2026-10-14 answer authorizes frontend-reference
+removal and resolves that question.
+
+## Active governance and optional profile correction (2026-10-14)
+
+The [profile](PROFILE.md) now owns temporary frontend rules, native comparison and retirement. General policies,
+their configurations, AI instructions, ADRs and Help-authoring rules remain active. Permanent governance discovers
+optional task profiles generically, with no dependency on this directory's presence. Reviewed localized pilot Help
+remains runtime content. Its two English metadata-owner corrections preserve article bodies and all images.
+
+At this checkpoint eight complete future production guides remained staged; the later amendment-staging decision
+below supersedes that format. The approved cleanup removes migration references from
+`README.md`, `docs/README.md` and `docs/TESTING_GUIDE.md`; their exact independently reviewed Git blob receipts are in
+the [manifest](documentation-boundary.json). No broad production-path exemption or replacement baseline is introduced.
+Other native production guide prose/assets, runtime source, shared backend behavior and default routes remain unchanged.
+
+Independent nonauthors and root reviewed the role classification, actual active adoption, original technical choices,
+three narrow cleanup diffs and unchanged English article bodies. This documentation/tooling correction does not renew
+the earlier application, database, compiler, visual or operator-rehearsal receipts.
+
+| Executed checkpoint check | Result and boundary |
+|---|---|
+| Production boundary | The relocated default guard reports zero production worktree/index findings and zero replacement findings for eight guide candidates. The immutable baseline is unchanged; three exact approved cleanup receipts accept only reviewed contents. A source scan found no frontend-migration or staging references in production guides. |
+| Current real Git CLI cases | Nine focused cases passed in two selections: four scope/cleanup/invalid-map/exact-preview cases in 148.339 seconds and five affected index/addition/junction cases in 150.788 seconds. Active governance, localized Help and another optional profile can change; native guides, added/ignored production files and concealed index edits are rejected. No full seventeen-case rerun is claimed. Owned fixture trees are removed. |
+| Generic checker regressions | The dependency-free suite passed 49/49 in 13.99 seconds before the final Windows case-key correction. Independent review found inconsistent alias handling; one shared key helper now owns duplicate detection and map lookups. The final affected profile/classification selection passed 10/10 in 5.30 seconds, including the real Windows alias case with zero skips. No full fifty-case rerun is claimed. |
+| Help and engineering diagnostics | Current Help report covers all 32 native/EN/DE articles, 585 links and nine images with no findings. `check:development` reports zero findings and inventories all eleven DBAL services; no touched runtime readability operations exist. These are diagnostics, not renewed image/browser or application acceptance. |
+| Generic profile report | The current strict advisory report discovers one profile/eight replacements across 87 Markdown files and 1,611 local links, with zero broken links, metadata/classification/profile findings, missing commands or stale terms. The historical fingerprint and four optional-path occurrence-count differences remain visible; current and future guide copies both enter that census. Configuration is not rebaselined to conceal them. |
+| Verbatim destination preview | `.temp/frontend-documentation-preview-CZSTOh` contains the exact candidate bytes at final paths on the settled checker source, with the profile absent. Its 62 Markdown files/590 links have zero broken links, metadata/classification/profile findings, missing commands or stale terms. The historical fingerprint and two optional-path count differences remain advisory. This validates documentation placement, not application cutover or operator execution. |
+
+## Amendment staging and documentation risk controls (2026-10-14)
+
+The maintainer explicitly restores delta staging after the drift analysis: full copies still require reconciliation
+and unnecessarily duplicate unchanged guidance. The
+[dated amendment](FRONTEND_FOUNDATION_DESIGN.md#authorized-amendment-staging-and-risk-mitigation-2026-10-14)
+retains that decision history. Eight amendment sources and 99 named operations replace the maintained complete copies.
+The manifest remains the only target/operation owner. Actual assembly preserves seven normalized prior candidates
+exactly; the README also preserves the already approved remediation-backlog row omitted by its earlier full-copy draft.
+Detailed frontend contribution guidance is retained; unchanged domain and operating procedures are inherited.
+
+The existing generic checker supplies policy/profile context, explicit selection and caller-held handoff identities.
+Initial absence is valid; a selected profile or governing source changing/disappearing requires refreshed review.
+Caller-supplied authorization remains a statement, not a generated approval. Actual automatic host delivery and
+interception of arbitrary edits are not certified: selecting the agent entry point remains an unresolved integration
+detail raised directly with the maintainer. Emitted context cannot prove instruction following.
+
+The temporary guard checks production worktree/index separately, reconciles exact changed locations and rejects
+unmapped/repeated payloads. Preparation assembles current approved guides between input captures, records scoped
+guide/source/governance identities and pins raw output/report bytes. Independent and root semantic provenance must
+refer to those same identities. Readiness rechecks them without authorizing cutover or gating application delivery.
+Complete output lives only in ignored preparation artifacts; separately authorized cutover copies reviewed bytes
+unchanged. Source identities prompt semantic review and do not establish that wording is correct.
+
+Release publication reuses shared optional-profile discovery. Temporary directories are omitted even for malformed
+or inactive declarations; markers cannot suppress canonical governance or runtime Help. Independent review found
+unreadable-marker and case-alias gaps, now corrected in their existing owners. Help publication diagnostics reuse
+the same declaration helper and retain the native Help byte-comparison requirement. No application/native/shared
+backend, API, default route or runtime Help content change belongs to this documentation/tooling scope.
+
+| Executed check | Result and boundary |
+|---|---|
+| Combined advisory/tooling regression | 83 tests passed in 34.614 seconds after bootstrap, unavailable-marker, shared traversal and Windows ownership changes. Subsequent Help/publication helper adoption passed all 25 affected tests in 5.12 seconds. These dependency-free fixtures protect tooling and visible advisory failures; they do not certify host injection, instruction following or application behavior. |
+| Publication adoption | Six actual publisher fixtures passed in 13.084 seconds, including the real Windows canonical-category alias with zero skips. The repository publication check compared all 65 retained canonical files byte for byte, including 43 Help-tree files across native/EN/DE corpora; the frontend profile was absent from the publication bundle. This is packaging evidence, not a hosted release execution. |
+| Engineering and preservation | `check:development` reported zero findings across all eleven DBAL services, with no touched runtime readability operations; whitespace checks passed. Production cleanup retains the original immutable baseline and three exact reviewed receipts. Earlier application/database/browser/image results remain historical evidence; none is renewed by these tool checks. |
+| Real Git reconciliation/readiness regressions | The complete disposable-repository run passed 21 of 22 cases in 636.087 seconds; its sole failure was an old unrelated-profile fixture missing the required activation declaration. After correcting that fixture and deriving target classification from the canonical allowlist, both affected classification/invalid-manifest cases passed in 78.919 seconds. All 22 distinct cases have passing evidence across those selections; a full final-source rerun is not claimed. Coverage includes worktree/index concealment, public source/governance additions and deletions, absent directory state, redirected inputs, actual semantic provenance and altered output/report bytes. |
+| Actual preparation and semantic review | The real guard reports zero production/amendment findings for eight sources/99 operations and 556 public review inputs. Exploratory final-path output has 62 Markdown files/593 links with zero broken links, metadata/classification/profile findings, missing commands or stale terms. Its historical fingerprint and two occurrence-count advisories remain visible without rebaselining. Independent review checked all eight raw output hashes, 20 inherited operating/setup sections, 34 heading links and all 43 unchanged Help-tree files. Later control/engine edits correctly invalidate that exploratory receipt; final preparation must capture settled inputs and bind actual independent/root review before readiness. No publication or cutover follows from those checks. |

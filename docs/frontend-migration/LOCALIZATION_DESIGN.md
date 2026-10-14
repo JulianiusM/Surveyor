@@ -4,7 +4,7 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; documentation contributors
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: original shared-catalog/locale choices and approved Help/fallback correction retained; named language-owned query invalidation clarified; actual readiness execution owned by paired review
 source-anchors: src/locales/; scripts/generate-locales.mjs; src/modules/localization/; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/controller/helpController.ts; docs/user-guide/en/; docs/user-guide/de/; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
@@ -18,10 +18,12 @@ request isolation, hydration and reactive locale changes remain acceptance bound
 
 ## Authorized documentation boundary (2026-10-08)
 
-Native feature guide prose/images remain unchanged; the Oct12 decision permits editorial metadata/history cleanup.
-Language choice is global user guidance, not implementation
-information repeated in feature help. Prospective maintainer guidance stays under frontend-migration staging and
-merges into existing canonical owners only at authorized cutover.
+Native feature guide prose/images remain the comparison reference during coexistence. Language choice is global
+user guidance, not implementation information repeated in feature help. The maintainer's 2026-10-14
+[amendment-staging decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-amendment-staging-and-risk-mitigation-2026-10-14)
+restores changed-section/fragment staging. Current approved guidance supplies unchanged content; complete temporary
+output is reconciled and independently reviewed before verbatim authorized cutover. Governance/authoring rules stay active;
+runtime Help belongs directly in its canonical tree.
 
 The current direct correction explicitly promotes existing new EN/DE Help into reviewed release-owned runtime
 corpora under `docs/user-guide/en/` and `docs/user-guide/de/`. This supersedes their earlier staging location

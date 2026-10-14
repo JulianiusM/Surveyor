@@ -4,7 +4,7 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: pilot/shared-controller/permission/runtime-Help decisions retained; refined Req6A initial skeleton/static delivery, failure notice and retired interactive POST boundaries reconciled; execution owned by paired review
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/
@@ -26,8 +26,11 @@ and maintainability requirements. Subsequent slices cover surveys, events, activ
 pools and full account/profile administration.
 
 Preserve native UI/UX and business behavior except for explicitly approved changes. Native guide prose/images remain
-the reference; authorized editorial cleanup does not import pilot behavior into live guidance. Prospective maintainer guidance stays under
-`docs/frontend-migration/staged/`; it is never runtime input. Default-route cutover requires separate authorization.
+the reference; approved reference cleanup does not import pilot behavior into production guidance. The optional
+[profile](PROFILE.md) owns temporary rules and stages only changed guide sections/fragments. Unchanged guidance
+comes from approved canonical guides; complete reviewed temporary output is prepared before cutover. General policies,
+AI instructions, decision records and Help-authoring rules remain active. New localized pilot Help stays directly
+in its runtime corpus. Default-route cutover requires separate authorization.
 
 Packing business operations now share existing controller owners with removable native/v1 transport adapters and
 central method permission definitions. Pilot action grants are independent of detail-page membership where native
@@ -193,8 +196,11 @@ execution evidence is owned by that review. Historical suite counts/captures do 
 certify changed inputs. Report actual commands, source scope, failures and
 unmet prerequisites; hosted CI, deployment replay and live providers/mail are separate claims.
 
-Follow [staged Development](staged/DEVELOPMENT.md#implementing-the-next-feature-slice) for each next
-slice and [staged Testing](staged/TESTING_GUIDE.md#risk-and-test-cost) for unique detection value.
+Follow the [migration contribution handoff](FRONTEND_FOUNDATION_DESIGN.md#migration-contribution-handoff) for each next
+slice, the [Testing amendments](staged/TESTING_GUIDE.md#risk-and-test-cost) and unchanged
+[canonical assertion guidance](../TESTING_GUIDE.md#assertions-and-isolation) for unique detection value.
 Preserve baseline IDs, native comparison and feature exceptions. Default-route cutover requires complete feature
-parity and direct authorization. Maintainer drafts merge into existing canonical owners at that cutover; remove
-merged copies after reconciling intervening native changes. Documentation reports never gate application delivery.
+parity and direct authorization. Reconcile the amendments and independently review complete temporary output before
+verbatim cutover under the
+[current staging amendment](FRONTEND_FOUNDATION_DESIGN.md#authorized-amendment-staging-and-risk-mitigation-2026-10-14);
+production documents are not edited for migration. Documentation reports never gate application delivery.

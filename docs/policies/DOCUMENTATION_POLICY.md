@@ -5,10 +5,10 @@ documentation-metadata
 audience: maintainers; documentation contributors; AI agents
 owner: documentation maintainers
 status: current
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-ci-repair
-verification-scope: prior canonical classifications, locale corpus decisions, advisory reporting and native Help trust retained; per-decision approval routing includes meaningful-content and semantic delegation review
-source-anchors: docs/policies/DEVELOPMENT_POLICY.md; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts
+verification-scope: active governance and runtime Help roles retained; generic profile context delivery, task-scoped continuation and profile-owned amendment staging clarified; no application or operator execution claimed
+source-anchors: docs/policies/DEVELOPMENT_POLICY.md; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/frontend/features/help/; src/locales/; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; tests/unit/help-localization.spec.ts
 next-review: documentation-pipeline-or-help-trust-boundary-change
 -->
 
@@ -25,7 +25,7 @@ documentation prerequisite to an install, build, test, release, or Git hook. Do 
 condition for approving or delivering an otherwise acceptable application change.
 
 Documentation standards remain useful maintainer guidance. Record discrepancies and follow-up work; do not suppress
-findings or call an unexecuted check successful. Historical migration references to a documentation "gate" now mean
+findings or call an unexecuted check successful. Historical references to a documentation "gate" now mean
 advisory review evidence only; they do not override this policy.
 
 Application correctness is separate: authentication, authorization, database safety, and help-renderer security tests
@@ -35,7 +35,7 @@ The runtime rejection of unsafe help content is unchanged by the advisory report
 ## Policy authority and changes
 
 The maintainer's explicit decisions govern policy. This includes documentation structure, source locations,
-audiences, architecture, technology choices, security boundaries, design documents and migration acceptance criteria.
+audiences, architecture, technology choices, security boundaries, design documents and change acceptance criteria.
 Executable code establishes what currently happens; it does not authorize changing an approved policy or design.
 If instructions, policy, design or implementation conflict, inspect the evidence and ask the maintainer directly
 before dependent implementation. Continue independent authorized work while the decision is pending.
@@ -69,19 +69,17 @@ approval or silent updates to the design.
 | Policies | [`docs/policies/`](./) | Authoritative documentation/development rules and their advisory configuration. |
 | Architecture decision records | [`docs/decisions/`](../decisions/) | Original choices, rationale and approved dated amendments. |
 | Feature/layer design and references | [`docs/features/`](../features/) | Durable specialist material for its intended maintainer audience. |
-| Temporary migration documentation | [`docs/frontend-migration/`](../frontend-migration/) | Plans, baselines, migration status, pilot records and staged technical guidance for the migration's duration only. |
+| Optional task profiles and their working material | `docs/<directory>/PROFILE.md` and its owning directory | An approved profile describes its activation scope and owns temporary rules, evidence and any guide replacement staging for that task. Presence is optional. |
 | AI-agent summaries | [`AGENTS.md`](../../AGENTS.md) and [`.github/copilot/`](../../.github/copilot/) | These are summaries, not an independent source of behavioral truth. |
-| Migration state | [Documentation migration status](../frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md) | Human-readable continuation point and run evidence. |
 | Machine-readable backlog and defect register | [`documentation-remediation.yml`](../backlog/documentation-remediation.yml) | Open findings/defects, durable decisions, acceptance criteria and concise closed-ID/package dispositions. |
 | Advisory report configuration | [`documentation-check.json`](documentation-check.json) | Baselines, metadata rules, and explicitly deferred stale-term debt. |
 
 Do not introduce an alias directory for end-user help. Code, links, release packaging, and contributor instructions must
 all use `docs/user-guide/`.
 
-The native English reference is directly under `docs/user-guide/`; pilot/translated articles and assets live beside it
-under `docs/user-guide/en/`, `docs/user-guide/de/` and further approved catalog directories. There is no second Help
-root. Migration/staged documents are never runtime Help input. Prefer localized Help; missing localized content uses
-reviewed English with visible disclosure, as recorded in the staged technical amendment.
+Reviewed Help corpora and their assets share this canonical tree; there is no second Help root. A corpus is the
+application-selected collection of articles and adjacent assets used together. Catalogs define its approved language
+directory. Request input selects only a supported language, never an arbitrary filesystem root.
 
 The exact permitted filename inventory is defined once in
 [`documentClassification.rootAllowlist`](documentation-check.json), alongside this policy. It contains only the nine
@@ -90,16 +88,62 @@ readers rather than accumulating implementation history or feature plans. Report
 do not authorize adding a document or changing a classification.
 
 Classify existing material before moving it. Backlog records belong under `docs/backlog/`; formal decisions go only
-under `docs/decisions/`; permanent feature/layer designs go under `docs/features/`; migration-only material goes only
-under `docs/frontend-migration/`. Do not create aliases, duplicate copies or extra root documents. Review anything
-outside these classifications and request approval with the exact file list and reasons before removing it. Reports
-must never delete or rewrite material automatically.
+under `docs/decisions/`; permanent feature/layer designs go under `docs/features/`. Do not create aliases, duplicate
+copies or extra root documents. Review anything outside these classifications and request approval with the exact
+file list and reasons before removing it. Reports must never delete or rewrite material automatically.
 
-The maintainer's subsequent 2026-10-12 correction explicitly restores the original `docs/user-guide/` path. The
-intermediate rename followed a mistaken directory name without resolving its conflict with the canonical source;
-that was a process violation, not an approved design precedent. The separate pilot Help root was also unauthorized.
-The approved cleanup removes only the obsolete unreferenced illustration and the maintainer-only Activity Help
-paragraph. The remaining article bodies/assets and trusted-content model are preserved.
+## Document roles and optional task profiles
+
+The maintainer's approved 2026-10-14 clarification distinguishes three roles:
+
+- **Active governance:** policies, their review configuration, AI instructions, approved designs/decision records
+  and Help-authoring rules remain active. They may change within an explicitly authorized governance task; a
+  production-guide freeze does not apply to them. Approved technical choices still require their decision history.
+- **Production guides:** operational, development and ordinary feature/reference guides describe the applicable
+  production reference. A task profile may identify frozen guides and own staged amendments or replacements.
+  Its declared format, baseline, reconciliation and publication procedure govern that task only.
+- **Runtime Help:** reviewed articles and assets under `docs/user-guide/` are application content. New approved
+  language corpora belong directly in that canonical runtime tree, not in guide replacement staging. Existing
+  content still follows its approved behavioral and security boundaries.
+
+At task start, obtain current policy and optional profile context through the shared repository bootstrap in
+`scripts/check-documentation.mjs`. It discovers `PROFILE.md` files directly inside immediate child directories of
+`docs/`, supplies their declared scope and contents, and identifies governing-file versions. The executable help
+owns its CLI forms. A report does not prove that a host delivered instructions to an agent or that the agent followed
+them; verify the actual entry point rather than claim automatic loading from a configured command alone.
+
+Select applicable current profiles using task purpose and affected responsibilities, including shared dependencies;
+do not rely on keywords or folder names alone. A matching profile adds approved task-specific rules to both general
+policies; it cannot override them or grant implementation approval. Record the selection reason, actual authorized
+scope, owned files and unresolved decisions in the task context. Surface incompatible matched requirements directly;
+directory order, a newer date or a stricter-sounding rule does not decide authority.
+
+Missing profiles are normal. Do not require a particular directory, profile, staging area or temporary document to
+exist, create one during discovery, or report its absence as an application/documentation failure. Permanent policies
+and AI routing reference this generic discovery procedure rather than a particular temporary profile. Approved
+profile creation and classification still follow the location and decision rules above.
+
+Pass the selected context and governing-file identities to delegates and resumed work. Refresh it after context
+restoration, scope changes or governing-file changes. Unexpected disappearance, retirement or modification of a
+previously selected profile invalidates that task's earlier context evidence; investigate before dependent edits.
+Authorized retirement clears that expectation. This task-scoped check does not create a permanent required-profile
+registry or turn initial absence into an error. If bootstrap tooling is unavailable, report that limit and perform
+the same discovery, source reading and context review directly; required rules still apply.
+
+Each applied profile owns its temporary instructions, guide-reference preservation, staging and retirement rules.
+Keep those rules in that profile's directory; do not copy them into active governance or production guides. Read its
+referenced working material only after activation. Pass the applicable profile, current authorization and unresolved
+conflicts to delegated agents. Its staging area is never a runtime Help source or a duplicate policy/AI owner.
+
+Approved changes outside a profile's implementation scope can still affect its documentation inputs. Identify the
+affected staged guidance and its existing maintainer without importing unrelated temporary implementation rules into
+that authorized task. Reconciliation and semantic review belong to the profile's existing owners. Structural findings,
+content identities and emitted context establish their recorded scope only; they do not establish approval or meaning.
+
+Release documentation publication uses the same optional-profile discovery to omit temporary working/staging
+directories. A profile marker cannot reclassify a canonical policy, decision, feature, backlog or runtime Help owner
+as temporary material. Preserve canonical content and assets; publication/discovery findings remain visible and
+advisory under the delivery policy above.
 
 ## User-facing content boundary
 
@@ -117,9 +161,9 @@ language's text and pictures independently; a translation does not establish the
 
 ## In-app help trust boundary
 
-The in-app guides are trusted, application-shipped content. The help controller reads the fixed `docs/user-guide/`
-directory, and the release workflow packages those files with the application. Surveyor does not treat this directory as
-a user-editable knowledge base, upload destination, tenant content store, or remote feed.
+The in-app guides are trusted, application-shipped content. The help controller selects reviewed corpora within the
+fixed `docs/user-guide/` tree, and the release workflow packages those files with the application. Surveyor does not
+treat this tree as a user-editable knowledge base, upload destination, tenant content store, or remote feed.
 
 Because converted Markdown is inserted into the help view as HTML, changes to the user guides are security-sensitive and
 must receive the same review as source changes. Only reviewed content shipped with the matching release may be placed in
@@ -134,6 +178,19 @@ Runtime sanitization is not the controlling boundary while the source remains tr
 to load help from uploads, a database, an administrator editor, a tenant-managed directory, a network source, or a plugin
 must first reopen [DEC-004](../decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md) and implement an appropriate sanitization and
 URI-allowlist strategy before enabling that source.
+
+## Localized Help
+
+Prefer complete reviewed articles, stable anchors, search text, raster images, captions and alt descriptions in the
+selected language. If its corpus, article or required figure is missing, select only the complete corresponding
+reviewed English article with all of its English assets. Keep the chosen interface language and visibly disclose
+the fallback, actual article/contents language and English navigation/search entries. Available translations remain
+preferred; missing topics enter results once.
+
+Each article's authored local references stay in its own corpus. An individual image request cannot independently
+borrow another language. Unsafe, malformed or unreadable existing translated content fails its normal validation/read
+instead of disappearing behind English fallback. Article, navigation and search projections use the same complete
+source selection; a complete English replacement must itself satisfy the trusted-content rules.
 
 ## Evidence and documentation contract
 
@@ -154,17 +211,17 @@ Deliberate feature differences are part of the current working implementation an
 defects are tracked separately and product documentation assumes they have been corrected. A lower-ranked source must
 link to the higher-ranked source rather than duplicate volatile details.
 
-## Change boundary for this migration
+## Documentation change boundary
 
-The documentation migration is documentation-only by default. A documentation package may inspect application source,
+A documentation task is documentation-only by default. It may inspect application source,
 tests, examples, and workflows as evidence, but it must not alter runtime behavior to make the documentation easier to
 write.
 
-When implementation evidence contains a transient defect, the active run must:
+When implementation evidence contains a transient defect, the active task must:
 
 1. verify the intended working contract from feature-specific behavior, tests, and, when needed, an explicit maintainer or product decision;
 2. record the defect once in the `implementation_defects` register in `docs/backlog/documentation-remediation.yml`;
-3. keep defect details in migration-control material only, such as the backlog, decision records, and migration status;
+3. keep defect details in maintenance records only, such as the backlog and decision records;
 4. write end-user, operator, maintainer, and AI documentation for the corrected working contract without copying the transient defect, warning, or workaround into those documents; and
 5. leave application remediation for a separately authorized change set.
 
@@ -200,7 +257,8 @@ The fields mean:
 
 - **audience:** who should be able to act on the document.
 - **owner:** a role, not a person, that is responsible for keeping it current.
-- **status:** whether the content is authoritative, awaiting its assigned migration package, or intentionally historical.
+- **status:** whether the content is current authoritative guidance, pending its recorded documentation work, or
+  intentionally historical. A profile's activation requires `current`, independently of its other document states.
 - **last-verified:** the date on which the stated verification scope was completed.
 - **verification-baseline:** an identifier registered in `documentation-check.json`; each baseline is tied to a source fingerprint.
 - **verification-scope:** what was actually checked. `structural` never implies that behavioral instructions are correct.
@@ -277,14 +335,14 @@ does not suppress archive creation. Build and other application failures remain 
 
 ## Per-package workflow
 
-1. Select one ready package or the recorded next behavior decision from the [migration status](../frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md).
+1. Select the explicitly authorized documentation scope or the next recorded behavior decision in the existing backlog.
 2. Reproduce only its findings against the current source anchors.
 3. Establish the feature-specific working contract from implementation evidence and any explicit maintainer decision, or keep the decision open.
 4. Classify each difference as intentional behavior, a transient defect, or unresolved; do not infer uniformity from peer features alone.
 5. Record transient defects in the central backlog without copying them into product documentation.
 6. Change the smallest coherent documentation set; edit source only for an explicitly authorized in-app help integration change.
 7. Use optional structural and semantic reports as review evidence; log anything not run.
-8. Update document metadata and concise current dispositions in the machine-readable backlog/migration status.
+8. Update document metadata and concise current dispositions in the machine-readable backlog.
 9. Record completed work and remaining review items truthfully, without making the package a delivery prerequisite.
 
 Newly discovered problems are recorded in the backlog with a package assignment. They do not expand the active package
@@ -292,18 +350,20 @@ unless they block truthful completion of that package.
 
 Keep only durable decisions, open findings, concise closed-ID dispositions and latest relevant evidence in maintained
 records. Superseded runs, repeated failures, file inventories and completed implementation sequences remain in Git
-history and ignored run artifacts. Consolidate completed plans by transferring unique native contracts to existing
-canonical owners before retiring the plan. Editorial cleanup does not authorize changed behavior or pilot technical
-claims in native guidance; the [staged amendment](../frontend-migration/staged/DOCUMENTATION_POLICY.md) owns those deltas.
+history and ignored run artifacts. Consolidate completed plans by transferring unique behavioral contracts to existing
+canonical owners before retiring the plan. Editorial cleanup does not authorize changed behavior or changing an
+approved technical decision.
 
 ## In-app help authoring reports and runtime protection
 
-The application renders only the reviewed Markdown files under `docs/user-guide/`. D14 enforces the trusted-content model recorded in [DEC-004](../decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md):
+The application renders only the reviewed Markdown files under `docs/user-guide/`, following the trusted-content model recorded in [DEC-004](../decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md):
 
 - The documentation metadata comment is the only raw HTML permitted in an in-app guide, and the renderer removes it before producing HTML.
 - Active raw HTML, protocol-relative URLs, control characters, and URI schemes other than HTTP, HTTPS, mailto, and tel are rejected.
-- Markdown links to another guide must target a maintained Markdown file directly inside `docs/user-guide/`.
-- Images must use non-empty alt text and a reviewed raster file under `docs/user-guide/assets/`; remote images, data URIs, SVG, and nested asset sources are not accepted.
+- Markdown links to another guide must target a maintained Markdown file directly inside the selected reviewed corpus.
+- Images must use non-empty alt text and a reviewed raster file directly inside that corpus's `assets/` directory;
+  remote images, data URIs, SVG, and images in subdirectories below `assets/` are not accepted.
+- Authored local references remain within their article's corpus. Request input cannot select an arbitrary source root.
 - Unreferenced or unsupported help assets are reported for maintainer review.
 - `npm run docs:check:help` reports these rules without a database or application server. The normal and strict reports also include this advisory check.
 - The release workflow attempts the copy and byte comparison in a separate non-blocking step.

@@ -19,6 +19,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {declaresDocumentationPublication} from './check-documentation.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const helpRoot = path.join(repositoryRoot, 'docs', 'user-guide');
@@ -357,10 +358,15 @@ function validateSourceBoundary() {
 
     const releasePath = path.join(repositoryRoot, '.github', 'workflows', 'release.yml');
     const release = fs.readFileSync(releasePath, 'utf8');
-    for (const required of ['cp -R docs release/docs', 'diff -qr docs/user-guide release/docs/user-guide']) {
-        if (!release.includes(required)) {
-            addError(releasePath, `Release packaging does not verify maintained help content: ${required}`);
-        }
+    // Publication declarations share their existing generic owner. This report
+    // still independently requires the exact native/runtime Help byte comparison;
+    // recognizing a command never certifies that its execution copied the bytes.
+    if (!declaresDocumentationPublication(repositoryRoot, release)) {
+        addError(releasePath, 'Release packaging does not declare maintained documentation copying');
+    }
+    const comparison = 'diff -qr docs/user-guide release/docs/user-guide';
+    if (!release.includes(comparison)) {
+        addError(releasePath, `Release packaging does not verify maintained help content: ${comparison}`);
     }
 }
 

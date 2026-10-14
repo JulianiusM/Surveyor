@@ -4,9 +4,9 @@ documentation-metadata
 audience: documentation maintainers; feature maintainers; operators; AI agents
 owner: documentation maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-ci-repair
-verification-scope: editorial consolidation of completed migration history, durable dispositions and independent open work; no operator rehearsal or application run claimed
+verification-scope: completed native documentation history retained; eight amendment-only guide sources, current-base reconciliation and pinned temporary publication outputs routed through the optional profile; no operator rehearsal or new application run claimed
 source-anchors: docs/backlog/documentation-remediation.yml; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/documentation-check.json; scripts/check-documentation.mjs; scripts/check-help-documentation.mjs; scripts/tests/documentation-check.test.mjs; docs/features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md; docs/features/help/HELP_VISUALS.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md
 next-review: D04V-or-implementation-defect-remediation
 -->
@@ -14,9 +14,14 @@ next-review: D04V-or-implementation-defect-remediation
 The documentation migration **D00–D14 is complete**. Its decisions, open findings, implementation defects and concise
 closed-ID/package dispositions remain in the [backlog](../backlog/documentation-remediation.yml). Superseded execution
 transcripts, repeated file inventories and completed procedures remain in Git history instead of another archive.
-Native guidance describes native behavior. Prospective frontend technical guidance remains
-[staged](staged/README.md); current pilot evidence belongs to its
-[review](PILOT_PARITY_REVIEW.md).
+Native production guides remain frozen except for explicitly approved production changes/reference cleanup.
+Policies, AI instructions, decision records and Help-authoring rules remain active; localized pilot Help is runtime
+content. The optional [frontend profile](PROFILE.md) owns temporary rules and eight
+[guide amendment mappings](documentation-boundary.json). Unchanged guidance is inherited from current approved
+canonical documents; changed parts are actively reconciled. Complete temporary output is assembled and independently
+reviewed before cutover, then copied verbatim only after separate authorization. Full future guides are not maintained
+in staging. Current guide, source and governance identities invalidate stale preparation/review receipts.
+Current pilot evidence belongs to its [review](PILOT_PARITY_REVIEW.md).
 
 ## Delivery policy and evidence
 

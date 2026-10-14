@@ -1,572 +1,776 @@
-# Staged frontend development guidance
+# Staged frontend development amendments
 <!--
 documentation-metadata
-audience: maintainers; frontend developers; API developers; AI coding agents
-owner: application maintainers
+audience: maintainers; frontend developers; migration reviewers
+owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved migration recipe/startup/file-release and locked completion boundaries retained; refined Req6A initial skeleton/static delivery and API-only interactive consumers reconciled; execution owned by review
-source-anchors: package.json; src/controller/packingController.ts; src/modules/database/services/; contracts/api/v1/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/watch-frontend-inputs.mjs; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/DEVELOPMENT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
-next-review: frontend-production-cutover
-canonical-merge-target: docs/DEVELOPMENT.md
-production-reference: 2dfa257 native documentation; not evidence of an installed production commit
+verification-scope: digest-guarded frontend amendments preserve complete reviewed candidate guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
+next-review: next-authorized-migration-slice-or-cutover
 -->
 
-## Cutover staging
+These amendments retain the reviewed frontend guidance without copying unchanged production procedures.
+The [profile](../PROFILE.md) governs preparation and review; its [manifest](../documentation-boundary.json)
+owns destination mapping and exact operations. Payload links use their mapped production location.
+Surrounding notes use this file's location. Preparing complete temporary output does not authorize cutover.
 
-This is the migration delta and single contribution playbook for [Development](../../DEVELOPMENT.md).
-Use canonical guidance for unchanged checkout setup, settings, database safety, native modules and domain-specific
-implementation. Do not copy those sections here. At authorized cutover, merge relevant guidance into the existing
-canonical sections, reconcile intervening changes and remove this copy. Staged documents never become runtime input.
+## Components, contracts and browser state — amendment-01
 
-Native implementation, canonical/user/AI documents and images remain the reference, subject only to explicit
-exceptions in the [foundation ledger](../FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
-One canonical Help tree holds native English at `docs/user-guide/` and reviewed pilot languages in its catalog directories.
-Editorial cleanup is authorized; pilot technical changes stay staged and native guide prose/assets remain the comparator.
+<!-- delta:amendment-01 -->
+### Components, contracts and browser state
 
-Packing now demonstrates named shared business operations and central method policy inside its existing controller,
-with independent native/v1 transport adapters and pure DBAL. Existing administration/event/image owners supply shared
-behavior at their own boundaries. The handoff below follows that implementation and its approved bounded lock remedy;
-final acceptance remains in the review. Subsequent modules reuse these owners rather than copy backend logic.
+Keep visible labels, field names, controllers and Help aligned. Features live under `src/frontend/features/`; their
+`api.ts` owns generated operation/validator selection and uses `app/transport.ts`. Shared components/composables accept
+explicit values, capabilities, events and injected operations. They own presentation/accessibility, not feature
+endpoints or permission policy. The following contracts describe how those owners work together; the
+[Architecture](ARCHITECTURE.md#frontend-architecture) defines the wider runtime boundary.
 
-## Normal development and generated sources
-
-Use the root `npm run server` workflow: initial build, Express/Vite middleware and HMR, native browser watcher,
-and serialized contract/catalog regeneration. The authored inputs include `contracts/api/v1/`, `src/locales/` and
-the exact permission registry `src/modules/lib/permissions.ts`. Watch the registry's parent with an exact filename
-filter so editor replacement retains observation; unrelated library files keep ordinary server restart behavior.
-API generation precedes locale generation, which derives permission keys and includes registry bytes in its version.
-Authored-input completion triggers Express restart only through `.generated/frontend-ready.json`; generated outputs
-and that registry must not independently restart it mid-generation. A newer save queues another complete batch,
-and failed or superseded batches do not publish readiness. Source serving explicitly uses `vite.config.mts` and the project root.
-Production runs matching built artifacts through Express without a Vite server.
-
-Authored OpenAPI/YAML and catalog JSON are single sources. Package generation creates declaration files, validators,
-operation policy, typed translation keys/parameters and runtime resources. Generated output stays ignored.
-Use `npm run prepare:frontend` for the contract/catalog boundary and the exact build/type/test scripts in
-`package.json`; do not hand-edit generated files or assume a direct runner invocation prepares them.
-
-Normal locale generation retires only its known compiled `permissions.js`/`.js.map` siblings before publishing current
-`permissions.ts`; extensionless imports must not select a stale emitted copy. Exact output-root paths, entry types and
-real parent containment are checked before removal. `--check` reports a collision without rewriting/deleting it.
-Preserve the whole authored-tree collision regression and unrelated generated neighbors; do not add an exclusion or
-general directory cleanup to obtain a pass.
-
-Keep browser, native assets, server and SSR outputs separate. Client and SSR use the same release/compilation mode.
-Production dependencies must include packages externalized by SSR; standalone validators include runtime helpers
-without compiling schemas at startup. No database entity, settings secret, filesystem or server-only import may
-enter the browser graph.
-
-## Implementing the next feature slice
-
-Use one authorized route family and the [behavior/edge-case baseline](../FRONTEND_MIGRATION_BASELINE.md#using-the-baseline-for-a-migration-slice).
-Help/Packing are the current complete slice; other scaffolds remain future increments.
-Resolve conflicting instructions and potentially unintended consequences directly before dependent implementation.
-A document, test expectation or implementation result cannot supply user permission.
-Use the exact labeled [required change explanation](../../policies/DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13)
-separately for every individual approval, including its meaningful-content requirements, prohibition on bundling and
-semantic delegation/root review before asking the maintainer. Correct labels alone are insufficient.
+#### Ownership handoffs
 
 | Handoff | Existing owner |
 |---|---|
-| Wire shape → generated types/validators | `contracts/api/v1/`, `scripts/generate-api.mjs`; import declaration contracts directly. |
-| Business operation → permitted projection | Existing feature controller; native/v1 adapters translate transport around one named policy owner. |
-| Locked context → checks/write | Existing DBAL transaction/lock operation invokes a named controller callback. |
-| DTO → browser operation | `features/<feature>/api.ts`, shared `app/transport.ts`, generated operation/feature validators. |
-| Entry/read → authorized view | `composables/pageEntry.ts`, `app/queryKeys.ts`, `app/queryCache.ts`; feature supplies policy/dependencies. |
-| Snapshot → draft/command/recovery | `metadataDraft.ts`, `command.ts`, shared feedback/confirmed-navigation/read owners. |
-| Route → SSR/hydration | Existing Express pilot route/renderer, `app/serializeBootstrap.ts`, `createApp.ts` and `mountPreservingDrafts.ts`. |
-| Initial content → usable controls | `app/context.ts` initialization helpers, route metadata and the existing shell/shared controls; one control/read readiness contract. |
-| Repeated interaction → presentation | Shared components/composables; explicit props/events and injected operations. |
-| Language → UI/server/Help | Catalog, shared translator, i18next-vue and reviewed runtime corpus. |
+| Wire shape to generated types/validators | `contracts/api/v1/`, `scripts/generate-api.mjs`; import declaration contracts directly. |
+| Business operation to permitted projection | Existing feature controller; transport adapters use its named operation and method policy. |
+| Locked context to checks/write | Existing DBAL transaction/lock operation invokes a named controller callback. |
+| DTO to browser operation | `features/<feature>/api.ts`, `app/transport.ts`, generated operation and feature validators. |
+| Entry/read to authorized view | `composables/pageEntry.ts`, `app/queryKeys.ts`, `app/queryCache.ts`; the feature supplies policy/dependencies. |
+| Snapshot to draft/command/recovery | `metadataDraft.ts`, `command.ts`, shared feedback, confirmed-navigation and fresh-read owners. |
+| Route to SSR/hydration | Existing Express route/renderer, `app/serializeBootstrap.ts`, `createApp.ts` and `mountPreservingDrafts.ts`. |
+| Initial content to usable controls | `app/context.ts` initialization helpers, route metadata and existing shell/shared controls. |
+| Repeated interaction to presentation | Shared components/composables; explicit props/events and injected operations. |
+| Language to UI/server/Help | Catalog, shared translator, i18next-vue and reviewed runtime corpus. |
 
 Frontend paths in this table are relative to `src/frontend/`. Create a module only when an existing logical owner
 cannot comfortably hold its responsibility. Do not add another router, HTTP wrapper, state store, controller,
-validator or service simply to make this table symmetrical.
+validator or service simply to make this table symmetrical. Reuse existing styles, logo/favicon and pure browser
+helpers through their actual owners rather than copying them into a frontend-specific asset tree.
 
-Packing supplies the concrete backend handoff example. `packingMethodPermissions` in its existing controller owns
-action requirements consumed by native middleware, v1 checks and capability projections; root property fields reuse
-the existing administration field policy. `savePackingMetadata`, `addPackingItem`, `applyPackingItemPatch` and
-`applyPackingMembership` own the corresponding writes/checks. Native/v1 adapters retain normalization, error/feedback
-and conditional-write differences. Existing reorder/remove/default operations accept the service-managed transaction
-when v1 coordinates more than one write. `eventController.authorizeEventLink` checks the locked destination, and
-`entityAdminController.applyEntityAdministrator` returns domain outcomes for each adapter's own response mapping.
-These are owning operations, not forwarding wrappers or business rules in DBAL. A next feature follows its own native
-policy and contracts rather than copying Packing's grants or persistence shapes.
+#### Adding or changing a feature view
 
-The existing `entityAdminController.entityMethodPermission` supplies common header, event-link, permission-management
-and duplication requirements. Native header/duplicate factories, administrator middleware and Packing's method map
-consume this owner. Keep actor/profile admission and feature exceptions alongside their established consumers; a
-shared grant does not imply a shared page-admission rule.
+1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
+   controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;
+   feedback; focus; and hidden/empty/archived states. Peer features are evidence to inspect, not a universal policy.
 
-For each mutation, keep a short compatibility account in the feature's contract/test evidence: native decoding,
-actor/page/action grants, normalization, no-op outcomes, lock/check location, response/feedback and destinations.
-Mark intentional native/v1 protocol differences and inherited defects explicitly. The current map in
-[Test Coverage](../TEST_COVERAGE.md#pilot-baseline-to-implementation-assertions) links this handoff to precise assertions;
-the review owns actual execution and remaining limits. Do not leave duplicated backend operations for a later cleanup.
+2. **Expose the smallest useful projection.** Author the operation/schema once in its v1 YAML. Reuse the owning
+   controller projection and method permission definition; do not serialize entities, sessions, permission internals
+   or hidden edit data. Keep contextual validation/errors in the controller. Read/page admission and independently
+   granted action admission stay distinct. Transport adapters may preserve different envelopes or coercion without
+   copying business decisions.
 
-General defects, large changes and backend behavior changes discovered during a slice belong in the existing defect
-backlog and a separately authorized effort, even when their remedy includes small frontend edits. Apply the central
-[migration scope rule](../../policies/DEVELOPMENT_POLICY.md#frontend-migration-boundary-2026-10-13); earlier bounded approvals
-remain limited to their recorded outcome. Migration completion means native visual and behavioral parity.
-
-1. **Trace the native contract.** Follow page GET, form POST, collectors, controller, DBAL and rendered controls.
-   Compare the complete native delta against `2dfa257`, including committed drift. Identify each approved exception.
-   Include owner, guest and restricted actors, field coercion, omitted/null/false, no-op outcomes, destinations,
-   feedback, focus and hidden/empty/archived states. Peer features are evidence to inspect, not a universal policy.
-
-2. **Expose the smallest useful read through shared policy.** Author the operation/schema once in its v1 YAML.
-   Reuse the owning controller projection and method permission definition; do not serialize entities, sessions,
-   permission internals or hidden edit data. Keep contextual validation/errors in the controller.
-   Read/page admission and independently granted action admission remain distinct where native behavior requires it.
-   Native/v1 adapters preserve transport differences without copying business decisions.
-
-3. **Connect the scoped browser operation.** Use generated operation declarations/validators and the app-local
-   transport. Capture identity/resource/route scope and pass the same AbortSignal through HTTP decoding,
-   classification and cooldown owners. Query keys contain actor/resource/meaningful filters; locale belongs only
-   to language-owned content. Shared keys/families name dependencies without teaching generic owners a feature.
+3. **Connect the scoped browser operation.** Use generated declarations/validators and the app-local transport.
+   Capture identity/resource/route scope and pass the same AbortSignal through HTTP decoding, classification and
+   cooldown owners. Query keys contain actor/resource/meaningful filters; locale belongs only to translated content.
+   Shared keys/families name dependencies without teaching generic owners a feature.
 
 4. **Wire entry, routing and SSR before editing.** Extend explicit Express/Vue routes rather than a wildcard HTML
-   fallback. Preserve provider, token, email-link, print and download boundaries. Entry preflights use shared
-   `usePageEntry` where the native journey has an admission decision; public read-only views can use a direct query.
-   Request-local SSR renders the same Vue tree and makes no self-HTTP call. Initial seeds check live document/scope
-   eligibility when evaluated; Back, eviction or an actor change cannot replay retired SSR data.
-   Classify initial interactive content through `requiresClientInitialization`, using existing route metadata and
-   admitted result state. Shared controls use `useClientInitialization`; initial skeletons, genuinely functional
-   static content and the independent failure notice follow the bootstrap section below. Cover shell controls as
-   well as the feature body. JavaScript failure must not leave a normal-looking action which cannot work.
+   fallback. Preserve provider, token, email-link, print and download boundaries. Entry preflights use `usePageEntry`
+   where the journey has an admission decision; public read-only views can use a direct query. Request-local SSR
+   renders the same Vue tree without self-HTTP. Initial seeds check live document/scope eligibility when evaluated;
+   Back, eviction or actor change cannot replay retired SSR data. Use `requiresClientInitialization` and existing
+   route metadata for initial content; shared controls use `useClientInitialization`. Cover shell controls as well
+   as the feature body so JavaScript failure cannot leave a normal-looking action which cannot work.
 
 5. **Complete read/recovery behavior.** Start queries only when identity, hydration, visibility and activity permit.
-   Retire obsolete generations and preserve server cooldowns. Missing pending data uses shared skeletons;
-   temporary failure retains confirmed scoped data/drafts and its stale notice. Validated denial clears private
-   content. Explicit Retry is an eligible read only and observes its actual deadline and last successful receipt.
-   A canceled observer refetch may fulfill with retained data; fresh authority requires a new admitted read.
+   Retire obsolete generations and preserve server cooldowns. Missing pending data uses shared skeletons; temporary
+   failure retains confirmed scoped data/drafts and its stale notice. Validated denial clears private content.
+   Explicit Retry is an eligible read which observes its actual deadline and last successful receipt. A canceled
+   observer refetch may fulfill with retained data; fresh authority requires a new admitted read.
 
-6. **Add independent drafts and commands.** Use the existing draft/command owners, with feature field normalization
-   and operation-specific feedback. Original, local and remote values stay separate. D2 compares touched fields
-   under locks; financial/recommendation commands retain their separate revisions/reviews. Submit deliberate changes.
-   Confirmation acknowledges submitted values; only a later fresh read supplies current grants/token/baseline.
-   Failed refresh remains a saved command with stale authority. Unknown delivery never automatically replays.
-   Independently granted writes need independently granted baseline reads. Filter both values and comparison
-   hashes by the actual method policy; do not require broader detail admission or a token obtained before revocation.
-   Packing's item/order, defaults, single-admin, header and description baselines demonstrate this without disclosing
-   unrelated fields, assignments, rosters or parent metadata. Actor admission follows each native method, not one
-   blanket profile rule; public tokens bind the captured context and never a common anonymous identity.
+6. **Add independent drafts and commands.** Use the existing draft/command owners with feature normalization and
+   operation-specific feedback. Original, local and remote values stay separate. Current-value comparisons check
+   touched fields under locks; financial/recommendation commands retain their separate revisions/reviews. Submit
+   deliberate changes. Confirmation acknowledges submitted values; only a fresh read supplies current grants/token
+   and baseline. Failed refresh remains saved with stale authority. Unknown delivery never automatically replays.
+   Independently granted writes need independently granted baseline reads: filter values and comparison hashes by
+   the actual method policy rather than require broader detail admission or a token obtained before revocation.
+   Public tokens bind the captured context, never one common anonymous identity.
 
-7. **Compose native presentation through shared contracts.** Reuse fields, inline editors, dialogs/tabs, action
-   buttons, permission matrix, pickers, skeletons, notices and images where behavior is shared. A feature supplies
-   values/capabilities/events/operations; the control owns visual/accessibility interaction, not authorization.
-   Match labels, input attributes, no-op behavior, ordering, spacing, disclosure, focus and responsive geometry.
-   Keep complex feature composites separate when their semantics differ.
+7. **Compose presentation through shared contracts.** Reuse fields, inline editors, dialogs/tabs, action buttons,
+   permission matrix, pickers, skeletons, notices and images where behavior is shared. A feature supplies values,
+   capabilities, events and operations; controls own visual/accessibility interaction. Preserve labels, attributes,
+   no-op behavior, ordering, spacing, disclosure, focus and responsive geometry. Keep feature composites separate
+   where their semantics differ.
 
-8. **Verify the changed boundary and hand off.** Apply [risk and test cost](TESTING_GUIDE.md#risk-and-test-cost),
-   preserve unique assertions and inspect the actual production consumers of shared corrections.
-   Check compiler scope honestly and compare affected native/pilot scenes using the same records/actors/sizes.
-   Obtain a final review by someone who made none of the corrections. Record actual commands, failures and limits in
-   the existing review; update these staged owners and retire completed sequences without another report/registry.
-   A passing build, helper test or screenshot alone does not establish feature completeness.
+8. **Verify the changed boundary.** Apply [risk and test cost](TESTING_GUIDE.md#risk-and-test-cost), preserve unique
+   assertions and inspect actual consumers of shared corrections. Check compiler scope honestly and test the
+   affected mounted controls/reads/commands. Use equivalent records, actors and sizes for visual checks. Obtain an
+   independent semantic review and report actual commands, failures and limits. A build, helper test or screenshot
+   alone cannot establish feature completeness.
 
-When coordination changes, enumerate every native/v1 writer and actual lock order, including self/admin removal,
+When coordination changes, enumerate every active writer and actual lock order, including self/admin removal,
 item deletion, relationship changes and foreign-key locks. A comment claiming a shared lock is not scheduling
-evidence. Use controlled milestones in the real disposable-DB operation path to distinguish a source inference,
-reproduced failure and verified bounded remedy. Preserve native coercion/outcomes and disclose any potentially
-unintended lock or access consequence directly before dependent implementation.
+evidence. Use controlled milestones in the real disposable-database operation path to distinguish source inference,
+reproduced failure and verified remedy. Do not generalize one feature's locking or harmless no-op policy to another.
+Authorization still precedes an unchanged relationship outcome; reviewed comparison is needed when the relationship
+changes. Resolve potentially unintended access or concurrency changes directly before dependent implementation.
 
-The approved 2026-10-12 Packing example now takes native list-S before item-X; v1 keeps root-X before item-X.
-The production coexistence cases exercise both arrival orders, parallel native items, deletion during root discovery,
-native self/admin removal and later item overwrite. Preserve those schedules when touching these owners. Copying the
-root lock to every writer would change native concurrency; a new module needs its own inspected writers and approval.
-
-The approved [same-event no-op decision](../FRONTEND_FOUNDATION_DESIGN.md#authorized-same-event-no-op-clarification-2026-10-13)
-is an operation-specific exception. Current source/target permissions still precede a harmless result; reviewed
-comparison is required only when that association actually changes. Preserve the native adapter's no-op outcome and
-do not generalize this exception into a command retry or precondition bypass.
-
-### Worked extension: one metadata field
+#### Worked extension: one metadata field
 
 Adding an editable field follows one coherent path:
 
-1. Inspect its native input policy and owner/restricted behavior. Decide whether the wire contract actually changes;
-   reuse a generated field if it already exists.
-2. Update the owning YAML request/projection once and generate consumers. Keep sparse omission versus explicit clearing.
+1. Inspect its input policy and owner/restricted behavior. Decide whether the wire contract actually changes; reuse
+   a generated field if it already exists.
+2. Update the owning YAML request/projection once and generate consumers. Keep sparse omission versus explicit
+   clearing, including null/false/empty.
 3. Extend the named shared controller policy/projection and field permission definition. A contextual check against
    current locked state belongs in its controller callback inside the existing DBAL transaction.
 4. Add catalog messages and bind the shared field in the feature editor. Supply normalization to `MetadataDraft`
    only when the field needs it; dirty comparison and submission use the same meaning.
 5. Run the existing named command and fresh-authority continuation. Test unrelated remote changes, overlap, denial
-   and confirmed-save/failed-read only where those distinct risks cross the changed boundary.
-6. Compare the actual mounted native/pilot control and update the affected staged delta.
+   and confirmed-save/failed-read where those distinct risks cross the changed boundary.
+6. Check the actual mounted control, its submitted value and its release/retention behavior; update affected Help
+   and canonical guidance when the visible contract changes.
 
-A read-only slice stops before editor/command work, but still owns admission, privacy, cancellation, retry,
+A read-only view stops before editor/command work but still owns admission, privacy, cancellation, retry,
 localization and visual behavior. No universal CRUD engine or wrapper per HTML element is needed.
 
-## Backend and method-policy contracts
+#### Backend and method-policy contracts
 
-Controllers own business rules, authentication/authorization decisions, contextual validation and user-facing errors.
-DBAL services own queries, locks, transactions and persistence; no APIError/ExpectedError or UI-specific exceptions.
-When authorization depends on locked context, pass a named controller operation into the existing service-managed
-transaction rather than checking outside the lock or moving policy into the service.
+The [controller/DBAL rules](#controllers-and-services) apply to every transport. Central method permission definitions
+live in the existing controller. Adapters can decode/coerce differently, return different envelopes or apply their
+declared preconditions; capacity, ownership, deletion and access policy remain one shared business implementation.
+Page membership must not silently narrow a separately granted action, and edit-token projections stay private.
 
-The approved shared-backend target uses central method permission definitions inside the existing controller.
-Native/v1 entry points consult those definitions. They may decode/coerce differently, return different envelopes or
-apply v1 preconditions, but must not independently decide capacity, ownership, deletion or access policy.
-Page membership must not silently narrow a separately granted native action; edit-token projections remain private.
+Packing supplies a concrete ownership example. `packingMethodPermissions` owns requirements consumed by middleware,
+v1 checks and capability projections; root property fields reuse the existing administration field policy.
+`savePackingMetadata`, `addPackingItem`, `applyPackingItemPatch` and `applyPackingMembership` own the corresponding
+writes/checks. Reorder/remove/default operations accept the existing service-managed transaction when an adapter
+coordinates several writes. `eventController.authorizeEventLink` checks the locked destination;
+`entityAdminController.applyEntityAdministrator` returns domain outcomes for each adapter's response mapping.
+These are owning operations, not forwarding wrappers or business rules in DBAL. Another feature follows its own
+policy/contracts rather than copying Packing's grants or persistence shapes.
 
-Follow each policy definition to its production consumers, including generic factories, header preflight/write,
-duplicate entry, administrator changes and relinking. Shared operations alone do not remove a copied permission
-literal. Derive the rule through its existing controller owner and pass it into a factory when needed; preserve other
-features' defaults, actor requirements and deliberate exceptions. Generic middleware must not import a feature's
-controller merely to discover its policy, and no DBAL owner may choose the grant.
+`entityAdminController.entityMethodPermission` supplies common header, event-link, permission-management and
+duplication requirements. Header/duplicate factories, administrator middleware and Packing's method map consume
+this owner. Keep actor/profile admission and feature exceptions alongside their established consumers; a shared
+grant does not imply a shared page-admission rule. Follow the definition to every actual consumer, including header
+preflight/write, duplicate entry, administrators and relinking. Shared operations do not by themselves remove a
+copied permission literal. Pass the owning rule into a generic factory; middleware must not import a feature's
+controller merely to discover policy, and DBAL must not choose the grant.
 
 Conditional-header limits are authored contract constraints, including the full token emitted by metadata/settings
 reads. Reuse generated schema/operation validation through the existing transport and comparison owner. A decoder's
-safety bound must agree with the wire shape rather than silently reject the application's own issued token. Verify
-generated input/output consumers with a realistic full token and an oversized rejected token.
+safety bound must agree with the wire shape rather than reject the application's own issued token. Verify generated
+input/output consumers with a realistic full token and an oversized rejected token.
 
-The [approved 2026-10-12 amendment](../FRONTEND_FOUNDATION_DESIGN.md#explicit-canonical-location-and-action-decisions-2026-10-12)
-replaces the initial pilot's blanket profile requirement only where existing native methods permit public grants:
+Packing's method-specific reads illustrate independent action admission:
 
-| Packing admission boundary | Implemented scope |
+| Admission boundary | Current Packing scope |
 |---|---|
-| Captured context; optional profile; fresh method grant | Item edit/order/delete and their minimal baselines; administrator assignment removal; default/admin CRUD and scoped baselines; account-profile discovery; header baseline/preflight/write; description-only GET/PATCH. |
+| Captured context; optional profile; fresh method grant | Item edit/order/delete and minimal baselines; administrator assignment removal; default/admin CRUD and scoped baselines; account-profile discovery; header baseline/preflight/write; description-only GET/PATCH. |
 | Active profile and existing operation policy | Full detail, metadata, settings and header bytes; mixed metadata writes, creation/Quick Add, self-assignment, archive/restore, event changes and owner deletion. |
-| Existing entry policy | Session/Help and create/resource/duplicate entries retain their declared native admission; a duplicate GET does not grant account-only creation. |
+| Existing entry policy | Session/Help and create/resource/duplicate entries retain their own admission; duplicate GET does not grant account-only creation. |
 
-Public baselines carry only the method's values/hashes and bind the captured context; profile tokens preserve their
-established scope. Context checks, mutation CSRF, conditional comparisons and authorization before `304` still apply.
-Header admission runs before upload bytes and again under the write lock. Scoped account-profile discovery reuses
-the native 120-search/10-minute per-IP limiter: native text stays native, and v1 emits its localized Problem.
-Do not generalize this matrix to another feature or expose its full settings page merely to obtain one edit token.
+Public baselines carry only the method's values/hashes and bind the captured context; profile tokens keep their own
+scope. Context checks, mutation CSRF, conditional comparisons and authorization before `304` still apply.
+Header admission runs before upload bytes and again under the write lock. Scoped account-profile discovery uses
+the existing 120-search/10-minute per-IP limiter; the adapter owns its localized Problem presentation. Do not
+generalize this matrix to another feature or expose a full settings page merely to obtain one edit token.
+Packing's item/order, defaults, single-admin, header and description baselines omit unrelated fields, assignments,
+rosters and parent metadata. A displayed or disabled control is never server authority. Inherited permissions,
+owner, guest, archival, personal visibility and permanent deletion remain distinct concepts.
 
-Existing native permission inconsistency is tracked as `IMP-022`; reuse that register entry and preserve native
-behavior until its separately approved remedy. A displayed/disabled control is never server authority.
-Inherited parent permissions, owner, guest, archive, personal hide and permanent deletion remain distinct concepts.
+Keep a short operation account in its contract/test evidence: decoding, actor/page/action grants, normalization,
+no-op outcomes, lock/check location, response/feedback and destinations. Inspect deliberate differences rather than
+turn peer behavior into policy. General defects and unrelated backend behavior changes follow the
+[separate-work boundary](policies/DEVELOPMENT_POLICY.md#scope-of-separately-authorized-work); a contract or backlog
+entry does not authorize their implementation.
 
-Preserve deletion in its existing feature service and keep file retention separate from archive/restore.
-The bounded archival and approved native assignment remedies do not authorize a general lock framework. Any coexistence scheduling
-change needs the actual native/v1 interleaving and existing policy preserved.
+#### Entry, canonical delivery and outcomes
 
-Shared type-only contracts remain declaration files under `src/types/`. Use neighboring interface/type conventions.
-Optional feature state uses renderer `data` and explicit Pug mixin arguments; keep `res.locals` for common request
-infrastructure. Pug comments are unbuffered and explain data, branches and browser hooks.
+Keep server-owned admission/canonical navigation separate from temporary resource reads. `usePageEntry` owns the
+entry decision. Capture the intended destination/notice once and commit it through the shared confirmed-navigation
+owner. Failed or canceled delivery retains the same completion, including across actor remount, without replaying
+a command. A navigation Retry repeats delivery only.
 
-## Entry, canonical delivery and native outcomes
+Preserve exact duplicate return through the shared guest-flow owner/forms and surveys' distinct policy. Invalid
+guest tokens and expired stored identity keep their established status, message and provider boundaries. Read retries
+cannot consume a reset/activation/guest capability or submit a creation. A configuration-denied login/register
+journey uses its full error presentation rather than an empty form. Confirmed recovery/guest registration uses its
+canonical destination; inline success on the old form is not equivalent. Pending/unknown states retain input and
+explicit review.
 
-Keep native admission and canonical navigation separate from temporary resource reads.
-Capture the intended destination/notice once; commit it only through the shared confirmed-navigation owner.
-Failed or canceled delivery retains that same completion, including across actor remount, without replaying a command.
-
-Preserve exact duplicate return through the approved shared guest-flow owner/forms. Preserve surveys' exceptions.
-Invalid guest tokens and expired stored identity keep their known native status/message/provider boundaries.
-Read retries cannot consume a reset/activation/guest capability or submit a creation.
-
-A configuration-denied login/register journey uses the native full error presentation, not an invented empty form.
-Confirmed recovery/guest registration uses its native canonical destination; inline success on the old form is
-not equivalent. Pending/unknown states retain inputs and explicit review.
-
-Fragments and modified-click hrefs preserve ordinary navigation semantics. Region navigation reads a target before
+Fragments and modified-click hrefs preserve ordinary navigation semantics. Region navigation reads the target before
 history commit, merges only its region into current query state and adopts server-clamped pages/parent removal.
-Failure or obsolete response leaves the current URL/cards/focus intact. Search draft/caret and sibling regions survive.
+Failure or obsolete response leaves the URL/cards/focus intact. Search draft/caret and sibling regions survive.
 
-## Commands, drafts and retained work
+#### Commands, drafts and retained work
+
+TanStack Query owns authorized snapshots, feature drafts own original/local/current values and Router owns URL
+state. `MetadataDraft` applies feature normalization consistently to dirtiness and sparse submission; omission,
+null/false/empty remain distinct. No-op validation/feedback precedes confirmation, cross-form discard and writes
+where the workflow requires it. Machine/raw number drafts survive framework coercion: inline capacity acceptance,
+creation bounds and SQL persistence are different policies.
 
 Use application-root draft protection with feature/dialog subtrees. Dialog close resolves its own work; route,
-identity/update and whole-page destructive departures resolve every affected descendant.
-Pending/unknown command state may outlive an editor; retiring a component does not certify delivery.
+identity/update and whole-page destructive departures resolve every affected descendant. Pending/unknown command
+state may outlive an editor; retiring a component does not certify delivery.
 
 Admit a new `useCommand.run` only while its owning component remains mounted. Reject a retained callback after
-unmount before capturing presentation/actor scope, retaining a status lease or invoking its operation. Retained
-completion state protects an already admitted command; it cannot grant another submission from a retired owner.
-Preserve legitimate deferrals: a child chooser can close while its command owner stays mounted, and an operation
-admitted before unmount can defer its request or finish settlement, follow-up reads and confirmed navigation under
-its captured scope. Do not replace this admission check with cancellation of in-flight work or treat every dialog
-close as owner retirement.
+unmount before capturing presentation/actor scope, retaining a status lease or invoking the operation. Retained
+completion state protects an admitted command; it cannot grant another submission from a retired owner. Preserve
+legitimate deferrals: a child chooser can close while its command owner stays mounted, and an operation admitted
+before unmount can defer its request or finish settlement, follow-up reads and confirmed navigation under its
+captured scope. Do not substitute cancellation of in-flight work or treat every dialog close as owner retirement.
 
-Obtain whole-page deletion consent before writing. Retain confirmed deletion/creation destination and one-time
+Obtain whole-page deletion consent before writing. Retain confirmed deletion/creation destination and its one-time
 receipt through failed navigation. Do not discard other drafts because a button was hidden or capability changed.
 Field write loss disables saving while readable drafts remain cancelable; actor/read denial retires protected state.
+Confirmation acknowledges submitted values; only a fresh admitted read restores grants/token and baseline.
+A saved command followed by failed refresh remains saved with stale authority, not a failed mutation.
 
-Unknown outcomes are reviewed through reads. Reconcile-only recovery never retries automatically or proves an
-unknown creation failed. Financial/recommendation commands preserve their specific revision/fingerprint protocol.
-A saved command followed by failed refresh is saved, not a failed mutation.
+Unknown outcomes are reviewed through reads without automatic replay. Reconciliation cannot prove that an unknown
+creation failed; preserve submitted input and require deliberate review or acknowledged departure. Financial and
+recommendation commands retain their specific revision/fingerprint protocol rather than a generic comparison rule.
 
-Pilot guest registration, API account signup and activation use the existing user controller's
-`commitIdentityCompletion` through `UserService.withIdentitySessionTransaction`. The controller owns expiry/context
-checks, staged identity and result preparation; pure DBAL owns the manager, row lock and persistence. Prepare all
-required projections and serialized replies before the final commit through the existing session/transport owners.
-API result envelopes cross their generated validators; retained admission GET completion prepares its notice/redirect.
-A precommit session check followed by a separate session save leaves a partial mutation and does not satisfy this
-boundary. Use `registerGuestWithSession` for Guest/profile plus stored identity, `registerUserWithSession` for the
-inactive User/profile/activation token, and `activateAccountWithSession` for token consumption. API account signup
-preserves the current actor and never returns its activation token; document activation stages its existing redirect
-and flash in the token transaction. Adopt only the completed detached receipt, without a later response-time session
-read/write which can substitute another tab's actor or reject an already committed operation.
+Guest registration, API account signup and activation use the existing user controller's `commitIdentityCompletion`
+through `UserService.withIdentitySessionTransaction`. The controller owns expiry/context checks, staged identity and
+result preparation; pure DBAL owns the manager, row lock and persistence. Prepare required projections and serialized
+replies before final commit through the existing session/transport owners. API envelopes cross generated validators;
+admission GET completion prepares its notice/redirect. A precommit session check followed by a separate session save
+leaves a partial mutation and does not satisfy this boundary.
 
-After registration commits, SMTP only selects an already prepared delivery outcome. Guest email failure remains
-explicit advisory feedback with the confirmed personal link; account failure uses its existing completion surface
-and keeps activation required. SMTP acceptance does not guarantee inbox delivery. Never recreate the identity,
-replay registration or treat network uncertainty as proof of rollback. Interactive pilot callers use the existing
-APIs; refined Req6A retires their unused ordinary-form POST adapters. Native compatibility paths and capability-link
-GET completion remain distinct. Do not generalize this boundary to every session/provider operation;
-keep exact database/session schedules and client adoption/retirement assertions separate from helper-only evidence.
+Use `registerGuestWithSession` for Guest/profile plus stored identity, `registerUserWithSession` for inactive
+User/profile/activation token, and `activateAccountWithSession` for token consumption. API account signup preserves
+the current actor and never returns its activation token; document activation stages redirect/flash in the token
+transaction. Adopt only the completed detached receipt, without a response-time session read/write which can
+substitute another tab's actor or reject an already committed operation.
+
+After registration commits, SMTP selects an already prepared delivery outcome. Guest email failure remains advisory
+feedback with the confirmed personal link; account failure uses its completion surface and keeps activation required.
+SMTP acceptance does not guarantee inbox delivery. Never recreate identity, replay registration or treat network
+uncertainty as rollback evidence. Keep database/session schedules and client adoption/retirement assertions separate
+from helper-only evidence. Do not generalize this operation boundary to every session/provider workflow.
 
 Login, private guest-link login and profile switching use `loginUserWithSession`, `loginGuestWithSession` and
-`changeActiveProfileWithSession` with that same completion owner. API projection through `prepareIdentityReply`
-finishes before the locked identity save commits; delivery adopts the prepared receipt outside rejection handling.
-The retained private guest-link GET prepares its existing notice/302 under that owner. Native credential, profile
-ownership and return-path decisions remain shared.
-An inactive account's established activation resend belongs before the identity transaction: its refreshed token
-must survive the intended login rejection. Keep provider logout's separately backlogged failure boundary distinct.
+`changeActiveProfileWithSession` with the same completion owner. `prepareIdentityReply` finishes the API projection
+before locked identity save commits; delivery adopts the prepared receipt outside rejection handling. Private
+guest-link GET prepares its notice/302 under that owner. Credential, profile ownership and return-path decisions
+remain shared. An inactive account's activation resend belongs before the identity transaction: its refreshed
+token must survive intended login rejection. Provider logout keeps its separate operation boundary.
 
-Explicit pilot logout uses `logoutUserWithSession` only when `session.tokens` is not truthy; an empty object still
+Explicit API logout uses `logoutUserWithSession` only when `session.tokens` is not truthy; an empty object still
 selects the protected provider path. Recheck that classification on locked staging before clearing authority.
-Prepare its generated anonymous API receipt in the same transaction, then adopt the detached completion without a
-later session save. The existing mounted caller owns its admitted navigation; refined Req6A retires the unused pilot
-logout POST adapter. Native logout and all token-bearing provider paths keep their existing owner/order;
-its preparation-failure defect is deferred as separate `IMP-056`. Authored cases do not substitute for executed acceptance.
+Prepare the generated anonymous API receipt in the transaction, then adopt the detached completion without another
+session save. The mounted caller owns its admitted navigation; token-bearing provider paths retain their own order.
 
-Pilot password reset uses `resetPasswordWithSession` to check the token under its account lock and prepare the API
-receipt through `prepareValidatedJson` before password/token mutation commits. `sendPreparedJson` delivers that
-captured receipt without another session write. Serialization failure leaves the original token/password state intact.
-Refined Req6A retires the unused pilot reset POST adapter; its former SSR success response is historical evidence.
-The token-admission GET remains. This lock covers cooperating pilot
-consumers; native mixed-writer defects `IMP-051`/`IMP-057` are deferred to separately authorized general-defect work.
+Password reset uses `resetPasswordWithSession` to check the token under its account lock and prepare the API receipt
+through `prepareValidatedJson` before password/token mutation commits. `sendPreparedJson` delivers the captured
+receipt without another session write. Serialization failure leaves original token/password state intact. The
+token-admission GET remains distinct from mutation. A lock protects only its cooperating writers; inspect all active
+operation paths before claiming a broader atomicity guarantee.
 
-Pilot reset-mail uses `requestPasswordResetWithSession` with shared username-first account resolution. Prepare the
-token, private link/templates, cached sender and generic API result on the same transaction.
-Cached sender setup makes no SMTP connection; captured delivery follows commit through the existing mail owner.
-Keep known/unknown accounts' generic confirmation and original errors, without account-found/delivery metadata.
-Native forgot-mail and inactive-login resend retain their existing owners/order. No result preparation or later
-session read/write may reinterpret that completed pilot operation.
+Reset-mail uses `requestPasswordResetWithSession` with shared username-first account resolution. Prepare token,
+private link/templates, cached sender and generic API result in the same transaction. Cached sender setup makes no
+SMTP connection; captured delivery follows commit through the existing mail owner. Keep known/unknown accounts'
+generic confirmation and established errors, without account-found/delivery metadata. Forgot-mail and inactive-login
+resend keep their own operation boundaries. No later session read/write may reinterpret the completed operation.
 
-Shared relink/archive/restore owners accept typed `EntityMutationCompletion` preparation inside their original
-locked transaction. Packing relink evaluates resulting view admission through the existing manager-aware owner,
-including authorized unchanged/unlink outcomes; archive/restore prepare their invariant acknowledgement without an
-unused later archive DTO. Omission retains native defaults and presentation. Do not copy lifecycle business checks
-into an adapter or treat every static typed response as another database projection.
+Shared relink/archive/restore owners accept typed `EntityMutationCompletion` preparation inside their existing locked
+transaction. Packing relink evaluates resulting view admission through the manager-aware owner, including unchanged
+and unlink outcomes; archive/restore prepare their invariant acknowledgement without an unused later archive DTO.
+Omitted completion retains each existing caller's default presentation. Do not copy lifecycle business checks into
+an adapter or treat every static typed response as another database projection.
 
-Personal visibility uses the existing user controller's optional typed completion and manager-aware archive
-projection. The Overview adapter maps visibility, archived and overviewHidden once under the lock, then its route
-uses `prepareValidatedJson`/`sendPreparedJson`. Membership/private preference and shared archival remain separate.
-Native callers omit that completion and retain their established presentation; the paired review owns actual acceptance.
+Personal visibility uses the user controller's optional typed completion and manager-aware archive projection. The
+Overview adapter maps visibility, archived and overviewHidden once under the lock, then its route uses
+`prepareValidatedJson`/`sendPreparedJson`. Membership/private preference and shared archival stay separate. Callers
+which omit the completion retain their presentation; they do not acquire another frontend's response protocol.
 
-No-op validation/feedback precedes confirmation, cross-form discard and writes where native forms do.
-Preserve empty/null/false/omission independently. Machine/raw number drafts must survive framework coercion:
-inline capacity acceptance, creation bounds and SQL persistence are different policies.
+#### Read authority and recovery
 
-## Read authority and recovery
+Packing's checklist uses its established browser-local keys, separate from query snapshots and server assignments.
+When browser storage is unavailable or throws, preserve checks only for the mounted actor/list visit. Show a
+persistent localized load/save-failure notice explaining possible loss of unsaved changes on leave/reload or
+account/profile change. Failed reads cannot establish that previously stored or successfully written checks are
+unpersisted. Successful rereads observe external changes; a real missing key is unchecked unless a failed toggle
+write still owns the item's selected value. Explicit Retry reattempts outstanding browser-storage writes and reads
+only; keep the notice while reads fail or writes remain outstanding. Background reads never replay writes.
 
-Packing's checklist keeps its native browser-local keys and remains separate from query snapshots and server
-assignments. Follow the [approved temporary fallback](../FRONTEND_FOUNDATION_DESIGN.md#authorized-temporary-packed-state-fallback-2026-10-13)
-when browser storage is unavailable or throws: preserve checks only for the mounted actor/list visit. Show a
-persistent localized notice explaining the load/save failure and possible loss of unsaved changes on leave/reload
-or account/profile change. Failed reads cannot establish that previously stored or successfully written checks
-are unpersisted. Successful rereads still observe external changes; a real missing key is unchecked unless a failed
-toggle write still owns that item's selected value. Explicit Retry reattempts outstanding browser-storage writes
-and reads only; keep the notice while reads fail or writes remain outstanding. Background reads never replay them.
-Before a retained local callback writes, check its mounted actor, admitted current list and live/rendered row;
+Before a retained local callback writes, check its mounted actor, admitted current list and live/rendered row.
 Retry prunes removed rows before retrying. Dispose fallback and pending writes on list/context change, unmount or
 admitted-resource retirement. Preserve profile-independent persisted keys and keep this state outside the server.
 
 Authorized cache data is presentation, not perpetual command permission. Controller admission rechecks every write.
-Identity/profile/resource/route generations retire reads, caches and tokens; a late response cannot repopulate them.
+Identity/profile/resource/route generations retire reads, caches and tokens; late responses cannot repopulate them.
 Language-independent machine state uses one authority across languages. Locale-owned Help/Overview projections have
 their own locale keys; a prior-language grant cannot restore revoked edit authority.
 
-Presentation readiness and automatic-read admission are separate. Focus, visibility and reconnect recovery first
-require a current successful session bootstrap before private queries resume. A pending, failed or cooldown-blocked
-bootstrap cannot reopen those queries. Retain mounted readable data and drafts during ordinary revalidation;
-validated identity change still retires the old actor. Apply this admission to every automatic query consumer, not
-only the explicit refetch continuation, and keep server Retry-After and observer disposal intact.
-The existing app context's `readsReady`/`mayRead` contract supplies that gate; `ready`/`isCurrent` retain their
-presentation/result-generation responsibilities. Automatic query consumers use `useQueryAdmission` in the existing
-query-cache owner. It applies `mayObserve(key, firstRead)` per mounted logical-key visit: a fresh visit gets its own
-GET despite a cached terminal failure, while a dispatched or joined pending read consumes that first admission.
-An equal recreated key does not start another visit. Later session resumes keep terminal failures paused.
-Deliberate manual recovery uses `mayRead` within its read deadline.
-The shared transport also checks dispatch admission, while an already admitted image/picker operation retains its
-captured lifetime during ordinary bootstrap pause. Actual actor/input/visibility retirement still disposes it.
+Presentation readiness and automatic-read admission are separate. Focus, visibility and reconnect recovery require
+a current successful session bootstrap before private queries resume. A pending, failed or cooldown-blocked bootstrap
+cannot reopen those queries. Retain mounted readable data/drafts during ordinary revalidation; validated identity
+change retires the old actor. Apply admission to every automatic query consumer, not only explicit refetch.
+The context's `readsReady`/`mayRead` contract supplies this gate; `ready`/`isCurrent` retain their presentation and
+result-generation responsibilities. Automatic consumers use `useQueryAdmission` in the existing query-cache owner.
+It applies `mayObserve(key, firstRead)` per mounted logical-key visit: a fresh visit gets its own GET despite cached
+terminal failure, while a dispatched or joined pending read consumes first admission. Recreating an equal key does
+not start another visit. Later session resumes keep terminal failures paused. Deliberate manual recovery uses
+`mayRead` within its read deadline.
 
-Explicit command-dependency refresh uses each actual observer's key-bound `surveyorRead` metadata, with current
-eligibility and disposal rechecked after cancellation. A terminal-paused readable observer can recover through its
-own authored query function; hidden, closed, retired and changed-key observers cannot. Do not select query-level
-last-writer options or create a parallel query-policy registry.
+Shared transport also checks dispatch admission. An already admitted image/picker operation keeps its captured
+lifetime during ordinary bootstrap pause; actual actor/input/visibility retirement still disposes it.
+Explicit command-dependency refresh uses each observer's key-bound `surveyorRead` metadata, rechecking current
+eligibility/disposal after cancellation. A terminal-paused readable observer can recover through its own authored
+query function; hidden, closed, retired and changed-key observers cannot. Do not select query-level last-writer
+options or create a parallel query-policy registry.
 
-Forward cancellation through decoding and classification. A fulfilled TanStack observer refetch can contain canceled
-retained data; fresh continuation uses the existing query-cache owner (`refetchFreshQuery`/`refetchFreshQueries`).
-Await the actually dispatched admitted read, retaining command/authority fences until it settles.
-Equal successful data can restore authority; object identity, timestamps or idle flags alone cannot.
+Forward the same AbortSignal through decoding and classification. A fulfilled TanStack observer refetch can contain
+canceled retained data; fresh continuation uses `refetchFreshQuery`/`refetchFreshQueries` in the query-cache owner.
+Await the actually dispatched admitted read, retaining command/authority fences until it settles. Equal successful
+data can restore authority; object identity, timestamps and idle flags alone cannot. Temporary errors retain
+confirmed readable data and raw drafts with their last successful scoped receipt. Validated denial retires private
+projections/entry variants; only another admitted read restores them, not cache aliases or stale SSR seeds.
+Review readable-data loss separately from write loss.
 
-Temporary errors retain confirmed readable data and raw drafts with the last successful scoped receipt.
-Validated denial retires private projections/entry variants. Only another admitted read restores them; cache aliases
-and stale SSR seeds cannot. Review readable-data loss separately from write loss.
+Retire derived membership totals, hidden badges and related counts with the projection supplying them. A denied
+region must not leave private aggregates after its cards/cache disappear. Derive presentation from admitted source
+scopes/receipts through the existing feature owner; do not mirror server counts in a second store. Temporary failure
+retains confirmed scoped evidence; independently admitted siblings retain only their own evidence. Unknown membership
+has no zero/count/empty assertion.
 
-Retire derived membership totals, hidden badges and related counts with the projection that supplied them. A denied
-region must not leave its previous private aggregates visible after its cards/cache disappear. Derive current
-presentation from admitted source scopes/receipts through the existing feature owner; do not mirror server counts in
-a second store. Temporary failure retains confirmed scoped evidence, while independently admitted siblings retain
-only their own evidence. Unknown membership has no zero/count/empty assertion.
+Healthy active shared queries use the 30-second cadence and eligible recovery within roughly one minute. Honor
+Retry-After, hidden-tab pause and observer disposal. Safe reads may retry; commands do not. Use shared `useReadRetry`
+and `useReadRetryAt` with notice controls for eligible GETs. The deadline timer changes availability; it never starts
+a GET or renews unrelated feedback.
 
-Healthy active shared queries use the 30-second cadence and eligible recovery within roughly one minute.
-Honor Retry-After, hidden-tab pause and observer disposal. Safe reads may retry; commands do not.
-Use shared `useReadRetry`/`useReadRetryAt` and notice controls for actual eligible GETs.
-The deadline timer changes availability, never starts a GET or renews unrelated feedback.
+#### Bootstrap, hydration and scoped completion
 
-## Bootstrap, hydration and scoped completion
+Each SSR request owns its app, router, QueryClient, translator and authorized bootstrap. Escape script delimiters in
+bootstrap JSON. Do not serialize persistence/session/private edit data through convenience objects. Request/locale
+state cannot live in a singleton. When adding a bootstrap field, update its declaration contract and the exhaustive
+field-validator map in `app/serializeBootstrap.ts`. Validate the complete wire object before reactive state;
+generated lazy feature validators remain schema owners rather than duplicate renderer/page checks.
+`decodeBootstrap` owns exhaustive browser validation. `serializeBootstrap` only serializes/escapes inert JSON;
+successful SSR serialization is not proof that every bootstrap field was validated for the browser.
 
-Each SSR request owns app, router, query client, translator and authorized bootstrap.
-Escape script delimiters in bootstrap JSON. Do not serialize persistence/session/private edit data through convenience
-objects. Locale/request state cannot live in a singleton that leaks between users.
-When adding a bootstrap field, update its declaration contract and the exhaustive field-validator map in
-`app/serializeBootstrap.ts`. Validate the complete wire object before it enters reactive state; generated lazy
-feature validators remain the schema owners rather than duplicated checks in the renderer or page.
-`decodeBootstrap` owns that exhaustive browser validation. `serializeBootstrap` only serializes and escapes inert
-script-element JSON; successful SSR serialization is not proof that every browser bootstrap field has been validated.
+The context helper derives initialization needs from route metadata and admitted denial/completion evidence; the
+shell uses `context.hydrated` and `LoadingSkeleton`. Do not copy route classification or add another control/read
+readiness policy. `initializePilotApp` stages initial feature mounting through `initialContentReady` inside bounded
+Vue error capture. That internal step admits neither actions nor scoped reads. Initialization succeeds only after
+mounting and first readiness render; captured failure restores `context.hydrated` to false while retaining partial
+draft/command owners. Readable denials/completions and Help GET search, article links and anchors stay functional
+static content before JavaScript runs.
 
-Initial delivery follows the
-[refined Req6A amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-interactive-startup-delivery-clarification-2026-10-13).
-The existing context helper derives initialization needs from route metadata and admitted denial/completion evidence;
-the shell uses `context.hydrated` and `LoadingSkeleton`. Do not copy the route classification or introduce a second
-control/read readiness policy. `initializePilotApp` stages initial feature mounting through `initialContentReady`
-inside its bounded Vue error capture; that internal step does not admit actions or scoped reads. Initialization succeeds
-only after mounting and the first readiness render; a captured failure restores `context.hydrated` to false while
-retaining partial draft/command owners. Readable denials/completions and
-ordinary Help GET search, article links and anchors remain static and functional before JavaScript runs.
+Shared initialization also gates JavaScript-only shell selectors, actions, Retry and dismiss controls. Genuine links
+and mobile navigation disclosures remain reachable. The renderer's independent localized failure notice works before
+the entry executes, including disabled, missing, blocked or failed initialization. A normal-looking control must not
+depend on an uninitialized client. Initial setup/mount/first-readiness failure cannot leave the app marked initialized.
+If a failed attempt attached handlers, genuine static links and Help GET search still navigate through their HTML
+owners, retaining edited-control consent. This bounded initial boundary does not replace later feature-error owners.
 
-The shared initialization owner also gates JavaScript-only shell selectors, actions, Retry and dismiss controls.
-Genuine native links and mobile navigation disclosures remain reachable. The renderer's independent localized failure
-notice must work before the entry module executes, including disabled, missing, blocked or failed initialization.
-Do not expose a normal-looking control whose action depends on a client which has not initialized.
-Initial Vue setup/mount or first-readiness failure must not leave the application marked initialized. If a failed attempt already attached client
-handlers, genuine static links and Help GET search must still navigate through their native owners, retaining existing
-edited-control consent. This is the initial readiness boundary, not a new policy for every later component error.
+Shared mount preserves genuine static pre-hydration drafts, such as Help search, on original controls. Explicitly
+opted-in non-text/file controls use `data-hydration-draft` where admitted. Recovery uploads no files and submits no
+commands. Interactive initial inputs are skeletons; mounted feature drafts keep their own protection. An SSR seed
+is eligible only for its live document/actor at use time, not because a captured closure once matched.
 
-The shared mount preserves genuine static pre-hydration drafts, such as Help search, on their original controls;
-explicitly opted-in non-text/file controls use `data-hydration-draft` where such controls are admitted. Hydration recovery
-does not upload files or submit commands. Initial interactive inputs are skeletons, so prior edited interactive SSR
-receipts do not certify the new delivery shape. Mounted feature drafts retain their existing owners and protections.
-An SSR seed is eligible only for its live document/actor at use time, not because a captured closure once matched.
+Startup protection precedes asynchronous route loading and mounted router guards. Retain edited static controls
+through failed initial chunks/bootstrap; keep the initial guard until mount restoration finishes. Automatic departure
+needs demonstrably clean state and a working loop marker; unavailable storage leaves visible localized recovery.
+Deliberate recovery can bypass the automatic-attempt marker but still confirms edited-control loss and respects
+pending/unknown command protection. Reuse startup, mount and update owners; never persist secrets/files or replay
+commands to recover startup.
 
-Startup protection precedes asynchronous route loading and mounted router guards. Retain edited genuine static controls through
-a failed initial chunk or bootstrap, and keep the initial guard until mount restoration finishes. The
-[approved startup amendment](../FRONTEND_FOUNDATION_DESIGN.md#authorized-startup-recovery-clarification-2026-10-13)
-distinguishes automatic reload from deliberate recovery: automatic departure needs demonstrably clean state and a
-working loop marker; unavailable storage leaves visible localized recovery. A deliberate recovery can bypass the
-automatic-attempt marker, but must confirm edited-control loss and retain pending/unknown command protections.
-Reuse the existing startup, mount and update owners; do not persist secrets/files or replay commands to recover startup.
+SSR parent aggregates use the same admitted QueryClient projections as child regions. Seed only the eligible initial
+document before parent badges render. Page/Region share `overviewQueryParameters` from the existing Overview API
+owner, so generated query keys identify the same data. An old seed or manual cache write never becomes fresh
+post-command authority.
 
-SSR parent aggregates use the same admitted QueryClient projections as child regions. Seed only the currently eligible
-initial document before parent badges render; Page/Region share `overviewQueryParameters` from the existing Overview
-API owner so their generated query keys identify the same data. This does not turn an old seed or manual cache write
-into fresh post-command authority.
+Express serves shared static/Help resources; Vite transforms entry/style URLs before inserting the Vue tree.
+Test emitted URLs and mounted usable controls, not a hydration marker. HMR/authored-input restart checks are relevant
+when their owners change; they are not required again for every unrelated feature view.
 
-Express serves native static/Help resources; Vite transforms entry/style URLs before inserting the Vue tree.
-Test the actual emitted URLs and mounted usable controls, not a hydration marker. Keep HMR and authored-input restart
-checks conditional on changes to those owners, rather than rerunning them for every module.
+#### Progressive loading and shared placeholders
 
-## Progressive loading and shared placeholders
-
-Initial interactive HTML is the shared skeleton until client initialization, separately from authoritative session
+Initial interactive HTML is the shared skeleton until client initialization, separate from authoritative session
 admission and independently pending feature projections. Once initialized, Overview active regions load in parallel;
-unopened hidden regions wait. Read-only Help retains complete SSR and native GET search/links.
-Resource data arrives through the owning scoped query without renderer self-HTTP requests.
+unopened hidden regions wait. Readable Help retains complete SSR and functional GET search/links. Resource data
+arrives through its owning scoped query without renderer self-HTTP.
 
-Use `LoadingSkeleton` for initial client initialization and missing pending data. Its shapes are decorative, with one localized status; they invent no
-records, membership count or command. Respect reduced motion and existing responsive geometry.
-Do not replace readable same-resource content/drafts on ordinary background reads or display a false empty state.
+Use `LoadingSkeleton` for client initialization and missing pending data. Shapes are decorative, with one localized
+status; they invent no records, membership count or command. Respect reduced motion and existing responsive geometry.
+Never replace readable same-resource content/drafts on ordinary background reads or show a false empty state.
+Independent siblings render when ready. Initial failure has clear error/Retry; unknown membership has no zero count.
+Identity/resource transitions cannot retain another scope's content. Same-resource locale refresh retains user
+values/machine state while labels react. Article content matches its selected corpus or visibly disclosed complete
+English fallback, with actual content language identified.
 
-Independent siblings render when ready. Initial failure has a clear error/retry; unknown membership has no zero count.
-Identity/resource transitions cannot retain another scope's content. Same-resource locale refresh may retain user
-values/machine state while labels react; article content must match the selected corpus or its visibly disclosed
-approved English fallback, with actual content language identified.
-
-## Shared presentation, feedback and images
+#### Shared presentation, feedback and images
 
 Shared controls have explicit data/capability/value/event contracts. Generic controls cannot import feature API
-owners or choose private query families; inject the operation and let the feature name its affected resources.
-Keep feature-specific validation and financial semantics out of generic form/inline/action components.
+owners or choose private query families; inject operations and let the feature name affected resources. Keep feature
+validation and financial semantics outside generic form/inline/action components. Native controls, semantic tables,
+Bootstrap-compatible geometry and suitable Reka dialog/tab primitives remain the shared presentation strategy.
 
-Extract a settings composite when an actual repeated interaction can share its data, events and injected operations.
-The composite shares repeated presentation and local interaction, preserving focus through established controls and
-dialog owners; the feature retains query dependencies,
-authorization inputs, draft reconciliation and command orchestration. Preserve independent tab/panel drafts and native
-layout. File size alone does not establish a new module boundary, and extraction must not create a universal CRUD
-engine, forwarding controller or backend service.
-`EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions` demonstrate this presentation/event boundary;
-their props contracts live in `src/types/FrontendEntitySettingsTypes.d.ts`. Packing supplies admitted state, independent
-file/relationship drafts, lifecycle commands, injected event discovery, tokens and labels.
+Extract a settings composite only when repeated interaction shares its data, events and injected operations. It
+owns repeated presentation/local interaction and focus through established controls/dialogs. The feature retains
+query dependencies, authorization input, draft reconciliation and command orchestration. Preserve independent panel
+drafts and layout. File size alone is not a module boundary, and extraction cannot justify a universal CRUD engine,
+forwarding controller or backend service. `EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions`
+demonstrate this boundary; their props contracts live in `src/types/FrontendEntitySettingsTypes.d.ts`. Packing supplies
+admitted state, independent file/relationship drafts, lifecycle commands, injected event discovery, tokens and labels.
 
-Audit the logical lifetime of every component value, including controls reused during warm navigation. Feature drafts
-and their native controls must agree after accepted departure, target changes and confirmed resets; ordinary reads,
-fragment movement and canceled departure retain the live form's values. A mounted component's lifetime alone cannot
-identify the current form scope. Use the existing `composables/fileSelection.ts` release owner for file controls:
-it holds only a DOM ref and clears the same input when the feature actually releases its File to null. Its watcher
-is not immediate, so initial setup cannot erase a pre-hydration browser selection before restoration. Keep the release
-decision, dirty checks, command state and comparison tokens in their existing feature owners.
+Audit logical value lifetime, including warm navigation. Feature drafts and controls must agree after accepted
+departure, target changes and confirmed reset. Ordinary reads, fragments and canceled departure retain live values;
+component lifetime alone cannot identify current form scope. `composables/fileSelection.ts` holds only a DOM ref and
+clears the same chooser when the feature releases its File to null. Its watcher is not immediate, so initial setup
+cannot erase pre-hydration selection before restoration. Release decisions, dirtiness, commands and tokens stay
+in their feature owners.
 
-For header uploads, pass the feature-owned `selectedFile` through the existing declaration contract. A confirmed
-upload releases that draft even if the follow-up read fails; the shared header editor then clears the same native file
-input through that same release owner so the same file can be selected again. Rejection, unknown delivery and background
-reads keep the selected bytes and input. Do not infer release from a changed header URL, token or translated filename,
-and do not recreate the input or emit another selection event merely to reset it.
+Header upload passes feature-owned `selectedFile` through the declaration contract. Confirmation releases the draft
+even when follow-up fails; the editor clears the same input through the shared release owner so the same file can be
+selected again. Rejection, unknown delivery and background reads retain bytes/input. Do not infer release from changed
+header URL, token or translated filename, recreate the input or emit another selection event to reset it.
 
-Match native feedback per operation. Inline notices own Close/focus/scroll placement and a live fallback when their
-initiator detaches/hides. Full flashes keep native presentation. Capture initiating elements before awaits.
-Receipt identity controls dismissal/renewal: repeated outcomes renew, locale/render changes do not revive notices.
+`feedback.ts` binds notices to semantic receipts and reuses `scheduleAlertDismissal` from
+`src/public/js/shared/alerts.ts` with its ten-second lifetime. Repeated outcomes renew; locale/render changes neither
+renew expiry nor revive dismissed notices. Persistent conditions use status semantics and remain visible. Capture
+initiating elements before awaits. Inline notices own Close, focus/scroll placement and a live modal/page fallback
+when their initiator detaches/hides, without restoring revoked controls. Full flashes retain their presentation.
 Confirmed destinations/receipts survive failed delivery; warnings clear only through their own successful recovery.
+Dispose timers/listeners and preserve page-cache restoration behavior.
 
 Dialogs share one focus trap/dismissal owner, pending close lock and actual invoker return. Features can supply the
-native body-field initial target. Tabs retain independent drafts and freeze while necessary work is pending.
-Avoid simultaneous Vue/Bootstrap DOM ownership. Mixed navigation disclosures keep their established native key policy.
+body-field initial target. Tabs retain independent drafts and freeze while necessary work is pending. Avoid
+simultaneous Vue/Bootstrap DOM ownership. Mixed navigation disclosures use the existing app-owned wrapper and its
+established native key policy.
 
 Authorized images use the shared injected read/lifetime owner with cancellation, generation checks and object-URL
-cleanup. A missing optional image does not fail the whole resource. Equal successful reads can restore a failed
-image; access denial cannot be repaired by a retained URL or foreign-scope result.
+cleanup. A missing optional image does not fail the resource. Equal successful reads can restore a failed image;
+access denial cannot be repaired by a retained URL or foreign-scope result.
 
-## Localization and runtime Help
+#### Localization and runtime Help
 
-One catalog per language supplies UI/API text, generated keys/parameters and fixed `help.directory`.
-Use the shared typed translator and request/application-local i18next-vue binding; no second frontend/backend dictionary.
-Plain interpolation remains escaped; locale changes preserve drafts, focus and machine-value parsing.
+One catalog per language supplies localized UI/API text, generated keys/parameters and fixed `help.directory`.
+Use the shared typed translator and request/application-local i18next-vue binding, without a second dictionary.
+Plain interpolation stays escaped; locale changes preserve drafts, focus and machine-value parsing. User-authored
+titles and other content remain data rather than translation keys.
 
-Cancel/invalidate only named language-owned query families from the existing query-key owner after a confirmed locale
-change. Machine values, user-authored titles, event options and edit authority retain their existing language-independent
-keys and in-flight reads. Avoid tuple-position matching or a second family registry. A locale change must not cancel
-the fresh post-command read that restores metadata/settings authority merely because labels were translated.
-`belongsToLocalizedQueryFamily` selects the existing Help/Overview families from the query-key owner.
+After confirmed locale change, cancel/invalidate only named translated query families from the existing query-key
+owner. Machine values, user titles, event options and edit authority retain language-independent keys/in-flight
+reads. Avoid tuple-position matching or another family registry. Translation cannot cancel the fresh post-command
+read restoring metadata/settings authority. `belongsToLocalizedQueryFamily` selects existing Help/Overview families.
 
-One fixed `docs/user-guide/` tree contains native English and adjacent pilot EN/DE catalog directories, reviewed and
-packaged with the application. Native guide prose/images remain the reference. Staged maintainer drafts are never searched,
-read, served or selected by the application. Runtime source/security tests use independently specified synthetic
-fixtures rather than maintained prose or expectations taken from the source selector under test.
+One fixed `docs/user-guide/` tree contains reviewed catalog-selected corpora and adjacent assets packaged with the
+application. Only the trusted reviewed Help source is searched/read/served. Runtime source/security tests use
+independently specified synthetic fixtures, not maintained prose or expectations taken from the selector under test.
+The [Documentation Policy](policies/DOCUMENTATION_POLICY.md#localized-help) owns source/fallback authoring rules.
 
 Prefer complete localized articles, stable anchors, search text and raster images/captions/alt descriptions.
-Missing corpora/articles/required figures select the complete reviewed English article and its own English assets,
-with the localized fallback notice, English navigation/search markers and actual `contentLocale`; retain the selected
-interface locale. Never resolve an individual missing figure from another language or author a cross-language local
-reference. Article, navigation and search projections share complete-source selection. Invalid existing localized content fails
-rather than fall back. Source directories stay fixed and staging cannot supply missing content.
-Authored locale hints use the existing localization owner's `resolveSupportedLocale`: a regional hint may name
-the same corpus, but an unsupported or other-corpus hint cannot pass through passive English negotiation.
-Keep user-facing prose/pixels task-focused; provenance/framework/API/storage/permission internals belong in maintainer
-records. Any changed picture requires individual full-resolution and reduced-size inspection.
-Persisted principal preferences, email/PDF and application-wide localization remain future work.
+Missing corpus/article/required figure selects the complete reviewed English article and its own assets, with
+localized fallback notice, English navigation/search markers and actual `contentLocale`; interface locale stays
+selected. Never resolve one missing figure across languages or author a cross-language local reference. Article,
+navigation and search projections share complete-source selection. Invalid existing localized content fails rather
+than fall back. Source directories stay fixed. Authored hints use `resolveSupportedLocale`: a regional hint may name
+the same corpus, but unsupported or other-corpus hints cannot pass through passive English negotiation.
 
-## Baseline-to-observable verification
+Keep Help prose/pixels task-focused; framework/API/storage/permission internals belong in maintainer guidance.
+Every changed picture needs individual full-resolution and reduced-size inspection. An untrusted content source
+requires reopening [DEC-004](decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md) before admission.
 
-Use [Testing](TESTING_GUIDE.md) for layer selection and actual compiler scope. Test outcomes at production consumers:
-shared helper adoption, cancellation, authority, focused control behavior and native/v1 scheduling where affected.
-Transfer unique assertions before retiring similar tests. Financial/destructive/privacy/authorization/concurrency
-boundaries remain protected; mocking persistence is not a substitute for real disposable-DB evidence.
 
-Compare affected native/pilot views with identical records/actors/desktop-mobile sizes. Inspect original images,
-labels, keyboard/focus, validation/no-op behavior and confirmed/unknown delivery. A screenshot capture success is
-not visual approval. Disabled/failed JavaScript retains functional static Help and the approved initial skeleton/failure
-notice contract; JavaScript-dependent shell and feature controls cannot remain normal-looking and dead.
+<!-- /delta:amendment-01 -->
 
-Follow all review criteria in the [paired review](../PILOT_PARITY_REVIEW.md#all-requested-review-criteria).
-Record source scope, commands, results, failures, prerequisites and independent reviewer provenance.
-The paired review owns latest execution and any remaining limits; do not narrow checks, repeat superseded run history
-or claim unrun suites. Source implementation and focused passes do not certify the final build/browser run.
-Documentation reports are optional and advisory, never required application tests or CI/release gates.
+## 5. Start Surveyor — amendment-02
+
+<!-- delta:amendment-02 -->
+- Express under Nodemon through `npm run server:dev`, with Vite middleware/HMR;
+- existing browser modules under `npm run server:client`; and
+- serialized contract/catalog generation under `npm run server:frontend`.
+
+Authored inputs are `contracts/api/v1/`, `src/locales/` and the exact permission registry
+`src/modules/lib/permissions.ts`. The watcher observes the registry's parent so atomic editor replacement remains
+visible, generates API before locales and publishes `.generated/frontend-ready.json` only after the current successful
+batch. Failed or superseded batches keep watching without restarting Express with partial inputs. Other library
+saves retain ordinary server restart behavior. Source serving explicitly uses `vite.config.mts` and the repository
+root. Production runs matching built artifacts without a Vite server.
+
+<!-- /delta:amendment-02 -->
+
+## Project structure — amendment-03
+
+<!-- delta:amendment-03 -->
+src/frontend/                      Vue app, components, composables and feature views
+contracts/api/v1/                   authored API schema and operation policy
+src/locales/                        shared UI/server catalogs
+src/types/                          shared .d.ts contracts
+src/public/js/                     existing browser modules and shared helpers
+
+<!-- /delta:amendment-03 -->
+
+## Project structure — amendment-04
+
+<!-- delta:amendment-04 -->
+tests/frontend/                    client helpers/mounted Vue and isolated browser checks
+
+<!-- /delta:amendment-04 -->
+
+## Build and run commands — amendment-05
+
+<!-- delta:amendment-05 -->
+| `npm run server` | Full build, then Express/Vite HMR, existing browser watch and ordered authored-input generation. |
+
+<!-- /delta:amendment-05 -->
+
+## Build and run commands — amendment-06
+
+<!-- delta:amendment-06 -->
+| `npm run server:frontend` | Watch contracts, catalogs and permission declarations; publish successful generation readiness. |
+| `npm run build` | Sass, database/API/catalog generation, server compile, existing browser and Vue client/SSR builds, then views/assets copy. |
+
+<!-- /delta:amendment-06 -->
+
+## Build and run commands — amendment-07
+
+<!-- delta:amendment-07 -->
+| `npm run build:server` | Generate shared inputs, compile server TypeScript into `dist/` and copy runtime contract artifacts. |
+| `npm run build:client` | Build existing browser modules and the Vue client/SSR output. |
+| `npm run build:frontend` | Check and build the separate Vue client and SSR scopes through Vite. |
+| `npm run typecheck:frontend` | Check both Vue client and SSR configurations. |
+| `npm run typecheck:tests` | Check the Vue-aware test import graph without executing tests. |
+
+<!-- /delta:amendment-07 -->
+
+## Build and run commands — amendment-08
+
+<!-- delta:amendment-08 -->
+| `npm run generate` | Rebuild database metadata and API/localization consumers without a database connection. |
+| `npm run prepare:frontend` | Generate the authored API and locale boundaries only. |
+
+<!-- /delta:amendment-08 -->
+
+## Generated files — amendment-09
+
+<!-- delta:amendment-09 -->
+- `.generated/api/` and `.generated/frontend-ready.json`
+- `src/types/api/` generated declarations and `src/types/LocalizationTypes.d.ts`
+- `src/modules/localization/generated/`
+- `src/public/js/**/*.gen.js`
+
+<!-- /delta:amendment-09 -->
+
+## Current code patterns — amendment-10
+
+<!-- delta:amendment-10 -->
+Vite owns separate client/SSR outputs. Browser, server and SSR compiler scopes are explicit; no filesystem, settings
+secret or ORM entity belongs in the browser graph. Client and SSR outputs use the same release/compilation mode.
+Externalized SSR packages remain production dependencies; standalone validators include their runtime helpers
+without compiling schemas at application startup.
+Normal locale generation retires only its known compiled `permissions.js`/`.js.map` siblings before emitting current
+`permissions.ts`, so extensionless imports cannot select stale emitted code. Exact output-root paths, entry types
+and real parent containment are checked before removal. `--check` reports a collision without rewriting/deleting
+files. Preserve the whole authored-tree collision regression and unrelated generated neighbors rather than adding
+exclusions or general directory cleanup.
+
+## Current code patterns
+
+<!-- /delta:amendment-10 -->
+
+## Readability and shared contracts — amendment-11
+
+<!-- delta:amendment-11 -->
+Vue templates and composables need equivalent explanations of explicit inputs, scoped data, meaningful branches,
+draft/command lifetimes and DOM hooks. Document nontrivial methods with a contract and internal comments describing
+their meaningful steps. Existing Pug consumers use unbuffered `//-` comments for mixin inputs and render branches;
+optional feature state still uses renderer `data` and explicit arguments, never a second `res.locals` channel.
+
+<!-- /delta:amendment-11 -->
+
+## Routes — amendment-12
+
+<!-- delta:amendment-12 -->
+- Mount versioned feature adapters in `src/routes/api/v1.ts`; existing API consumers keep their `src/routes/api.ts`
+  owner. `src/app.ts` mounts v1 before the existing HTML session-expiry redirect and view locals so structured errors
+  and explicit context admission remain inside the versioned boundary.
+
+<!-- /delta:amendment-12 -->
+
+## Errors and responses — amendment-13
+
+<!-- delta:amendment-13 -->
+- Use the established page renderer and response adapters rather than create another response convention.
+
+Versioned adapters use the generated request/result contracts and `ApiProblem` boundary. Prepare and validate a final
+mutation receipt before commit; a later mutable-context check or session save must not reject an already committed
+operation. Delivery failure remains distinct from business rejection. Services never own transport-specific errors.
+Vue HTML is produced by the existing `src/modules/frontendPilotRenderer.ts` owner; existing adapters under
+`src/modules/renderer.ts` retain their actual consumers. Both reuse controller projections rather than duplicate
+business behavior inside templates or components.
+
+<!-- /delta:amendment-13 -->
+
+## Root property dialogs — amendment-14
+
+<!-- delta:amendment-14 -->
+existing feature controller and atomic persistence to its existing database service. Pass admitted field/capability
+projections explicitly to shared controls. Shared contracts remain `.d.ts` declarations.
+
+<!-- /delta:amendment-14 -->
+
+## Root property dialogs — amendment-15
+
+<!-- delta:amendment-15 -->
+Feature draft/query/command owners coordinate each dialog's independent sections. Shared header/event/lifecycle
+panels provide repeated layout and explicit events; they retain no business tokens or second file draft. Validate local
+prerequisites before admitting a command. Keep selection IDs separate from discovery labels. Exports/modified clicks
+leave the source draft protected, while tab changes retain independent input. Presentation-only audience/search state
+does not become a business patch. Validity reporting reveals the invalid field's family before focusing it.
+
+<!-- /delta:amendment-15 -->
+
+## Root property dialogs — amendment-16
+
+<!-- delta:amendment-16 -->
+Event creation and association writes authorize the submitted destination with effective
+
+<!-- /delta:amendment-16 -->
+
+## Root property dialogs — amendment-17
+
+<!-- delta:amendment-17 -->
+invalidation is decided by the activity controller using its existing persistence/job boundaries. Shared discovery
+owners provide server validation, permission-prefiltered database pages, a final engine check and opaque continuation
+tokens. EventPicker receives the feature's generated discovery operation and query families: Packing injects
+`searchPackingEvents` through `PackingApi.events` at `/api/v1/packing-lists/events`. The existing
+`GET /api/event/link-options` adapter is a separate consumer of those business owners, not the component's transport.
+The shared picker replaces result pages and retains only current/saved selection labels
+
+<!-- /delta:amendment-17 -->
+
+## Root property dialogs — amendment-18
+
+<!-- delta:amendment-18 -->
+Closing resolves section drafts; changing tabs preserves them. Before a departing command, resolve other dirty
+sections through shared departure protection. Ordinary refresh preserves live drafts. Pending work freezes dismissal and competing commands,
+
+<!-- /delta:amendment-18 -->
+
+## Root property dialogs — amendment-19
+
+<!-- delta:amendment-19 -->
+is idempotent. Persist the TypeORM relation rather than its relation-ID projection; prepare required resulting
+admission/capabilities before final commit. Preserve root identity, grants, files, direct archival and stored pause state.
+
+<!-- /delta:amendment-19 -->
+
+## Entity archival — amendment-20
+
+<!-- delta:amendment-20 -->
+owns personal overview visibility. Existing `adminApiFactory` adapters and generated v1 adapters share those
+business owners. `EntityLifecycleService`
+
+<!-- /delta:amendment-20 -->
+
+## Entity archival — amendment-21
+
+<!-- delta:amendment-21 -->
+The existing adapter commands are explicit and retry-safe:
+
+<!-- /delta:amendment-21 -->
+
+## Entity archival — amendment-22
+
+<!-- delta:amendment-22 -->
+Vue controls receive feature-owned generated operations rather than calling these adapters directly. Packing injects
+`archivePackingList` and `restorePackingList` through `PackingApi`; Overview injects
+`setOverviewVisibility` through its API owner. Each uses the shared transport/validated result and existing
+`entityAdminController` or `userController` operation. Neither reusable lifecycle presentation nor a second
+controller/service duplicates grants, root/parent policy or visibility eligibility.
+
+Never accept profile IDs, timestamps, stored parent state, or other arbitrary fields from the browser. Follow the [archival authority contract](PERMISSIONS_REFERENCE.md#archival-authority-and-personal-visibility), including the survey exception. A private preference may change placement only after existing overview membership is established.
+
+<!-- /delta:amendment-22 -->
+
+## Entity archival — amendment-23
+
+<!-- delta:amendment-23 -->
+Render lifecycle actions through explicit authorized component projections. Personal actions remain an explicit
+card contract; placement comes from the bounded overview service. Commands wait for validated confirmation before
+refreshing named affected appearances. The presentation owner never infers archival dates or parent policy.
+
+<!-- /delta:amendment-23 -->
+
+## Paged profile overview — amendment-24
+
+<!-- delta:amendment-24 -->
+Overview adapters share controller normalization and server-owned page limits. Namespaced URL state preserves each
+collection/region's filters, pages and selection. `OverviewRegion`, `OverviewItems` and `OverviewCard` divide read/navigation,
+grid and card presentation without another server-data store. Read before history commitment; preserve sibling state,
+modified-click hrefs, search caret and focus through failed/obsolete delivery. Retire source-owned aggregate receipts
+with denied cards; unknown membership is not zero. Shared event **Things to do** retains local filtering. Database work
+can grow with membership even when returned cards/DOM are bounded; measure plans and paging before adding indexes.
+
+<!-- /delta:amendment-24 -->
+
+## Invoice pool calculation and saved changes — amendment-25
+
+<!-- delta:amendment-25 -->
+`presentation.ts` owns signed financial presentation and the single settlement-status rule used by the interface,
+emails, and PDF exports. The primary **Calculated balance** is the saved `shareAmount` after carried credits,
+
+<!-- /delta:amendment-25 -->
+
+## Invoice pool calculation and saved changes — amendment-26
+
+<!-- delta:amendment-26 -->
+Use the existing pure presentation/wording owners directly and pass explicit values to shared controls. Avoid a
+second renderer formula or copied catalog. Programmatic hooks are independent of translated labels. Settlement actions use the same
+
+<!-- /delta:amendment-26 -->
+
+## Invoice pool calculation and saved changes — amendment-27
+
+<!-- delta:amendment-27 -->
+labelled, formatted steps in the interface and email; render global figures only as labels and values. Avoid a large unformatted
+
+<!-- /delta:amendment-27 -->
+
+## Test selection — amendment-28
+
+<!-- delta:amendment-28 -->
+npm run test:frontend:browser # isolated built-browser client behavior
+npm run test:all           # Vitest + build + client browser + system E2E
+
+<!-- /delta:amendment-28 -->
+
+## Add or change a page workflow — amendment-29
+
+<!-- delta:amendment-29 -->
+5. Update the feature component, generated read/command contract and shared catalog together when values or actions change.
+
+<!-- /delta:amendment-29 -->
+
+## Add or change an API action — amendment-30
+
+<!-- delta:amendment-30 -->
+1. Author the versioned operation/schema once in `contracts/api/v1/` and regenerate its consumers.
+2. Add its adapter under the existing API route owner and confirm explicit mounting.
+
+<!-- /delta:amendment-30 -->
+
+## Add or change an API action — amendment-31
+
+<!-- delta:amendment-31 -->
+4. Use generated validation and the shared API error chain; prepare a mutation's validated receipt before commit.
+
+<!-- /delta:amendment-31 -->
+
+## Add a client-side module — amendment-32
+
+<!-- delta:amendment-32 -->
+1. Reuse an existing component/composable; add a feature owner under `src/frontend/` only when its responsibility is distinct.
+2. Import its actual declaration/domain owner directly, with no forwarding exports or browser-unsafe dependency.
+3. Use the integrated `npm run server` workflow for HMR; check client/SSR through `npm run typecheck:frontend` and build through `npm run build:frontend`.
+4. Add a mounted client/helper check at the cheapest meaningful boundary; use isolated browser or system E2E only for its distinct risk.
+
+<!-- /delta:amendment-32 -->
+
+## Browser changes do not appear — amendment-33
+
+<!-- delta:amendment-33 -->
+Use the integrated `npm run server` workflow for Vue HMR and ordered generated inputs. Existing esbuild consumers
+still use `server:client`; do not remove source or hand-edit generated modules. If an authored contract/catalog save
+fails, correct it and wait for successful readiness before relying on a restart. For compiled runs, build before run.
+
+<!-- /delta:amendment-33 -->

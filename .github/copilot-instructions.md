@@ -4,9 +4,9 @@ documentation-metadata
 audience: GitHub Copilot; maintainers
 owner: project maintainers
 status: current
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: mandatory central policy routing and meaningful individual approval/semantic delegation-review routing; no competing engineering rules
+verification-scope: shared agent-context command and continuation routing; centralized concise approval and semantic review retained without competing engineering rules
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; package.json; repository-tree
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -23,18 +23,21 @@ Policies and approved designs cannot be silently changed to match code. Resolve 
 consequences directly with the maintainer before dependent implementation; never hide approvals or plans in a file.
 The policies own all engineering, documentation classification, evidence, test and database-safety rules.
 
+Use the Documentation Policy's [optional task-profile discovery](../docs/policies/DOCUMENTATION_POLICY.md#document-roles-and-optional-task-profiles)
+at task start and pass applied profiles to delegates. The policy owns activation; absent profiles are normal.
+Use the shared context command and caller-held resume procedure in [AGENTS.md](../AGENTS.md), including explicit
+profile selection, actual approval history and review of changed sources. Its JSON delivery does not establish
+automatic host injection or certify that the instructions were read.
+
 Apply the concrete [agent enforcement procedure](../docs/policies/DEVELOPMENT_POLICY.md#agent-enforcement): compare
 request/canonical/design sources before editing, obtain explicit conflict resolution, run scoped measurable checks
 and review semantic boundaries and readability. A newer conflicting name and a clean checker result do not replace
 approval or human review. Apply the procedure to every delegated agent and review its actual output.
 
-Follow the exact labeled [required change explanation](../docs/policies/DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13)
-separately before each individual approval question, including its meaningful-content requirements, prohibition on
+Follow the short, simple [required change explanation](../docs/policies/DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13)
+separately before each individual approval question, including its meaningful four-field explanation, prohibition on
 bundling and semantic delegation/root review. Correct labels alone are insufficient. This routing summary does not
 define an alternative format or grant approval.
-
-For migration work, apply the central [frontend migration boundary](../docs/policies/DEVELOPMENT_POLICY.md#frontend-migration-boundary-2026-10-13)
-in task classification, delegated handoffs and actual source review.
 
 ## Canonical references
 
@@ -45,7 +48,6 @@ in task classification, delegated handoffs and actual source review.
 - [Database and migrations](../docs/DATABASE.md)
 - [Documentation policy and help trust boundary](../docs/policies/DOCUMENTATION_POLICY.md)
 - [Development policy](../docs/policies/DEVELOPMENT_POLICY.md)
-- [Documentation migration status](../docs/frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md)
 
 Use the topic files under [`.github/copilot/`](copilot/) only as navigation aids. If any AI instruction conflicts with a
 canonical policy or approved design, resolve the conflict before changing any decision or dependent implementation.

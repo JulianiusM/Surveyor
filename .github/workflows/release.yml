@@ -181,9 +181,9 @@ jobs:
         continue-on-error: true
         run: |
           if [ -d docs ]; then
-            if ! cp -R docs release/docs; then
-              echo "::warning::Could not copy documentation; release continues."
-            fi
+            # The shared profile resolver excludes optional temporary working
+            # material while retaining canonical runtime Help and active rules.
+            node scripts/package-documentation.mjs --destination release/docs
             if ! diff -qr docs/user-guide release/docs/user-guide; then
               echo "::warning::Documentation packaging differs; review the release contents. Release continues."
             fi

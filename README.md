@@ -34,7 +34,7 @@ Surveyor is a server-rendered collaboration application for recurring-date surve
 | Prepare or migrate the database | [Database and Migrations](docs/DATABASE.md) |
 | Operate a production instance | [Production Operations](docs/OPERATIONS.md) |
 | Upgrade or roll back | [Upgrading and Rolling Back](docs/UPGRADING.md) |
-| Continue the documentation migration | [Documentation Migration Status](docs/frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md) |
+| Review documentation remediation | [Remediation backlog](docs/backlog/documentation-remediation.yml) |
 
 The complete inventory and review state are in [`docs/README.md`](docs/README.md).
 

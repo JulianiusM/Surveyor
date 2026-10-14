@@ -35,6 +35,38 @@ function creation(eventId: string | null = null): components['schemas']['Packing
 }
 async function fixture() { return (await packing.createPackingList(creation(), undefined, actor(owner))).id; }
 
+/** Compare actual native and versioned projections of one unchanged persisted
+ * list. Native equal-position ordering is unspecified: this assertion observes
+ * the real database result without inventing a creation-order or UUID policy. */
+async function expectPackingReadOrder(id: string, stage: string) {
+    const session = actor(owner);
+    const list = (await packingService.getPackingListById(id))!;
+    const request = createApiRequest({profileId: owner.id});
+
+    // Read through both existing native consumers before comparing the API's
+    // detail, duplicate draft and minimal order baseline on the same fixture.
+    const nativeItems = await packingService.getPackingItems(id);
+    const nativeView = await packingController.fetchForView(list, request);
+    const nativeDuplicate = await packingController.fetchForDuplicate(list, request.session);
+    const nativeIds = nativeItems.map(item => item.id);
+    const nativeTitles = nativeItems.map(item => item.title);
+    expect(nativeView.items.map(item => item.id), `${stage}: native detail`).toEqual(nativeIds);
+    expect(nativeDuplicate.map(item => item.id), `${stage}: native duplicate`).toEqual(nativeIds);
+
+    // These are production controller/DBAL reads, including their normal
+    // authorization and generated response contracts; no repository is mocked.
+    const versioned = (await packing.readPackingList(id, session)).data;
+    const duplicate = await packing.readPackingDuplicate(id, session);
+    const order = await packing.readPackingItemOrderBaseline(id, session);
+    expect(contractValidator('PackingListView')(versioned)).toBe(true);
+    expect(contractValidator('PackingDuplicate')(duplicate)).toBe(true);
+    expect(contractValidator('PackingOrderEditBaseline')(order)).toBe(true);
+    expect(versioned.items.map(item => item.id), `${stage}: versioned detail`).toEqual(nativeIds);
+    expect(duplicate.items.map(item => item.title), `${stage}: versioned duplicate`).toEqual(nativeTitles);
+    expect(order.items.map(item => item.id), `${stage}: versioned order baseline`).toEqual(nativeIds);
+    return nativeItems;
+}
+
 beforeAll(async () => {
     await initializeIntegrationDatabase();
     owner = await persistIntegrationProfile({name: 'Complete packing owner'});
@@ -43,6 +75,43 @@ beforeAll(async () => {
 afterAll(closeIntegrationDatabase);
 
 describe('complete versioned packing management', () => {
+    it('preserves actual native tied-position order through detail, duplicate and order-baseline reads', async function nativeTiedPositionParity() {
+        // Exercise the native collector and creation hooks. Their inherited
+        // position/pos mismatch intentionally leaves these three positions zero;
+        // the migration must compare that reference rather than repair IMP-023.
+        const body = {
+            title: 'Native tied-position reference', description: '', event_id: '',
+            items: JSON.stringify([
+                {title: 'First submitted shelter', description: '', maxAssignees: 2, requiredByAll: false},
+                {title: 'Second submitted water', description: '', maxAssignees: 2, requiredByAll: false},
+                {title: 'Third submitted food', description: '', maxAssignees: 2, requiredByAll: false},
+            ]),
+        };
+        const parsed = Object.assign(packingController.preprocessCreate(body), {_body: body});
+        const id = await packingController.createEntity(owner.id, parsed);
+        await packingController.afterCreateItems(id, parsed);
+        const initial = await expectPackingReadOrder(id, 'native creation');
+        expect(initial).toHaveLength(3);
+        expect(initial.map(item => item.pos)).toEqual([0, 0, 0]);
+
+        // Native Quick Add also retains its original default position. Compare
+        // both surfaces after the real write, without assuming its insertion rank.
+        await packingController.quickAddItem((await packingService.getPackingListById(id))!,
+            {title: 'Fourth quick-added torch', description: '', maxAssignees: '2'}, actor(owner));
+        const added = await expectPackingReadOrder(id, 'native Quick Add');
+        expect(added).toHaveLength(4);
+        expect(added.map(item => item.pos)).toEqual([0, 0, 0, 0]);
+
+        // Partial, non-dense native ordering can leave several tied rows. Its
+        // existing adapter must remain intact while each API read matches it.
+        await packingController.reorderItems(id, [
+            {itemId: added[0].id, position: 7},
+            {itemId: added[1].id, position: 7},
+        ]);
+        const reordered = await expectPackingReadOrder(id, 'native partial reorder');
+        expect(reordered.map(item => item.pos)).toEqual([0, 0, 7, 7]);
+    });
+
     it('shares native initial event admission for create and duplicate while rechecking grants after revocation', async () => {
         const allowed = await createIntegrationEvent(owner.id, 'Allowed initial selection');
         const forbidden = await createIntegrationEvent(editor.id, 'Private initial selection');

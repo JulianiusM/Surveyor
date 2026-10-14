@@ -4,10 +4,10 @@ documentation-metadata
 audience: end users
 owner: product documentation maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
-source-anchors: docs/user-guide/en/; docs/user-guide/en/assets/; docs/frontend-migration/staged/HELP_VISUALS.md; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; src/views/layout.pug; src/public/style/help.sass; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; .github/workflows/release.yml
+verification-scope: Reviewed English article content and image references retained; metadata routes to the active visual-authoring owner.
+source-anchors: docs/user-guide/en/; docs/user-guide/en/assets/; docs/features/help/HELP_VISUALS.md; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; src/views/layout.pug; src/public/style/help.sass; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; .github/workflows/release.yml
 next-review: help-source-or-visible-UI-change
 production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->

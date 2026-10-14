@@ -1,0 +1,1084 @@
+{
+  "baselineCommit": "3b6091caff2717fbbd8405d43fe03b51151cb730",
+  "stagingMode": "deltas",
+  "protectedRoots": [
+    "docs/features/",
+    "docs/user-guide/assets/"
+  ],
+  "flatGuideRoots": [
+    "docs/",
+    "docs/user-guide/"
+  ],
+  "protectedFiles": [
+    "README.md"
+  ],
+  "exemptFiles": [
+    "docs/features/help/HELP_VISUALS.md"
+  ],
+  "controlRoot": "docs/frontend-migration/",
+  "reviewInputs": [
+    "docs/policies/",
+    "docs/decisions/",
+    "docs/features/help/HELP_VISUALS.md",
+    "AGENTS.md",
+    ".github/copilot/",
+    ".github/copilot-instructions.md",
+    "scripts/package-documentation.mjs",
+    "scripts/tests/package-documentation.test.mjs",
+    "scripts/tests/documentation-check.test.mjs",
+    "scripts/report-documentation.mjs"
+  ],
+  "approvedCleanups": [
+    {
+      "path": "README.md",
+      "blob": "c05970f0cf4007b3c587a70d02ba16b1ef4aa8ea",
+      "approvedOn": "2026-10-14",
+      "reference": "Maintainer explicitly approved removing production frontend-migration references; independently reviewed minimal cleanup"
+    },
+    {
+      "path": "docs/README.md",
+      "blob": "9c506ae80801320a3b083f0d34467636c50737b9",
+      "approvedOn": "2026-10-14",
+      "reference": "Maintainer explicitly approved removing production frontend-migration references; independently reviewed minimal cleanup"
+    },
+    {
+      "path": "docs/TESTING_GUIDE.md",
+      "blob": "aa1759f92ec8d72abde411c5fbc1866b7907bda0",
+      "approvedOn": "2026-10-14",
+      "reference": "Maintainer explicitly approved removing production frontend-migration references; independently reviewed minimal cleanup"
+    }
+  ],
+  "previewInputs": [
+    "src/types/api/",
+    "src/types/LocalizationTypes.d.ts",
+    "src/modules/localization/generated/",
+    "scripts/package-documentation.mjs"
+  ],
+  "replacements": [
+    {
+      "source": "docs/frontend-migration/staged/README.md",
+      "target": "README.md",
+      "metadataOriginSha256": "628ca3f9f73e48cd4b464fb3305bf081032cdf33d1613d2264a63fca286ed0bb",
+      "metadata": {
+        "last-verified": "2026-10-14",
+        "verification-scope": "setup and domain guidance retained; Vue/SSR development, generated contracts/catalogs, package commands and client/system test boundaries checked against source; no operator rehearsal claimed",
+        "source-anchors": "package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts"
+      },
+      "operations": [
+        {
+          "kind": "replace-text",
+          "original": "Surveyor is a server-rendered collaboration application for recurring-date surveys, events, activity schedules, packing lists, rides, and event cost sharing. It is written in TypeScript and runs as an Express application backed by MariaDB.\n",
+          "originSha256": "7c3a8ec5e98f41d83359644d4405bc992dfada0207f23b29c8924a937696ddba",
+          "payload": "amendment-01"
+        },
+        {
+          "kind": "replace-text",
+          "original": "| Use Surveyor | [In-app user guides](docs/user-guide/README.md) |\n",
+          "originSha256": "affa509a1dadd8a63a1ceaac4790aa98119c5541d8f83e5762d36b2b55e19ead",
+          "payload": "amendment-02",
+          "headingPath": [
+            "## Choose the right documentation"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "This performs a full build, starts the TypeScript server under Nodemon, and starts the client-side esbuild watcher. Confirm startup with:\n",
+          "originSha256": "971f5b1861a1b7b8d51e42a8de0b1f010df652702f7d3c7dc9b911646d38e77e",
+          "payload": "amendment-03",
+          "headingPath": [
+            "## Development quick start",
+            "### 5. Start the development server"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| `npm run server` | Build once, then run the server and browser-code watchers together. |\n",
+          "originSha256": "692f544524fcaa61fa88a1ef6c2b7dc718707489502d6f962323be727af5b2fe",
+          "payload": "amendment-04",
+          "headingPath": [
+            "## Common development commands"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| `npm run server:client` | Run only the browser-code watcher. |\n| `npm run build` | Generate the TypeORM index, compile server and browser TypeScript, compile Sass, and copy views/assets into `dist/`. |\n",
+          "originSha256": "47f740be9798175fd47d7a98b2a5e073d93381c4e0b28d9b993741a8ec0f88ba",
+          "payload": "amendment-05",
+          "headingPath": [
+            "## Common development commands"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| `npm run generate` | Regenerate `src/modules/database/__index__.ts`. |\n",
+          "originSha256": "5d4574040bb504bd41a4d3e5080f39e315fe4077801aa6758ed40e24768926c8",
+          "payload": "amendment-06",
+          "headingPath": [
+            "## Common development commands"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| `npm run test:all` | Run Vitest, build the application, and run the Playwright suite. |\n",
+          "originSha256": "37555aba7671cbf8aaf0a270b090b434a364af9371e0d9b0802d7210c75dc8fc",
+          "payload": "amendment-07",
+          "headingPath": [
+            "## Common development commands"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "src/public/js/                        browser TypeScript\n",
+          "originSha256": "e5de5aa9208d29bf55aec9acdaf7b5ce4cb33563b1be42b8e7173a197f7df22a",
+          "payload": "amendment-08",
+          "headingPath": [
+            "## Repository map"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "tests/frontend/                        browser-helper behavior under Vitest\n",
+          "originSha256": "9376fb12bede1f8e9d2d48a9bcf71c5e01cce11de9eccccadeae8eb5a669634e",
+          "payload": "amendment-09",
+          "headingPath": [
+            "## Repository map"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Vitest runs the unit, frontend, and integration suites configured in `vitest.config.mts`. Playwright runs the focused browser/API flows configured in `playwright.config.ts` and manages the built server through `npm run e2e:init`.\n",
+          "originSha256": "971330e4f4fb2d1f7f9bff42be43fc729aa40c0a42251d0c6866165fdebdda4e",
+          "payload": "amendment-10",
+          "headingPath": [
+            "## Test and release automation"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The CI workflow currently runs for manual dispatch, reusable workflow calls, and pushes or pull requests on `master`, `dev`, and `ts-migration`. It uses Node.js 24.15.0 and MariaDB 10.11, installs dependencies, runs application Vitest tests with coverage, builds the application, and then runs Chromium Playwright checks.\n",
+          "originSha256": "6e5a54229133586f3694665bf62d8c035c06b1cbe1cf1dd8252d2c73b10626d9",
+          "payload": "amendment-11",
+          "headingPath": [
+            "## Test and release automation"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "docs/frontend-migration/staged/ARCHITECTURE.md",
+      "target": "docs/ARCHITECTURE.md",
+      "metadataOriginSha256": "79ea4b7a413aa8a59e9542cf8b495541529a375be6a56df09cf46acbc412d528",
+      "metadata": {
+        "last-verified": "2026-10-14",
+        "verification-scope": "runtime/domain/identity/persistence guidance retained; Vue/SSR, generated contracts/catalogs and frontend owners checked against source; no deployment rehearsal claimed",
+        "source-anchors": "tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoice/retention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts"
+      },
+      "operations": [
+        {
+          "kind": "replace-section",
+          "headingPath": [
+            "## Frontend architecture",
+            "### Server-rendered pages"
+          ],
+          "originSha256": "4b083269957e2a5b8c43343b5caf0a034fd5d0642afdc84c7da6b9072e4d9309",
+          "payload": "amendment-01"
+        },
+        {
+          "kind": "replace-section",
+          "headingPath": [
+            "## Frontend architecture",
+            "### Browser TypeScript"
+          ],
+          "originSha256": "6f69cb23771613226ca8bdbecca2edaceeef204a48d744065fdb6b6a4f8234f5",
+          "payload": "amendment-02"
+        },
+        {
+          "kind": "replace-text",
+          "original": "Surveyor is a TypeScript monolith that serves HTML and JSON from one Express process. MariaDB stores application records and sessions; the filesystem stores uploaded header images and invoice proofs. Pug renders the primary UI, with focused browser-side TypeScript enhancing interactive pages.\n",
+          "originSha256": "3914f3b0797092248ef2a4ffcd64b90b50aeb2a0aed34b819c53589ae14304b1",
+          "payload": "amendment-03"
+        },
+        {
+          "kind": "replace-text",
+          "original": "  |-- Pug HTML and static assets\n  |-- JSON API under /api\n",
+          "originSha256": "78859badef944e3d345d9a097ac0b9f208b7ced661687bcc96daad5fa835d9f9",
+          "payload": "amendment-04",
+          "headingPath": [
+            "## System context"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| Templates and UI | Pug 3, Bootstrap 5.3, Sass, browser TypeScript |\n| Browser build | esbuild |\n",
+          "originSha256": "82184fd5c567cd12729f48ee5ae0c24e12723ccd8a46268e0ab128925ce3e8e5",
+          "payload": "amendment-05",
+          "headingPath": [
+            "## Current technology baseline"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| Input validation | Joi and `express-validator`, according to the route or workflow |\n",
+          "originSha256": "a8c244405f9c732c58137c12a14e9f8f6cb7c8ca3979bf28c702885d31eeeb0e",
+          "payload": "amendment-06",
+          "headingPath": [
+            "## Current technology baseline"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "3. Install request logging, JSON and URL-encoded parsing, cookies, and static-file serving.\n4. Create a one-day database-backed session with secure cookies in production and `SameSite=Lax`.\n5. Enable one trusted proxy hop so secure cookies work behind the documented reverse proxy.\n",
+          "originSha256": "8c231ea9126785f2b665bf5efac8609429281226305327628ff3a33b742fa98c",
+          "payload": "amendment-07",
+          "headingPath": [
+            "## HTTP application and request pipeline"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "7. Validate the stored user/guest/profile session on every request; invalid sessions are logged out.\n8. Populate common Pug locals, including the active profile, authentication state, version, selected public settings, and return URL.\n9. Mount page and API routers.\n10. Expose `GET /healthz`, then the 404 and generic error handlers.\n",
+          "originSha256": "c4adff8cc9481a5e6a81361e5e6b6b09242eb8e080dd9c24ff286218a6c96c46",
+          "payload": "amendment-08",
+          "headingPath": [
+            "## HTTP application and request pipeline"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "/users     account, profile, dashboard, and OIDC routes\n",
+          "originSha256": "758863d6e2397f8e167e88425ad852b8a2a357df318b1f579ac9d94bcdd983ce",
+          "payload": "amendment-09",
+          "headingPath": [
+            "## HTTP application and request pipeline"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Feature routers are not auto-discovered. A new top-level router must be imported and mounted deliberately. API subrouters are mounted separately in `src/routes/api.ts`.\n",
+          "originSha256": "32804674d57df5e082c736db36a2c18486a2b5c22159fe5f4ae4998f1bd96721",
+          "payload": "amendment-10",
+          "headingPath": [
+            "## HTTP application and request pipeline"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "`src/routes/` defines URL shape, middleware order, request validation, controller invocation, redirects, and response selection. Page routes use `express.Router`; API routes live under `src/routes/api/` and are mounted by `src/routes/api.ts`.\n",
+          "originSha256": "2ca1f2cab140c3e31009fa97c0d6436c41d4576edd6e05695bf0d7d5f640bb47",
+          "payload": "amendment-11",
+          "headingPath": [
+            "## Application layers",
+            "### Routes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "- build data for a Pug view or API response;\n",
+          "originSha256": "6be3388b26b8e9ad519f6499c1ca17d4e1a68724aad8eb64d259f5383296eaf4",
+          "payload": "amendment-12",
+          "headingPath": [
+            "## Application layers",
+            "### Controllers"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The complete bit, preset, default, audience, persistence, and evaluation contracts are maintained in [Permission-System Reference](PERMISSIONS_REFERENCE.md). User-facing recipes are in [Permissions and Sharing](user-guide/PERMISSIONS.md).\n",
+          "originSha256": "8ccb3f43f4a13855805555dd4ef66df23283c3624941e5e1178290482caecae6",
+          "payload": "amendment-13",
+          "headingPath": [
+            "## Authorization architecture"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The five root views and event dashboard use `module_entity_properties.pug`. The existing\n`entityAdminController` builds `data.entityProperties` from the same field policy used to authorize property writes.\n",
+          "originSha256": "0e163a19e340bb732da4427ed277e2d71690d2ed8bab93f8918a739ac73ec547",
+          "payload": "amendment-14",
+          "headingPath": [
+            "## Frontend architecture",
+            "### Entity settings"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The browser dialog hosts the existing image, permission, administrator, and archival commands through shared UI\nhelpers. Each section has its own draft and save boundary; pending writes freeze controls and successful writes\nrefresh server-rendered permissions and context. General, Linked event, Access, and Actions tabs appear only when\n",
+          "originSha256": "1ccddb907f75f49d506df96d5ce125b1b6bbc7b36086520e5914e9195dc212fe",
+          "payload": "amendment-15",
+          "headingPath": [
+            "## Frontend architecture",
+            "### Entity settings"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Inline event, time-zone, and administrator controls avoid nested modals; time-zone search, common choices, browser\ndetection, and UTC offsets remain shared between inline and standalone hosts.\n",
+          "originSha256": "a27c953faee42f24e3ad0b88c49e77d2fed774eab80454427101dfaf7b08cc2a",
+          "payload": "amendment-16",
+          "headingPath": [
+            "## Frontend architecture",
+            "### Entity settings"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "`/users/dashboard` and `GET /api/users/overview` share controller normalization and these service reads. The API\nreturns Pug-rendered region HTML in the established JSON envelope, with private, noncacheable responses. Ordinary\nlinks and search forms retain full-page navigation. Each loaded region renders at most one page or one enclosing\nevent card plus a child page; hidden regions load when opened. Browser navigation replaces that region's content,\npreserves namespaced URL state, and rejects stale responses. Shared event **Things to do** retains its existing local\nfiltering and ungrouped cards.\n",
+          "originSha256": "8935a26261050bfde0760204ff7bac92446367c1f8a50438213a920103f8f846",
+          "payload": "amendment-17",
+          "headingPath": [
+            "## Frontend architecture",
+            "### Profile overview"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| Shared archive/card Pug mixins and browser modules | Server-calculated state, bounded overview/sub-view navigation, explicit commands, and refresh after success. |\n",
+          "originSha256": "65cf5b5f73d7f912258fd748e6b80f148a8a2c200358db1049f89a20d0768380",
+          "payload": "amendment-18",
+          "headingPath": [
+            "## Persistence and lifecycle boundaries",
+            "### Entity archival and personal visibility"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Optional lifecycle notices travel with the renderer's page data and explicit Pug mixin arguments. Shared contracts\n",
+          "originSha256": "e0ccb64f97bbd67439365157f1083d33307557b7aa1eda8b42be27e040f7c53d",
+          "payload": "amendment-19",
+          "headingPath": [
+            "## Persistence and lifecycle boundaries",
+            "### Entity archival and personal visibility"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "2. Generate the TypeORM index and compile server TypeScript to `dist/`.\n3. Compile browser TypeScript to `dist/public/js/`.\n",
+          "originSha256": "9f021a73eb6167b2af269a2a50c73d3877fca9fb303e2fed35248e2e711ea373",
+          "payload": "amendment-20",
+          "headingPath": [
+            "## Build and release architecture"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Vitest discovers `tests/unit/`, `tests/frontend/`, and `tests/integration/`. It runs them in the Node environment with file-level parallelism disabled because integration suites share a guarded disposable MariaDB schema.\n",
+          "originSha256": "b7017dcda0e52c13c3c0a0494eefdbc3bf89b4467983a9a4c21b916a0c2eafed",
+          "payload": "amendment-21",
+          "headingPath": [
+            "## Testing architecture"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Playwright discovers `tests/e2e/`, runs Chromium, initializes the E2E database, and starts the built server through its managed `webServer` command. Factories under `tests/factories/` build production-shaped inputs; reusable workflow/assertion helpers live under `tests/keywords/`; runner and database setup live under `tests/support/`.\n",
+          "originSha256": "292f1062339933cd744acf2b9d6fa12f61d29e8510915e4196415c4b04edf511",
+          "payload": "amendment-22",
+          "headingPath": [
+            "## Testing architecture"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "7. **Frontend:** Pug label/control, browser module, generated asset, no-JavaScript behavior where applicable.\n",
+          "originSha256": "07f8bba08d1c022248d98d8158019525a412dcbaace1666c965a9b3a4d1fa374",
+          "payload": "amendment-23",
+          "headingPath": [
+            "## Change-impact checklist"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "1. `src/controller/helpController.ts` discovers Markdown only in `docs/user-guide/` and images only in `docs/user-guide/assets/`.\n",
+          "originSha256": "67e65f9295c27b40d48c8f493a20676e7c45b70d341700626e14c69dc6eaa413",
+          "payload": "amendment-24",
+          "headingPath": [
+            "## In-app help delivery"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "4. Internal guide links become `/help/<guide>` routes, and maintained images become `/help/assets/<file>` routes. Path-containment and filename checks prevent request-controlled traversal.\n",
+          "originSha256": "9e3de02d8a426f6bf6a2ba9b94e985df063021656216a3f7550d390a404a9dee",
+          "payload": "amendment-25",
+          "headingPath": [
+            "## In-app help delivery"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The renderer inserts validated, release-shipped HTML into the Pug view. This is a trusted-content boundary rather than a generic sanitization service. Changing the source model requires reopening DEC-004.\n",
+          "originSha256": "2b22e36088b69bc747c7240d6a08ad93fe1cbf7f5795334ace333dd739a8066b",
+          "payload": "amendment-26",
+          "headingPath": [
+            "## In-app help delivery"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "docs/frontend-migration/staged/DEVELOPMENT.md",
+      "target": "docs/DEVELOPMENT.md",
+      "metadataOriginSha256": "cffc790b8d510c7edbee8ba8e6fb6212439350b8e27c9b164536f345bce94e13",
+      "metadata": {
+        "last-verified": "2026-10-14",
+        "verification-scope": "setup/domain guidance retained; detailed Vue/shared-controller/DBAL, generated-input, operation-completion, command/draft/read/bootstrap/presentation/localization contracts and worked metadata extension checked against source; no operator rehearsal claimed",
+        "source-anchors": "tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts"
+      },
+      "operations": [
+        {
+          "kind": "replace-section",
+          "headingPath": [
+            "## Current code patterns",
+            "### Views and browser code"
+          ],
+          "originSha256": "4ee7de3f0d1e3b72194bd0e5704d82b42fe5c2eddf4406f92ffc04d28cbd6da1",
+          "payload": "amendment-01"
+        },
+        {
+          "kind": "replace-text",
+          "original": "- the server under Nodemon through `npm run server:dev`; and\n- browser TypeScript under the esbuild watcher through `npm run server:client`.\n",
+          "originSha256": "933ed973f77ce855280499bac5270f2455b07ea55aece23ec6887748f2726748",
+          "payload": "amendment-02",
+          "headingPath": [
+            "## Clean-clone setup",
+            "### 5. Start Surveyor"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "src/public/js/                     browser TypeScript\n",
+          "originSha256": "57842493cfb1aa77d1cef25bdaa92e126deb5e88cc7786d041cad68d2c87ddb0",
+          "payload": "amendment-03",
+          "headingPath": [
+            "## Project structure"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "tests/frontend/                    browser-helper behavior under Vitest\n",
+          "originSha256": "6fb607d31d3f8f68397644b0aeec280d1f95dd99980da3160c6535f3bc808764",
+          "payload": "amendment-04",
+          "headingPath": [
+            "## Project structure"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| `npm run server` | Full build, then server and browser-code watchers. |\n",
+          "originSha256": "5bea8e7950e9356c8d537dbd1ee51f18d77fcb640bd96cc56cbf587b2d29567b",
+          "payload": "amendment-05",
+          "headingPath": [
+            "## Build and run commands"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| `npm run build` | Sass, generated database index, server compile, browser compile, then views/assets copy. |\n",
+          "originSha256": "f2247ce110e23197326061c8a45e0f38184c8ac1362abea38596bce5502cdd1a",
+          "payload": "amendment-06",
+          "headingPath": [
+            "## Build and run commands"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| `npm run build:server` | Generate the database index and compile server TypeScript into `dist/`. |\n| `npm run build:client` | Compile browser TypeScript into `dist/public/js/`. |\n",
+          "originSha256": "b557d508b24246d652e23c738a7e167b5e7a87e31e687d05bac811c2f81c7a9e",
+          "payload": "amendment-07",
+          "headingPath": [
+            "## Build and run commands"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| `npm run generate` | Rebuild the ignored TypeORM entity/migration/subscriber index. |\n",
+          "originSha256": "79b620355746c56da2f8493bb2912817f464cb39c47aaa658904264f08f05914",
+          "payload": "amendment-08",
+          "headingPath": [
+            "## Build and run commands"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "- `src/public/js/**/*.gen.js`\n",
+          "originSha256": "8e25baca8a48aab6163754e91f0ad36e4bdec0f7d90694884ed9dfbeda2749d1",
+          "payload": "amendment-09",
+          "headingPath": [
+            "## Build and run commands",
+            "### Generated files"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "## Current code patterns\n",
+          "originSha256": "9f370ae67ccc65c33f7894b9fa8454a8d4d5fc1abe3a458babac4da00e408f96",
+          "payload": "amendment-10",
+          "headingPath": [
+            "## Current code patterns"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Pug templates and mixins need the same level of explanation. Document each mixin's parameters, required render data,\nshared request context, meaningful branches, and browser-facing DOM hooks with unbuffered `//-` comments. Explain why\npage scripts and optional state are loaded at that page boundary, especially where the same mixin serves different views.\n",
+          "originSha256": "19fbb3ac2383faad84688d4f2a15727eec598dfc7d5014763426cc857f2b1e86",
+          "payload": "amendment-11",
+          "headingPath": [
+            "## Current code patterns",
+            "### Readability and shared contracts"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "- Mount a feature API router in `src/routes/api.ts`.\n",
+          "originSha256": "ee33216d7b140c84683d8c89ea23e55e9b9987614b08573c0ba04c673093ccb6",
+          "payload": "amendment-12",
+          "headingPath": [
+            "## Current code patterns",
+            "### Routes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "- Use `src/modules/renderer.ts` for the established page/JSON response shape.\n",
+          "originSha256": "4463e2652ef86f07edaeb8aff358d9b5d9f7b9a9dac4f1062701849a2a7ebffc",
+          "payload": "amendment-13",
+          "headingPath": [
+            "## Current code patterns",
+            "### Errors and responses"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "existing feature controller and atomic persistence to its existing database service. Pass `data.entityProperties`\nand `data.archive` explicitly to the shared modal. Shared contracts belong in `src/types/EntityPropertyTypes.d.ts`.\n",
+          "originSha256": "ef772971c29e5ae22c06168aeb867fd76b29f5f90cc5d20abb6287f15fee664f",
+          "payload": "amendment-14",
+          "headingPath": [
+            "## Current code patterns",
+            "### Root property dialogs"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "`entity-properties.ts` owns draft restoration, local feedback, and the dialog write lock. Existing command modules\nacquire its host through `ui-helpers` and keep their established endpoints. Validate local prerequisites before\nstarting a command. Hidden picker fields need captured initial values for cancellation because changing a hidden\ninput also changes its DOM default. Preserve current drafts when an export opens another tab. Presentation-only\naudience/search controls opt out of draft tracking. Tab changes retain drafts; native validity reporting opens any\ncollapsed property family containing an invalid field before focusing it.\n",
+          "originSha256": "77557f733823222b3dafada104fc90a440c1288d1fe275b61d77ee949d78a678",
+          "payload": "amendment-15",
+          "headingPath": [
+            "## Current code patterns",
+            "### Root property dialogs"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Event creation and `POST /api/{activity|packing|drivers}/:id/event` authorize the submitted destination with effective\n",
+          "originSha256": "d1fcb6320a512e5c13cedc4441b56be1b6e1e355a40569c8efbb361728947efa",
+          "payload": "amendment-16",
+          "headingPath": [
+            "## Current code patterns",
+            "### Root property dialogs"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "invalidation is decided by the activity controller using its existing persistence/job boundaries. Picker options come\nfrom `GET /api/event/link-options`, with server validation, permission-prefiltered database pages, a final engine check,\nand opaque continuation tokens. The browser replaces result pages and retains only current/saved selection labels\n",
+          "originSha256": "0bdfec927d974d0ad2eaf067e63ee3baeac5b763492b5ccf73616bdf575888bc",
+          "payload": "amendment-17",
+          "headingPath": [
+            "## Current code patterns",
+            "### Root property dialogs"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Closing discards section drafts; changing tabs preserves them. Before a refreshing or departing command, resolve\nother dirty sections through the existing host. Pending work freezes dismissal and all competing dialog commands,\n",
+          "originSha256": "03cde4df8e62e24332367b544e73fbdb2596ef49d80ea6dfea333b88c5b23476",
+          "payload": "amendment-18",
+          "headingPath": [
+            "## Current code patterns",
+            "### Root property dialogs"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "is idempotent. Persist the TypeORM relation rather than its relation-ID projection; recompute admission, capabilities\nand inherited archival after commit. Preserve root identity, grants, files, direct archival and stored pause state.\n",
+          "originSha256": "f776cac08ee9a8af540ab508dbdc5bbcc9edf77b21e5fd19c9f2804a994bfceb",
+          "payload": "amendment-19",
+          "headingPath": [
+            "## Current code patterns",
+            "### Root property dialogs"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "owns personal overview visibility. `adminApiFactory` registers the shared lifecycle API. `EntityLifecycleService`\n",
+          "originSha256": "d99ba375ec32663d91ecfc4862cc8ae4c804826055fb2d25bbbfd2ad90c10f8e",
+          "payload": "amendment-20",
+          "headingPath": [
+            "## Current code patterns",
+            "### Entity archival"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The shared API commands are explicit and retry-safe:\n",
+          "originSha256": "d2b9848d8e9e13a7abbc3028c8bb33c1e0311b0b39c3df887bfdb02f7c16a376",
+          "payload": "amendment-21",
+          "headingPath": [
+            "## Current code patterns",
+            "### Entity archival"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Never accept profile IDs, timestamps, stored parent state, or other arbitrary fields from the browser. Follow the [archival authority contract](PERMISSIONS_REFERENCE.md#archival-authority-and-personal-visibility), including the survey exception. A private preference may change placement only after existing overview membership is established.\n",
+          "originSha256": "7439275aa08c4289f42da286082f299381134e16591489dc44ae6734157e34c0",
+          "payload": "amendment-22",
+          "headingPath": [
+            "## Current code patterns",
+            "### Entity archival"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Render lifecycle actions through `module_entity_archive.pug`, passing the optional notice state in renderer data and\nexplicit mixin arguments. Personal actions are an explicit card argument; dashboard placement comes from the bounded\noverview service. The shared browser module delegates commands so inserted cards work, keeps one page-wide mutation\nlock, and waits for structured success before refreshing all appearances. It does not infer archival dates or parent policy.\n",
+          "originSha256": "426d497eeced91d5c6616da5dd4b0b1604aadf071287d942d534fb2f95bcc6e3",
+          "payload": "amendment-23",
+          "headingPath": [
+            "## Current code patterns",
+            "### Entity archival"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The full-page and region API routes share controller normalization and server-owned page limits. Their namespaced\nURL state preserves independent collection/region filters, pages, and selection. Both render through the existing\n`data` channel: `renderer.renderWithDataToString` uses Express locals for a layout-free fragment without creating a\nsecond card implementation. `entityCard` owns ordinary, expandable, and enclosing-card markup; `entityCards` owns\nthe responsive grid. Keep paged navigation an explicit browser initialization option so shared event **Things to do**\nretains local filtering. Replace previous region content, release closed hidden bodies, and keep request-generation\nchecks and the archival mutation lock when extending navigation. Database work can grow with membership size even\nthough returned cards and DOM are bounded; measure query plans and first/late-page behavior before adding indexes.\n",
+          "originSha256": "1c68ed6b32f31204512c44cde3db8a32f486f73487ff26356a403aac0f4ba831",
+          "payload": "amendment-24",
+          "headingPath": [
+            "## Current code patterns",
+            "### Paged profile overview"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "`presentation.ts` owns signed financial presentation and the single settlement-status rule used by Pug, browser\nupdates, emails, and PDF exports. The primary **Calculated balance** is the saved `shareAmount` after carried credits,\n",
+          "originSha256": "538757fbf5dc7b50b0f4f25ebbf7b49dc339504cdfdd74eb62f7e0d849be67f6",
+          "payload": "amendment-25",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Pass presentation helpers through renderer `data` and explicit mixin arguments; serialize the label catalog for\nbrowser controls. Programmatic DOM hooks are independent of translated labels. Settlement actions use the same\n",
+          "originSha256": "38dc55c1734842a604e2e7d3a628ad182e377491b7dcc61d2ae371af5ba07eaa",
+          "payload": "amendment-26",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "labelled, formatted steps in Pug and email; render global figures only as labels and values. Avoid a large unformatted\n",
+          "originSha256": "8123910bf951f1d99604d4161d9d83eb08d9a70f3b18b2dffbc8b1ddb6dd36e9",
+          "payload": "amendment-27",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "npm run test:all           # all Vitest layers + build + Playwright\n",
+          "originSha256": "06e19d03ab77b88430b0d0cf7fb9ccf8bc013529f2cdc20ca366e854e89c8859",
+          "payload": "amendment-28",
+          "headingPath": [
+            "## Test selection"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "5. Update the Pug view and browser module together when labels, fields, or actions change.\n",
+          "originSha256": "3d0621cdbd2827a740e8e66702df9c075dfb73b6afdbc788eadd22776fcc3be7",
+          "payload": "amendment-29",
+          "headingPath": [
+            "## Common change recipes",
+            "### Add or change a page workflow"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "1. Add the feature route under `src/routes/api/`.\n2. Confirm it is mounted by `src/routes/api.ts`.\n",
+          "originSha256": "27d44563f66636dbdec819664cae42be5cb6fbb7d94406ced864db8edbe84f5b",
+          "payload": "amendment-30",
+          "headingPath": [
+            "## Common change recipes",
+            "### Add or change an API action"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "4. Return through the established structured JSON and API error chain.\n",
+          "originSha256": "6a8be88e1a3ca07b62d10e322729d56ae8f233ec5e769125e08d70c2b548ac41",
+          "payload": "amendment-31",
+          "headingPath": [
+            "## Common change recipes",
+            "### Add or change an API action"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "1. Add the `.ts` source under `src/public/js/` in the appropriate existing directory.\n2. Import it from the relevant Pug page or client module using the existing generated-module convention.\n3. Run `npm run server:client` while developing or `npm run build:client` for a production build.\n4. Add a frontend Vitest test for deterministic helper behavior and Playwright only when real navigation/session/rendering is essential.\n",
+          "originSha256": "9b4261e042be7d074c5e81bf5352cefd830a82842777d4df6d016d36487e5531",
+          "payload": "amendment-32",
+          "headingPath": [
+            "## Common change recipes",
+            "### Add a client-side module"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "For development, ensure `npm run server:client` is running. Remove no source files; regenerate the ignored `.gen.js` output by restarting the watcher. For a compiled run, execute `npm run build` before `npm run run`.\n",
+          "originSha256": "57469c0eaa7d841fa057adb1a9442b09a02921b17196663699ed7f24a58989bc",
+          "payload": "amendment-33",
+          "headingPath": [
+            "## Debugging and troubleshooting",
+            "### Browser changes do not appear"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "docs/frontend-migration/staged/TESTING_GUIDE.md",
+      "target": "docs/TESTING_GUIDE.md",
+      "metadataOriginSha256": "2828c430b419daaeeaa0090252c7740f10d713c63a45f5475081f891174c709b",
+      "metadata": {
+        "verification-scope": "complete canonical setup/database-safety/fixture/CI guide retained; Vue/compiler/client/system ownership and current managed-server behavior integrated from source; no new hosted-CI or operator rehearsal claimed",
+        "source-anchors": "tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json"
+      },
+      "operations": [
+        {
+          "kind": "replace-text",
+          "original": "The explicit 2026-10-13 decision retains this E2E boundary. Isolated built-browser fixtures belong to the client\nlayer even when another runner happens to start a server/database. Source-server browser workflows with real\npersistence belong to integration coverage; they are not built-application E2E. Exact runner selection comes from\nconfiguration and package scripts, with prospective frontend details in the staged testing amendment.",
+          "originSha256": "955db1dedf315cedcff3066539a06badf727ec8c215f98efef1898d1d21c134d",
+          "reviewedCurrentText": "The explicit 2026-10-13 decision retains this E2E boundary. Isolated built-browser fixtures belong to the client\nlayer even when another runner happens to start a server/database. Source-server browser workflows with real\npersistence belong to integration coverage; they are not built-application E2E. Exact runner selection comes from\nconfiguration and package scripts.",
+          "reviewedCurrentSha256": "990eaf5825b1e9c971a0913f75a86f8a250b4d9c19b715a76e9d8b3ba1588701",
+          "reconciliation": "The approved 2026-10-14 Testing cleanup removed its staging reference; retain the reviewed classification paragraph before adding the prepared guide section reference.",
+          "payload": "amendment-01"
+        },
+        {
+          "kind": "replace-text",
+          "original": "- UI helper state transitions; and\n",
+          "originSha256": "b8ace0fd749740d4a3ef4d7343cf1ea9a1d6b4a8ffc1df7cdeca179ffd41f06d",
+          "payload": "amendment-02",
+          "headingPath": [
+            "## Layer contracts",
+            "### Frontend tests"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Do not assume a global browser DOM. Save and restore every global installed by the test so one frontend spec cannot contaminate another.\n",
+          "originSha256": "2d4596b7033f168d137419c63d397bfb1d1df1466eb6e609ae58c4f9d2ef2912",
+          "payload": "amendment-03",
+          "headingPath": [
+            "## Layer contracts",
+            "### Frontend tests"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Playwright starts and stops the server according to `playwright.config.ts`. Outside CI, it may reuse a server already responding at the configured base URL. Stop unrelated processes or verify the responding instance before trusting the result.\n",
+          "originSha256": "97921a7fd715264ca5943d982dd1b1259571d6359198e4975a64ab3b686bc54e",
+          "payload": "amendment-04",
+          "headingPath": [
+            "## E2E setup",
+            "### 3. Install Chromium and run"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "npm run test:all      # all Vitest layers, build, then Playwright\n",
+          "originSha256": "645226f3e9ac647d65711bb89144c2375ace9d8b11e7d9ad4f1d8a5d54124070",
+          "payload": "amendment-05",
+          "headingPath": [
+            "## E2E setup",
+            "### 3. Install Chromium and run"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| Browser helper with stubbed globals | Frontend | real Pug wiring, navigation, or session state matters |\n",
+          "originSha256": "6d36aeff56f3864b6cd713a2f7ec5ebd4899cd593f35c1428af356ee4bcf6352",
+          "payload": "amendment-06",
+          "headingPath": [
+            "## Choosing the layer"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "## Archival coverage\n",
+          "originSha256": "8fca4397dacf02b33807181a6efca24b5d72a2425d2c3973f0dbcc3d45fc6464",
+          "payload": "amendment-07",
+          "headingPath": [
+            "## Archival coverage"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| `npm run test:frontend` | No | No | Stubbed globals only | Browser helper logic. |\n",
+          "originSha256": "17acfcf321acbd4f2ba5319714fe59b8fc5b9af27cebdb98bdc0650e0f82c4d1",
+          "payload": "amendment-08",
+          "headingPath": [
+            "## Command matrix"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Compare Node.js, MariaDB, environment files, process-level variables, generated output, Chromium version, and whether an old server is being reused. The workflow files and lockfile are the reproducibility baseline.\n",
+          "originSha256": "001b79057b7f6189ee3636ad25d5131a1bbe839ceff67785d491b029593629ec",
+          "payload": "amendment-09",
+          "headingPath": [
+            "## Troubleshooting",
+            "### CI passes a layer that fails locally"
+          ]
+        }
+      ],
+      "metadataReviewedCurrentSha256": "229687ea576b95736d10af1ecf48ba7eee2cb55a1c067d45a640054e4ffb71e4",
+      "metadataReconciliation": "Retain the independently reviewed 2026-10-14 production-reference cleanup metadata before applying the future-guide field changes."
+    },
+    {
+      "source": "docs/frontend-migration/staged/DATABASE.md",
+      "target": "docs/DATABASE.md",
+      "metadataOriginSha256": "211fa89e2ce678a30855f54b10197325b9811c666e6b2b457e213324d8437ab3",
+      "metadata": {
+        "last-verified": "2026-10-14",
+        "verification-scope": "Complete settings-aware schema, targeting, backup/rollback and archival procedures retained; generated frontend inputs and current-value persistence source-reviewed; no new installed-schema or restore rehearsal claimed.",
+        "source-anchors": "src/migrations/1789862400000-AddEntityArchival.ts; src/modules/database/entities/archive/EntityVisibilityPreference.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/dataSource.ts; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; src/controller/packingController.ts; src/modules/database/services/PackingService.ts; src/modules/api/contracts.ts; src/modules/database/entities/session/Session.ts; src/migrations; package.json; .github/workflows/ci.yml",
+        "next-review": "database-schema-or-targeting-change"
+      },
+      "operations": [
+        {
+          "kind": "replace-text",
+          "original": "migration datasource. Run it before every schema command in a fresh checkout.\n",
+          "originSha256": "47b6a9c3c2e3ae139e4b574b9e03a1ba95a07ea408cbcf4de4389eed737f15f6",
+          "payload": "amendment-01",
+          "headingPath": [
+            "## Prepare a migration workspace"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "## Database backup\n",
+          "originSha256": "3251f0b4454b7e9cc5806a2f8683b404339a57bf2819e8158bf29c28cb580aaa",
+          "payload": "amendment-02",
+          "headingPath": [
+            "## Database backup"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "docs/frontend-migration/staged/OPERATIONS.md",
+      "target": "docs/OPERATIONS.md",
+      "metadataOriginSha256": "b582ce5f7ee913498694c7d3fe4bb0b4c41d9602f704e3632f629b60af733dda",
+      "metadata": {
+        "last-verified": "2026-10-14",
+        "verification-scope": "Complete installation, configuration, storage, authentication and backup/restore procedures retained; compiled frontend distribution and loaded-client behavior source-reviewed; no new deployment, provider or delivery rehearsal claimed.",
+        "next-review": "release-layout-or-operational-procedure-change"
+      },
+      "operations": [
+        {
+          "kind": "replace-text",
+          "original": "production dependency manifests. It does not replace the need for:\n",
+          "originSha256": "c7ac57b9efb4889678a0b5dcedec0c87f75a5426052ac58b076bbdfedab16338",
+          "payload": "amendment-01",
+          "headingPath": [
+            "## Operational model"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "docs/\n",
+          "originSha256": "39979724c41ea9e7a7616a06d74f5021d3c866c2d9a769a79c2e0a9c6e72550f",
+          "payload": "amendment-02",
+          "headingPath": [
+            "## First installation from a release archive",
+            "### 2. Extract and verify the release"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The `docs/user-guide/` directory must be present because the application serves it as in-app help.\n",
+          "originSha256": "10b764bfbac2214ccb96d0d3e47853457b80b6d5313e694392f8c9827fdaba50",
+          "payload": "amendment-03",
+          "headingPath": [
+            "## First installation from a release archive",
+            "### 2. Extract and verify the release"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "### 4. Attach persistent files\n",
+          "originSha256": "640c1d9c0ec66f197d3ea59041118af199ff44600218ccb1fe9ae76759bc4c19",
+          "payload": "amendment-04",
+          "headingPath": [
+            "## First installation from a release archive",
+            "### 4. Attach persistent files"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "[Invoice Pools and Payments](user-guide/INVOICE_POOLS.md#privacy-proof-access-storage-and-retention).\n",
+          "originSha256": "2a301f668fe38895ee950f482475d9e865f5a5c7f597d37588de412296cfbaaf",
+          "payload": "amendment-05",
+          "headingPath": [
+            "## Persistent files",
+            "### Invoice retention"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Remove disposable test data according to normal application and retention procedures.\n",
+          "originSha256": "5cb8816a3bc0c9b1ee451e3707ba577d91e9c4d24bb26bb8185e000371622903",
+          "payload": "amendment-06",
+          "headingPath": [
+            "## Post-start validation"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "## Decommissioning\n",
+          "originSha256": "712f7b0c383b074cb99e1e5513bd971df81f7c7b1f3b21abc3148a2bc576878a",
+          "payload": "amendment-07",
+          "headingPath": [
+            "## Decommissioning"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "docs/frontend-migration/staged/UPGRADING.md",
+      "target": "docs/UPGRADING.md",
+      "metadataOriginSha256": "dd44a037ba28e99caa7ce4f4d1700ccfe92815e5032ad0b3ff5618b503fffa73",
+      "metadata": {
+        "last-verified": "2026-10-14",
+        "verification-scope": "Complete settings-aware upgrade, migration, storage and rollback procedures retained; coherent frontend distribution and browser validation source-reviewed; documentation packaging remains advisory and no new deployment/provider rehearsal is claimed.",
+        "next-review": "release-or-rollback-compatibility-change"
+      },
+      "operations": [
+        {
+          "kind": "replace-text",
+          "original": "## Before scheduling the change\n",
+          "originSha256": "dad34fad652893f742a16b32598dc3231c07ef41ef1c079f6464b32c7673da7c",
+          "payload": "amendment-01",
+          "headingPath": [
+            "## Before scheduling the change"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The release workflow does not create a sidecar checksum file. Obtain the expected digest from the approved release\n",
+          "originSha256": "9ab4d6674fbecc5b3e21244fcf0c8b88c6b186960ea0813d7a3f8a1d06d95c9a",
+          "payload": "amendment-02",
+          "headingPath": [
+            "## Stage the new version while the old version runs",
+            "### 1. Verify and extract the release"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "### 5. Start and validate\n",
+          "originSha256": "e478c2a820b77bd8e4beb8a64148c039b0bc9eea237f41464adcb2c023aeab84",
+          "payload": "amendment-03",
+          "headingPath": [
+            "## Maintenance-window procedure",
+            "### 5. Start and validate"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Only then remove the maintenance response and reopen normal traffic.\n",
+          "originSha256": "d924a02fc60e8902ccd62bab04e2925d0185c1856129887f64cc538a9d540dcd",
+          "payload": "amendment-04",
+          "headingPath": [
+            "## Maintenance-window procedure",
+            "### 5. Start and validate"
+          ]
+        }
+      ]
+    },
+    {
+      "source": "docs/frontend-migration/staged/DOCS_INDEX.md",
+      "target": "docs/README.md",
+      "metadataOriginSha256": "a8bddf2d2ee77d4062c50a2b75bebc8b18f002ddc11ce2f673613911853d0a82",
+      "metadata": {
+        "verification-scope": "complete routing to canonical user, contributor, operator and policy owners; framework decision and shared frontend contracts retained"
+      },
+      "operations": [
+        {
+          "kind": "replace-text",
+          "original": "\n\nThis index lists maintained documentation that exists in the repository. The native documentation migration is\n[complete](frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md), with independent advisory verification debt. Prospective frontend\ntechnical changes remain [staged](frontend-migration/staged/README.md) until authorized migration cutover.\n\nRead the [documentation policy](policies/DOCUMENTATION_POLICY.md) for source precedence, metadata rules, the canonical in-app\nhelp path, intentional feature exceptions, defect isolation, and advisory structural reports. Product documentation describes\nthe intended current working implementation: deliberate differences are documented, while transient defects remain in\nmigration-control records instead of being repeated across user, operator, maintainer, and AI documentation.\n\n",
+          "originSha256": "8ac8ec539d139300830fe2edfdc83932dd928063aeebf814bba0e13dc6f9b49a",
+          "reviewedCurrentText": "\n\nThis index lists maintained documentation that exists in the repository. The native documentation migration is\ncomplete, with independent advisory verification debt.\n\nRead the [documentation policy](policies/DOCUMENTATION_POLICY.md) for source precedence, metadata rules, the canonical in-app\nhelp path, intentional feature exceptions, defect isolation, and advisory structural reports. Product documentation describes\nthe intended current working implementation: deliberate differences are documented, while transient defects remain in\nmigration-control records instead of being repeated across user, operator, maintainer, and AI documentation.\n\n",
+          "reviewedCurrentSha256": "c4d9dd70d00f85915fb8a622e7da2749dad38b89fdeff530c9654340baa1b35c",
+          "reconciliation": "The approved 2026-10-14 production-index cleanup removed migration routing; retain that reviewed current input before preparing the future index introduction.",
+          "payload": "amendment-01"
+        },
+        {
+          "kind": "replace-text",
+          "original": "\n\nA published API contract remains a backlog deliverable. The frontend migration baseline inventories the existing\nnative routes. The [opt-in pilot](frontend-migration/FRONTEND_PILOT.md) now implements the generated v1 boundary;\nits [contract design](frontend-migration/API_CONTRACT_DESIGN.md) routes to authored YAML and generated consumers.\nThose migration records do not establish a published API or default-route cutover. The permission reference exists\nand is generated and verified in D03.\n\n",
+          "originSha256": "0ad6b9f46d8439015001cf111f85d8b1cd77509ecd95bf606c5f7237e2993549",
+          "reviewedCurrentText": "\n\nA published API contract remains a backlog deliverable. The permission reference exists and is generated and\nverified in D03.\n\n",
+          "reviewedCurrentSha256": "a86f4087abb1a8fe2cca7e2be34bf6349f5cf357541b9a64a62be58bc0c6cc51",
+          "reconciliation": "The approved 2026-10-14 index cleanup removed temporary pilot/API routing; the reviewed current paragraph is retained as the input to the prepared internal-contract explanation.",
+          "payload": "amendment-02"
+        },
+        {
+          "kind": "replace-text",
+          "original": "| Continue documentation remediation | [Migration status](frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md) |\n",
+          "originSha256": "6d9190c3ae551182a719d4cd87d443c3a0fe806bdf23bf2b61705378b4d1e31f",
+          "reviewedCurrentText": "| Continue documentation remediation | [Remediation backlog](backlog/documentation-remediation.yml) |\n",
+          "reviewedCurrentSha256": "195da21601bdc773a3917afa4aa0b76b47feaed26003cae43aaf78edc3f90847",
+          "reconciliation": "The approved 2026-10-14 index cleanup replaced the migration-status destination with the remediation backlog; preserve that same approved destination in the future routing row.",
+          "payload": "amendment-03"
+        },
+        {
+          "kind": "replace-text",
+          "original": "| [User guide home](user-guide/README.md) | D01-D03 and D05-D13 feature guidance is current, including basic and advanced activity plans; D14 help navigation and visuals are delivered, with optional rendered-content reports |\n| [Getting started](user-guide/GETTING_STARTED.md) | Current: D01 identity, guest recovery, profiles, migration, and account lifecycle verified |\n| [Your overview](user-guide/DASHBOARD.md) | Current: D02 navigation, profile-scoped collections, search/filtering, cards, and owner actions verified |\n| [Permissions and sharing](user-guide/PERMISSIONS.md) | Current: D03 cumulative grants, audiences, recipes, labels, presets, item fallback, and survey exclusion verified |\n| [Events](user-guide/EVENTS.md) | Current: D05 creation, registration, deadlines, dietary data, administration, related resources, export, permissions, and privacy; D06 links the dedicated cost workflow |\n| [Invoice pools and payments](user-guide/INVOICE_POOLS.md) | Current: D06 participant and organizer workflows, state transitions, assignments, takeovers, surcharges, invoice review, shares, settlement, proof privacy, and retention |\n| [Activity plans](user-guide/ACTIVITY_PLANS.md) | Current: D07 basic creation and participation plus D08 requirements, live coverage, recommendation generation, review, manual staging, application, and limitations |\n| [Surveys](user-guide/SURVEYS.md) | Current: D09 recurring-monthly primary use, one-month secondary use, creation, survey-specific sharing, guest recovery, Yes/Maybe/No voting, named results, collaborative combinations, header images, duplication, and deletion |\n| [Packing lists](user-guide/PACKING_LISTS.md) | Current: D10 creation-time items, shared assignments, Everyone/All behavior, browser-local Packed state, counters, event linkage, permissions, images, duplication, deletion, privacy, and troubleshooting |\n| [Drivers lists](user-guide/DRIVERS_LISTS.md) | Current: D11 driver, passenger, and organizer workflows; profile-derived identity; capacity and counters; event linkage; permissions; privacy; images; duplication; deletion; and troubleshooting |\n",
+          "originSha256": "96c2ea0c329c26a15ca778300080ff2c591281dc57f42271df4bda201db5aacd",
+          "payload": "amendment-04",
+          "headingPath": [
+            "## End users"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "\n## Operators and site reliability engineers\n",
+          "originSha256": "8bace09b5c5f4072271f1bbba0f5fe81797e97cd0dc72c364951aa537adffdc7",
+          "payload": "amendment-05"
+        },
+        {
+          "kind": "replace-text",
+          "original": "| Use the application | [User guide home](user-guide/README.md) |\n",
+          "originSha256": "746eb915c2ee37232f05cbc82d3332380afba51cdc2a509d22a591c47de890b4",
+          "payload": "amendment-06",
+          "headingPath": [
+            "## Quick task routing"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| Understand permissions as an organizer | [Permissions and sharing](user-guide/PERMISSIONS.md) |\n| Submit or administer shared event costs | [Invoice pools and payments](user-guide/INVOICE_POOLS.md) |\n",
+          "originSha256": "f83139e76740f588af5826b7b2d637e2075bc21ec9d29c50867c9b98590f9a5e",
+          "payload": "amendment-07",
+          "headingPath": [
+            "## Quick task routing"
+          ]
+        }
+      ],
+      "metadataReviewedCurrentSha256": "08a5d3ae3509888de4e6b048790d0197be7782063a5e9be102ca1de08f55cb66",
+      "metadataReconciliation": "Retain the independently reviewed 2026-10-14 production-reference cleanup metadata before applying the future-guide field changes."
+    }
+  ]
+}

@@ -5,16 +5,15 @@ documentation-metadata
 audience: all documentation readers
 owner: documentation maintainers
 status: current
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Editorial routing to canonical native guides, the implemented opt-in pilot, framework decision and current review; completed design contracts remain in canonical sections.
+verification-scope: editorial routing to canonical guides, active governance and backlog; ordinary native guide content and completed documentation-package history retained; no runtime or operator verification claimed
 source-anchors: repository-tree; package.json; README.md; AGENTS.md; .github/copilot-instructions.md; .github/copilot/; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; docs/user-guide/; src/server.ts; src/app.ts; src/modules/settings.ts; vitest.config.mts; playwright.config.ts; .github/workflows/ci.yml; .github/workflows/release.yml; docs/features/help/HELP_VISUALS.md; scripts/check-help-documentation.mjs; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: documentation-inventory-or-status-change
 -->
 
 This index lists maintained documentation that exists in the repository. The native documentation migration is
-[complete](frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md), with independent advisory verification debt. Prospective frontend
-technical changes remain [staged](frontend-migration/staged/README.md) until authorized migration cutover.
+complete, with independent advisory verification debt.
 
 Read the [documentation policy](policies/DOCUMENTATION_POLICY.md) for source precedence, metadata rules, the canonical in-app
 help path, intentional feature exceptions, defect isolation, and advisory structural reports. Product documentation describes
@@ -48,9 +47,6 @@ The canonical in-app help source is [`docs/user-guide/`](user-guide/). The appli
 | [Testing guide](TESTING_GUIDE.md) | Vitest/Playwright layer contracts, database safeguards, environments, commands, and CI | Current: D12/D14; content reports are separate from application tests |
 | [Activity requirement algorithm](features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md) | Detailed requirement and coverage algorithm | Current: D08 canonical requirement, coverage, allocation, job, review-state, application, and limitation reference |
 | [Permission system reference](PERMISSIONS_REFERENCE.md) | Generated bit/preset/default tables and maintainer authorization semantics | Current: D03 |
-| [Frontend migration baseline](frontend-migration/FRONTEND_MIGRATION_BASELINE.md) | Native behaviors, route/permission boundaries, test assertions and visual reference | Preserved comparator for each migration slice |
-| [Frontend foundation design](frontend-migration/FRONTEND_FOUNDATION_DESIGN.md) | Original framework/contract/localization choices and dated amendments | Pilot migration record; prospective canonical guidance remains [staged](frontend-migration/staged/README.md) |
-| [Frontend pilot](frontend-migration/FRONTEND_PILOT.md) and [parity review](frontend-migration/PILOT_PARITY_REVIEW.md) | Implemented opt-in scope and actual verification | Other migrations and default-route cutover remain future work; recorded results retain their individual scopes |
 
 ## Operators and site reliability engineers
 
@@ -64,11 +60,8 @@ The canonical in-app help source is [`docs/user-guide/`](user-guide/). The appli
 Use these four documents as one operating set. The runtime release archive and matching tagged migration workspace are
 separate deployment inputs, while the database and both upload directories form one state and backup unit.
 
-A published API contract remains a backlog deliverable. The frontend migration baseline inventories the existing
-native routes. The [opt-in pilot](frontend-migration/FRONTEND_PILOT.md) now implements the generated v1 boundary;
-its [contract design](frontend-migration/API_CONTRACT_DESIGN.md) routes to authored YAML and generated consumers.
-Those migration records do not establish a published API or default-route cutover. The permission reference exists
-and is generated and verified in D03.
+A published API contract remains a backlog deliverable. The permission reference exists and is generated and
+verified in D03.
 
 ## AI coding agents
 
@@ -83,7 +76,7 @@ commands, versions, test inventories, or operating procedures.
 D13 consolidated the AI layer. `AGENTS.md` and Copilot files now require both centralized policies; they remain entry
 points and topic-specific navigation aids rather than competing rule owners.
 
-## Decisions, migration, and quality controls
+## Decisions and quality controls
 
 - [DEC-001: survey combination authorization](decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md)
 - [DEC-002: OIDC callback path](decisions/DEC-002-OIDC-CALLBACK.md)
@@ -91,7 +84,6 @@ points and topic-specific navigation aids rather than competing rule owners.
 - [DEC-004: in-app help Markdown trust model](decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md)
 - [DEC-005: surveys and the general permission system](decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md)
 - [DEC-006: frontend framework](decisions/DEC-006-FRONTEND-FRAMEWORK.md)
-- [Migration status and continuation point](frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md)
 - [Documentation policy](policies/DOCUMENTATION_POLICY.md)
 - [Development policy](policies/DEVELOPMENT_POLICY.md)
 - [Machine-readable remediation backlog](backlog/documentation-remediation.yml)
@@ -114,12 +106,11 @@ Use `npm run docs:check:strict` to include all configured stale concepts in the 
 | Set up or understand the repository | [Project README](../README.md), then [Development](DEVELOPMENT.md) or [Architecture](ARCHITECTURE.md) |
 | Operate a production instance | [Production operations runbook](OPERATIONS.md), with [configuration](CONFIGURATION.md), [database](DATABASE.md), and [upgrade](UPGRADING.md) references |
 | Work on tests | [Testing guide](TESTING_GUIDE.md), then verify commands in `package.json` |
-| Continue the frontend migration | [Foundation design](frontend-migration/FRONTEND_FOUNDATION_DESIGN.md), [single contribution playbook](frontend-migration/staged/DEVELOPMENT.md#implementing-the-next-feature-slice) and [current review](frontend-migration/PILOT_PARITY_REVIEW.md), with the [behavior baseline](frontend-migration/FRONTEND_MIGRATION_BASELINE.md) and edge-case records |
 | Understand permissions as an organizer | [Permissions and sharing](user-guide/PERMISSIONS.md) |
 | Submit or administer shared event costs | [Invoice pools and payments](user-guide/INVOICE_POOLS.md) |
 | Maintain or review the permission engine | [Permission system reference](PERMISSIONS_REFERENCE.md) |
 | Understand activity requirement calculation | [Activity requirement algorithm](features/activity/ACTIVITY_REQUIREMENTS_ALGORITHM.md) |
-| Continue documentation remediation | [Migration status](frontend-migration/DOCUMENTATION_MIGRATION_STATUS.md) |
+| Continue documentation remediation | [Remediation backlog](backlog/documentation-remediation.yml) |
 | Update documentation safely | [Documentation policy](policies/DOCUMENTATION_POLICY.md), including the in-app help trust boundary |
 
 - [In-App Help Visuals](features/help/HELP_VISUALS.md) — ownership and update rules for maintained interface maps.

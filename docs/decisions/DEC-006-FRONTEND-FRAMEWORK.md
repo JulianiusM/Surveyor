@@ -1,14 +1,14 @@
 # DEC-006: Frontend framework decision
 <!--
 documentation-metadata
-audience: maintainers; frontend developers; migration reviewers
-owner: frontend migration maintainers
-status: migration-pending
-last-verified: 2026-10-13
+audience: maintainers; frontend developers
+owner: frontend maintainers
+status: current
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original technology comparison and SSR/hydration choice retained; linked refined Req6A amendment governs initial interactive/static delivery without changing selected dependencies; execution belongs to paired review
-source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; src/views/layout.pug; docs/frontend-migration/EDGE_CASES.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
-next-review: expanded-feature-migration
+verification-scope: active selected stack and original alternatives retained; dated rendering, localization, comparison and release amendments routed to canonical owners; no default-route or runtime change
+source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
+next-review: frontend-technology-or-rendering-boundary-change
 -->
 
 ## Decision and scope
@@ -19,8 +19,9 @@ Use shared i18next resources with primary i18next-vue binding and typed translat
 
 This is the original selected stack. It is not a benchmark or a claim that library defaults satisfy Surveyor's
 permissions, capacity, revisions, financial reviews, accessibility or private-cache boundaries.
-[Foundation](../frontend-migration/FRONTEND_FOUNDATION_DESIGN.md) owns original choices and dated D1–D5 amendments;
-[Development](../frontend-migration/staged/DEVELOPMENT.md) owns the one contribution recipe.
+The dated choices below retain their original rationale and approved amendments.
+General contribution and module rules belong to the active [Development Policy](../policies/DEVELOPMENT_POLICY.md);
+applicable temporary profiles are discovered through the [Documentation Policy](../policies/DOCUMENTATION_POLICY.md#document-roles-and-optional-task-profiles).
 
 ## Authorized fallback and scope amendment (2026-10-08)
 
@@ -28,12 +29,10 @@ The original rendering decision required same-component SSR/native forms for est
 That historical rationale remains: a static-only SPA could not preserve them.
 
 The approved Oct8 amendment supersedes mandatory interactive no-JavaScript operation.
-Interactive migrated routes require JavaScript and display a clear shared message or genuinely read-only result.
+Interactive component routes require JavaScript and display a clear shared message or genuinely read-only result.
 Same-component SSR/hydration remains; Help retains readable/searchable no-JavaScript GET/search.
 Progressive Overview loads independent active regions after session-authorized shell rendering.
-Neither amendment drops native behavior from unmigrated routes or authorizes default-route cutover.
-
-The later refined Req6A [startup delivery clarification](../frontend-migration/FRONTEND_FOUNDATION_DESIGN.md#authorized-interactive-startup-delivery-clarification-2026-10-13)
+The later refined Req6A startup delivery clarification (2026-10-13)
 retains Vue SSR and same-tree hydration while initial interactive content uses shared skeletons. Genuinely functional
 static content remains available; JavaScript-dependent controls wait for initialization and failure has an independent
 visible notice. The original choices above remain historical rationale, not permission to expose dead controls.
@@ -44,7 +43,7 @@ Surveyor already has template composition, typed browser modules, shared UI owne
 modules. Vue's SFC/template model preserves familiar HTML while moving interactive composition into one owner.
 Express keeps existing controllers/services/sessions/deployment rather than adopting a second application server.
 
-Add isolated Vite client/SSR outputs beside native esbuild until consumers migrate.
+Keep client, SSR and server build outputs separate according to their runtime consumers.
 Preserve the actual rendered Bootstrap/style baseline; installed package versions alone do not prove visual parity.
 Reuse browser-safe domain owners directly, without barrels/forwarding modules.
 
@@ -55,11 +54,11 @@ The original comparison used framework documentation and repository needs, not p
 | Candidate | Original assessment |
 |---|---|
 | Vue + Vite/Router/Query | Selected: typed SFC/template composition fits current HTML-oriented structure; integration still requires explicit routing/SSR/state/controls. |
-| Svelte + Vite or SvelteKit | Strongest alternative: compile-time reactivity and Kit conventions are viable, including a custom Express host; adapting load/action/routing ownership adds migration scope. |
+| Svelte + Vite or SvelteKit | Strongest alternative: compile-time reactivity and Kit conventions are viable, including a custom Express host; adapting load/action/routing ownership adds integration scope. |
 | React + Vite/router/query | Viable: typed JSX/composition, but another authoring model with no established repository/team advantage to offset it. |
 | Angular | Viable: integrated routing/DI/typed forms, but broader conventions replace more of Surveyor's lightweight organization than reviewed needs justify. |
 | Solid | Viable: signals/JSX/router, with equivalent integration/testing decisions and no demonstrated requirement advantage here. |
-| Pug plus enhancement library | Rejected as target: retains separate server/client presentation for interactive features; native remains the migration reference and owns separate outputs. |
+| Pug plus enhancement library | Rejected for interactive presentation: retains separate server/client presentation rather than one component owner. |
 
 Primary references: [Vue SFC](https://vuejs.org/guide/scaling-up/sfc.html),
 [Svelte TypeScript](https://svelte.dev/docs/svelte/typescript),
@@ -79,16 +78,16 @@ Do not add Nuxt merely for Vue SSR: Express already owns the relevant responsibi
 
 Express explicitly authorizes recognized document routes. Request-local Vue SSR uses the same component tree,
 router/query/locale state and controlled bootstrap; no self-HTTP or global private cache.
-The browser hydrates and uses typed JSON/multipart inside migrated route families.
-Initial interactive versus static output follows the linked delivery clarification; it does not remove the SSR build,
+The browser hydrates and uses typed JSON/multipart inside admitted component route families.
+Initial interactive versus static output follows the delivery clarification above; it does not remove the SSR build,
 production dependencies or request-local rendering ownership.
 
-Preserve provider/token/email/print/download document boundaries and native destinations until migrated.
+Preserve provider/token/email/print/download document boundaries.
 No wildcard HTML handling for APIs, missing assets or exports.
 [Vue Router history](https://router.vuejs.org/guide/essentials/history-mode.html)
 
-Complete component ownership at cutover prevents Vue/native scripts from competing over one subtree.
-Remove native entries only after all consumers retire. SSR HTML alone cannot prove active hydration.
+Complete component ownership prevents scripts from competing over one subtree.
+SSR HTML alone cannot prove active hydration.
 
 ## Shared components without a redesign
 
@@ -122,18 +121,30 @@ Generic controls receive data/events/injected operations without feature endpoin
 
 Use normal bindings and field-owned normalization, generated constraints and shared command/recovery behavior.
 No second validation language/schema-driven universal form engine.
-[Refresh/conflicts](../frontend-migration/REFRESH_CONFLICT_DESIGN.md) owns identity retirement, polling, current-value comparisons and
-financial/recommendation exceptions.
+Identity retirement, polling, current-value comparisons and separate financial/recommendation guarantees remain
+owned by their shared consumers and domain contracts.
 
 Shared i18next serves browser/server wording. The original provide/inject fallback was conditional on the primary
-binding failing its proof; the spike selected it without established authorization. D1 restores i18next-vue.
+binding failing its proof. An earlier implementation selected that fallback without established authorization;
+the approved 2026-10-07 amendment restores i18next-vue.
 Preload request-local central resources and prove locale isolation/hydration/reactivity.
 [i18next-vue SSR](https://i18next.github.io/i18next-vue/guide/ssr.html)
 
+### Authorized comparison and uncertainty amendments (2026-10-07)
+
+The original Packing design used a monotonic revision. The approved amendment replaces it with touched-current-value
+comparisons under existing locks, preserving unrelated fields and local drafts. A value changed away and back can
+match earlier evidence; financial revisions and reviewed recommendation fingerprints retain their separate guarantees.
+The unreleased v1 contract is corrected in place rather than adding another version.
+
+Unknown commands recover through admitted reads and deliberate review, without operation tracking or automatic replay.
+A read cannot establish the outcome of an uncertain creation. Retain its input and require an explicit decision before
+leaving or submitting again. These bounded choices preserve separate shared controller and persistence responsibilities.
+
 ## Build and development integration
 
-Keep root package/lockfile and existing release shape. Vite emits separate client/SSR artifacts; native esbuild
-retains its consumers. Explicit browser/bundler/server/SSR scopes prevent Node imports entering client output.
+Keep root package/lockfile and existing release shape. Vite emits separate client/SSR artifacts.
+Explicit browser/bundler/server/SSR scopes prevent Node imports entering client output.
 vue-tsc checks SFCs separately from Vite compilation.
 [Vite backend integration](https://vite.dev/guide/backend-integration),
 [Vite SSR](https://vite.dev/guide/ssr)
@@ -143,7 +154,7 @@ The earlier manual-refresh watch substitution was corrected. Serialized authored
 restarts Express only after completion. Production runs coherent built artifacts, not Vite.
 Externalized SSR dependencies remain production dependencies; generated outputs stay ignored.
 
-D5 supersedes retained-old-asset deployment: current-folder replacement, ordinary session update detection,
+The approved 2026-10-07 release amendment supersedes retained-old-asset deployment: current-folder replacement, ordinary session update detection,
 compatible loaded edits, one clean idle reload and preserved mounted drafts for missing chunks/incompatible commands.
 No additional operator protocol is introduced.
 
@@ -155,9 +166,9 @@ Accessible primitives are not certification: preserve semantic labels, keyboard/
 small-screen behavior.
 [Vue accessibility](https://vuejs.org/guide/best-practices/accessibility.html)
 
-Compare affected native/pilot scenes with equal data/actors/viewport and disclose intended amendments.
+Compare affected scenes against approved behavior with equal data/actors/viewport and disclose intended changes.
 Named shared operations and controller-owned method policy are implemented. Existing shared-action declarations
 also feed native factories and v1 policy/capability consumers, rather than retaining separate copied grants.
-Current source disposition and scope-specific results are in the
-[review](../frontend-migration/PILOT_PARITY_REVIEW.md). No bundle-size/framework benchmark, complete migration or production cutover is claimed.
+Current verification selection belongs to [Testing](../TESTING_GUIDE.md).
+No bundle-size or framework benchmark is claimed by this decision record.
 Documentation reports remain advisory.

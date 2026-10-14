@@ -5,14 +5,17 @@ documentation-metadata
 audience: documentation contributors; feature maintainers
 owner: product documentation maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Native maintained asset ownership and individual inspection rules; approved obsolete-asset cleanup; pilot changes remain staged.
-source-anchors: docs/user-guide/assets/; docs/user-guide/README.md; docs/user-guide/SURVEYS.md; docs/user-guide/PACKING_LISTS.md; src/views/layout.pug; src/views/surveyor/survey-vote.pug; src/views/packing/packing-view.pug; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
+verification-scope: per-corpus authoring ownership, complete localized article fallback and current reproduction source reviewed; no new image generation or pixel acceptance claimed
+source-anchors: docs/user-guide/assets/; docs/user-guide/README.md; docs/user-guide/SURVEYS.md; docs/user-guide/PACKING_LISTS.md; docs/user-guide/en/; docs/user-guide/de/; src/views/layout.pug; src/views/surveyor/survey-vote.pug; src/views/packing/packing-view.pug; src/frontend/components/AppHeader.vue; src/frontend/features/packing/; src/locales/; scripts/generate-help-visuals.mjs; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
 next-review: help-visual-or-visible-UI-change
 -->
 
-The images under `docs/user-guide/assets/` are maintained instructional visuals. The navigation image combines a **source-rendered screenshot of the actual application header** with numbered explanations placed outside that screenshot. It preserves the original logo, Home link, New and Overview menus, Help link and profile area. The example profile is fictional; this is not a capture of a live production account.
+Reviewed images in each Help corpus's `assets/` directory under `docs/user-guide/` are maintained instructional visuals.
+The navigation image combines a **source-rendered screenshot of the actual application header** with numbered
+explanations placed outside that screenshot. Use the actual logo, navigation, Help link and account/profile area for
+the article's corpus. The example profile is fictional; this is not a capture of a live production account.
 
 The other two images are explicitly captioned explanatory diagrams, not screenshots. Their labels and state distinctions must match the application. The survey example uses the visible option **1. day in month**, rather than inventing a replacement label.
 
@@ -24,9 +27,9 @@ The product documentation maintainers own the asset set. A feature maintainer id
 
 | Asset | Used by | Implementation sources to compare |
 |---|---|---|
-| `navigation-at-a-glance.png` | User-guide home | `src/views/layout.pug`, `src/views/users/dashboard.pug` |
+| `navigation-at-a-glance.png` | User-guide home | The article's actual rendered header; current template owners are `src/views/layout.pug`/`src/views/users/dashboard.pug`, and the localized component owner is `src/frontend/components/AppHeader.vue`. |
 | `survey-recurring-pattern.png` | Surveys | `src/views/surveyor/survey-create.pug`, `src/views/surveyor/survey-vote.pug` |
-| `packing-shared-vs-local.png` | Packing Lists | `src/views/packing/packing-create.pug`, `src/views/packing/packing-view.pug`, `src/public/js/packing.ts` |
+| `packing-shared-vs-local.png` | Packing Lists | The article's actual shared-assignment and browser-local Packed controls; current owners are `src/views/packing/`, `src/public/js/packing.ts` and `src/frontend/features/packing/`. |
 
 ## Authoring rules
 
@@ -35,9 +38,22 @@ The product documentation maintainers own the asset set. A feature maintainer id
   captions and alt text in every language; retain source/generation/provenance information only in maintainer evidence.
 - Use a non-empty Markdown alt description that communicates the instructional point without requiring the image.
 - Add a nearby caption when the image is an abstraction, when local versus shared state matters, or when a permission boundary needs clarification.
-- Store release-managed raster files under `docs/user-guide/assets/`. Do not embed remote images, data URIs, active SVG, scripts, or HTML.
+- Store release-managed raster files directly under the reviewed article corpus's `assets/` directory within
+  `docs/user-guide/`. Do not embed remote images, data URIs, SVG, scripts, or HTML.
 - Do not place personal data, real invitation tokens, credentials, production hostnames, or real participant names in a visual.
-- Treat all text inside the image as documentation: verify spelling, capitalization, and meaning against the current Pug or browser source.
+- Treat all text inside the image as documentation: verify spelling, capitalization, and meaning against the article's
+  actual rendered controls and reviewed language labels. Use shared catalog text where it owns those controls.
+
+## Language-owned images
+
+Each available `visual-labels.json` supplies its diagram copy; actual localized UI text comes from the shared catalog.
+Review equivalent localized captions, non-empty alt descriptions and full-size links with each image. Asset URLs
+identify the article's actual language, and authored local references stay within that article's corpus.
+
+If a required localized figure is missing, the [Help policy](../../policies/DOCUMENTATION_POLICY.md#localized-help)
+selects the complete reviewed English article with all its own English assets and a visible disclosure. Translated
+article text never borrows an English figure. Asset requests cannot independently choose another corpus, and invalid
+existing source fails its normal checks.
 
 ## Mandatory visual inspection
 
@@ -49,7 +65,7 @@ Use measured text widths and explicit padded content boxes when annotating. Pref
 
 ## Update procedure
 
-1. Identify the affected guide, source templates and browser modules. Capture navigation from the actual header; do not draw a substitute navbar from memory. An offline source-rendered fixture must preserve the template's markup and styling and use fictional account data. Record its origin and source/asset fingerprints in maintainer documentation or ignored authoring evidence, away from user-facing text and pixels.
+1. Identify the affected guide, source templates/components, browser modules and language labels. Capture navigation from the actual header; do not draw a substitute navbar from memory. An offline source-rendered fixture must preserve its actual markup and styling and use fictional account data. Record its origin and source/asset fingerprints in maintainer documentation or ignored authoring evidence, away from user-facing text and pixels.
 2. Update only the affected visual, retaining its filename when its purpose is unchanged. Keep annotations away from screenshot controls and clearly distinguish diagrams from screenshots.
 3. Open and inspect that individual exported image at full resolution and representative reduced sizes. Any subsequent change invalidates its prior acceptance: regenerate and inspect it again. Repeat until there are no visual defects in the final export.
 4. Recheck alt text, captions and the full-size link. On narrow screens, confirm that the image fits the page and readers can open it at full resolution. Keep the procedure understandable without the image.
@@ -57,3 +73,18 @@ Use measured text widths and explicit padded content boxes when annotating. Pref
 6. Confirm that the release bundle contains every referenced asset. Record the final image hash, dimensions, inspection sizes, findings and acceptance result. Inspect the packaged PNG again if packaging changes its bytes.
 
 Removing a visual requires removing its Markdown reference and either deleting the unreferenced asset or documenting why it remains. Any proposal to load visuals from an untrusted or remotely managed source must reopen [DEC-004](../../decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md) before implementation.
+
+## Reproducing localized figures
+
+After the normal application build, the maintained script exports figures for the selected reviewed locale corpus:
+
+```powershell
+node scripts/generate-help-visuals.mjs --locale=en --figure=navigation
+node scripts/generate-help-visuals.mjs --locale=de --figure=navigation
+```
+
+`--figure` limits exports; omitting it regenerates all three and requires inspecting every changed image.
+Labels and output are fixed under the catalog-selected `docs/user-guide/<locale>/` directory. Requests and flags do
+not select arbitrary source or output roots. This script uses the built Vue renderer, fictional account data and
+pinned styling without a database or application server; it does not regenerate the root corpus's template images.
+Ignored `.temp/help-visuals-<locale>/` fingerprints/previews are authoring evidence, not runtime dependencies.

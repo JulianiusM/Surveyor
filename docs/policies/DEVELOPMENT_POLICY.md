@@ -4,15 +4,15 @@ documentation-metadata
 audience: maintainers; developers; AI coding agents
 owner: project maintainers
 status: current
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: meaningful individual approval/semantic delegation review retained; explicit native-parity frontend migration boundary separates general defects and backend behavior changes from migration work; previously approved implementation and engineering/test boundaries preserved
+verification-scope: shared engineering and concise individual approval retained; generic task-context bootstrap, scoped profile selection and continuation/delegation freshness routed to the documentation policy
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
 next-review: explicit-maintainer-policy-amendment
 -->
 
 This is the authoritative owner of Surveyor's shared engineering rules. The
-[documentation policy](DOCUMENTATION_POLICY.md) owns document classification, audience, staging, decision provenance
+[documentation policy](DOCUMENTATION_POLICY.md) owns document classification, audience, decision provenance
 and approval. Practical procedures remain in the maintained development, architecture, testing and database guides.
 AI instruction files must link to these policies rather than introduce alternative rules.
 
@@ -21,6 +21,11 @@ AI instruction files must link to these policies rather than introduce alternati
 Read the current request, both policies and the relevant canonical guide before editing. Inspect the exact production
 behavior and tests, check the working tree and preserve unrelated user changes. Identify affected persistence,
 authorization, files, UI, tests and documentation boundaries, then make the smallest coherent authorized change.
+
+Apply the documentation policy's [optional task-profile context procedure](DOCUMENTATION_POLICY.md#document-roles-and-optional-task-profiles)
+before dependent edits and when scope or governing instructions change. Use its shared bootstrap, explicit selection
+and continuation/delegation evidence; missing profiles are normal. An applicable profile supplements these rules
+within its declared scope. Temporary boundaries do not belong in permanent guidance or supply additional approval.
 
 Treat explicit maintainer decisions and approved designs as constraints. Code is evidence of current behavior, not
 permission to rewrite the policy to match an implementation defect. Resolve conflicting instructions directly with
@@ -31,104 +36,60 @@ Do not infer approval from elapsed time, delegation, an existing defect or an ed
 Before dependent edits, compare the request with the actual canonical paths, policy and design anchors. If they
 disagree, state both sources directly and obtain explicit resolution even when the newer wording appears deliberate.
 Only a decision that explicitly identifies and resolves the conflict authorizes the override. Apply this rule equally
-to documentation names, technology choices, architecture, coding patterns and native behavior.
+to documentation names, technology choices, architecture, coding patterns and existing behavior.
 
 Preserve existing behavior unless a change is explicitly authorized or directly required by accepted implementation
-instructions. During frontend coexistence, native UI/behavior remains the reference; shared backend operations serve
-both frontends. Record bounded approved exceptions without broadening them into an unrelated redesign.
+instructions. Shared callers use the existing backend business owners. Record bounded approved exceptions without
+broadening them into an unrelated redesign.
 
-### Frontend migration boundary (2026-10-13)
+### Scope of separately authorized work
 
-The maintainer explicitly requires frontend migration to attain native visual and behavioral parity through shared
-backend owners. Classify a discovered difference against that reference and the recorded approved exceptions before
-changing it. A general application defect is separate from a defect introduced by the migration.
+General defects, large changes and backend behavior changes outside the accepted task scope belong in the existing
+backlog for a separate effort. A related frontend adjustment does not authorize an unrelated backend behavior change.
+Reuse and transport adaptation preserve existing business behavior rather than introduce a second implementation.
 
-General defects, large changes and backend behavior changes belong in the existing backlog for a separate effort;
-they are not fixed as part of frontend migration. Accompanying a backend behavior change with a minor frontend
-adjustment does not make it migration work. Reuse and transport adaptation must preserve the existing business
-behavior rather than introduce a second implementation or conceal an unrelated behavior change.
-
-Record each general defect once with its evidence, scope and disposition; a backlog entry or migration instruction
-does not authorize its implementation. Any separate effort requires its own explicit authorization under the
-required change explanation below. This clarification preserves previously explicitly approved work and its
-recorded provenance; it does not instruct agents to roll that work back or grant permission for further changes.
+Record each general defect once with its evidence, scope and disposition. A backlog entry does not authorize its
+implementation. A separate effort requires explicit authorization under the required change explanation below.
+Previously valid approvals retain their recorded scope; this rule grants no permission for further changes.
 
 ### Required change explanation (2026-10-13)
 
-The maintainer explicitly requires every AI agent to explain proposed changes briefly and simply, in addition to
-the existing direct approval rules. The subsequent explicit 2026-10-13 correction requires the following exact
-labels, in this order, before every approval request. Before presenting a change for maintainer review or approval,
-explain in the conversation:
+The maintainer's 2026-10-13 correction withdraws the quotation and mandatory read-back amendment in favor of concise,
+meaningful explanations. Earlier valid approvals retain their scope.
 
-- **Reason:** the concrete problem and why the change is needed.
-- **Implications:** the resulting behavior, affected scope and any potentially unintended consequences.
-- **Prior decisions and requirements:** whether an earlier choice or design requirement explains, limits or conflicts
-  with the change. Identify the relevant source, or state that no conflicting requirement was found.
+Every individual approval request must be short, simple and understandable on its own. Use these four labels in
+this order, with a brief sentence or two for each:
+
+- **Reason:** who encounters the problem, what currently happens and why the change is needed.
+- **Implications:** what the existing owner will change from the current rule or behavior to the proposed end state,
+  and the resulting user-visible effects or material risks.
+- **Prior decisions and requirements:** which earlier choice or requirement the change preserves, affects or
+  conflicts with. State when no conflict was found.
 - **History:** the relevant original choice, approved amendments and how the issue was discovered. Distinguish
-  verified history from inference; say when the history is unknown rather than inventing a rationale or approval.
+  observed evidence from inference; keep unknown rationale or authorization explicitly unknown.
 
-The maintainer's further explicit 2026-10-13 correction applies this complete format to **each and every individual
-approval**. One request must concern the smallest independently decidable change or conflict resolution. Several
-files or steps may belong to one request only when they are necessary for that same indivisible outcome. If the
-maintainer could approve one part and reject another, split those parts into separate requests, even when they
-support the same project or implementation plan. Presenting several requests in one message is permitted only
-when each is self-contained, with its own complete explanation, specific decision, approval rule/source link and
-direct question.
+Explain the change clearly in concise prose. Exact quotations, replacement text, code, diffs and implementation
+transcripts are forbidden in approval requests. Name affected material only where needed to define the decision's
+scope; avoid unexplained file inventories. A source link may identify an owner, but must not replace the explanation.
+Use familiar words and only the context needed to decide; define necessary technical terms. When several layers
+change, briefly name their shared owner and callers so the actual reuse and responsibility remain understandable.
 
-**Bundling is forbidden.** Never share one set of the four fields across multiple decisions, combine several
-approvals into an umbrella plan request, ask to approve a list such as A–D together, or replace an individual field
-with "see above", "the full plan" or another request's explanation. Formatting each field once is insufficient
-when the maintainer must decide more than one matter. An incomplete or bundled request establishes no approval;
-correct it before seeking a decision or implementing dependent work.
+One request covers the smallest independently decidable change. If one part could be approved and another rejected,
+make separate requests, each with its own four fields, specific decision and governing approval-rule link. Do not
+bundle decisions, share their explanations or substitute "see above" for a field. After the four fields, ask a direct
+question naming the decision and link the rule requiring approval. Never hide the request or implementation plan in
+documentation, infer consent from silence or request permission again for work already explicitly authorized.
 
-Every field must contain information relevant to that individual decision. Identify the concrete affected behavior
-and source, explain its specific effects and material risks, name the original choice and applicable amendments,
-and state the actual discovery evidence and its limits. Generic policy acknowledgements, unrelated findings,
-blanket assurances or repeated boilerplate do not provide an informed choice. Unknown rationale or authorization
-must remain explicitly unknown. Do not claim that a proposed remedy has passed checks which have not been run.
+Before presenting each request, obtain an independent nonauthor review and root review against the inspected source.
+Reject and rewrite requests that are lengthy, quote proposed edits, depend on jargon or fail to explain what changes
+to what, why, the consequences, affected decisions and relevant history. Correct labels and a declaration of compliance
+are insufficient. Both reviewers must assess meaning, actual shared adoption and approval provenance; no prescribed
+read-back or verbatim reproduction is required.
 
-**Meaningful information is mandatory (2026-10-13).** The maintainer explicitly rejected correctly labeled requests
-which left the affected journey, proposed edit or shared responsibilities unclear. The four fields must let the
-maintainer understand and decide the individual change without reconstructing it from code, links or earlier messages:
-
-- In **Reason**, identify the feature and who encounters the problem, explain how it happens, and give a concrete
-  current outcome. Use a short example when timing, alternative entry points or concurrency would otherwise be unclear.
-- In **Implications**, say exactly what will change and describe the resulting observable behavior. For changes across
-  frontends or layers, identify the existing routes/functions/modules to edit and explain each owner's responsibility.
-  Trace how the affected callers will use the shared implementation. State material risks and a practical alternative
-  where it would affect the decision; do not substitute an unexplained file inventory or a blanket assurance.
-- Explain modularization and reuse concretely whenever they are affected: which owner retains each business rule,
-  which repeated steps are consolidated, and which separate input/response handling is necessary. If existing paths
-  differ, identify their users and the reason for retaining or changing each difference. A promise to "share logic"
-  is insufficient. Do not introduce another implementation of the same responsibility to fix only one caller.
-- In **Prior decisions and requirements**, connect the actual proposed change to the applicable approved choices and
-  constraints. Specify the exact preserved behavior or bounded exception being requested; citing DRY or a policy name
-  alone does not explain that relationship.
-- In **History**, identify what the source/history actually establishes, any relevant approved amendments, and the
-  evidence used to discover the issue. Distinguish an observed failure from a source-inferred schedule, an unrun check
-  or an unknown original rationale. Do not label a path "legacy" instead of explaining why it exists and who uses it.
-
-Lead with plain user actions and outcomes, then add code identifiers as precise anchors. Define necessary technical
-terms at first use; internal shorthand must never carry the explanation. Keep the request short without removing
-information needed to understand the change, its scope, responsibility boundaries or consequences.
-
-Keep this explanation short and use plain language. After these four labeled fields, identify the specific decision
-being requested, name the rule requiring approval and link its governing source, then ask the maintainer directly.
-Do not substitute an unlabeled summary, hide the request in a document or infer an answer from elapsed time.
-Documentation may record the decision afterward, but must never substitute for this explanation or approval request.
-
-The delegating agent includes this per-decision format and the actual authorization in every handoff, and requires
-the delegated agent to acknowledge them. A delegated agent reports unresolved decisions to the coordinating agent;
-the root agent reviews each request separately for all four substantive fields, its exact single decision, approval
-rule/source link and evidence before presenting it to the maintainer. This review must check meaning as well as labels:
-can the maintainer identify the affected user journey, the current problem, the precise proposed edits, the shared
-owners/callers, the before/after behavior and the material consequences from the request itself? Can the reviewer
-trace the claimed reuse to the inspected source rather than infer it from function names? Reject and rewrite any
-request which fails these checks, even when every label is present. Reject bundled, incomplete, jargon-dependent or
-irrelevant explanations. Delegation and a reviewed request grant no implementation approval.
-Track the maintainer's answer against that individual decision; approval of one request does not approve another.
-This requirement supplements the existing approval boundaries; it neither grants implementation approval nor
-requires asking again for work already authorized.
+Withdraw and reissue a rejected unresolved request. Its unclear wording or an inferred answer supplies no approval.
+Existing valid approvals remain effective. Pass current authorization, unresolved decisions and these concise
+requirements to every delegated agent; require its acknowledgement. Track each answer against that individual
+decision. Delegation or successful checks cannot grant approval or certify the quality of an explanation.
 
 ## Implementation principles
 
@@ -161,9 +122,9 @@ requires asking again for work already authorized.
   Every complex method requires method-level JSDoc describing its contract **and internal code comments explaining
   its meaningful steps**. JSDoc does not satisfy the internal-comment requirement. Keep comments accurate and current;
   explain input selection, checks, transformations, persistence, side effects and recovery without restating obvious
-  syntax. Pug templates/mixins use unbuffered comments explaining arguments, render data, conditions,
-  shared/personal state and browser DOM hooks. Do not substitute comments for clear code.
-- Pass optional feature/page state through renderer `data` and explicit mixin arguments. `res.locals` remains the
+  syntax. Templates/components explain their inputs, rendered data, conditions, shared/personal state and
+  DOM lifecycle hooks in the established comment style. Do not substitute comments for clear code.
+- Pass optional feature/page state through explicit component inputs and the owning renderer's data contract. `res.locals` remains the
   established common request-infrastructure channel. Keep labels, field names, routes, parsing and user Help aligned.
 - Keep archival, personal visibility, permanent deletion and file retention separate. Archive/restore must not delete
   records or files. Permanent deletion remains the simple operation in its existing feature service.
@@ -210,21 +171,23 @@ Database-backed tests use dedicated schemas and credentials with no privileges o
 Every agent, including subagents, applies this policy and the documentation policy at task start and throughout the
 change. The delegating agent supplies current authorizations, file ownership, protected boundaries and unresolved
 decisions. Each agent reports violations or conflicts immediately and completes unaffected authorized work while
-required approval remains pending. The final review checks actual production adoption, native/reference preservation,
+required approval remains pending. The final review checks actual production adoption, behavior preservation,
 policy compliance and truthful evidence; a passing helper test or a comment alone does not establish acceptance.
 
 Use the following task procedure; a repeated statement that policies were followed is not evidence:
 
-1. Read both policies and the affected canonical/design sources before editing. Inspect the working tree and identify
-   the exact task-owned files, existing user changes, protected native reference and approval boundaries.
-2. Resolve conflicts directly before dependent edits. Pass the resolved decision, file ownership, remaining
-   conflicts and required approval-request format to every subagent; require its policy acknowledgement and review
-   its actual changes. Apply the [frontend migration boundary](#frontend-migration-boundary-2026-10-13) before
-   expanding a migration task; classify general defects for the separate backlog effort. The root agent reviews
-   any delegated approval request under the required change explanation
-   before presenting it to the maintainer. Check its plain-language journey, concrete before/after change, existing
-   owners and actual shared adoption against the source; a correctly formatted but unclear request is rejected and
-   rewritten before asking. No missing substantive explanation can be supplied by a documentation file.
+1. Obtain current task context through the documentation policy's shared bootstrap and read both policies and affected
+   canonical/design sources before editing. Refresh selected profile identities on continuation or scope changes.
+   Inspect the working tree and identify the exact task-owned files, existing user
+   changes, active profile scope, existing behavior and approval boundaries.
+2. Resolve conflicts directly before dependent edits. Pass the resolved decision, file ownership, applied profile,
+   remaining conflicts and required approval-request format to every subagent; require its policy acknowledgement
+   and review its actual changes. Keep general defects outside the authorized scope and follow the
+   [separate-work boundary](#scope-of-separately-authorized-work) before expanding the task. The root agent and an
+   independent nonauthor review each approval request under the required change explanation before presentation.
+   Check its plain-language journey, concrete before/after change, existing owners and actual shared adoption against
+   the source. Reject and rewrite unclear, lengthy or quotation-based requests before asking. No missing substantive
+   explanation can be supplied by a documentation file.
 3. Review every touched nontrivial operation for a purposeful contract, separate in-code explanations of its steps,
    logical spacing and readable control flow. Comment presence alone does not satisfy this review. Preserve existing
    module ownership and neighboring style; do not apply a blanket formatter or refactor unrelated functions.
@@ -235,7 +198,7 @@ Use the following task procedure; a repeated statement that policies were follow
    cover the full authored inventory. Never exclude a task-owned file just to make the result clean.
 5. Inspect the advisory documentation/classification report and resolve task-created location violations. Preserve
    its nonblocking delivery policy. Run the appropriate production checks, then obtain an independent review of
-   approval provenance, semantic boundaries, readability and native preservation where the task changes those risks.
+   approval provenance, semantic boundaries, readability and behavior preservation where the task changes those risks.
 6. Report actual findings, evidence, scope and limitations. Resolve violations in owned changes or seek a direct
    decision; do not declare an incomplete review or a skipped check successful.
 

@@ -4,9 +4,9 @@ documentation-metadata
 audience: developers; maintainers; AI agents
 owner: test maintainers
 status: current
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared strict built-application/database E2E and client/source-integration classification clarified by explicit 2026-10-13 decision; native setup/database safety and advisory reporting retained; pilot runtime detail stays staged
+verification-scope: established native runner/setup guidance retained; approved removal of frontend staging references only; no new test execution claimed
 source-anchors: tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs
 next-review: test-layout-command-or-help-validation-change
 -->
@@ -21,7 +21,7 @@ Surveyor uses two runners with four test layers:
 The explicit 2026-10-13 decision retains this E2E boundary. Isolated built-browser fixtures belong to the client
 layer even when another runner happens to start a server/database. Source-server browser workflows with real
 persistence belong to integration coverage; they are not built-application E2E. Exact runner selection comes from
-configuration and package scripts, with prospective frontend details in the staged testing amendment.
+configuration and package scripts.
 
 The test file suffix is `*.spec.ts`. Runner configuration and the repository tree are the source of truth for inventory; do not hard-code test counts in documentation.
 

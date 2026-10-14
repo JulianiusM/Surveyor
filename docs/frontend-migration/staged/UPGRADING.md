@@ -1,30 +1,64 @@
-# Staged frontend upgrade amendment
+# Staged frontend upgrading amendments
 <!--
 documentation-metadata
-audience: operators; maintainers
-owner: application operators
+audience: maintainers; frontend developers; migration reviewers
+owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved frontend release delta and opt-in coexistence clarified against the cutover boundary; installed-folder and rollback evidence owned by paired review
-source-anchors: .github/workflows/release.yml; package.json; src/modules/frontendPilotRenderer.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/UPGRADING.md
-next-review: frontend-production-cutover
-canonical-merge-target: docs/UPGRADING.md
-production-reference: 2dfa257 native documentation; not evidence of installed production
+verification-scope: digest-guarded frontend amendments preserve complete reviewed candidate guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
+next-review: next-authorized-migration-slice-or-cutover
 -->
 
-Merge this amendment into [Upgrading and Rolling Back](../../UPGRADING.md) at authorized frontend cutover,
-reconcile changes and remove the copy. Preserve canonical backup, file-retention, targeting and rollback procedures.
+These amendments retain the reviewed frontend guidance without copying unchanged production procedures.
+The [profile](../PROFILE.md) governs preparation and review; its [manifest](../documentation-boundary.json)
+owns destination mapping and exact operations. Payload links use their mapped production location.
+Surrounding notes use this file's location. Preparing complete temporary output does not authorize cutover.
 
-Install matching Express, client/SSR, generated contract/catalog and reviewed pilot Help artifacts.
-Runtime pilot Help is `docs/user-guide/<locale>/`; native `docs/user-guide/` stays unchanged.
-Staged maintainer documents are never runtime resources. D5 adds no retained old-asset directory or external steps:
-compatible loaded edits may finish; clean idle views reload once; missing chunks/incompatible commands retain drafts.
+## Before scheduling the change — amendment-01
 
-Opt-in coexistence retains native destinations for workflows awaiting migration. It is not a default-route cutover;
-default-route replacement requires complete feature parity and direct maintainer authorization. The shared backend
-keeps business policy in existing controllers/pure DBAL and lets native/v1 adapters retire independently.
-Use ordinary smoke verification plus emitted assets/hydration/required controls; SSR HTML alone proves neither.
-D3 corrects unreleased v1 in place; D2 adds no Packing revision schema/replacement migration.
-Release-specific migrations/rollback compatibility remain canonical. Final checks belong to the [review](../PILOT_PARITY_REVIEW.md);
-documentation reports remain advisory and no deployment rehearsal is claimed.
+<!-- delta:amendment-01 -->
+The runtime bundle includes matching Express/server-rendering output, fingerprinted client assets, generated API
+contracts and language catalogs. Keep these together with the reviewed Help corpora and runtime dependencies.
+See the [release-content inventory](OPERATIONS.md#2-extract-and-verify-the-release) before activating the release.
+Production runs the existing Node service without a Vite development server or additional frontend asset service.
+
+## Before scheduling the change
+
+<!-- /delta:amendment-01 -->
+
+## 1. Verify and extract the release — amendment-02
+
+<!-- delta:amendment-02 -->
+Verify the frontend renderer, client manifest/assets, generated contract validators and language resources listed in
+the [operations runbook](OPERATIONS.md#2-extract-and-verify-the-release). Do not assemble a release from selected files
+belonging to different builds or run generation inside the installed runtime directory.
+
+The release workflow does not create a sidecar checksum file. Obtain the expected digest from the approved release
+
+<!-- /delta:amendment-02 -->
+
+## 5. Start and validate — amendment-03
+
+<!-- delta:amendment-03 -->
+Replace the compiled runtime and frontend artifacts together. The application detects the new build through normal
+session refresh: compatible open edits may finish, and a clean idle page reloads once. Missing chunks or incompatible
+commands preserve mounted drafts for deliberate recovery. No retained old-client asset directory is required.
+This browser recovery does not remove the maintenance window, schema checks or rollback boundaries above.
+
+### 5. Start and validate
+
+<!-- /delta:amendment-03 -->
+
+## 5. Start and validate — amendment-04
+
+<!-- delta:amendment-04 -->
+On pages using the Vue frontend, fetch the emitted scripts/styles and exercise required controls after initialization.
+Check Help navigation/search and the selected language as well as successful server rendering. A rendered document or
+healthy server alone does not verify initialized controls; use the [full operations checklist](OPERATIONS.md#post-start-validation).
+Validate enabled identity-provider and SMTP workflows independently rather than infer them from frontend loading.
+
+Only then remove the maintenance response and reopen normal traffic.
+
+<!-- /delta:amendment-04 -->

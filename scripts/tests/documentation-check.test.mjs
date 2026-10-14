@@ -21,6 +21,7 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {test} from 'node:test';
+import {discoverTaskProfiles, parseDocumentationDelta, parseMetadataBlock, walkFiles} from '../check-documentation.mjs';
 
 // Dependency-free maintainer diagnostics; never part of required application CI.
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -93,12 +94,320 @@ function expectError(root, type) {
     assert.ok(report.errors.some(error => error.type === type), JSON.stringify(report.errors));
 }
 
+/** Add an explicitly scoped synthetic profile; no real task directory is assumed. */
+function writeTaskProfile(root, directory, extraFields = '') {
+    const fields = `activation-scope: isolated documentation review${extraFields ? `\n${extraFields}` : ''}`;
+    const profileMetadata = metadata.replace('next-review: none', `next-review: none\n${fields}`);
+    write(root, `${directory}/PROFILE.md`, `# Task profile\n${profileMetadata}\n`);
+}
+
+/** Supply only synthetic governance. Bootstrap must not require a matching global
+ * source fingerprint or all unrelated documentation diagnostics to be clean. */
+function contextFixture(t) {
+    const root = fixture(t);
+    write(root, 'AGENTS.md', `# Agent routing\n${metadata}\nRead both current policies.\n`);
+    write(root, 'docs/policies/DOCUMENTATION_POLICY.md', `# Documentation policy\n${metadata}\nDiscovery grants no approval.\n`);
+    write(root, 'docs/policies/DEVELOPMENT_POLICY.md', `# Development policy\n${metadata}\nControllers own business rules.\n`);
+    return root;
+}
+
+/** Exercise the public CLI and its actual serialized continuation contract. */
+function context(root, args = []) {
+    const result = run(script, ['--root', root, '--context', ...args]);
+    assert.equal(result.status, 0, result.stderr);
+    return JSON.parse(result.stdout);
+}
+
+test('context bootstrap accepts no profiles and does not run the global report', t => {
+    const root = contextFixture(t);
+    write(root, 'docs/UNCLASSIFIED.md', '# RETIRED_CONCEPT\n[Broken](absent.md)\n');
+    const report = context(root, ['--purpose', 'Inspect an ordinary feature', '--path', 'src/feature.ts']);
+    assert.equal(report.state, 'current-identities');
+    assert.equal(report.profiles.selectedCount, 0);
+    assert.deepEqual(report.profiles.available, []);
+    assert.equal(report.sources.length, 3);
+    assert.ok(report.sources.every(source => source.content && /^[a-f0-9]{64}$/u.test(source.sha256)));
+    assert.equal(report.sourceFingerprint, undefined);
+    assert.equal(report.handoff.authorization, null);
+    const listing = run(script, ['--root', root, '--profiles']);
+    assert.equal(listing.status, 0, listing.stderr);
+    assert.deepEqual(JSON.parse(listing.stdout).profiles, []);
+});
+
+test('context discovery delivers candidate bodies without selecting or loading their references', t => {
+    const root = contextFixture(t);
+    writeTaskProfile(root, 'docs/operations-review');
+    fs.appendFileSync(path.join(root, 'docs/operations-review/PROFILE.md'), '\n[Working procedure](WORK.md)\n');
+    const report = context(root, ['--purpose', 'An approved general task']);
+    assert.equal(report.profiles.available.length, 1);
+    assert.match(report.profiles.available[0].content, /Working procedure/u);
+    assert.equal(report.profiles.available[0].selected, false);
+    assert.equal(report.sources.length, 3);
+    assert.equal(report.state, 'current-identities');
+    assert.equal(report.handoff.authorization, null);
+});
+
+test('selected context loads owned working material and preserves caller-held handoff statements', t => {
+    const root = contextFixture(t);
+    const profile = 'docs/operations-review/PROFILE.md';
+    writeTaskProfile(root, 'docs/operations-review');
+    write(root, 'docs/operations-review/WORK.md', `# Working procedure\n${metadata}\nA scoped procedure.\n`);
+    fs.appendFileSync(path.join(root, profile), '\n[Working procedure](WORK.md)\n');
+    const first = context(root, ['--profile', profile, '--purpose', 'Inspect storage', '--path', 'src/']);
+    assert.equal(first.profiles.selectedCount, 1);
+    assert.ok(first.sources.some(source => source.path.endsWith('/WORK.md') && source.content.includes('scoped procedure')));
+    first.receipt.authorization = {decision: 'caller supplied approval provenance', scope: ['src/']};
+    first.receipt.unresolvedDecisions = [{decision: 'caller supplied unresolved consequence'}];
+    first.receipt.selectionReasons = {[profile]: 'Caller assessed storage responsibility against the declared scope'};
+    write(root, 'artifacts/context.json', JSON.stringify(first));
+    const resumed = context(root, ['--expect-context', 'artifacts/context.json']);
+    assert.equal(resumed.state, 'current-identities');
+    assert.deepEqual(resumed.profiles.selected, [profile]);
+    assert.deepEqual(resumed.handoff.authorization, first.receipt.authorization);
+    assert.deepEqual(resumed.handoff.unresolvedDecisions, first.receipt.unresolvedDecisions);
+    assert.deepEqual(resumed.handoff.selectionReasons, first.receipt.selectionReasons);
+    assert.deepEqual(resumed.task, first.task);
+});
+
+test('selected profile changes and disappearance invalidate held context distinctly', t => {
+    const root = contextFixture(t);
+    const profile = 'docs/operations-review/PROFILE.md';
+    writeTaskProfile(root, 'docs/operations-review');
+    const first = context(root, ['--profile', profile]);
+    write(root, 'artifacts/context.json', JSON.stringify(first.receipt));
+    fs.appendFileSync(path.join(root, profile), '\nA newly changed scoped rule.\n');
+    const changed = context(root, ['--expect-context', 'artifacts/context.json']);
+    assert.equal(changed.state, 'review-required');
+    assert.ok(changed.reviewRequired.some(item => item.type === 'context-source-changed' && item.path === profile));
+    fs.unlinkSync(path.join(root, profile));
+    const missing = context(root, ['--expect-context', 'artifacts/context.json']);
+    assert.equal(missing.state, 'review-required');
+    assert.ok(missing.reviewRequired.some(item => item.type === 'selected-profile-unavailable' && item.path === profile));
+    assert.deepEqual(missing.receipt.selectedProfiles, [profile]);
+    writeTaskProfile(root, 'docs/operations-review');
+    fs.writeFileSync(path.join(root, profile), fs.readFileSync(path.join(root, profile), 'utf8').replace('status: current', 'status: historical'));
+    assert.ok(context(root, ['--expect-context', 'artifacts/context.json']).reviewRequired
+        .some(item => item.type === 'selected-profile-unavailable'));
+});
+
+test('resume checks governance, selected references and manifest bytes without manufacturing approval', t => {
+    const root = contextFixture(t);
+    const profile = 'docs/operations-review/PROFILE.md';
+    writeTaskProfile(root, 'docs/operations-review', 'replacement-manifest: boundary.json');
+    write(root, 'docs/operations-review/boundary.json', JSON.stringify({replacements: []}));
+    write(root, 'docs/operations-review/WORK.md', `# Work\n${metadata}\n`);
+    fs.appendFileSync(path.join(root, profile), '\n[Work](WORK.md)\n');
+    const first = context(root, ['--profile', profile, '--purpose', 'An already approved request']);
+    write(root, 'artifacts/context.json', JSON.stringify(first));
+    for (const changedPath of ['AGENTS.md', 'docs/operations-review/WORK.md', 'docs/operations-review/boundary.json']) {
+        fs.appendFileSync(path.join(root, changedPath), '\n');
+        const resumed = context(root, ['--expect-context', 'artifacts/context.json']);
+        assert.ok(resumed.reviewRequired.some(item => item.type === 'context-source-changed' && item.path === changedPath));
+        assert.equal(resumed.handoff.authorization, null);
+    }
+    const changedScope = context(root, ['--expect-context', 'artifacts/context.json', '--no-profile', '--purpose', 'A different task']);
+    assert.deepEqual(changedScope.profiles.selected, []);
+    assert.ok(changedScope.reviewRequired.some(item => item.type === 'context-scope-changed'));
+});
+
+test('context retains unresolved freshness review and reports malformed caller evidence', t => {
+    const root = contextFixture(t);
+    const first = context(root);
+    first.receipt.reviewRequired.push({type: 'caller-unresolved-review', message: 'Still awaiting actual review'});
+    write(root, 'artifacts/context.json', JSON.stringify(first));
+    assert.ok(context(root, ['--expect-context', 'artifacts/context.json']).reviewRequired
+        .some(item => item.type === 'unresolved-context-review'));
+    write(root, 'artifacts/context.json', '{not JSON');
+    const malformed = context(root, ['--expect-context', 'artifacts/context.json']);
+    assert.ok(malformed.reviewRequired.some(item => item.type === 'invalid-expected-context'));
+    assert.equal(malformed.state, 'review-required');
+});
+
+test('context rejects unsafe owned paths and does not silently use report mode for selection', t => {
+    const root = contextFixture(t);
+    assert.ok(context(root, ['--path', '../outside']).reviewRequired.some(item => item.type === 'invalid-context-path'));
+    const result = run(script, ['--root', root, '--profile', 'docs/operations-review/PROFILE.md']);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /require --context/u);
+});
+
+test('profile declaration inventory includes invalid and inactive markers without claiming canonical owners', t => {
+    const root = fixture(t);
+    writeTaskProfile(root, 'docs/operations-review');
+    writeTaskProfile(root, 'docs/retired-review');
+    const retired = path.join(root, 'docs/retired-review/PROFILE.md');
+    fs.writeFileSync(retired, fs.readFileSync(retired, 'utf8').replace('status: current', 'status: historical'));
+    write(root, 'docs/broken-review/PROFILE.md', '# Unclassified marker\n');
+    fs.mkdirSync(path.join(root, 'docs/non-file-review/PROFILE.md'), {recursive: true});
+    writeTaskProfile(root, 'docs/features');
+    const config = JSON.parse(fs.readFileSync(path.join(root, 'docs/policies/documentation-check.json'), 'utf8'));
+    const discovered = discoverTaskProfiles(root, config);
+    assert.deepEqual(discovered.profileDirectories, ['docs/broken-review', 'docs/features', 'docs/non-file-review',
+        'docs/operations-review', 'docs/retired-review']);
+    assert.deepEqual(discovered.profiles.map(profile => profile.directory), ['docs/operations-review']);
+    assert.ok(discovered.errors.some(error => error.type === 'invalid-task-profile'));
+    assert.ok(discovered.errors.some(error => error.type === 'task-profile-role-conflict' && error.path === 'docs/features/PROFILE.md'));
+});
+
+test('Windows case aliases cannot reclassify a canonical category as temporary profile material', {
+    skip: process.platform !== 'win32',
+}, t => {
+    const root = fixture(t);
+    writeTaskProfile(root, 'docs/Features');
+    const config = JSON.parse(fs.readFileSync(path.join(root, 'docs/policies/documentation-check.json'), 'utf8'));
+    const discovered = discoverTaskProfiles(root, config);
+    assert.deepEqual(discovered.profileDirectories, ['docs/Features']);
+    assert.equal(discovered.profiles.length, 0);
+    assert.ok(discovered.errors.some(error => error.type === 'task-profile-role-conflict'));
+});
+
+test('unreadable profile metadata remains a finding with its temporary declaration inventory', t => {
+    const root = fixture(t);
+    const profile = 'docs/operations-review/PROFILE.md';
+    writeTaskProfile(root, 'docs/operations-review');
+    const config = JSON.parse(fs.readFileSync(path.join(root, 'docs/policies/documentation-check.json'), 'utf8'));
+    const readFile = fs.readFileSync;
+    // Replace only the external filesystem read failure. Production discovery,
+    // metadata ownership and declaration inventory remain the actual code path;
+    // this does not claim a platform ACL or release rehearsal was performed.
+    t.mock.method(fs, 'readFileSync', function unavailableProfileRead(filename, ...args) {
+        if (filename === path.join(root, profile)) throw Object.assign(new Error('Fixture permission denied'), {code: 'EACCES'});
+        return readFile.call(fs, filename, ...args);
+    });
+    const discovered = discoverTaskProfiles(root, config);
+    assert.deepEqual(discovered.profileDirectories, ['docs/operations-review']);
+    assert.equal(discovered.profiles.length, 0);
+    assert.ok(discovered.errors.some(error => error.type === 'unreadable-task-profile' && error.path === profile));
+    assert.equal(fs.existsSync(path.join(root, 'docs/user-guide/README.md')), true);
+});
+
+test('unavailable delta payloads cannot abort the shared optional profile inventory', t => {
+    const root = fixture(t);
+    writeTaskProfile(root, 'docs/operations-review', 'staging-directory: staged\nreplacement-manifest: boundary.json');
+    const source = 'docs/operations-review/staged/NOTES.md';
+    write(root, source, `# Delta\n${metadata}\n<!-- delta:body -->Text<!-- /delta:body -->\n`);
+    write(root, 'docs/operations-review/boundary.json', JSON.stringify({stagingMode: 'deltas',
+        replacements: [{source, target: 'docs/ARCHITECTURE.md'}]}));
+    const config = JSON.parse(fs.readFileSync(path.join(root, 'docs/policies/documentation-check.json'), 'utf8'));
+    const readFile = fs.readFileSync;
+    t.mock.method(fs, 'readFileSync', function unavailablePayloadRead(filename, ...args) {
+        if (filename === path.join(root, source)) throw Object.assign(new Error('Fixture read unavailable'), {code: 'EACCES'});
+        return readFile.call(fs, filename, ...args);
+    });
+    const discovered = discoverTaskProfiles(root, config);
+    assert.deepEqual(discovered.profileDirectories, ['docs/operations-review']);
+    assert.equal(discovered.profiles.length, 1);
+    assert.equal(discovered.deltasBySource.size, 0);
+    assert.ok(discovered.errors.some(error => error.type === 'invalid-profile-delta' && error.path === source));
+});
+
+test('optional walker visitor sees real redirected entries without changing default traversal', t => {
+    const root = fixture(t);
+    write(root, 'other-source/HIDDEN.ts', 'export const hidden = true;\n');
+    write(root, 'ignored/PRIVATE.ts', 'export const excluded = true;\n');
+    const redirect = path.join(root, 'src/redirected');
+    fs.symlinkSync(path.join(root, 'other-source'), redirect, process.platform === 'win32' ? 'junction' : 'dir');
+    const ordinary = walkFiles(root, ['ignored']);
+    const entries = [];
+    function recordVisitedEntry(value) {
+        entries.push({relative: value.relative, absolute: value.absolute, redirected: value.entry.isSymbolicLink()});
+    }
+    assert.deepEqual(walkFiles(root, ['ignored'], recordVisitedEntry), ordinary);
+    assert.ok(entries.some(entry => entry.relative === 'src/redirected' && entry.absolute === redirect && entry.redirected));
+    assert.equal(entries.some(entry => entry.relative.startsWith('ignored')), false);
+    assert.equal(ordinary.includes('src/redirected/HIDDEN.ts'), false);
+
+    function rejectSelectedRedirection(value) {
+        if (value.relative.startsWith('src/') && value.entry.isSymbolicLink()) throw new Error('Selected input is redirected');
+    }
+    assert.throws(() => walkFiles(root, ['ignored'], rejectSelectedRedirection), /Selected input is redirected/u);
+});
+
+test('shared parser preserves metadata and delta CRLF offsets and rejects ambiguous payloads', () => {
+    const text = `# Delta\r\n${metadata.replace(/\n/gu, '\r\n')}\r\n<!-- delta:step_1 -->\r\nText.\r\n<!-- /delta:step_1 -->\r\n`;
+    const header = parseMetadataBlock(text);
+    assert.equal(text.slice(header.start, header.end), header.content);
+    assert.equal(header.metadata.owner, 'documentation maintainers');
+    const delta = parseDocumentationDelta(text);
+    assert.deepEqual(delta.errors, []);
+    assert.equal(delta.blocks[0].id, 'step_1');
+    assert.equal(text.slice(delta.blocks[0].contentStart, delta.blocks[0].contentEnd), '\r\nText.\r\n');
+    for (const malformed of [
+        '<!-- delta:bad.id --><!-- /delta:bad.id -->',
+        '<!-- delta:outer --><!-- delta:inner --><!-- /delta:inner --><!-- /delta:outer -->',
+        '<!-- delta:same --><!-- /delta:same --><!-- delta:same --><!-- /delta:same -->',
+        '<!-- /delta:stray -->', '<!-- delta:unclosed -->',
+        '<!-- delta:first --><!-- /delta:different -->',
+    ]) {
+        const invalid = parseDocumentationDelta(malformed);
+        assert.ok(invalid.errors.length, malformed);
+        assert.deepEqual(invalid.blocks, []);
+    }
+});
+
+test('delta payload links use final destinations while outer links stay profile-local', t => {
+    const root = fixture(t);
+    writeTaskProfile(root, 'docs/operations-review', 'staging-directory: staged\nreplacement-manifest: boundary.json');
+    const source = 'docs/operations-review/staged/ARCHITECTURE.md';
+    const second = 'docs/operations-review/staged/DEVELOPMENT.md';
+    write(root, 'docs/operations-review/CONTROL.md', `# Control\n${metadata}\n`);
+    write(root, source, `# Architecture delta\n${metadata.replace('status: current', 'status: migration-pending')}\n` +
+        '[Control](../CONTROL.md)\n<!-- delta:links -->\n[Development](DEVELOPMENT.md)\n<!-- /delta:links -->\n');
+    write(root, second, `# Development delta\n${metadata}\n<!-- delta:body -->\nDevelopment content.\n<!-- /delta:body -->\n`);
+    write(root, 'docs/operations-review/boundary.json', JSON.stringify({stagingMode: 'deltas', replacements: [
+        {source, target: 'docs/ARCHITECTURE.md'}, {source: second, target: 'docs/DEVELOPMENT.md'},
+    ]}));
+    const config = JSON.parse(fs.readFileSync(path.join(root, 'docs/policies/documentation-check.json'), 'utf8'));
+    const discovered = discoverTaskProfiles(root, config);
+    assert.equal(discovered.replacementsBySource.size, 0);
+    assert.equal(discovered.deltasBySource.size, 2);
+    assert.equal(discovered.mappedTargetsBySource.size, 2);
+    const report = inspect(root).report;
+    assert.equal(report.summary.brokenLinks, 0, JSON.stringify(report.errors));
+    assert.equal(report.summary.classificationErrors, 0, JSON.stringify(report.errors));
+    assert.equal(report.summary.stagedDeltas, 2);
+    fs.appendFileSync(path.join(root, source), '\n[Outer missing](DEVELOPMENT.md)\n');
+    // This physical sibling exists. Removing it invalidates the map separately;
+    // an unrelated outer link cannot borrow a final-location replacement.
+    fs.appendFileSync(path.join(root, source), '\n[Outer final guide](../../ARCHITECTURE.md)\n');
+    assert.equal(inspect(root).report.summary.brokenLinks, 1);
+});
+
+test('delta maps preserve governance/runtime roles and reject malformed payload overlays', t => {
+    const root = fixture(t);
+    writeTaskProfile(root, 'docs/operations-review', 'staging-directory: staged\nreplacement-manifest: boundary.json');
+    const source = 'docs/operations-review/staged/NOTES.md';
+    write(root, source, `# Delta\n${metadata}\n<!-- delta:body -->\nText\n<!-- /delta:body -->\n`);
+    const manifest = 'docs/operations-review/boundary.json';
+    for (const target of ['docs/policies/NOTES.md', 'docs/decisions/DEC-999-NOTES.md', 'docs/user-guide/NOTES.md']) {
+        write(root, manifest, JSON.stringify({stagingMode: 'deltas', replacements: [{source, target}]}));
+        assert.ok(inspect(root).report.errors.some(item => ['misplaced-governance-document',
+            'misplaced-decision-document', 'misplaced-user-help-document'].includes(item.type)));
+    }
+    write(root, source, `# Delta\n${metadata}\n<!-- delta:body -->\nUnclosed.\n`);
+    expectError(root, 'invalid-profile-delta');
+});
+
+test('release declarations recognize the optional publisher only when its executable exists', t => {
+    const root = fixture(t);
+    write(root, '.github/workflows/release.yml', 'run: node scripts/package-documentation.mjs --destination release/docs\n');
+    expectError(root, 'release-missing-user-guides');
+    // Use the real executable owner. Its separate CLI suite verifies copying;
+    // this regression protects only the advisory declaration/path boundary.
+    write(root, 'scripts/package-documentation.mjs', fs.readFileSync(path.join(repository, 'scripts/package-documentation.mjs')));
+    assert.equal(inspect(root).report.errors.some(error => error.type === 'release-missing-user-guides'), false);
+    write(root, '.github/workflows/release.yml', 'run: node scripts/package-documentation.mjs --destination other/docs\n');
+    expectError(root, 'release-missing-user-guides');
+});
+
 test('both structural modes accept a clean checkout without generated/local files', t => {
     const root = fixture(t);
     for (const strict of [false, true]) {
         const {result, report} = inspect(root, strict);
         assert.equal(result.status, 0, result.stdout + result.stderr);
         assert.equal(report.summary.totalErrors, 0);
+        assert.equal(report.summary.taskProfiles, 0);
+        assert.equal(report.summary.profileErrors, 0);
         assert.equal(report.allowlistedMissingDocumentedPaths.length, optionalPaths.length);
     }
 });
@@ -241,16 +550,172 @@ test('classification accepts the policy root allowlist and reports unclassified 
     assert.equal(fs.readFileSync(path.join(root, document), 'utf8'), content);
 });
 
-test('classification reports misplaced user help, migration amendments and formal decisions', t => {
+test('classification reports misplaced user help, task amendments and formal decisions', t => {
     const root = fixture(t);
     write(root, 'docs/features/help/TASKS.md', `# User task\n${metadata.replace('audience: test fixture', 'audience: end users')}\n`);
     write(root, 'docs/features/packing/MIGRATION.md', `# Migration amendment\n${metadata.replace('status: current', 'status: migration-pending')}\n`);
-    write(root, 'docs/frontend-migration/DEC-999-SAMPLE.md', `# Formal decision\n${metadata}\n`);
+    writeTaskProfile(root, 'docs/review-task');
+    write(root, 'docs/review-task/DEC-999-SAMPLE.md', `# Formal decision\n${metadata}\n`);
     const {result, report} = inspect(root);
     assert.equal(result.status, 0);
     for (const type of ['misplaced-user-help-document', 'misplaced-migration-document', 'misplaced-decision-document']) {
         assert.ok(report.errors.some(error => error.type === type), type);
     }
+});
+
+test('optional profiles and declared replacement manifests may be absent without findings', t => {
+    const root = fixture(t);
+    writeTaskProfile(root, 'docs/operations-review');
+    writeTaskProfile(root, 'docs/second-review', 'replacement-manifest: missing.json');
+    const {result, report} = inspect(root, true);
+    assert.equal(result.status, 0);
+    assert.equal(report.summary.totalErrors, 0);
+    assert.equal(report.summary.taskProfiles, 2);
+    assert.equal(report.summary.stagedReplacements, 0);
+    assert.equal(fs.existsSync(path.join(root, 'docs/second-review/missing.json')), false);
+});
+
+test('an alternate profile resolves candidate links at final locations using staged counterparts', t => {
+    const root = fixture(t);
+    const directory = 'docs/operations-review';
+    writeTaskProfile(root, directory, 'staging-directory: candidates\nreplacement-manifest: replacements.json');
+    write(root, `${directory}/candidates/architecture.md`, `# Architecture\n${metadata}\n\n[Development](DEVELOPMENT.md)\n[Project](../README.md)\n`);
+    write(root, `${directory}/candidates/development.md`, `# Development\n${metadata}\n\n[Architecture](ARCHITECTURE.md)\n`);
+    write(root, `${directory}/replacements.json`, JSON.stringify({replacements: [
+        {source: `${directory}/candidates/architecture.md`, target: 'docs/ARCHITECTURE.md'},
+        {source: `${directory}/candidates/development.md`, target: 'docs/DEVELOPMENT.md'},
+    ]}));
+    write(root, `${directory}/NOTES.md`, `# Review notes\n${metadata}\n`);
+    const {report} = inspect(root, true);
+    assert.equal(report.summary.totalErrors, 0, JSON.stringify(report.errors));
+    assert.equal(report.summary.taskProfiles, 1);
+    assert.equal(report.summary.stagedReplacements, 2);
+    assert.equal(fs.existsSync(path.join(root, 'docs/DEVELOPMENT.md')), false);
+
+    // A future counterpart cannot make the same missing current guide usable now.
+    fs.appendFileSync(path.join(root, 'README.md'), '\n[Live development guide](docs/DEVELOPMENT.md)\n');
+    const live = inspect(root).report;
+    assert.ok(live.errors.some(error => error.type === 'broken-link' && error.path === 'README.md'));
+});
+
+test('a mapped project README preserves its legitimate combined audience', t => {
+    const root = fixture(t);
+    const directory = 'docs/entry-review';
+    writeTaskProfile(root, directory, 'replacement-manifest: replacements.json\nstaging-directory: candidates');
+    const entryMetadata = metadata.replace('audience: test fixture', 'audience: developers; operators; end users');
+    write(root, `${directory}/candidates/PROJECT.md`, `# Project\n${entryMetadata}\n`);
+    write(root, `${directory}/replacements.json`, JSON.stringify({replacements: [
+        {source: `${directory}/candidates/PROJECT.md`, target: 'README.md'},
+    ]}));
+    assert.equal(inspect(root, true).report.summary.totalErrors, 0);
+});
+
+test('mapped candidates cannot hide an unapproved root document or stage canonical governance and Help', t => {
+    const root = fixture(t);
+    const directory = 'docs/entry-review';
+    writeTaskProfile(root, directory, 'replacement-manifest: replacements.json\nstaging-directory: candidates');
+    const replacements = [
+        {source: `${directory}/candidates/PLAN.md`, target: 'docs/UNAPPROVED_PLAN.md'},
+        {source: `${directory}/candidates/DECISION.md`, target: 'docs/decisions/DEC-999-SAMPLE.md'},
+        {source: `${directory}/candidates/POLICY.md`, target: 'docs/policies/EXTRA_POLICY.md'},
+        {source: `${directory}/candidates/HELP.md`, target: 'docs/user-guide/TASK.md'},
+        {source: `${directory}/candidates/FIGURE.png`, target: 'docs/user-guide/assets/STAGED.png'},
+    ];
+    for (const replacement of replacements) write(root, replacement.source, `# Candidate\n${metadata}\n`);
+    write(root, `${directory}/replacements.json`, JSON.stringify({replacements}));
+    const {result, report} = inspect(root);
+    assert.equal(result.status, 0);
+    for (const type of ['unclassified-document', 'misplaced-decision-document', 'misplaced-governance-document', 'misplaced-user-help-document']) {
+        assert.ok(report.errors.some(error => error.type === type), type);
+    }
+    assert.ok(report.errors.some(error => error.type === 'misplaced-user-help-document'
+        && error.path === `${directory}/candidates/FIGURE.png`));
+});
+
+test('malformed profiles and replacement JSON remain advisory and grant no overlay', t => {
+    const root = fixture(t);
+    write(root, 'docs/incomplete-review/PROFILE.md', `# Incomplete profile\n${metadata}\n`);
+    writeTaskProfile(root, 'docs/json-review', 'replacement-manifest: replacements.json');
+    write(root, 'docs/json-review/replacements.json', '{not-json');
+    const {result, report} = inspect(root);
+    assert.equal(result.status, 0);
+    assert.ok(report.errors.some(error => error.type === 'invalid-task-profile'));
+    assert.ok(report.errors.some(error => error.type === 'invalid-profile-replacement-map'));
+    assert.equal(report.summary.stagedReplacements, 0);
+});
+
+test('escaping and noncanonical replacement paths cannot select outside files or an overlay', t => {
+    const root = fixture(t);
+    const directory = 'docs/path-review';
+    writeTaskProfile(root, directory, 'replacement-manifest: replacements.json\nstaging-directory: candidates');
+    write(root, `${directory}/candidates/GUIDE.md`, `# Candidate\n${metadata}\n`);
+    write(root, 'docs/features/OUTSIDE.md', `# Outside\n${metadata}\n`);
+    const unsafeEntries = [
+        {source: `${directory}/candidates/../candidates/GUIDE.md`, target: 'docs/DEVELOPMENT.md'},
+        {source: 'docs/features/OUTSIDE.md', target: 'docs/DEVELOPMENT.md'},
+        {source: `${directory}/candidates/GUIDE.md`, target: '../OUTSIDE.md'},
+        {source: `${directory}/candidates/GUIDE.md`, target: 'C:OUTSIDE.md'},
+        {source: `${directory}/candidates/GUIDE.md`, target: 'docs/DEVELOPMENT.md:stream'},
+        {source: `${directory}/candidates/GUIDE.md`, target: 'docs\\DEVELOPMENT.md'},
+        null,
+    ];
+    for (const entry of unsafeEntries) {
+        write(root, `${directory}/replacements.json`, JSON.stringify({replacements: [entry]}));
+        const {result, report} = inspect(root);
+        assert.equal(result.status, 0);
+        assert.ok(report.errors.some(error => error.type === 'invalid-profile-replacement-map'), JSON.stringify(entry));
+        assert.equal(report.summary.stagedReplacements, 0);
+    }
+
+    writeTaskProfile(root, directory, 'replacement-manifest: ../outside.json');
+    expectError(root, 'invalid-profile-replacement-map');
+});
+
+test('duplicate replacement destinations within and across profiles have no selected winner', t => {
+    const root = fixture(t);
+    const directories = ['docs/first-review', 'docs/second-review'];
+    for (const directory of directories) {
+        writeTaskProfile(root, directory, 'replacement-manifest: replacements.json\nstaging-directory: candidates');
+        write(root, `${directory}/candidates/GUIDE.md`, `# Candidate\n${metadata}\n`);
+        write(root, `${directory}/replacements.json`, JSON.stringify({replacements: [
+            {source: `${directory}/candidates/GUIDE.md`, target: 'docs/DEVELOPMENT.md'},
+        ]}));
+    }
+    const conflicting = inspect(root).report;
+    assert.ok(conflicting.errors.some(error => error.type === 'duplicate-profile-replacement'));
+    assert.equal(conflicting.summary.stagedReplacements, 0);
+
+    const directory = directories[0];
+    write(root, `${directory}/candidates/SECOND.md`, `# Second candidate\n${metadata}\n`);
+    write(root, `${directory}/replacements.json`, JSON.stringify({replacements: [
+        {source: `${directory}/candidates/GUIDE.md`, target: 'docs/ARCHITECTURE.md'},
+        {source: `${directory}/candidates/SECOND.md`, target: 'docs/ARCHITECTURE.md'},
+    ]}));
+    const duplicate = inspect(root).report;
+    assert.ok(duplicate.errors.some(error => error.type === 'duplicate-profile-replacement'));
+    assert.equal(duplicate.summary.stagedReplacements, 1); // Only the unaffected second profile contributes.
+});
+
+test('Windows case aliases share candidate, counterpart and duplicate-source keys', {skip: process.platform !== 'win32'}, t => {
+    const root = fixture(t);
+    const directory = 'docs/case-review';
+    writeTaskProfile(root, directory, 'replacement-manifest: replacements.json\nstaging-directory: candidates');
+    write(root, `${directory}/candidates/ARCHITECTURE.md`, `# Architecture\n${metadata}\n\n[Development](development.md)\n`);
+    write(root, `${directory}/candidates/DEVELOPMENT.md`, `# Development\n${metadata}\n`);
+    const replacements = [
+        {source: `${directory}/candidates/architecture.md`, target: 'docs/ARCHITECTURE.md'},
+        {source: `${directory}/candidates/DEVELOPMENT.md`, target: 'docs/DEVELOPMENT.md'},
+    ];
+    write(root, `${directory}/replacements.json`, JSON.stringify({replacements}));
+    assert.equal(inspect(root).report.summary.totalErrors, 0);
+
+    // The same Windows file cannot quietly become a second source owner.
+    replacements.push({source: `${directory}/candidates/development.md`, target: 'docs/TESTING_GUIDE.md'});
+    write(root, `${directory}/replacements.json`, JSON.stringify({replacements}));
+    const {result, report} = inspect(root);
+    assert.equal(result.status, 0);
+    assert.ok(report.errors.some(error => error.type === 'duplicate-profile-replacement'));
+    assert.equal(report.summary.stagedReplacements, 0);
 });
 
 test('decision/source conflicts are reported without rewriting the policy configuration or record', t => {
@@ -269,6 +734,7 @@ function helpFixture(t, extra = '') {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'surveyor-help-check-'));
     t.after(() => fs.rmSync(root, {recursive: true, force: true}));
     write(root, 'scripts/check-help-documentation.mjs', fs.readFileSync(helpScript));
+    write(root, 'scripts/check-documentation.mjs', fs.readFileSync(script));
     write(root, 'docs/user-guide/README.md', `# Help\n${metadata}\n\n![Test diagram](assets/test.png)\n${extra}\n`);
     write(root, 'docs/user-guide/assets/test.png', Buffer.from('89504e470d0a1a0a', 'hex'));
     write(root, 'src/controller/helpController.ts', "'docs', 'user-guide'\nvalidateTrustedHelpMarkdown\nresolveHelpAssetPath\nrenderTrustedHelpMarkdown\n");
@@ -413,4 +879,18 @@ test('missing canonical release-copy comparison remains an advisory finding', t 
     const {result, report} = inspectHelp(root);
     assert.equal(result.status, 0);
     assert.ok(report.errors.some(error => error.message.includes('diff -qr docs/user-guide')));
+});
+
+test('Help publication accepts the real publisher declaration and still requires canonical byte comparison', t => {
+    const root = helpFixture(t);
+    const publish = 'node scripts/package-documentation.mjs --destination release/docs';
+    const compare = 'diff -qr docs/user-guide release/docs/user-guide';
+    write(root, '.github/workflows/release.yml', `${publish}\n${compare}\n`);
+    assert.ok(inspectHelp(root).report.errors.some(error => error.message.includes('declare maintained documentation copying')));
+    write(root, 'scripts/package-documentation.mjs', fs.readFileSync(path.join(repository, 'scripts/package-documentation.mjs')));
+    assert.equal(inspectHelp(root).report.ok, true);
+    write(root, '.github/workflows/release.yml', `${publish}\n`);
+    assert.ok(inspectHelp(root).report.errors.some(error => error.message.includes(compare)));
+    write(root, '.github/workflows/release.yml', `cp -R docs/user-guide release/docs/user-guide\n${compare}\n`);
+    assert.ok(inspectHelp(root).report.errors.some(error => error.message.includes('declare maintained documentation copying')));
 });

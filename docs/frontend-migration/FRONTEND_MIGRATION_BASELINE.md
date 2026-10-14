@@ -4,11 +4,11 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-08
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved D1–D5 rectification source/ownership and documentation consistency review; actual execution evidence remains in the paired review record; step-one source inventory and second-pass edge-case review of existing routes, behaviors, permissions, rendering, native fallbacks and test assertions; first-pass application build and controlled browser capture; implementation of the replacement frontend is not included
+verification-scope: current migration/general-defect boundary and temporary comparator retirement routing reconciled; historical approved D1–D5 review, step-one source inventory, second-pass edge cases and first-pass build/capture scopes retained without renewed execution claims; current execution evidence belongs to the paired review
 source-anchors: src/app.ts; src/routes/; src/controller/; src/views/; src/public/js/; src/types/; src/modules/invoice/; src/modules/activity/; tests/; scripts/capture-frontend-baseline.cjs; package.json; esbuild.client.js; playwright.config.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md
-next-review: frontend-foundation-proof-slice-implementation
+next-review: next-authorized-feature-migration
 -->
 
 This is the first-step baseline for replacing Surveyor's Pug and imperative browser frontend with a more uniform
@@ -76,7 +76,16 @@ scenarios when implemented. They must not be described as already verified by th
 The inventory describes intentional product behavior. A transient defect is not an acceptance criterion to reproduce.
 Consult the existing [implementation defect register](../backlog/documentation-remediation.yml) when source and canonical
 guidance disagree; record a new confirmed defect there once and keep any remediation separate from this baseline.
-Unresolved intent remains a question for the relevant implementation slice.
+The current [migration boundary](PROFILE.md#native-reference-and-shared-implementation) distinguishes
+a migration regression from a general application defect. General defects, large changes and backend behavior
+changes require a separately authorized effort; they do not become migration work because a remedy includes a
+frontend edit. Earlier bounded approvals retain their recorded scope. Unresolved intent remains a direct maintainer
+decision before dependent implementation.
+
+Native source, UI and root Help remain the comparator during coexistence only. This temporary obligation ends at
+authorized cutover; it is not a lasting application contract. The single
+[cutover retirement inventory](FRONTEND_FOUNDATION_DESIGN.md#cutover-retirement-inventory) owns its retirement together
+with staged guidance and migration-only records.
 
 ## Native forms and JavaScript support
 

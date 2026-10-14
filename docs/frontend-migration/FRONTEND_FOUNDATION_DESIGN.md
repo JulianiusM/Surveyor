@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original design and dated amendments retained; refined Req6A interactive skeleton/static delivery and failure boundaries recorded without changing SSR technology; actual adoption and execution owned by paired review
+verification-scope: original staging choices and dated amendments retained; eight amendment-only guides use explicit reconciliation and reviewed temporary preparation; profile context and publication boundaries remain separate from application acceptance
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -63,7 +63,7 @@ guarantees. D5 cannot promise every old browser can submit indefinitely after re
   implemented portions still satisfy behavior, modularity and readability requirements.
 - Interactive migrated pages require JavaScript and display a clear shared message or genuinely read-only result
   when it is disabled. This supersedes the original interactive fallback and Packing-card-image obligation.
-- Keep prospective maintainer guidance staged and merge it into existing canonical owners only at authorized cutover,
+- The original procedure kept prospective maintainer guidance as staged deltas for reconciliation at cutover,
   reconciling intervening changes. Language choice has one global user guide per language.
 - Healthy shared reads use a 30-second cadence. Eligible recovery targets convergence within roughly one minute,
   retaining server cooldowns, visibility and observer disposal rather than the earlier generic two-minute delay.
@@ -278,8 +278,9 @@ activation through an ID-only update after consumption/reissue. The direct subse
 general behavioral defects to separately authorized backlog work; they are not migration blockers or permission to
 change native writers. The existing finality requirement does not approve those native consequences.
 
-`resetPasswordWithSession` prepares API or full SSR completion before its locked password/token commit; the document
-preserves the submitted URL and 200 success response. `requestPasswordResetWithSession` prepares token, mail/templates,
+`resetPasswordWithSession` currently prepares the API receipt before its locked password/token commit. Its earlier
+full SSR completion preserved the submitted URL and 200 success response; that document path is historical after
+Req6A retired the unused interactive pilot POST adapters. `requestPasswordResetWithSession` prepares token, mail/templates,
 cached sender and generic output/optional flash before commit, then settles captured delivery afterward. Setup does
 not connect to SMTP, and the reply adds no account-discovery/delivery metadata. The existing native defaults remain;
 the paired review owns the executed pilot-only concurrency, rollback, mail and delivery scopes and their limits.
@@ -301,9 +302,9 @@ hidden behind a substitute. The same complete-source selection supplies article 
 
 The maintainer's Req. 7–9 decisions place provider logout preparation failure, mixed native/pilot password reset and
 mixed activation acknowledgement into separate general-defect backlog entries. Their remedies are not approved by
-the migration. The centralized [development policy](../policies/DEVELOPMENT_POLICY.md#authorization-and-task-boundaries)
-owns the explicit migration limit: preserve native visual/behavioral parity and defer general defects, large changes
-and backend behavior changes to separately authorized work. Earlier bounded approvals retain their recorded scope.
+the migration. The [profile boundary](PROFILE.md#native-reference-and-shared-implementation) owns temporary native
+comparison and separately scoped general defects. The general [development policy](../policies/DEVELOPMENT_POLICY.md)
+continues to own authorization and engineering boundaries. Earlier bounded approvals retain their recorded scope.
 
 ### Authorized interactive startup delivery clarification (2026-10-13)
 
@@ -326,6 +327,107 @@ work; warm navigation and background refresh do not discard initialized views or
 
 This is the single delivery amendment; the paired review owns actual source adoption and executed acceptance.
 Earlier interactive-SSR document/startup receipts retain their historical scope and do not certify the new shape.
+
+### Authorized migration-readiness clarification (2026-10-13)
+
+The maintainer directly authorized the reviewed readiness corrections and clarified that preserving native source,
+UI and root Help is temporary migration work. Keep that comparator during coexistence, then remove its preservation
+obligation at authorized cutover through the single [cutover inventory](#cutover-retirement-inventory).
+Do not carry a frozen native/root-corpus requirement into lasting policy or API contracts. Canonical Help location,
+trusted release content, shared backend ownership and existing general engineering rules remain applicable.
+
+The same instruction requires short, clear approval explanations with the four existing fields for each individual
+decision. Explain the affected user action, proposed change, consequences and relevant history directly. Quotations,
+proposed replacement text and diffs are forbidden in approval requests; no mandatory read-back is required.
+Original choices and earlier valid approvals remain recorded above.
+This amendment authorizes the scoped readiness corrections, not default-route replacement or implementation of
+separately deferred general defects.
+
+### Production documentation freeze and verbatim replacement correction (2026-10-13)
+
+The maintainer rejects importing migration changes into production guides without an explicitly requested or
+approved production change. The agent initially interpreted this freeze too broadly, restored ten outside-profile
+files to pre-task commit `3b6091caff2717fbbd8405d43fe03b51151cb730`, and incorrectly staged governance and runtime Help.
+That interpretation was not a maintainer decision; the explicit role clarification below corrects it.
+The immutable commit remains a task restoration baseline, not a deployed-version claim.
+
+At this checkpoint the instruction superseded the earlier delta/merge procedure. Prepare complete replacement documents
+in the existing staged area, using final destination-relative links and production-valid metadata. They contain no
+temporary migration references, comparison/preservation obligations or cutover instructions. Reconcile approved
+production changes and review completeness **before** cutover; authorized cutover copies the reviewed bytes verbatim.
+Current migration instructions and evidence stay in this control area, outside future production replacement bytes.
+The pre-existing committed production references were raised directly as a conflict. The 2026-10-14 answer below
+explicitly authorizes their removal; the earlier question itself supplied no approval.
+
+### Authorized documentation-role clarification (2026-10-14)
+
+The maintainer explicitly limits the freeze to production guides. Policies, AI instructions, approved decision
+records and Help-authoring rules stay active; reviewed new pilot Help remains in the canonical runtime tree.
+Temporary frontend rules and evidence belong to this directory. Permanent governance discovers optional task
+profiles generically, without requiring a particular profile or temporary directory to exist.
+
+The maintainer also explicitly approves removing frontend-migration references from production guides. The
+[profile](PROFILE.md#documentation-roles) owns current classification, additive activation, exact cleanup receipts,
+the guide staging and retirement inventory. Redundant staged governance/AI/ADR/runtime Help copies are removed.
+This correction changes neither application behavior nor the earlier technology, shared-backend or Help-trust choices.
+
+### Authorized amendment staging and risk mitigation (2026-10-14)
+
+After reviewing discovery and drift risks, the maintainer explicitly restores the earlier delta-based approach:
+reconciliation is required in either format, so maintained full copies add duplication without removing that work.
+This supersedes the complete-copy staging choice above, while retaining the production freeze and verbatim cutover.
+The eight staged sources now contain only changed sections or fragments. The existing manifest owns their locations,
+original content identities, approved reconciliations and future metadata; unchanged guidance comes from current
+approved canonical documents. Do not maintain another full future guide alongside those amendments.
+
+The maintainer also authorizes the reviewed mitigations. Generic repository context supplies active policies and
+optional profile declarations, with explicit selection and freshness evidence carried through handoffs. Delivery
+to a particular agent host still requires a verified entry-point integration; an emitted receipt cannot prove it.
+The temporary guard inventories every amendment and assembles complete ignored output before cutover. Independent
+nonauthor and root review pin the actual inputs and output; later guide, source, governance or prepared-byte changes
+invalidate that evidence. A separately authorized cutover copies those prepared bytes unchanged, without a merge
+or repair during publication. Release packaging excludes optional temporary profile directories while retaining
+canonical runtime Help and active governance. These controls do not gate application delivery or grant cutover.
+
+#### Required boundary checks
+
+Follow the [profile's checks and delegation procedure](PROFILE.md#checks-and-delegation) after its activation.
+The [boundary manifest](documentation-boundary.json) owns the immutable baseline, production selectors, reviewed
+cleanup receipts, amendment operations and prepared destinations. The guard and pinned-output preview remain temporary review tools
+without package hooks or delivery-gate integration. Structural checks do not establish completeness or approval;
+independent nonauthor and root comparison remains required.
+
+#### Migration contribution handoff
+
+For each authorized route family, trace the [behavior inventory](BEHAVIOR_INVENTORY.md), route/permission boundaries
+and [edge cases](EDGE_CASES.md) against the unchanged native comparator and approved exceptions. General application
+defects remain separately scoped; do not correct them through a frontend migration or alter frozen product guidance.
+Use the existing backend business owners and pure DBAL. Inventory every native/v1 writer and relevant foreign-key
+effect before changing transaction coordination; existing coexistence tests prove only their recorded schedules.
+
+Put changed lasting contribution rules in the staged [Development amendments](staged/DEVELOPMENT.md), read with the
+unchanged canonical guide and active policies. Put baseline-specific
+assertions in the [coverage map](TEST_COVERAGE.md). The [review](PILOT_PARITY_REVIEW.md) owns executed results and limits.
+Handoffs name actual shared adoption, authorization, file ownership, retained drafts, privacy, chosen checks and any
+general-defect disposition. Native source/UI/Help stay the temporary visual/behavioral reference during coexistence.
+Historic D2 schema/reset decisions apply only to inspected disposable targets; no production reset or default-route
+replacement follows from a successful local run.
+
+## Cutover retirement inventory
+
+The [boundary manifest](documentation-boundary.json) is the sole amendment-to-destination inventory.
+Each listed staged source contains deltas. Reconcile and assemble complete temporary production outputs before
+cutover, then independently review their exact inputs and bytes. Authorized cutover replaces each mapped owner
+verbatim from that prepared output. No current copy, deployment,
+default-route change, native removal or production edit is authorized by this inventory.
+
+| Other temporary material | Cutover disposition |
+|---|---|
+| Native view/browser/Help consumers | Retire superseded consumers and root-native corpus references only after migrated callers are complete. `docs/user-guide/` remains the canonical parent; its flat native corpus is temporary comparison material. |
+| Shared browser helper and assets | Vue feedback uses `src/public/js/shared/alerts.ts`; renderer/header consumers still use `/style/style.css`, `/style/help.css`, `/img/logo.png` and `/img/favicon-32x32.png`. Retain or relocate each dependency once with all consumers updated; do not delete all of `src/public/` or duplicate shared backend owners. |
+| Comparator fixtures and capture tooling | Review `tests/frontend/`, `tests/integration/`, `tests/e2e/` and maintained capture scripts. Retire/adapt native-only comparison assertions and corpus/routes; retain shared persistence, privacy, recovery and new-frontend behavior checks. |
+| Migration profile, control and staged tooling | Retire the profile, completed baselines, recipes, inventories, review/status records and this guard/manifest after cutover. Lasting decisions already belong to active ADRs; unresolved defects retain their existing owner. Generic discovery still works with this directory absent. Do not create another archive or carry migration links into replacement bytes. |
+| Historical evidence | Existing Git history and ignored images/results describe their original verification scope. They impose no continuing native preservation requirement or deployed-version claim. |
 
 ## Architecture and logical ownership
 
@@ -372,7 +474,9 @@ One package workflow generates contracts/catalogs, checks server/client/SSR scop
 Vite client and SSR outputs. Express owns development requests with Vite middleware/HMR; production loads matching
 built artifacts without a development server. Generated output remains ignored and is never hand-edited.
 
-Migrate one authorized route family at a time through the [single contribution recipe](staged/DEVELOPMENT.md#implementing-the-next-feature-slice).
+Migrate one authorized route family at a time through the [migration contribution handoff](#migration-contribution-handoff),
+using the staged [Development amendments](staged/DEVELOPMENT.md#adding-or-changing-a-feature-view), unchanged canonical
+guidance and active policies for lasting implementation patterns.
 Preserve the native comparison and unique assertion boundaries while reusable controller operations serve both
 frontends. Later retirement removes adapters/legacy consumers after complete feature parity and explicit cutover.
 

@@ -1,46 +1,46 @@
-# Staged frontend database amendment
+# Staged frontend database amendments
 <!--
 documentation-metadata
-audience: maintainers; operators; database administrators
-owner: application operators
+audience: maintainers; frontend developers; migration reviewers
+owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-12
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved schema/generation/coexistence delta consolidated; completed scoped concurrency evidence owned by paired review; no installed-schema migration or operator rehearsal claimed
-source-anchors: package.json; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; docs/DATABASE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
-next-review: frontend-production-cutover
-canonical-merge-target: docs/DATABASE.md
-production-reference: 2dfa257 native documentation; not evidence of the installed production commit
+verification-scope: digest-guarded frontend amendments preserve complete reviewed candidate guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
+next-review: next-authorized-migration-slice-or-cutover
 -->
 
-Merge this delta into [Database and Migrations](../../DATABASE.md) at authorized cutover, reconcile intervening
-changes and remove this copy. All unchanged targeting, credential, backup, migration and rollback procedures remain
-canonical. Staged documentation is never runtime input.
+These amendments retain the reviewed frontend guidance without copying unchanged production procedures.
+The [profile](../PROFILE.md) governs preparation and review; its [manifest](../documentation-boundary.json)
+owns destination mapping and exact operations. Payload links use their mapped production location.
+Surrounding notes use this file's location. Preparing complete temporary output does not authorize cutover.
 
-## Generated index and frontend artifacts
+## Prepare a migration workspace — amendment-01
 
-`npm run generate` prepares the TypeORM index and API/localization consumers without connecting to a database.
-`npm run generate:db-index` prepares only the index. Use the settings-aware package wrappers for migrations.
-A persistent schema change still requires matching entities and a reviewed migration for existing installations.
+<!-- delta:amendment-01 -->
+migration datasource, followed by the generated API contracts, validators and language catalogs. Generation does not
+connect to MariaDB or change its schema. `npm run generate:db-index` prepares only the TypeORM index. Run generation
+before every schema command in a fresh checkout.
 
-## Packing comparison and coexistence
+<!-- /delta:amendment-01 -->
 
-Approved D2 removed the unreleased Packing metadata revision column/increments/migration in favor of current-value
-comparisons under existing locks, including useful setup fields. This correction introduces no replacement Packing
-schema. Financial revisions and existing archival migrations retain their own contracts.
+## Database backup — amendment-02
 
-A developer who applied the abandoned pilot migration must inspect that local schema before changing it.
-Only an explicitly disposable database may use reset/synchronization procedures; do not infer disposability from its
-name or convert this frontend correction into a production reset/reversion instruction.
+<!-- delta:amendment-02 -->
+## Frontend contracts and persistence
 
-The implemented shared-backend structure uses native/v1 controller operations/method policy and existing persistence
-services. Scoped acceptance and the approved native shared-root-before-item remedy are recorded in the review;
-v1 retains its exclusive root-before-item coordination.
-Transport/conflict protocols can differ; native writers
-retain last-write request behavior while changed current values affect later
-v1 comparison. Preserve controller-owned checks inside service-managed transactions and required lock ordering.
-The bounded archival and approved native assignment remedies grant no broad locking redesign.
+Generated API contracts, validators and language catalogs are application build inputs. They do not replace entity
+definitions, reviewed database migrations or the settings-aware database commands above.
 
-Verify coexistence through actual native/v1 operations against guarded disposable MariaDB, not repository mocks.
-Confirm the effective database target before every schema-changing/test-reset command using canonical procedures.
-Completed scoped concurrency evidence and its limits belong to the [pilot review](../PILOT_PARITY_REVIEW.md).
+Packing edit comparisons use the current relevant values inside existing locked transactions, without an edit-history
+table or Packing revision column. A value changed away and back can match an earlier comparison. Financial calculation
+revisions and saved settlement history retain their own persistence contracts.
+
+Controllers own authorization and business decisions against the locked evidence supplied by database services.
+The services own queries, locks, transactions and persistence. Diagnose conflicting writes through the actual application
+operations and database logs; do not bypass the checks or change transaction isolation as an operational workaround.
+
+## Database backup
+
+<!-- /delta:amendment-02 -->
