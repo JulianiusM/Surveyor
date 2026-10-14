@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original query/draft/command choices and D2/D4/D5/Oct8 amendments retained; approved session-read admission, source-owned aggregate retirement and temporary Packed-state lifetime clarified; execution owned by paired review
+verification-scope: implemented query/draft/command and approved admission/aggregate/Packed-state boundaries retained; future financial/recommendation frontend integration targets routed to active DEC-006; execution owned by paired review
 source-anchors: src/frontend/app/context.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/overview/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
 next-review: next-refresh-migration-or-authorized-cutover
 -->
@@ -74,6 +74,10 @@ arbitrary age-based command prohibition.
 | Static catalog/Help | No shared-data polling; language/release-owned content reads when required. |
 | Reviewed finance preview | Explicit preview/refresh; stale detection cannot replace reviewed values/token. |
 | Recommendation/job | Existing job-specific backoff/expiry/terminal rules. |
+
+The last two rows describe intended future frontend integrations, not implemented pilot query consumers.
+[DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets) preserves
+their durable status and domain boundaries; it supplies no implementation approval.
 
 Honor Retry-After and per-client jitter. Safe reads can retry with bounded shared backoff; commands default to zero.
 Do not run independent interval/retry timers against the same failed endpoint.

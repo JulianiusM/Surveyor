@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original shared-catalog/locale choices and approved Help/fallback correction retained; named language-owned query invalidation clarified; actual readiness execution owned by paired review
+verification-scope: original future locale/output targets transferred to active DEC-006 with intended status; current grammar/preference guidance routed to staged Development; approved Help/fallback and query-locale boundaries retained
 source-anchors: src/locales/; scripts/generate-locales.mjs; src/modules/localization/; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/controller/helpController.ts; docs/user-guide/en/; docs/user-guide/de/; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: frontend-production-cutover
 -->
@@ -79,10 +79,11 @@ Generation discovers catalogs and derives locale choices automatically.
 API parameter policy remains in OpenAPI; ordinary UI parameter declarations belong to the catalog rather than
 duplicated call-site interfaces. Reject duplicate keys, malformed metadata, missing variants/parameters and raw markup.
 
-Plain strings/plurals are the implemented contract. Rich named slots, grammatical context/ordinal forms and other
-future features must be explicitly supported before authored use; do not hide new executable grammar in messages.
-Fallback uses the shared resolver/default catalog; call sites do not carry independent English defaultValue text
-or raw validator messages. Completeness is checked before release.
+The [Development catalog guidance](staged/DEVELOPMENT.md#localization-and-runtime-help) owns the current plain-text/
+cardinal-plural grammar and browser-cookie preference scope. The
+[active decision record](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets)
+preserves original unsupported extensions as intended future choices. Fallback uses the shared resolver/default
+catalog; call sites do not carry independent English defaultValue text or raw validator messages.
 
 To add a supported language:
 
@@ -103,17 +104,10 @@ Current requests resolve explicit supported X-Surveyor-Locale, server browser pr
 and the shared default as applicable. Malformed explicit preference commands fail their contract; passive negotiation
 can fall back safely. Bootstrap exposes resolved choice; components do not parse HttpOnly cookies.
 
-The original target preference belongs to User/Guest, not active participation profile/event/pool.
-It remains planned and requires persistence/API work; browser-cookie implementation is not claimed to fulfill it.
-
-| Future boundary | Preserved target |
-|---|---|
-| Profile switch | Keeps the operating principal's chosen interface language. |
-| Guest-to-account | May inherit guest preference only if destination has none; never overwrite an explicit account choice. |
-| Explicit output override | Validated locale affects presentation only, never access or selected records. |
-| Email | Recipient preference, identity-creation initiating language when no preference, then shared default; not organizer's language for others. |
-| Queued mail/PDF | Capture effective locale/formatting context so retries keep wording; bind each recipient before async work. |
-| Principal language command | Persist authorized User/Guest choice and browser cookie without losing current drafts on failure. |
+The original principal-preference, guest-to-account inheritance and recipient/queued-output decisions now have one
+durable owner in [DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets).
+They remain intended and unimplemented. Current cookie-only behavior does not fulfill those future targets or
+authorize their persistence/output changes.
 
 Pass localization context through renderer data/explicit helpers, retaining explicit timezone policy.
 Localized representations declare Content-Language/applicable Vary and private caching; Vary never authorizes data.

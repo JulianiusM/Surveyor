@@ -23,8 +23,11 @@ import {parseMetadata, parseMetadataBlock, parseDocumentationDelta, discoverTask
 
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const transientReference = /frontend-migration\/|canonical-merge-target:|production-reference:|status:\s*migration-pending|\]\([^\n)]*staged\//i;
+// Exact reviewed public owners may be copied before a normal commit makes them
+// tracked. This does not admit another test, a directory or ignored private state.
 const publicPreviewOwners = new Set(['src/types/api/', 'src/types/LocalizationTypes.d.ts',
-    'src/modules/localization/generated/', 'scripts/package-documentation.mjs']);
+    'src/modules/localization/generated/', 'scripts/package-documentation.mjs',
+    'tests/integration/frontend-development-runtime.spec.ts']);
 const publicEnvironmentTemplates = new Set(['.env.e2e.example', 'tests/.env.test.example']);
 const loadedEngineFiles = [fileURLToPath(import.meta.url), path.resolve(toolDirectory, '../../scripts/check-documentation.mjs')];
 const loadedEngineDigests = loadedEngineFiles.map(function identifyLoadedEngine(filename) {
@@ -289,7 +292,7 @@ function isProtected(relative, manifest) {
 
 /** Reject a missing/vacuous scope instead of treating it as proof of a freeze.
  * The recorded commit is immutable; this tool never accepts a moving HEAD name. */
-function validateManifest(manifest) {
+function validateManifest(manifest, root) {
     // Required production/native selectors cannot disappear into an empty or
     // moving configuration and then be presented as a clean freeze report.
     if (!/^[0-9a-f]{40}$/.test(manifest.baselineCommit) || manifest.controlRoot !== 'docs/frontend-migration/') {
@@ -321,7 +324,10 @@ function validateManifest(manifest) {
     if (manifest.previewInputs !== undefined && !Array.isArray(manifest.previewInputs)) throw new Error('Invalid preview input inventory');
     for (const relative of manifest.previewInputs ?? []) {
         validateRelativePath(relative);
-        if (!publicPreviewOwners.has(relative)) throw new Error('Preview input is not an admitted public generated owner');
+        if (!publicPreviewOwners.has(relative)) throw new Error('Preview input is not an admitted public owner');
+        // An exact public file name cannot be substituted with a directory and
+        // recursively copy unrelated children into an otherwise valid preview.
+        validatePreviewInput(root, relative);
     }
     if (manifest.approvedCleanups !== undefined && !Array.isArray(manifest.approvedCleanups)) throw new Error('Invalid cleanup inventory');
     for (const cleanup of manifest.approvedCleanups ?? []) {
@@ -329,6 +335,22 @@ function validateManifest(manifest) {
         if (!/^[0-9a-f]{40}$/.test(cleanup.blob) || !/^\d{4}-\d{2}-\d{2}$/.test(cleanup.approvedOn)
             || typeof cleanup.reference !== 'string' || !cleanup.reference.trim()) throw new Error('Invalid reviewed cleanup receipt');
     }
+}
+
+/** Resolve one declared public source with its file/directory kind intact.
+ * Missing generated inputs remain visible advisory evidence; existing sources
+ * must match their exact owner's kind before preparation can create output. */
+function validatePreviewInput(root, relative) {
+    const source = resolveContained(root, relative);
+    if (!fs.existsSync(source)) return source;
+
+    // Directory owners have an explicit trailing separator; all other admitted
+    // owners are ordinary files. Containment already rejects redirected ancestors.
+    const information = fs.lstatSync(source);
+    if (relative.endsWith('/')) {
+        if (!information.isDirectory()) throw new Error(`Public preview input must be a directory: ${relative}`);
+    } else if (!information.isFile()) throw new Error(`Public preview input must be a regular file: ${relative}`);
+    return source;
 }
 
 /** A raw prefix is insufficient: reject traversal and alternative separators
@@ -576,14 +598,20 @@ function createPreview(root, manifest, inspection) {
         fs.mkdirSync(path.dirname(destination), {recursive: true});
         fs.copyFileSync(source, destination);
     }
-    // Only declared public generated contracts/catalogs and the new packaging
-    // helper are admitted. Their current bytes resolve documented paths without
-    // copying credentials or pretending they were tracked baseline inputs.
+    // Only declared, exactly reviewed public owners are admitted. Generated
+    // contracts/catalogs and newly authored helpers/fixtures resolve documented
+    // paths without copying credentials or pretending to be tracked baseline inputs.
     for (const relative of manifest.previewInputs ?? []) {
-        const source = resolveContained(root, relative);
+        const source = validatePreviewInput(root, relative);
         if (!fs.existsSync(source)) continue;
         const destination = resolveContained(preview, relative);
         fs.mkdirSync(path.dirname(destination), {recursive: true});
+        // Exact file owners use a nonrecursive copy even if an input changes
+        // after validation. Recursive copying is confined to admitted directories.
+        if (!relative.endsWith('/')) {
+            fs.copyFileSync(source, destination);
+            continue;
+        }
         fs.cpSync(source, destination, {recursive: true, dereference: false,
             filter: function acceptPlainGeneratedPath(candidate) {
                 assertPlainPath(candidate);
@@ -724,7 +752,7 @@ function main() {
     if (!fs.statSync(options.root).isDirectory()) throw new Error('Repository root must be a directory');
     const manifestBytes = fs.readFileSync(options.manifest);
     const manifest = JSON.parse(manifestBytes.toString('utf8'));
-    validateManifest(manifest);
+    validateManifest(manifest, options.root);
     // Direct invocation activates this one profile. General tooling never
     // imports it and remains valid when this entire optional directory is gone.
     const profile = resolveContained(options.root, manifest.controlRoot + 'PROFILE.md');

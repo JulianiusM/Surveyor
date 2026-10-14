@@ -52,7 +52,8 @@
     "src/types/api/",
     "src/types/LocalizationTypes.d.ts",
     "src/modules/localization/generated/",
-    "scripts/package-documentation.mjs"
+    "scripts/package-documentation.mjs",
+    "tests/integration/frontend-development-runtime.spec.ts"
   ],
   "replacements": [
     {
@@ -119,8 +120,8 @@
         },
         {
           "kind": "replace-text",
-          "original": "| `npm run test:all` | Run Vitest, build the application, and run the Playwright suite. |\n",
-          "originSha256": "37555aba7671cbf8aaf0a270b090b434a364af9371e0d9b0802d7210c75dc8fc",
+          "original": "| `npm run test:quick` | Run database-free unit and frontend Vitest suites. |\n| `npm test` | Run all Vitest suites, including MariaDB integration tests. |\n| `npm run test:all` | Run Vitest, build the application, and run the Playwright suite. |\n",
+          "originSha256": "f09521263e5b2b3697b60f601a99bea7750146579f20cf7c16b64071efdae750",
           "payload": "amendment-07",
           "headingPath": [
             "## Common development commands"
@@ -137,8 +138,8 @@
         },
         {
           "kind": "replace-text",
-          "original": "tests/frontend/                        browser-helper behavior under Vitest\n",
-          "originSha256": "9376fb12bede1f8e9d2d48a9bcf71c5e01cce11de9eccccadeae8eb5a669634e",
+          "original": "tests/frontend/                        browser-helper behavior under Vitest\ntests/integration/                     MariaDB-backed production-service workflows\n",
+          "originSha256": "de21776022e586db1a92b427057b63fc181f57870c72825787a0b8d6a466b3f0",
           "payload": "amendment-09",
           "headingPath": [
             "## Repository map"
@@ -170,8 +171,8 @@
       "metadataOriginSha256": "79ea4b7a413aa8a59e9542cf8b495541529a375be6a56df09cf46acbc412d528",
       "metadata": {
         "last-verified": "2026-10-14",
-        "verification-scope": "runtime/domain/identity/persistence guidance retained; Vue/SSR, generated contracts/catalogs and frontend owners checked against source; no deployment rehearsal claimed",
-        "source-anchors": "tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoice/retention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts"
+        "verification-scope": "runtime/domain/identity/persistence guidance retained; current Vue/API/localization architecture and bounded database-free server integration source-reviewed; no deployment rehearsal claimed",
+        "source-anchors": "tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoice/retention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md"
       },
       "operations": [
         {
@@ -421,8 +422,8 @@
       "metadataOriginSha256": "cffc790b8d510c7edbee8ba8e6fb6212439350b8e27c9b164536f345bce94e13",
       "metadata": {
         "last-verified": "2026-10-14",
-        "verification-scope": "setup/domain guidance retained; detailed Vue/shared-controller/DBAL, generated-input, operation-completion, command/draft/read/bootstrap/presentation/localization contracts and worked metadata extension checked against source; no operator rehearsal claimed",
-        "source-anchors": "tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts"
+        "verification-scope": "setup/domain guidance retained; shared-controller/DBAL and frontend playbook plus current API authoring, strictness, transport/version compatibility and localization scope source-reviewed; no operator rehearsal claimed",
+        "source-anchors": "tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md"
       },
       "operations": [
         {
@@ -455,8 +456,8 @@
         },
         {
           "kind": "replace-text",
-          "original": "tests/frontend/                    browser-helper behavior under Vitest\n",
-          "originSha256": "6fb607d31d3f8f68397644b0aeec280d1f95dd99980da3160c6535f3bc808764",
+          "original": "tests/frontend/                    browser-helper behavior under Vitest\ntests/integration/                 MariaDB-backed workflows\n",
+          "originSha256": "215cfbd928be8ad2e0b75501b1d388caf0f3efde1507a5fefadf251910533774",
           "payload": "amendment-04",
           "headingPath": [
             "## Project structure"
@@ -745,6 +746,24 @@
             "## Debugging and troubleshooting",
             "### Browser changes do not appear"
           ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "npm run test:quick         # unit + frontend\n",
+          "originSha256": "83abfd81e660cf8daf42d287175c38647d36d62f1aa638460348051333a5fcf7",
+          "payload": "amendment-34",
+          "headingPath": [
+            "## Test selection"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The integration suite rebuilds its selected MariaDB schema. The E2E initializer drops and recreates its selected schema. Read [Testing Guide](TESTING_GUIDE.md) before running either and never reuse development or production database names.\n",
+          "originSha256": "6c2642ab65bd19cd06eb36239f45125d8d29220a6bbc06cbe8d0424a6dcb7167",
+          "payload": "amendment-35",
+          "headingPath": [
+            "## Test selection"
+          ]
         }
       ]
     },
@@ -753,8 +772,9 @@
       "target": "docs/TESTING_GUIDE.md",
       "metadataOriginSha256": "2828c430b419daaeeaa0090252c7740f10d713c63a45f5475081f891174c709b",
       "metadata": {
-        "verification-scope": "complete canonical setup/database-safety/fixture/CI guide retained; Vue/compiler/client/system ownership and current managed-server behavior integrated from source; no new hosted-CI or operator rehearsal claimed",
-        "source-anchors": "tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json"
+        "verification-scope": "canonical setup/database safety retained; genuine Express/Vite/SSR integration, existing database-free quick selection and separate client/system boundaries source-reviewed; no hosted-CI or operator rehearsal claimed",
+        "source-anchors": "tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tests/integration/frontend-development-runtime.spec.ts",
+        "last-verified": "2026-10-14"
       },
       "operations": [
         {
@@ -841,6 +861,78 @@
           "headingPath": [
             "## Troubleshooting",
             "### CI passes a layer that fails locally"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "- **Vitest integration tests** for production services and selected controllers against a real disposable MariaDB schema.\n",
+          "originSha256": "0f75178309892351c27d225b290126a52961988c51113e273491361eaa10a1a8",
+          "payload": "amendment-10"
+        },
+        {
+          "kind": "replace-text",
+          "original": "- Integration setup calls `AppDataSource.synchronize(true)` for each integration suite.\n",
+          "originSha256": "a6e94919bc86e5b3da2745b08e37cdf0690ee87de4092ee7ef636e5d838c17ba",
+          "payload": "amendment-11",
+          "headingPath": [
+            "## Safety first"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "`npm test` runs every Vitest layer, including MariaDB integration tests. It is not a database-free shortcut. `npm run test:quick` is the database-free unit-plus-frontend command.\n",
+          "originSha256": "94cf1cfb1caf13945bc926d733e7cfa8d9e39f21697f92fe75219d056be28403",
+          "payload": "amendment-12",
+          "headingPath": [
+            "## Vitest setup",
+            "### 3. Run the desired layer"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| `npm run test:quick` | No | No | Stubbed globals only | Fast local regression pass. |\n",
+          "originSha256": "e20772f08aa32145415f1425ac657c103fd3a0e5c68ecbef83683891f72e1824",
+          "payload": "amendment-13",
+          "headingPath": [
+            "## Command matrix"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Use `tests/integration/` when correctness depends on TypeORM mappings, transactions, constraints, relationships, persisted queries, or coordination among production service functions. Selected controller orchestration may also be exercised when it can be called directly with production-shaped data and without constructing a full HTTP stack.\n\nIntegration suites use the real `AppDataSource` and production entity metadata. They do not replace TypeORM repositories with general-purpose mocks.\n\nThe standard lifecycle is:\n",
+          "originSha256": "839553d201f5adba8ca0846a484fa45d2c67ac7a85216c37a8a24557c41fbe7f",
+          "payload": "amendment-14",
+          "headingPath": [
+            "## Layer contracts",
+            "### Integration tests"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "| Controller using production services | Integration | full request parsing, cookies, redirect, or view rendering matters |\n",
+          "originSha256": "aaf63946e2c6d37fa2876ed8386e104f9cfb9b9c7e4a2d566cb826ddff30d521",
+          "payload": "amendment-15",
+          "headingPath": [
+            "## Choosing the layer"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Each integration file owns a clean schema for its suite. Do not rely on rows created by another spec file. Use `tests/factories/` for valid production-shaped entities/inputs and remove arbitrary sleeps or ordering assumptions.\n",
+          "originSha256": "21a2e7cdb9a9fcb1767d3fdfca588dd1c9625e22ded05caa2d8809d5652e825b",
+          "payload": "amendment-16",
+          "headingPath": [
+            "## Layer contracts",
+            "### Integration tests"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The configuration uses the Node environment and loads `tests/support/env.ts`. The `database-free` project runs isolated\nunit/frontend files with bounded thread workers; the `integration` project serializes files because each rebuilds the\nsame disposable schema. A full local Vitest run orders those projects so database resets do not overlap independent\nfiles. Keep database-backed fixture resets serialized; their requirement does not prohibit isolated database-free\nparallelism. Exact worker limits and project order belong to `vitest.config.mts`.\n",
+          "originSha256": "592d8485e0ba117bc86d2fef03f0c7f7a4af278cc62219ed9e2ceb1542e34c48",
+          "payload": "amendment-17",
+          "headingPath": [
+            "## Vitest configuration"
           ]
         }
       ],

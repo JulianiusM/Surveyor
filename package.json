@@ -32,7 +32,7 @@
     "build:client": "cross-env NODE_ENV=production node esbuild.client.js && npm run build:frontend",
     "build": "npm run build:sass && npm run build:server && npm run build:client --ignore-scripts && npm run copy",
     "test": "vitest run --config vitest.config.mts",
-    "test:quick": "vitest run --config vitest.config.mts tests/unit tests/frontend",
+    "test:quick": "vitest run --config vitest.config.mts --project database-free",
     "test:unit": "vitest run --config vitest.config.mts tests/unit",
     "test:integration": "vitest run --config vitest.config.mts tests/integration",
     "test:frontend": "vitest run --config vitest.config.mts tests/frontend",

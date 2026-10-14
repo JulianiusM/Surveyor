@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; API developers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-13
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original authored-contract choices retained; approved method admission and explicit 2026-10-13 same-event no-op exception reconciled with owning guidance; actual readiness execution owned by paired review
+verification-scope: original toolchain decisions routed to active DEC-006 and current authoring/transport/version procedures consolidated in staged Development; approved method/no-op contracts retained; current execution owned by paired review
 source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: next-contract-migration-or-authorized-cutover
 -->
@@ -35,71 +35,19 @@ Final build/application/concurrency/browser evidence belongs to the [review](PIL
 
 ## Contract authority and toolchain
 
-Use `openapi: 3.1.1` and JSON Schema draft 2020-12. This is the original interoperability choice, not a claim about
-the newest specification. [OpenAPI specification](https://spec.openapis.org/oas/v3.1.1.html)
-
-| Owner/artifact | Responsibility |
-|---|---|
-| `contracts/api/v1/openapi.yaml` | Version, operation IDs, paths/security/status/media policy and local feature references. |
-| Feature YAML and `common.yaml` | Operation-specific shapes plus genuinely shared IDs/problems/pagination. |
-| `.generated/api/v1/openapi.json` | Locally bundled description consumed by generators and packaged with the release. |
-| `src/types/api/v1.d.ts` | Runtime-free paths/operations/components from openapi-typescript. |
-| `src/types/api/validation-v1.d.ts` | Validator/operation signatures referring to those generated declarations. |
-| `.generated/api/v1/` | Standalone validators and operation metadata, with matching browser/server outputs. |
-| Existing HTTP adapter/feature API owner | Decoding, context/media/status/validation binding and controller invocation. |
-
-Generated outputs stay ignored. Import declarations directly; no forwarding module, barrel, ORM import or handwritten
-DTO. Versions belong to package/lockfile. Authored application code is TypeScript; generated JavaScript is output.
-
-The finite generation pipeline is:
-
-1. Redocly lints/bundles local references, unique operation IDs/parameters and declared statuses/media.
-   Builds never fetch remote schemas. [Redocly](https://redocly.com/docs/cli/commands/bundle)
-2. openapi-typescript emits runtime-free declarations without enum emission.
-   Types do not validate received JSON. [openapi-typescript](https://openapi-ts.dev/introduction)
-3. The bounded script extracts named schemas/operations and compiles strict Ajv 2020 with ajv-formats,
-   preserving resolution and declared constraints; it cannot invent business policy or discard unsupported keywords.
-4. Standalone functions validate server inputs/outputs and browser inputs/responses. Bundle required runtime helpers;
-   feature chunks load their own validators. No browser/startup schema compilation or unsafe-eval.
-   [Ajv standalone](https://ajv.js.org/standalone.html)
-5. openapi-fetch consumes generated paths; the shared adapter adds runtime validation, headers, cancellation and
-   status classification while retaining the original Response. [openapi-fetch](https://openapi-ts.dev/openapi-fetch/)
-
-The original alternative Express OpenAPI Validator would add a second runtime validation configuration alongside
-browser Ajv. The selected shared compiler avoids that duplication in exchange for a small owned HTTP adapter.
-Do not grow that adapter into another controller/routing framework.
+The [active framework decision](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#shared-api-contract-decision) preserves
+the original OpenAPI/standalone compiler choice, alternatives and rationale. The
+[Development contract guidance](staged/DEVELOPMENT.md#contract-authoring-and-generated-consumers) owns the current
+artifact inventory, generation pipeline, strictness and authoring procedure. Generated declarations/validators
+consume the authored YAML; transport adapters remain outside business/controller ownership.
 
 ### The supported schema and transport subset
 
-Use explicit scalars, object properties/required, arrays, local refs, enums/const, bounds/patterns and simple tagged
-oneOf unions. JSON null uses a type union, not OpenAPI 3.0 nullable.
-Mutation bodies are closed; unknown fields are rejected rather than silently dropped.
-Separate create/update/read semantics and reusable subshapes; projections control privilege disclosure.
-
-The original preference avoids recursive polymorphism, arbitrary maps, deep allOf, remote references, custom
-validation vocabulary and readOnly/writeOnly as disclosure controls. Two bounded native-preserving extensions are
-explicit rather than silently changing that preference:
-
-- Registration/reset author `x-surveyor-min-length-utf16: 8`, preserving native eight UTF-16 units.
-  Standalone browser/server validators share that constraint; passwords acquire no maximum.
-  Ordinary JSON Schema string bounds retain code-point semantics. Native metadata diagnostics retain native policy,
-  rather than a claim that frozen native validators were converted to generated schemas.
-- Existing-item capacity permits the finite number/string/null primitive union, retaining raw scalar transport
-  to the existing signed nullable SQL column. Database rounding/range/failure remains authoritative.
-  Creation/new-item rules remain separate; no blanket coercion, browser minimum or copied SQL-limit policy.
-
-Keep Ajv strict with format checking, no type coercion/default insertion/additional-field removal.
-Register only supported annotation vocabulary; unsupported constructs fail generation rather than disabling strictness.
-Timezone existence/cross-field date rules remain named controller checks.
-[Ajv options](https://ajv.js.org/options.html), [formats](https://ajv.js.org/guide/formats.html)
-
-Binding supports declared path/single query/header scalars, JSON, Packing multipart and scoped binary image responses.
-Creation decodes the `data` JSON part once against the authored nested schema and handles `image` separately.
-Absent/empty/repeated/malformed transport values stay distinct. Arbitrary arrays/text/binary serialization are not
-general adapter capabilities; unsupported styles fail generation.
-
-TypeScript cannot express every bound or exclusivity constraint. Compile/runtime fixtures must prove supported
-null/false/optional/tagged cases and standalone loading rather than introducing a second validation language.
+The same [Development owner](staged/DEVELOPMENT.md#contract-authoring-and-generated-consumers) records the supported
+schema/transport subset and bounded password/capacity extensions. The separately approved
+[2026-10-14 scope restoration](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#authorized-transport-scope-restoration-2026-10-14)
+removes unused repeated-query-array and plain-text API support; JSON arrays and existing document/image boundaries
+retain their contracts. This is explicit restoration of the original subset, not a silently expanded API design.
 
 ## Server boundaries and DTO projection
 
@@ -267,13 +215,10 @@ Native/v1 adapters translate distinct input/status/feedback around shared contro
 Neither route is redirected into the other's HTTP endpoint. Stronger v1 preconditions do not add fields/conflict
 behavior to frozen native forms. Adapters retire independently only after consumers migrate and cutover is approved.
 
-D3 corrects unreleased v1 in place. After a version is released, compatible additive response fields and optional
-operations can remain in that version; browser validators accept compatible additions. Removing/renaming fields,
-changing their type/meaning, adding mandatory request data, or changing an existing operation's authorization or
-outcome contract is a breaking change and needs an explicitly approved version/migration decision. Keep the released
-contract available for its supported consumers until their retirement is authorized; never silently replace a released
-schema or tighten it to match a new frontend. This compatibility policy does not authorize another unreleased pilot
-version. D5 current-folder replacement uses the shared session/release protocol; incompatible commands retain drafts.
+D3 corrects unreleased v1 in place. The [Development compatibility procedure](staged/DEVELOPMENT.md#contract-authoring-and-generated-consumers)
+preserves released contracts and distinguishes additive from breaking changes; it does not authorize another
+unreleased pilot version. D5 current-folder replacement uses the shared session/release protocol; incompatible
+commands retain drafts.
 
 Generate before checks, preserve declaration-only contracts and feature-local validators, and verify actual native/
 v1 authorization/private projections. Real TypeORM coexistence cases protect touched-field and capacity scheduling;

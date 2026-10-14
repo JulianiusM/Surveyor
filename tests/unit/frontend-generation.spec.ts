@@ -4,6 +4,8 @@ import path from 'node:path';
 import os from 'node:os';
 import {execFileSync, spawn} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
+import YAML from 'yaml';
+import type {ApiContractManifest} from '../../src/types/ApiTransportTypes';
 
 const root = process.cwd();
 const artifacts = ['.generated/api/v1/openapi.json', '.generated/api/v1/operations.json',
@@ -15,8 +17,34 @@ const artifacts = ['.generated/api/v1/openapi.json', '.generated/api/v1/operatio
     '.generated/api/v1/browser/validatePackingListView.mjs', '.generated/api/v1/browser/validateRegistrationInput.mjs'];
 
 /** Run the real generators in an empty output tree; never substitute hand-authored validators. */
-function generate(script: string, arguments_: string[]): void {
-    execFileSync(process.execPath, [path.join(root, 'scripts', script), ...arguments_], {cwd: root, stdio: 'pipe'});
+function generate(script: string, arguments_: string[], sourceRoot = root): void {
+    execFileSync(process.execPath, [path.join(sourceRoot, 'scripts', script), ...arguments_], {cwd: sourceRoot, stdio: 'pipe'});
+}
+
+/** Copy the real generation inputs into one owned tree. Both watcher and
+ * transport-subset fixtures share this setup without changing authored sources. */
+async function prepareGenerationTree(directory: string): Promise<void> {
+    // Installed dependencies remain read-only behind the one explicit junction.
+    // Remove that link separately after child processes close, before tree cleanup.
+    await fs.mkdir(path.join(directory, 'scripts'), {recursive: true});
+    for (const script of ['watch-frontend-inputs.mjs', 'generate-api.mjs', 'generate-locales.mjs']) {
+        await fs.copyFile(path.join(root, 'scripts', script), path.join(directory, 'scripts', script));
+    }
+    await fs.cp(path.join(root, 'contracts/api/v1'), path.join(directory, 'contracts/api/v1'), {recursive: true});
+    await fs.cp(path.join(root, 'src/locales'), path.join(directory, 'src/locales'), {recursive: true});
+    await fs.mkdir(path.join(directory, 'src/modules/lib'), {recursive: true});
+    await fs.copyFile(path.join(root, 'src/modules/lib/permissions.ts'), path.join(directory, 'src/modules/lib/permissions.ts'));
+    await fs.symlink(path.join(root, 'node_modules'), path.join(directory, 'node_modules'),
+        process.platform === 'win32' ? 'junction' : 'dir');
+}
+
+/** Remove only the fixture's dependency link; never recursively follow it. */
+async function removeDependencyLink(directory: string): Promise<void> {
+    try {
+        await fs.unlink(path.join(directory, 'node_modules'));
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
 }
 
 /** Temporary directories originate from mkdtemp and cleanup cannot escape that named test directory. */
@@ -25,7 +53,36 @@ async function removeTemporary(directory: string): Promise<void> {
     if (path.dirname(resolved) !== path.resolve(os.tmpdir()) || !path.basename(resolved).startsWith('surveyor-generation-')) {
         throw new Error('Refusing unexpected generation test cleanup path');
     }
-    await fs.rm(resolved, {recursive: true, force: true});
+    // Callers have already settled their generator processes and released links.
+    // Bound Windows filesystem-release retries rather than hiding a live child.
+    await fs.rm(resolved, {recursive: true, force: true, maxRetries: 5, retryDelay: 100});
+}
+
+/** Request test-owned generator draining over IPC, then await stdio closure.
+ * Windows process signals can terminate a parent before its children stop, so
+ * this fixture never uses a process-tree kill or touches another Node process. */
+async function stopWatcher(watcher: ReturnType<typeof spawn>): Promise<void> {
+    if (watcher.exitCode !== null || watcher.signalCode !== null) return;
+    await new Promise<void>(requestWatcherStop);
+
+    function requestWatcherStop(resolve: () => void, reject: (error: Error) => void): void {
+        // Generators finish their own synchronous subprocesses before the preload
+        // emits the production stop event. Parent close then settles streams/cwd.
+        const timer = setTimeout(stopExpired, 30_000);
+        watcher.once('close', watcherClosed);
+        watcher.once('error', stopFailed);
+        watcher.send({kind: 'stop-watcher'}, sentStop);
+
+        function watcherClosed(): void { finish(); resolve(); }
+        function stopFailed(error: Error): void { finish(); reject(error); }
+        function stopExpired(): void { stopFailed(new Error('Owned generator watcher did not finish cleanup within 30 seconds.')); }
+        function sentStop(error: Error | null): void { if (error) stopFailed(error); }
+        function finish(): void {
+            clearTimeout(timer);
+            watcher.off('close', watcherClosed);
+            watcher.off('error', stopFailed);
+        }
+    }
 }
 
 /** Read a watcher result while its asynchronous generator may not have published it yet. */
@@ -47,11 +104,36 @@ import filesystem from 'node:fs';
 import promises from 'node:fs/promises';
 import path from 'node:path';
 import {syncBuiltinESMExports} from 'node:module';
+import childProcess from 'node:child_process';
 
 const writeFile = promises.writeFile.bind(promises);
 const watch = filesystem.watch.bind(filesystem);
+const spawn = childProcess.spawn.bind(childProcess);
+const generators = new Set();
 let firstReadinessWrite = true;
 let release;
+let stopRequested = false;
+let stopping = false;
+
+// Observe only actual generators launched inside this detached fixture. No
+// production command, generator output or readiness policy is substituted.
+childProcess.spawn = function observeGenerator(command, arguments_, options) {
+    const generator = spawn(command, arguments_, options);
+    const script = arguments_?.[0];
+    if (command === process.execPath && options?.cwd === process.cwd()
+        && ['generate-api.mjs', 'generate-locales.mjs'].includes(path.basename(script ?? ''))
+        && path.dirname(script) === path.join(process.cwd(), 'scripts')) {
+        generators.add(generator);
+        generator.once('close', generatorClosed);
+    }
+    return generator;
+
+    function generatorClosed() {
+        generators.delete(generator);
+        finishDrain();
+        finishStop();
+    }
+};
 
 // Delay only the first readiness artifact, whether published directly or staged
 // beside it. Generator subprocesses do not inherit this process-only preload.
@@ -84,11 +166,32 @@ syncBuiltinESMExports();
 
 function receiveRelease(message) {
     if (message.kind === 'release-readiness') release?.();
+    // Let actual generators finish their own Redocly/esbuild work. Killing their
+    // Node parent early would not prove that its subprocesses released this tree.
+    else if (message.kind === 'stop-watcher') {
+        stopRequested = true;
+        release?.();
+        finishDrain();
+    }
+}
+function finishDrain() {
+    if (!stopRequested || stopping || generators.size) return;
+    // There is no active generator for production stop to kill. Its real handler
+    // closes watches and queued timers before they can start another input pass.
+    process.emit('SIGTERM');
 }
 function stopGate() {
+    if (stopping) return;
+    stopping = true;
     release?.();
+    finishStop();
+}
+function finishStop() {
+    if (!stopping || generators.size || !process.connected) return;
     process.off('message', receiveRelease);
-    if (process.connected) process.disconnect();
+    process.send({kind: 'generators-stopped'}, function acknowledgedStop() {
+        if (process.connected) process.disconnect();
+    });
 }
 process.on('message', receiveRelease);
 process.once('SIGTERM', stopGate);
@@ -103,22 +206,15 @@ describe('contract and catalog generation', () => {
         let output = '';
         let publicationHeld = false;
         let observedSaves = 0;
+        let generatorsStopped = false;
+        let assertionFailed = false;
         try {
             // Run copies of the actual watcher/generators against a detached authored
             // tree. Installed dependencies are read through one junction; no maintained
             // source, application server, environment or database is changed.
-            await fs.mkdir(path.join(temporary, 'scripts'), {recursive: true});
-            for (const script of ['watch-frontend-inputs.mjs', 'generate-api.mjs', 'generate-locales.mjs']) {
-                await fs.copyFile(path.join(root, 'scripts', script), path.join(temporary, 'scripts', script));
-            }
-            await fs.cp(path.join(root, 'contracts/api/v1'), path.join(temporary, 'contracts/api/v1'), {recursive: true});
-            await fs.cp(path.join(root, 'src/locales'), path.join(temporary, 'src/locales'), {recursive: true});
-            await fs.mkdir(path.join(temporary, 'src/modules/lib'), {recursive: true});
+            await prepareGenerationTree(temporary);
             const permissionsPath = path.join(temporary, 'src/modules/lib/permissions.ts');
-            const originalPermissions = await fs.readFile(path.join(root, 'src/modules/lib/permissions.ts'), 'utf8');
-            await fs.writeFile(permissionsPath, originalPermissions);
-            await fs.symlink(path.join(root, 'node_modules'), path.join(temporary, 'node_modules'),
-                process.platform === 'win32' ? 'junction' : 'dir');
+            const originalPermissions = await fs.readFile(permissionsPath, 'utf8');
 
             // Add the synthetic permission's text before watching. Subsequent changes
             // affect only the registry, proving its exact dependency is observed.
@@ -137,6 +233,7 @@ describe('contract and catalog generation', () => {
             function receiveWatcherGate(message: {kind?: string}): void {
                 if (message.kind === 'readiness-held') publicationHeld = true;
                 else if (message.kind === 'permission-observed') observedSaves++;
+                else if (message.kind === 'generators-stopped') generatorsStopped = true;
             }
             watcher.stdout!.on('data', captureWatcherOutput);
             watcher.stderr!.on('data', captureWatcherOutput);
@@ -208,20 +305,25 @@ describe('contract and catalog generation', () => {
             expect(recoveredPermissions).not.toContain('"WATCHER_PERMISSION":');
             const recoveredManifest = JSON.parse(await fs.readFile(path.join(generatedDirectory, 'manifest.json'), 'utf8'));
             expect(recoveredManifest.version).not.toBe(firstManifest.version);
+        } catch (error) {
+            assertionFailed = true;
+            throw error;
         } finally {
-            // Stop the real child and release the dependency link before the established
-            // mkdtemp containment guard removes only this fixture's own authored tree.
-            if (watcher && watcher.exitCode === null) {
-                const stopped = new Promise<void>(function waitForWatcherExit(resolve) {
-                    watcher!.once('exit', function watcherExited() { resolve(); });
-                });
-                watcher.kill('SIGTERM');
-                await stopped;
+            // A close receipt proves this fixture's generator children settled.
+            // Failed shutdown leaves the tree intact rather than racing its removal.
+            try {
+                if (watcher) {
+                    await stopWatcher(watcher);
+                    expect(generatorsStopped).toBe(true);
+                }
+                await removeDependencyLink(temporary);
+                await removeTemporary(temporary);
+            } catch (error) {
+                // Keep the original assertion as the test failure. Cleanup remains
+                // visible in diagnostics instead of replacing the evidence with EBUSY.
+                if (!assertionFailed) throw error;
+                console.error('Generation fixture cleanup also failed; the original assertion remains primary.', error);
             }
-            await fs.unlink(path.join(temporary, 'node_modules')).catch(function ignoreAbsentJunction(error: NodeJS.ErrnoException) {
-                if (error.code !== 'ENOENT') throw error;
-            });
-            await removeTemporary(temporary);
         }
     }, 90_000);
 
@@ -289,6 +391,52 @@ describe('contract and catalog generation', () => {
             await removeTemporary(temporary);
         }
     }, 20_000);
+
+    it('retains declared scalar, JSON-array, multipart and binary transport while rejecting query arrays and plain text', async function limitsTransportSubset() {
+        const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
+        try {
+            await prepareGenerationTree(temporary);
+            generate('generate-api.mjs', [], temporary);
+            const metadata = JSON.parse(await fs.readFile(path.join(temporary, '.generated/api/v1/operations.json'), 'utf8')) as ApiContractManifest;
+            expect(metadata.operations.some(operation => operation.requestMediaType === 'multipart/form-data')).toBe(true);
+            expect(metadata.operations.some(operation => Object.values(operation.responseMediaTypes).includes('application/octet-stream'))).toBe(true);
+
+            // The narrowed transport subset does not narrow authored JSON bodies.
+            // Exercise actual emitted validators rather than inspect generator text.
+            const server: typeof import('../../.generated/api/v1/server.cjs') =
+                (await import(pathToFileURL(path.join(temporary, '.generated/api/v1/server.cjs')).href)).default;
+            expect(server.validateGetHelpPageParameters({path: {}, query: {q: 'packing'}, header: {}})).toBe(true);
+            expect(server.validatePackingCreateForm({data: {title: 'Packing fixture', description: null, eventId: null,
+                defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0},
+                items: [{title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false},
+                    {title: 'Water', description: null, maxAssignees: 2, requiredByAll: false}]}})).toBe(true);
+
+            const source = path.join(temporary, 'contracts/api/v1/openapi.yaml');
+            const original = await fs.readFile(source, 'utf8');
+            const queryContract = YAML.parseDocument(original);
+            const parameters = queryContract.getIn(['paths', '/packing-lists/create-entry', 'get', 'parameters']);
+            if (!YAML.isSeq(parameters)) throw new Error('Fixture operation no longer declares its scalar parameters.');
+            parameters.add({name: 'repeated', in: 'query', style: 'form', explode: true,
+                schema: {type: 'array', items: {type: 'string'}}});
+            await fs.writeFile(source, queryContract.toString());
+            expect(() => generate('generate-api.mjs', [], temporary))
+                .toThrow(/Unsupported pilot parameter serialization: query:repeated/u);
+
+            // A separately declared plain-text response must fail generation too.
+            // Its named scalar schema otherwise meets the generator's response
+            // contract, isolating media rejection from an unrelated schema error.
+            const textContract = YAML.parseDocument(original);
+            textContract.setIn(['components', 'schemas', 'PlainTextFixture'], {type: 'string'});
+            textContract.setIn(['paths', '/packing-lists/create-entry', 'get', 'responses', '200', 'content'],
+                {'text/plain': {schema: {$ref: '#/components/schemas/PlainTextFixture'}}});
+            await fs.writeFile(source, textContract.toString());
+            expect(() => generate('generate-api.mjs', [], temporary)).toThrow(/Unsupported pilot response media type/u);
+        } finally {
+            // Every synchronous child has closed before its link and named tree retire.
+            await removeDependencyLink(temporary);
+            await removeTemporary(temporary);
+        }
+    }, 60_000);
 
     it('generates identical artifacts from two clean trees and verifies them without rewriting', async () => {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));

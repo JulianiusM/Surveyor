@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: digest-guarded frontend amendments preserve complete reviewed candidate guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
+verification-scope: digest-guarded amendments retain layer boundaries and classify actual Express/Vite/SSR integration in the existing database-free selection; current quick command source-reviewed; no cutover or operator execution claimed
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; vitest.config.mts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -23,6 +23,12 @@ The explicit 2026-10-13 decision retains this E2E boundary. Isolated built-brows
 layer even when another runner happens to start a server/database. Source-server browser workflows with real
 persistence belong to integration coverage; they are not built-application E2E. Exact runner selection comes from
 configuration and package scripts; the frontend and compiler contracts below cover their distinct scopes.
+
+Genuine integration of production server components can be database-free when persistence lies outside the exercised
+boundary. The Express/Vite fixture combines actual development middleware, shared SSR and HTTP asset delivery;
+it belongs to integration and uses the existing database-free selection without initializing a schema it never reads.
+A mocked response alone does not establish that boundary. The [Development Policy](policies/DEVELOPMENT_POLICY.md#test-selection-and-evidence)
+owns this bounded classification; database-backed integration retains real ORM metadata and guarded schema setup.
 <!-- /delta:amendment-01 -->
 
 ## Frontend tests — amendment-02
@@ -73,6 +79,13 @@ npm run test:all      # Vitest, build, isolated client browser and system E2E
 vue-tsc with `tsconfig.test.json` for tests and production/SFC imports reached by that graph. Vitest transpilation
 does not type-check assertions or fixtures, and a test-graph pass does not certify every unimported browser source.
 Server compilation belongs to `tsconfig.server.json`; Vite compilation alone is not a TypeScript check.
+
+`vitest.config.mts` includes `tests/integration/frontend-development-runtime.spec.ts` in its `database-free` project
+and excludes that exact file from its schema-resetting `integration` project. `npm run test:quick` selects the
+database-free project, retaining the genuine server-component fixture without copying discovery globs into the
+package command. A focused infrastructure run uses the same project with that exact file; `test:integration` still
+selects the whole integration directory and therefore includes database-backed suites. Do not describe the quick
+selection as unit/client-only or infer a layer from whether its runner starts a database.
 
 Package pre-hooks prepare generated API/localization/database inputs. Direct runners can bypass those hooks;
 generate after checkout or authored contract/catalog changes. Generated compile fixtures exercise actual request,
@@ -179,3 +192,77 @@ reproducibility baseline. Record the original failure and measured focused/full 
 or changing fixtures without establishing the cause.
 
 <!-- /delta:amendment-09 -->
+
+## Runner classification — amendment-10
+
+<!-- delta:amendment-10 -->
+- **Vitest integration tests** for production services/controllers against real disposable MariaDB, or genuine integration of production server components when persistence is outside the tested boundary.
+
+<!-- /delta:amendment-10 -->
+
+## Safety first — amendment-11
+
+<!-- delta:amendment-11 -->
+- Database-backed integration setup calls `AppDataSource.synchronize(true)` for each suite in the schema-resetting project; the separately selected Express/Vite fixture never initializes a database.
+
+<!-- /delta:amendment-11 -->
+
+## 3. Run the desired layer — amendment-12
+
+<!-- delta:amendment-12 -->
+`npm test` runs every Vitest layer, including MariaDB integration tests. It is not a database-free shortcut.
+`npm run test:quick` selects the configured database-free project: unit/client checks and the genuine Express/Vite
+server-component integration fixture. The runner configuration owns this selection once.
+
+<!-- /delta:amendment-12 -->
+
+## Command matrix — amendment-13
+
+<!-- delta:amendment-13 -->
+| `npm run test:quick` | No | No | Stubbed client globals; real local Express/Vite listener for the scoped fixture | Configured database-free regression selection, including server-component integration. |
+
+<!-- /delta:amendment-13 -->
+
+## Integration tests — amendment-14
+
+<!-- delta:amendment-14 -->
+Use `tests/integration/` when correctness depends on TypeORM mappings, transactions, constraints, relationships,
+persisted queries or coordination among production services. Selected controller orchestration uses production-shaped
+data. Genuine server-component integration may instead exercise actual middleware/rendering/HTTP without persistence;
+the bounded Express/Vite fixture uses that boundary rather than mocked delivery or a full application/database setup.
+
+Database-backed integration uses the real `AppDataSource` and production entity metadata, without general-purpose
+repository mocks. The database-free infrastructure selection does not initialize that datasource.
+
+The standard database-backed lifecycle is:
+
+<!-- /delta:amendment-14 -->
+
+## Choosing the layer — amendment-15
+
+<!-- delta:amendment-15 -->
+| Controller using production services | Integration | full request parsing, cookies, redirect, or view rendering matters |
+| Genuine middleware/rendering/asset delivery | Integration; database-free when persistence is outside its boundary | actual sessions, business workflow or persistence require the integrated application |
+
+<!-- /delta:amendment-15 -->
+
+## Integration tests — amendment-16
+
+<!-- delta:amendment-16 -->
+Each database-backed integration file owns a clean schema for its suite. Do not rely on rows created by another
+spec file. Use `tests/factories/` for valid production-shaped entities/inputs and remove arbitrary sleeps or ordering
+assumptions. The scoped database-free server fixture instead owns and closes its local listener and Vite instance.
+
+<!-- /delta:amendment-16 -->
+
+## Vitest configuration — amendment-17
+
+<!-- delta:amendment-17 -->
+The configuration uses the Node environment and loads `tests/support/env.ts`. The `database-free` project runs
+isolated unit/client files and the scoped Express/Vite server-component fixture with bounded thread workers.
+The database-backed `integration` project serializes its files because each rebuilds the same disposable schema.
+A full local Vitest run orders those projects so database resets do not overlap independent files. Keep database-backed
+fixture resets serialized; their requirement does not prohibit isolated database-free parallelism. Exact discovery,
+worker limits and project order belong to `vitest.config.mts`.
+
+<!-- /delta:amendment-17 -->

@@ -9,7 +9,7 @@
     "Apply Documentation Policy's optional task-profile discovery; verify declared scope and pass applicable profiles to delegates without requiring their presence or inferring approval.",
     "Resolve every conflict with existing policies or approved designs directly with the maintainer before dependent edits.",
     "Verify approval for potentially unintended consequences and every policy or design decision change.",
-    "Apply Development Policy's concise four-field approval explanation; reject quotations, proposed replacement text, lengthy or unclear requests before asking.",
+    "Apply Development Policy's concise individual approval explanation with sufficient decision context, explicit what/how and answer-scoped identifiers; reject quotations, proposed replacement text, lengthy or unclear requests before asking.",
     "Review comment purpose, logical spacing, readability, DRY, information hiding and existing module reuse.",
     "Verify controller-owned business decisions, locked authorization and pure DBAL persistence.",
     "Verify established behavior and run the cheapest appropriate production checks."

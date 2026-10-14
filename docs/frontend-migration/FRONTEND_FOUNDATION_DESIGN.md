@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original staging choices and dated amendments retained; eight amendment-only guides use explicit reconciliation and reviewed temporary preparation; profile context and publication boundaries remain separate from application acceptance
+verification-scope: current API contribution rules and original future targets consolidated into staged guides/active DEC-006; approved transport scope restoration and bounded server integration recorded; original amendments and temporary publication boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -397,6 +397,29 @@ cleanup receipts, amendment operations and prepared destinations. The guard and 
 without package hooks or delivery-gate integration. Structural checks do not establish completeness or approval;
 independent nonauthor and root comparison remains required.
 
+### Authorized readiness consolidation (2026-10-14)
+
+The maintainer explicitly authorizes the reviewed readiness work and separately approves restoring scalar-only query
+transport and removing unused plain-text API output. Both unused additions first appeared in the 2026-10-08 correction;
+no current endpoint depends on them, and their original rationale/specific authorization was not established.
+The existing generator/transport owner retains JSON arrays, current API operations and native download boundaries.
+
+Current API authoring, strictness and version-compatibility guidance is consolidated in the existing staged
+[Development owner](staged/DEVELOPMENT.md#contract-authoring-and-generated-consumers). Original toolchain rationale
+and intended future localization/domain integration choices move to active
+[DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#shared-api-contract-decision), with implemented and future status
+kept distinct. This transfers durable knowledge before eventual retirement without creating a documentation destination
+or changing frozen production guidance. Control/baseline records remain required during coexistence.
+
+The conditional integration decision is satisfied by the fixture's actual Express middleware, Vite asset delivery
+and shared SSR renderer; persistence lies outside that exercised boundary. It belongs to integration while using
+the existing database-free selection. The active
+[Development Policy](../policies/DEVELOPMENT_POLICY.md#test-selection-and-evidence) owns this bounded classification.
+The same policy's [approval explanation](../policies/DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13)
+now owns sufficient decision context, explicit scope/approach and answer-specific request identifiers. The historical
+four-field amendments above retain their original scope; they are not the current template.
+No new module migration, default route, native retirement or deployment follows from this readiness work.
+
 #### Migration contribution handoff
 
 For each authorized route family, trace the [behavior inventory](BEHAVIOR_INVENTORY.md), route/permission boundaries
@@ -426,7 +449,7 @@ default-route change, native removal or production edit is authorized by this in
 | Native view/browser/Help consumers | Retire superseded consumers and root-native corpus references only after migrated callers are complete. `docs/user-guide/` remains the canonical parent; its flat native corpus is temporary comparison material. |
 | Shared browser helper and assets | Vue feedback uses `src/public/js/shared/alerts.ts`; renderer/header consumers still use `/style/style.css`, `/style/help.css`, `/img/logo.png` and `/img/favicon-32x32.png`. Retain or relocate each dependency once with all consumers updated; do not delete all of `src/public/` or duplicate shared backend owners. |
 | Comparator fixtures and capture tooling | Review `tests/frontend/`, `tests/integration/`, `tests/e2e/` and maintained capture scripts. Retire/adapt native-only comparison assertions and corpus/routes; retain shared persistence, privacy, recovery and new-frontend behavior checks. |
-| Migration profile, control and staged tooling | Retire the profile, completed baselines, recipes, inventories, review/status records and this guard/manifest after cutover. Lasting decisions already belong to active ADRs; unresolved defects retain their existing owner. Generic discovery still works with this directory absent. Do not create another archive or carry migration links into replacement bytes. |
+| Migration profile, control and staged tooling | Retire the profile, completed baselines, recipes, inventories, review/status records and this guard/manifest only after authorized cutover and review of their remaining unique contracts. Original API rationale and intended future targets now belong to active DEC-006; current contribution rules are mapped to the existing guide amendments. Reconcile any remaining unique decision into its durable owner before retiring its source. Unresolved defects retain their existing owner; generic discovery still works with this directory absent. Do not create another archive or carry migration links into replacement bytes. |
 | Historical evidence | Existing Git history and ignored images/results describe their original verification scope. They impose no continuing native preservation requirement or deployed-version claim. |
 
 ## Architecture and logical ownership

@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: digest-guarded frontend amendments preserve complete reviewed candidate guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
+verification-scope: digest-guarded frontend amendments consolidate current contract authoring, transport, versioning and localization guidance; unchanged production procedures stay in their existing owners; no cutover or operator execution claimed
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -46,6 +46,63 @@ Frontend paths in this table are relative to `src/frontend/`. Create a module on
 cannot comfortably hold its responsibility. Do not add another router, HTTP wrapper, state store, controller,
 validator or service simply to make this table symmetrical. Reuse existing styles, logo/favicon and pure browser
 helpers through their actual owners rather than copying them into a frontend-specific asset tree.
+
+#### Contract authoring and generated consumers
+
+Author wire shapes and operation policy once in OpenAPI 3.1.1 with JSON Schema draft 2020-12 under
+`contracts/api/v1/`. The [framework decision](decisions/DEC-006-FRONTEND-FRAMEWORK.md#shared-api-contract-decision)
+retains the original toolchain choice and alternatives; executable package scripts own exact dependency versions.
+
+| Input or generated artifact | Responsibility |
+|---|---|
+| `openapi.yaml`, feature YAML and `common.yaml` | Operation IDs, paths, security, statuses, media, feature shapes and genuinely shared subshapes. |
+| `.generated/api/v1/openapi.json` and `operations.json` | Bundled local description and derived operation/schema metadata; packaged with the matching server validators. |
+| `src/types/api/v1.d.ts` and `validation-v1.d.ts` | Runtime-free wire declarations and validator signatures referring to those declarations. |
+| `.generated/api/v1/server.cjs` and `browser/` | Standalone server validators and lazy browser validators compiled from the same authored constraints. |
+| Existing server transport and feature `api.ts` | Decode declared transport, select generated validation and present outcomes around the existing business owner. |
+
+`scripts/generate-api.mjs` parses local YAML, rejects duplicate keys/remote references and uses Redocly to lint/bundle
+the description. openapi-typescript emits declarations without runtime enums. Strict Ajv 2020 plus ajv-formats
+compiles standalone validators and their required runtime helpers. Feature chunks load their own validators;
+neither the browser nor server startup compiles schemas. openapi-fetch consumes the generated paths while
+`app/transport.ts` supplies headers, runtime validation, cancellation and status classification, retaining the Response.
+Types alone cannot validate received JSON. Do not introduce another schema language, validator configuration or router.
+
+Use explicit scalars, object properties/required, arrays, local references, enums/const, bounds/patterns and simple
+tagged `oneOf` unions. JSON null uses a type union rather than OpenAPI 3.0 `nullable`. Mutation bodies reject unknown
+fields; browser response validation accepts compatible additions while error parameters retain their authored shape.
+Separate create/update/read semantics and permitted projections. Avoid recursive polymorphism, arbitrary maps,
+deep `allOf`, remote references and custom executable vocabulary; `readOnly`/`writeOnly` cannot enforce disclosure.
+These shape preferences require author/reviewer judgment; the generator does not reject every complex schema that
+Ajv understands. Unknown schema vocabulary and unsupported transport styles fail generation. Do not disable Ajv
+strictness or enable coercion, default insertion or additional-field removal. Timezone existence and cross-field
+business checks remain named controller operations.
+
+Two implemented constraints preserve existing field behavior. Registration/reset author
+`x-surveyor-min-length-utf16: 8`, because native password validation counts UTF-16 units; ordinary JSON Schema string
+bounds count code points, and passwords acquire no maximum. Existing-item capacity admits the number/string/null
+primitive union and passes the raw scalar to the existing signed nullable SQL column. Database rounding/range/failure
+remain authoritative; creation/new-item validation stays separate. Do not generalize either extension into coercion
+or a copied database-limit policy. Native metadata diagnostics remain owned by their native adapter.
+
+Bind only declared single path/query/header scalars, JSON, Packing multipart and scoped binary image responses.
+Creation decodes the `data` JSON part once against its authored nested schema and handles `image` separately.
+Repeated query parameters, absent/empty values and malformed input stay distinct. Query arrays and plain-text API
+responses are outside this supported subset; JSON arrays remain valid where the authored body/response declares them.
+New transport styles require a separately approved capability change. Validate actual standalone consumers and
+compile-time null/false/optional/tagged cases rather than handwritten copies of the wire contract.
+
+Use each operation's declared status/media rather than the native envelope. Handle `204`/`304` before JSON parsing;
+HTML `200` or invalid delivery cannot confirm a command. RFC 9457 Problems keep code/status/messageKey/parameters
+correlated, with safe localized detail and bounded field pointers. Unknown future errors may display validated detail
+without triggering known machine actions. Credential rejection, field denial and foreign-child absence retain their
+operation-specific meaning. Private localized representations carry `Content-Language`, applicable `Vary` and
+`private, no-store`; cache headers never authorize data or expose validators, SQL, session or filesystem details.
+
+For a released API version, additive response fields and optional operations can remain compatible. Removing or
+renaming fields, changing their type/meaning, adding mandatory input or changing an existing operation's authorization
+or outcome is breaking: obtain an explicit version/migration decision and retain the supported released contract
+until consumer retirement is authorized. The unreleased-v1 correction does not authorize another pilot version.
 
 #### Adding or changing a feature view
 
@@ -447,6 +504,12 @@ Use the shared typed translator and request/application-local i18next-vue bindin
 Plain interpolation stays escaped; locale changes preserve drafts, focus and machine-value parsing. User-authored
 titles and other content remain data rather than translation keys.
 
+The implemented catalog grammar is plain text and cardinal plurals. Generation checks complete keys, parameters and
+plural variants; raw markup or unsupported rich/context/ordinal forms are not executable message extensions.
+The current preference is a server-issued browser cookie, not a User/Guest or participation-profile database field.
+The [framework decision](decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets)
+retains the original intended persistence and output-localization choices with their unimplemented status.
+
 After confirmed locale change, cancel/invalidate only named translated query families from the existing query-key
 owner. Machine values, user titles, event options and edit authority retain language-independent keys/in-flight
 reads. Avoid tuple-position matching or another family registry. Translation cannot cancel the fresh post-command
@@ -503,6 +566,7 @@ src/public/js/                     existing browser modules and shared helpers
 
 <!-- delta:amendment-04 -->
 tests/frontend/                    client helpers/mounted Vue and isolated browser checks
+tests/integration/                 database-backed workflows and genuine isolated server-component integration
 
 <!-- /delta:amendment-04 -->
 
@@ -774,3 +838,20 @@ still use `server:client`; do not remove source or hand-edit generated modules. 
 fails, correct it and wait for successful readiness before relying on a restart. For compiled runs, build before run.
 
 <!-- /delta:amendment-33 -->
+
+## Test selection — amendment-34
+
+<!-- delta:amendment-34 -->
+npm run test:quick         # configured database-free project, including scoped server integration
+
+<!-- /delta:amendment-34 -->
+
+## Test selection — amendment-35
+
+<!-- delta:amendment-35 -->
+The database-backed integration project rebuilds its selected MariaDB schema; the genuinely database-free
+Express/Vite integration fixture uses the other existing project without a schema reset. The E2E initializer drops
+and recreates its selected schema. Read [Testing Guide](TESTING_GUIDE.md) before database-backed suites and never
+reuse development or production database names.
+
+<!-- /delta:amendment-35 -->

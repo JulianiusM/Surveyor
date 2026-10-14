@@ -127,6 +127,12 @@ separate client/SSR destinations. The release contains coherent artifacts and ru
 Production needs no Vite server or runtime schema compiler. Generated declarations, validators, locale resources
 and `dist/` remain ignored. Exact scripts and dependency versions belong to executable package configuration.
 
+The actual Express/Vite/SSR/HTTP module fixture lives in `tests/integration/frontend-development-runtime.spec.ts`.
+Its exercised boundary needs no persistence, so the existing database-free Vitest project and `test:quick` selection
+retain it without schema initialization. Source-development browser workflows remain separate integration evidence;
+neither source fixture establishes built-application E2E. The [Testing amendments](staged/TESTING_GUIDE.md#frontend-compiler-and-build-scopes)
+own runner details, while the [review](PILOT_PARITY_REVIEW.md) owns actual execution.
+
 ## Progressive loading (2026-10-08)
 
 Refined Req6A adds the initial interactive skeleton until client initialization; the following data-loading policy

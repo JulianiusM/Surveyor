@@ -9,6 +9,9 @@ import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 
 afterEach(() => { vi.unstubAllEnvs(); });
 
+// This fixture integrates actual Express/Vite middleware and shared SSR through
+// HTTP. It owns only synthetic bootstrap data and a temporary local listener;
+// the database-free Vitest project runs it without an ORM connection or reset.
 describe('Express-integrated frontend development', () => {
     it('does not initialize Vite in an installed production release', async () => {
         vi.stubEnv('NODE_ENV', 'production');

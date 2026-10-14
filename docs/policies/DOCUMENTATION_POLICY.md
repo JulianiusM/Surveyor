@@ -7,7 +7,7 @@ owner: documentation maintainers
 status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-ci-repair
-verification-scope: active governance and runtime Help roles retained; generic profile context delivery, task-scoped continuation and profile-owned amendment staging clarified; no application or operator execution claimed
+verification-scope: informed individual approval context and answer-scoped identifiers routed to the development policy; active governance, runtime Help and profile-owned staging boundaries retained
 source-anchors: docs/policies/DEVELOPMENT_POLICY.md; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; repository-tree; src/controller/helpController.ts; src/frontend/features/help/; src/locales/; .github/workflows/release.yml; docs/decisions/DEC-004-HELP-MARKDOWN-TRUST-MODEL.md; docs/policies/documentation-check.json; docs/backlog/documentation-remediation.yml; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; tests/unit/help-localization.spec.ts
 next-review: documentation-pipeline-or-help-trust-boundary-change
 -->
@@ -52,7 +52,9 @@ Editorial corrections and authorized relocation do not reopen unchanged technica
 Before each individual approval question, apply the complete
 [required change explanation](DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13).
 That section owns the per-decision format, meaningful-content requirements and semantic delegation review.
-Correct labels alone do not make an unclear request valid; this policy does not maintain another template.
+Its 2026-10-14 amendment requires sufficient decision context, explicit scope and approach, and distinct identifiers
+for requests presented together. Correct labels or brevity alone do not make a request understandable; this policy
+does not maintain another template.
 
 All AI agents must read this policy and the [development policy](DEVELOPMENT_POLICY.md) at task start and apply them
 to every touched boundary. The delegating agent passes the actual authorized scope and unresolved conflicts to each

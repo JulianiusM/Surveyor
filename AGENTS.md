@@ -6,7 +6,7 @@ owner: project maintainers
 status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared context bootstrap and caller-held continuation routing; concise individual approval, semantic review and established engineering boundaries retained
+verification-scope: informed individual approval and answer-scoped identifiers routed to the authoritative policy; shared context bootstrap, semantic review and established engineering boundaries retained
 source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; scripts/check-documentation.mjs; scripts/tests/documentation-check.test.mjs; docs/README.md; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; package.json; repository-tree
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -49,8 +49,9 @@ After approval, record a concise dated amendment without erasing the original ch
 work while a required answer is pending; elapsed time is not approval.
 
 Follow the [required change explanation](docs/policies/DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13)
-with its short, simple four-field explanation and independent semantic/root review for each individual approval.
-Correct labels do not excuse an unclear or lengthy explanation. The policy owns these requirements and
+with sufficient decision context, explicit scope/approach and independent semantic/root review for each individual approval.
+Apply its identifiers for requests presented together. Correct labels do not excuse an unclear or lengthy explanation.
+The policy owns these requirements and
 the prohibition on bundled approvals; do not replace it with another summary or infer implementation approval.
 
 A new request that disagrees with an existing canonical path or approved policy/design still needs explicit conflict

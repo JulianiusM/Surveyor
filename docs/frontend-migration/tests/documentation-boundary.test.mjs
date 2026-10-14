@@ -338,6 +338,8 @@ test('rejects malformed JSON and empty or invalid manifest boundaries before pre
         {...fixture.manifest, previewInputs: ['src/../.env']},
         {...fixture.manifest, previewInputs: ['src/runtime-private.env']},
         {...fixture.manifest, previewInputs: ['src/.secret']},
+        {...fixture.manifest, previewInputs: ['tests/integration/']},
+        {...fixture.manifest, previewInputs: ['tests/integration/another-runtime.spec.ts']},
         {...fixture.manifest, previewInputs: 'src/types/api/'},
         {...fixture.manifest, approvedCleanups: 'README.md'},
         {...fixture.manifest, approvedCleanups: [{path: 'README.md', blob: 'HEAD',
@@ -408,6 +410,49 @@ test('prepares complete delta output at final paths using the real advisory chec
     assert.equal(receipt.semanticReview, null);
     assert.equal(receipt.outputs[0].target, 'README.md');
     assert.equal(receipt.advisory.status, 'advisory');
+});
+
+test('pins the exact untracked public runtime fixture in a real Git preparation', function publicRuntimeFixture(t) {
+    const fixture = createFixture(t);
+    const relative = 'tests/integration/frontend-development-runtime.spec.ts';
+    const content = '// Synthetic public Express/Vite runtime fixture.\nexport const boundary = "server-components";\n';
+    write(fixture, relative, content);
+    assert.equal(git(fixture, ['ls-files', '--', relative]), '');
+    fixture.manifest.previewInputs = [relative];
+    writeManifest(fixture);
+
+    // Preparation copies this reviewed source's current bytes while leaving its
+    // worktree and Git ownership untouched. The receipt must pin the input too.
+    const result = runBoundary(fixture, {preview: true});
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const prepared = fixtureReceipt(fixture);
+    assert.equal(fs.readFileSync(contained(prepared.preview, relative), 'utf8'), content);
+    assert.equal(fs.readFileSync(contained(fixture.root, relative), 'utf8'), content);
+    assert.equal(git(fixture, ['ls-files', '--', relative]), '');
+    const source = prepared.receipt.inputs.files.find(function reviewedPublicSource(input) {
+        return input.path === relative;
+    });
+    assert.equal(source?.sha256, documentationDigest(content));
+
+    // A later uncommitted source edit invalidates the actual reviewed receipt;
+    // allowing this one path cannot turn its moving bytes into permanent approval.
+    attestFixturePreparation(prepared);
+    write(fixture, relative, content + '// Changed after review.\n');
+    const stale = runBoundary(fixture, {ready: prepared.filename});
+    assert.equal(stale.status, 1, stale.stdout + stale.stderr);
+    assert.match(stale.stderr, /Preparation inputs changed/);
+    assert.equal(fs.readFileSync(contained(fixture.root, 'README.md'), 'utf8'), originalReadme);
+});
+
+test('rejects an admitted public file replaced by a directory before preview writes', function publicFileKind(t) {
+    const fixture = createFixture(t);
+    const relative = 'tests/integration/frontend-development-runtime.spec.ts';
+    // A misleading file suffix must not admit a directory or its private-looking
+    // synthetic child. The failure precedes even the ignored preparation directory.
+    write(fixture, relative + '/.env', 'SYNTHETIC_PRIVATE_VALUE=fixture-only\n');
+    fixture.manifest.previewInputs = [relative];
+    writeManifest(fixture);
+    expectRejectedBeforePreview(fixture, runBoundary(fixture, {preview: true}), /Public preview input must be a regular file/);
 });
 
 test('preserves unrelated live text and requires reviewed overlapping fragments', function reconcileFragments() {

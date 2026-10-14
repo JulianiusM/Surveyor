@@ -6,7 +6,7 @@ owner: project maintainers
 status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared engineering and concise individual approval retained; generic task-context bootstrap, scoped profile selection and continuation/delegation freshness routed to the documentation policy
+verification-scope: approved informed-decision context, explicit what/how fields and answer-scoped approval identifiers; genuine database-free server integration classification; shared engineering and task-context boundaries retained
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -55,14 +55,24 @@ Previously valid approvals retain their recorded scope; this rule grants no perm
 ### Required change explanation (2026-10-13)
 
 The maintainer's 2026-10-13 correction withdraws the quotation and mandatory read-back amendment in favor of concise,
-meaningful explanations. Earlier valid approvals retain their scope.
+meaningful explanations. The 2026-10-14 correction strengthens that original four-field format after requests supplied
+too little context to support an informed decision: add explicit scope and approach, and identifiable simultaneous
+requests. Earlier valid approvals retain their scope; brevity alone never establishes explanation quality.
 
-Every individual approval request must be short, simple and understandable on its own. Use these four labels in
-this order, with a brief sentence or two for each:
+Every individual approval request must be short, simple and understandable on its own to a maintainer who has not
+followed the investigation. Supply enough current behavior, intended outcome and relevant context to decide without
+opening source files or reconstructing earlier messages. Use these labels in this order, normally with a brief
+sentence or two for each; keep necessary context rather than compress the explanation into ambiguous shorthand:
 
 - **Reason:** who encounters the problem, what currently happens and why the change is needed.
-- **Implications:** what the existing owner will change from the current rule or behavior to the proposed end state,
-  and the resulting user-visible effects or material risks.
+- **What is to be changed:** the concrete behavior, rule or responsibility in scope, from its current state to the
+  proposed result. Identify the affected user action or workflow and its boundaries, rather than naming only an
+  unused helper, file or abstract capability.
+- **How it is to be changed:** the intended approach and resulting ownership. Explain which existing owner and
+  callers adopt the change, what remains shared and how the target behavior is reached, without code or a technical
+  implementation transcript. Describe the target, not an unexplained instruction such as "remove the branch."
+- **Implications:** the resulting user-visible effects, compatibility consequences, material risks or tradeoffs.
+  Explain the consequences separately from the scope and approach; state when no current user-facing change is expected.
 - **Prior decisions and requirements:** which earlier choice or requirement the change preserves, affects or
   conflicts with. State when no conflict was found.
 - **History:** the relevant original choice, approved amendments and how the issue was discovered. Distinguish
@@ -73,18 +83,28 @@ transcripts are forbidden in approval requests. Name affected material only wher
 scope; avoid unexplained file inventories. A source link may identify an owner, but must not replace the explanation.
 Use familiar words and only the context needed to decide; define necessary technical terms. When several layers
 change, briefly name their shared owner and callers so the actual reuse and responsibility remain understandable.
+Use a concrete trigger or before/after example when the behavior would otherwise remain abstract. Explain why the
+proposed choice is appropriate and mention a material alternative when it affects the decision. Do not add a long
+inventory or speculative alternatives merely to fill the format.
 
 One request covers the smallest independently decidable change. If one part could be approved and another rejected,
-make separate requests, each with its own four fields, specific decision and governing approval-rule link. Do not
-bundle decisions, share their explanations or substitute "see above" for a field. After the four fields, ask a direct
+make separate requests, each with its own complete explanation, specific decision and governing approval-rule link. Do not
+bundle decisions, share their explanations or substitute "see above" for a field. After the explanation, ask a direct
 question naming the decision and link the rule requiring approval. Never hide the request or implementation plan in
 documentation, infer consent from silence or request permission again for work already explicitly authorized.
+
+When one answer presents multiple approval requests, give each a short, distinct identifier, such as **R1** and
+**R2**, and repeat that identifier in its direct question. Identifiers must be unique within that answer; global
+uniqueness is unnecessary. Track replies against both the identifier and its actual decision, including the answer
+which introduced it. A later identifier reuse or an ambiguous reply must not transfer approval to another change.
 
 Before presenting each request, obtain an independent nonauthor review and root review against the inspected source.
 Reject and rewrite requests that are lengthy, quote proposed edits, depend on jargon or fail to explain what changes
 to what, why, the consequences, affected decisions and relevant history. Correct labels and a declaration of compliance
-are insufficient. Both reviewers must assess meaning, actual shared adoption and approval provenance; no prescribed
-read-back or verbatim reproduction is required.
+are insufficient. Both reviewers must assess whether an uninvolved maintainer can understand the current problem,
+concrete proposal, approach and consequences well enough to choose, as well as actual shared adoption, identifiers
+and approval provenance. A short request with insufficient context fails this review. No prescribed read-back or
+verbatim reproduction is required.
 
 Withdraw and reissue a rejected unresolved request. Its unclear wording or an inferred answer supplies no approval.
 Existing valid approvals remain effective. Pass current authorization, unresolved decisions and these concise
@@ -140,7 +160,7 @@ boundary. Do not require every feature to have unit, frontend, integration and E
 |---|---|
 | `tests/unit/` | Isolated production logic without database, HTTP application, external service or real browser. |
 | `tests/frontend/` | Client helpers/DOM behavior under Vitest, or isolated real-browser client behavior under the client Playwright runner. |
-| `tests/integration/` | Real TypeORM persistence, relationships, transactions or selected controller orchestration on the guarded disposable schema. |
+| `tests/integration/` | Real TypeORM persistence, relationships, transactions or selected controller orchestration on the guarded disposable schema; genuine integration of production server components may be database-free when persistence is outside the tested boundary. |
 | `tests/e2e/` | A critical built workflow requiring routes, middleware, sessions, rendering and persistence together. |
 
 The maintainer's explicit 2026-10-13 decision reaffirms that **every E2E test exercises the built application against
@@ -149,6 +169,13 @@ setup. An incidentally running server/database does not turn a substituted docum
 fixture into E2E coverage. Isolated built-browser checks belong only to the client-test layer. Source-development
 server workflows remain integration evidence and must not be labeled built-application E2E. Preserve the original
 full-workflow boundary rather than broadening it to accommodate an incorrectly classified test.
+
+The maintainer's 2026-10-14 conditional decision admits the Express/Vite fixture as genuine integration: it combines
+the actual development middleware, shared SSR renderer and HTTP asset delivery instead of replacing those components
+with mocks. Such isolated server-rendering/development-asset checks belong in `tests/integration/` and use the existing
+database-free runner selection without initializing a schema they never access. A mocked HTTP response alone is not
+this boundary. Database-backed integration retains real ORM metadata and its guarded schema; unit/client limits and
+the built-application E2E requirement remain unchanged.
 
 Test production behavior, not test-only helpers or private implementation details. Persistence tests use real ORM
 metadata and the disposable database rather than repository/core-service mocks. A narrow replacement at a true

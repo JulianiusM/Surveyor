@@ -21,17 +21,20 @@ function scalarParameter(value: unknown, type: unknown): unknown {
     return value;
 }
 
-/** Repeated arrays are legal only for explicitly declared form/explode query parameters. */
+/** Decode declared scalar path/query/header values without transforming JSON body arrays.
+ * Unknown parameter names remain present for the generated closed-schema validator to reject. */
 export function decodeApiParameters(operationId: ApiOperationId, input: {path: object; query: object; header: object}) {
+    // Work on transport copies: request values and later body normalization retain
+    // their own owners, while undeclared names still reach structural validation.
     const decoded: Record<string, Record<string, unknown>> = {path: {...input.path}, query: {...input.query}, header: {...input.header}};
+
+    // Declared parameters share the scalar decoder. Repeated or structured
+    // submitted values fail in the same decoder as malformed scalars.
     for (const parameter of operationContract(operationId).parameters) {
         const value = decoded[parameter.in]?.[parameter.name];
         if (value === undefined) continue;
-        const schema = parameter.schema as {type?: string; items?: {type?: string}};
-        if (schema.type === 'array') {
-            if (parameter.in !== 'query' || parameter.explode === false) throw new ApiProblem('VALIDATION_FAILED');
-            decoded.query![parameter.name] = (Array.isArray(value) ? value : [value]).map(entry => scalarParameter(entry, schema.items?.type));
-        } else decoded[parameter.in]![parameter.name] = scalarParameter(value, schema.type);
+        const schema = parameter.schema as {type?: string};
+        decoded[parameter.in]![parameter.name] = scalarParameter(value, schema.type);
     }
     return decoded;
 }
@@ -128,18 +131,6 @@ export function sendValidatedBinary<Operation extends ApiOperationId>(req: Reque
     }
     privateResponse(req, res);
     res.status(status).type('application/octet-stream').send(bytes);
-}
-
-/** Plain text is a supported declared output, with the same generated scalar bounds as JSON. */
-export function sendValidatedText<Operation extends ApiOperationId, Status extends ApiSuccessStatus<NoInfer<Operation>>>(
-    req: Request, res: Response, operationId: Operation, status: Status, data: ApiResponseBody<NoInfer<Operation>, NoInfer<Status>>): void {
-    const operation = operationContract(operationId);
-    const schema = operation.responseSchemas[String(status)];
-    if (operation.responseMediaTypes[String(status)] !== 'text/plain' || !schema || !contractValidator(schema)(data)) {
-        throw new ApiProblem('INTERNAL_ERROR');
-    }
-    privateResponse(req, res);
-    res.status(status).type('text/plain').send(data);
 }
 
 /** Reauthorization/projection occurs before this helper, including before a conditional 304. */

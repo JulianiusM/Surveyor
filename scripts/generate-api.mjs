@@ -188,11 +188,12 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
             if (names.has(identity)) throw new Error(`Duplicate parameter: ${identity}`);
             names.add(identity);
             const parameterType = resolve(document, parameter.schema)?.type;
-            const repeatedQuery = parameterType === 'array' && parameter.in === 'query'
-                && parameter.explode !== false && ['string', 'integer', 'number', 'boolean'].includes(resolve(document, parameter.schema.items)?.type);
+
+            // URL/header parameters use the existing scalar decoder. Arrays belong
+            // to JSON bodies; another parameter encoding needs an explicit contract decision.
             if (!['path', 'query', 'header'].includes(parameter.in) || parameter.content
                 || (parameter.style && parameter.style !== (parameter.in === 'query' ? 'form' : 'simple'))
-                || parameterType === 'array' && !repeatedQuery) {
+                || parameterType === 'array') {
                 throw new Error(`Unsupported pilot parameter serialization: ${identity}`);
             }
             // Runtime transport metadata must contain resolved shapes, not a second reference resolver.
@@ -213,7 +214,7 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
             const response = resolve(document, unresolved);
             if (!response.content) { responseSchemas[status] = null; continue; }
             const entries = Object.entries(response.content);
-            if (entries.length !== 1 || !['application/json', 'application/problem+json', 'application/octet-stream', 'text/plain'].includes(entries[0][0])) {
+            if (entries.length !== 1 || !['application/json', 'application/problem+json', 'application/octet-stream'].includes(entries[0][0])) {
                 throw new Error('Unsupported pilot response media type');
             }
             responseMediaTypes[status] = entries[0][0];

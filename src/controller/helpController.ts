@@ -427,24 +427,32 @@ function extractHeadings(markdown: string): HeadingInfo[] {
  * Levels and unique safe IDs protect against silently assigning a link to the wrong heading.
  */
 function applyAuthoredHeadingAnchors(markdown: string, headings: HeadingInfo[], sourceName: string): void {
+    // Only the permitted article metadata can declare anchors. Articles without
+    // that declaration retain the ordinary generated heading IDs.
     const metadata = DOCUMENTATION_METADATA_RE.exec(markdown)?.[0];
     const anchors = metadata && /^heading-anchors:\s*(.+)$/mu.exec(metadata)?.[1];
     if (!anchors) {
         return;
     }
+
+    // Require one declared anchor per parsed heading before assigning any. The
+    // positional mapping keeps translated task links aligned with their headings.
     const entries = anchors.trim().split(/\s*;\s*/u);
     const ids = new Set<string>();
     if (entries.length !== headings.length) {
         throw new Error(`${sourceName} heading anchors must match the article's headings`);
     }
-    entries.forEach((entry, index) => {
-        const match = /^([1-6]):([a-z0-9][a-z0-9_-]*)$/u.exec(entry);
+
+    for (let index = 0; index < entries.length; index += 1) {
+        // Reject unsafe IDs, mismatched levels and duplicates at the same point
+        // as the original traversal, then apply this article's stable anchor.
+        const match = /^([1-6]):([a-z0-9][a-z0-9_-]*)$/u.exec(entries[index]);
         if (!match || Number(match[1]) !== headings[index].level || ids.has(match[2])) {
             throw new Error(`${sourceName} contains invalid or mismatched heading anchors`);
         }
         ids.add(match[2]);
         headings[index].id = match[2];
-    });
+    }
 }
 
 function addHeadingIds(html: string, headings: HeadingInfo[]): string {

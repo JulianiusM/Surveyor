@@ -1,8 +1,8 @@
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page, type Route} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../../factories/e2eCoreFactory';
 import {createResourceViaForm, loginForE2E} from '../../keywords/e2eCoreKeywords';
-import {waitForPilotHydration} from '../../keywords/frontendDynamicKeywords';
+import {createBrowserReadGate, waitForPilotHydration} from '../../keywords/frontendDynamicKeywords';
 import type {components} from '../../../src/types/api/v1';
 
 type SessionView = components['schemas']['SessionView'];
@@ -92,9 +92,9 @@ test.describe('actual frontend development runtime', () => {
         expect(errors).toEqual([]);
     });
 
-    test('preserves an overview search typed before the source client hydrates', async ({page}) => {
+    test('withholds source Overview controls until initialization and retains its focused search through a real read', async ({page}) => {
         await loginForE2E(page.request, createE2ELogin());
-        const marker = `Early search ${randomUUID().slice(0, 8)}`;
+        const marker = `Source search ${randomUUID().slice(0, 8)}`;
         expect((await page.request.post('/users/profile/create', {form: {name: marker}, maxRedirects: 0})).status()).toBe(302);
         const session = await (await page.request.get('/api/v1/session')).json() as SessionView;
         const profile = session.profiles.find(item => item.name === marker);
@@ -107,41 +107,83 @@ test.describe('actual frontend development runtime', () => {
         packingInput.title = packingInput.form.title = `${marker} standalone`;
         const packing = await createResourceViaForm(page.request, packingInput);
 
-        let releaseEntry!: () => void;
-        let entryStarted!: () => void;
-        const entryGate = new Promise<void>(resolve => { releaseEntry = resolve; });
-        const entryAttempt = new Promise<void>(resolve => { entryStarted = resolve; });
-        await page.route('**/app/src/frontend/app/entry-client.ts*', async route => {
-            entryStarted(); await entryGate; await route.continue();
-        });
+        const entryGate = createBrowserReadGate();
+        const entryStarted = createBrowserReadGate();
+        const readGate = createBrowserReadGate();
+        const readStarted = createBrowserReadGate();
+        await page.route('**/app/src/frontend/app/entry-client.ts*', holdSourceEntry);
+
+        async function holdSourceEntry(route: Route): Promise<void> {
+            entryStarted.release();
+            await entryGate.promise;
+            await route.continue();
+        }
+
+        /** Delay delivery only after the real server has answered the initialized
+         * search. Admission, generated projection and database reads stay intact. */
+        async function holdOwnerRead(route: Route): Promise<void> {
+            const parameters = new URL(route.request().url()).searchParams;
+            if (parameters.get('collection') !== 'owner' || parameters.get('region') !== 'main') {
+                await route.continue();
+                return;
+            }
+            const response = await route.fetch();
+            expect(response.status()).toBe(200);
+            readStarted.release();
+            await readGate.promise;
+            await route.fulfill({response});
+        }
+
         try {
-            // DOMContentLoaded waits for module execution. Commit lets the user interact
-            // with the actual server-rendered form while the client script is downloading.
+            // The source renderer uses the approved initial skeleton, just like an
+            // installed build. Holding its entry must expose no inactive editors.
             await page.goto(`/frontend-pilot?owner_main_q=${encodeURIComponent(marker)}`, {waitUntil: 'commit'});
-            await entryAttempt;
-            const owner = page.locator('[data-collection="owner"][data-region="main"]');
-            // Progressive Overview SSR carries the search controls and placeholders,
-            // not collection records. Prove early interaction against that actual shell.
-            await expect(owner.locator('[data-loading-skeleton="cards"]')).toBeVisible();
-            await expect(owner.locator(`[data-id="${event.id}"]`)).toHaveCount(0);
-            const input = owner.getByRole('searchbox');
+            await entryStarted.promise;
+            await expect(page.locator('[data-pilot-initial-loading]')).toBeVisible();
+            await expect(page.locator('main input, main form, [data-collection]')).toHaveCount(0);
             await page.evaluate(() => { document.documentElement.dataset.developmentDocument = 'overview-original'; });
-            await input.fill(`${marker} standalone`);
-            releaseEntry();
-            // Wait for the current entry's completed draft restoration. Region data
-            // arrives after hydration. The replayed input must survive that
-            // authoritative read rather than being restored from the original URL filter.
+            entryGate.release();
             await waitForPilotHydration(page);
-            expect(await documentMarker(page)).toBe('overview-original');
-            await expect(input).toHaveValue(`${marker} standalone`);
-            await owner.getByRole('button', {name: 'Search', exact: true}).click();
-            await expect(owner.locator(`[data-id="${event.id}"]`)).toHaveCount(0);
+
+            const owner = page.locator('[data-collection="owner"][data-region="main"]');
+            await expect(owner.locator(`[data-id="${event.id}"]`)).toBeVisible();
             await expect(owner.locator(`[data-id="${packing.id}"]`)).toBeVisible();
-            await expect(owner).toContainText('1 matching entities');
-            expect(await documentMarker(page)).toBe('overview-original');
+            await page.route('**/api/v1/overview?*', holdOwnerRead);
+            const input = owner.getByRole('searchbox');
+            const originalInput = await input.elementHandle();
+            try {
+                // This newly submitted initialized draft starts its own read. The
+                // successful projection must keep its original focused control,
+                // selection and source document rather than recreate the editor.
+                await input.fill(`${marker} standalone`);
+                await owner.getByRole('button', {name: 'Search', exact: true}).click();
+                await readStarted.promise;
+                await input.focus();
+                await input.evaluate(function selectSearchDraft(element): void {
+                    (element as HTMLInputElement).setSelectionRange(2, 9);
+                });
+                await expect(input).toHaveValue(`${marker} standalone`);
+                readGate.release();
+
+                await expect(owner.locator(`[data-id="${event.id}"]`)).toHaveCount(0);
+                await expect(owner.locator(`[data-id="${packing.id}"]`)).toBeVisible();
+                await expect(owner).toContainText('1 matching entities');
+                await expect(input).toBeFocused();
+                expect(await originalInput!.evaluate(element =>
+                    element === document.querySelector('input[name="owner_main_q"]'))).toBe(true);
+                expect(await input.evaluate(function readSearchSelection(element) {
+                    const field = element as HTMLInputElement;
+                    return [field.selectionStart, field.selectionEnd];
+                })).toEqual([2, 9]);
+                expect(await documentMarker(page)).toBe('overview-original');
+            } finally {
+                await originalInput?.dispose();
+            }
         } finally {
-            releaseEntry();
+            entryGate.release();
+            readGate.release();
             await page.unroute('**/app/src/frontend/app/entry-client.ts*');
+            await page.unroute('**/api/v1/overview?*');
         }
     });
 

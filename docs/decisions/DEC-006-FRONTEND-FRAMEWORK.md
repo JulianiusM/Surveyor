@@ -6,8 +6,8 @@ owner: frontend maintainers
 status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: active selected stack and original alternatives retained; dated rendering, localization, comparison and release amendments routed to canonical owners; no default-route or runtime change
-source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
+verification-scope: original framework/API toolchain and deferred localization/domain targets consolidated; approved scalar-query and response-subset restoration recorded; current cookie/catalog scope distinguished from future choices; no default-route or deployment change
+source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
 next-review: frontend-technology-or-rendering-boundary-change
 -->
 
@@ -140,6 +140,63 @@ The unreleased v1 contract is corrected in place rather than adding another vers
 Unknown commands recover through admitted reads and deliberate review, without operation tracking or automatic replay.
 A read cannot establish the outcome of an uncertain creation. Retain its input and require an explicit decision before
 leaving or submitting again. These bounded choices preserve separate shared controller and persistence responsibilities.
+
+## Shared API contract decision
+
+The original foundation selected authored OpenAPI 3.1.1 with JSON Schema draft 2020-12 as the wire-shape authority.
+Redocly lints/bundles local references; openapi-typescript generates declaration-only contracts; strict Ajv 2020 with
+ajv-formats compiles standalone server/browser validators; openapi-fetch consumes the generated paths. The bounded
+HTTP adapter binds that generated policy to Express without becoming another controller or routing framework.
+Generated validators carry their runtime helpers; schemas are not compiled in the browser or at application startup.
+One root package/lockfile owns dependencies and exact versions.
+
+The original Express OpenAPI Validator alternative would add a second runtime validation configuration alongside
+the browser compiler. The selected shared standalone pipeline avoids that duplication in exchange for the small
+app-owned transport adapter. The schema preference favors explicit shapes, local references and simple tagged
+unions over recursive polymorphism, arbitrary maps, deep composition or executable custom vocabulary. Existing
+password UTF-16 minimum semantics and raw existing-item capacity values are bounded native-preserving extensions,
+not permission to introduce a second validation language or generic coercion.
+
+Original interoperability choice: [OpenAPI 3.1.1](https://spec.openapis.org/oas/v3.1.1.html),
+[openapi-typescript](https://openapi-ts.dev/introduction),
+[Ajv standalone](https://ajv.js.org/standalone.html),
+[openapi-fetch](https://openapi-ts.dev/openapi-fetch/).
+These links record the selected approach rather than a claim about the newest specification or library version.
+Current authoring and released-version compatibility procedures belong in the Development Guide.
+
+### Authorized transport scope restoration (2026-10-14)
+
+The original supported transport binds single path/query/header values, JSON, Packing multipart and scoped binary
+images. The 2026-10-08 correction also added repeated scalar query arrays and plain-text API responses. Review found
+no authored endpoint or production consumer for those additions and no specific authorization in the inspected
+records; their original rationale remains unknown.
+
+The maintainer separately approved removing repeated-query-array support and unused plain-text API output during
+the current readiness work. This restores the documented subset in the existing generator and transport owner.
+JSON body/response arrays, existing API operations, native document/download boundaries and shared business behavior
+retain their existing contracts. The approval grants neither another transport style nor a new frontend framework.
+
+## Deferred localization and domain integration targets
+
+These original target choices are preserved as **intended, not implemented**. The current pilot localizes UI/API
+text and reviewed Help through shared catalogs, plain text/cardinal plurals and a server-issued browser preference
+cookie. It does not persist language on User/Guest or fully localize Pug, invoice wording, email or PDF output.
+This record preserves decisions and supplies no authorization to implement those future capabilities.
+
+The intended persisted preference belongs to the operating User/Guest rather than participation profile/event/pool.
+Profile switching retains that principal's choice. Guest-to-account migration may inherit a guest preference only
+when the destination has no explicit preference. A future principal-language command must preserve live drafts on
+failure; an explicit output-language override changes presentation only, never access or selected records.
+
+Future email uses the recipient's preference, then the identity-creation initiating language when no preference
+exists, then the shared default. Queued mail/PDF captures each recipient's locale/formatting context before async
+work so retry cannot change the wording. Rich named slots, grammatical context/ordinal forms, regional formatting
+and additional scripts/fonts remain separate unsupported extensions; messages cannot silently introduce them.
+
+Future financial frontend integration preserves explicit reviewed preview/refresh rather than generic polling or
+rebasing of reviewed values. Recommendation/job consumers retain their established backoff/expiry/terminal protocol.
+These intended frontend integrations leave existing financial revisions, signed evidence and activity fingerprints
+with their domain owners; the 30-second shared-read policy is not a replacement for those contracts.
 
 ## Build and development integration
 

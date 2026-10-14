@@ -69,6 +69,8 @@ and starts the existing browser watcher plus serialized API/catalog generation. 
 ## Common development commands — amendment-07
 
 <!-- delta:amendment-07 -->
+| `npm run test:quick` | Select the configured database-free Vitest project: unit/client checks and scoped Express/Vite server integration. |
+| `npm test` | Run all Vitest suites, including MariaDB integration tests. |
 | `npm run test:frontend:browser` | Build and run isolated real-browser client checks; no system database is supplied by this runner. |
 | `npm run test:all` | Run Vitest, build, isolated client-browser checks and built-application E2E. |
 
@@ -89,6 +91,7 @@ src/public/js/                        existing browser modules and shared pure h
 
 <!-- delta:amendment-09 -->
 tests/frontend/                        client helpers/mounted Vue and isolated browser checks
+tests/integration/                     database-backed workflows and genuine isolated server-component integration
 
 <!-- /delta:amendment-09 -->
 

@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: digest-guarded frontend amendments preserve complete reviewed candidate guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
+verification-scope: digest-guarded amendments retain current API/localization architecture and bounded database-free server integration; unchanged production procedures stay in their existing owners; no cutover or operator execution claimed
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -44,6 +44,13 @@ work. Recovery never persists secrets/files or replays writes.
 runtime validators; no second handwritten wire schema or runtime schema compilation exists. Transport adapters decode
 and present around the same controller business owners. Page admission, method grants and private projections remain
 separate; reusable controls never grant authority.
+
+The [Development contract guidance](DEVELOPMENT.md#contract-authoring-and-generated-consumers) owns supported
+schema/transport styles, strict generated validation and released-version compatibility. The shared translator and
+catalogs currently serve UI/API text and reviewed Help; language preference is a browser cookie and grammar supports
+plain text/cardinal plurals. Principal-language persistence and full email/PDF/invoice localization remain intended
+future decisions in [DEC-006](decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets),
+without an implemented production capability.
 
 TanStack Query owns authorized snapshots; feature drafts own original/local/current values and Router owns URL state.
 `app/queryKeys.ts` names actor/resource/filter families, adding locale only for translated representations.
@@ -259,8 +266,11 @@ Optional lifecycle presentation travels through explicit component data/events a
 ## Testing architecture — amendment-21
 
 <!-- delta:amendment-21 -->
-Vitest discovers unit, frontend and integration files. Its isolated database-free project uses bounded workers;
-integration files remain serialized because they rebuild one guarded disposable MariaDB schema.
+Vitest discovers unit, frontend and integration files. Its database-free project uses bounded workers for isolated
+logic/client checks and the genuine Express/Vite server-component fixture. The database-backed integration project
+remains serialized because it rebuilds one guarded disposable MariaDB schema. Test layer describes the exercised
+production boundary; the database-free runner selection does not turn a real server-component integration into a
+unit/client test. The [Testing Guide](TESTING_GUIDE.md#vitest-configuration) owns exact selection and commands.
 
 <!-- /delta:amendment-21 -->
 
