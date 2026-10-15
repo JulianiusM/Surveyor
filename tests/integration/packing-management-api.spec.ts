@@ -624,9 +624,9 @@ describe('complete versioned packing management', () => {
         expect(Object.keys(payload.fields)).toEqual(['description']);
         await expect(packing.readPackingItemEditBaseline(id, second.id, session)).rejects.toMatchObject({status: 403});
         await expect(packing.readPackingItemEditBaseline(foreign, first.id, session)).rejects.toMatchObject({status: 404});
-        await expect(packing.readPackingItemEditBaseline(id, first.id, {})).rejects.toMatchObject({status: 401});
+        await expect(packing.readPackingItemEditBaseline(id, first.id, {})).rejects.toMatchObject({status: 403});
         await expect(packing.readPackingItemOrderBaseline(id, session)).rejects.toMatchObject({status: 403});
-        await expect(packing.readPackingItemOrderBaseline(id, {})).rejects.toMatchObject({status: 401});
+        await expect(packing.readPackingItemOrderBaseline(id, {})).rejects.toMatchObject({status: 403});
         await expect(packing.updatePackingItem(id, first.id, {title: 'Hidden title edit'}, baseline.editToken, session))
             .rejects.toMatchObject({status: 403});
 

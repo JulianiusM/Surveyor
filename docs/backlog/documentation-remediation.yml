@@ -1494,6 +1494,68 @@ implementation_defects:
       the separate IMP-003 backend remedy remains excluded.
     evidence_limit: The observed duplication remains present under the explicit exception. No extraction, native or
       browser-build change, behavioral correction or new runtime verification is claimed by this disposition.
+  - id: IMP-064
+    status: closed
+    discovered_on: 2026-10-15
+    closed_on: 2026-10-15
+    severity: high
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    out_of_scope_for_documentation_migration: true
+    title: Pilot admission can save an earlier session over a later identity transition
+    evidence:
+      - The original src/modules/api/session.ts reloadSession installed fresh stored evidence directly into req.session
+        through sessionStore.createSession. Express retained its initial saved-state comparison while the replacement
+        lost the middleware save/reload wrappers. The direct replacement first appeared in correction d58fb35.
+      - A database-free HTTP fixture using production captureApiActor and actual Express/session middleware loaded
+        context A, admitted stored context B, then stored C before completing the response. The response saved B again;
+        final stored context was B instead of C. Root and independent review reproduced it.
+      - The installed TypeormStore set operation serializes the complete session; touch only updates expiry. Restoring
+        an earlier authentication/profile snapshot was a source-supported consequence, not a demonstrated account exploit.
+    history: The first R1 remedy introduced a second writable request Session, save observation and locked generic
+      initialization/invalidation/feedback merging. Its explanation mentioned separate evidence but inadequately exposed
+      that ownership expansion. The maintainer challenged it; prior architectural acceptance and this entry's same-run
+      closed disposition are withdrawn. Shared files/store and tests did not establish approval. Historical checks of
+      that implementation passed 92 database-free, 85 persistence/workflow and 53 selected built-system cases, plus
+      build/compiler checks; none certifies the changed restoration.
+    authorization: On 2026-10-15 the maintainer explicitly authorized the preserved ordinary-session restoration and
+      stateless-initial plan, using native behavior and existing owners. All authentication/authorization remains
+      server-owned. The earlier GET-bootstrap initializer proposal was not approved. The separately asked sessionless
+      account-required notice URL/repeat consequence remains unanswered and unimplemented; no approval is inferred.
+    resolution: Current source keeps one ordinary Express req.session; stored-generation checks reject without
+      replacing or mutating it, and a plain server-hydrated actor supplies operation identity. Initial public/session
+      projection has null metadata and no anonymous initialization. Authenticated legacy compatibility derives bounded
+      server-session-bound HMAC metadata without a write; explicit identity transitions retain their random pair.
+      Only the separately approved identity-completion transaction stages a Session, including a first absent row after
+      validated preparation. Public method comparison scope needs no anonymous principal; controller grants remain
+      authoritative. Existing feedback uses ordinary library getters/saves with empty pilot getters avoided and required
+      business continuations preserved. The reproduced read-only overwrite is verified repaired under the latest
+      explicit restoration authorization. This new bounded closure does not reinstate the challenged lifecycle or
+      its withdrawn acceptance; the separate redirect-notice consequence still prevents overall stateless readiness.
+    documentation_contract: Ordinary admission/projection must not install or persist another Session snapshot or create
+      a synthetic anonymous session. Explicit operations retain their separately owned session-change contracts; native
+      TTL/touch, real feedback consumption and expiry/provider effects are preserved.
+    verification: Build, final server emission and both noEmit compilers passed. Database-free cases total 1528
+      passing across the initial selection and unchanged targeted rerun. The five-file ORM selection passed 150;
+      after the partial-legacy correction its authentication file passed 73, including two new cases. Together with
+      20 other Packing cases passed earlier, these are 172 distinct ORM assertions across runs. Client-browser checks
+      passed 21. Engineering enforcement passed 26 synthetic CLI cases and a 321-source/11-DBAL scan plus 19 readability
+      files/29 operations without findings. All 78 distinct selected built-system cases pass across the initial normal
+      configuration, corrected real-mouse drag rerun and local-login-disabled case; no final uniform 78-case run is
+      claimed. The full boundary-tool suite passed 25 with no skips/failures. The paired review preserves initial
+      failures, corrections, exact selections and limits; document preparation remains separate advisory evidence.
+    closure_evidence:
+      - Root and independent source review confirm one ordinary request Session, a read-only mismatch check and a
+        plain hydrated actor; only the separately approved explicit identity transaction stages completion.
+      - Actual HTTP/session regressions reject stored B while retaining Express A, its save/reload methods and later
+        stored C without response-time persistence. Real ORM cases cover first completion, legacy read-only metadata,
+        actor-preserving receipts, malformed staged-output rollback and retained required business continuations.
+      - The closure relies on the maintainer's latest explicit full-plan authorization and the bounded adopted source
+        and current execution evidence, not agent-authored approval claims or passing tests as authorization.
+    evidence_limit: The original reproduction used MemoryStore/synthetic anonymous contexts. The revised test source
+      expects rejection of changed stored B while preserving the original request Session and later C, not adoption of B.
+      Prior documentation preparation acceptance is stale. No global session concurrency, live provider/mail behavior,
+      production exploit, exhaustive visual/accessibility acceptance or completed stateless redirect is established.
 findings:
   - id: DOC-PERMISSION-POLICY-REVIEW
     status: open
@@ -1734,6 +1796,47 @@ findings:
     title: Architecture omits runtime and persistence boundaries
     closed_in: D12
     closed_on: 2026-09-05
+  - id: ARCH-005
+    status: open
+    discovered_on: 2026-10-15
+    severity: medium
+    category: architecture-review
+    owner: application maintainers
+    title: Verify and unify the whole session concept and flash lifecycle
+    authorization: The maintainer explicitly requested this follow-up after selecting the native anonymous-session
+      flash behavior for the pilot account-required redirect. Recording the work does not authorize a session redesign.
+    implementation_evidence:
+      - src/app.ts
+      - src/middleware/permissionMiddleware.ts
+      - src/modules/api/session.ts
+      - src/modules/lib/session.ts
+      - src/modules/lib/frontendSession.ts
+      - src/modules/oidc.ts
+      - src/controller/userController.ts
+      - src/routes/users.ts
+      - src/routes/frontendPilot.ts
+      - src/routes/api/v1/auth.ts
+    deficiency: Native documents, pilot documents and versioned API operations retain different session and feedback
+      lifecycles. Their complete intended contract has not received one application-wide verification and unification
+      review. This is a requested architectural follow-up, not a claim that every difference is a defect.
+    desired_outcome: Establish one reviewed session and flash concept with existing shared implementation owners and
+      explicit transport differences, preserving server-owned authentication and authorization and native behavior.
+    acceptance_criteria:
+      - Inventory session creation, reads, mutation, persistence, expiry, invalidation and cookie handling across native
+        and pilot documents, API requests, account/guest/profile transitions and OIDC entry/callback/logout.
+      - Trace all flash producers and consumers, including anonymous account-required redirects, one-time consumption,
+        failed delivery and concurrent requests; distinguish native behavior from proposed corrections.
+      - Review initial public reads, stored and legacy sessions, CSRF/context evidence, third-party API reuse and
+        session-changing endpoints without treating browser state or claims as authority.
+      - Propose shared ownership in the existing modules, retaining controller business logic and pure DBAL; obtain
+        direct individual approval for any changed security, persistence, protocol or user-visible behavior first.
+      - Verify the accepted design through actual Express middleware and real persistence at the appropriate boundary,
+        including response-completion writes, explicit transitions and one-time flash behavior.
+      - Reconcile current guidance and decision history without silently replacing earlier choices or using successful
+        tests, agent-authored records or this backlog entry as implementation authorization.
+    disposition: Separate future review and approved implementation effort. Retain the native anonymous-session notice
+      now; do not make broader unification or excluded backend remedies a prerequisite for parity-only migration.
+    blocks_documentation_migration: false
   - id: DEV-001
     status: closed
     title: Development guide uses incorrect and incomplete environment keys

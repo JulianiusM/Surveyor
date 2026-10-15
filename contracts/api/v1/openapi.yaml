@@ -1038,7 +1038,8 @@ components:
     Context:
       in: header
       name: X-Surveyor-Context
-      required: true
+      required: false
+      description: Required when the server session has context evidence. Sessionless public requests and initial identity actions omit it; omission never selects an anonymous actor or grants permission.
       schema:
         type: string
         minLength: 1
@@ -1052,7 +1053,8 @@ components:
     Csrf:
       in: header
       name: X-CSRF-Token
-      required: true
+      required: false
+      description: Required for mutations when the server session has CSRF evidence. Sessionless actions retain server-owned origin and request protections; omission never bypasses authentication or authorization.
       schema:
         type: string
         minLength: 1

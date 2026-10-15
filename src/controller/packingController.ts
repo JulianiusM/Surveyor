@@ -444,10 +444,13 @@ function entityTag(scope: string, value: unknown): string {
 /**
  * Capture field values as hashes, without counters or a stored edit history. Tokens contain no
  * submitted values or private record identifiers. Their scope also binds them to this resource
- * and actor; fresh authorization is still mandatory before any comparison is inspected.
+ * and acting profile/session when one exists. Public projections instead bind the available
+ * field set, without inventing an anonymous identity; current authorization remains mandatory.
  */
 function comparisonToken(scope: string, id: string, session: SessionLike, values: Record<string, unknown>): string {
-    const context = entityTag(scope, {id, actor: comparisonActor(session)});
+    const actor = comparisonActor(session);
+    const context = entityTag(scope, {id, actor,
+        ...(actor === null ? {fields: Object.keys(values).sort()} : {})});
     const fields = Object.fromEntries(Object.entries(values).map(([field, value]) => [field, entityTag('field', value)]));
     return `"edit-${Buffer.from(JSON.stringify({context, fields})).toString('base64url')}"`;
 }
@@ -496,16 +499,18 @@ function actorId(session: SessionLike): string {
 }
 
 /**
- * Preserve established profile token scopes. Publicly granted methods instead use
- * the context captured by requireApiContext, never a shared anonymous identity or
- * an actor supplied in the request body. The object namespace cannot collide with
- * a profile ID, and a later profile/session change invalidates the public baseline.
+ * Preserve established profile and frontend-context token scopes. An anonymous
+ * request without frontend context has no principal, even if native flash has
+ * persisted its Session. Null describes a public projection, not a shared account
+ * or permission. Resource/method/field scope and fresh controller grants still
+ * govern every public comparison/write.
  */
-function comparisonActor(session: SessionLike): string | {context: string} {
+function comparisonActor(session: SessionLike): string | {context: string} | null {
     if (session.profile?.id) return session.profile.id;
     if ('context' in session && typeof session.context === 'string' && session.context) {
         return {context: session.context};
     }
+    if (!session.auth?.user && !session.auth?.guest) return null;
     throw new ApiProblem('AUTH_REQUIRED');
 }
 
@@ -529,9 +534,9 @@ async function authorizeRead(manager: EntityManager, list: PackingList, session:
     return permissions;
 }
 
-/** Field grants and page admission are separate native contracts. This evaluator
- * admits captured public contexts for native grant-only methods; operations with
- * a profile contract require actorId explicitly before using the same fresh grants. */
+/** Field grants and page admission are separate native contracts. Public grant-only
+ * methods need no fabricated session principal; operations with a profile contract
+ * still require actorId explicitly before using the same current native grants. */
 async function packingPermissions(manager: EntityManager, list: PackingList, session: SessionLike, caches?: PermEngineCaches): Promise<PermView> {
     comparisonActor(session);
     return evaluateSubject({kind: 'entity', entity: {
@@ -1304,8 +1309,10 @@ export async function updatePackingItem(
             if (!mayEditItemField(permissions, field)) throw new ApiProblem('FORBIDDEN');
         }
 
-        // Compare only submitted fields against the reviewed versioned baseline.
-        requireFieldComparison(token, itemEditToken(list, item, session), Object.keys(body));
+        // Compare submitted values within the same freshly permitted projection
+        // that supplied the baseline. Public scopes also bind its available fields.
+        const projection = itemEditProjection(item, permissions);
+        requireFieldComparison(token, itemEditToken(list, item, session, projection.values), Object.keys(body));
 
         // The shared owner retains numeric-draft and assignment-retention behavior.
         const changed = await applyPackingItemPatch(itemId, body, {kind: 'versioned', manager, item});

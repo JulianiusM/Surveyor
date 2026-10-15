@@ -2,19 +2,19 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import {MetadataDraft} from '../../src/frontend/composables/metadataDraft';
 import {readPacked, writePacked} from '../../src/frontend/features/packing/packed';
 import {PilotApi} from '../../src/frontend/app/api';
-import {ApiFailure, ObsoleteRequestError, UnconfirmedResponseError} from '../../src/frontend/app/transport';
+import {ApiFailure, InvalidInputError, ObsoleteRequestError, UnconfirmedResponseError} from '../../src/frontend/app/transport';
 import {PackingApi} from '../../src/frontend/features/packing/api';
 import {useHelpApi} from '../../src/frontend/features/help/api';
 import {canRetryRead, createPilotContext, refreshInterval} from '../../src/frontend/app/context';
 import {decodeBootstrap, serializeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import {evictQueryFamilies} from '../../src/frontend/app/queryCache';
-import {overviewKeys, packingKeys} from '../../src/frontend/app/queryKeys';
+import {helpKeys, overviewKeys, packingKeys} from '../../src/frontend/app/queryKeys';
 import type {components} from '../../src/types/api/v1';
 import type {PilotMetadataFieldPolicy, PilotMetadataSnapshot, PilotRequestScope} from '../../src/types/FrontendPilotUiTypes';
 
 const listId = '11111111-1111-4111-8111-111111111111';
 const itemId = '22222222-2222-4222-8222-222222222222';
-const scope: PilotRequestScope = {context: 'test-context-1234567890', csrfToken: 'csrf-token-1234567890', epoch: 0, locale: 'en'};
+const scope = {context: 'test-context-1234567890', csrfToken: 'csrf-token-1234567890', epoch: 0, locale: 'en'} satisfies PilotRequestScope;
 type Metadata = components['schemas']['PackingMetadata'];
 const packingFieldPolicy: PilotMetadataFieldPolicy<Metadata['values']> = {description: normalizeNullableText};
 
@@ -26,11 +26,16 @@ function metadata(values: components['schemas']['PackingMetadata']['values'] = {
     return {entityType: 'packing', id: listId, values, editableFields: ['title', 'description'],
         currentEventId: null, archived: false, inheritedArchived: false};
 }
-function session(context = scope.context, locale = 'en'): components['schemas']['SessionView'] {
+function session(context = scope.context, locale = 'en'): components['schemas']['SessionView'] & {context: string; csrfToken: string} {
     return {kind: 'account', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context, csrfToken: scope.csrfToken, locale,
         activeProfile: {id: itemId, name: 'A profile'}, profiles: [{id: itemId, name: 'A profile'}],
         loginUrl: '/users/login', logoutUrl: '/users/logout', shell: {version: 'fixture', imprintUrl: '/imprint',
             privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Identity provider'}};
+}
+/** Public bootstrap retains the complete shell without a stored visitor identifier. */
+function sessionless(): components['schemas']['SessionView'] {
+    return {...session(), kind: 'anonymous', context: null, csrfToken: null,
+        activeProfile: null, profiles: [], logoutUrl: null};
 }
 function response(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
     return new Response(JSON.stringify(data), {status, headers: {'content-type': 'application/json',
@@ -43,6 +48,109 @@ function deferred<T>() {
 }
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+describe('sessionless initial frontend scope', () => {
+    it('keeps paired null evidence through the real bootstrap codec and rejects a partial pair', async () => {
+        const bootstrap = {session: sessionless(), initialUrl: '/frontend-pilot/help'};
+        expect(await decodeBootstrap(JSON.parse(serializeBootstrap(bootstrap)))).toEqual(bootstrap);
+        for (const evidence of [{context: null, csrfToken: scope.csrfToken}, {context: scope.context, csrfToken: null}]) {
+            await expect(decodeBootstrap({...bootstrap, session: {...bootstrap.session, ...evidence}}))
+                .rejects.toThrow('Invalid pilot bootstrap');
+        }
+        await expect(decodeBootstrap({...bootstrap, session: {...session(), context: null, csrfToken: null}}))
+            .rejects.toThrow('Invalid pilot bootstrap');
+
+        // An explicit logout can leave a stored anonymous session. Its complete
+        // evidence stays valid; principal kind never substitutes for that pair.
+        const storedAnonymous = {...sessionless(), context: scope.context, csrfToken: scope.csrfToken};
+        expect(await decodeBootstrap({session: storedAnonymous})).toEqual({session: storedAnonymous});
+
+        // Public recovery can finish without creating a session. Its document
+        // completion belongs to this same null scope and still survives hydration.
+        const completed = {...bootstrap, pageCompletion: {context: null, destination: '/frontend-pilot/help',
+            messageKey: 'auth.recoverySent' as const, kind: 'success' as const}};
+        expect(await decodeBootstrap(JSON.parse(serializeBootstrap(completed)))).toEqual(completed);
+    });
+
+    it('keeps ordinary read readiness and cached public content across a sessionless bootstrap', async () => {
+        const send = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify(sessionless()), {
+            headers: {'Content-Type': 'application/json'},
+        }));
+        const context = createPilotContext({session: sessionless()}, false, send);
+        const captured = context.capture();
+        const key = helpKeys.page(captured.context, captured.locale, {doc: 'packing_lists'});
+        context.queryClient.setQueryData(key, 'admitted public content');
+        try {
+            await context.refreshSession();
+            expect(context.capture()).toEqual({context: null, csrfToken: null, epoch: 0, locale: 'en'});
+            expect(context.ready.value).toBe(true);
+            expect(context.mayRead(captured)).toBe(true);
+            expect(context.queryClient.getQueryData(key)).toBe('admitted public content');
+            const request = send.mock.calls[0]?.[0] as Request | undefined;
+            expect(request?.url).toContain('/api/v1/session');
+            expect(request?.headers.has('X-Surveyor-Context')).toBe(false);
+            expect(request?.headers.has('X-CSRF-Token')).toBe(false);
+        } finally { context.start()(); }
+    });
+
+    it('reads public Help without fabricated headers while retaining locale and response validation', async () => {
+        const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Public Help', content: '<p>A task</p>',
+            currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
+        const send = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify(help), {headers: {'Content-Type': 'application/json'}}));
+        const context = createPilotContext({session: sessionless()}, false, send);
+        try {
+            expect(await useHelpApi(context).help({}, context.capture())).toEqual(help);
+            const request = send.mock.calls[0]?.[0] as Request | undefined;
+            expect(request?.headers.get('X-Surveyor-Locale')).toBe('en');
+            expect(request?.headers.has('X-Surveyor-Context')).toBe(false);
+            expect(request?.headers.has('X-CSRF-Token')).toBe(false);
+        } finally { context.start()(); }
+    });
+
+    it('admits a first deliberate login only from its confirmed resulting server context', async () => {
+        const current = session('first-login-context');
+        const result: components['schemas']['IdentityResult'] = {session: current, personalLink: null, redirect: null};
+        const send = vi.fn(async (_input: RequestInfo | URL) => response(result, 200, {'X-Surveyor-Context': current.context!}));
+        const api = new PilotApi(() => true, vi.fn(), send);
+        const anonymousScope: PilotRequestScope = {context: null, csrfToken: null, epoch: 0, locale: 'en'};
+        expect(await api.login({username: 'Account', password: 'correct password'}, anonymousScope)).toEqual(result);
+        const request = send.mock.calls[0]?.[0] as Request | undefined;
+        expect(request?.headers.has('X-Surveyor-Context')).toBe(false);
+        expect(request?.headers.has('X-CSRF-Token')).toBe(false);
+        expect(request?.headers.get('X-Surveyor-Api-Compatibility')).toBe('v1-pilot-2026-10-07');
+        expect(send).toHaveBeenCalledOnce();
+    });
+
+    it('retires sessionless scope and its cache when a real server identity is observed', async () => {
+        const current = session('newly-authenticated-context');
+        const send = vi.fn(async () => response(current, 200, {'X-Surveyor-Context': current.context!}));
+        const context = createPilotContext({session: sessionless()}, false, send);
+        const captured = context.capture();
+        const key = helpKeys.page(null, 'en', {});
+        context.queryClient.setQueryData(key, 'old anonymous visit');
+        try {
+            await context.refreshSession();
+            expect(context.session.value?.context).toBe(current.context);
+            expect(context.epoch.value).toBe(1);
+            expect(context.isCurrent(captured)).toBe(false);
+            expect(context.queryClient.getQueryData(key)).toBeUndefined();
+        } finally { context.start()(); }
+    });
+
+    it('rejects an unexpected stored context instead of adopting its response into a sessionless read', async () => {
+        const changed = vi.fn();
+        const api = new PilotApi(() => true, changed);
+        const anonymousScope: PilotRequestScope = {context: null, csrfToken: null, epoch: 0, locale: 'en'};
+        expect(() => api.checkScope(response({}, 200), anonymousScope)).toThrow(ObsoleteRequestError);
+        expect(changed).toHaveBeenCalledOnce();
+        expect(() => api.checkScope(new Response(null, {status: 304}), scope)).toThrow(UnconfirmedResponseError);
+    });
+
+    it('does not submit partial evidence from a malformed internal caller', () => {
+        const api = new PilotApi(() => true, vi.fn());
+        expect(() => api.headers({...scope, csrfToken: null} as PilotRequestScope)).toThrow(InvalidInputError);
+    });
+});
 
 describe('complete frontend bootstrap boundary', () => {
     it.each(['packing.notFound', 'packing.eventRegistrationRequired', 'common.notAllowed'] as const)(

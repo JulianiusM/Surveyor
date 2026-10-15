@@ -35,6 +35,8 @@ declare module "express" {
 declare module "express-serve-static-core" {
     interface Request {
         apiActor?: ApiActor;
+        /** Admission observed an existing server record; disappearance cannot become a new-session candidate. */
+        apiSessionStored?: boolean;
     }
     interface Locals {
         data?: any,

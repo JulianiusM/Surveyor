@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: dynamic-page-only automatic document reload and confirmed-command follow-up contract reconciled with scoped client/build verification in paired review; excluded backend remedies stay deferred
+verification-scope: full pilot source/readiness review, one-session initial projection and approved native anonymous flash reconciled; scoped fixture/repair evidence retained; excluded backend remedies deferred; no cutover
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -143,10 +143,11 @@ separate client/SSR destinations. The release contains coherent artifacts and ru
 Production needs no Vite server or runtime schema compiler. Generated declarations, validators, locale resources
 and `dist/` remain ignored. Exact scripts and dependency versions belong to executable package configuration.
 
-The actual Express/Vite/SSR/HTTP module fixture lives in `tests/integration/frontend-development-runtime.spec.ts`.
-Its exercised boundary needs no persistence, so the existing database-free Vitest project and `test:quick` selection
-retain it without schema initialization. Source-development browser workflows remain separate integration evidence;
-neither source fixture establishes built-application E2E. The [Testing amendments](staged/TESTING_GUIDE.md#frontend-compiler-and-build-scopes)
+The actual Express/Vite/SSR/HTTP module fixture lives in `tests/integration/frontend-development-runtime.spec.ts`;
+`frontend-session-admission.spec.ts` separately integrates actual HTTP/session middleware with MemoryStore. These
+scoped component boundaries need no application persistence, so the existing database-free Vitest project and
+`test:quick` selection retain them without schema initialization. Source-development browser workflows remain
+separate integration evidence; neither fixture establishes built-application E2E. The [Testing amendments](staged/TESTING_GUIDE.md#frontend-compiler-and-build-scopes)
 own runner details, while the [review](PILOT_PARITY_REVIEW.md) owns actual execution.
 
 ## Progressive loading (2026-10-08)
@@ -161,6 +162,15 @@ reduced-motion behavior. Use it for client initialization or missing pending dat
 confirmed content and drafts; validated denial clears protected content. Lazy navigation can show shared progress without discarding work.
 
 ## Identity, refresh and edits
+
+The [session-ownership correction](FRONTEND_FOUNDATION_DESIGN.md#session-ownership-restoration-and-stateless-initial-visits-2026-10-15)
+retains one ordinary Express Session. Bootstrap projects null context/CSRF for an uninitialized anonymous visitor;
+it does not persist that Session or issue a cookie. Existing authenticated scope and controller grants remain
+server-owned, and explicit identity operations retain their completion transaction. The later
+[native-flash decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-native-anonymous-session-flash-2026-10-15)
+preserves an anonymous Session for the account-required redirect's one-time notice, without a URL notice parameter
+or metadata initialization. The paired review records verification; `ARCH-005` owns the separate whole-session/flash
+review, which is not a migration prerequisite.
 
 Query keys capture actor/profile/resource and meaningful filters; locale belongs only to language-owned projections.
 Profile/logout/context changes retire private reads/cache, commands and authority. Late responses cannot restore

@@ -16,12 +16,14 @@ import {test} from 'node:test';
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const script = path.join(repository, 'scripts/check-development-policy.mjs');
 const policy = fs.readFileSync(path.join(repository, 'docs/policies/development-check.json'));
+const developmentPolicy = fs.readFileSync(path.join(repository, 'docs/policies/DEVELOPMENT_POLICY.md'));
 
 /** Each fixture owns a fresh disposable Git tree; no application source or DB is loaded. */
 function fixture(t) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'surveyor-development-policy-'));
     execFileSync('git', ['init', '--quiet'], {cwd: root});
     write(root, 'docs/policies/development-check.json', policy);
+    write(root, 'docs/policies/DEVELOPMENT_POLICY.md', developmentPolicy);
     t.after(function removeFixture() {
         // Verify the exact OS-created directory before its recursive cleanup.
         const resolved = path.resolve(root);
@@ -178,11 +180,204 @@ test('rejects configurations that would silently disable policy boundaries', t =
         {...original, sourceExtensions: []},
         {...original, requestOwnerDirectories: ['src/../controller']},
         {...original, manualReview: []},
+        {...original, sessionStagingOwner: undefined},
+        {...original, sessionStagingOwner: {file: 'src/modules/', operation: '*'}},
+        {...original, sessionStagingOwner: {...original.sessionStagingOwner, directory: 'src/'}},
     ];
     for (const config of invalid) {
         write(root, 'docs/policies/development-check.json', JSON.stringify(config));
         assert.equal(run(root).status, 2);
     }
+});
+
+test('keeps isolated Session construction and save deferral with the exact existing identity operation', t => {
+    const root = fixture(t);
+    const owner = JSON.parse(policy).sessionStagingOwner;
+    const accepted = '/** Stage only the owning explicit identity transaction. */\n'
+        + `export function ${owner.operation}(req: Request, stored: unknown) {\n`
+        + '    // Keep rollback state separate until the controller commits.\n'
+        + '    const staging = {sessionID: req.sessionID, sessionStore: req.sessionStore};\n'
+        + '    req.sessionStore.createSession(staging, stored);\n'
+        + '    const staged = staging.session;\n'
+        + '    Object.defineProperty(staged, "save", {value: function acknowledge() { return staged; }});\n'
+        + '    return staged;\n}';
+    write(root, owner.file, accepted);
+    assert.equal(run(root).status, 0);
+
+    // Sharing its file does not give an ordinary admission helper that exception.
+    write(root, owner.file, accepted.replace(owner.operation, 'admitSession'));
+    const rejected = run(root);
+    assert.equal(rejected.status, 1);
+    assert.equal(rejected.report.errors.filter(error => error.rule === 'session-lifecycle-owner').length, 2);
+    write(root, owner.file, accepted);
+    write(root, 'src/routes/example.ts', accepted);
+    assert.equal(run(root).report.errors.filter(error => error.rule === 'session-lifecycle-owner').length, 2);
+});
+
+test('rejects extra Express request Session contracts without banning immutable actor data', t => {
+    const root = fixture(t);
+    write(root, 'src/types/express.d.ts', [
+        "import type {Session as ServerSession} from 'express-session';",
+        'declare module "express-serve-static-core" { interface Request {',
+        '    actor?: {profileId: string};',
+        '    secondSession?: Request["session"];',
+        '    another?: ServerSession | undefined;',
+        '} }',
+    ].join('\n'));
+    const result = run(root);
+    assert.equal(result.status, 1);
+    assert.deepEqual(result.report.errors.map(error => error.rule), ['request-session-owner', 'request-session-owner']);
+    assert.deepEqual(result.report.errors.map(error => error.line), [4, 5]);
+});
+
+test('recognizes typed and assigned Session save overrides while ordinary saves remain library-owned', t => {
+    const root = fixture(t);
+    write(root, 'src/session.ts', [
+        '/** Exercise explicit Session bindings without executing them. */',
+        'export function replace(req: Request, typed: Request["session"]) {',
+        '    // Local aliases must not hide a second save lifecycle.',
+        '    const alias = req.session;',
+        '    const next = alias;',
+        '    typed.save = replacement;',
+        '    next["save"] = replacement;',
+        '    Object.defineProperty(alias, "save", {value: replacement});',
+        '    Reflect.defineProperty(typed, "save", {value: replacement});',
+        '    Object.defineProperties(next, {save: {value: replacement}});',
+        '    Object.assign(typed, {save: replacement});',
+        '}',
+    ].join('\n'));
+    const result = run(root);
+    assert.equal(result.status, 1);
+    assert.equal(result.report.errors.filter(error => error.rule === 'session-lifecycle-owner').length, 6);
+    write(root, 'src/session.ts', [
+        'export function save(req: Request) { req.session.save(callback); }',
+        'const model = {save: initial};',
+        'model.save = replacement;',
+        'Object.defineProperty(model, "save", {value: replacement});',
+        'const text = "store.createSession and session.save = are documentation";',
+    ].join('\n'));
+    assert.equal(run(root).status, 0);
+});
+
+test('session ownership is global even outside a selected readability file', t => {
+    const root = fixture(t);
+    write(root, 'src/owned.ts', 'export const owned = true;');
+    write(root, 'src/other.ts', 'store["createSession"](request, stored);');
+    write(root, 'src/types/express.d.ts',
+        'declare module "express" { interface Request { extra?: Request["session"] } }');
+    const result = run(root, ['--all', '--file', 'src/owned.ts']);
+    assert.equal(result.status, 1);
+    assert.deepEqual(new Set(result.report.errors.map(error => error.rule)), new Set(['request-session-owner', 'session-lifecycle-owner']));
+});
+
+test('staged session ownership violations remain visible after the worktree is restored', t => {
+    const root = fixture(t);
+    const contract = 'src/types/express.d.ts';
+    const operation = 'src/owned.ts';
+    const originalContract = 'declare module "express" { interface Request { actor?: {id: string} } }';
+    const originalOperation = 'export const owned = true;';
+    write(root, contract, originalContract);
+    write(root, operation, originalOperation);
+    execFileSync('git', ['add', '.'], {cwd: root});
+    execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+        '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'Synthetic single Session baseline'], {cwd: root});
+    write(root, contract, 'declare module "express" { interface Request { extra?: Request["session"] } }');
+    write(root, operation, 'req.sessionStore.createSession(req, stored);');
+    execFileSync('git', ['add', contract, operation], {cwd: root});
+    write(root, contract, originalContract);
+    write(root, operation, originalOperation);
+
+    const result = run(root, []);
+    assert.equal(result.status, 1);
+    assert.equal(result.report.errors.length, 2);
+    assert.ok(result.report.errors.every(error => error.snapshot === 'index'));
+    assert.deepEqual(new Set(result.report.errors.map(error => error.rule)), new Set(['request-session-owner', 'session-lifecycle-owner']));
+    assert.equal(fs.readFileSync(path.join(root, operation), 'utf8'), originalOperation);
+});
+
+/** Synthetic conversation text exercises format only; it grants no real task approval. */
+function approvalRequest(id = 'R1') {
+    return `**${id} — Bounded fixture decision**\n\n`
+        + '**Reason:** A visitor encounters the recorded behavior.\n'
+        + '**What is to be changed:** Change this one named outcome for that visitor.\n'
+        + '**How it is to be changed:** The existing owner supplies the bounded result.\n'
+        + '**Implications:** The visitor sees the stated compatibility consequence.\n'
+        + '**Prior decisions and requirements:** This resolves the identified design conflict.\n'
+        + '**History:** The old choice and new finding are distinguished.\n\n'
+        + `Do you approve ${id}, this bounded decision? `
+        + '[Required approval rule](docs/policies/DEVELOPMENT_POLICY.md#required-change-explanation-2026-10-13)\n';
+}
+
+test('approval preflight reads policy labels and accepts clear single and distinct multiple request structures', t => {
+    const root = fixture(t);
+    const file = 'request.txt';
+    const args = ['--approval-request', path.join(root, file)];
+    write(root, file, approvalRequest());
+    const single = run(root, args);
+    assert.equal(single.status, 0);
+    assert.equal(single.report.mode, 'approval-request');
+    assert.equal(single.report.checkedRequests, 1);
+    assert.equal(single.report.limitations.length, 2);
+    assert.match(single.report.limitations.join(' '), /cannot establish.*approval/u);
+    write(root, file, approvalRequest() + '\n' + approvalRequest('R2'));
+    assert.equal(run(root, args).status, 0);
+
+    // Ordinary Markdown/plain label variants use the same authoritative words.
+    write(root, file, approvalRequest().replaceAll(/\*\*([^*]+):\*\*/gu, '**$1**:'));
+    assert.equal(run(root, args).status, 0);
+    write(root, file, approvalRequest().replaceAll('**', ''));
+    assert.equal(run(root, args).status, 0);
+});
+
+test('approval preflight rejects omissions, order changes, empty fields and missing question or rule link', t => {
+    const root = fixture(t);
+    const file = 'request.txt';
+    const args = ['--approval-request', path.join(root, file)];
+    const valid = approvalRequest();
+    const invalid = [
+        'May I keep bootstrap initialization?',
+        valid.replace(/^\*\*Implications:.*\n/mu, ''),
+        valid.replace('**What is to be changed:**', '**How it is to be changed:**'),
+        valid.replace('**Reason:** A visitor encounters the recorded behavior.', '**Reason:**'),
+        valid.replace('**History:** The old choice and new finding are distinguished.', '**History:**'),
+        valid.replace(/Do you approve[^\n]+/u, ''),
+        valid.replace(/\[Required approval rule\]\([^\)]+\)/u, ''),
+    ];
+    for (const text of invalid) {
+        write(root, file, text);
+        const result = run(root, args);
+        assert.equal(result.status, 1);
+        assert.ok(result.report.errors.every(error => error.rule === 'approval-request-format'));
+    }
+});
+
+test('simultaneous approval requests need distinct identifiers repeated in their own questions', t => {
+    const root = fixture(t);
+    const file = 'request.txt';
+    const args = ['--approval-request', path.join(root, file)];
+    const invalid = [
+        approvalRequest() + '\n' + approvalRequest(),
+        approvalRequest() + '\n' + approvalRequest('r1'),
+        approvalRequest() + '\n' + approvalRequest('R2').replace('Do you approve R2,', 'Do you approve this,'),
+        approvalRequest() + '\n' + approvalRequest('R2').replace('**R2 — Bounded fixture decision**\n', ''),
+    ];
+    for (const text of invalid) {
+        write(root, file, text);
+        assert.equal(run(root, args).status, 1);
+    }
+});
+
+test('approval preflight is independent of source checks and rejects mixed or unavailable inputs', t => {
+    const root = fixture(t);
+    const file = 'request.txt';
+    const args = ['--approval-request', path.join(root, file)];
+    write(root, file, approvalRequest());
+    write(root, 'src/types/Invalid.ts', 'export const invalid = true;');
+    assert.equal(run(root, args).status, 0);
+    assert.equal(run(root, [...args, '--all']).status, 2);
+    assert.equal(run(root, ['--approval-request', path.join(root, 'absent.txt')]).status, 2);
+    fs.writeFileSync(path.join(root, file), Buffer.from([0xc3, 0x28]));
+    assert.equal(run(root, args).status, 2);
 });
 
 test('real comments in a template substitution remain valid while multiline template text does not', t => {

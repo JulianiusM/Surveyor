@@ -19,15 +19,15 @@ import {frontendIdentityPageEntry} from '../../src/modules/lib/frontendIdentity'
 
 const profileId = '11111111-1111-4111-8111-111111111111';
 const eventId = '22222222-2222-4222-8222-222222222222';
-const session: components['schemas']['SessionView'] = {
+const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'account', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context: 'identity-ui-context-1234567890', csrfToken: 'identity-ui-csrf-1234567890', locale: 'en',
     activeProfile: {id: profileId, name: 'Organizer'}, profiles: [{id: profileId, name: 'Organizer'}],
     loginUrl: '/users/login', logoutUrl: '/users/logout', shell: {version: 'fixture', imprintUrl: '/imprint',
         privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'},
 };
-function json(value: unknown, status = 200, responseContext = session.context): Response {
+function json(value: unknown, status = 200, responseContext: components['schemas']['SessionView']['context'] = session.context): Response {
     return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
-        'X-Surveyor-Context': responseContext}});
+        ...(responseContext === null ? {} : {'X-Surveyor-Context': responseContext})}});
 }
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {

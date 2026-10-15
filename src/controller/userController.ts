@@ -28,7 +28,7 @@ import mailer, {prepareActivationEmail, prepareGuestLinkEmail, preparePasswordRe
 import type {PreparedIdentityEmail} from '../types/EmailTypes';
 import {APIError, ExpectedError, ValidationError} from "../modules/lib/errors";
 import {createSessionStore, persistSession, readStoredSession, requireSessionProfileId, stageIdentitySession, writeStoredSession} from "../modules/lib/session";
-import {rotateFrontendSessionContext} from '../modules/lib/frontendSession';
+import {readFrontendSessionMetadata, rotateFrontendSessionContext, sameFrontendSessionIdentity} from '../modules/lib/frontendSession';
 import {safeFrontendReturn} from '../modules/lib/frontendIdentity';
 import type {AccountRegistrationTransactionOptions, RegistrationEmailDelivery, RegistrationReceipt, GuestRegistrationTransactionOptions, IdentityCompletionOptions, IdentityCompletionReceipt, IdentityLinkOptions, IdentityTransitionOptions} from '../types/IdentityTypes';
 import {ApiProblem} from '../modules/api/problem';
@@ -873,7 +873,7 @@ interface PreparedRegistration<Result> {
  * finality. Feature callbacks own their records and response/mail preparation;
  * DBAL owns the session lock and transaction, while SMTP remains postcommit delivery.
  */
-async function commitRegistration<Result>(req: Request, context: string,
+async function commitRegistration<Result>(req: Request, context: string | null,
     prepare: (manager: EntityManager, session: Request['session']) => Promise<PreparedRegistration<Result>>,
     persistSessionState: boolean): Promise<RegistrationReceipt<Result>> {
     // The shared owner finishes all locked persistence before external mail can
@@ -902,7 +902,7 @@ async function settleIdentityDelivery(receipt: PreparedIdentityEmail): Promise<b
  * Original request authority stays untouched until a successful adapter adopts
  * the receipt, preventing Express autosave from leaking rolled-back state.
  */
-async function commitIdentityCompletion<Result>(req: Request, context: string,
+async function commitIdentityCompletion<Result>(req: Request, context: string | null,
     prepare: (manager: EntityManager, session: Request['session']) => Promise<Result>,
     persistSessionState: boolean): Promise<IdentityCompletionReceipt<Result>> {
     const sessionId = req.sessionID;
@@ -910,19 +910,32 @@ async function commitIdentityCompletion<Result>(req: Request, context: string,
     /** Keep every prepared write and optional completion session on the locked connection. */
     async function prepareLocked(manager: EntityManager, lockedSession: Session | null) {
         // The library remains the owner of expiry, destroyed-row and JSON
-        // semantics; only matching current stored context permits allocation.
-        if (!lockedSession) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+        // semantics. Recognized sessions must retain their captured authority;
+        // absence is allowed only for an admitted, uninitialized server candidate.
         const store = createSessionStore(manager);
         const stored = await readStoredSession(store, sessionId);
-        if (!stored || stored.frontendContext !== context) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+        if (stored) {
+            if (!lockedSession || !sameFrontendSessionIdentity(req.session, stored)
+                || readFrontendSessionMetadata(stored, sessionId).context !== context) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+        } else {
+            // A login/guest creation can be the browser's first session-changing
+            // action. No empty row is saved before credential/business validation.
+            // Previously observed, expired or destroyed authority cannot use this path.
+            const original = req.session;
+            if (lockedSession || req.apiSessionStored !== false || context !== null || original.auth || original.profile
+                || original.tokens || original.oidc || original.frontendContext || original.frontendCsrfToken) {
+                throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+            }
+        }
 
         // No staged authority/completion reaches request autosave on rollback.
         // Account API signup has no identity change and needs no session write.
         // Capture before staging: Cookie construction and flash consumption can
         // share nested objects with this decoded store value. Compare snapshots,
         // never two aliases after preparation has already mutated them.
-        const originalJson = persistSessionState ? JSON.stringify(stored) : undefined;
-        const session = stageIdentitySession(req, stored);
+        const original = stored ?? req.session;
+        const originalJson = persistSessionState ? JSON.stringify(original) : undefined;
+        const session = stageIdentitySession(req, original);
         const result = await prepare(manager, session);
         if (persistSessionState && JSON.stringify(session) !== originalJson) {
             await writeStoredSession(store, sessionId, session);

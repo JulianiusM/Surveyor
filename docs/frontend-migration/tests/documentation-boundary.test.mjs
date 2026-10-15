@@ -445,14 +445,15 @@ test('pins the exact untracked public runtime fixture in a real Git preparation'
     assert.equal(fs.readFileSync(contained(fixture.root, 'README.md'), 'utf8'), originalReadme);
 });
 
-test('copies only exact reviewed untracked shared frontend owners', function publicFrontendOwners(t) {
+test('copies only exact reviewed untracked public owners', function publicFrontendOwners(t) {
     const fixture = createFixture(t);
     const owners = ['src/types/FrontendFeedbackTypes.d.ts', 'src/frontend/components/CommandFeedback.vue',
         'src/frontend/composables/pageNavigation.ts', 'src/frontend/features/packing/lifecycle.ts',
         'src/frontend/styles/application.sass',
         'src/frontend/styles/style.sass', 'src/frontend/styles/accordion.sass',
         'src/frontend/styles/timezone-select.sass', 'src/frontend/styles/help.sass',
-        'tests/frontend/frontend-page-navigation.spec.ts'];
+        'tests/frontend/frontend-page-navigation.spec.ts',
+        'tests/integration/frontend-session-admission.spec.ts'];
     for (const relative of owners) write(fixture, relative, `// Synthetic reviewed public owner: ${relative}\n`);
     const unlisted = 'src/frontend/styles/unlisted-neighbor.sass';
     write(fixture, unlisted, '// Unlisted source must not enter the copied tree.\n');

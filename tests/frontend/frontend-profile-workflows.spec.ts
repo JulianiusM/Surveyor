@@ -15,7 +15,7 @@ import type {FrontendPilotBootstrap, FrontendProfileWorkflow} from '../../src/ty
 
 const profileId = '11111111-1111-4111-8111-111111111111';
 const token = 'private-migration-token-1234567890';
-const session: components['schemas']['SessionView'] = {
+const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'account', context: 'workflow-context-12345678901234567890', csrfToken: 'workflow-csrf-12345678901234567890',
     deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, locale: 'en',
     activeProfile: {id: profileId, name: 'Fixture profile'}, profiles: [{id: profileId, name: 'Fixture profile'}],

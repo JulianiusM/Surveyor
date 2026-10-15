@@ -11,6 +11,7 @@ import * as userController from '../controller/userController';
 import {frontendIdentityFeedback, frontendIdentityPageEntry, readGuestLinkHandoff, safeFrontendReturn} from '../modules/lib/frontendIdentity';
 import type {FrontendIdentityOperation, IdentityCompletionReceipt} from '../types/IdentityTypes';
 import {persistSession} from '../modules/lib/session';
+import {readFrontendSessionMetadata} from '../modules/lib/frontendSession';
 import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
 import settings from '../modules/settings';
 import * as packingService from '../modules/database/services/PackingService';
@@ -25,9 +26,9 @@ import {resolvePilotHelpQuery} from '../modules/lib/helpNavigation';
 const router = Router();
 
 /**
- * Document admission reloads and validates stored identity before API-style clearing
- * can discard OIDC logout evidence. Expiry follows native flash/logout; store failures
- * retain their ordinary operational error instead of being treated as false expiry.
+ * Validate the ordinary Express request session without replacing or saving it.
+ * Confirmed expiry follows the native logout owner; operational failures do not
+ * clear server identity or provider evidence merely because a read failed.
  */
 router.use(asyncHandler(async function admitPilotDocument(req, res, next) {
     // Select presentation language before identity admission so any ensuing
@@ -36,19 +37,20 @@ router.use(asyncHandler(async function admitPilotDocument(req, res, next) {
     try {
         // Retain provider-token evidence until the ordinary logout owner can
         // finish its native handoff; only a successfully captured actor continues.
-        await captureApiActor(req, true);
+        await captureApiActor(req);
         next();
     } catch (error) {
         // A store outage or other error remains an operational failure. Only
         // confirmed expired/invalid identity enters the established logout journey.
         if (!(error instanceof ApiProblem) || error.code !== 'AUTH_REQUIRED') throw error;
+        const session = req.session;
         req.flash('error', 'Session has expired');
-        const destination = await userController.logoutUserOidc(req.session);
+        const destination = await userController.logoutUserOidc(session);
 
         // Persist the bounded pilot notice after logout, then deliver its chosen
         // destination. No submitted text or provider evidence enters the notice.
         req.flash('frontend-pilot-notice', JSON.stringify({kind: 'error', messageKey: 'auth.sessionExpired'}));
-        await persistSession(req.session);
+        await persistCompletedWorkflowFeedback(req);
         res.redirect(destination);
     }
 }));
@@ -71,24 +73,20 @@ function applyNativePresentationLocale(req: Request): void {
 }
 
 /**
- * Project documents only after stored-session admission. Consume one-time feedback
- * from that freshly admitted session so reloading authority cannot restore messages
- * which an earlier document already displayed.
+ * Project the admitted Express session and its established one-time feedback.
+ * Reading absent feedback must leave a fresh anonymous session unmodified, so
+ * ordinary documents do not create a stored session or cookie as a side effect.
  */
 async function bootstrap(req: Request): Promise<FrontendPilotBootstrap> {
     applyNativePresentationLocale(req);
     const session = await sessionView(req);
-    const flashRequest = {session: req.session} as Request;
-    const readFlash: (this: Request, type: string) => unknown = req.flash;
-    // express-flash's declaration disagrees with its one-type getter's array result.
-    // Check that boundary and select a known message rather than trusting a cast or stored text.
-    const flashes = readFlash.call(flashRequest, 'frontend-pilot');
+    const flashes = readPilotFlash(req, 'frontend-pilot');
     const feedback = frontendIdentityFeedback.find(key => Array.isArray(flashes) && flashes.includes(key));
     const state: FrontendPilotBootstrap = {session, ...(feedback ? {identityFeedback: feedback} : {})};
     // These are the existing controller's completion words, including its former-
     // owner cleanup result. Do not infer that business outcome again in this adapter.
     // The dedicated internal channel accepts only this admitted actor's receipt.
-    const workflowNotices = readFlash.call(flashRequest, 'frontend-pilot-workflow');
+    const workflowNotices = readPilotFlash(req, 'frontend-pilot-workflow');
     if (Array.isArray(workflowNotices)) {
         for (const notice of workflowNotices) {
             if (typeof notice !== 'string') continue;
@@ -100,7 +98,7 @@ async function bootstrap(req: Request): Promise<FrontendPilotBootstrap> {
     }
     // Flash storage remains an untyped boundary. Accept only a known plain catalog
     // message, never submitted text or interpolation/options through this channel.
-    const notices = readFlash.call(flashRequest, 'frontend-pilot-notice');
+    const notices = readPilotFlash(req, 'frontend-pilot-notice');
     if (Array.isArray(notices)) {
         for (const notice of notices) {
             if (typeof notice !== 'string') continue;
@@ -112,8 +110,8 @@ async function bootstrap(req: Request): Promise<FrontendPilotBootstrap> {
             } catch { /* Ignore malformed stored feedback rather than treating it as page authority. */ }
         }
     }
-    const links = readFlash.call(flashRequest, 'frontend-pilot-link');
-    if (Array.isArray(links)) {
+    const links = readPilotFlash(req, 'frontend-pilot-link');
+    if (session.context && Array.isArray(links)) {
         // A different tab can change identity between the committed redirect and
         // this GET. Only its admitted matching context receives that private link.
         for (const link of links) {
@@ -122,6 +120,23 @@ async function bootstrap(req: Request): Promise<FrontendPilotBootstrap> {
         }
     }
     return state;
+}
+
+/**
+ * Consume only an existing nonempty flash channel through the native library.
+ * Its getter creates `session.flash` even when no message exists; avoid that
+ * mutation on public first visits while preserving actual one-time consumption.
+ */
+function readPilotFlash(req: Request, channel: string): unknown[] {
+    const flash = (req.session as Request['session'] & {flash?: Record<string, unknown>}).flash;
+    const values = flash?.[channel];
+    if (!Array.isArray(values) || !values.length) return [];
+
+    // The installed getter returns arrays although its declaration differs.
+    // Keep the established library as the owner of consuming stored messages.
+    const readFlash: (this: Request, type: string) => unknown = req.flash;
+    const consumed = readFlash.call(req, channel);
+    return Array.isArray(consumed) ? consumed : [];
 }
 
 /** Apply shared admission at the native HTTP boundary; Vue consumes this same declaration. */
@@ -133,8 +148,12 @@ async function applyPageEntry(req: Request, res: Response, state: FrontendPilotB
     // Bootstrap consumed document feedback before admission chose another canonical URL.
     // Carry it to the first rendered destination instead of losing a successful transition.
     const notice = entry.notice ?? state.pageNotice;
-    if (notice) flashPageNotice(req, notice);
-    await persistSession(req.session);
+    if (notice) {
+        // Match native flash delivery even for a previously sessionless visitor:
+        // this notice deliberately creates an anonymous Session before redirect.
+        flashPageNotice(req, notice);
+        await persistSession(req.session);
+    }
     res.redirect(nativeFrontendReturn(req, entry.url));
     return true;
 }
@@ -203,7 +222,8 @@ router.get('/users/profile/migrate/request', asyncHandler(async function renderM
 
     // Native entry issues/replaces a token on GET. Invoke that existing operation
     // once per document, never from a refresh query, hydration or automatic retry.
-    state.profileWorkflow = {kind: 'token', token: await userController.getMigrationToken(req.session.profile!.id)};
+    const actor = await captureApiActor(req);
+    state.profileWorkflow = {kind: 'token', token: await userController.getMigrationToken(actor.profile!.id)};
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
@@ -222,8 +242,10 @@ router.post('/users/profile/migrate/execute', asyncHandler(async function execut
 
     // Preserve the exact native operation, including existing token checks,
     // previous-owner cleanup, mail ordering and receiver-profile selection.
-    const message = await userController.migrateProfile(req.session.auth!.user!.id, workflowField(req, 'token'));
+    const actor = await captureApiActor(req);
+    const message = await userController.migrateProfile(actor.auth!.user!.id, workflowField(req, 'token'));
     flashWorkflowNotice(req, message);
+    await persistCompletedWorkflowFeedback(req);
     res.redirect(nativeFrontendReturn(req, '/frontend-pilot/users/profile/manage'));
 }));
 
@@ -247,30 +269,38 @@ router.post(['/users/profile/delete', '/users/account/delete'], asyncHandler(asy
     const profile = req.path === '/users/profile/delete';
     const state = await admitProfileWorkflow(req, res, profile);
     if (!state) return;
+    const session = req.session;
 
     try {
         // Confirmations and destructive decisions belong to the existing owner.
         // Keep the route sequence, including native final-profile failure, intact.
         if (profile) {
-            const message = await userController.deactivateProfile({name: workflowField(req, 'name')}, req.session);
+            const message = await userController.deactivateProfile({name: workflowField(req, 'name')}, session);
             flashWorkflowNotice(req, message);
-            await userController.changeActiveProfile(req.session);
+            await userController.changeActiveProfile(session);
             // Selection rotates the frontend context. Rebind only this transport
             // receipt after success; a native selection failure keeps its earlier flash.
             flashWorkflowNotice(req, message);
+            await persistCompletedWorkflowFeedback(req);
             res.redirect(nativeFrontendReturn(req, '/frontend-pilot/users/profile/manage'));
         } else {
-            const destination = await userController.deleteAccount({username: workflowField(req, 'username')}, req.session);
+            const destination = await userController.deleteAccount({username: workflowField(req, 'username')}, session);
             // The existing logout owner supplies provider/root navigation. Do not
             // rewrite it, preflight it, or introduce another session transaction.
             req.flash('success', 'Account successfully deleted');
+            await persistCompletedWorkflowFeedback(req);
             res.redirect(destination);
         }
     } catch (error) {
         // Native confirmation failures render the same form and submitted value
         // at status 500. Only this known validation category reopens a form;
         // a later partial-completion failure retains the ordinary error outcome.
-        if (!(error instanceof ValidationError)) throw error;
+        if (!(error instanceof ValidationError)) {
+            // A native partial-failure continuation keeps its original error.
+            // Deliver any recorded notice without inserting a new rejection.
+            await persistCompletedWorkflowFeedback(req);
+            throw error;
+        }
         state.profileWorkflow = profile
             ? {kind: 'deactivate', value: workflowField(req, 'name'), error: 'profile.invalidDeactivation'}
             : {kind: 'delete-account', value: workflowField(req, 'username'), error: 'profile.invalidAccountDeletion'};
@@ -295,10 +325,30 @@ function workflowField(req: Request, field: 'name' | 'username' | 'token'): stri
 
 /** Keep the shared controller's completion wording scoped to its resulting identity. */
 function flashWorkflowNotice(req: Request, message: string): void {
-    // Native session persistence/redirect ordering remains unchanged. Flash storage
-    // is consumed only by the next matching admitted pilot document.
-    req.flash('frontend-pilot-workflow');
-    req.flash('frontend-pilot-workflow', JSON.stringify({context: req.session.frontendContext, message}));
+    // Preserve native controller/save ordering and use the resulting ordinary
+    // request session. Legacy admitted identities use the same read-only context
+    // projection as their document, without writing metadata during admission.
+    const context = readFrontendSessionMetadata(req.session, req.sessionID).context;
+    readPilotFlash(req, 'frontend-pilot-workflow');
+    req.flash('frontend-pilot-workflow', JSON.stringify({context, message}));
+}
+
+/**
+ * Feedback delivery after a shared native operation cannot reject or interrupt
+ * that operation's completed business work. Its existing outcome/redirect wins;
+ * storage failure is logged without exposing identity or replaying the command.
+ */
+async function persistCompletedWorkflowFeedback(req: Request): Promise<void> {
+    // Keep this normal Express save after required business continuations. It
+    // acknowledges the exact operation's feedback, without a second persistence
+    // protocol or a lock/merge of some independently loaded Session snapshot.
+    try {
+        await persistSession(req.session);
+    } catch {
+        // The bounded category is operational evidence, never submitted data,
+        // private session contents or an exception that may include SQL values.
+        console.error('[frontend-pilot]', {code: 'WORKFLOW_FEEDBACK_UNAVAILABLE'});
+    }
 }
 
 router.get('/packing/create', asyncHandler(async function renderPackingCreatePilot(req, res) {
@@ -387,9 +437,10 @@ router.get('/users/oidc/login', asyncHandler(async function startPilotOidc(req, 
     }
     // Preserve the configured callback and PKCE/state handling; only the final application
     // destination differs. It belongs to the session and is never supplied by the provider.
-    req.session.frontendAuthReturn = safeFrontendReturn(req.query.next);
-    const redirect = await userController.loginUserWithOidc(req.session);
-    await persistSession(req.session);
+    const session = req.session;
+    session.frontendAuthReturn = safeFrontendReturn(req.query.next);
+    const redirect = await userController.loginUserWithOidc(session);
+    await persistSession(session);
     res.redirect(redirect);
 }));
 

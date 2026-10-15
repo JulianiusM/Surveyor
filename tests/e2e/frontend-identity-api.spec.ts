@@ -5,6 +5,7 @@ import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import {createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
 import {createResourceViaForm, loginForE2E, readAccountRegistrationCountsForE2E, readGuestRegistrationCountsForE2E, withPasswordResetAccountForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 
 type SessionView = components['schemas']['SessionView'];
 
@@ -12,7 +13,7 @@ async function session(request: APIRequestContext): Promise<SessionView> {
     const response = await request.get('/api/v1/session');
     expect(response.status()).toBe(200);
     const view = await response.json() as SessionView;
-    expect(response.headers()['x-surveyor-context']).toBe(view.context);
+    expect(response.headers()['x-surveyor-context']).toBe(view.context ?? undefined);
     return view;
 }
 
@@ -107,8 +108,15 @@ test('disabled authentication configuration preserves native document outcomes a
     expect(await api.json()).toMatchObject({status: 403, code: 'LOCAL_LOGIN_DISABLED', messageKey: 'api:errors.LOCAL_LOGIN_DISABLED'});
 });
 
+/** Reproduce browser mutation protections while preserving absent initial session evidence. */
 function headers(view: SessionView): Record<string, string> {
-    return {'X-Surveyor-Context': view.context, 'X-CSRF-Token': view.csrfToken, 'X-Surveyor-Locale': 'de'};
+    const baseUrl = test.info().project.use.baseURL;
+    if (!baseUrl) throw new Error('The built identity fixture requires its configured application origin.');
+    // These are actual browser request protections, not invented anonymous
+    // evidence. Established sessions still submit their exact stored pair.
+    return {Origin: new URL(baseUrl).origin, 'X-Surveyor-Api-Compatibility': apiCompatibility,
+        ...(view.context === null ? {} : {'X-Surveyor-Context': view.context, 'X-CSRF-Token': view.csrfToken}),
+        'X-Surveyor-Locale': 'de'};
 }
 
 test('native form rejections and mounted pilot constraints retain the shared typed API problems', async ({request, page}) => {
@@ -163,7 +171,7 @@ test('native form rejections and mounted pilot constraints retain the shared typ
     // The enhanced transport owns context/CSRF and generated input admission;
     // no ordinary HTML POST adapter remains in the pilot namespace.
     const admission = await request.post('/api/v1/auth/login', {
-        data: {username, password}, headers: {'X-Surveyor-Context': before.context},
+        data: {username, password}, headers: before.context === null ? {} : {'X-Surveyor-Context': before.context},
     });
     expect(admission.status()).toBe(403);
     expect(await admission.json()).toMatchObject({code: 'CSRF_INVALID'});
@@ -237,7 +245,7 @@ test('identity commands bind old admission and new results while retaining local
     const anonymous = await session(request);
     const credentials = createE2ELogin();
     const denied = await request.post('/api/v1/auth/login', {data: credentials,
-        headers: {'X-Surveyor-Context': anonymous.context}});
+        headers: anonymous.context === null ? {} : {'X-Surveyor-Context': anonymous.context}});
     expect(denied.status()).toBe(403);
     expect(await denied.json()).toMatchObject({code: 'CSRF_INVALID'});
     const invalid = await request.post('/api/v1/auth/login', {headers: headers(anonymous),
@@ -250,8 +258,10 @@ test('identity commands bind old admission and new results while retaining local
     const login = await identity(await request.post('/api/v1/auth/login', {headers: headers(anonymous), data: credentials}), anonymous);
     expect(login).toMatchObject({session: {kind: 'account'}, personalLink: null, redirect: null});
     const obsolete = await request.post('/api/v1/auth/logout', {headers: headers(anonymous)});
-    expect(obsolete.status()).toBe(409);
-    expect(await obsolete.json()).toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+    // Initial null evidence is omitted. Once login establishes a session, this
+    // old caller lacks its required context rather than supplying a false token.
+    expect(obsolete.status()).toBe(anonymous.context === null ? 400 : 409);
+    expect(await obsolete.json()).toMatchObject({code: anonymous.context === null ? 'CONTEXT_REQUIRED' : 'SESSION_CONTEXT_CHANGED'});
 
     const name = `Identity alternate ${randomUUID().slice(0, 8)}`;
     expect((await request.post('/users/profile/create', {form: {name}, maxRedirects: 0})).status()).toBe(302);
@@ -316,7 +326,13 @@ test('parallel guest registrations commit exactly one identity and restore its p
         const suffix = randomUUID().slice(0, 12);
         const usernames = [`Final guest A ${suffix}`, `Final guest B ${suffix}`];
         try {
-            const anonymous = await session(guest.request);
+            const initial = await session(guest.request);
+            // This race concerns two writes in one existing session. Ordinary
+            // browsing stays stateless; an explicit logout establishes the shared
+            // anonymous row and rotated evidence before concurrent submissions.
+            const established = await guest.request.post('/api/v1/auth/logout', {headers: headers(initial)});
+            const anonymous = (await identity(established, initial)).session;
+            expect(established.headers()['set-cookie']).toBeTruthy();
             expect(anonymous.kind).toBe('anonymous');
             expect(await readGuestRegistrationCountsForE2E(usernames)).toEqual({guests: 0, profiles: 0});
 
@@ -414,7 +430,7 @@ test('retired pilot HTML POST adapters reject without creating rows or changing 
         const form = {username, displayname: username, email: `${username}@example.invalid`,
             password: 'Retired-form!A1', password_repeat: 'Retired-form!A1',
             confirmPassword: 'Retired-form!A1', profileId: randomUUID(),
-            _context: before.context, _csrf: before.csrfToken,
+            ...(before.context === null ? {} : {_context: before.context, _csrf: before.csrfToken}),
             _compatibility: before.deployment.apiCompatibility, next: '/frontend-pilot'};
         expect(await readAccountRegistrationCountsForE2E([username])).toEqual({accounts: 0, profiles: 0, activationReady: 0});
         expect(await readGuestRegistrationCountsForE2E([username])).toEqual({guests: 0, profiles: 0});
@@ -451,7 +467,7 @@ test('account signup commits its profile and activation token before controlled 
         });
         expect(completed.status()).toBe(200);
         expect(completed.headers()['cache-control']).toContain('no-store');
-        expect(completed.headers()['x-surveyor-context']).toBe(before.context);
+        expect(completed.headers()['x-surveyor-context']).toBe(before.context ?? undefined);
         expect(await completed.json()).toEqual({changed: true, emailDelivery: 'failed'});
         const after = await session(request);
         expect(after).toMatchObject({kind: 'anonymous', context: before.context, csrfToken: before.csrfToken});
@@ -474,18 +490,18 @@ test('account signup commits its profile and activation token before controlled 
 test('invalid password-reset links are denied before rendering a form, with scoped localized uncached preflight', async ({request, browser, baseURL}) => {
     const anonymous = await session(request);
     const path = '/api/v1/auth/reset-password?token=not-a-valid-reset-token';
-    expect((await request.get(path)).status()).toBe(400);
+    const unscoped = await request.get(path);
+    expect(unscoped.status()).toBe(401);
+    expect(await unscoped.json()).toMatchObject({code: 'TOKEN_INVALID'});
     const stale = await request.get(path, {headers: {'X-Surveyor-Context': 'obsolete-context'}});
     expect(stale.status()).toBe(409);
     expect(await stale.json()).toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
-    const denied = await request.get(path, {headers: {
-        'X-Surveyor-Context': anonymous.context, 'X-Surveyor-Locale': 'de',
-    }});
+    const denied = await request.get(path, {headers: headers(anonymous)});
     expect(denied.status()).toBe(401);
     expect(denied.headers()['content-type']).toContain('application/problem+json');
     expect(denied.headers()['content-language']).toBe('de');
     expect(denied.headers()['cache-control']).toContain('no-store');
-    expect(denied.headers()['x-surveyor-context']).toBe(anonymous.context);
+    expect(denied.headers()['x-surveyor-context']).toBe(anonymous.context ?? undefined);
     const problem = await denied.json() as components['schemas']['Problem'];
     expect(problem).toMatchObject({code: 'TOKEN_INVALID', status: 401, messageKey: 'api:errors.TOKEN_INVALID'});
     expect((await session(request)).context).toBe(anonymous.context);

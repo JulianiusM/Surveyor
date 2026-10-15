@@ -17,7 +17,7 @@ import {completePageEntry, navigatePageEntry, useConfirmedNavigation} from '../.
 
 const firstId = '11111111-1111-4111-8111-111111111111';
 const secondId = '22222222-2222-4222-8222-222222222222';
-const session: components['schemas']['SessionView'] = {
+const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
     context: 'page-entry-context-1234567890', csrfToken: 'page-entry-csrf-1234567890', locale: 'en',
     activeProfile: null, profiles: [], loginUrl: '/users/login', logoutUrl: null,

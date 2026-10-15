@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: native-isolation decision/history and implemented frontend-owned timer/style delivery reconciled; prior amendments and execution retain their scopes; no full migration or cutover claimed
-source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
+verification-scope: original choices, corrected transport provenance and withdrawn R1 acceptance retained; approved native anonymous flash and full pilot source/readiness re-review reconciled; no full-application or cutover acceptance
+source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
 
@@ -404,10 +404,14 @@ overstated approval to remove unused implementation. The
 [maintainer correction](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15) distinguishes
 authored definitions from implemented HTTP transport and directs removal of the unauthorized definition guards.
 
-The maintainer explicitly authorizes the reviewed readiness work and separately approves restoring scalar-only query
-transport and removing unused plain-text API output. Both unused additions first appeared in the 2026-10-08 correction;
-no current endpoint depends on them, and their original rationale/specific authorization was not established.
-The existing generator/transport owner retains JSON arrays, current API operations and native download boundaries.
+The maintainer explicitly authorizes the reviewed readiness work and separately approves removing unused repeated-
+query-array transport and plain-text API output. The original selected API design already included those capabilities;
+their implementation first appeared in the 2026-10-08 correction. The earlier agent account confused absence of a
+current endpoint consumer with absence from the approved design. The later removal intentionally narrows that
+original runtime scope; it does not establish that the original choice was scalar-only or authorize definition bans.
+The [corrected provenance](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#authorized-transport-scope-restoration-2026-10-14)
+preserves both the original selection and subsequent explicit decisions. The existing generator/transport owner
+retains JSON arrays, current API operations and native download boundaries.
 
 Current API authoring, strictness and version-compatibility guidance is consolidated in the existing staged
 [Development owner](staged/DEVELOPMENT.md#contract-authoring-and-generated-consumers). Original toolchain rationale
@@ -519,6 +523,71 @@ feedback owner now owns the transient timer, and copied authored Sass belongs to
 Native source/build inputs and shared backend owners remain unchanged.
 The [implementation receipt](PILOT_PARITY_REVIEW.md#native-frontend-isolation-implementation-2026-10-15) owns the actual
 checks and limits; full feature migration, native removal and publication remain future separately authorized work.
+
+### Session ownership restoration and stateless initial visits (2026-10-15)
+
+The original Oct4 design retained Express session ownership but chose a context and session-bound CSRF token even
+for anonymous bootstrap. That was a protocol choice, not a Vue or authentication requirement. The initial pilot
+initialized missing metadata during common actor capture; its Oct8 store reload directly replaced `req.session`.
+The later A/B/C reproduction showed that a response could consequently restore an earlier stored generation.
+
+The first R1 remedy introduced writable `req.apiSession`, save observation and locked initialization/invalidation/
+feedback merging. Its request mentioned separate evidence, but did not adequately explain that expanded lifecycle
+against the original ownership boundary. The maintainer challenged it. The agent's architectural acceptance and
+IMP-064 closure are withdrawn; the accompanying test results establish exercised behavior, not design approval.
+Those same-run documentation claims cannot independently authorize the implementation they describe.
+
+The maintainer now explicitly authorizes the preserved restoration/stateless-initial plan. Express's ordinary
+`req.session` remains the only request Session. Admission may read stored identity/generation to reject a mismatch;
+it never installs that snapshot, initializes metadata or clears authority. A plain server-hydrated `ApiActor`
+captures identity for the operation. Existing controller grants remain authoritative; browser context, CSRF values,
+capabilities and local epochs are untrusted comparisons or presentation state, never credentials or permission.
+
+`GET /api/v1/session` and message-free initial public rendering project state without creating an anonymous row/cookie.
+Sessionless projections contain a null context/CSRF pair. The earlier proposal to retain a GET initializer was not
+approved. Complete stored pairs remain valid; authenticated legacy sessions lacking the pair use bounded read-only,
+domain-separated HMAC projections bound to the existing server secret, SID, identity/profile and partial context.
+No SID or signing payload is exposed. The next explicit identity transition persists its ordinary random pair.
+This compatibility projection does not establish a global generation or compare-and-swap guarantee.
+
+Explicit login/guest/provider and other session-changing operations retain their established owners. The previously
+approved identity-completion transaction handles a first uninitialized candidate without precreating an empty row;
+credentials/business checks and prepared completion precede its final session write. Existing native TTL/touch,
+real flash consumption, expiry/logout and token/provider entry effects are preserved, not recast as stateless reads.
+The pilot avoids empty flash getters; ordinary feedback uses the existing Session/save path after required business
+continuations. No general save interceptor, flash merger or admission transaction remains.
+
+Public grant-only Packing methods retain public access. Their sessionless comparison scope binds resource, operation
+and exposed fields/current values rather than inventing an anonymous principal; controllers reauthorize every
+projection/write. Context-bearing or authenticated scopes still require matching context/CSRF. Public mutations
+without identity or frontend context require affirmative configured-origin/Fetch Metadata evidence and the
+non-simple compatibility header before generated
+JSON/multipart validation; omission of claims never selects anonymous authority.
+
+The [paired review](PILOT_PARITY_REVIEW.md#pilot-session-admission-correction-2026-10-15) owns current source adoption,
+verification and limits. At that checkpoint the account-required redirect-notice choice remained unanswered; the
+dated decision below resolves it. The original overwrite defect is verified repaired under the latest explicit
+authorization. This amendment grants no native change, excluded backend remedy, later feature migration,
+publication or cutover.
+
+### Authorized native anonymous-session flash (2026-10-15)
+
+The maintainer explicitly selects the existing native anonymous Session and one-time flash behavior for an
+account-required redirect. The proposed URL notice parameter and its repeat-on-revisit consequence are rejected;
+that proposal was never implemented. A fresh visitor opening account-only Packing creation keeps the established
+302, login destination and informational notice. The existing document adapter records the known notice through
+`req.session` and the native flash library, saves that anonymous Session before redirect, and consumes the notice
+once at the destination. No identity, context/CSRF initialization or URL notice transport is added.
+
+For a fresh anonymous visitor, pilot public/session reads without feedback leave metadata null and avoid initial
+persistence. An intentional native feedback redirect can create an anonymous row/cookie; it is an explicit feedback
+effect, not generic admission
+initialization or a second session owner. Native source remains unchanged.
+
+`ARCH-005` in the [backlog](../backlog/documentation-remediation.yml) owns the requested whole-session/flash
+verification and unification review. It is separately scoped future work, not permission for a new lifecycle or a
+prerequisite for parity migration. The [full pilot re-review](PILOT_PARITY_REVIEW.md#full-pilot-baseline-and-migration-readiness-re-review-2026-10-15)
+records the bounded readiness disposition; resolving this choice alone does not certify the rest of the implementation.
 
 ## Cutover retirement inventory
 

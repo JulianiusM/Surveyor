@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; developers; AI coding agents
 owner: project maintainers
 status: current
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved scope-preserving adaptation clarification distinguishes existing defects from new operation requirements; informed individual decisions, server integration and shared engineering boundaries retained
-source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
+verification-scope: maintainer-authorized baseline and responsibility review, clarification approval enforcement and bounded session-ownership checks added; existing engineering and delivery boundaries retained
+source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/development-check.json; scripts/check-development-policy.mjs; scripts/tests/development-policy-check.test.mjs; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
 next-review: explicit-maintainer-policy-amendment
 -->
 
@@ -41,6 +41,14 @@ to documentation names, technology choices, architecture, coding patterns and ex
 Preserve existing behavior unless a change is explicitly authorized or directly required by accepted implementation
 instructions. Shared callers use the existing backend business owners. Record bounded approved exceptions without
 broadening them into an unrelated redesign.
+
+**Authorized enforcement correction (2026-10-15):** compare each touched responsibility with its original accepted
+baseline and explicit amendments, not only the latest implementation. Before editing, explain the intended owner,
+callers, reads, writes and lifecycle effects in the conversation. Reusing the same files, library, database table or
+schema does not prove that responsibility or behavior is unchanged. A new writable request-state mirror, save
+interceptor, lock or persistence from common admission requires review of those effects against the actual approval
+before dependent implementation. Existing scoped operations, middleware expiry/touch and feedback retain their
+approved behavior; this rule does not authorize their removal or a general backend redesign.
 
 ### Scope of separately authorized work
 
@@ -87,6 +95,16 @@ sentence or two for each; keep necessary context rather than compress the explan
 - **History:** the relevant original choice, approved amendments and how the issue was discovered. Distinguish
   observed evidence from inference; keep unknown rationale or authorization explicitly unknown.
 
+The maintainer's 2026-10-15 enforcement correction explicitly applies this complete explanation and direct-question
+requirement to a clarification, preference or option question that resolves a policy/design conflict or authorizes
+changed behavior. Calling it a clarification does not waive the approval rules. A factual question that grants no
+such decision remains an ordinary clarification. Inspect the exact proposed request with both required reviewers
+before sending it; a previous review of the broader plan does not review a later question automatically.
+Preflight the exact proposed text with `node scripts/check-development-policy.mjs --approval-request <temporary-file>`
+before presentation. This read-only mode checks field/order/question/link/identifier syntax only; its temporary input
+is not a documentation destination or approval record. Present the full request in the conversation. Passing it
+does not replace either semantic reviewer, grant approval or create an application/documentation delivery gate.
+
 Explain the change clearly in concise prose. Exact quotations, replacement text, code, diffs and implementation
 transcripts are forbidden in approval requests. Name affected material only where needed to define the decision's
 scope; avoid unexplained file inventories. A source link may identify an owner, but must not replace the explanation.
@@ -119,6 +137,8 @@ Withdraw and reissue a rejected unresolved request. Its unclear wording or an in
 Existing valid approvals remain effective. Pass current authorization, unresolved decisions and these concise
 requirements to every delegated agent; require its acknowledgement. Track each answer against that individual
 decision. Delegation or successful checks cannot grant approval or certify the quality of an explanation.
+Tests establish their exercised behavior, not design authorization. An agent-authored amendment, backlog closure or
+review claim cannot supply missing conversational approval or retroactively authorize its own implementation.
 
 ## Implementation principles
 
@@ -216,14 +236,15 @@ Use the following task procedure; a repeated statement that policies were follow
 1. Obtain current task context through the documentation policy's shared bootstrap and read both policies and affected
    canonical/design sources before editing. Refresh selected profile identities on continuation or scope changes.
    Inspect the working tree and identify the exact task-owned files, existing user
-   changes, active profile scope, existing behavior and approval boundaries.
+   changes, active profile scope, existing behavior and approval boundaries. Trace the original accepted owner and
+   its explicit amendments; identify any proposed change in reads, writes, authority or lifecycle before editing.
 2. Resolve conflicts directly before dependent edits. Pass the resolved decision, file ownership, applied profile,
    remaining conflicts and required approval-request format to every subagent; require its policy acknowledgement
    and review its actual changes. Keep general defects outside the authorized scope and follow the
    [separate-work boundary](#scope-of-separately-authorized-work) before expanding the task. The root agent and an
    independent nonauthor review each approval request under the required change explanation before presentation.
    Check its plain-language journey, concrete before/after change, existing owners and actual shared adoption against
-   the source. Reject and rewrite unclear, lengthy or quotation-based requests before asking. No missing substantive
+   the source, including conflict-resolving clarification questions. Reject and rewrite unclear, lengthy or quotation-based requests before asking. No missing substantive
    explanation can be supplied by a documentation file.
 3. Review every touched nontrivial operation for a purposeful contract, separate in-code explanations of its steps,
    logical spacing and readable control flow. Comment presence alone does not satisfy this review. Preserve existing
@@ -231,8 +252,9 @@ Use the following task procedure; a repeated statement that policies were follow
 4. Run `npm run check:development` for measurable engineering rules and `git diff --check` for whitespace. The checker
    inspects worktree changes and separately changed index blobs against HEAD, so restored worktree content cannot
    conceal a staged violation. In a dirty shared workspace use repeated `--file src/...` arguments
-   for the complete task-owned readability scope and disclose that list; declaration and DBAL dependency checks still
-   cover the full authored inventory. Never exclude a task-owned file just to make the result clean.
+   for the complete task-owned readability scope and disclose that list; declaration, DBAL dependency and
+   session-ownership checks still cover the full authored inventory. Never exclude a task-owned file just to make
+   the result clean.
 5. Inspect the advisory documentation/classification report and resolve task-created location violations. Preserve
    its nonblocking delivery policy. Run the appropriate production checks, then obtain an independent review of
    approval provenance, semantic boundaries, readability and behavior preservation where the task changes those risks.
@@ -244,7 +266,7 @@ criteria; [`check-development-policy.mjs`](../../scripts/check-development-polic
 on non-declaration contracts, request-owned DBAL dependencies, unexplained nontrivial touched operations and nested
 complex anonymous operations. Its control-flow coverage is a review heuristic, not a new numeric style limit.
 It parses actual TypeScript (including getters/setters) and Vue script blocks without executing application code.
-The complete authored worktree declaration/DBAL inventory remains global; separately changed staged sources are
+The complete authored worktree declaration/DBAL/session inventory remains global; separately changed staged sources are
 also checked. It does not certify unchanged legacy index content or infer that a syntax-clean method has meaningful
 JSDoc and internal explanations. Those remain required by the canonical development guide and human review.
 Synthetic CLI regressions run
@@ -254,3 +276,10 @@ Automated syntax checks cannot establish comment quality, DRY, business semantic
 Those require the explicit review above. The standalone engineering command has no lifecycle hook or CI/deployment
 integration; adding a delivery gate, especially one involving documentation, requires resolution of the existing
 nonblocking policy first. No claim that future agents cannot bypass instructions is supported by this tooling.
+
+The bounded session-ownership checks detect recognizable extra request Session declarations, store construction and
+save overrides. The existing explicitly scoped identity-transaction staging operation is the sole configured owner;
+its configuration records that boundary rather than granting approval to new callers or effects. Other aliases and
+indirect mutation still require semantic review. Ordinary saves and existing middleware behavior are not prohibited.
+Property-name heuristics are conservative: a `createSession` call or `.session` alias does not establish its runtime
+type. Review an unrelated-domain match against its actual owner rather than invent an exception to hide the finding.

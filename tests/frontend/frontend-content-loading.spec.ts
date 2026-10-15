@@ -16,7 +16,7 @@ type Help = components['schemas']['HelpPageData'];
 type Region = components['schemas']['OverviewRegion'];
 const profileId = '11111111-1111-4111-8111-111111111111';
 const cardId = '33333333-3333-4333-8333-333333333333';
-const session: components['schemas']['SessionView'] = {
+const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'account', context: 'content-loading-context-1234567890', csrfToken: 'content-loading-csrf-1234567890',
     deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, locale: 'en',
     activeProfile: {id: profileId, name: 'Organizer'}, profiles: [{id: profileId, name: 'Organizer'}],

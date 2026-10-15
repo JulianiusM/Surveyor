@@ -6,7 +6,7 @@ owner: frontend maintainers
 status: current
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved dynamic-page-only automatic document reload amendment recorded; original D5, framework/API choices and definition correction retained; readiness execution belongs to the pilot review
+verification-scope: original selected transport provenance corrected against the design baseline; approved runtime narrowing, definition correction and document reload amendment retained; readiness execution belongs to the pilot review
 source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
 next-review: frontend-technology-or-rendering-boundary-change
 -->
@@ -169,13 +169,15 @@ Current authoring and released-version compatibility procedures belong in the De
 **Superseded agent interpretation:** the account below extended removal of unused implementation into definition
 restrictions. The maintainer's 2026-10-15 correction below resolves that overreach; the original account remains as history.
 
-The original supported transport binds single path/query/header values, JSON, Packing multipart and scoped binary
-images. The 2026-10-08 correction also added repeated scalar query arrays and plain-text API responses. Review found
-no authored endpoint or production consumer for those additions and no specific authorization in the inspected
-records; their original rationale remains unknown.
+**Historical account correction (2026-10-15):** the original selected API design at `2dfa2573c64178f54684cc4877b5a945f66e24c8`
+explicitly included declared repeated query arrays and binary/text outputs. Their implementation appeared in the
+2026-10-08 correction. An earlier agent account incorrectly treated them as outside the original design because
+the inspected current endpoints had no production consumer. Absence of a consumer did not negate that selected
+capability or establish missing design authorization.
 
 The maintainer separately approved removing repeated-query-array support and unused plain-text API output during
-the current readiness work. This restores the documented subset in the existing generator and transport owner.
+the readiness work. That is an explicit narrowing of the originally selected runtime scope in the existing
+generator and transport owner, not restoration of an originally scalar-only design.
 JSON body/response arrays, existing API operations, native document/download boundaries and shared business behavior
 retain their existing contracts. The approval grants neither another transport style nor a new frontend framework.
 

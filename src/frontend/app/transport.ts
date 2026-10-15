@@ -71,11 +71,16 @@ export class PilotTransport {
         this.client = createClient<paths>({baseUrl: `${globalThis.location?.origin ?? 'http://localhost'}/api/v1`, fetch: requestFetch});
     }
 
+    /** Sessionless public reads/actions carry no fabricated identity evidence.
+     * The server still selects the actor from its actual session and decides
+     * which protections that operation requires; omitted headers grant nothing. */
     headers(scope: PilotRequestScope, etag?: string | null) {
+        // Bootstrap validates this pair together. Reject a malformed internal
+        // caller too, rather than submit half a stored session's evidence.
+        if ((scope.context === null) !== (scope.csrfToken === null)) throw new InvalidInputError();
         return {
-            'X-Surveyor-Context': scope.context,
+            ...(scope.context !== null ? {'X-Surveyor-Context': scope.context, 'X-CSRF-Token': scope.csrfToken!} : {}),
             'X-Surveyor-Locale': scope.locale,
-            'X-CSRF-Token': scope.csrfToken,
             'X-Surveyor-Api-Compatibility': apiCompatibility,
             ...(etag ? {'If-None-Match': etag} : {}),
         };
@@ -90,9 +95,10 @@ export class PilotTransport {
             this.identityLost();
             throw new ObsoleteRequestError();
         }
-        // Failures before actor admission can omit this header (notably expired authentication).
-        // A private success or 304 must positively bind its body/snapshot to the captured actor.
-        if (!admitted && (response.ok || response.status === 304)) throw new UnconfirmedResponseError();
+        // A sessionless response deliberately has no context header. An existing
+        // stored scope still needs positive confirmation before a successful body
+        // or conditional snapshot can enter its actor's cache.
+        if (scope.context !== null && !admitted && (response.ok || response.status === 304)) throw new UnconfirmedResponseError();
     }
 
     /** JSON and binary operations share this error boundary. Check actor/locale before

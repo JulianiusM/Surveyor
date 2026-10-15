@@ -14,8 +14,8 @@ import * as userService from '../../src/modules/database/services/UserService';
 import email from "../../src/modules/email";
 import * as emailOwner from '../../src/modules/email';
 import {createSessionStore, persistSession, readStoredSession} from '../../src/modules/lib/session';
-import {ensureFrontendSessionContext} from '../../src/modules/lib/frontendSession';
-import {prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, sessionView} from '../../src/modules/api/session';
+import {rotateFrontendSessionContext} from '../../src/modules/lib/frontendSession';
+import {captureApiActor, prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, sessionView} from '../../src/modules/api/session';
 import {prepareValidatedJson, sendPreparedJson} from '../../src/modules/api/transport';
 import type {PreparedApiJsonResponse} from '../../src/types/ApiTransportTypes';
 import type {AccountRegistrationTransactionOptions, GuestRegistrationTransactionOptions, IdentityCompletionOptions} from '../../src/types/IdentityTypes';
@@ -31,17 +31,30 @@ afterAll(async () => {
     await closeIntegrationDatabase();
 });
 
-/** Persist a real anonymous cookie session through the production configured store. */
-async function atomicGuestRequest(): Promise<Request> {
+/** Construct the ordinary library Session without persisting an anonymous visitor. */
+function identityRequest(): Request {
     const store = createSessionStore(AppDataSource.manager);
     const req = {sessionID: randomUUID(), sessionStore: store,
         get: function getHeader(name: string) { return name.toLowerCase() === 'x-surveyor-locale' ? 'en' : undefined; },
     } as unknown as Request;
     store.createSession(req, {cookie: {expires: new Date(Date.now() + 86_400_000), originalMaxAge: 86_400_000,
         httpOnly: true, secure: false, path: '/', sameSite: 'lax'}} as SessionData);
-    ensureFrontendSessionContext(req.session);
+    return req;
+}
+
+/** Persist an existing anonymous cookie session for the established coexistence cases. */
+async function atomicGuestRequest(): Promise<Request> {
+    const req = identityRequest();
+    rotateFrontendSessionContext(req.session);
     await persistSession(req.session);
     req.apiActor = {context: req.session.frontendContext!};
+    return req;
+}
+
+/** Admit a first explicit action from the same uninitialized candidate as a cookie-free browser. */
+async function initialIdentityRequest(): Promise<Request> {
+    const req = identityRequest();
+    await captureApiActor(req);
     return req;
 }
 
@@ -61,8 +74,8 @@ async function expectGuestAbsent(username: string): Promise<void> {
 
 /** Signup uses the production generated reply owner while preserving this anonymous actor. */
 function atomicAccountOptions(req: Request): AccountRegistrationTransactionOptions<PreparedApiJsonResponse> {
-    function prepareResult(staged: Request['session']) {
-        return prepareAccountRegistrationReplies(req, staged);
+    function prepareResult() {
+        return prepareAccountRegistrationReplies(req);
     }
     return {frontend: true, next: '/frontend-pilot', context: req.apiActor!.context, prepareResult};
 }
@@ -86,8 +99,8 @@ function activationDelivery(accepted: boolean) {
 
 /** Use the actual activation contract before token consumption and optional document persistence. */
 function activationOptions(req: Request, persistCompletion = false): IdentityCompletionOptions<PreparedApiJsonResponse> {
-    function prepareResult(staged: Request['session']) {
-        return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true}, staged.frontendContext);
+    function prepareResult() {
+        return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true});
     }
     return {context: req.apiActor!.context, persistCompletion, prepareResult};
 }
@@ -167,7 +180,211 @@ function preparedResponse() {
     return {res, headers, get body() { return body; }, get statusCode() { return statusCode; }};
 }
 
+/** Persist malformed server evidence to exercise retirement before any principal lookup.
+ * The real session row/store, rather than a substituted repository, owns this fixture. */
+async function invalidAdmissionRequest(): Promise<Request> {
+    const req = await atomicGuestRequest();
+    const stored = JSON.parse(JSON.stringify(req.session)) as SessionData;
+    stored.auth = {user: {id: -1} as User, guest: {id: randomUUID()} as Guest};
+    stored.tokens = {access_token: 'stored-access-evidence', token_type: 'bearer', id_token: 'stored-provider-evidence'};
+    req.sessionStore.createSession(req, stored);
+    await persistSession(req.session);
+    req.apiActor = undefined;
+    return req;
+}
+
+describe('read-only pilot session admission', () => {
+    it('projects a cookie-free anonymous visit without creating or mutating its server session', async () => {
+        const req = identityRequest();
+        const original = req.session;
+        const before = JSON.stringify(original);
+
+        const view = await sessionView(req);
+        expect(view).toMatchObject({kind: 'anonymous', context: null, csrfToken: null});
+        expect(req.session).toBe(original);
+        expect(JSON.stringify(original)).toBe(before);
+        expect(req.apiSessionStored).toBe(false);
+        expect(await AppDataSource.getRepository(Session).findOneBy({id: req.sessionID})).toBeNull();
+    });
+
+    it.each(['account', 'guest'] as const)('projects a valid legacy %s without persisting metadata or changing its Session', async kind => {
+        const {req, run} = await ordinaryIdentityFixture(kind);
+        await run();
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        req.sessionStore.createSession(req, stored!);
+        delete req.session.frontendContext;
+        delete req.session.frontendCsrfToken;
+        await persistSession(req.session);
+        req.apiActor = undefined;
+        const original = req.session;
+        const originalJson = JSON.stringify(original);
+        const before = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+
+        const view = await sessionView(req);
+        expect(view.kind).toBe(kind);
+        expect(view.context).toBeTruthy();
+        expect(view.csrfToken).toBeTruthy();
+        expect(view.csrfToken).not.toBe(view.context);
+        expect(JSON.stringify(view)).not.toContain(req.sessionID);
+        expect(req.session).toBe(original);
+        expect(JSON.stringify(original)).toBe(originalJson);
+        req.apiActor = undefined;
+        expect((await sessionView(req)).context).toBe(view.context);
+        const after = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+        expect(after.json).toBe(before.json);
+        expect(after.expiredAt).toBe(before.expiredAt);
+
+        // The same server principal/profile in another real session cannot
+        // reuse this session's derived context or CSRF proof.
+        const other = identityRequest();
+        other.sessionStore.createSession(other, JSON.parse(originalJson) as SessionData);
+        await persistSession(other.session);
+        const otherView = await sessionView(other);
+        expect(otherView.context).not.toBe(view.context);
+        expect(otherView.csrfToken).not.toBe(view.csrfToken);
+        expect(other.session.frontendContext).toBeUndefined();
+        expect(other.session.frontendCsrfToken).toBeUndefined();
+    });
+
+    it.each(['account', 'guest'] as const)('retains the admitted partial-legacy %s scope in actor-preserving prepared receipts', async kind => {
+        const {req, run} = await ordinaryIdentityFixture(kind);
+        await run();
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        req.sessionStore.createSession(req, stored!);
+        // Keep a real stored context while removing only CSRF. This forces the
+        // read-only fallback to differ from the raw partial generation; missing
+        // both fields would accidentally exercise a default-argument shortcut.
+        delete req.session.frontendCsrfToken;
+        await persistSession(req.session);
+        req.apiActor = undefined;
+        const original = req.session;
+        const originalJson = JSON.stringify(original);
+        const actor = await captureApiActor(req);
+        expect(actor.context).toBeTruthy();
+        expect(actor.context).not.toBe(original.frontendContext);
+        const before = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+
+        // Signup and activation use the actual locked transaction, generated
+        // response preparation and mail renderer. Only SMTP delivery is replaced.
+        const username = `partial-legacy-${kind}-${randomUUID().slice(0, 8)}`;
+        const {prepared} = activationDelivery(true);
+        try {
+            const signup = await userController.registerUserWithSession(accountRegistrationInput(username), req, atomicAccountOptions(req));
+            expect(signup.result.context).toBe(actor.context);
+            const account = await AppDataSource.getRepository(User).findOneByOrFail({username});
+            const activation = await userController.activateAccountWithSession(account.activationToken!, req, activationOptions(req));
+            expect(activation.result.context).toBe(actor.context);
+            const response = preparedResponse();
+            sendPreparedJson(req, response.res, activation.result);
+            expect(response.headers.get('X-Surveyor-Context')).toBe(actor.context);
+            expect(await userService.verifyActivationToken(account.activationToken!)).toBeNull();
+
+            // Neither unchanged-actor operation installs staging, repairs the
+            // partial Session or writes its row merely to deliver confirmation.
+            const after = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+            expect(after.json).toBe(before.json);
+            expect(after.expiredAt).toBe(before.expiredAt);
+            expect(req.session).toBe(original);
+            expect(JSON.stringify(original)).toBe(originalJson);
+        } finally { prepared.mockRestore(); }
+    });
+
+    it('rejects malformed stored authority without clearing provider evidence or writing on admission', async () => {
+        const req = await invalidAdmissionRequest();
+        const original = req.session;
+        const before = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+
+        await expect(captureApiActor(req)).rejects.toMatchObject({code: 'AUTH_REQUIRED'});
+        const after = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+        expect(after.json).toBe(before.json);
+        expect(after.expiredAt).toBe(before.expiredAt);
+        expect(req.session).toBe(original);
+        expect(original.tokens?.id_token).toBe('stored-provider-evidence');
+    });
+
+    it('rejects a changed stored generation without installing it into the middleware Session', async () => {
+        const req = await atomicGuestRequest();
+        req.apiActor = undefined;
+        const original = req.session;
+        const current = JSON.parse(JSON.stringify(original)) as SessionData;
+        current.frontendContext = 'later-server-context';
+        current.frontendCsrfToken = 'later-server-csrf';
+        await AppDataSource.getRepository(Session).update({id: req.sessionID}, {json: JSON.stringify(current)});
+
+        await expect(captureApiActor(req)).rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+        expect(req.session).toBe(original);
+        expect(original.frontendContext).not.toBe(current.frontendContext);
+        expect(await readStoredSession(req.sessionStore, req.sessionID)).toMatchObject({
+            frontendContext: current.frontendContext, frontendCsrfToken: current.frontendCsrfToken,
+        });
+    });
+
+    it('retains stored authority when its actual admission store read fails', async () => {
+        const req = await invalidAdmissionRequest();
+        const before = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+        const failure = new Error('Controlled session-store read failure');
+        const failedRead = vi.spyOn(req.sessionStore, 'get').mockImplementationOnce(function rejectRead(_id, callback) {
+            callback(failure);
+        });
+        try {
+            await expect(captureApiActor(req)).rejects.toBe(failure);
+            const after = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
+            expect(after.json).toBe(before.json);
+            expect(after.expiredAt).toBe(before.expiredAt);
+        } finally { failedRead.mockRestore(); }
+    });
+
+    it('does not reinterpret a recognized metadata-less record as a first session after it disappears', async () => {
+        const req = identityRequest();
+        await persistSession(req.session);
+        Object.assign(req, {headers: {cookie: 'existing-server-cookie'}});
+        await captureApiActor(req);
+        expect(req.apiSessionStored).toBe(true);
+        expect(req.apiActor?.context).toBeNull();
+        await AppDataSource.getRepository(Session).delete({id: req.sessionID});
+        const username = `Retired legacy anonymous ${randomUUID().slice(0, 8)}`;
+
+        await expect(userController.registerGuestWithSession(username, undefined, req, atomicGuestOptions(req)))
+            .rejects.toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+        await expectGuestAbsent(username);
+        expect(await AppDataSource.getRepository(Session).findOneBy({id: req.sessionID})).toBeNull();
+    });
+});
 describe('atomic versioned guest registration', () => {
+    it('creates the first guest, profile, completed session and receipt in one transaction', async () => {
+        const req = await initialIdentityRequest();
+        const original = req.session;
+        const before = JSON.stringify(original);
+        const username = `First guest ${randomUUID().slice(0, 8)}`;
+        expect(await readStoredSession(req.sessionStore, req.sessionID)).toBeUndefined();
+
+        const committed = await userController.registerGuestWithSession(username, undefined, req, atomicGuestOptions(req));
+        const reply = JSON.parse(committed.result.json) as components['schemas']['IdentityResult'];
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        expect(stored?.auth.guest?.username).toBe(username);
+        expect(stored?.profile?.name).toBe(username);
+        expect(reply.session).toMatchObject({kind: 'guest', context: stored!.frontendContext,
+            csrfToken: stored!.frontendCsrfToken, activeProfile: {id: stored!.profile!.id}});
+        expect(req.session).toBe(original);
+        expect(JSON.stringify(original)).toBe(before);
+        expect(committed.session).not.toBe(original);
+    });
+
+    it('leaves no anonymous row or identity rows when first guest result preparation fails', async () => {
+        const req = await initialIdentityRequest();
+        const username = `Rejected first guest ${randomUUID().slice(0, 8)}`;
+        const failure = new Error('Controlled first completion failure');
+        const options = atomicGuestOptions(req);
+        function rejectPreparedResult(): never { throw failure; }
+        options.prepareResult = rejectPreparedResult;
+
+        await expect(userController.registerGuestWithSession(username, undefined, req, options)).rejects.toBe(failure);
+        await expectGuestAbsent(username);
+        expect(await readStoredSession(req.sessionStore, req.sessionID)).toBeUndefined();
+        expect(req.session.auth).toBeUndefined();
+        expect(req.session.frontendContext).toBeUndefined();
+    });
+
     it('commits guest, profile and stored identity together with a prevalidated private receipt', async () => {
         const req = await atomicGuestRequest();
         const original = req.session;
@@ -340,6 +557,24 @@ describe('atomic versioned guest registration', () => {
 });
 
 describe('atomic versioned account registration', () => {
+    it('commits first account signup without initializing or persisting an anonymous session', async () => {
+        const req = await initialIdentityRequest();
+        const original = JSON.stringify(req.session);
+        const username = `first-account-${randomUUID().slice(0, 8)}`;
+        const {prepared, deliver} = activationDelivery(true);
+        try {
+            const committed = await userController.registerUserWithSession(accountRegistrationInput(username), req, atomicAccountOptions(req));
+            expect(JSON.parse(committed.result.json)).toEqual({changed: true, emailDelivery: 'sent'});
+            const account = await AppDataSource.getRepository(User).findOneOrFail({where: {username}, relations: {profiles: true}});
+            expect(account.profiles).toHaveLength(1);
+            expect(account.activationToken).toBeTruthy();
+            expect(await readStoredSession(req.sessionStore, req.sessionID)).toBeUndefined();
+            expect(JSON.stringify(req.session)).toBe(original);
+            expect(committed.result.context).toBeUndefined();
+            expect(deliver).toHaveBeenCalledOnce();
+        } finally { prepared.mockRestore(); }
+    });
+
     it.each([true, false])('commits account/profile/activation together and reports SMTP acceptance %s without changing actor', async accepted => {
         const req = await atomicGuestRequest();
         const original = req.session;
@@ -374,12 +609,12 @@ describe('atomic versioned account registration', () => {
         const username = `invalid-account-${randomUUID().slice(0, 8)}`;
         const {prepared, deliver} = activationDelivery(true);
         const options = atomicAccountOptions(req);
-        function prepareInvalidResult(staged: Request['session']) {
+        function prepareInvalidResult() {
             // Exercise the production generated validator after record/token
             // preparation, without substituting DBAL or transaction behavior.
-            const replies = prepareAccountRegistrationReplies(req, staged);
+            const replies = prepareAccountRegistrationReplies(req);
             const malformed = {changed: 'yes'} as unknown as components['schemas']['RegistrationResult'];
-            const invalid = prepareValidatedJson(req, 'registerAccount', 200, malformed, staged.frontendContext);
+            const invalid = prepareValidatedJson(req, 'registerAccount', 200, malformed);
             return {...replies, sent: invalid};
         }
         options.prepareResult = prepareInvalidResult;
@@ -433,7 +668,7 @@ describe('atomic pilot activation completion', () => {
             // The document adapter writes this same connect-flash shape only on
             // isolated staging; private activation tokens never enter feedback.
             Object.defineProperty(staged, 'flash', {value: {'frontend-pilot': ['auth.activated']}, enumerable: true});
-            return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true}, staged.frontendContext);
+            return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true});
         }
         options.prepareResult = prepareDocumentCompletion;
         const committed = await userController.activateAccountWithSession(token, req, options);
@@ -462,7 +697,7 @@ describe('atomic pilot activation completion', () => {
         const originalJson = JSON.stringify(req.session);
         const options = activationOptions(req, true);
         function prepareUnserializableCompletion(staged: Request['session']) {
-            const reply = prepareValidatedJson(req, 'activateIdentity', 200, {changed: true}, staged.frontendContext);
+            const reply = prepareValidatedJson(req, 'activateIdentity', 200, {changed: true});
             Object.defineProperty(staged, 'serializationCycle', {value: staged, enumerable: true});
             return reply;
         }
@@ -496,6 +731,47 @@ describe('atomic pilot activation completion', () => {
 });
 
 describe('atomic ordinary pilot identity completion', () => {
+    it('creates its first account session only after credentials and prepared identity completion succeed', async () => {
+        const account = await registerLocalAccount('first-account-login');
+        await userService.activateUser(account.id);
+        const req = await initialIdentityRequest();
+        const original = JSON.stringify(req.session);
+        function prepareResult(staged: Request['session']) {
+            return prepareIdentityReply(req, staged, 'loginIdentity');
+        }
+        const options: IdentityCompletionOptions<PreparedApiJsonResponse> = {context: null, prepareResult};
+
+        // A rejected explicit action must not leave an anonymous bootstrap row.
+        await expect(userController.loginUserWithSession({username: account.username, password: 'incorrect'}, req, options)).rejects.toBeDefined();
+        expect(await readStoredSession(req.sessionStore, req.sessionID)).toBeUndefined();
+        expect(JSON.stringify(req.session)).toBe(original);
+
+        const committed = await userController.loginUserWithSession({username: account.username, password: 'initial-secret'}, req, options);
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        expect(stored?.auth.user?.id).toBe(account.id);
+        expect(JSON.parse(committed.result.json).session).toMatchObject({kind: 'account',
+            context: stored!.frontendContext, csrfToken: stored!.frontendCsrfToken});
+        expect(JSON.stringify(req.session)).toBe(original);
+    });
+
+    it('accepts a validated legacy context under the lock and rotates ordinary stored metadata on profile selection', async () => {
+        const {req, run, options} = await ordinaryIdentityFixture('profile');
+        delete req.session.frontendContext;
+        delete req.session.frontendCsrfToken;
+        await persistSession(req.session);
+        req.apiActor = undefined;
+        const actor = await captureApiActor(req);
+        expect(actor.context).toBeTruthy();
+        expect(req.session.frontendContext).toBeUndefined();
+
+        const committed = await run({...options, context: actor.context});
+        const stored = await readStoredSession(req.sessionStore, req.sessionID);
+        expect(stored?.frontendContext).toBeTruthy();
+        expect(stored?.frontendContext).not.toBe(actor.context);
+        expect(JSON.parse(committed.result.json).session.context).toBe(stored!.frontendContext);
+        expect(req.session.frontendContext).toBeUndefined();
+    });
+
     it.each(['account', 'guest', 'profile'] as const)('rolls back %s authority when its generated completion rejects after inner deferred save', async kind => {
         const {req, options, run, operation} = await ordinaryIdentityFixture(kind);
         const original = req.session;
@@ -663,8 +939,8 @@ describe('atomic pilot password-reset consumption', () => {
         const first = await atomicGuestRequest();
         const second = await atomicGuestRequest();
         function options(req: Request): IdentityCompletionOptions<PreparedApiJsonResponse> {
-            function prepareResult(staged: Request['session']) {
-                return prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true}, staged.frontendContext);
+            function prepareResult() {
+                return prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true});
             }
             return {context: req.apiActor!.context, prepareResult};
         }
@@ -690,7 +966,7 @@ describe('atomic pilot password-reset consumption', () => {
         const req = await atomicGuestRequest();
         const originalJson = JSON.stringify(req.session);
         const response = preparedResponse();
-        function prepareInvalidReply(staged: Request['session']) {
+        function prepareInvalidReply() {
             const result: components['schemas']['MutationResult'] = {changed: true};
             // The real generated validator admits the ordinary wire fields. A
             // non-enumerable serializer fault then proves output preparation still
@@ -698,7 +974,7 @@ describe('atomic pilot password-reset consumption', () => {
             Object.defineProperty(result, 'toJSON', {value: function rejectSerialization(): never {
                 throw new TypeError('Reset completion serialization failed');
             }});
-            return prepareValidatedJson(req, 'resetAccountPassword', 200, result, staged.frontendContext);
+            return prepareValidatedJson(req, 'resetAccountPassword', 200, result);
         }
         // Capture only the error so an unexpected fulfilled receipt cannot print
         // its private capability URL in the assertion output.
@@ -721,8 +997,8 @@ describe('atomic pilot password-reset consumption', () => {
         const original = req.session;
         const before = await AppDataSource.getRepository(Session).findOneByOrFail({id: req.sessionID});
         const response = preparedResponse();
-        function prepareReply(staged: Request['session']) {
-            return prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true}, staged.frontendContext);
+        function prepareReply() {
+            return prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true});
         }
         const committed = await userController.resetPasswordWithSession(token,
             {password: 'confirmed-reset-secret', confirmPassword: 'confirmed-reset-secret'}, req,
@@ -766,8 +1042,8 @@ describe('atomic pilot password-reset mail preparation', () => {
         const req = await atomicGuestRequest();
         const failedSetup = new Error('Controlled SMTP setup failure');
         const create = vi.spyOn(nodemailer, 'createTransport').mockImplementation(function failSetup(): never { throw failedSetup; });
-        function prepareReply(staged: Request['session']) {
-            return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true}, staged.frontendContext);
+        function prepareReply() {
+            return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true});
         }
         try {
             await expect(userController.requestPasswordResetWithSession(account.username, req,
@@ -787,8 +1063,8 @@ describe('atomic pilot password-reset mail preparation', () => {
         const unknown = await atomicGuestRequest();
         const known = await atomicGuestRequest();
         function options(req: Request): IdentityCompletionOptions<PreparedApiJsonResponse> {
-            function prepareResult(staged: Request['session']) {
-                return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true}, staged.frontendContext);
+            function prepareResult() {
+                return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true});
             }
             return {frontend: true, context: req.apiActor!.context, prepareResult};
         }
@@ -823,8 +1099,8 @@ describe('atomic pilot password-reset mail preparation', () => {
             prepare(recipient, link);
             return {deliver: delivery};
         });
-        function prepareReply(staged: Request['session']) {
-            return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true}, staged.frontendContext);
+        function prepareReply() {
+            return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true});
         }
         try {
             const committed = await userController.requestPasswordResetWithSession(account.username, req,
@@ -838,22 +1114,26 @@ describe('atomic pilot password-reset mail preparation', () => {
 });
 
 describe('authentication user stories', () => {
-    it('reloads stored authority and discards uncommitted completion feedback when an identity save fails', async () => {
+    it('preserves the original Session and discards staged completion feedback when identity persistence fails', async () => {
         const {id, username} = await registerLocalAccount('frontend-failed-identity-save');
         await userService.activateUser(id);
         const req = await atomicGuestRequest();
-        /** Model pending session feedback and fail the actual store JSON writer. */
-        async function prepareFailingSave(): Promise<void> {
-            Object.defineProperty(req.session, 'flash', {value: {
+        req.apiActor = undefined;
+        await captureApiActor(req);
+        /** Prepare the real account result, then fail only the staged store JSON write. */
+        function prepareFailingSave(staged: Request['session']): PreparedApiJsonResponse {
+            const result = prepareIdentityReply(req, staged, 'loginIdentity');
+            Object.defineProperty(staged, 'flash', {value: {
                 'frontend-pilot-notice': [JSON.stringify({kind: 'success', messageKey: 'auth.loginDone'})],
             }, enumerable: true});
-            Object.defineProperty(req.session, 'serializationCycle', {value: req.session, enumerable: true});
+            Object.defineProperty(staged, 'serializationCycle', {value: staged, enumerable: true});
+            return result;
         }
-        await expect(userController.loginUser({username, password: 'initial-secret'}, req.session,
-            {beforeTransition: prepareFailingSave})).rejects.toBeInstanceOf(TypeError);
+        await expect(userController.loginUserWithSession({username, password: 'initial-secret'}, req,
+            {context: req.apiActor!.context, prepareResult: prepareFailingSave})).rejects.toBeInstanceOf(TypeError);
 
-        // Fresh admission reloads stored authority before consuming feedback.
-        // A failed earlier save must not turn in-memory identity into evidence.
+        // Explicit completion staging protects the original middleware Session;
+        // ordinary read-only admission never needs to repair or reload it afterward.
         req.apiActor = undefined;
         const reloaded = await sessionView(req);
         expect(reloaded.kind).toBe('anonymous');

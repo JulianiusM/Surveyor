@@ -6,6 +6,13 @@ import vue from '@vitejs/plugin-vue';
 // Windows; the per-worker value below also keeps that contract explicit.
 process.env.TZ = 'UTC';
 
+// Genuine server-component integration without persistence belongs to the
+// database-free project only. One inventory drives both project selections.
+const databaseFreeIntegrationFiles = [
+    'tests/integration/frontend-development-runtime.spec.ts',
+    'tests/integration/frontend-session-admission.spec.ts',
+];
+
 export default defineConfig({
     plugins: [vue()],
     test: {
@@ -33,7 +40,7 @@ export default defineConfig({
                 test: {
                     name: 'database-free',
                     include: ['tests/unit/**/*.spec.ts', 'tests/frontend/**/*.spec.ts',
-                        'tests/integration/frontend-development-runtime.spec.ts'],
+                        ...databaseFreeIntegrationFiles],
                     // Real-browser client fixtures share this layer's directory but
                     // run through their own Playwright configuration and built assets.
                     exclude: ['tests/frontend/browser/**'],
@@ -48,9 +55,9 @@ export default defineConfig({
                     include: ['tests/integration/**/*.spec.ts'],
                     // The explicitly selected source-runtime browser integration
                     // uses its existing owned server/schema, rather than this resetter.
-                    // Actual server-infrastructure integration needs no ORM schema.
-                    // Its exact file stays in the database-free project above.
-                    exclude: ['tests/integration/browser/**', 'tests/integration/frontend-development-runtime.spec.ts'],
+                    // These server-infrastructure fixtures need no ORM schema.
+                    // Their exact files stay in the database-free project above.
+                    exclude: ['tests/integration/browser/**', ...databaseFreeIntegrationFiles],
                     // Every file rebuilds the same disposable schema. This project
                     // must own a single worker, after the independent files finish;
                     // no suite may reset rows while another suite uses them.

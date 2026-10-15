@@ -22,7 +22,7 @@ test.afterEach(async ({page}) => {
  * resource or database connection. They prove browser delivery/recovery, never
  * controller admission or persistence. The real built SSR/entry owns rendering. */
 function startupSession(locale: Session['locale'] = 'en'): Session {
-    return {kind: 'anonymous', context: 'startup-browser-context-1234567890', csrfToken: 'startup-browser-csrf-1234567890',
+    return {kind: 'anonymous', context: null, csrfToken: null,
         locale, activeProfile: null, profiles: [], loginUrl: '/users/login', logoutUrl: null,
         deployment: {buildId: 'startup-browser-fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
         shell: {version: 'startup-fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
@@ -113,7 +113,7 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendPilo
         else if (pathname === '/api/v1/packing-lists/create-entry' && bootstrap.packingCreateContext)
             data = {entry: {kind: 'render'}, context: bootstrap.packingCreateContext, selectedEvent: null};
         if (data !== undefined) {
-            await route.fulfill({status: 200, contentType: 'application/json', headers: {
+            await route.fulfill({status: 200, contentType: 'application/json', headers: bootstrap.session.context === null ? {} : {
                 'X-Surveyor-Context': bootstrap.session.context}, body: JSON.stringify(data)});
             return;
         }
@@ -296,7 +296,7 @@ test('a hydrated Packing denial retains its static document through a detected r
     // browser context observes that release after a mounted denial has retired
     // bootstrap; this exercises the lifecycle an unmounted route test cannot.
     await page.route('**/api/v1/session', async function deliverReplacementSession(route): Promise<void> {
-        await route.fulfill({status: 200, contentType: 'application/json', headers: {
+        await route.fulfill({status: 200, contentType: 'application/json', headers: session.context === null ? {} : {
             'X-Surveyor-Context': session.context}, body: JSON.stringify({...session,
                 deployment: {...session.deployment, buildId: 'mounted-denial-replacement'}})});
     });

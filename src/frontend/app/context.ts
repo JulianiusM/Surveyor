@@ -160,6 +160,8 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         return [...identityGuards].every(guard => guard());
     }
 
+    /** Capture server-projected evidence without inventing an anonymous visitor.
+     * A null pair still has this app's ordinary epoch/route/draft lifetimes. */
     function capture(): PilotRequestScope {
         return {context: session.value.context, csrfToken: session.value.csrfToken,
             locale: locale.value, epoch: epoch.value};

@@ -1,5 +1,4 @@
 import type {Request, Response} from 'express';
-import type {EntityManager} from 'typeorm';
 import {timingSafeEqual} from 'node:crypto';
 import {version} from '../../../package.json';
 import type {ApiActor} from '../../types/ApiTypes';
@@ -8,13 +7,14 @@ import type {RegistrationEmailDelivery} from '../../types/IdentityTypes';
 import type {PreparedApiJsonResponse} from '../../types/ApiTransportTypes';
 import {prepareValidatedJson} from './transport';
 import * as userService from '../database/services/UserService';
-import {ensureFrontendSessionContext, rotateFrontendSessionContext} from '../lib/frontendSession';
-import {persistSession} from '../lib/session';
+import {readFrontendSessionMetadata, sameFrontendSessionIdentity} from '../lib/frontendSession';
+import {readStoredSession} from '../lib/session';
 import {ApiProblem, requestLocale} from './problem';
 import settings from '../settings';
 import {compatibleApiClient, deploymentView} from './deployment';
 
-function sameToken(left: string | undefined, right: string | undefined): boolean {
+/** Compare submitted tokens without making their contents authorization evidence. */
+function sameToken(left: string | undefined, right: string | null | undefined): boolean {
     if (!left || !right) return false;
     const leftBytes = Buffer.from(left);
     const rightBytes = Buffer.from(right);
@@ -22,62 +22,61 @@ function sameToken(left: string | undefined, right: string | undefined): boolean
 }
 
 /**
- * Reload the authoritative store before admitting a request. Express may have loaded its session
- * before another tab finished switching profiles. Once admitted, the returned actor stays fixed.
+ * Check current stored generation without changing Express's request Session.
+ * A delayed request must reject changed authority rather than install a newer
+ * snapshot that Express would subsequently write back at response completion.
  */
-async function reloadSession(req: Request): Promise<void> {
-    if (!req.session.auth && !req.session.frontendContext) return;
-    await new Promise<void>(function reloadStoredSession(resolve, reject) {
-        req.sessionStore.get(req.sessionID, function finishSessionReload(error, stored) {
-            // An unavailable store is an operational error, not proof that an account
-            // expired. Preserve that error rather than logging out a valid identity.
-            if (error) return reject(error);
-            if (!stored) return reject(new ApiProblem('AUTH_REQUIRED'));
-            // Use Express Session's reload boundary directly. A single store read
-            // distinguishes absence from failure without a racing preliminary probe.
-            req.sessionStore.createSession(req, stored);
-            resolve();
-        });
-    });
-}
+async function checkStoredAdmission(req: Request): Promise<void> {
+    const session = req.session;
+    const recognized = Boolean(session.auth || session.profile || session.tokens || session.oidc
+        || session.frontendContext || session.frontendCsrfToken);
 
-async function clearInvalidIdentity(req: Request, preserveForNativeLogout: boolean): Promise<never> {
-    // Documents must run OIDC logout before token evidence is discarded. APIs retain
-    // their structured expiry response and clear invalid authority immediately.
-    if (preserveForNativeLogout) throw new ApiProblem('AUTH_REQUIRED');
-    req.session.auth = undefined;
-    req.session.profile = undefined;
-    req.session.tokens = undefined;
-    rotateFrontendSessionContext(req.session);
-    await persistSession(req.session);
-    throw new ApiProblem('AUTH_REQUIRED');
+    // Cookie-free, empty middleware sessions are already uninitialized server
+    // candidates. Ordinary anonymous visits need neither another read nor a row.
+    if (!recognized && !req.headers?.cookie) {
+        req.apiSessionStored = false;
+        return;
+    }
+
+    // Operational store failures propagate unchanged. An already recognized
+    // identity/context cannot become a new anonymous candidate after expiry.
+    const stored = await readStoredSession(req.sessionStore, req.sessionID);
+    req.apiSessionStored = Boolean(stored);
+    if (!stored) {
+        if (recognized) throw new ApiProblem('AUTH_REQUIRED');
+        return;
+    }
+    if (!sameFrontendSessionIdentity(session, stored)) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
 }
 
 /** Hydrate audience relations explicitly, never infer identity from an optional serialized ORM relation. */
-export async function captureApiActor(req: Request, preserveForNativeLogout = false): Promise<ApiActor> {
+export async function captureApiActor(req: Request): Promise<ApiActor> {
     if (req.apiActor) return req.apiActor;
 
-    // Refresh once, then keep this request's context and identity evidence fixed.
-    await reloadSession(req);
-    if (ensureFrontendSessionContext(req.session)) await persistSession(req.session);
-    const context = req.session.frontendContext!;
-    const auth = req.session.auth;
-    if (auth?.user && auth?.guest) return clearInvalidIdentity(req, preserveForNativeLogout);
+    // Express already loaded this server-owned session. A second store check can
+    // reject stale authority, but never replaces or mutates its lifecycle object.
+    await checkStoredAdmission(req);
+    const session = req.session;
+    const auth = session.auth;
+    if (auth?.user && auth?.guest) throw new ApiProblem('AUTH_REQUIRED');
 
     // Load the explicit account/guest/profile relations before checking ownership.
     // Their presence in a serialized session alone is not authoritative evidence.
     const user = auth?.user ? await userService.getUserById(auth.user.id) : null;
     const guest = auth?.guest ? await userService.getGuestInternal(auth.guest.id) : null;
-    const profile = req.session.profile ? await userService.getProfileById(req.session.profile.id) : null;
-    if ((auth?.user && !user) || (auth?.guest && !guest) || (req.session.profile && !profile)) return clearInvalidIdentity(req, preserveForNativeLogout);
-    if (profile && ((!user && !guest) || (user && profile.userId !== user.id) || (guest && profile.guestId !== guest.id))) return clearInvalidIdentity(req, preserveForNativeLogout);
+    const profile = session.profile ? await userService.getProfileById(session.profile.id) : null;
+    if ((auth?.user && !user) || (auth?.guest && !guest) || (session.profile && !profile)) throw new ApiProblem('AUTH_REQUIRED');
+    if (profile && ((!user && !guest) || (user && profile.userId !== user.id) || (guest && profile.guestId !== guest.id))) throw new ApiProblem('AUTH_REQUIRED');
 
     if (profile) {
         profile.user = user;
         profile.guest = guest;
     }
 
-    const actor: ApiActor = {context, auth: user || guest ? {user, guest} : undefined, profile};
+    // Hydrated relations belong only to this plain actor. Do not assign them to
+    // the stored Session or incidentally dirty its serialized ORM graph on GET.
+    const metadata = readFrontendSessionMetadata(session, req.sessionID);
+    const actor: ApiActor = {context: metadata.context, auth: user || guest ? {user, guest} : undefined, profile};
     req.apiActor = actor;
     return actor;
 }
@@ -111,27 +110,58 @@ interface ContextEvidence {
     compatibility?: string;
 }
 
+/** Verify browser request origin without interpreting any header as identity or permission. */
+function requireRequestOrigin(req: Request, requireEvidence: boolean): void {
+    // Configuration supplies the public origin even behind a proxy. Neither an
+    // arbitrary Host nor client-supplied forwarded headers select the allowlist.
+    const expectedOrigin = new URL(settings.value.rootUrl).origin;
+    const fetchSite = req.get('Sec-Fetch-Site');
+    const origin = req.get('Origin');
+    if ((fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') || (origin && origin !== expectedOrigin)) {
+        throw new ApiProblem('CSRF_INVALID');
+    }
+
+    // A token-free anonymous command needs affirmative browser evidence. Older
+    // clients without Fetch Metadata must supply the matching Origin instead;
+    // `none`, missing headers and an opaque `null` origin never prove that alone.
+    if (requireEvidence && fetchSite !== 'same-origin' && origin !== expectedOrigin) throw new ApiProblem('CSRF_INVALID');
+}
+
 /** Share admission for header and form transports without changing either business workflow. */
 async function requireContextEvidence(req: Request, res: Response, requireProfile: boolean,
     evidence: ContextEvidence): Promise<ApiActor> {
-    // Capture once after authoritative store reload. Later workflow failures must
+    // Capture once after the read-only stored generation check. Later workflow failures must
     // not be reinterpreted by validating an already changed/deleted identity again.
     const actor = await captureApiActor(req);
-    res.set('X-Surveyor-Context', actor.context);
+    if (actor.context) res.set('X-Surveyor-Context', actor.context);
     if (requireProfile && (!actor.profile || !(actor.auth?.user || actor.auth?.guest))) throw new ApiProblem('AUTH_REQUIRED');
 
     const suppliedContext = evidence.context;
-    if (!suppliedContext) throw new ApiProblem('CONTEXT_REQUIRED');
-    if (!sameToken(suppliedContext, actor.context)) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
+    if (actor.context && !suppliedContext) throw new ApiProblem('CONTEXT_REQUIRED');
+    if (suppliedContext && !sameToken(suppliedContext, actor.context)) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
 
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
         // Reject an incompatible loaded client before controller admission or any side effect.
         if (!compatibleApiClient(evidence.compatibility)) throw new ApiProblem('CLIENT_UPDATE_REQUIRED');
-        const fetchSite = req.get('Sec-Fetch-Site');
-        const origin = req.get('Origin');
-        const expectedOrigin = `${req.protocol}://${req.get('host')}`;
-        if ((fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') || (origin && origin !== expectedOrigin)
-            || !sameToken(evidence.csrf, req.session.frontendCsrfToken)) throw new ApiProblem('CSRF_INVALID');
+        requireRequestOrigin(req, actor.context === null);
+        if (actor.context) {
+            // Both stored and read-only legacy metadata are bound to this exact
+            // server session. Omitting browser fields cannot select anonymous admission.
+            const metadata = readFrontendSessionMetadata(req.session, req.sessionID);
+            if (!sameToken(evidence.csrf, metadata.csrfToken)) throw new ApiProblem('CSRF_INVALID');
+        } else {
+            // The required compatibility header is also a non-simple browser
+            // header: an untrusted origin cannot attach it without CORS approval.
+            // This proof applies only to browser CSRF; controllers still decide grants.
+            const compatibilityHeader = req.get('X-Surveyor-Api-Compatibility');
+            if (!compatibilityHeader || !compatibleApiClient(compatibilityHeader)) throw new ApiProblem('CSRF_INVALID');
+            const contentType = req.get('Content-Type')?.split(';', 1)[0]?.trim().toLowerCase();
+            if (contentType && contentType !== 'application/json' && contentType !== 'multipart/form-data') {
+                throw new ApiProblem('UNSUPPORTED_MEDIA_TYPE');
+            }
+            // The generated operation validator subsequently admits its exact
+            // JSON/multipart/no-body contract before any controller operation.
+        }
     }
     return actor;
 }
@@ -142,21 +172,12 @@ export async function sessionView(req: Request): Promise<components['schemas']['
     const profiles = actor.auth?.user ? await userService.getProfilesForUser(actor.auth.user.id)
         : actor.profile ? [actor.profile] : [];
 
-    return projectSessionView(actor, req.session.frontendCsrfToken!, requestLocale(req), profiles);
-}
-
-/** Project an actor-preserving completion from admitted authority and manager-bound roster reads. */
-export async function stagedSessionView(req: Request, staged: Request['session'], manager: EntityManager): Promise<components['schemas']['SessionView']> {
-    // The enclosing controller locked/rechecked this exact context. Reuse its
-    // already validated actor instead of reloading the globally mutable store.
-    const actor = req.apiActor!;
-    const profiles = actor.auth?.user ? await userService.getProfilesForUser(actor.auth.user.id, manager)
-        : actor.profile ? [actor.profile] : [];
-    return projectSessionView({...actor, context: staged.frontendContext!}, staged.frontendCsrfToken!, requestLocale(req), profiles);
+    const metadata = readFrontendSessionMetadata(req.session, req.sessionID);
+    return projectSessionView(actor, metadata.csrfToken, requestLocale(req), profiles);
 }
 
 /** Project explicit admitted session evidence without reading a mutable store or serializing ORM objects. */
-export function projectSessionView(actor: ApiActor, csrfToken: string, locale: string,
+export function projectSessionView(actor: ApiActor, csrfToken: string | null, locale: string,
     profiles: NonNullable<ApiActor['profile']>[]): components['schemas']['SessionView'] {
     // Admission/transaction owners supply these rows and the corresponding token.
     // This common projection selects only browser-needed identity and shell data.
@@ -193,10 +214,13 @@ function transitionSessionView(req: Request, staged: Request['session']): compon
     const auth = staged.auth;
     const account = auth?.user && req.apiActor?.auth?.user?.id === auth.user.id
         ? req.apiActor.auth.user : auth?.user;
-    const actor: ApiActor = {context: staged.frontendContext!, auth: auth ? {user: account, guest: auth.guest} : undefined,
+    // An explicit transition owns a freshly rotated stored generation. Project
+    // its actual fields: legacy read compatibility must not repair malformed
+    // staged metadata or acknowledge values different from the impending write.
+    const actor: ApiActor = {context: staged.frontendContext ?? null, auth: auth ? {user: account, guest: auth.guest} : undefined,
         profile: staged.profile};
     const profiles = account?.profiles ?? (actor.profile ? [actor.profile] : []);
-    return projectSessionView(actor, staged.frontendCsrfToken!, requestLocale(req), profiles);
+    return projectSessionView(actor, staged.frontendCsrfToken ?? null, requestLocale(req), profiles);
 }
 
 /** Prepare ordinary identity confirmation before its sole locked session write and commit. */
@@ -231,14 +255,15 @@ export function prepareGuestIdentityReplies(req: Request, staged: Request['sessi
 }
 
 /** Prepare signup delivery variants without exposing an activation token/link or changing the actor. */
-export function prepareAccountRegistrationReplies(req: Request, staged: Request['session']):
+export function prepareAccountRegistrationReplies(req: Request):
     Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {
     // Signup returns only creation/delivery confirmation. Its captured context
-    // is unchanged; private activation material remains inside the email owner.
+    // is unchanged, including a read-only derived legacy generation. Raw partial
+    // stored metadata is not this actor's scope. Activation material stays private.
     const result: components['schemas']['RegistrationResult'] = {changed: true};
     return Object.freeze({
-        'not-requested': prepareValidatedJson(req, 'registerAccount', 200, result, staged.frontendContext),
-        sent: prepareValidatedJson(req, 'registerAccount', 200, {...result, emailDelivery: 'sent'}, staged.frontendContext),
-        failed: prepareValidatedJson(req, 'registerAccount', 200, {...result, emailDelivery: 'failed'}, staged.frontendContext),
+        'not-requested': prepareValidatedJson(req, 'registerAccount', 200, result),
+        sent: prepareValidatedJson(req, 'registerAccount', 200, {...result, emailDelivery: 'sent'}),
+        failed: prepareValidatedJson(req, 'registerAccount', 200, {...result, emailDelivery: 'failed'}),
     });
 }

@@ -33,7 +33,8 @@ const publicPreviewOwners = new Set(['src/types/api/', 'src/types/LocalizationTy
     'src/frontend/styles/style.sass', 'src/frontend/styles/accordion.sass',
     'src/frontend/styles/timezone-select.sass', 'src/frontend/styles/help.sass',
     'src/modules/localization/generated/', 'scripts/package-documentation.mjs',
-    'tests/integration/frontend-development-runtime.spec.ts']);
+    'tests/integration/frontend-development-runtime.spec.ts',
+    'tests/integration/frontend-session-admission.spec.ts']);
 const publicEnvironmentTemplates = new Set(['.env.e2e.example', 'tests/.env.test.example']);
 const loadedEngineFiles = [fileURLToPath(import.meta.url), path.resolve(toolDirectory, '../../scripts/check-documentation.mjs')];
 const loadedEngineDigests = loadedEngineFiles.map(function identifyLoadedEngine(filename) {

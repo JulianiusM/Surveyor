@@ -65,12 +65,14 @@ export function writeStoredSession(store: Pick<TypeormStore, 'set'>, sessionId: 
  * After committed adoption, save acknowledges that durable write instead of
  * overwriting a later actor. Express still renews the response cookie normally.
  */
-export function stageIdentitySession(req: Request, stored: SessionData): Request['session'] {
+export function stageIdentitySession(req: Request, stored: Pick<SessionData, 'cookie'> & Partial<SessionData>): Request['session'] {
     // createSession only constructs the Cookie/Session objects. Its detached
     // request keeps the original response's authority untouched during rollback.
-    const stagedRequest = {sessionID: req.sessionID, sessionStore: req.sessionStore} as Request;
-    req.sessionStore.createSession(stagedRequest, stored);
-    const staged = stagedRequest.session;
+    const detachedRequest = {sessionID: req.sessionID, sessionStore: req.sessionStore} as Request;
+    // Isolate nested values as well: rollback must not change the middleware's
+    // original cookie, identity or flash through an aliased stored object.
+    req.sessionStore.createSession(detachedRequest, JSON.parse(JSON.stringify(stored)) as SessionData);
+    const staged = detachedRequest.session;
 
     /** Defer inner persistence before commit; acknowledge the owner's write after adopted completion. */
     function deferOwnedSave(callback?: (error?: unknown) => void): Request['session'] {

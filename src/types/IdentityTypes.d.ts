@@ -29,7 +29,7 @@ export type RegistrationEmailDelivery = components['schemas']['EmailDelivery'];
 
 /** A controller receives the captured context, never a profile/context selected by posted fields. */
 export interface IdentityTransactionOptions extends IdentityLinkOptions {
-    context: string;
+    context: string | null;
 }
 
 /** Prepare every possible delivery receipt while the guest/profile/session transaction can still roll back. */

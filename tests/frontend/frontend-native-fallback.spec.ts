@@ -33,8 +33,35 @@ describe('admitted initial document delivery', () => {
             import('../../src/frontend/features/packing/PackingEntry.vue'),
             import('../../src/frontend/features/identity/IdentityPage.vue'),
             import('../../src/frontend/features/overview/OverviewPage.vue'),
+            import('../../src/frontend/features/help/HelpPage.vue'),
         ]);
     }, 60_000);
+
+    it('renders initial public Help and first login with no stored anonymous evidence or self HTTP', async () => {
+        const fetch = vi.fn(() => { throw new Error('SSR must render admitted request data without self HTTP'); });
+        vi.stubGlobal('fetch', fetch);
+        const initial: components['schemas']['SessionView'] = {...session, context: null, csrfToken: null};
+        const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Public Help', content: '<p>Read this task.</p>',
+            currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
+
+        // Public content stays server-rendered. A null pair describes absence of
+        // stored evidence, rather than a missing bootstrap or an unreadable shell.
+        const publicResult = await render('/frontend-pilot/help', {session: initial, help});
+        const publicDocument = new DOMParser().parseFromString(publicResult.html, 'text/html');
+        expect(publicDocument.querySelector('main article')?.textContent).toContain('Read this task.');
+        expect(JSON.parse(publicResult.state).session).toMatchObject({context: null, csrfToken: null});
+        expect(publicResult.javascriptRequired).toBe(false);
+
+        // Identity input retains its existing initialization disclosure; no new
+        // frontend bootstrap or anonymous session is required before showing it.
+        const loginResult = await render('/frontend-pilot/users/login', {session: initial});
+        const loginDocument = new DOMParser().parseFromString(loginResult.html, 'text/html');
+        expect(loginDocument.querySelector('[data-pilot-initial-loading]')).not.toBeNull();
+        expect(loginDocument.querySelector('main form')).toBeNull();
+        expect(JSON.parse(loginResult.state).session).toMatchObject({context: null, csrfToken: null});
+        expect(loginResult.javascriptRequired).toBe(true);
+        expect(fetch).not.toHaveBeenCalled();
+    });
 
     it('retains the server-admitted event while withholding creation controls during SSR', async () => {
         const fetch = vi.fn(() => {throw new Error('SSR must retain server-owned initial selection');});

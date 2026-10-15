@@ -98,7 +98,7 @@ function validateCommonPage(value: unknown): boolean {
  * are checked again by the context/view owner; only known parameter-free labels can render. */
 function validateCompletion(value: unknown): boolean {
     if (!isRecord(value)) return false;
-    return Object.keys(value).length === 4 && typeof value.context === 'string'
+    return Object.keys(value).length === 4 && (value.context === null || typeof value.context === 'string')
         && typeof value.destination === 'string' && isPlainMessageKey(value.messageKey)
         && (value.kind === 'success' || value.kind === 'info');
 }

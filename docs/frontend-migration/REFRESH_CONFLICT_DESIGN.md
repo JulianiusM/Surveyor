@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: dynamic-page-only automatic document reload and confirmed-command follow-up boundaries reconciled with scoped client/build verification in paired review; query/draft/privacy contracts and deferred domain targets retained
+verification-scope: stateless anonymous epoch versus stored actor context clarified alongside retained refresh/draft boundaries; repair execution remains in paired review; no new concurrency guarantee
 source-anchors: src/frontend/app/context.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/overview/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
 next-review: next-refresh-migration-or-authorized-cutover
 -->
@@ -138,7 +138,11 @@ existing source scopes/receipts rather than a second server-count store, and nev
 
 ## Identity changes and multiple tabs
 
-Server session context and browser epoch jointly bind reads/commands to captured actors.
+Server session context and browser epoch jointly bind reads/commands to captured actors where identity exists.
+The [Oct15 session-ownership amendment](FRONTEND_FOUNDATION_DESIGN.md#session-ownership-restoration-and-stateless-initial-visits-2026-10-15)
+removes mandatory anonymous initialization: sessionless projections use null metadata and only the app-local epoch
+for late-result/cache lifetimes. That epoch is not server authority. A changed cookie with stored context still
+requires matching server evidence; omitted fields cannot turn its current identity into an anonymous actor.
 Login/logout/profile/guest transitions rotate context. Before an intentional switch, resolve dirty/pending work,
 retire old scope, bootstrap the new context and then admit queries.
 

@@ -5,6 +5,7 @@ import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
 import {createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 
 /** Exercise cookie/session admission through the built application, without a test-only identity shortcut. */
 async function bootstrap(request: APIRequestContext): Promise<components['schemas']['SessionView']> {
@@ -13,14 +14,25 @@ async function bootstrap(request: APIRequestContext): Promise<components['schema
     expect(response.headers()['content-type']).toContain('application/json');
     expect(response.headers()['cache-control']).toContain('no-store');
     const body = await response.json() as components['schemas']['SessionView'];
-    expect(body.context).toBeTruthy();
-    expect(body.csrfToken).toBeTruthy();
-    expect(response.headers()['x-surveyor-context']).toBe(body.context);
+    if (body.context === null) {
+        expect(body.kind).toBe('anonymous');
+        expect(body.csrfToken).toBeNull();
+    } else {
+        expect(body.context).toBeTruthy();
+        expect(body.csrfToken).toBeTruthy();
+    }
+    expect(response.headers()['x-surveyor-context']).toBe(body.context ?? undefined);
     return body;
 }
 
+/** Reproduce browser mutation protections while preserving absent initial session evidence. */
 function headersFor(session: components['schemas']['SessionView']): Record<string, string> {
-    return {'X-Surveyor-Context': session.context, 'X-CSRF-Token': session.csrfToken};
+    const baseUrl = test.info().project.use.baseURL;
+    if (!baseUrl) throw new Error('The built API fixture requires its configured application origin.');
+    // Sessionless requests use the same origin/custom-header protections as the
+    // client. Only actual stored evidence becomes context/CSRF request headers.
+    return {Origin: new URL(baseUrl).origin, 'X-Surveyor-Api-Compatibility': apiCompatibility,
+        ...(session.context === null ? {} : {'X-Surveyor-Context': session.context, 'X-CSRF-Token': session.csrfToken})};
 }
 
 /** Run inside the browser against detached response documents. The native alert
@@ -490,6 +502,10 @@ test('runs the native expiry/logout document journey before invalid stored ident
         expect(await expiryPage.text()).toContain('Session has expired');
         expect((await bootstrap(documentContext.request)).kind).toBe('anonymous');
         await expectProblem(await apiContext.request.get('/api/v1/session'), 401, 'AUTH_REQUIRED');
+        // API admission is read-only, including invalid stored identity. The
+        // existing native logout owner deliberately clears it before reuse.
+        await expectProblem(await apiContext.request.get('/api/v1/session'), 401, 'AUTH_REQUIRED');
+        expect((await apiContext.request.get('/users/logout', {maxRedirects: 0})).status()).toBe(302);
         expect((await bootstrap(apiContext.request)).kind).toBe('anonymous');
     } finally {
         await documentContext.close();
@@ -578,6 +594,34 @@ test('keeps native Help path aliases authoritative while retaining authored pilo
     await expectProblem(await request.get('/api/v1/help', {params: {doc: missing}, headers: headersFor(current)}), 404, 'NOT_FOUND');
 });
 
+test('keeps initial public documents and API reads free of anonymous session cookies', async ({request, browser, baseURL}) => {
+    await loginForE2E(request, createE2ELogin());
+    const list = await createApiPackingList(request);
+    const visitor = await browser.newContext({baseURL});
+    try {
+        // These are the real built routes and database-backed public grants. No
+        // intercepted bootstrap, prepared session row or native render precedes them.
+        expect((await visitor.storageState()).cookies).toEqual([]);
+        const initial = await bootstrap(visitor.request);
+        expect(initial).toMatchObject({kind: 'anonymous', context: null, csrfToken: null});
+        for (const path of ['/api/v1/session', '/api/v1/help', `/api/v1/packing-lists/${list.id}/guest`,
+            '/frontend-pilot/home', '/frontend-pilot/help', `/frontend-pilot/packing/${list.id}/guest`]) {
+            const result = await visitor.request.get(path, {maxRedirects: 0});
+            expect(result.status(), path).toBe(200);
+            expect(result.headers()['set-cookie'], path).toBeUndefined();
+            expect(result.headers()['x-surveyor-context'], path).toBeUndefined();
+            if (path.startsWith('/frontend-pilot/')) {
+                expect(pilotDocumentState(await result.text()).session).toMatchObject({
+                    kind: 'anonymous', context: null, csrfToken: null,
+                });
+            }
+        }
+        expect((await visitor.storageState()).cookies).toEqual([]);
+        expect(await bootstrap(visitor.request)).toMatchObject({kind: 'anonymous', context: null, csrfToken: null});
+        expect((await visitor.storageState()).cookies).toEqual([]);
+    } finally { await visitor.close(); }
+});
+
 test('bootstraps account and guest scopes while projecting only public session and packing fields', async ({request, browser, baseURL}) => {
     await loginForE2E(request, createE2ELogin());
     const list = await createApiPackingList(request);
@@ -640,7 +684,9 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
         headers: {...headers, 'If-None-Match': 'a'.repeat(4097)},
     }), 400, 'VALIDATION_FAILED');
     const patchHeaders = {...headers, 'If-Match': tag};
-    await expectProblem(await request.patch(path, {headers: {'X-Surveyor-Context': session.context}, data: {title: 'No CSRF'}}), 403, 'CSRF_INVALID');
+    const missingCsrf = headersFor(session);
+    delete missingCsrf['X-CSRF-Token'];
+    await expectProblem(await request.patch(path, {headers: missingCsrf, data: {title: 'No CSRF'}}), 403, 'CSRF_INVALID');
     await expectProblem(await request.patch(path, {headers: {...patchHeaders, Origin: 'https://other.example'}, data: {title: 'Foreign origin'}}), 403, 'CSRF_INVALID');
     await expectProblem(await request.patch(path, {headers: {...patchHeaders, 'Sec-Fetch-Site': 'cross-site'}, data: {title: 'Cross site'}}), 403, 'CSRF_INVALID');
     await expectProblem(await request.get('/api/v1/packing-lists/not-a-uuid', {headers}), 400, 'VALIDATION_FAILED');
@@ -928,7 +974,8 @@ test('honors native public method grants without disclosing protected packing pr
         const secondSession = await bootstrap(second);
         expect(firstSession.kind).toBe('anonymous');
         expect(firstSession.activeProfile).toBeNull();
-        expect(secondSession.context).not.toBe(firstSession.context);
+        expect(firstSession.context).toBeNull();
+        expect(secondSession.context).toBeNull();
         const publicHeaders = headersFor(firstSession);
         const itemPath = `${rootPath}/items/${item.id}`;
 
@@ -955,12 +1002,25 @@ test('honors native public method grants without disclosing protected packing pr
         const itemBaseline = await itemRead.json() as components['schemas']['PackingItemEditBaseline'];
         expect(Object.keys(itemBaseline).sort()).toEqual(['editToken', 'editableFields', 'id', 'values']);
         const itemHeaders = {...publicHeaders, 'If-Match': itemBaseline.editToken};
-        await expectProblem(await second.patch(itemPath, {headers: {...headersFor(secondSession), 'If-Match': itemBaseline.editToken},
-            data: {title: 'Another anonymous context'}}), 412, 'PRECONDITION_FAILED');
-        await expectProblem(await first.patch(itemPath, {headers: {...itemHeaders, 'X-CSRF-Token': 'invalid'}, data: {title: 'Missing CSRF'}}), 403, 'CSRF_INVALID');
+        // Public comparisons bind resource, method and reviewed values, with no
+        // synthetic shared identity. Another stateless visitor has the same
+        // effective public scope; this token still cannot edit another item.
+        const secondRead = await second.get(`${itemPath}/edit-baseline`, {headers: headersFor(secondSession)});
+        expect(secondRead.status()).toBe(200);
+        expect((await secondRead.json()).editToken).toBe(itemBaseline.editToken);
+        await expectProblem(await second.patch(`${rootPath}/items/${original.items[1].id}`, {
+            headers: {...headersFor(secondSession), 'If-Match': itemBaseline.editToken}, data: {title: 'Another item'},
+        }), 412, 'PRECONDITION_FAILED');
+        const missingCompatibility: Record<string, string> = {...itemHeaders};
+        delete missingCompatibility['X-Surveyor-Api-Compatibility'];
+        await expectProblem(await first.patch(itemPath, {headers: missingCompatibility, data: {title: 'Missing request protection'}}), 403, 'CSRF_INVALID');
         await expectProblem(await first.patch(itemPath, {headers: {...itemHeaders, Origin: 'https://other.example'}, data: {title: 'Cross origin'}}), 403, 'CSRF_INVALID');
         await expectProblem(await first.patch(itemPath, {headers: itemHeaders, data: {title: 'Forged actor', profileId: owner.activeProfile!.id}}), 400, 'VALIDATION_FAILED');
-        expect((await first.patch(itemPath, {headers: itemHeaders, data: {title: 'Explicit public edit'}})).status()).toBe(200);
+        const publicSave = await first.patch(itemPath, {headers: itemHeaders, data: {title: 'Explicit public edit'}});
+        expect(publicSave.status()).toBe(200);
+        expect(publicSave.headers()['set-cookie']).toBeUndefined();
+        expect(publicSave.headers()['x-surveyor-context']).toBeUndefined();
+        expect((await firstContext.storageState()).cookies).toEqual([]);
         expect((await first.delete(`${rootPath}/assignments/${assignmentId}`, {headers: publicHeaders})).status()).toBe(200);
 
         const orderRead = await first.get(`${rootPath}/item-order`, {headers: publicHeaders});

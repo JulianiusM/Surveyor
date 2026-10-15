@@ -4,7 +4,9 @@ import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import * as userService from '../../src/modules/database/services/UserService';
 import {AppDataSource} from '../../src/modules/database/dataSource';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
+import {Session} from '../../src/modules/database/entities/session/Session';
 import {createTranslator} from '../../src/modules/localization/translator';
+import settings from '../../src/modules/settings';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import type {components} from '../../src/types/api/v1';
 import {registerLocalAccount} from '../keywords/coreDomainKeywords';
@@ -29,6 +31,7 @@ afterAll(async () => {
             listener!.close(function listenerClosed(error) { if (error) reject(error); else resolve(); });
         });
     }
+    vi.restoreAllMocks();
     await closeIntegrationDatabase();
 });
 
@@ -47,6 +50,9 @@ async function applicationOrigin(): Promise<string> {
     const address = listener.address();
     if (!address || typeof address === 'string') throw new Error('The profile integration listener has no local port.');
     origin = `http://127.0.0.1:${address.port}`;
+    // Production admission compares its configured public origin. This fixture's
+    // owned ephemeral listener is that public origin, including its chosen port.
+    vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value, rootUrl: origin});
     return origin;
 }
 
@@ -85,6 +91,15 @@ function createHttpActor() {
 }
 
 type Actor = {agent: ReturnType<typeof createHttpActor>; session: components['schemas']['SessionView']};
+type SessionProof = Pick<components['schemas']['SessionView'], 'context' | 'csrfToken' | 'deployment'>;
+
+/** Match the client transport's paired metadata omission without inventing anonymous headers. */
+function sessionHeaders(proof: SessionProof): Record<string, string> {
+    // Established account/guest sessions send their exact server-issued pair.
+    // An anonymous null pair is absent; server admission still decides its rights.
+    return {'X-Surveyor-Api-Compatibility': proof.deployment.apiCompatibility,
+        ...(proof.context && proof.csrfToken ? {'X-Surveyor-Context': proof.context, 'X-CSRF-Token': proof.csrfToken} : {})};
+}
 
 /** Reuse native account login; optional credentials create another independent
  * browser session of the same account for concurrent profile-default writes. */
@@ -108,16 +123,13 @@ async function guestActor(): Promise<Actor> {
 
 /** Submit exactly the generated adapter's current captured actor/CSRF evidence. */
 function profileCommand(actor: Actor, method: 'POST' | 'PATCH', body: unknown,
-                        proof: components['schemas']['SessionView'] = actor.session) {
-    return actor.agent.dispatch('/api/v1/profiles' + (method === 'PATCH' ? '/current' : ''), method, body, {
-        'X-Surveyor-Context': proof.context, 'X-CSRF-Token': proof.csrfToken,
-        'X-Surveyor-Api-Compatibility': proof.deployment.apiCompatibility,
-    });
+                        proof: SessionProof = actor.session) {
+    return actor.agent.dispatch('/api/v1/profiles' + (method === 'PATCH' ? '/current' : ''), method, body, sessionHeaders(proof));
 }
 
 async function readSettings(actor: Actor) {
     const response = await actor.agent.dispatch('/api/v1/profiles/current', 'GET', undefined,
-        {'X-Surveyor-Context': actor.session.context});
+        sessionHeaders(actor.session));
     expect(response.status).toBe(200);
     return response.json() as Promise<components['schemas']['ProfileSettings']>;
 }
@@ -160,7 +172,7 @@ describe('versioned profile administration reuses native persistence', () => {
         expect((await profileCommand(actor, 'PATCH', {name, isDefault: true})).status).toBe(200);
         expect(await readSettings(actor)).toMatchObject({name, isDefault: true});
         const roster = await actor.agent.dispatch('/api/v1/profiles', 'GET', undefined,
-            {'X-Surveyor-Context': actor.session.context});
+            sessionHeaders(actor.session));
         expect(roster.status).toBe(403);
         expect((await profileCommand(actor, 'POST', {name: 'Unsupported guest profile'})).status).toBe(403);
         expect(await AppDataSource.getRepository(Profile).countBy({name: 'Unsupported guest profile'})).toBe(0);
@@ -171,7 +183,7 @@ describe('versioned profile administration reuses native persistence', () => {
         const actor = await accountActor();
         const recipient = await accountActor();
         const roster = await actor.agent.dispatch('/api/v1/profiles', 'GET', undefined,
-            {'X-Surveyor-Context': actor.session.context});
+            sessionHeaders(actor.session));
         const projection = await roster.json() as components['schemas']['ProfileManagement'];
         expect(projection.profiles.map(profile => profile.id)).toEqual([actor.session.activeProfile!.id]);
         expect(Object.keys(projection.profiles[0]).sort()).toEqual(['id', 'isDefault', 'name']);
@@ -211,6 +223,40 @@ describe('versioned profile administration reuses native persistence', () => {
 });
 
 describe('admitted common documents through the actual Express application', () => {
+    it('carries an account-required notice through a native anonymous session and consumes it once', async function preservesAnonymousFlash() {
+        const visitor = createHttpActor();
+        const repository = AppDataSource.getRepository(Session);
+        const before = await repository.count();
+
+        // An ordinary public read needs no stored row. The subsequent protected
+        // entry deliberately uses native flash, which owns this anonymous state.
+        const initial = await visitor.dispatch('/api/v1/session');
+        expect(initial.status).toBe(200);
+        expect(initial.headers.get('set-cookie')).toBeNull();
+        expect(await initial.json()).toMatchObject({kind: 'anonymous', context: null, csrfToken: null});
+        expect(await repository.count()).toBe(before);
+
+        const redirect = await visitor.dispatch('/frontend-pilot/packing/create?locale=en');
+        expect(redirect.status).toBe(302);
+        expect(redirect.headers.get('set-cookie')).toContain('connect.sid=');
+        expect(redirect.headers.get('location')).toBe('/frontend-pilot/users/login?next=%2Ffrontend-pilot%2Fpacking%2Fcreate%3Flocale%3Den&locale=en');
+        expect(await repository.count()).toBe(before + 1);
+
+        // Return the server's actual cookie and redirect, then observe the real
+        // library's one-time consumption rather than a substituted notice DTO.
+        const destination = redirect.headers.get('location');
+        if (!destination) throw new Error('The protected entry has no login destination.');
+        const first = await visitor.dispatch(destination);
+        expect(first.status).toBe(200);
+        const state = await documentBootstrap(await first.text());
+        expect(state.session).toMatchObject({kind: 'anonymous', context: null, csrfToken: null});
+        expect(state.pageNotice).toEqual({kind: 'info', messageKey: 'auth.accountRequired'});
+        const second = await visitor.dispatch(destination);
+        expect(second.status).toBe(200);
+        expect((await documentBootstrap(await second.text())).pageNotice).toBeUndefined();
+        expect(await repository.count()).toBe(before + 1);
+    });
+
     it('keeps the opt-in landing separate from the existing Overview root', async function preservesOverviewRoot() {
         const base = await applicationOrigin();
         const landing = await fetch(`${base}/frontend-pilot/home`);

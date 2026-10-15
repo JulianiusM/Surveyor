@@ -5,7 +5,7 @@ import {createPilotApp, initializePilotApp} from '../../src/frontend/app/createA
 import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
 
-const session: components['schemas']['SessionView'] = {kind: 'anonymous',
+const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {kind: 'anonymous',
     deployment: {buildId: 'route-fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
     context: 'route-fixture-context', csrfToken: 'route-fixture-csrf', locale: 'en',
     activeProfile: null, profiles: [], loginUrl: '/users/login', logoutUrl: null,

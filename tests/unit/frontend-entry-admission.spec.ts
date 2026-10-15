@@ -33,10 +33,11 @@ describe('shared server-owned page admission', () => {
         expect(await getEntityViewAdmission('packing', root, {profile: new Profile()})).toBe('render');
     });
 
-    it('keeps document logout evidence until native logout, while API expiry clears invalid identity', async () => {
+    it('keeps document logout evidence until native logout', async () => {
         function request(): Request {
             const stored = {auth: {user: new User(), guest: new Guest()}, profile: new Profile(),
-                frontendContext: 'captured-context', tokens: {id_token: 'provider-logout-evidence'},
+                frontendContext: 'captured-context', frontendCsrfToken: 'captured-csrf',
+                tokens: {id_token: 'provider-logout-evidence'},
                 save(done: (error?: unknown) => void) { done(); }};
             return {session: stored, sessionID: 'fixture', sessionStore: {
                 get(_id: string, done: (error: unknown, session: typeof stored) => void) { done(null, stored); },
@@ -44,21 +45,18 @@ describe('shared server-owned page admission', () => {
             }} as unknown as Request;
         }
         const document = request();
-        await expect(captureApiActor(document, true)).rejects.toMatchObject({code: 'AUTH_REQUIRED'});
+        await expect(captureApiActor(document)).rejects.toMatchObject({code: 'AUTH_REQUIRED'});
         expect(document.session.tokens).toEqual({id_token: 'provider-logout-evidence'});
         expect(document.session.auth?.user).toBeDefined();
-        const api = request();
-        await expect(captureApiActor(api)).rejects.toMatchObject({code: 'AUTH_REQUIRED'});
-        expect(api.session.tokens).toBeUndefined();
-        expect(api.session.auth).toBeUndefined();
-        expect(api.session.frontendContext).not.toBe('captured-context');
+        // Admission rejects invalid server evidence without clearing it. Explicit
+        // native logout remains the owner of provider cleanup and session writes.
     });
 
     it('does not mistake an unavailable session store for an expired identity', async () => {
         const failure = new Error('fixture store unavailable');
         const req = {session: {frontendContext: 'known'}, sessionID: 'fixture',
             sessionStore: {get(_id: string, done: (error: Error) => void) { done(failure); }}} as unknown as Request;
-        await expect(captureApiActor(req, true)).rejects.toBe(failure);
+        await expect(captureApiActor(req)).rejects.toBe(failure);
         expect(req.session.frontendContext).toBe('known');
     });
 });

@@ -11,7 +11,7 @@ import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import type {components} from '../../src/types/api/v1';
 
 const profileId = '11111111-1111-4111-8111-111111111111';
-const session: components['schemas']['SessionView'] = {kind: 'anonymous', context: 'hydration-context',
+const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {kind: 'anonymous', context: 'hydration-context',
     csrfToken: 'hydration-csrf', locale: 'en', activeProfile: null, profiles: [], loginUrl: '/users/login',
     logoutUrl: null, deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
     shell: {version: 'fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
@@ -19,7 +19,7 @@ const session: components['schemas']['SessionView'] = {kind: 'anonymous', contex
 const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synthetic help',
     content: '<h2 id="task">A synthetic task</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
 const cleanups: (() => void)[] = [];
-const account: components['schemas']['SessionView'] = {...session, kind: 'account',
+const account: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {...session, kind: 'account',
     activeProfile: {id: profileId, name: 'Fixture'}, profiles: [{id: profileId, name: 'Fixture'}], logoutUrl: '/users/logout'};
 const creation: components['schemas']['PackingCreateContext'] = {
     defaults: {participant: 0, guest: 0, authenticated: 0, public: 0},

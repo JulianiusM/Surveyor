@@ -25,7 +25,7 @@ import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 
-const session: components['schemas']['SessionView'] = {kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context: 'shell-context-1234567890',
+const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context: 'shell-context-1234567890',
     csrfToken: 'shell-csrf-1234567890', locale: 'en', activeProfile: null, profiles: [],
     loginUrl: '/users/login', logoutUrl: null, shell: {version: 'fixture-version', imprintUrl: '/fixture-imprint',
         privacyPolicyUrl: '/fixture-privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'}};
@@ -70,9 +70,9 @@ async function renderHelp(data = help, url = '/frontend-pilot/help?doc=fixture',
 
 /** Supply the public Help DTO for the requested presentation language at the
  * HTTP seam. No application lookup, renderer or locale policy is replaced. */
-function helpResponse(request: Request, data = help, context = session.context): Response {
+function helpResponse(request: Request, data = help, context: components['schemas']['SessionView']['context'] = session.context): Response {
     return new Response(JSON.stringify({...data, locale: request.headers.get('X-Surveyor-Locale') ?? data.locale}), {
-        headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': context},
+        headers: {'Content-Type': 'application/json', ...(context === null ? {} : {'X-Surveyor-Context': context})},
     });
 }
 

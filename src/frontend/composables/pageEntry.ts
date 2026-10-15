@@ -123,7 +123,7 @@ const identityNavigations = new WeakMap<PilotContext['session'], () => void>();
  * owner keeps any private result; this owner retains only its confirmed context and destination.
  * A later matching Retry never replays login/registration or visits a retired origin.
  */
-function retainIdentityNavigation(context: PilotContext, router: Router, confirmedContext: string,
+function retainIdentityNavigation(context: PilotContext, router: Router, confirmedContext: string | null,
                                  outcome: components['schemas']['PageEntryOutcome'], origin: string,
                                  completion?: PilotConfirmedNavigation): void {
     const navigation = observePageNavigation(router, {finished: resumeNavigation});
@@ -447,7 +447,7 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
     // server-owned page outcome or message key. Retain either original descriptor
     // until a fresh admitted read restores this actor/resource's authority.
     const deniedEntry = shallowRef<PilotPageEntryDenial | ApiFailure>();
-    const renderedScope = shallowRef<{context: string | undefined; epoch: number; route: string; updatedAt?: number}>();
+    const renderedScope = shallowRef<{context: string | null | undefined; epoch: number; route: string; updatedAt?: number}>();
     let followed: components['schemas']['PageEntryOutcome'] | undefined;
     const navigation = observePageNavigation(router);
     const queryKey = computed(() => [...source.key.value, {context: context.session.value?.context,

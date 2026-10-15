@@ -5,6 +5,7 @@ import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories
 import {createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
 import {createBrowserReadGate as readGate, waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 
 type Session = components['schemas']['SessionView'];
 
@@ -40,8 +41,15 @@ async function bootstrap(request: APIRequestContext): Promise<Session> {
     expect(result.status()).toBe(200);
     return await result.json() as Session;
 }
-function headers(session: Session) {
-    return {'X-Surveyor-Context': session.context, 'X-CSRF-Token': session.csrfToken, 'X-Surveyor-Locale': session.locale};
+/** Reproduce browser mutation protections while preserving absent initial session evidence. */
+function headers(session: Session): Record<string, string> {
+    const baseUrl = test.info().project.use.baseURL;
+    if (!baseUrl) throw new Error('The built frontend fixture requires its configured application origin.');
+    // Keep null initial evidence absent while retaining the browser's mutation
+    // protections and the precise string pair of every established session.
+    return {Origin: new URL(baseUrl).origin, 'X-Surveyor-Api-Compatibility': apiCompatibility,
+        ...(session.context === null ? {} : {'X-Surveyor-Context': session.context, 'X-CSRF-Token': session.csrfToken}),
+        'X-Surveyor-Locale': session.locale};
 }
 
 /** Compare rendered label/count and sibling badge gaps independently of markup.
@@ -1156,7 +1164,14 @@ test('pilot edits items with conflict review, quick-adds, reorders and removes a
     const added = (await readPacking(page.request, resource.id)).items.find(item => item.title === 'Shared stove')!;
     const addedRow = page.locator(`tr[data-item-id="${added.id}"]`);
     await expect(addedRow).toContainText('Bring gas');
-    await packingCommand(page, resource.id, '/item-order', 'PUT', () => addedRow.dragTo(row));
+    await expect(addedRow).toHaveAttribute('draggable', 'true');
+    await expect(row).toHaveAttribute('draggable', 'true');
+    // Target autoscroll can put two row centers only a few screen pixels apart,
+    // below the browser's drag threshold. Blank first-cell padding keeps the
+    // real mouse gesture clear of controls and guarantees horizontal movement.
+    await packingCommand(page, resource.id, '/item-order', 'PUT', () => addedRow.dragTo(row, {
+        sourcePosition: {x: 5, y: 5}, targetPosition: {x: 25, y: 5},
+    }));
     await expect(page.locator('tr[data-item-id]').first()).toHaveAttribute('data-item-id', added.id);
     expect((await readPacking(page.request, resource.id)).items.sort((a, b) => a.position - b.position).map(item => item.id))
         .toEqual([added.id, original.id]);
@@ -1597,7 +1612,7 @@ test('native and pilot disclosures keep link semantics and pilot failed paginati
         // Keep the outage through the initial read and its two automatic retries;
         // only the explicit recovery below restores the real endpoint.
         await route.fulfill({status: 500, contentType: 'application/json',
-            headers: {'X-Surveyor-Context': scope.context}, body: JSON.stringify({type: 'about:blank',
+            headers: scope.context === null ? {} : {'X-Surveyor-Context': scope.context}, body: JSON.stringify({type: 'about:blank',
                 title: 'Page temporarily unavailable', status: 500, code: 'INTERNAL_ERROR',
                 detail: 'Retry this bounded page.', messageKey: 'api:errors.INTERNAL_ERROR', params: {}, requestId: 'overview-failed-next'})});
     }

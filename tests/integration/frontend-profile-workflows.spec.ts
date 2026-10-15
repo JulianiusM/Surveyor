@@ -6,6 +6,7 @@ import {User} from '../../src/modules/database/entities/user/User';
 import {Guest} from '../../src/modules/database/entities/user/Guest';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
 import * as userService from '../../src/modules/database/services/UserService';
+import * as sessionOwner from '../../src/modules/lib/session';
 import mailer from '../../src/modules/email';
 import settings from '../../src/modules/settings';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
@@ -33,6 +34,7 @@ interface Actor {
 
 let listener: http.Server | undefined;
 let origin = '';
+let applicationStore: ReturnType<typeof sessionOwner.createSessionStore> | undefined;
 
 /** Keep only actual server cookies while using the same native Fetch boundary as the existing HTTP integration. */
 function createHttpActor() {
@@ -71,12 +73,26 @@ beforeAll(async function prepareRealApplication() {
     // sessions and persistence remain intact, including native partial failures.
     vi.spyOn(mailer, 'sendMigrationEmail').mockResolvedValue();
     vi.spyOn(mailer, 'sendDeletionEmail').mockResolvedValue();
-    const application = (await vi.importActual<typeof import('../../src/app')>('../../src/app')).default;
+    // Retain the real application's store for the later external-write failure.
+    // The pass-through factory leaves all options, session objects and SQL intact.
+    const createStore = sessionOwner.createSessionStore;
+    const factory = vi.spyOn(sessionOwner, 'createSessionStore').mockImplementation(function retainApplicationStore(manager) {
+        const store = createStore(manager);
+        applicationStore ??= store;
+        return store;
+    });
+    let application: typeof import('../../src/app')['default'];
+    try {
+        application = (await vi.importActual<typeof import('../../src/app')>('../../src/app')).default;
+    } finally {
+        factory.mockRestore();
+    }
     listener = http.createServer(application);
     await new Promise<void>(function listenLocally(resolve) { listener!.listen(0, '127.0.0.1', resolve); });
     const address = listener.address();
     if (!address || typeof address === 'string') throw new Error('The workflow integration listener has no local port.');
     origin = `http://127.0.0.1:${address.port}`;
+    vi.spyOn(settings, 'value', 'get').mockReturnValue({...settings.value, rootUrl: origin});
 });
 
 afterEach(() => { vi.clearAllMocks(); });
@@ -123,6 +139,7 @@ async function workflowDocument(actor: Actor, suffix: string) {
 
 /** Actual mutations submit ordinary document forms with the admitted document's captured receipt. */
 function formReceipt(state: FrontendPilotBootstrap): Record<string, string> {
+    if (!state.session.context || !state.session.csrfToken) throw new Error('A private workflow needs admitted session evidence.');
     return {_context: state.session.context, _csrf: state.session.csrfToken,
         _compat: state.session.deployment.apiCompatibility};
 }
@@ -135,8 +152,9 @@ async function postWorkflow(actor: Actor, suffix: string, state: FrontendPilotBo
 
 /** Preview is a generated read-only operation; the existing business check still owns its limited result. */
 function previewRequest(actor: Actor, state: FrontendPilotBootstrap, token: string): Promise<DocumentResponse> {
+    const proof = formReceipt(state);
     return actor.agent.postJson('/api/v1/profiles/migration/preview', {token}, {
-        'X-Surveyor-Context': state.session.context, 'X-CSRF-Token': state.session.csrfToken,
+        'X-Surveyor-Context': proof._context, 'X-CSRF-Token': proof._csrf,
         'X-Surveyor-Api-Compatibility': state.session.deployment.apiCompatibility, 'X-Surveyor-Locale': state.session.locale,
     });
 }
@@ -292,6 +310,45 @@ describe('native profile workflows through pilot adapters', () => {
         expect(await userService.getProfileById(actor.profileId)).toMatchObject({userId: null, defaultForOwner: false});
         expect((await sessionOf(actor)).activeProfile?.id).toBe(sibling.id);
         expect(await AppDataSource.getRepository(User).findOneBy({id: actor.userId!})).not.toBeNull();
+    });
+
+    it('completes remaining-profile selection and redirect when subsequent feedback storage fails', async function retainsCompletedSelection() {
+        const actor = await accountActor();
+        const sibling = await userService.createProfile(actor.userId!, 'Remaining after feedback failure');
+        await userService.updateProfileDefault(sibling.id, true);
+        const document = await workflowDocument(actor, 'profile/delete');
+        const store = applicationStore;
+        if (!store) throw new Error('The application session store was not retained.');
+        const write = store.set;
+        const failedWrite = vi.fn();
+        const log = vi.spyOn(console, 'error').mockImplementation(function retainBoundedLog() {});
+
+        // The profile owner first persists its new selection with the old notice.
+        // Only the subsequent ordinary feedback save has a notice rebound to the
+        // new context. Fail that external write, retaining all real business work.
+        const failure = vi.spyOn(store, 'set').mockImplementation(function failFeedbackWrite(id, value, callback) {
+            const notice = value.flash?.['frontend-pilot-workflow']?.[0];
+            const currentNotice = typeof notice === 'string' ? JSON.parse(notice) as {context?: string} : undefined;
+            if (value.profile?.id === sibling.id && currentNotice?.context === value.frontendContext) {
+                failedWrite();
+                callback?.(new Error('Controlled feedback persistence failure'));
+                return;
+            }
+            write(id, value, callback);
+        });
+
+        try {
+            const response = await postWorkflow(actor, 'profile/delete', document.state,
+                {name: document.state.session.activeProfile!.name}, 302);
+            expect(response.headers.get('location')).toBe('/frontend-pilot/users/profile/manage?locale=en');
+            expect(await userService.getProfileById(actor.profileId)).toMatchObject({userId: null, defaultForOwner: false});
+            expect((await sessionOf(actor)).activeProfile?.id).toBe(sibling.id);
+            expect(failedWrite).toHaveBeenCalledOnce();
+            expect(log).toHaveBeenCalledWith('[frontend-pilot]', {code: 'WORKFLOW_FEEDBACK_UNAVAILABLE'});
+        } finally {
+            failure.mockRestore();
+            log.mockRestore();
+        }
     });
 
     it('preserves the existing final-profile 400 after deletion instead of silently repairing IMP-006', async function retainsFinalProfileFailure() {

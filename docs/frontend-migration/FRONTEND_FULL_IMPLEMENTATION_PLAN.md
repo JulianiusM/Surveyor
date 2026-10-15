@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented bounded native-isolation ownership reconciled with completed P0/P1 and future phases; actual execution remains in paired review; no full migration or cutover claimed
+verification-scope: prior P0/P1 and native-isolation receipts retained; bounded session repair, native anonymous flash and full pilot readiness review reconciled; future phases and cutover separately authorized
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -23,6 +23,18 @@ follow-up's A5 interpretation: unused implementation removal did not authorize s
 are removed, with [generation verification](PILOT_PARITY_REVIEW.md#definition-guard-correction-verification-2026-10-15)
 and no restored runtime transport support. The follow-up does not broaden the earlier receipts into full-application
 or deployment acceptance.
+
+The [session-ownership restoration](FRONTEND_FOUNDATION_DESIGN.md#session-ownership-restoration-and-stateless-initial-visits-2026-10-15)
+has current bounded verification in the [session receipt](PILOT_PARITY_REVIEW.md#pilot-session-admission-correction-2026-10-15).
+The earlier R1 architectural acceptance and defect closure are withdrawn; its successful tests do not certify this
+changed mechanism. The original overwrite defect is now verified repaired under the latest explicit authorization.
+The [native-flash decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-native-anonymous-session-flash-2026-10-15)
+resolves the former account-required notice blocker: retain the ordinary anonymous Session and one-time notice,
+not a URL parameter. Message-free initial reads remain uninitialized. `ARCH-005` owns the separate whole-session/
+flash review and does not block parity migration. The
+[full baseline re-review](PILOT_PARITY_REVIEW.md#full-pilot-baseline-and-migration-readiness-re-review-2026-10-15)
+finds the foundation ready for the next authorized parity-only slice with its recorded limits; this is not
+full-application acceptance or approval to implement every later phase.
 
 P2–P10 remain future phase contracts. P11 retains its separate cutover, publication and retirement authorization
 requirements. This plan records the sequence and acceptance boundaries; implementation proceeds only within the

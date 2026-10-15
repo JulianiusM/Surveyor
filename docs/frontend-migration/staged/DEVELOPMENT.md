@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: frontend-owned timer, copied Sass and Vite client/SSR delivery source-reviewed; reviewed static/feedback/navigation/lifecycle adoption retains earlier scopes; no cutover claimed
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; package.json
+verification-scope: full pilot playbook/source review includes ordinary Express ownership, initial projection, native anonymous flash and explicit completion; corrected original transport provenance remains in the active ADR; no cutover claimed
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -160,7 +160,9 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
    and baseline. Failed refresh remains saved with stale authority. Unknown delivery never automatically replays.
    Independently granted writes need independently granted baseline reads: filter values and comparison hashes by
    the actual method policy rather than require broader detail admission or a token obtained before revocation.
-   Public tokens bind the captured context, never one common anonymous identity.
+   Tokens for context-bearing or authenticated scopes retain their existing profile or frontend-context binding.
+   A public scope without identity or frontend context binds resource, method and visible fields/current values;
+   current grants are rechecked.
 
 7. **Compose presentation through shared contracts.** Reuse fields, inline editors, dialogs/tabs, action buttons,
    permission matrix, pickers, skeletons, notices and images where behavior is shared. A feature supplies values,
@@ -208,6 +210,46 @@ live in the existing controller. Adapters can decode/coerce differently, return 
 declared preconditions; capacity, ownership, deletion and access policy remain one shared business implementation.
 Page membership must not silently narrow a separately granted action, and edit-token projections stay private.
 
+Treat every browser-supplied identity, profile, context, security token and capability value as untrusted input.
+The session admission owner reconstructs identity from the server's stored session and loaded relations; context
+and CSRF comparisons check submitted claims against that server evidence. Existing controllers decide current
+ownership, grants and business policy. Browser capability flags, query keys, epochs and disabled controls guide
+presentation only; they never select the acting identity or grant permission on the server. Preserve this boundary
+when adding an adapter instead of trusting a previously displayed projection.
+
+`req.session` is the one middleware-managed request Session. `captureApiActor` checks stored identity/generation
+without replacing it, rejects a mismatch and hydrates a plain server-only actor. It neither initializes missing
+metadata nor clears invalid authority on admission. Ordinary controller/provider/feedback consumers keep the same
+Session and library save methods; do not introduce a second writable snapshot or a generic persistence lifecycle.
+The separately approved identity transaction alone stages isolated completion and adopts its committed receipt.
+
+For a fresh anonymous visitor, initial session projection and public SSR without feedback leave the Session
+unpersisted and issue no cookie. A view without frontend identity scope carries null context/CSRF.
+
+An account-required document redirect intentionally saves the existing native anonymous Session to carry its
+one-time notice. Preserve the login/return destination and consume the known notice through the native flash library;
+do not replace it with a URL parameter or initialize context/CSRF just to carry feedback. That anonymous feedback
+Session can still have null frontend metadata. Whole-application session/flash unification remains separately scoped.
+
+Complete stored pairs remain unchanged. Authenticated legacy records use read-only domain-separated HMAC metadata
+bound to server secret, SID, principal/profile and partial context, never browser-selected identity.
+Explicit identity transitions persist the existing random pair. Keep compatibility derivation in its owning session
+helper; do not copy it into adapters, client code or another authentication owner.
+
+Context headers are conditionally required by server state. A context-bearing or authenticated scope cannot omit
+its evidence to become public. Mutations in a public scope without identity or frontend context require affirmative
+configured-origin/Fetch Metadata checks, a valid non-simple compatibility header and their generated
+JSON/multipart/no-body contract. Controllers independently
+authenticate personal actions and reevaluate public grants. Public comparison baselines bind resource/operation,
+visible field set and current values without inventing a shared anonymous identity; tokens do not authorize writes.
+
+The existing native flash getter creates an object even for absent messages. Pilot document reads inspect existing
+nonempty channels before consuming them through that library, avoiding accidental first-visit persistence. Real
+feedback still uses ordinary Session/save ownership. Complete required business continuations before fallible
+feedback delivery; retain their original outcome and bounded operational logging if delivery fails. Native TTL,
+actual flash consumption, expiry/logout and token/provider entry effects retain their existing scoped behavior.
+No general flash merger, save observer, admission transaction or global session concurrency guarantee is introduced.
+
 Packing supplies a concrete ownership example. `packingMethodPermissions` owns requirements consumed by middleware,
 v1 checks and capability projections; root property fields reuse the existing administration field policy.
 `savePackingMetadata`, `addPackingItem`, `applyPackingItemPatch` and `applyPackingMembership` own the corresponding
@@ -234,12 +276,14 @@ Packing's method-specific reads illustrate independent action admission:
 
 | Admission boundary | Current Packing scope |
 |---|---|
-| Captured context; optional profile; fresh method grant | Item edit/order/delete and minimal baselines; administrator assignment removal; default/admin CRUD and scoped baselines; account-profile discovery; header baseline/preflight/write; description-only GET/PATCH. |
+| Server context when present; optional profile; fresh method grant | Item edit/order/delete and minimal baselines; administrator assignment removal; default/admin CRUD and scoped baselines; account-profile discovery; header baseline/preflight/write; description-only GET/PATCH. |
 | Active profile and existing operation policy | Full detail, metadata, settings and header bytes; mixed metadata writes, creation/Quick Add, self-assignment, archive/restore, event changes and owner deletion. |
 | Existing entry policy | Session/Help and create/resource/duplicate entries retain their own admission; duplicate GET does not grant account-only creation. |
 
-Public baselines carry only the method's values/hashes and bind the captured context; profile tokens keep their own
-scope. Context checks, mutation CSRF, conditional comparisons and authorization before `304` still apply.
+Public baselines carry only the method's values/hashes. Tokens retain their existing profile or frontend-context
+binding where present; public scopes without identity or frontend context bind resource, method and visible
+fields/current values. Mutations apply server-context/CSRF checks or the public origin/header protections above as
+appropriate; conditional comparisons and authorization before `304` apply to both scopes.
 Header admission runs before upload bytes and again under the write lock. Scoped account-profile discovery uses
 the existing 120-search/10-minute per-IP limiter; the adapter owns its localized Problem presentation. Do not
 generalize this matrix to another feature or expose a full settings page merely to obtain one edit token.
@@ -338,6 +382,11 @@ result preparation; pure DBAL owns the manager, row lock and persistence. Prepar
 replies before final commit through the existing session/transport owners. API envelopes cross generated validators;
 admission GET completion prepares its notice/redirect. A precommit session check followed by a separate session save
 leaves a partial mutation and does not satisfy this boundary.
+Project an identity-changing completion from its actual staged context/CSRF fields. Read-only legacy compatibility must not
+supply replacement values which conceal malformed newly prepared output; validation failure still rolls back the
+operation and leaves the original request Session untouched.
+An actor-preserving confirmation instead retains its admitted context, including a derived legacy context. Use the
+existing prepared-response default rather than overriding it with partial raw stored metadata.
 
 Use `registerGuestWithSession` for Guest/profile plus stored identity, `registerUserWithSession` for inactive
 User/profile/activation token, and `activateAccountWithSession` for token consumption. API account signup preserves
@@ -946,8 +995,8 @@ npm run test:quick         # configured database-free project, including scoped 
 ## Test selection — amendment-35
 
 <!-- delta:amendment-35 -->
-The database-backed integration project rebuilds its selected MariaDB schema; the genuinely database-free
-Express/Vite integration fixture uses the other existing project without a schema reset. The E2E initializer drops
+The database-backed integration project rebuilds its selected MariaDB schema; the separately selected database-free
+server-component fixtures use the other existing project without a schema reset. The E2E initializer drops
 and recreates its selected schema. Read [Testing Guide](TESTING_GUIDE.md) before database-backed suites and never
 reuse development or production database names.
 

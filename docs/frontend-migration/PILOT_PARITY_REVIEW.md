@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: native-isolation decision/history and bounded frontend-owned timer/style implementation recorded; prior runtime checks retain their scopes; no full feature migration or cutover claimed
-source-anchors: src/controller/packingController.ts; src/controller/entityAdminController.ts; src/controller/eventController.ts; src/controller/userController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/modules/lib/fileCommons.ts; src/modules/overview/api.ts; src/routes/api/v1/overview.ts; src/controller/helpController.ts; src/modules/permissionEngine.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/unit/frontend-generation.spec.ts; tests/frontend/frontend-page-entry.spec.ts; tests/frontend/frontend-command-recovery.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/browser/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/authentication-workflows.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/integration/packing-management-api.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; .gitignore; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml
+verification-scope: full pilot baseline, approval provenance, source ownership, readability and migration-readiness re-review completed; original transport history corrected and native anonymous flash verified; scoped prior receipts retained; no full-application or cutover acceptance
+source-anchors: src/controller/packingController.ts; src/controller/entityAdminController.ts; src/controller/eventController.ts; src/controller/userController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/modules/lib/fileCommons.ts; src/modules/overview/api.ts; src/routes/api/v1/overview.ts; src/controller/helpController.ts; src/modules/permissionEngine.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/unit/frontend-generation.spec.ts; tests/frontend/frontend-page-entry.spec.ts; tests/frontend/frontend-command-recovery.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/browser/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/authentication-workflows.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/integration/packing-management-api.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; .gitignore; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/routes/frontendPilot.ts; src/routes/api/v1/auth.ts; tests/integration/frontend-session-admission.spec.ts; tests/unit/frontend-entry-admission.spec.ts; vitest.config.mts; tests/integration/frontend-profile-workflows.spec.ts
 next-review: next-migration-slice-or-permission-policy-review
 -->
 
@@ -278,11 +278,13 @@ connection and 103,408 ms schema preparation; current supported-version runs nee
 old local schemas. Generated-output hygiene now ignores `/artifacts/`; no tracked maintained material was there and no
 local artifact was removed.
 
-The remaining-v1 source census covers session, locale, Help and Overview reads plus the corrected visibility command.
-Session initialization/invalid-authority cleanup are explicit request infrastructure; locale persists only a cookie,
-Help reads release-controlled files and Overview uses SELECT snapshots. No further concrete persistence-then-required-
-projection defect was found in those routes. Static typed delivery was distinguished from real DB/context/file work;
-this manual census is not a universal transport guarantee.
+The remaining-v1 source census at that review point covered session, locale, Help and Overview reads plus the corrected
+visibility command. It classified session initialization/invalid-authority cleanup as request infrastructure; that
+classification and the associated lifecycle are superseded by the dated session correction below. The original census
+also recorded that locale persisted only a cookie, Help read release-controlled files and Overview used SELECT
+snapshots, with no further concrete persistence-then-required-projection defect found in those routes. Static typed
+delivery was distinguished from real DB/context/file work; this historical manual census is not a universal transport
+guarantee.
 
 Full migration/cutover, live provider/SMTP, renewed source-development/HMR, hosted CI and deployment rehearsal remain
 unverified by these receipts. Their distinct older evidence is retained above; the bounded renewed visual scope is below.
@@ -427,9 +429,12 @@ The maintainer's [2026-10-15 correction](../decisions/DEC-006-FRONTEND-FRAMEWORK
 identifies the restriction interpretation as agent overreach and directs removal; the recorded executions below
 retain their historical scope.
 
-The current readiness work implements the maintainer's separately approved transport-scope restorations and the
-conditionally approved classification of genuine Express/Vite/SSR/HTTP integration. Existing generator/transport
-owners now reject query arrays/plain-text API responses while preserving authored scalar, JSON-array, multipart and
+At this historical checkpoint, readiness work implemented the maintainer's separately approved unused runtime
+transport removal and the conditionally approved classification of genuine Express/Vite/SSR/HTTP integration.
+The original selected design already included repeated query arrays and binary/text outputs; the
+[corrected history](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#authorized-transport-scope-restoration-2026-10-14)
+distinguishes that choice from the later explicit narrowing. Existing generator/transport owners at this checkpoint
+rejected query arrays/plain-text API responses while preserving authored scalar, JSON-array, multipart and
 binary operations. Native views/browser code/Help and shared business behavior remain the comparator; no next-module
 migration or default cutover is included. The active Development Policy now owns sufficient approval context,
 explicit scope/approach and answer-specific identifiers; historical approvals retain their recorded scope.
@@ -801,3 +806,104 @@ the existing regular-file mechanism. The final ten-owner real-Git copy/pin regre
 excludes an unlisted Sass sibling. No directory, private-file, immutable-baseline or live-reference-count rule is
 weakened. Earlier preparation receipts are stale after these source/amendment changes; any new preparation remains
 distinct from semantic acceptance and publication.
+
+### Pilot session admission correction (2026-10-15)
+
+The original read-only overwrite was reproduced with actual Express/session middleware: it loaded A, pilot admission
+installed stored B, another transition stored C, and response completion saved B over C. The native application
+source baseline is `7ff78998667e55df56390a8e8da88e8ace687771`; the original design/comparator is `2dfa2573c64178f54684cc4877b5a945f66e24c8`.
+The first pilot used `req.session.reload()`; correction `d58fb35` introduced direct store construction on the request.
+Account/profile restoration was initially inferred from whole-session persistence, not demonstrated by the anonymous
+MemoryStore reproduction.
+
+**Prior architectural acceptance withdrawn.** The first R1 implementation added writable `req.apiSession`, save
+observation and locked initialization/invalidation/flash merging. Its explanation mentioned separate evidence but
+did not adequately expose that new lifecycle against the accepted Express ownership boundary. Root and independent
+review wrongly treated shared files/store, server-only data and successful tests as sufficient scope evidence.
+The maintainer challenged it. The same-run foundation claim and IMP-064 closure cannot authorize their own code.
+Earlier checks of that implementation passed 92 database-free, 85 persistence/workflow and 53 selected built-system
+cases across two login configurations, plus build/compiler checks; these are historical results, not repair evidence.
+The previous prepared-guide semantic acceptance is also superseded by the changed design and inputs.
+
+The maintainer explicitly authorizes the [restoration/stateless plan](FRONTEND_FOUNDATION_DESIGN.md#session-ownership-restoration-and-stateless-initial-visits-2026-10-15).
+Current source keeps the one ordinary Express Session and its save/reload methods. Stored generation checking rejects
+a mismatch without installing B or clearing authority; server relations hydrate a plain actor. Cookie-free initial
+projection returns null context/CSRF without a row/cookie. Complete stored pairs remain; authenticated legacy records
+derive bounded HMAC metadata without writing, and explicit transitions replace it with their normal random pair.
+Only the previously approved identity-completion transaction stages a separate completion, including a first absent
+row after admission, business checks and prepared results. No generic admission transaction/save observer remains.
+
+Public Packing comparison scope uses resource/operation, visible fields and current values when there is no
+identity or frontend context, while current controller grants still authorize every projection/write. Omitted context
+never downgrades a context-bearing or authenticated scope. Mutations in public scope without identity or frontend
+context require affirmative configured-origin/Fetch Metadata evidence, the non-simple compatibility header and
+generated operation decoding. Browser fields never grant identity.
+Ordinary feedback uses `req.session` and the library getter/save path after required continuations; empty pilot
+getters are avoided. Existing native TTL, actual flash consumption, expiry and provider/token entry effects remain.
+
+| Current evidence | Scope and limitation |
+|---|---|
+| Source and client review | Independent review accepted nullable anonymous versus authenticated contracts, transport retirement, existing cache/epoch owners and server-only boundaries. Current production ownership is source-reviewed; this does not certify all persisted workflows. |
+| Focused client tests | The client owner reports 78 passing tests across `frontend-pilot.spec.ts` and `frontend-native-fallback.spec.ts`, plus frontend type-checking. They protect codecs, transport/context and SSR component behavior, not real session persistence or built-system routes. |
+| Build and compiler | The normal `npm run build` passed. Final server emission and both server/test `--noEmit` compilers passed after the staged-output, public-projection and partial-legacy receipt corrections. |
+| Database-free regressions | Initial full selection passed 1,526 tests with two local fixture failures: the HMR case hit its 30-second deadline and an isolated watcher rename reported Windows `EPERM`. An unchanged rerun of those two files passed 9/9, giving 1,528 distinct passing assertions across runs, including 23 actual HTTP/session cases. This is not a fresh full-selection rerun or database evidence. |
+| Persistence and public methods | The five-file disposable-schema run passed 150/150: authentication 71, profile administration 11, profile workflows 18, Packing management 35 and public actions 15. After the partial-legacy correction and two new cases, the final authentication rerun passed 73/73. Two other Packing files passed 20 earlier, for 172 distinct ORM assertions across these runs rather than one final all-file execution. Real row/transaction evidence remains separate from synthetic MemoryStore HTTP cases. |
+| Isolated client browser | The selected client-browser suite passed 21/21. It does not establish built application/session/database E2E. |
+| Engineering enforcement | `test:development-policy` passed 26 synthetic CLI cases; the final source scan checked 321 authored sources/11 DBAL files and 19 readability files/29 operations without findings. Exact approval-text preflight remains structural; independent/root semantic review and actual approval are still required. |
+| Built-system workflows | The initial five-file selection had 78 cases: 76 passed, one was configuration-dependent and skipped, and one drag journey timed out. Its unchanged isolated retry also failed. Trace/source review found the scrolled fixture reduced mouse movement to 2 pixels, with both rows still draggable; no native drag start occurred. A test-only explicit-position gesture correction retained real mouse, HTTP, UI and persisted-order assertions; its isolated rerun passed 1/1 in 38.4 seconds. The alternate local-login-disabled case passed 1/1 in 36.9 seconds. Thus all 78 distinct selected cases pass across runs/configurations, not one final uniform 78-case execution. No application drag fix is claimed. |
+| Documentation tooling | The full boundary-tool suite passed 25/25 with no skips/failures in 890,639 ms, including exact new-fixture copying/pins and rejected broader admission. This is tooling evidence, not semantic guide acceptance or an application delivery gate. |
+
+The initial six-file ORM selection passed 144/155. Four completion regressions exposed legacy fallback incorrectly
+masking malformed staged metadata; completion now projects its actual fields and preserves validation/rollback.
+Two Packing expectations were updated from blanket authentication rejection to current grant denial; remaining
+initial failures concerned concurrent-build assets or timing. The final passing selection follows those corrections;
+no failure or deadline was suppressed.
+The later partial-legacy regression found an actor-preserving receipt could expose raw partial context instead of
+the admitted derived scope. That header preparation is corrected; the final 73-case authentication run includes
+both account and guest regression cases, while identity-changing output still uses actual staged fields.
+
+IMP-064 closes only the reproduced read-only overwrite under the latest explicit restoration authorization and
+current evidence. It does not reinstate the challenged lifecycle or its withdrawn architectural acceptance.
+
+The later [native-flash decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-native-anonymous-session-flash-2026-10-15)
+resolves the formerly pending notice choice. The maintainer selects the existing anonymous Session and one-time
+flash, rejecting the unimplemented URL/repeated-notice proposal. This retains a deliberate anonymous row/cookie for
+that redirect while message-free public/session reads stay uninitialized. `ARCH-005` owns the separately requested
+whole-session/flash review; it is not a parity-migration prerequisite. The new real HTTP/ORM notice regression passed
+as part of the 12/12 profile-administration selection. It checks real row/cookie creation only for the redirect,
+the exact 302 destination, null metadata and one-time consumption. The current test compiler also passed. These are
+new scoped results, not a rerun or arithmetic extension of the earlier broad suite receipts. The completed full
+baseline re-review below establishes the current bounded readiness disposition.
+
+The [assertion map](TEST_COVERAGE.md#server-owned-session-admission-and-response-completion-2026-10-15) records revised
+source cases without claiming execution. No global session compare-and-swap, exhaustive race, live provider/SMTP,
+production database, exhaustive visual/accessibility, native change or cutover acceptance is established.
+
+### Full pilot baseline and migration-readiness re-review (2026-10-15)
+
+This re-review compares the implemented pilot with the original application-source baseline `7ff78998667e55df56390a8e8da88e8ace687771`,
+selected design `2dfa2573c64178f54684cc4877b5a945f66e24c8` and subsequent explicit decisions. It reviews the whole current
+pilot source, not only the most recent session patch. Current code, passing tests and agent-authored records do not
+replace the maintainer's actual authorization.
+
+| Acceptance criterion | Current finding and evidence |
+|---|---|
+| Original vision and scope | The implemented Help/Packing, Overview, identity and common presentation foundation serves the approved pilot. The whole-application vision is not complete: Events, Drivers, Surveys, Activities and finance remain the live P2–P11 contracts in the [full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md). The original baseline, behavior/edge-case IDs and native comparator remain the acceptance source for each next slice. |
+| Design choices, technology and authorization | Vue/TypeScript, Vite, Router, Vue Query, i18next-vue, authored OpenAPI and generated standalone validators remain adopted. SSR/startup, conflict, update and native-isolation adjustments have dated decisions. The erroneous historical claim that repeated-query-array/text output was outside the original design is corrected in [DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#authorized-transport-scope-restoration-2026-10-14); later approved runtime removal and definition-ban correction remain distinct. Prior extra-session architectural acceptance stays withdrawn; the latest explicit restoration/native-flash choices govern current source. |
+| Modularity and rapid extension | Independent frontend review traced SSR/bootstrap, app-local context/router/QueryClient, transport/query admission, command/document/draft/confirmed-navigation owners, update recovery and every implemented feature family. Matching current new-frontend consumers use their shared owners. Native/new frontend copying follows the explicit temporary isolation exception. Drivers' first additional guest-entry consumer and feature-specific finance/recommendation contracts remain concrete future reuse checks; no speculative universal engine is introduced. |
+| Shared backend and server authority | Existing controllers own admission/business policy and pure DBAL owns persistence. API/document adapters retain their transport differences around those owners. One ordinary Express request Session, a plain hydrated actor, read-only stored-generation rejection, bounded legacy metadata and separately approved explicit completion staging match the current design. Browser claims/capabilities never authorize. Current native frontend/app/Pug/DBAL diffs are empty; historical integration exceptions retain their recorded scope. |
+| Documentation, comments and human maintenance | The frontend reviewer inspected complex ownership, concurrency, lifecycle and DOM comments as well as actual adoption; the whole frontend structural scan covered 225 nontrivial operations without findings. Root/backend review covered session, transport, controller and completion owners. The existing [Development playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature-view) includes worked extension, policy/projection, state/draft, feedback, localization, transport and test-boundary guidance. Syntax/comment counts alone are not semantic certification. |
+| Core principles and formatting | All shared contracts under `src/types/` remain declaration files. No new controller/service, second session owner, mirrored server-data store or duplicate backend implementation was added for this decision. Named operations, internal explanations and logical spacing follow the existing patterns. The global engineering scan checked 321 authored sources, 11 DBAL files and the 19 changed readability files/29 operations without findings; whitespace checks passed. |
+| Technical debt and bounded guarantees | No newly discovered runtime blocker remains in the reviewed pilot. Existing general defects and previously excluded token/transfer/deactivation/deletion remedies remain separately owned. `ARCH-005` records the newly requested whole-session/flash verification and unification effort; it grants no redesign and does not block parity migration. Current-value comparisons, legacy metadata and native feedback retain their documented limits; no global session CAS, exhaustive race or repaired legacy guarantee is asserted. |
+| Repository and documentation cleanliness | The full implementation plan has live future phase contracts; baseline/inventory/capture records remain needed during coexistence. P0/P1 execution sequences are completed dispositions, not pending implementation checklists. Eight existing staged guide owners and one manifest retain amendments without full guide copies or new destinations. Completed earlier native documentation plans are already consolidated; the [retirement inventory](FRONTEND_FOUNDATION_DESIGN.md#cutover-retirement-inventory) classifies remaining temporary material for separately authorized cutover. No unclassified file was removed. |
+| Staged guidance and architecture consistency | Source-reviewed Architecture/Development/Testing amendments describe the one-Session boundary, read-only initial projection, deliberate native anonymous flash, context-bearing versus public null comparison scope and actual test layers. An anonymous flash row can still have null metadata; row presence alone does not establish scope. The rejected URL-notice proposal is retained as history, with no pending R1 wording. Active policies/ADR remain canonical; the profile owns temporary coexistence and publication rules. Prepared-output semantic review and publication permission remain separate from source review. |
+| Next migration readiness | No unresolved pilot implementation/design blocker was found after the documented corrections. The foundation is ready for the next explicitly authorized parity-only vertical slice using the existing playbook and phase producer contracts. Each new module must still prove its own permissions, private projections, transaction/uncertain-result semantics and equivalent native visual/behavioral states; successful pilot checks do not preapprove those implementations or cutover. |
+
+The new native-flash verification used the actual Express application and isolated MariaDB: the profile-administration
+selection passed 12/12, including no initial row/cookie, deliberate notice persistence, exact login redirect and one-time
+consumption. The current test type-check passed. Independent frontend/backend source reviews found no surviving
+runtime blocker; the factual transport-history correction received separate nonauthor review. Earlier broad
+database-free, ORM, browser and built-system runs retain their dated scopes above and are not represented as a fresh
+uniform full-suite run. This re-review ran no new complete visual/accessibility matrix, hosted CI, real provider/SMTP,
+operator/deployment rehearsal or full-application migration. Native removal, default routes and guide publication
+remain separately authorized actions.

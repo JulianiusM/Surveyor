@@ -32,8 +32,10 @@ schemas:
     required: [kind, context, csrfToken, locale, activeProfile, profiles, loginUrl, logoutUrl, shell, deployment]
     properties:
       kind: {type: string, enum: [anonymous, account, guest]}
-      context: {type: string, minLength: 1, maxLength: 256}
-      csrfToken: {type: string, minLength: 1, maxLength: 256}
+      # Sessionless reads expose no synthetic visitor identity or security token.
+      # Existing logged-out sessions can still have the complete stored pair.
+      context: {type: [string, 'null'], minLength: 1, maxLength: 256}
+      csrfToken: {type: [string, 'null'], minLength: 1, maxLength: 256}
       # Supported locales come from catalog discovery; adding a catalog never changes this contract.
       locale: {$ref: './common.yaml#/schemas/LocaleTag'}
       activeProfile:
@@ -56,4 +58,18 @@ schemas:
         required: [kind]
       - properties:
           kind: {enum: [account, guest]}
+          # Validated legacy identities receive read-only compatibility evidence;
+          # an authenticated projection can never downgrade to a null pair.
+          context: {type: string}
+          csrfToken: {type: string}
         required: [kind]
+    allOf:
+      - oneOf:
+          - properties:
+              context: {type: string}
+              csrfToken: {type: string}
+            required: [context, csrfToken]
+          - properties:
+              context: {type: 'null'}
+              csrfToken: {type: 'null'}
+            required: [context, csrfToken]

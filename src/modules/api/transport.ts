@@ -87,7 +87,7 @@ export function validateOperationRequest(req: Request, operationId: ApiOperation
 function privateResponse(req: Request, res: Response, locale = requestLocale(req)): void {
     res.set('Cache-Control', 'private, no-store').set('Content-Language', locale)
         .vary('Cookie').vary('X-Surveyor-Context').vary('X-Surveyor-Locale');
-    if (req.apiActor) res.set('X-Surveyor-Context', req.apiActor.context);
+    if (req.apiActor?.context) res.set('X-Surveyor-Context', req.apiActor.context);
 }
 
 /** Validate the common JSON boundary once for ordinary replies and commit-sensitive receipts. */
@@ -105,12 +105,12 @@ function jsonResponseContract(operationId: ApiOperationId, status: number, data:
  */
 export function prepareValidatedJson<Operation extends ApiOperationId, Status extends ApiSuccessStatus<NoInfer<Operation>>>(
     req: Request, operationId: Operation, status: Status, data: ApiResponseBody<NoInfer<Operation>, NoInfer<Status>>,
-    context = req.apiActor?.context): PreparedApiJsonResponse {
+    context: string | null | undefined = req.apiActor?.context): PreparedApiJsonResponse {
     // Generated shape/status admission precedes serialization. Locale/context
     // are captured with this receipt rather than resolved from a later session.
     const operation = jsonResponseContract(operationId, status, data);
     return Object.freeze({status, mediaType: operation.responseMediaTypes[String(status)] ?? 'application/json',
-        locale: requestLocale(req), context, json: JSON.stringify(data)});
+        locale: requestLocale(req), context: context ?? undefined, json: JSON.stringify(data)});
 }
 
 /** Deliver a prepared commit receipt without another read, validation or serialization. */

@@ -19,7 +19,9 @@ let owner: Profile;
 let target: Profile;
 
 function profileActor(profile: Profile): SessionLike { return {profile, auth: {user: profile.user!}}; }
-function publicActor(): ApiActor { return {context: randomUUID()}; }
+function publicActor(kind: 'stored' | 'stateless' = 'stored'): ApiActor {
+    return {context: kind === 'stored' ? randomUUID() : null};
+}
 
 /** Seed through the production creator, retaining its normal nonediting defaults.
  * Each scenario grants only the native method it actually exercises. */
@@ -51,9 +53,9 @@ beforeAll(async () => {
 afterAll(closeIntegrationDatabase);
 
 describe('native-granted public Packing actions through versioned operations', () => {
-    it('denies editing and administration with normal audience defaults', async () => {
+    it.each(['stored', 'stateless'] as const)('denies editing and administration with normal defaults for %s public requests', async kind => {
         const {id, items} = await fixture();
-        const actor = publicActor();
+        const actor = publicActor(kind);
         await packingService.assignPackingItem(items[0].id, target.id);
         const assignment = await AppDataSource.getRepository(PackingAssignment).findOneByOrFail({item: {id: items[0].id}});
 
@@ -76,9 +78,9 @@ describe('native-granted public Packing actions through versioned operations', (
         expect(await packingService.getPackingAssignmentById(assignment.id)).not.toBeNull();
     });
 
-    it('keeps protected reads and principal-owned commands profile-only even with broad public grants', async () => {
+    it.each(['stored', 'stateless'] as const)('keeps private reads and personal commands profile-only despite broad grants for %s requests', async kind => {
         const {id, items} = await fixture(true);
-        const actor = publicActor();
+        const actor = publicActor(kind);
         await adminService.updatePerms('packing', id, {public: DEFAULT_PERM.ADMIN});
 
         await expect(packing.readPackingList(id, actor)).rejects.toMatchObject({status: 401});
@@ -113,7 +115,7 @@ describe('native-granted public Packing actions through versioned operations', (
             (await packing.readPackingItemEditBaseline(id, items[0].id, profileActor(owner))).editToken, actor)).rejects.toMatchObject({status: 412});
         await expect(packing.updatePackingItem(id, items[0].id, {title: 'Private field'}, baseline.editToken, actor)).rejects.toMatchObject({status: 403});
         await expect(packing.updatePackingItem(foreign.id, items[0].id, {description: 'Wrong root'}, baseline.editToken, actor)).rejects.toMatchObject({status: 404});
-        await expect(packing.updatePackingItem(id, items[0].id, {description: 'No admitted context'}, baseline.editToken, {})).rejects.toMatchObject({status: 401});
+        await expect(packing.updatePackingItem(id, items[0].id, {description: 'Different public scope'}, baseline.editToken, {})).rejects.toMatchObject({status: 412});
         await packing.updatePackingItem(id, items[0].id, {description: 'Publicly reviewed'}, baseline.editToken, actor);
         expect(await packingService.getPackingItemById(items[0].id)).toMatchObject({title: 'Private first title', description: 'Publicly reviewed', maxAssignees: 2});
 
@@ -121,6 +123,44 @@ describe('native-granted public Packing actions through versioned operations', (
         await adminService.updatePerms('packingItem', items[0].id, {public: 0});
         await expect(packing.updatePackingItem(id, items[0].id, {description: 'Revoked'}, latest.editToken, actor)).rejects.toMatchObject({status: 403});
         await expect(packing.readPackingItemEditBaseline(id, items[0].id, actor)).rejects.toMatchObject({status: 403});
+    });
+
+    it('reviews stateless public fields without a principal and never treats its token as permission', async () => {
+        const {id, items} = await fixture(true);
+        const foreign = await fixture();
+        const actor = publicActor('stateless');
+        await adminService.updatePerms('packing', id, {public: 0});
+        await adminService.updatePerms('packingItem', items[0].id, {public: PERM.EDIT_DESC});
+        await adminService.updatePerms('packingItem', items[1].id, {public: PERM.EDIT_DESC});
+
+        // A public projection has no visitor identity. Its available values and
+        // comparison scope agree for plain anonymous and explicitly null actors.
+        const baseline = await packing.readPackingItemEditBaseline(id, items[0].id, {});
+        expect(baseline).toMatchObject({values: {description: 'Original first description'}, editableFields: ['description']});
+        expect((await packing.readPackingItemEditBaseline(id, items[0].id, actor)).editToken).toBe(baseline.editToken);
+        expect(contractValidator('PackingItemEditBaseline')(baseline)).toBe(true);
+        expect(tokenFields(baseline.editToken)).toEqual(['description']);
+
+        // Stored/profile comparisons cannot substitute for this public baseline;
+        // another resource or an ungranted field still fails its own current check.
+        const stored = await packing.readPackingItemEditBaseline(id, items[0].id, publicActor());
+        const personal = await packing.readPackingItemEditBaseline(id, items[0].id, profileActor(owner));
+        await expect(packing.updatePackingItem(id, items[0].id, {description: 'Stored scope'}, stored.editToken, actor)).rejects.toMatchObject({status: 412});
+        await expect(packing.updatePackingItem(id, items[0].id, {description: 'Profile scope'}, personal.editToken, actor)).rejects.toMatchObject({status: 412});
+        await expect(packing.updatePackingItem(id, items[1].id, {description: 'Other item'}, baseline.editToken, actor)).rejects.toMatchObject({status: 412});
+        await expect(packing.updatePackingItem(foreign.id, items[0].id, {description: 'Other root'}, baseline.editToken, actor)).rejects.toMatchObject({status: 404});
+        await expect(packing.updatePackingItem(id, items[0].id, {title: 'Ungrantable field'}, baseline.editToken, actor)).rejects.toMatchObject({status: 403});
+
+        // Changing the available public fields retires that projection's token.
+        // A fresh matching token permits only the current grant, without a profile.
+        await adminService.updatePerms('packingItem', items[0].id, {public: PERM.EDIT_DESC | PERM.EDIT_META});
+        await expect(packing.updatePackingItem(id, items[0].id, {description: 'Old projection'}, baseline.editToken, actor)).rejects.toMatchObject({status: 412});
+        const latest = await packing.readPackingItemEditBaseline(id, items[0].id, actor);
+        await packing.updatePackingItem(id, items[0].id, {description: 'Stateless public edit'}, latest.editToken, {});
+        expect(await packingService.getPackingItemById(items[0].id)).toMatchObject({title: 'Private first title', description: 'Stateless public edit'});
+        const reviewed = await packing.readPackingItemEditBaseline(id, items[0].id, actor);
+        await adminService.updatePerms('packingItem', items[0].id, {public: 0});
+        await expect(packing.updatePackingItem(id, items[0].id, {description: 'Revoked'}, reviewed.editToken, actor)).rejects.toMatchObject({status: 403});
     });
 
     it('retains item counts without a personal profile and independently reviews the public order', async () => {
@@ -162,9 +202,9 @@ describe('native-granted public Packing actions through versioned operations', (
         expect(await AppDataSource.getRepository(PackingAssignment).countBy({item: {id: items[0].id}})).toBe(0);
     });
 
-    it('exposes only audience masks and compares each changed public default independently', async () => {
+    it.each(['stored', 'stateless'] as const)('exposes audience masks and compares independent public defaults for %s requests', async kind => {
         const {id} = await fixture(true);
-        const actor = publicActor();
+        const actor = publicActor(kind);
         await adminService.updatePerms('packing', id, {public: PERM.MANAGE_PERMISSIONS});
         const baseline = await packing.readPackingDefaultsBaseline(id, actor);
         expect(Object.keys(baseline)).toEqual(['defaultPermissions', 'editToken']);
@@ -244,9 +284,9 @@ describe('native-granted public Packing actions through versioned operations', (
         }
     });
 
-    it('shares the native description operation without exposing or changing mixed root properties', async () => {
+    it.each(['stored', 'stateless'] as const)('shares native description behavior without exposing mixed properties for %s requests', async kind => {
         const {id, eventId} = await fixture(true);
-        const actor = publicActor();
+        const actor = publicActor(kind);
         await adminService.updatePerms('packing', id, {public: PERM.EDIT_DESC});
         const baseline = await packing.readPackingDescription(id, actor);
         expect(baseline).toEqual({description: 'Original root description', editToken: expect.any(String)});

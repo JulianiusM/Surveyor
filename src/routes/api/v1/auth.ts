@@ -78,8 +78,8 @@ router.post('/auth/register', asyncHandler(async function registerAccount(req, r
     requireLocalLogin();
 
     /** Bind the request's transport metadata to precommit signup confirmation only. */
-    function prepareSignupReply(staged: Request['session']) {
-        return prepareAccountRegistrationReplies(req, staged);
+    function prepareSignupReply() {
+        return prepareAccountRegistrationReplies(req);
     }
     const committed = await userController.registerUserWithSession(req.body, req,
         {frontend: true, next: req.body.next, context: req.apiActor!.context, prepareResult: prepareSignupReply});
@@ -93,8 +93,8 @@ router.post('/auth/forgot-password', asyncHandler(async function requestPassword
     await admit(req, res, 'requestPasswordReset');
     requireLocalLogin();
     /** Prepare identical generic confirmation for known and unknown account requests. */
-    function prepareRecoveryReply(staged: Request['session']) {
-        return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true}, staged.frontendContext);
+    function prepareRecoveryReply() {
+        return prepareValidatedJson(req, 'requestPasswordReset', 200, {changed: true});
     }
     const committed = await userController.requestPasswordResetWithSession(req.body.username, req,
         {frontend: true, next: req.body.next, context: req.apiActor!.context, prepareResult: prepareRecoveryReply});
@@ -114,8 +114,8 @@ router.post('/auth/reset-password', asyncHandler(async function resetAccountPass
     await admit(req, res, 'resetAccountPassword');
     requireLocalLogin();
     /** Prepare confirmation before password/token consumption becomes final. */
-    function prepareResetReply(staged: Request['session']) {
-        return prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true}, staged.frontendContext);
+    function prepareResetReply() {
+        return prepareValidatedJson(req, 'resetAccountPassword', 200, {changed: true});
     }
     const committed = await userController.resetPasswordWithSession(req.body.token, req.body, req,
         {context: req.apiActor!.context, prepareResult: prepareResetReply});
@@ -127,8 +127,8 @@ router.post('/auth/activate', asyncHandler(async function activateIdentity(req, 
     await admit(req, res, 'activateIdentity');
     requireLocalLogin();
     /** Validate and serialize completion before consuming this one-time token. */
-    function prepareActivationReply(staged: Request['session']) {
-        return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true}, staged.frontendContext);
+    function prepareActivationReply() {
+        return prepareValidatedJson(req, 'activateIdentity', 200, {changed: true});
     }
     const committed = await userController.activateAccountWithSession(req.body.token, req,
         {context: req.apiActor!.context, prepareResult: prepareActivationReply});

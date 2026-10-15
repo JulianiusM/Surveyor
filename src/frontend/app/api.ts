@@ -13,7 +13,7 @@ type Session = components['schemas']['SessionView'];
 
 /** Session and identity commands are needed by the shell; product feature operations stay with their routes. */
 export class PilotApi extends PilotTransport {
-    /** Bootstrap establishes the authoritative cookie context before scoped reads.
+    /** Bootstrap reads the current server identity without establishing a session.
      * Its shared deadline is application-local; no conditional private snapshot or
      * previously captured actor is supplied to this identity admission request. */
     async bootstrap(signal?: AbortSignal): Promise<Session> {

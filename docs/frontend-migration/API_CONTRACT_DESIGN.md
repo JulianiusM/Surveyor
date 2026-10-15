@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: corrected definition freedom versus implemented HTTP transport routed to DEC-006; existing toolchain, method/no-op and version contracts retained; no new runtime transport verification
+verification-scope: original transport provenance corrected; approved one-session initial projection, native flash and nullable/public comparison contracts source-reviewed in full pilot audit; execution belongs to paired review
 source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: next-contract-migration-or-authorized-cutover
 -->
@@ -49,6 +49,9 @@ preferences, implemented HTTP transport and bounded password/capacity extensions
 resolves the earlier agent interpretation: removal of unused implementation did not authorize definition bans.
 Array/object/union parameter schemas and response media definitions are distinct from the decoder and response
 delivery capabilities actually implemented. Accepting their definitions does not restore unused runtime behavior.
+The [transport decision history](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#authorized-transport-scope-restoration-2026-10-14)
+also distinguishes the original selected repeated-query-array/text-output capability from its later implementation
+and explicitly approved removal; an unused capability was not an unselected design.
 
 ## Server boundaries and DTO projection
 
@@ -69,11 +72,21 @@ and disclosure policy rather than generalizing Packing rules to surveys or finan
 ## Identity, sessions, and request context
 
 Use same-origin cookie sessions. Session bootstrap distinguishes anonymous/account/guest, active profile and event
-registration; return only UI-needed identity/entry/locale/CSRF data, never session IDs/provider/guest tokens.
+registration; return only UI-needed identity/entry/locale/CSRF data, never session IDs/provider/guest tokens. The
+[2026-10-15 ownership amendment](FRONTEND_FOUNDATION_DESIGN.md#session-ownership-restoration-and-stateless-initial-visits-2026-10-15)
+supersedes the original mandatory anonymous-context initialization. GET bootstrap reads the ordinary Express Session;
+an uninitialized anonymous candidate has a null context/CSRF pair and gains no stored row/cookie from that read.
+Existing authenticated sessions lacking SPA fields receive bounded server-session-bound read-only compatibility
+metadata; explicit identity operations retain the stored random generation and approved completion transaction.
+The [native-flash decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-native-anonymous-session-flash-2026-10-15)
+separately retains anonymous Session persistence for an intentional document redirect notice; it does not turn
+API bootstrap into an initializer or add context/CSRF metadata to that feedback Session.
 
-Subsequent scoped v1 requests send `X-Surveyor-Context`. The server compares authoritative session generation before
+Subsequent v1 requests with server context send `X-Surveyor-Context`. The server compares authoritative generation before
 private reads/commands; stale context yields `SESSION_CONTEXT_CHANGED`, while missing/expired context follows its
-declared error. Login/logout/profile/guest transitions rotate context. A caller's profile ID is not authority.
+declared error. Omitting claims never downgrades a context-bearing or authenticated scope to public. Admission can
+reject newer stored identity evidence, but never adopts another writable Session. Login/logout/profile/guest transitions rotate context.
+A caller's profile ID is not authority.
 
 The browser checks captured context/identity epoch before adopting results. Intentional switches resolve drafts,
 retire private queries and bootstrap the new identity. A command already admitted for the original actor may finish;
@@ -81,11 +94,14 @@ aborting HTTP is not transaction rollback and cannot justify replay as another a
 
 The API mount precedes HTML/OIDC redirect handling. Structured API expiry stays JSON; known invalid credentials/token
 are confirmed rejections rather than global identity invalidation.
-Identity operations admit old context/CSRF and bind successful results to the new context.
+Identity operations admit the captured old scope, including a public null scope without identity or frontend context,
+and bind successful identity transitions to the new context. First completion allocates no empty session before validation/preparation.
 Stored-context rechecks protect slow transitions; this is not a session-store compare-and-swap guarantee.
 
-Cookie mutations validate session CSRF and same-origin metadata, including multipart.
-Custom headers, SameSite and CORS alone are not complete policy.
+Stored-context mutations validate session CSRF and same-origin metadata, including multipart. Sessionless mutations
+require affirmative configured-origin/Fetch Metadata evidence and the non-simple compatibility header before exact
+generated operation decoding; no permissive CORS exception is introduced. A custom header or SameSite alone is not
+the entire policy, and these transport checks never authenticate or grant feature permission.
 Native adapters retain established transport/status/flash semantics; no new native hidden conflict fields are claimed.
 
 `X-Surveyor-Locale` chooses supported response language; localized results declare Content-Language.
@@ -179,13 +195,15 @@ The YAML owns `getPackingDescription`/`updatePackingDescription`, `getPackingDef
 
 The initial pilot's blanket profile requirement narrowed independently granted native methods. The explicit
 [maintainer amendment](FRONTEND_FOUNDATION_DESIGN.md#explicit-canonical-location-and-action-decisions-2026-10-12)
-now admits those methods using the captured session context without inventing a shared anonymous actor. Item
+admitted those methods using captured session context without inventing a shared anonymous actor. The Oct15
+ownership amendment above replaces that per-visitor requirement for sessionless public projections. Item
 edit/order/delete, administrator assignment removal, default/admin management, scoped profile discovery, header
 write/preflight and the legacy description-only action follow current native method grants. The authored description,
 defaults, administrator and header baseline operations expose only their permitted comparison state. Profile-required
 reads and commands retain their original boundary; the [admission matrix](staged/DEVELOPMENT.md#backend-and-method-policy-contracts)
-distinguishes them. Context checks, mutation CSRF and fresh authorization remain mandatory; conditional operations
-retain actor-bound comparison tokens.
+distinguishes them. Existing-context checks, the corresponding mutation protection and fresh authorization remain
+mandatory. Conditional tokens remain profile/session-bound where identity exists; a sessionless baseline binds
+resource/operation, visible field set and current values, never an anonymous principal or permission.
 
 Native and v1 profile discovery share the existing per-IP 120-search/10-minute budget. Native rate-limit text remains
 unchanged; v1 maps rejection through its existing localized Problem owner. No global permission redesign is implied.

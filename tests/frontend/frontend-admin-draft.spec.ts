@@ -13,7 +13,7 @@ import type {components} from '../../src/types/api/v1';
 const listId = '11111111-1111-4111-8111-111111111111';
 const profileId = '22222222-2222-4222-8222-222222222222';
 const adminId = '33333333-3333-4333-8333-333333333333';
-const session: components['schemas']['SessionView'] = {
+const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'account', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
     context: 'component-context-1234567890', csrfToken: 'component-csrf-1234567890', locale: 'en',
     activeProfile: {id: profileId, name: 'Owner'}, profiles: [{id: profileId, name: 'Owner'}],

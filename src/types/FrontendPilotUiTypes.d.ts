@@ -8,12 +8,10 @@ import type {FrontendPageCompletion, FrontendPilotBootstrap} from './FrontendPil
 import type {PilotApi} from '../frontend/app/api';
 
 /** Browser-only collaborators must never enter the backend bootstrap declaration's import graph. */
-export interface PilotRequestScope {
-    context: string;
+export type PilotRequestScope = Pick<components['schemas']['SessionView'], 'context' | 'csrfToken'> & {
     epoch: number;
     locale: string;
-    csrfToken: string;
-}
+};
 
 /** A control and its handler read the same derived operation state. Each owner
  * supplies its existing admission and locks; initialization is shared, while
@@ -160,8 +158,8 @@ export type PilotEventPickerSelection = Pick<PilotEventPickerOption, 'id'>
     & Partial<Pick<PilotEventPickerOption, 'archived'>>;
 export interface PilotEventPickerSource {
     search(query: PilotEventPickerQuery, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventPickerOptions']>;
-    pageKey(context: string | undefined, locale: string, filters: string, parameters: PilotEventPickerQuery): readonly unknown[];
-    filterKey(context: string | undefined, locale: string, filters: string): readonly unknown[];
+    pageKey(context: string | null | undefined, locale: string, filters: string, parameters: PilotEventPickerQuery): readonly unknown[];
+    filterKey(context: string | null | undefined, locale: string, filters: string): readonly unknown[];
 }
 
 /** The mixed Overview owner selects the feature's migrated presentation. Cards

@@ -7,7 +7,7 @@ export type PackingPageError = 'packing.notFound' | 'packing.eventRegistrationRe
 /** A confirmed message result belongs to one actor and canonical destination;
  * it scopes the in-memory SPA completion receipt independently of later admission. */
 export interface FrontendPageCompletion {
-    context: string;
+    context: components['schemas']['SessionView']['context'];
     destination: string;
     messageKey: MessageKey;
     kind: 'success' | 'info';

@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: frontend-owned timer, copied Sass and Vite client/SSR delivery source-reviewed; earlier static/feedback composition and API/localization scopes retained; no cutover claimed
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json
+verification-scope: full pilot architecture/source review includes one Express request Session, initial read-only projection, native anonymous flash and bounded compatibility; no cutover or operator rehearsal claimed
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -50,6 +50,16 @@ persists secrets/files or replays writes. Session/security revalidation and scop
 runtime validators; no second handwritten wire schema or runtime schema compilation exists. Transport adapters decode
 and present around the same controller business owners. Page admission, method grants and private projections remain
 separate; reusable controls never grant authority.
+
+Express's ordinary `req.session` is the single request Session. Admission checks current stored generation without
+adopting another snapshot; its plain hydrated actor captures identity for the operation. Initial session projection
+and public rendering without feedback create no anonymous row/cookie and return null context/CSRF where none exists.
+Existing authenticated records can project bounded legacy metadata without a write; explicit identity transitions retain their existing
+completion owner. Browser claims/epochs/capabilities never grant authority. Controllers and stored server identity
+remain authoritative, including public grant-only methods without an invented anonymous principal. An intentional
+account-required document redirect retains native anonymous Session/flash persistence and one-time consumption,
+without a URL notice or metadata initialization. Ordinary saves and native expiry/provider effects retain their
+owners. The [Development guidance](DEVELOPMENT.md#backend-and-method-policy-contracts) describes these boundaries.
 
 The [Development contract guidance](DEVELOPMENT.md#contract-authoring-and-generated-consumers) owns supported
 schema/transport styles, strict generated validation and released-version compatibility. The shared translator and
@@ -284,7 +294,7 @@ Optional lifecycle presentation travels through explicit component data/events a
 
 <!-- delta:amendment-21 -->
 Vitest discovers unit, frontend and integration files. Its database-free project uses bounded workers for isolated
-logic/client checks and the genuine Express/Vite server-component fixture. The database-backed integration project
+logic/client checks and scoped server-component integration. The database-backed integration project
 remains serialized because it rebuilds one guarded disposable MariaDB schema. Test layer describes the exercised
 production boundary; the database-free runner selection does not turn a real server-component integration into a
 unit/client test. The [Testing Guide](TESTING_GUIDE.md#vitest-configuration) owns exact selection and commands.
