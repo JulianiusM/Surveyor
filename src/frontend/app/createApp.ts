@@ -4,7 +4,7 @@ import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
-import {createPilotContext, observeInitialDocument, pilotContextKey} from './context';
+import {createPilotContext, hasStaticPageOutcome, observeInitialDocument, pilotContextKey} from './context';
 import App from './App.vue';
 // The shell also renders admitted common outcomes, so this shared view is
 // already part of the entry bundle rather than an independent route chunk.
@@ -35,7 +35,7 @@ function isRouteModuleLoadFailure(error: unknown): boolean {
 /** Server and browser construct the same component tree with separate application-owned state. */
 export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boolean,
                                initialReloadGuard?: () => boolean) {
-    const context = createPilotContext(bootstrap, browser);
+    const context = createPilotContext(bootstrap, browser, undefined, mayReloadAutomatically);
     // Register initial DOM protection before Router can start a failing import.
     // The browser entry releases it only after mounted draft restoration finishes.
     const releaseInitialReloadGuard = initialReloadGuard
@@ -48,7 +48,9 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
     const router = createRouter({
         history: browser ? createWebHistory() : createMemoryHistory(),
         routes: [
-            {path: '/frontend-pilot', component: OverviewPage, meta: {javascriptRequired: true}},
+            // Only shared content which another actor can change opts into
+            // automatic document replacement. New routes default to explicit recovery.
+            {path: '/frontend-pilot', component: OverviewPage, meta: {...javascriptPage, dynamicContent: true}},
             {path: '/frontend-pilot/home', component: LandingPage},
             {path: '/frontend-pilot/message', component: CommonPage},
             {path: '/frontend-pilot/users/profile', component: ProfileAdministrationPage, meta: {...javascriptPage, profileMode: 'edit'}},
@@ -64,7 +66,7 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             {path: '/frontend-pilot/packing/create', component: PackingCreatePage, meta: {javascriptRequired: true}},
             {path: '/frontend-pilot/packing/:listId/duplicate', component: PackingCreatePage, meta: {javascriptRequired: true}},
             {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry, meta: {...javascriptPage}},
-            {path: '/frontend-pilot/packing/:listId', component: PackingEntry, meta: {javascriptRequired: true}},
+            {path: '/frontend-pilot/packing/:listId', component: PackingEntry, meta: {...javascriptPage, dynamicContent: true}},
             {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'login'}},
             {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...javascriptPage, identityMode: 'register'}},
             {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'oidc'}},
@@ -97,6 +99,28 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             return {top: 0};
         },
     });
+
+    /** Resolve startup and mounted eligibility from the same route declarations.
+     * This callback is installed before app.use(router) can load a failing chunk;
+     * no mounted feature or duplicate endpoint inventory grants reload authority. */
+    function mayReloadAutomatically(): boolean {
+        // A first lazy-route failure precedes currentRoute commitment. Resolve
+        // that document's URL without importing its component; later visits must
+        // instead consult the actual committed route, including warm static pages.
+        const current = router.currentRoute.value;
+        const route = current.matched.length ? current
+            : router.resolve(bootstrap.initialUrl ?? router.options.history.location);
+
+        // Back/Forward changes the address before asynchronous navigation settles.
+        // Do not reload a target document using the previous page's classification.
+        if (browser && frontendDocumentUrl(route.fullPath) !== frontendDocumentUrl(router.options.history.location)) return false;
+
+        // A server-admitted error/completion remains static even at a dynamic URL.
+        // Reuse rendering's existing outcome policy and its live document lifetime.
+        return route.meta.dynamicContent === true
+            && !hasStaticPageOutcome(route, context.initialDocumentFor(route.fullPath));
+    }
+
     observeInitialDocument(context, router);
     app.provide(pilotContextKey, context);
     app.use(I18NextVue, {i18next: context.i18next});

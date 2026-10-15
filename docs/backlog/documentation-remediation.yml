@@ -1401,6 +1401,37 @@ implementation_defects:
         failure outcomes, with independent semantic review and the provider-specific IMP-056 boundary preserved.
     evidence_limit: Failure consequences are source-inferred, not runtime reproduced; no live SMTP/provider outcome
       or native behavior change is established. This does not duplicate the final-profile deactivation defect IMP-006.
+  - id: IMP-061
+    status: closed
+    closed_on: 2026-10-15
+    severity: high
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: A paused follow-up read discards a confirmed frontend command result
+    evidence:
+      - src/frontend/composables/command.ts previously classified every ObsoleteRequestError as an obsolete command
+        before considering its confirmed response; its early return discarded the confirmed operation result.
+      - src/frontend/features/packing/PackingPage.vue refreshCurrentList rejects with that read error during session
+        revalidation even when context.isCurrent still accepts the captured actor. Quick Add clears fields only
+        when the shared command returns its confirmed result.
+    impact: A saved Quick Add can retain completed input without an unknown-outcome guard, allowing the user to
+      submit the same creation again. Other confirmed command consumers can lose their completion similarly.
+    history: Independent source review on 2026-10-15 established the mismatch between read admission and captured
+      command identity. Existing tests separately covered ordinary failed reads and actual actor retirement.
+    authorization: The maintainer approved the frontend-readiness implementation plan on 2026-10-15. This correction
+      enforces the existing saved-plus-failed-refresh contract; it changes no native UI or backend operation.
+    documentation_contract: Retain a confirmed result and visible failed-refresh warning when a following read pauses
+      for the same actor. Release only completed input; actual actor retirement still retires the old result.
+    closure_evidence:
+      - The existing shared command owner preserves a confirmed result on same-actor follow-up failure while keeping
+        actual actor retirement and preconfirmation disposal obsolete. No backend or native operation changes.
+      - Shared-command and actual mounted Quick Add regressions verify one validated creation, released completed
+        input, retained warning and read-only recovery preserving a later draft through pending/failed session checks.
+        Existing unknown/rejected and actor-retirement assertions remain. The current 39-file/918-test client and
+        genuine server-component selection passed; exact execution and its scope belong to the paired pilot review.
+      - Root and independent source review accept the confirmed-result, admission, lifetime and no-replay boundaries.
+    evidence_limit: The Quick Add checks substitute HTTP and establish mounted production-client behavior, not actual
+      persisted duplication or system E2E. No database, provider or native-backend guarantee is claimed by this closure.
 findings:
   - id: DOC-PERMISSION-POLICY-REVIEW
     status: open

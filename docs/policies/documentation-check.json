@@ -251,7 +251,7 @@
     },
     {
       "path": ".env.e2e",
-      "expectedOccurrences": 4,
+      "expectedOccurrences": 6,
       "reason": "Local E2E configuration generated from the committed example and intentionally ignored",
       "package": "D13"
     },

@@ -57,6 +57,14 @@ export function useActionState(inputs: PilotActionInputs = {}): PilotActionState
  * an otherwise interactive page expose controls before browser initialization. */
 export function requiresClientInitialization(route: Pick<RouteLocationNormalized, 'meta' | 'fullPath'>,
                                              initial?: FrontendPilotBootstrap): boolean {
+    return route.meta.javascriptRequired === true && !hasStaticPageOutcome(route, initial);
+}
+
+/** Rendering and release recovery share the admitted static-outcome boundary.
+ * A dynamic resource URL can deliver a readable denial/completion document;
+ * its route alone does not make that outcome live collaborative content. */
+export function hasStaticPageOutcome(route: Pick<RouteLocationNormalized, 'meta' | 'fullPath'>,
+                                     initial?: FrontendPilotBootstrap): boolean {
     // A completion belongs only to its admitted actor and canonical destination.
     // Retired initial-document evidence must not authorize a later visit.
     const completion = initial?.pageCompletion;
@@ -66,9 +74,8 @@ export function requiresClientInitialization(route: Pick<RouteLocationNormalized
 
     // These server-admitted results contain only readable feedback/navigation.
     // All other interactive route content starts with the same shared skeleton.
-    const readableResult = !!initial?.commonPage || initial?.pageEntry?.kind === 'denied' || !!initial?.packingError
+    return !!initial?.commonPage || initial?.pageEntry?.kind === 'denied' || !!initial?.packingError
         || !!initial?.identityProblem || !!(initial?.passwordReset && 'status' in initial.passwordReset) || completed;
-    return route.meta.javascriptRequired === true && !readableResult;
 }
 
 export function usePilot(): PilotContext {
@@ -91,7 +98,8 @@ function retryDelay(attempt: number): number {
 
 /** Request-local on the server, application-local in the browser; never a module singleton. */
 export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: boolean,
-                                   requestFetch?: typeof fetch): PilotContext {
+                                   requestFetch?: typeof fetch,
+                                   mayReloadAutomatically: () => boolean = () => false): PilotContext {
     const session = shallowRef(bootstrap.session);
     const epoch = ref(0);
     const locale = ref<Locale>(resolveLocale(bootstrap.session.locale));
@@ -125,7 +133,9 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     const personalLink = ref<string | null>(bootstrap.personalLink ?? null);
     const messages = computed(() => createTranslator(locale.value, i18next.getFixedT(locale.value)));
     const pageTitle = ref('Surveyor');
-    const updates = createUpdateCoordinator(bootstrap.session.deployment, browser);
+    // The application supplies live route eligibility before Router starts.
+    // Contexts without a route owner retain explicit recovery only.
+    const updates = createUpdateCoordinator(bootstrap.session.deployment, browser, mayReloadAutomatically);
     const queryClient = new QueryClient({defaultOptions: {
         queries: {
             staleTime: 15_000,

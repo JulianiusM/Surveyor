@@ -245,6 +245,85 @@ async function mountPackingView(view: components['schemas']['PackingListView'],
     return {wrapper, context, request, router, dispose};
 }
 
+describe('mounted Packing Quick Add confirmation', () => {
+    it.each(['pending', 'failed'] as const)('releases confirmed input once while session verification is %s',
+        async function preservesConfirmedQuickAdd(bootstrapState) {
+            let finishBootstrap!: (response: Response) => void;
+            let rejectBootstrap!: (failure: Error) => void;
+            const bootstrap = new Promise<Response>(function holdBootstrap(resolve, reject) {
+                finishBootstrap = resolve;
+                rejectBootstrap = reject;
+            });
+            let bootstrapReads = 0;
+            let writes = 0;
+            const editableList = {...list, capabilities: {...list.capabilities, addItem: true}};
+            const mounted = await mountPackingView(editableList, async function quickAddResponse(request): Promise<Response> {
+                const path = new URL(request.url).pathname;
+                if (path === '/api/v1/session') return ++bootstrapReads === 1 ? bootstrap : json(session);
+                if (request.method === 'POST') {
+                    writes++;
+                    return new Response(JSON.stringify({id: '33333333-3333-4333-8333-333333333333'}), {
+                        status: 201, headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},
+                    });
+                }
+                return json(editableList);
+            });
+            try {
+                const title = mounted.wrapper.get<HTMLInputElement>('#quick-title');
+                const description = mounted.wrapper.get<HTMLInputElement>('#quick-description');
+                const capacity = mounted.wrapper.get<HTMLInputElement>('#quick-max');
+                const form = title.element.closest('form')!;
+                await title.setValue('Confirmed tent');
+                await description.setValue('Already submitted equipment');
+                await capacity.setValue('2');
+
+                // Exercise the real session admission barrier, including its
+                // failed state. The same actor can still submit a deliberate write.
+                const checking = mounted.context.refreshSession().catch(ignoreBootstrapFailure);
+                if (bootstrapState === 'failed') {
+                    rejectBootstrap(new TypeError('Session verification unavailable'));
+                    await checking;
+                }
+                expect(mounted.context.mayRead()).toBe(false);
+                await mounted.wrapper.get('form').trigger('submit');
+                await flushPromises();
+
+                // The completed creation releases its actual controls even though
+                // its follow-up read cannot dispatch. No unknown-review prompt or
+                // retained creation input can offer the same item for resubmission.
+                expect(writes).toBe(1);
+                expect(title.element.value).toBe('');
+                expect(description.element.value).toBe('');
+                expect(capacity.element.value).toBe('1');
+                expect(form.checkValidity()).toBe(false);
+                expect(document.body.textContent).toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
+                expect(document.body.textContent).not.toContain(mounted.context.messages.value.t('packing.reviewUnknownItem'));
+
+                // Later session/detail recovery is read-only. It must not clear a
+                // new local draft or replay the already acknowledged creation.
+                await title.setValue('New unsaved item');
+                if (bootstrapState === 'pending') {
+                    finishBootstrap(json(session));
+                    await checking;
+                } else await mounted.context.refreshSession();
+                await flushPromises();
+                await mounted.wrapper.get('button[aria-label="Refresh"]').trigger('click');
+                await flushPromises();
+                expect(writes).toBe(1);
+                expect(title.element.value).toBe('New unsaved item');
+                expect(document.body.textContent).not.toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
+            } finally {
+                finishBootstrap(json(session));
+                await mounted.dispose();
+            }
+
+            function ignoreBootstrapFailure(): void {
+                // The production session owner retains its read-only recovery notice.
+            }
+        },
+    );
+});
+
 /** Select real browser-owned bytes on the existing input. The production change
  * event synchronizes PackingSettings rather than a test-only file draft. */
 function selectHeaderFile(input: HTMLInputElement): File {

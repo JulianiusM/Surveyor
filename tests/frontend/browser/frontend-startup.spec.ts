@@ -203,9 +203,9 @@ test('initial startup retains editable static Help search and recovers only afte
     } finally { module.restore(); page.off('dialog', answerRecovery); }
 });
 
-test('initial startup reloads a pristine failed route once and permits deliberate recovery from its stored marker', async ({page}) => {
-    const delivery = await startupDocument(page, '/frontend-pilot/users/login', {session: startupSession()});
-    const module = await failStartupModule(page, /\/app\/assets\/IdentityPage-[^/]+\.js(?:\?|$)/u);
+test('initial startup reloads a pristine dynamic route once and permits deliberate recovery from its stored marker', async ({page}) => {
+    const delivery = await startupDocument(page, '/frontend-pilot', {session: startupSession()});
+    const module = await failStartupModule(page, /\/app\/assets\/OverviewPage-[^/]+\.js(?:\?|$)/u);
     try {
         await page.goto(delivery.url, {waitUntil: 'commit'});
         await module.started;
@@ -235,6 +235,33 @@ test('initial startup reloads a pristine failed route once and permits deliberat
         expect(delivery.observed.documents).toBe(3);
         expect(delivery.observed.commands).toBe(0);
         page.off('dialog', recordUnexpectedDialog);
+    } finally { module.restore(); }
+});
+
+test('initial startup never automatically reopens token issuance and permits deliberate recovery', async ({page}) => {
+    const delivery = await startupDocument(page, '/frontend-pilot/users/profile/migrate/request', {
+        session: startupSession(), profileWorkflow: {kind: 'token', token: 'synthetic-private-transfer-token'},
+    });
+    const module = await failStartupModule(page, /\/app\/assets\/ProfileWorkflowPage-[^/]+\.js(?:\?|$)/u);
+    try {
+        await page.goto(delivery.url, {waitUntil: 'commit'});
+        await module.started;
+        module.fail();
+        const recovery = page.locator('#surveyor-pilot-startup-recovery');
+        await expect(recovery).toBeVisible();
+        await settleStartup(page);
+        expect(delivery.observed.documents).toBe(1);
+        expect(delivery.observed.commands).toBe(0);
+        await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-hydrated', 'true');
+
+        // This real URL issues a replacement token on document GET. The fixture
+        // counts navigation only; it does not claim backend token persistence.
+        // Deliberate recovery still follows that native document boundary once.
+        module.restore();
+        await recovery.getByRole('button', {name: 'Refresh page', exact: true}).click();
+        await waitForPilotHydration(page);
+        expect(delivery.observed.documents).toBe(2);
+        expect(delivery.observed.commands).toBe(0);
     } finally { module.restore(); }
 });
 

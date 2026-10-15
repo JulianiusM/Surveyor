@@ -8,6 +8,7 @@ import type {PilotUpdateCoordinator} from '../../types/FrontendPilotUiTypes';
  * Existing session refreshes call observe; this owner adds no polling or command replay.
  */
 export function createUpdateCoordinator(initial: components['schemas']['DeploymentView'], browser: boolean,
+    mayReloadAutomatically: () => boolean,
     reload: () => void = () => globalThis.location.reload()): PilotUpdateCoordinator {
     const available = ref(false);
     const incompatible = ref(false);
@@ -23,8 +24,11 @@ export function createUpdateCoordinator(initial: components['schemas']['Deployme
     function reloadWhenAllowed(deliberate: boolean): boolean {
         // Startup can register a DOM-draft guard before the component tree exists.
         // Mounted guards and admitted commands keep their existing lifetime too.
-        if (!browser || disposed || reloading || !deliberate && !available.value || commands > 0
-            || [...guards].some(guard => !guard())) return false;
+        // Route policy additionally limits automatic replacement to shared live
+        // content; deliberate recovery still respects every draft/command guard.
+        if (!browser || disposed || reloading || commands > 0) return false;
+        if (!deliberate && (!available.value || !mayReloadAutomatically())) return false;
+        if ([...guards].some(guard => !guard())) return false;
 
         // A failed chunk can have another cause, including an offline browser. An
         // automatic attempt must prove its cross-document loop protection works;

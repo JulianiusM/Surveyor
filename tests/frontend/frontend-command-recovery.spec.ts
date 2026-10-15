@@ -5,7 +5,7 @@ import {defineComponent, nextTick, ref} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import I18NextVue from 'i18next-vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
-import {ApiFailure, InvalidInputError} from '../../src/frontend/app/transport';
+import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../../src/frontend/app/transport';
 import {useCommand} from '../../src/frontend/composables/command';
 import type {components} from '../../src/types/api/v1';
 import type {PilotRequestScope} from '../../src/types/FrontendPilotUiTypes';
@@ -285,6 +285,41 @@ describe('reconcile-only commands', () => {
         expect(command.uncertain.value).toBe(false);
         await command.reconcile();
         expect(command.notice.value).toBeNull();
+    });
+
+    it('retains a confirmed result when only its same-actor follow-up read becomes obsolete', async function preservesConfirmedReadFailure() {
+        const {command, context, refresh} = await mountedCommand();
+        const scope = context.capture();
+        const write = vi.fn(async function confirmWrite() { return {changed: true}; });
+        refresh.mockRejectedValueOnce(new ObsoleteRequestError());
+
+        // A paused/canceled read owns no authority over the already confirmed
+        // write. Its still-current form receives that result and stale-read notice.
+        expect(await command.run(write)).toEqual({changed: true});
+        expect(context.isCurrent(scope)).toBe(true);
+        expect(command.outcome.value).toEqual({confirmation: 'confirmed', refresh: 'failed'});
+        expect(command.notice.value).toBe('state.savedRefreshFailed');
+        expect(command.uncertain.value).toBe(false);
+
+        // Deliberate recovery repeats only the read, never the completed write.
+        await command.reconcile();
+        expect(command.notice.value).toBeNull();
+        expect(refresh).toHaveBeenCalledTimes(2);
+        expect(write).toHaveBeenCalledOnce();
+    });
+
+    it('keeps intentional disposal before write confirmation obsolete', async function preservesPreconfirmationDisposal() {
+        const {command, context, refresh} = await mountedCommand();
+        const scope = context.capture();
+
+        // No admitted result exists to preserve. Disposal before confirmation
+        // must not invent saved feedback or classify the write as unknown.
+        await command.run(async function retireUnconfirmedOperation() { throw new ObsoleteRequestError(); });
+        expect(context.isCurrent(scope)).toBe(true);
+        expect(command.outcome.value).toEqual({confirmation: 'obsolete', refresh: 'not-requested'});
+        expect(command.notice.value).toBeNull();
+        expect(command.uncertain.value).toBe(false);
+        expect(refresh).not.toHaveBeenCalled();
     });
 
     it('retires a confirmed result when its following read changes the active identity', async () => {

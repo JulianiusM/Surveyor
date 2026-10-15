@@ -2004,6 +2004,8 @@ describe('packing command forms', () => {
         context.updates.observe({...session.deployment, buildId: 'next-release'});
         await flushPromises();
         expect(context.updates.requestReload()).toBe(false);
+        // Deliberate recovery also preserves this unresolved settings draft.
+        expect(context.updates.requestRecoveryReload()).toBe(false);
         confirm.mockReturnValue(true);
         confirm.mockClear();
         await router.push('/away');
@@ -2161,6 +2163,8 @@ describe('packing command forms', () => {
         expect(deletes).toBe(1);
         expect(confirm).toHaveBeenCalledTimes(2);
         expect(context.updates.requestReload()).toBe(false);
+        // A confirmed deletion awaiting delivery cannot be bypassed by recovery.
+        expect(context.updates.requestRecoveryReload()).toBe(false);
         const departure = new Event('beforeunload', {cancelable: true});
         window.dispatchEvent(departure);
         expect(departure.defaultPrevented).toBe(true);
@@ -2262,6 +2266,8 @@ describe('packing command forms', () => {
                 window.dispatchEvent(departure);
                 expect(departure.defaultPrevented).toBe(true);
                 expect(context.updates.requestReload()).toBe(false);
+                // Retired editor controls do not release the retained unknown write.
+                expect(context.updates.requestRecoveryReload()).toBe(false);
                 // Lost response remains uncertain after retirement; only a deliberate
                 // accepted departure acknowledges its status, never a replacement PATCH.
                 await router.push('/away');
@@ -3442,6 +3448,8 @@ describe('packing command forms', () => {
         expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined();
         expect(wrapper.text()).toContain(context.messages.value.t('state.saved'));
         expect(context.updates.requestReload()).toBe(false);
+        // Recovery must deliver the confirmed creation instead of reloading its form.
+        expect(context.updates.requestRecoveryReload()).toBe(false);
 
         // Even a programmatic repeated submit cannot create another record. Recovery
         // follows the retained confirmed ID through the generic navigation owner only.

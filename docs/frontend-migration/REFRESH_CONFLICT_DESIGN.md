@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented query/draft/command and approved admission/aggregate/Packed-state boundaries retained; future financial/recommendation frontend integration targets routed to active DEC-006; execution owned by paired review
+verification-scope: dynamic-page-only automatic document reload and confirmed-command follow-up boundaries reconciled with scoped client/build verification in paired review; query/draft/privacy contracts and deferred domain targets retained
 source-anchors: src/frontend/app/context.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/overview/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
 next-review: next-refresh-migration-or-authorized-cutover
 -->
@@ -181,6 +181,9 @@ An equal successful read can restore that authority without requiring different 
 
 D4 is reconcile-only without operation tracking. Recovery reads inform explicit review; they do not automatically
 retry writes or prove an unknown operation failed. Saved-plus-failed-refresh remains saved.
+A following read suppressed during same-actor session revalidation retains the confirmed write result and warning;
+only actual captured-actor retirement discards that result. The feature releases completed input without replaying
+the operation or treating stale read authority as renewed.
 Whole-page destructive departure obtains consent before writing; captured unknown/pending states can outlive editors.
 
 ## Dependent refresh and presentation stability
@@ -197,8 +200,13 @@ Region navigation reads before history commit, merges one region into latest URL
 Failed/obsolete targets keep current cards/URL/focus. Preserve sibling state, modified-click hrefs, search caret,
 fragments and pending drafts. Optional images inject feature operations and own cancellation/object-URL lifetime.
 
-D5 ordinary session refresh detects binary-folder replacement. Compatible loaded edits may finish before one clean
-idle reload. Missing chunks/incompatible commands retain mounted drafts; no retained asset service is required.
+D5 ordinary session refresh detects binary-folder replacement. The explicit 2026-10-15 amendment limits automatic
+full-document reload to eligible dynamic route/content, currently Overview and Packing detail. Creation, duplication,
+user-management, Help and static admitted error/completion content are excluded even when untouched. Compatible
+loaded edits may finish; eligible reloads still require clean state, no pending/unknown command and working loop
+protection. Missing chunks/incompatible commands retain mounted drafts and guarded deliberate recovery on every
+page; no retained asset service is required. This document-replacement policy does not change periodic content reads
+or session/security revalidation.
 
 ## Verification boundary
 

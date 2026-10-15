@@ -876,6 +876,8 @@ describe('identity forms and packing overview navigation', () => {
         context.updates.observe({...session.deployment, buildId: 'next-fixture'});
         expect(context.updates.available.value).toBe(true);
         expect(context.updates.requestReload()).toBe(false);
+        // Static-route policy cannot substitute for protection of this live draft.
+        expect(context.updates.requestRecoveryReload()).toBe(false);
         expect(confirm).toHaveBeenCalledTimes(2);
 
         confirm.mockReturnValue(true);

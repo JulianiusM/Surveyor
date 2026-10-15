@@ -267,6 +267,8 @@ describe('server-owned page entry and canonical navigation', () => {
         await flushPromises();
         expect(reload).not.toHaveBeenCalled();
         expect(context.updates.requestReload()).toBe(false);
+        // Deliberate recovery must retain the confirmed destination's guard too.
+        expect(context.updates.requestRecoveryReload()).toBe(false);
         // A caller cannot replace a confirmed receipt by attempting its command destination
         // again. The only recovery operation retained here is delivery of that first result.
         expect(await completion.navigate('/frontend-pilot/help')).toBe(false);

@@ -6,7 +6,7 @@ owner: frontend maintainers
 status: current
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: maintainer correction separates unused transport implementation removal from unauthorized definition restrictions; original framework/API choices and history retained; no new runtime transport verification
+verification-scope: approved dynamic-page-only automatic document reload amendment recorded; original D5, framework/API choices and definition correction retained; readiness execution belongs to the pilot review
 source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
 next-review: frontend-technology-or-rendering-boundary-change
 -->
@@ -229,6 +229,21 @@ Externalized SSR dependencies remain production dependencies; generated outputs 
 The approved 2026-10-07 release amendment supersedes retained-old-asset deployment: current-folder replacement, ordinary session update detection,
 compatible loaded edits, one clean idle reload and preserved mounted drafts for missing chunks/incompatible commands.
 No additional operator protocol is introduced.
+
+### Authorized automatic document reload scope (2026-10-15)
+
+During the frontend-readiness review, the maintainer explicitly limits automatic full-document reloads to pages
+whose displayed content can change dynamically, such as lists. The current eligible routes are Overview and Packing
+detail. Creation, duplication, user-management and Help pages are excluded, including an untouched form. A static
+admitted error or completion on a dynamic route is also excluded. Subsequent dynamic feature routes declare their
+eligibility through the existing route metadata and shared update owner; new pages do not inherit permission to
+reload automatically.
+
+This narrows D5's original clean-idle-page rule while retaining current-folder replacement, compatible mounted
+commands, draft/pending/unknown protection, initialization safety and the one-attempt loop marker. Detection of a
+changed release or missing chunk still exposes deliberate recovery on an excluded page. Deliberate recovery retains
+its existing consent and command guards. The amendment concerns replacing the whole document; it does not change
+periodic content reads or session/security revalidation. No native UI/backend change or default-route cutover follows.
 
 ## Verification required for implementation
 

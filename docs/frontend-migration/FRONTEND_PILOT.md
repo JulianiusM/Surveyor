@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: complete P1 frontend route ownership and parity-only document delivery; excluded backend remedies remain deferred; current execution owned by paired review
+verification-scope: dynamic-page-only automatic document reload and confirmed-command follow-up contract reconciled with scoped client/build verification in paired review; excluded backend remedies stay deferred
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -173,6 +173,8 @@ A fulfilled canceled observer refetch is not fresh authority; use the shared fre
 
 Drafts keep original/local/remote values separate. A confirmed command acknowledges submitted values; only the next
 fresh admitted read grants a new baseline/token. Saved-plus-failed-refresh remains saved with blocked stale authority.
+A same-actor session-read pause cannot turn a confirmed write into an obsolete result: retain its receipt and release
+only the completed input while presenting the failed-refresh warning. Actual actor retirement still retires its result.
 D2 compares touched current fields under locks, including useful setup fields, and preserves unrelated edits.
 Native last-write request shapes remain unchanged; the shared controller adapts their distinct transport guarantees.
 
@@ -181,8 +183,12 @@ creation failed. Command state and draft protection can outlive retired editors.
 the write; confirmed navigation retains its destination/receipt through canceled or failed delivery.
 Dialog close checks its own draft subtree; route/identity/release departures resolve the whole affected tree.
 
-D5 replacement detection uses ordinary session refresh. Compatible mounted edits may finish before one clean idle
-reload; missing lazy chunks or incompatible commands preserve drafts and explicit recovery.
+D5 replacement detection uses ordinary session refresh. Under the explicit 2026-10-15 amendment, automatic
+full-document reload is limited to admitted dynamic Overview and Packing detail content; creation, duplication,
+user-management, Help and static error/completion presentations are excluded. Eligible pages still require clean
+drafts, no pending/unknown command and working loop protection. Compatible mounted edits may finish; missing lazy
+chunks or incompatible commands preserve drafts and guarded deliberate recovery on every page. Periodic content
+reads and session/security revalidation retain their existing contracts.
 
 ## Localization and native rendering
 

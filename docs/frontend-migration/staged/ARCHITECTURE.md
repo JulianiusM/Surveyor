@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: digest-guarded amendments retain current API/localization architecture and bounded database-free server integration; unchanged production procedures stay in their existing owners; no cutover or operator execution claimed
+verification-scope: approved dynamic-page-only automatic document reload and confirmed-command follow-up ownership reconciled; API/localization and bounded server integration retained; no cutover or operator execution claimed
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -35,8 +35,11 @@ capture covers setup, mount and the first readiness render; later feature failur
 
 `mountPreservingDrafts` retains early edits on original admitted controls, with explicit opt-in for non-text/file
 inputs. Startup protection exists before route loading and transfers to mounted owners after restoration. Automatic
-reload needs clean state and a working loop marker; deliberate recovery respects draft consent and pending/unknown
-work. Recovery never persists secrets/files or replays writes.
+reload additionally requires explicitly eligible dynamic route/content, clean state and a working loop marker.
+Overview and Packing detail opt in; creation, duplication, user-management, Help and static admitted errors/completions
+remain excluded. Route metadata and the existing content classifier feed the shared update owner without copied
+field policy. Deliberate recovery retains draft consent and pending/unknown guards on every page. Recovery never
+persists secrets/files or replays writes. Session/security revalidation and scoped reads remain separate.
 
 ### Shared contracts, state and commands
 
@@ -65,6 +68,8 @@ to dirty comparison and sparse submission; touched-current-value comparisons occ
 revisions and recommendation fingerprints retain their separate semantics. Confirmation acknowledges submitted values;
 only a fresh admitted read restores tokens/grants. Failed follow-up remains saved; unknown delivery retains input and
 explicit review without automatic replay.
+A same-actor read pause does not retire a confirmed command. Preserve its returned result and failed-refresh warning
+so the feature can release completed input; actual captured-actor retirement still retires the result.
 
 `command.ts`, `pageEntry.ts` and `feedback.ts` share status, departure protection, canonical delivery and receipt-owned
 messages. Pending/unknown status may outlive an editor without retaining its fields. Confirmed navigation retries

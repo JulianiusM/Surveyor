@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: maintainer-corrected definition freedom distinguished from implemented transport; shared action-state and native profile-operation reuse guidance retained; no new runtime transport or cutover verification
+verification-scope: dynamic-page-only automatic document reload and confirmed-command follow-up guidance reconciled with scoped client/build verification in pilot review; definition freedom, action-state and native profile-operation reuse retained
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -297,6 +297,9 @@ receipt through failed navigation. Do not discard other drafts because a button 
 Field write loss disables saving while readable drafts remain cancelable; actor/read denial retires protected state.
 Confirmation acknowledges submitted values; only a fresh admitted read restores grants/token and baseline.
 A saved command followed by failed refresh remains saved with stale authority, not a failed mutation.
+This includes a follow-up read suppressed during same-actor session revalidation: return the confirmed write result
+so the feature releases completed input, and retain the failed-refresh warning. Read admission and captured-command
+identity are separate. An obsolete read error alone cannot erase confirmation; actual actor retirement still does.
 
 Unknown outcomes are reviewed through reads without automatic replay. Reconciliation cannot prove that an unknown
 creation failed; preserve submitted input and require deliberate review or acknowledged departure. Financial and
@@ -473,6 +476,15 @@ needs demonstrably clean state and a working loop marker; unavailable storage le
 Deliberate recovery can bypass the automatic-attempt marker but still confirms edited-control loss and respects
 pending/unknown command protection. Reuse startup, mount and update owners; never persist secrets/files or replay
 commands to recover startup.
+
+Automatic full-document reload additionally requires an explicitly eligible dynamic route and dynamic admitted
+content. Overview and Packing detail opt in; creation, duplication, user-management and Help remain excluded even
+when pristine. Static admitted errors/completions on a dynamic URL remain excluded through the existing shared
+content classifier, rather than a copied list of bootstrap fields. Declare this policy in route metadata and supply
+its live value to the existing update coordinator so release observation, missing chunks and command settlement
+share one decision, including after route changes. Draft/command/initialization/loop guards still apply. Excluded
+pages retain update notices and deliberate recovery. Periodic content reads and session/security revalidation are
+separate contracts and remain unchanged by this full-document policy.
 
 SSR parent aggregates use the same admitted QueryClient projections as child regions. Seed only the eligible initial
 document before parent badges render. Page/Region share `overviewQueryParameters` from the existing Overview API

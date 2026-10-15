@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: digest-guarded frontend amendments preserve complete reviewed candidate guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
+verification-scope: approved automatic document reload scope reconciled in existing upgrade guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -43,8 +43,11 @@ The release workflow does not create a sidecar checksum file. Obtain the expecte
 
 <!-- delta:amendment-03 -->
 Replace the compiled runtime and frontend artifacts together. The application detects the new build through normal
-session refresh: compatible open edits may finish, and a clean idle page reloads once. Missing chunks or incompatible
-commands preserve mounted drafts for deliberate recovery. No retained old-client asset directory is required.
+session refresh: compatible open edits may finish, and eligible dynamic content pages can reload once when clean and
+idle. Creation, duplication, user-management, Help and static error/completion pages require deliberate recovery even
+when untouched. Draft/pending/unknown and loop guards remain. Missing chunks or incompatible commands preserve mounted
+drafts for deliberate recovery. Session/security revalidation and periodic content reads retain their existing
+contracts. No retained old-client asset directory is required.
 This browser recovery does not remove the maintenance window, schema checks or rollback boundaries above.
 
 ### 5. Start and validate

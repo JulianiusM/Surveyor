@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: digest-guarded frontend amendments preserve complete reviewed candidate guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
+verification-scope: approved automatic document reload scope reconciled in existing release guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -53,9 +53,12 @@ Install the entire release rather than copying individual server files or client
 
 <!-- delta:amendment-04 -->
 The application detects a changed frontend build through normal session refresh. Compatible edits already open in
-the browser may finish; a clean idle page reloads once. A missing client chunk or incompatible command retains mounted
-drafts for deliberate recovery rather than automatically replaying writes. Operators do not maintain an old-asset
-directory. Users with unsaved or uncertain work should review the displayed recovery choices before reloading.
+the browser may finish. Only eligible dynamic content pages, currently Overview and Packing detail, can reload
+automatically when clean and idle. Creation, duplication, user-management, Help and static error/completion pages
+retain deliberate recovery, even when untouched. Draft/pending/unknown and loop guards still apply. A missing client
+chunk or incompatible command retains mounted drafts for deliberate recovery rather than automatically replaying
+writes. Operators do not maintain an old-asset directory. Users with unsaved or uncertain work should review the
+displayed recovery choices before reloading. Session/security revalidation and periodic content reads are unchanged.
 
 ### 4. Attach persistent files
 

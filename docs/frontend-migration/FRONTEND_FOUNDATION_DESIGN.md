@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: maintainer correction reconciles unauthorized definition restrictions with unused implementation removal; prior parity-only exclusions, bounded corrections and publication boundaries retained; no new runtime transport verification
+verification-scope: approved dynamic-page-only automatic document reload and confirmed-command follow-up correction reconciled with scoped execution in paired review; original amendments, parity-only exclusions and publication boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -456,6 +456,24 @@ acknowledgement is prepared before the call, then delivered without a new busine
 display refresh and destination retry follow confirmed success through existing client owners. The unreleased P1
 responses change from `IdentityResult` to `MutationResult`; visual workflows, submitted values and native backend
 behavior remain unchanged. Existing native partial failures remain inherited/excluded rather than repaired.
+
+### Authorized automatic document reload scope (2026-10-15)
+
+The maintainer's R1 answer narrows the original D5 automatic clean-idle reload to dynamically changeable content
+pages, such as lists. Overview and Packing detail declare eligibility; creation, duplication, user-management and
+Help do not, even before the user edits them. Static admitted errors/completions on a dynamic URL are excluded too.
+The existing route metadata, admitted-content classifier and shared update coordinator own this choice for every
+automatic trigger. Draft, pending/unknown command, initialization and loop protection still apply. Release detection
+and guarded deliberate recovery remain available on excluded pages. This is a full-document reload decision;
+periodic content reads and session/security revalidation retain their existing contracts.
+[DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#authorized-automatic-document-reload-scope-2026-10-15)
+retains the original D5 choice and this dated amendment.
+
+The same authorized readiness work corrects a confirmed command losing its result when a following read pauses for
+session revalidation. A read pause does not retire the captured actor. Preserve the confirmed result and its warning
+that refresh failed so completed creation input can be released without replay; actual actor retirement still
+discards the old result. This enforces the existing saved-plus-failed-refresh contract rather than adding a backend
+guarantee or requiring an inherited-defect remedy. The paired review owns actual implementation and checks.
 
 #### Migration contribution handoff
 

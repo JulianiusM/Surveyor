@@ -595,11 +595,16 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
             // that expired event again when confirmation arrives asynchronously.
             publishNotice(feedback?.success ?? 'state.saved', feedback?.presentation);
         } catch (failure) {
-            if (failure instanceof ObsoleteRequestError || !context.isCurrent(scope)) {
+            // Actual actor retirement still closes every result. Before confirmation,
+            // intentional disposal also keeps its existing obsolete outcome.
+            if (!context.isCurrent(scope) || (!confirmed && failure instanceof ObsoleteRequestError)) {
                 outcome.value = {confirmation: 'obsolete', refresh: outcome.value?.refresh ?? 'not-requested'};
                 return;
             }
             if (confirmed) {
+                // Routine session verification can pause/cancel the follow-up read
+                // without retiring this actor. Preserve the completed write's result
+                // so its form releases submitted input instead of offering it again.
                 outcome.value = {confirmation: 'confirmed', refresh: 'failed'};
                 notice.value = 'state.savedRefreshFailed';
             } else if (failure instanceof InvalidInputError) {

@@ -4,9 +4,9 @@ documentation-metadata
 audience: frontend migration implementers; reviewers; test maintainers
 owner: project maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared action-state and direct native profile-operation assertion boundaries alongside P1 workflows/common presentation; original gaps remain historical and execution belongs to the paired review
+verification-scope: confirmed-command follow-up and automatic document reload assertion boundaries added alongside retained action-state/profile evidence; original gaps stay historical and new execution belongs to paired review
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -104,6 +104,13 @@ entry/control initialization. [Page entry](../../tests/frontend/frontend-page-en
 fresh same-route state and cooldown expiry without another write. These isolated mounted assertions substitute
 their HTTP, operation or discovery collaborators; they do not exercise the integrated backend or a real browser.
 Actual integration/browser execution and limits belong to the [paired review](PILOT_PARITY_REVIEW.md).
+
+### Confirmed commands and automatic document reload (2026-10-15)
+
+| Baseline IDs | Current owner | Assertion and practical limit |
+|---|---|---|
+| **PCK-03; REF-02/05/06; EC-UI-01–03** confirmed result through paused reads | Existing shared command owner, session admission and actual Packing Quick Add | [Command recovery](../../tests/frontend/frontend-command-recovery.spec.ts), `retains a confirmed result when only its same-actor follow-up read becomes obsolete`, protects returned confirmation, failed-refresh warning and read-only reconciliation. `keeps intentional disposal before write confirmation obsolete` and the retained active-identity-change case protect the separate retirement boundaries. [Mounted Quick Add](../../tests/frontend/frontend-pilot-editor.spec.ts), `releases confirmed input once while session verification is %s`, covers pending/failed real context bootstrap, one validated creation, cleared title/description/capacity, no unknown-review state and later read-only recovery preserving a new draft. Its substituted HTTP is mounted client evidence, not real persistence or browser execution; current executed checks belong to the review. |
+| **SHL-04; REF-05; EC-UI-03/10** dynamic-page-only automatic document reload | Existing route metadata/admitted-content classifier and update coordinator | [Update coordinator](../../tests/frontend/frontend-update-coordinator.spec.ts), `keeps a static document through release and chunk failures without blocking guarded deliberate recovery` and `consults live route policy when a delayed command releases an automatic replacement`, protect live eligibility, unconsumed automatic marker and retained deliberate draft/command guards. [Actual app routes](../../tests/frontend/frontend-route-recovery.spec.ts) assert static create/duplicate/guest/identity/Help/common destinations, dynamic Overview/Packing startup, static denial at a dynamic URL and subsequent committed visits. [Built client startup](../../tests/frontend/browser/frontend-startup.spec.ts), `initial startup reloads a pristine dynamic route once and permits deliberate recovery from its stored marker` and `initial startup never automatically reopens token issuance and permits deliberate recovery`, inspect real built entry/chunk behavior and document requests. Their controlled HTTP fixtures establish client delivery, not backend token persistence or system E2E. Earlier startup-browser receipts retain their original policy inputs. Periodic content reads and session/security checks are outside this full-document change; current execution belongs to the review. |
 
 ## Retained native starting-point evidence
 
