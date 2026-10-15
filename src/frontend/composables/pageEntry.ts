@@ -7,9 +7,10 @@ import type {PilotConfirmedNavigation, PilotContext, PilotPageEntryDenial, Pilot
 import type {MessageKey} from '../../types/LocalizationTypes';
 import {frontendDocumentUrl, safeFrontendReturn} from '../../modules/lib/frontendIdentity';
 import {isPlainMessageKey} from '../../modules/localization/translator';
-import {canRetryRead, usePilot} from '../app/context';
+import {canRetryRead, useActionState, usePilot} from '../app/context';
 import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../app/transport';
 import {retireQueryFamily, useQueryAdmission} from '../app/queryCache';
+import {useReadRetry} from './feedback';
 
 /** Admit SPA navigation only for an ordinary primary click. Modified clicks, downloads
  * and explicit targets retain their captured href and native tab/window behavior. */
@@ -230,7 +231,7 @@ const confirmedNavigations = new WeakMap<PilotContext['session'], ReturnType<typ
  * Without a supplied identity, identifyOwner deliberately uses the component type. */
 function createConfirmedNavigation(context: PilotContext, router: Router) {
     const receipt = shallowRef<{destination: string; scope: PilotRequestScope; origin: string;
-        notice: components['schemas']['EntryNotice'] | null; owner: unknown}>();
+        notice: components['schemas']['EntryNotice'] | null; owner: unknown; refreshSession: boolean}>();
     const pending = ref(false);
     const mountedOwners = shallowRef(new Map<unknown, number>());
     const logicalOwners = new Map<unknown, Map<string, object>>();
@@ -298,11 +299,27 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         if (receipt.value && !context.isCurrent(receipt.value.scope)) receipt.value = undefined;
     }
 
+    function requiresSessionRefresh(): boolean {
+        return receipt.value?.refreshSession ?? false;
+    }
+
+    /** The shared receipt owns dispatch admission independently of any temporary
+     * component. Local controls add their own mount lifetime and deadline wakeup. */
+    function mayRetry(owner: unknown): boolean {
+        return !disposed && context.hydrated.value && !pending.value && receipt.value?.owner === owner
+            && (!requiresSessionRefresh() || canRetryRead(context.sessionRead.value.error));
+    }
+
+    function mayRetryFallback(): boolean {
+        const confirmed = receipt.value;
+        return !!confirmed && !mountedOwners.value.has(confirmed.owner) && mayRetry(confirmed.owner);
+    }
+
     /** Retry delivery with the current presentation language, while retaining the confirmed
      * actor/epoch and origin. Language selection cannot invalidate a committed business result. */
     async function retry(owner: unknown): Promise<boolean> {
         const confirmed = receipt.value;
-        if (disposed || pending.value || !confirmed || confirmed.owner !== owner) return false;
+        if (!confirmed || !mayRetry(owner)) return false;
 
         // A receipt may survive a remount, but cannot cross another actor or an
         // accepted departure from its originating form. Retire that obsolete
@@ -315,6 +332,14 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
 
         pending.value = true;
         try {
+            // Keep this serial display requirement in the shared receipt rather
+            // than retaining a feature callback after its component has retired.
+            // Failure retains confirmed success; Retry repeats only reads/delivery.
+            if (confirmed.refreshSession) {
+                try { await context.refreshSession(true); }
+                catch { return false; }
+                if (receipt.value !== confirmed || !context.isCurrent(confirmed.scope)) return false;
+            }
             // Retry only destination delivery with the current presentation
             // language. Clear this exact receipt after commitment; a newer owner
             // or failed navigation must not lose its retained recovery state.
@@ -329,10 +354,10 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
 
     async function navigate(owner: unknown, destination: string, scope: PilotRequestScope = context.capture(),
                             origin: string = router.currentRoute.value.fullPath,
-                            notice: components['schemas']['EntryNotice'] | null = null): Promise<boolean> {
+                            notice: components['schemas']['EntryNotice'] | null = null, refreshSession = false): Promise<boolean> {
         if (disposed || pending.value || receipt.value || !context.isCurrent(scope)
             || frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(origin)) return false;
-        receipt.value = {destination: pageDestination(router, destination), scope, origin, notice, owner};
+        receipt.value = {destination: pageDestination(router, destination), scope, origin, notice, owner, refreshSession};
         return retry(owner);
     }
 
@@ -388,7 +413,8 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         if (context.browser) window.removeEventListener('beforeunload', protectPendingDeparture);
         if (confirmedNavigations.get(context.session) === navigation) confirmedNavigations.delete(context.session);
     }
-    const navigation = {pending, target, fallbackTarget, navigate, retry, retryFallback, retain, identifyOwner};
+    const navigation = {pending, target, fallbackTarget, navigate, retry, retryFallback, retain, identifyOwner,
+        mayRetry, mayRetryFallback, requiresSessionRefresh};
     return navigation;
 }
 
@@ -411,16 +437,28 @@ export function useConfirmedNavigation(identity?: string): PilotConfirmedNavigat
     onBeforeUnmount(navigation.retain(owner));
     const target = computed(() => navigation.target(owner));
     const fallbackTarget = computed(navigation.fallbackTarget);
+    const sessionRetryAvailable = useReadRetry(() => context.sessionRead.value.error);
+    // These states belong to each mounted control, while the receipt and its
+    // dispatch guard remain application-owned across originating-view retirement.
+    const retryAction = useActionState({eligible: () => (!navigation.requiresSessionRefresh() || sessionRetryAvailable.value)
+        && navigation.mayRetry(owner), pending: () => navigation.pending.value});
+    const fallbackRetryAction = useActionState({eligible: () => (!navigation.requiresSessionRefresh() || sessionRetryAvailable.value)
+        && navigation.mayRetryFallback(), pending: () => navigation.pending.value});
     async function navigate(destination: string, scope: PilotRequestScope = context.capture(),
                             origin: string = router.currentRoute.value.fullPath,
-                            notice: components['schemas']['EntryNotice'] | null = null): Promise<boolean> {
-        return navigation.navigate(owner, destination, scope, origin, notice);
+                            notice: components['schemas']['EntryNotice'] | null = null, refreshSession = false): Promise<boolean> {
+        return navigation.navigate(owner, destination, scope, origin, notice, refreshSession);
     }
 
     function retry(): Promise<boolean> {
+        if (!retryAction.isAvailable()) return Promise.resolve(false);
         return navigation.retry(owner);
     }
-    return {pending: navigation.pending, target, fallbackTarget, navigate, retry, retryFallback: navigation.retryFallback};
+
+    function retryFallback(): Promise<boolean> {
+        return fallbackRetryAction.isAvailable() ? navigation.retryFallback() : Promise.resolve(false);
+    }
+    return {pending: navigation.pending, target, fallbackTarget, navigate, retry, retryFallback, retryAction, fallbackRetryAction};
 }
 
 /** One reusable read/navigation boundary for server-owned page admission. A feature supplies
@@ -611,16 +649,23 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
                       expectedRoute?: string): Promise<boolean> {
         return navigatePageEntry(context, router, entry, scope, expectedRoute);
     }
+    const retryAvailable = useReadRetry(() => error.value);
+    const retryAction = useActionState({eligible: mayRetryEntry, pending: () => query.isFetching.value});
+
+    function mayRetryEntry(): boolean {
+        return active && !navigation.pending() && context.mayRead()
+            && source.enabled?.value !== false && retryAvailable.value;
+    }
+
     /** Retry admission itself, without replaying navigation or any form command.
      * The ordinary query owns errors and the existing read operation fences its
      * captured actor/route/generation. An explicit retry must still honor enabled
      * state and the transport's server deadline even though refetch bypasses it. */
     async function retry(): Promise<void> {
-        if (!active || navigation.pending() || !context.mayRead() || !context.hydrated.value
-            || source.enabled?.value === false || query.isFetching.value || !canRetryRead(error.value)) return;
+        if (!retryAction.isAvailable()) return;
         await query.refetch();
     }
 
     return {data: query.data, dataUpdatedAt: query.dataUpdatedAt, error,
-        pending, reading: query.isFetching, outcome, admittedAt, navigate, retry};
+        pending, reading: query.isFetching, outcome, admittedAt, navigate, retry, retryAction, retryAvailable};
 }

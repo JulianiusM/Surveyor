@@ -14,6 +14,22 @@ export interface PilotRequestScope {
     csrfToken: string;
 }
 
+/** A control and its handler read the same derived operation state. Each owner
+ * supplies its existing admission and locks; initialization is shared, while
+ * drafts, query receipts and command outcomes remain with their current owners. */
+export interface PilotActionInputs {
+    eligible?(): boolean;
+    pending?(): boolean;
+    blocked?(): boolean;
+}
+
+export interface PilotActionState {
+    available: ComputedRef<boolean>;
+    disabled: ComputedRef<boolean>;
+    pending: ComputedRef<boolean>;
+    isAvailable(): boolean;
+}
+
 export interface PilotRead<T> { data: T; etag: string | null; }
 
 /** Query metadata describes the owning observer's current dispatch eligibility.
@@ -67,10 +83,12 @@ export type PilotMetadataFieldPolicy<TValues extends object> = {
  * actor/route receipt across identity remounts without persisting inputs or replaying writes. */
 export interface PilotConfirmedNavigation {
     pending: Ref<boolean>;
+    retryAction: PilotActionState;
+    fallbackRetryAction: PilotActionState;
     target: ComputedRef<string | null>;
     fallbackTarget: ComputedRef<string | null>;
     navigate(destination: string, scope?: PilotRequestScope, origin?: string,
-             notice?: components['schemas']['EntryNotice'] | null): Promise<boolean>;
+             notice?: components['schemas']['EntryNotice'] | null, refreshSession?: boolean): Promise<boolean>;
     retry(): Promise<boolean>;
     retryFallback(): Promise<boolean>;
 }
@@ -98,6 +116,9 @@ export interface PilotCommandDraft {
     uncertain?(): boolean;
     unknownMessage: MessageKey;
     problemKey?: PilotProblemPresentation;
+    /** Recovery may establish session admission itself. The owner supplies its
+     * actual read deadline without applying a resource-read barrier to bootstrap. */
+    recoveryEligible?(): boolean;
 }
 
 /** A retained command exposes status only after its private editor retires. The root
@@ -211,7 +232,7 @@ export interface PilotContext {
     mayRead(scope?: PilotRequestScope, checkLocale?: boolean): boolean;
     /** Automatic observer resume also respects its current terminal read rejection. */
     mayObserve(key: readonly unknown[], firstRead?: boolean): boolean;
-    refreshSession(): Promise<void>;
+    refreshSession(fresh?: boolean): Promise<void>;
     acceptIdentity(result: components['schemas']['IdentityResult']): Promise<void>;
     registerIdentityGuard(guard: () => boolean): () => void;
     mayChangeIdentity(): boolean;

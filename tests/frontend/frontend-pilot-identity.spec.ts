@@ -1120,7 +1120,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(wrapper.get('.alert-success').text()).toContain('The link(s) to your guest account(s)');
     });
 
-    it('retains the native Your profiles journey and protects pending identity changes', async () => {
+    it('retains the Your profiles journey through its migrated destination and protects pending identity changes', async () => {
         const {context, router, request} = await mounted('/frontend-pilot/users/login', async () => json(session));
         context.session.value = {...session, profiles: [...session.profiles, {id: eventId, name: 'Other profile'}]};
         const header = mount(AppHeader, {attachTo: document.body, global: {plugins: [router, [I18NextVue, {i18next: context.i18next}]],
@@ -1128,8 +1128,8 @@ describe('identity forms and packing overview navigation', () => {
         try {
             const confirm = vi.fn(() => false);
             vi.stubGlobal('confirm', confirm);
-            const menu = header.findAll('details').find(candidate => candidate.find('a[href="/users/profile/manage"]').exists())!;
-            expect(menu.get('a[href="/users/profile/manage"]').text()).toBe('Your profiles');
+            const menu = header.findAll('details').find(candidate => candidate.find('a[href="/frontend-pilot/users/profile/manage"]').exists())!;
+            expect(menu.get('a[href="/frontend-pilot/users/profile/manage"]').text()).toBe('Your profiles');
             expect(header.find('#pilot-profile').exists()).toBe(false);
             expect(header.find('form[action="/frontend-pilot/users/profile"]').exists()).toBe(false);
             expect((menu.element as HTMLDetailsElement).open).toBe(false);

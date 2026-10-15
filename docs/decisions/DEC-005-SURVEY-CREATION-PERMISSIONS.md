@@ -5,11 +5,11 @@ documentation-metadata
 audience: maintainers; documentation contributors
 owner: survey-feature and permission-system maintainers
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: maintainer-confirmed-product-contract-and-static-behavior
-source-anchors: src/routes/survey.ts; src/controller/surveyController.ts; src/views/surveyor/survey-create.pug; src/middleware/guestFlowFactory.ts; src/modules/lib/permissions.ts; docs/backlog/documentation-remediation.yml
-next-review: D03
+verification-scope: editorial dependency disposition against the backlog and advisory documentation policy; original technical decision retained without new runtime verification
+source-anchors: src/routes/survey.ts; src/controller/surveyController.ts; src/views/surveyor/survey-create.pug; src/middleware/guestFlowFactory.ts; src/modules/lib/permissions.ts; docs/backlog/documentation-remediation.yml; docs/policies/DOCUMENTATION_POLICY.md
+next-review: survey-permission-or-access-model-change
 -->
 
 ## Decision status
@@ -63,8 +63,16 @@ other areas remain confined to migration-control records under the documentation
 
 ## Gate effect
 
+**Historical dependency disposition (2026-09-05):**
+
 `DEC-005` no longer blocks D03 or D09. D03 is ready but remains held until the decision wave is complete. D09 remains
 blocked by D01, D03, and `DEC-001`.
+
+**Current disposition (2026-10-14, maintainer-approved editorial correction):** the
+[durable backlog](../backlog/documentation-remediation.yml) records D01, D03 and D09 as done and `DEC-001`/`DEC-005`
+as resolved. The paragraph above preserves the original dependency history. Documentation review is advisory under
+the [documentation policy](../policies/DOCUMENTATION_POLICY.md#documentation-is-never-a-delivery-gate); it does not
+block application delivery. The survey permission exception and its technical decision remain unchanged.
 
 This decision is reopened only if surveys intentionally adopt the general permission system or their feature-specific
 access model is redesigned.

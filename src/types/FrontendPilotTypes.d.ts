@@ -25,9 +25,52 @@ export interface FrontendIdentityRedirect {
     readonly destination: string;
 }
 
+/** A request chooses the native landing shortcut once; hydration reuses that choice. */
+export type FrontendLandingQuickCreate = 'survey' | 'event' | 'activity' | 'packing' | 'drivers';
+
+/** Private document-only identity presentation. Tokens never enter URL/query-cache
+ * state, and these projections confer no authority beyond the submitted native operation. */
+export type FrontendProfileWorkflow = {
+    kind: 'token';
+    token: string;
+} | {
+    kind: 'entry';
+} | {
+    kind: 'deactivate';
+    value: string;
+    error?: 'profile.invalidDeactivation';
+} | {
+    kind: 'delete-account';
+    value: string;
+    error?: 'profile.invalidAccountDeletion';
+};
+
+/** Escaped document presentation, supplied by the server's outcome owner rather than URL text. */
+export type FrontendCommonPage = {
+    /** Known parameter-free outcomes retranslate without treating arbitrary detail as a key. */
+    messageKey?: MessageKey;
+} & ({
+    kind: 'message';
+    severity: 'info' | 'success' | 'warning' | 'error';
+    message: string;
+    status?: number;
+} | {
+    kind: 'error';
+    message: string;
+    status: number;
+    /** The document adapter admits diagnostics only in development. */
+    stack?: string;
+});
+
 /** Request-safe renderer input. API payload shapes belong exclusively to the generated contract. */
 export interface FrontendPilotBootstrap {
     session: components['schemas']['SessionView'];
+    landing?: {quickCreate: FrontendLandingQuickCreate};
+    commonPage?: FrontendCommonPage;
+    /** One document/actor owns transfer secrets and confirmation redisplay. */
+    profileWorkflow?: FrontendProfileWorkflow;
+    /** Escaped native controller feedback, scoped by its document flash owner. */
+    workflowNotice?: string;
     /** The initial document and SPA navigation consume the same server-owned admission decision. */
     pageEntry?: components['schemas']['PageEntryOutcome'];
     /** One-time native redirect feedback, rendered before and after hydration. */

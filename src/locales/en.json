@@ -219,7 +219,12 @@
         "added": "Added",
         "error": "Unable to complete the request",
         "reauthenticate": "Log in again",
-        "unlimited": "Unlimited"
+        "unlimited": "Unlimited",
+      "warningTitle": "Warning",
+      "internalError": "An internal server error has occurred!",
+      "errorHeading": "Oops! Something went wrong",
+      "errorStatus": "(Status {{code}})",
+      "viewStackTrace": "View stack trace"
       },
       "eventPicker": {
         "chooseEvent": "Choose an event",
@@ -445,6 +450,138 @@
         "matchedCount_one": "{{count}} topic found for “{{query}}”.",
         "matchedCount_other": "{{count}} topics found for “{{query}}”.",
         "inSection": "In “{{title}}”"
+      },
+      "profile": {
+        "profileTitle": "Your profile '{{name}}'",
+        "profileIntro": "You can change your profile settings here.",
+        "profileName": "Profile name",
+        "profileNamePlaceholder": "Your profile name",
+        "defaultExplanation": "When this profile is set as default, it will be automatically selected upon login. If you have any other profile marked as default, setting this here will override the previous defaults.",
+        "defaultProfile": "Default profile",
+        "saveProfile": "Submit changes",
+        "showMigrationToken": "Show profile migration token",
+        "deleteProfile": "Delete profile",
+        "manageTitle": "Manage your profiles",
+        "createTitle": "Create new profile",
+        "createIntro": "Create a new profile. This will allow you to participate multiple times (once per profile), while still only needing one account!",
+        "createProfile": "Create new profile",
+        "backHome": "Back to home",
+        "migrateToAccount": "Migrate profile to account",
+        "switchProfile": "Switch to profile",
+        "profileUpdated": "Updated profile",
+        "profileCreated": "Profile created",
+        "remoteChanged": "These profile settings changed while you were editing. Your changes have been kept.",
+        "reloadSettings": "Reload saved settings",
+        "tokenTitle": "Migration token",
+        "tokenHeading": "Migrate your profile",
+        "tokenIntro": "Below is your personal migration token for this profile ({{name}}). This will allow to migrate your profile to another user.",
+        "tokenOwnerWarning": "Warning: If this is the last profile on your account you will permanently loose access to your account as it will be deleted upon migration!",
+        "tokenPrivacyWarning": "Do NOT share this token! It is valid for 24 hours. After that, you will need to request a new one.",
+        "tokenLabel": "Token:",
+        "transferTitle": "Migrate Profile",
+        "transferHeading": "Migrate profile to your user",
+        "transferIntro": "Enter the migration token below. You will get a preview of the profile you are about to migrate.",
+        "migrationToken": "Migration token",
+        "tokenPlaceholder": "Your migration token",
+        "showMigrationProfile": "Show migration profile",
+        "previewIntro": "Look at the profile to migrate below. When you are ready, confirm migration to proceed.",
+        "previewOwnerWarning": "Warning: If this is the last profile on the original account, it will be automatically deleted after migration is successful.",
+        "previewName": "Name",
+        "previewId": "ID",
+        "previewOwner": "Current Owner",
+        "previewNoOwner": "No current owner (deactivated profile)",
+        "executeMigration": "Permanently migrate profile",
+        "deactivateTitle": "Deactivate Profile",
+        "deactivateHeading": "Deactivate your profile?",
+        "deactivateIntro": "Enter your profile name to confirm deleting your account. This action is permanent and cannot be undone!",
+        "executeDeactivation": "Permanently deactivate profile",
+        "deleteAccountTitle": "Delete Account",
+        "deleteAccountHeading": "Delete your account?",
+        "deleteAccountIntro": "Enter your username to confirm deleting your account. This action is permanent and cannot be undone!",
+        "usernamePlaceholder": "Your username",
+        "executeAccountDeletion": "Permanently delete account",
+        "invalidDeactivation": "Invalid profile deactivation verification",
+        "invalidAccountDeletion": "Invalid account deletion verification",
+        "invalidMigrationToken": "Invalid or mismatched token",
+        "workflowReload": "Open this page again to continue."
+      },
+      "landing": {
+        "documentTitle": "Surveyor – Organize and coordinate group activities",
+        "welcome": "Welcome back, {{name}}.",
+        "signedOverview": "See all your surveys, events, packing lists, activity plans and drivers lists in one place.",
+        "signedCreate": "Quickly create new plans and share links so others can respond or sign up.",
+        "signedPacking": "Coordinate who brings what and who drives with whom.",
+        "signedRights": "Keep track of participants, assignments and access rights from your dashboard.",
+        "openDashboard": "Open your dashboard",
+        "intro": "Organize and coordinate group activities in one place.",
+        "plan": "Plan surveys, events and activity schedules.",
+        "share": "Share a single link so people can respond or sign up.",
+        "link": "Keep packing lists and drivers lists together with your events.",
+        "dashboard": "See everything you created on your personal dashboard.",
+        "guestHint": "If you received an invitation link, you can also participate as a guest without creating an account.",
+        "whatYouCanCreate": "What you can create",
+        "permissionsTitle": "Permissions",
+        "accessPermissions": "Access and permissions",
+        "accessParticipation": "Access and participation",
+        "accessBody": "People can take part either with a registered account or as guests using links shared by organizers.",
+        "accessDashboard": "Your dashboard works as your personal homepage and shows the surveys, events, packing lists, activity plans and drivers lists you have created.",
+        "permissionsBody": "Surveyor uses a permission system to control who can view and edit entities and their items.",
+        "permissionsDetail": "Permissions can be assigned to audiences as group permissions and to individual users, while the creator of an entity always keeps full access.",
+        "quickCreate": {
+          "survey": "Start a new survey",
+          "event": "Start a new event",
+          "activity": "Start a new activity plan",
+          "packing": "Start a new packing list",
+          "drivers": "Start a new drivers list"
+        },
+        "features": {
+          "survey": {
+            "title": "Surveys",
+            "description": "Find suitable dates and collect responses.",
+            "point1": "Define date combinations such as specific weekdays and weeks of a month.",
+            "point2": "Let people answer with options like Yes, Maybe or No.",
+            "point3": "See everyone’s availability in a combined view.",
+            "point4": "Allow both registered users and guests to participate."
+          },
+          "event": {
+            "title": "Events",
+            "description": "Create events with participant registration and links to related plans.",
+            "point1": "Store event details such as title, dates and location.",
+            "point2": "Manage participant registration and track who is attending.",
+            "point3": "Link related packing lists, activity plans and drivers lists.",
+            "point4": "Optionally collect information such as dietary notes.",
+            "point5": "Use invoice pools to assign costs, record payments and see balances."
+          },
+          "packing": {
+            "title": "Packing lists",
+            "description": "Coordinate what needs to be brought for trips or events.",
+            "point1": "Create items with descriptions and quantities.",
+            "point2": "Track how many of each item are still needed.",
+            "point3": "Assign items to people so everyone knows what they bring.",
+            "point4": "Support participation via shared links, including guests."
+          },
+          "activity": {
+            "title": "Activity plans",
+            "description": "Schedule activities with time slots and roles.",
+            "point1": "Create time-based schedules organized by date and time.",
+            "point2": "Define roles for activities, such as helpers or facilitators.",
+            "point3": "Assign people to activity slots and see who is where.",
+            "point4": "Track how many assignments participants should take.",
+            "point5": "Link plans to events to reuse participant lists.",
+            "point6": "Allow guests to take part using shared plan links."
+          },
+          "drivers": {
+            "title": "Drivers lists",
+            "description": "Coordinate transportation by organizing drivers and passengers.",
+            "point1": "Register drivers and specify the number of seats they offer.",
+            "point2": "Let participants sign up for available rides.",
+            "point3": "Track who is riding with whom.",
+            "point4": "Support participation via links so guests can join."
+          }
+        },
+        "metaDescription": "Surveyor helps you organize and coordinate group activities with surveys, events, packing lists, activity plans and drivers lists.",
+        "metaKeywords": "Surveyor, surveys, events, packing lists, activity plans, drivers lists, group activities",
+        "metaSocialDescription": "Create surveys, events, packing lists, activity plans and drivers lists in one place and keep an overview on your dashboard."
       }
     },
     "api": {
@@ -513,6 +650,10 @@
         "count": "number"
       },
       "plural": true
-    }
+    },
+    "landing.welcome": {"parameters": {"name": "string"}},
+    "common.errorStatus": {"parameters": {"code": "number"}},
+    "profile.profileTitle": {"parameters": {"name": "string"}},
+    "profile.tokenIntro": {"parameters": {"name": "string"}}
   }
 }

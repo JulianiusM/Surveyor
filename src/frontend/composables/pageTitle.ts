@@ -1,8 +1,10 @@
 import {toValue, watchEffect, type MaybeRefOrGetter} from 'vue';
 import {usePilot} from '../app/context';
 
-/** One title owner serves both the SSR document and subsequent SPA/locale transitions. */
-export function usePageTitle(title: MaybeRefOrGetter<string | undefined>): void {
+/** One title owner serves both the SSR document and subsequent SPA/locale transitions.
+ * Complete native document titles retain their existing order/branding explicitly;
+ * ordinary feature callers keep the application-name suffix by default. */
+export function usePageTitle(title: MaybeRefOrGetter<string | undefined>, complete = false): void {
     const context = usePilot();
     watchEffect(() => {
         // A route wrapper may own only an admission error. Undefined leaves the
@@ -12,7 +14,7 @@ export function usePageTitle(title: MaybeRefOrGetter<string | undefined>): void 
 
         // Do not read the shared output inside this effect: two mounted consumers
         // would otherwise subscribe to each other's writes and repeatedly rerun.
-        const pageTitle = `${value} | ${context.messages.value.t('app.title')}`;
+        const pageTitle = complete ? value : `${value} | ${context.messages.value.t('app.title')}`;
         context.pageTitle.value = pageTitle;
         if (context.browser) document.title = pageTitle;
     });

@@ -22,7 +22,7 @@ function generate(script: string, arguments_: string[], sourceRoot = root): void
 }
 
 /** Copy the real generation inputs into one owned tree. Both watcher and
- * transport-subset fixtures share this setup without changing authored sources. */
+ * contract-authoring fixtures share this setup without changing authored sources. */
 async function prepareGenerationTree(directory: string): Promise<void> {
     // Installed dependencies remain read-only behind the one explicit junction.
     // Remove that link separately after child processes close, before tree cleanup.
@@ -36,6 +36,34 @@ async function prepareGenerationTree(directory: string): Promise<void> {
     await fs.copyFile(path.join(root, 'src/modules/lib/permissions.ts'), path.join(directory, 'src/modules/lib/permissions.ts'));
     await fs.symlink(path.join(root, 'node_modules'), path.join(directory, 'node_modules'),
         process.platform === 'win32' ? 'junction' : 'dir');
+}
+
+/** Exercise watcher scheduling with a bounded slice of the actual authored API.
+ * All five lifecycle batches still run the real API/catalog generators. Full-contract
+ * compilation, transport and deterministic output remain covered by the other cases. */
+async function prepareWatcherTree(directory: string): Promise<void> {
+    // Copy the same scripts, catalogs and permission registry as the complete
+    // fixture. Only this detached tree's OpenAPI entry is narrowed afterward.
+    await prepareGenerationTree(directory);
+    const source = path.join(directory, 'contracts/api/v1/openapi.yaml');
+    const contract = YAML.parseDocument(await fs.readFile(source, 'utf8'));
+    const session = contract.getIn(['paths', '/session']);
+    const sessionRead = contract.getIn(['paths', '/session', 'get']);
+    const locale = contract.getIn(['components', 'parameters', 'Locale']);
+    const problem = contract.getIn(['components', 'schemas', 'Problem']);
+    const sessionView = contract.getIn(['components', 'schemas', 'SessionView']);
+    const localeTag = contract.getIn(['components', 'schemas', 'LocaleTag']);
+    if (![session, sessionRead, locale, problem, sessionView, localeTag].every(YAML.isMap)) {
+        throw new Error('Watcher fixture requires the actual session operation and its authored components.');
+    }
+
+    // Retain authored references instead of inventing wire shapes or validators.
+    // External session/problem schemas keep their complete dependency graphs;
+    // unused parameters must leave with their otherwise unreferenced root aliases.
+    contract.set('paths', {'/session': session});
+    contract.setIn(['components', 'parameters'], {Locale: locale});
+    contract.setIn(['components', 'schemas'], {Problem: problem, SessionView: sessionView, LocaleTag: localeTag});
+    await fs.writeFile(source, contract.toString());
 }
 
 /** Remove only the fixture's dependency link; never recursively follow it. */
@@ -124,12 +152,14 @@ childProcess.spawn = function observeGenerator(command, arguments_, options) {
         && ['generate-api.mjs', 'generate-locales.mjs'].includes(path.basename(script ?? ''))
         && path.dirname(script) === path.join(process.cwd(), 'scripts')) {
         generators.add(generator);
+        process.send({kind: 'generator-started', script: path.basename(script)});
         generator.once('close', generatorClosed);
     }
     return generator;
 
-    function generatorClosed() {
+    function generatorClosed(code) {
         generators.delete(generator);
+        process.send({kind: 'generator-closed', script: path.basename(script), code});
         finishDrain();
         finishStop();
     }
@@ -200,19 +230,39 @@ process.once('SIGINT', stopGate);
 }
 
 describe('contract and catalog generation', () => {
-    it('watches atomically replaced permission declarations and publishes readiness only after successful dependent generation', async function watchesPermissionDependency() {
+    it('watches atomically replaced permission declarations and publishes readiness only after successful dependent generation', async function watchesPermissionDependency(test) {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
+        const started = Date.now();
+        const trace: {elapsedMs: number; event: string}[] = [];
         let watcher: ReturnType<typeof spawn> | undefined;
         let output = '';
+        let phase = 'prepare detached generation inputs';
+        let failedPhase: string | undefined;
         let publicationHeld = false;
         let observedSaves = 0;
         let generatorsStopped = false;
         let assertionFailed = false;
+
+        /** Report actual child progress even when the runner's overall deadline
+         * wins before an awaited assertion can reach this fixture's catch block. */
+        function reportWatcherFailure(): void {
+            console.error('Generation watcher failure:', {phase: failedPhase ?? phase,
+                elapsedMs: Date.now() - started, publicationHeld, observedSaves, generatorsStopped,
+                exitCode: watcher?.exitCode, trace, output: output.slice(-32_000)});
+        }
+
+        /** Preserve phase timings without replacing production generators or their outputs. */
+        function enterPhase(next: string): void {
+            phase = next;
+            trace.push({elapsedMs: Date.now() - started, event: next});
+        }
+
+        test.onTestFailed(reportWatcherFailure);
         try {
             // Run copies of the actual watcher/generators against a detached authored
             // tree. Installed dependencies are read through one junction; no maintained
             // source, application server, environment or database is changed.
-            await prepareGenerationTree(temporary);
+            await prepareWatcherTree(temporary);
             const permissionsPath = path.join(temporary, 'src/modules/lib/permissions.ts');
             const originalPermissions = await fs.readFile(permissionsPath, 'utf8');
 
@@ -230,7 +280,9 @@ describe('contract and catalog generation', () => {
                 path.join(temporary, 'scripts/watch-frontend-inputs.mjs')],
                 {cwd: temporary, stdio: ['pipe', 'pipe', 'pipe', 'ipc']});
             function captureWatcherOutput(chunk: Buffer): void { output += chunk.toString(); }
-            function receiveWatcherGate(message: {kind?: string}): void {
+            function receiveWatcherGate(message: {kind?: string; script?: string; code?: number}): void {
+                trace.push({elapsedMs: Date.now() - started,
+                    event: [message.kind, message.script, message.code].filter(value => value !== undefined).join(' ')});
                 if (message.kind === 'readiness-held') publicationHeld = true;
                 else if (message.kind === 'permission-observed') observedSaves++;
                 else if (message.kind === 'generators-stopped') generatorsStopped = true;
@@ -238,6 +290,7 @@ describe('contract and catalog generation', () => {
             watcher.stdout!.on('data', captureWatcherOutput);
             watcher.stderr!.on('data', captureWatcherOutput);
             watcher.on('message', receiveWatcherGate);
+            enterPhase('wait for directory observers');
             await expect.poll(function watcherRegistered() { return output; }, {timeout: 10_000})
                 .toContain('Watching frontend contracts, language catalogs and permission registry.');
 
@@ -255,13 +308,16 @@ describe('contract and catalog generation', () => {
             // A newer save arrives inside the actual asynchronous readiness write.
             // Its callback is known before that write resumes, so the first valid
             // batch must not advertise readiness for the now-invalid input tree.
+            enterPhase('wait for first real API/catalog batch and held publication');
             await expect.poll(function readinessWriteStarted() { return publicationHeld; }, {timeout: 30_000}).toBe(true);
             const savesBeforeReplacement = observedSaves;
             await fs.writeFile(replacement, validPermissions.replace('WATCHER_PERMISSION:', 'WATCHER_MISSING:'));
             await fs.rename(replacement, permissionsPath);
+            enterPhase('deliver newer invalid permission save before publication');
             await expect.poll(function newerSaveDelivered() { return observedSaves; }, {timeout: 10_000})
                 .toBeGreaterThan(savesBeforeReplacement);
             watcher.send({kind: 'release-readiness'});
+            enterPhase('wait for queued invalid batch without readiness');
             await expect.poll(function queuedInvalidRegistryReported() { return output; }, {timeout: 30_000})
                 .toContain('Missing permission message: WATCHER_MISSING');
             expect(await readOptionalFile(markerPath)).toBeNull();
@@ -273,10 +329,16 @@ describe('contract and catalog generation', () => {
             // publish only after a full successful dependency pass for this save.
             await fs.writeFile(replacement, validPermissions);
             await fs.rename(replacement, permissionsPath);
+            enterPhase('recover valid registry through the original observers');
             await expect.poll(async function initialReadyMarker() { return readOptionalFile(markerPath); }, {timeout: 30_000})
                 .not.toBeNull();
 
             const firstMarker = await fs.readFile(markerPath, 'utf8');
+            // This is a real generated session contract, not a substituted restart
+            // signal. Comprehensive full-API artifacts are exercised independently.
+            const generatedApi = JSON.parse(await fs.readFile(path.join(temporary, '.generated/api/v1/operations.json'), 'utf8')) as ApiContractManifest;
+            expect(generatedApi.operations).toMatchObject([{operationId: 'getSession', method: 'GET', path: '/session',
+                responseSchemas: {'200': 'SessionView', default: 'Problem'}}]);
             const emittedPermissions = await fs.readFile(path.join(generatedDirectory, 'permissions.ts'), 'utf8');
             expect(emittedPermissions).toContain('"WATCHER_PERMISSION": "permissions.WATCHER_PERMISSION"');
             expect(emittedPermissions).not.toContain('"EDIT_TITLE":');
@@ -293,11 +355,13 @@ describe('contract and catalog generation', () => {
             const outputBeforeInvalidSave = output.length;
             await fs.writeFile(replacement, validPermissions.replace('WATCHER_PERMISSION:', 'WATCHER_MISSING:'));
             await fs.rename(replacement, permissionsPath);
+            enterPhase('reject invalid registry after a published valid batch');
             await expect.poll(function invalidRegistryReported() { return output.slice(outputBeforeInvalidSave); }, {timeout: 30_000})
                 .toContain('Missing permission message: WATCHER_MISSING');
             expect(await fs.readFile(markerPath, 'utf8')).toBe(firstMarker);
             await fs.writeFile(replacement, originalPermissions);
             await fs.rename(replacement, permissionsPath);
+            enterPhase('restore original registry and publish the next coherent batch');
             await expect.poll(async function recoveredReadyMarker() { return readOptionalFile(markerPath); }, {timeout: 30_000})
                 .not.toBe(firstMarker);
             const recoveredPermissions = await fs.readFile(path.join(generatedDirectory, 'permissions.ts'), 'utf8');
@@ -306,16 +370,19 @@ describe('contract and catalog generation', () => {
             const recoveredManifest = JSON.parse(await fs.readFile(path.join(generatedDirectory, 'manifest.json'), 'utf8'));
             expect(recoveredManifest.version).not.toBe(firstManifest.version);
         } catch (error) {
+            failedPhase = phase;
             assertionFailed = true;
             throw error;
         } finally {
             // A close receipt proves this fixture's generator children settled.
             // Failed shutdown leaves the tree intact rather than racing its removal.
             try {
+                enterPhase('drain owned generator processes');
                 if (watcher) {
                     await stopWatcher(watcher);
                     expect(generatorsStopped).toBe(true);
                 }
+                enterPhase('remove settled fixture dependency link and directory');
                 await removeDependencyLink(temporary);
                 await removeTemporary(temporary);
             } catch (error) {
@@ -392,7 +459,7 @@ describe('contract and catalog generation', () => {
         }
     }, 20_000);
 
-    it('retains declared scalar, JSON-array, multipart and binary transport while rejecting query arrays and plain text', async function limitsTransportSubset() {
+    it('preserves current contracts and compiles future parameter shapes and response media without policy bans', async function preservesAuthoredShapes() {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {
             await prepareGenerationTree(temporary);
@@ -401,8 +468,8 @@ describe('contract and catalog generation', () => {
             expect(metadata.operations.some(operation => operation.requestMediaType === 'multipart/form-data')).toBe(true);
             expect(metadata.operations.some(operation => Object.values(operation.responseMediaTypes).includes('application/octet-stream'))).toBe(true);
 
-            // The narrowed transport subset does not narrow authored JSON bodies.
-            // Exercise actual emitted validators rather than inspect generator text.
+            // Existing contracts keep their declared constraints. Exercise actual
+            // emitted validators rather than infer support from generator text.
             const server: typeof import('../../.generated/api/v1/server.cjs') =
                 (await import(pathToFileURL(path.join(temporary, '.generated/api/v1/server.cjs')).href)).default;
             expect(server.validateGetHelpPageParameters({path: {}, query: {q: 'packing'}, header: {}})).toBe(true);
@@ -412,25 +479,61 @@ describe('contract and catalog generation', () => {
                     {title: 'Water', description: null, maxAssignees: 2, requiredByAll: false}]}})).toBe(true);
 
             const source = path.join(temporary, 'contracts/api/v1/openapi.yaml');
-            const original = await fs.readFile(source, 'utf8');
-            const queryContract = YAML.parseDocument(original);
-            const parameters = queryContract.getIn(['paths', '/packing-lists/create-entry', 'get', 'parameters']);
-            if (!YAML.isSeq(parameters)) throw new Error('Fixture operation no longer declares its scalar parameters.');
-            parameters.add({name: 'repeated', in: 'query', style: 'form', explode: true,
-                schema: {type: 'array', items: {type: 'string'}}});
-            await fs.writeFile(source, queryContract.toString());
-            expect(() => generate('generate-api.mjs', [], temporary))
-                .toThrow(/Unsupported pilot parameter serialization: query:repeated/u);
+            const futureContract = YAML.parseDocument(await fs.readFile(source, 'utf8'));
+            const parameters = futureContract.getIn(['paths', '/packing-lists/create-entry', 'get', 'parameters']);
+            if (!YAML.isSeq(parameters)) throw new Error('Fixture operation no longer declares its parameters.');
 
-            // A separately declared plain-text response must fail generation too.
-            // Its named scalar schema otherwise meets the generator's response
-            // contract, isolating media rejection from an unrelated schema error.
-            const textContract = YAML.parseDocument(original);
-            textContract.setIn(['components', 'schemas', 'PlainTextFixture'], {type: 'string'});
-            textContract.setIn(['paths', '/packing-lists/create-entry', 'get', 'responses', '200', 'content'],
+            // These declarations live only in the detached fixture. Removing an
+            // unused runtime codec must not prohibit a future authored schema;
+            // compilation does not claim that Express already decodes its values.
+            futureContract.setIn(['components', 'schemas', 'FutureParameterValues'],
+                {type: 'array', items: {type: 'string'}});
+            parameters.add({name: 'repeated', in: 'query', style: 'form', explode: true,
+                schema: {$ref: '#/components/schemas/FutureParameterValues'}});
+            parameters.add({name: 'structured', in: 'query', schema: {type: 'object', additionalProperties: false,
+                required: ['label'], properties: {label: {type: 'string'}}}});
+            parameters.add({name: 'choice', in: 'query', schema: {oneOf: [
+                {type: 'object', additionalProperties: false, required: ['kind', 'id'],
+                    properties: {kind: {type: 'string', const: 'single'}, id: {type: 'integer'}}},
+                {type: 'object', additionalProperties: false, required: ['kind', 'ids'],
+                    properties: {kind: {type: 'string', const: 'multiple'}, ids: {type: 'array', items: {type: 'integer'}}}},
+            ]}});
+            parameters.add({name: 'X-Future-Values', in: 'header',
+                schema: {$ref: '#/components/schemas/FutureParameterValues'}});
+            futureContract.setIn(['components', 'schemas', 'PlainTextFixture'], {type: 'string'});
+            futureContract.setIn(['paths', '/packing-lists/create-entry', 'get', 'responses', '200', 'content'],
                 {'text/plain': {schema: {$ref: '#/components/schemas/PlainTextFixture'}}});
-            await fs.writeFile(source, textContract.toString());
-            expect(() => generate('generate-api.mjs', [], temporary)).toThrow(/Unsupported pilot response media type/u);
+            await fs.writeFile(source, futureContract.toString());
+
+            // Use another output path so module caching cannot return the first
+            // generation's validators after the fixture contract has changed.
+            const futureOutput = path.join(temporary, 'future-output');
+            generate('generate-api.mjs', ['--output-root', futureOutput], temporary);
+            const futureMetadata = JSON.parse(await fs.readFile(path.join(futureOutput, '.generated/api/v1/operations.json'), 'utf8')) as ApiContractManifest;
+            const operation = futureMetadata.operations.find(operation => operation.operationId === 'getPackingCreateEntry');
+            expect(operation?.responseMediaTypes['200']).toBe('text/plain');
+            expect(operation?.parameters.find(parameter => parameter.name === 'repeated')?.schema)
+                .toEqual({type: 'array', items: {type: 'string'}});
+
+            const generatedServer = (await import(pathToFileURL(path.join(futureOutput, '.generated/api/v1/server.cjs')).href)).default;
+            const generatedBrowser = await import(pathToFileURL(path.join(futureOutput, '.generated/api/v1/browser.mjs')).href);
+            const input = {path: {}, query: {repeated: ['one', 'two'], structured: {label: 'Selection'},
+                choice: {kind: 'multiple', ids: [1, 2]}}, header: {'X-Future-Values': ['first', 'second']}};
+            for (const validators of [generatedServer, generatedBrowser]) {
+                // Shape freedom preserves validation: wrong members and invalid
+                // union variants must fail in both actual standalone runtimes.
+                expect(validators.validateGetPackingCreateEntryParameters(input)).toBe(true);
+                expect(validators.validateGetPackingCreateEntryParameters({...input,
+                    query: {...input.query, choice: {kind: 'single', id: 3}}})).toBe(true);
+                expect(validators.validateGetPackingCreateEntryParameters({...input,
+                    query: {...input.query, repeated: 'one'}})).toBe(false);
+                expect(validators.validateGetPackingCreateEntryParameters({...input,
+                    query: {...input.query, structured: {label: 3}}})).toBe(false);
+                expect(validators.validateGetPackingCreateEntryParameters({...input,
+                    query: {...input.query, choice: {kind: 'multiple', ids: ['wrong']}}})).toBe(false);
+                expect(validators.validatePlainTextFixture('Authored text')).toBe(true);
+                expect(validators.validatePlainTextFixture(3)).toBe(false);
+            }
         } finally {
             // Every synchronous child has closed before its link and named tree retire.
             await removeDependencyLink(temporary);

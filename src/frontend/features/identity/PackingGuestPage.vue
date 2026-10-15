@@ -4,7 +4,7 @@ import {useRoute, useRouter, RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {useQuery} from '@tanstack/vue-query';
-import {usePilot} from '../../app/context';
+import {useActionState, usePilot} from '../../app/context';
 import {usePackingApi} from '../packing/api';
 import {useCommand} from '../../composables/command';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
@@ -44,10 +44,12 @@ const entry = useQuery({
 const guestEntry = computed(() => props.entry ?? (isReadDenial(entry.error.value) ? undefined : entry.data.value));
 const titleRetryAvailable = useReadRetry(() => entry.error.value);
 const titleRetryAt = useReadRetryAt(() => entry.error.value, titleRetryAvailable);
+const sessionRetryAvailable = useReadRetry(() => context.sessionRead.value.error);
 const command = useCommand(context.refreshSession, true, {
     dirty: isDirty,
     busy: isCheckingEmail,
     unknownMessage: 'auth.leaveUnknown',
+    recoveryEligible: () => sessionRetryAvailable.value,
 });
 const reconciling = command.recovering;
 
@@ -68,8 +70,13 @@ watch(listId, () => {
     choiceOpen.value = false;
 });
 usePageTitle(() => guestEntry.value?.title || messages.value.t('app.packing'));
-const blocked = computed(() => checkingEmail.value || reconciling.value || command.pending.value || command.uncertain.value
+const blocked = computed(() => checkingEmail.value || command.action.disabled.value
     || completion.pending.value || completion.target.value !== null);
+const titleRetryAction = useActionState({eligible: mayRetryTitle, pending: () => entry.isFetching.value});
+
+function mayRetryTitle(): boolean {
+    return !props.entry && context.mayRead() && titleRetryAvailable.value;
+}
 /** Reconcile identity without assuming a successful title read proves guest creation failed. */
 async function refreshIdentityState(): Promise<void> {
     await command.recover(readGuestAuthority);
@@ -78,7 +85,7 @@ async function refreshIdentityState(): Promise<void> {
 /** The public title read is independent of guest identity commands. Recover only
  * that current query, preserving the mounted name/email and any command receipt. */
 async function retryGuestTitle(): Promise<void> {
-    if (props.entry || !context.mayRead() || !context.hydrated.value || !titleRetryAvailable.value || entry.isFetching.value) return;
+    if (!titleRetryAction.isAvailable()) return;
     await entry.refetch();
 }
 
@@ -175,19 +182,19 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                 :read-error="entry.error.value" :retry-at="titleRetryAt"
                 :last-updated-at="guestEntry ? entry.dataUpdatedAt.value : undefined">{{
                 messages.t(guestEntry ? 'state.stale' : 'state.loadFailed')
-            }}<ActionButton class="btn-sm ms-2" variant="outline-light" :pending="entry.isFetching.value"
-                :disabled="!titleRetryAvailable" @click="retryGuestTitle">{{ messages.t('common.retry') }}</ActionButton></StatusNotice>
+            }}<ActionButton class="btn-sm ms-2" variant="outline-light" :state="titleRetryAction"
+                @click="retryGuestTitle">{{ messages.t('common.retry') }}</ActionButton></StatusNotice>
             <!-- A confirmed identity/mail result is never submitted again because a route
                  chunk failed. Keep delivery Retry with this mounted form when it owns it. -->
             <StatusNotice v-if="completion.target.value" kind="warning">
                 {{ messages.t('state.loadFailed') }}
-                <ActionButton class="ms-2" variant="outline-light" :pending="completion.pending.value" @click="completion.retry">
+                <ActionButton class="ms-2" variant="outline-light" :state="completion.retryAction" @click="completion.retry">
                     {{ messages.t('common.retry') }}
                 </ActionButton>
             </StatusNotice>
             <StatusNotice v-if="command.uncertain.value" kind="warning">{{
                 messages.t('state.unknownOutcome')
-            }} {{ messages.t('auth.unconfirmedRequest') }}<ActionButton class="ms-2" variant="outline-light" :pending="reconciling" :disabled="reconciling" @click="refreshIdentityState">{{ messages.t('common.refresh') }}</ActionButton></StatusNotice>
+            }} {{ messages.t('auth.unconfirmedRequest') }}<ActionButton class="ms-2" variant="outline-light" :state="command.recoveryAction" @click="refreshIdentityState">{{ messages.t('common.refresh') }}</ActionButton></StatusNotice>
             <div class="text-center mb-4">
                 <h3 class="mb-2">{{ messages.t('auth.guestIntro') }}</h3>
                 <ul class="list-unstyled small d-inline-block text-start mb-0">

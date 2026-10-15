@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; API developers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original toolchain decisions routed to active DEC-006 and current authoring/transport/version procedures consolidated in staged Development; approved method/no-op contracts retained; current execution owned by paired review
+verification-scope: corrected definition freedom versus implemented HTTP transport routed to DEC-006; existing toolchain, method/no-op and version contracts retained; no new runtime transport verification
 source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: next-contract-migration-or-authorized-cutover
 -->
@@ -41,13 +41,14 @@ the original OpenAPI/standalone compiler choice, alternatives and rationale. The
 artifact inventory, generation pipeline, strictness and authoring procedure. Generated declarations/validators
 consume the authored YAML; transport adapters remain outside business/controller ownership.
 
-### The supported schema and transport subset
+### Schema definitions and implemented transport
 
-The same [Development owner](staged/DEVELOPMENT.md#contract-authoring-and-generated-consumers) records the supported
-schema/transport subset and bounded password/capacity extensions. The separately approved
-[2026-10-14 scope restoration](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#authorized-transport-scope-restoration-2026-10-14)
-removes unused repeated-query-array and plain-text API support; JSON arrays and existing document/image boundaries
-retain their contracts. This is explicit restoration of the original subset, not a silently expanded API design.
+The same [Development owner](staged/DEVELOPMENT.md#contract-authoring-and-generated-consumers) records schema-authoring
+preferences, implemented HTTP transport and bounded password/capacity extensions. The
+[2026-10-15 maintainer correction](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15)
+resolves the earlier agent interpretation: removal of unused implementation did not authorize definition bans.
+Array/object/union parameter schemas and response media definitions are distinct from the decoder and response
+delivery capabilities actually implemented. Accepting their definitions does not restore unused runtime behavior.
 
 ## Server boundaries and DTO projection
 

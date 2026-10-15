@@ -2,6 +2,7 @@ import {expect, type APIRequestContext, type APIResponse, type Locator, type Pag
 import type {E2ECreateCase, E2ECreateForm} from '../factories/e2eCoreFactory';
 import 'reflect-metadata';
 import {createRequire} from 'node:module';
+import {randomUUID} from 'node:crypto';
 import {resolve} from 'node:path';
 import bcrypt from 'bcryptjs';
 import {DataSource, In} from 'typeorm';
@@ -94,6 +95,79 @@ export async function withPasswordResetAccountForE2E(
     }
 
     await withBuiltE2EDatabase('fixture', exerciseAccount);
+}
+
+/** These handles identify only this workflow's disposable rows; no ORM owner escapes the guarded fixture. */
+export interface E2EProfileWorkflowFixture {
+    account: {id: number; username: string; password: string; profileId: string};
+    guest: {id: string; username: string; profileId: string; loginPath: string};
+}
+
+/** Supply independent account/guest actors for destructive document and migration journeys.
+ * Use the existing exact-schema/grant guard and built production metadata. Empty
+ * account contact can be selected for direct account deletion, while the guest has
+ * no contact. No provider credentials or externally deliverable mailbox is installed. */
+export async function withProfileWorkflowFixtureForE2E(
+    exercise: (fixture: E2EProfileWorkflowFixture) => Promise<void>,
+    accountContact: 'ordinary' | 'absent' = 'ordinary',
+): Promise<void> {
+    async function exerciseWorkflow(datasource: DataSource, requireBuilt: ReturnType<typeof createRequire>): Promise<void> {
+        const {User} = requireBuilt('./dist/modules/database/entities/user/User.js') as typeof import('../../src/modules/database/entities/user/User');
+        const {Profile} = requireBuilt('./dist/modules/database/entities/user/Profile.js') as typeof import('../../src/modules/database/entities/user/Profile');
+        const {Guest} = requireBuilt('./dist/modules/database/entities/user/Guest.js') as typeof import('../../src/modules/database/entities/user/Guest');
+        const userService = requireBuilt('./dist/modules/database/services/UserService.js') as typeof import('../../src/modules/database/services/UserService');
+        const suffix = randomUUID().slice(0, 8);
+        const password = 'Profile-workflow-password!A1';
+        let userId: number | undefined;
+        let guestId: string | undefined;
+        const profileIds: string[] = [];
+
+        try {
+            // Use a unique account rather than mutating the shared seeded identity.
+            // Direct account deletion skips mail for this existing empty-contact case.
+            const user = await datasource.getRepository(User).save({username: `workflow-${suffix}`, name: `Workflow ${suffix}`,
+                email: accountContact === 'absent' ? '' : `workflow-${suffix}@example.invalid`,
+                password: await bcrypt.hash(password, 10), isActive: true});
+            userId = user.id;
+            const profile = await datasource.getRepository(Profile).save({name: user.name, defaultForOwner: true, user});
+            profileIds.push(profile.id);
+            const guest = await userService.createGuest(`Guest workflow ${suffix}`, null, datasource.manager);
+            guestId = guest.id;
+            profileIds.push(guest.profile.id);
+            await exercise({account: {id: user.id, username: user.username, password, profileId: profile.id},
+                guest: {id: guest.id, username: guest.username, profileId: guest.profile.id,
+                    loginPath: `/guest/${guest.id}/login/${guest.token}`}});
+        } finally {
+            // Profile deletion/deactivation retains historical rows, and a transfer
+            // may replace their owner. Exact captured IDs keep cleanup bounded.
+            if (profileIds.length) await datasource.getRepository(Profile).delete({id: In(profileIds)});
+            if (guestId !== undefined) await datasource.getRepository(Guest).delete(guestId);
+            if (userId !== undefined) await datasource.getRepository(User).delete(userId);
+        }
+    }
+
+    await withBuiltE2EDatabase('fixture', exerciseWorkflow);
+}
+
+/** Observe this fixture's actual saved ownership/token state without returning private credentials or relations. */
+export async function readProfileWorkflowFixtureForE2E(fixture: E2EProfileWorkflowFixture) {
+    async function readWorkflow(datasource: DataSource, requireBuilt: ReturnType<typeof createRequire>) {
+        const {User} = requireBuilt('./dist/modules/database/entities/user/User.js') as typeof import('../../src/modules/database/entities/user/User');
+        const {Guest} = requireBuilt('./dist/modules/database/entities/user/Guest.js') as typeof import('../../src/modules/database/entities/user/Guest');
+        const {Profile} = requireBuilt('./dist/modules/database/entities/user/Profile.js') as typeof import('../../src/modules/database/entities/user/Profile');
+        const profiles = await datasource.getRepository(Profile).find({where: {id: In([fixture.account.profileId, fixture.guest.profileId])}});
+        const accountCount = await datasource.getRepository(User).countBy({id: fixture.account.id});
+        const guestCount = await datasource.getRepository(Guest).countBy({id: fixture.guest.id});
+
+        // Return only observable fixture facts. Browser evidence never carries a
+        // password hash, migration token value, guest link token or live repository.
+        return {accountCount, guestCount, profiles: profiles.map(function profileState(profile) {
+            return {id: profile.id, userId: profile.userId ?? null, guestId: profile.guestId ?? null,
+                hasMigrationToken: !!profile.migrationToken};
+        })};
+    }
+
+    return withBuiltE2EDatabase('read', readWorkflow);
 }
 
 /** Read only this test's unique guest/profile names through the built entity metadata.

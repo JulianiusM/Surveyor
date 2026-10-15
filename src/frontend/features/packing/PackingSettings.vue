@@ -8,7 +8,7 @@ import type {EntityHeaderLabels, EntityLifecycleLabels} from '../../../types/Fro
 import type {PilotMetadataSnapshot, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {permissionLabel as translatedPermissionLabel} from '../../../modules/localization/permissionLabels';
 import {usePackingApi} from './api';
-import {usePilot, refreshInterval} from '../../app/context';
+import {useActionState, usePilot, refreshInterval} from '../../app/context';
 import {isReadDenial} from '../../app/transport';
 import {useCommand} from '../../composables/command';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
@@ -301,6 +301,10 @@ const awaitingAuthority = computed(() => awaitingSettingsAuthority() || !!fields
 const blocked = computed(
     () => busy.value || command.uncertain.value || fields.value?.unknown || awaitingAuthority.value || !!destination.target.value,
 );
+const refreshAction = useActionState({eligible: mayRefreshSettings, pending: () => refreshingSettings.value,
+    blocked: () => !!busy.value});
+
+function mayRefreshSettings(): boolean { return active && context.mayRead() && retryAvailable.value; }
 /** A confirmed metadata save stays confirmed even if its related settings read fails. */
 async function metadataSaved(): Promise<void> {
     // Complete the current-value read before another panel sends a command.
@@ -341,7 +345,7 @@ function adminConflict(id: string): boolean {
 
 /** Retry related reads explicitly; reconciliation never repeats the saved or uncertain write. */
 async function refreshSettings(): Promise<void> {
-    if (busy.value || !retryAvailable.value) return;
+    if (!refreshAction.isAvailable()) return;
     refreshingSettings.value = true;
     const scope = context.capture();
     try {
@@ -437,8 +441,14 @@ function retireDeniedProfiles(failure: Error | null): void {
         packingKeys.profilesFamily(context.session.value?.context, props.listId), failure);
 }
 
+const profileRetryAction = useActionState({eligible: mayRetryProfiles, pending: () => profiles.isFetching.value});
+
+function mayRetryProfiles(): boolean {
+    return active && addOpen.value && context.mayRead() && profileRetryAvailable.value;
+}
+
 async function retryProfiles(): Promise<void> {
-    if (!active || !addOpen.value || !context.mayRead() || profiles.isFetching.value || !profileRetryAvailable.value) return;
+    if (!profileRetryAction.isAvailable()) return;
     await profiles.refetch({cancelRefetch: false});
 }
 function profileOptionValue(profile: components['schemas']['PackingProfileOption']): string {
@@ -1046,8 +1056,8 @@ function permissionLabel(key: string): string {
                             :last-updated-at="profiles.data.value ? profiles.dataUpdatedAt.value : undefined"
                             :retry-at="profileRetryAt" :read-error="profiles.error.value">
                             {{ messages.t(profiles.data.value ? 'state.stale' : 'state.loadFailed') }}
-                            <ActionButton class="btn-sm ms-2" variant="outline-light" :pending="profiles.isFetching.value"
-                                :disabled="!profileRetryAvailable" @click="retryProfiles">{{ messages.t('common.retry') }}</ActionButton>
+                            <ActionButton class="btn-sm ms-2" variant="outline-light" :state="profileRetryAction"
+                                @click="retryProfiles">{{ messages.t('common.retry') }}</ActionButton>
                         </StatusNotice>
                         <div class="mb-3">
                             <label class="form-label" for="profile-search"
@@ -1126,14 +1136,13 @@ function permissionLabel(key: string): string {
         </template>
         <template #footer
             ><ActionButton v-if="destination.target.value" variant="outline-secondary"
-                :pending="destination.pending.value" @click="destination.retry">
+                :state="destination.retryAction" @click="destination.retry">
                 {{ messages.t('common.retry') }}
             </ActionButton
             ><ActionButton
                 v-if="settings.error.value || command.uncertain.value || awaitingAuthority || command.notice.value === 'state.savedRefreshFailed'"
                 variant="outline-secondary"
-                :pending="refreshingSettings"
-                :disabled="busy || !retryAvailable"
+                :state="refreshAction"
                 @click="refreshSettings"
                 >{{ messages.t('common.refresh') }}</ActionButton
             ><ActionButton variant="secondary" :disabled="busy || !!destination.target.value" @click="close">{{

@@ -21,6 +21,7 @@ import OverviewRegion from '../../src/frontend/features/overview/OverviewRegion.
 import OverviewPage from '../../src/frontend/features/overview/OverviewPage.vue';
 import OverviewCard from '../../src/frontend/features/overview/OverviewCard.vue';
 import AppNavigationDropdown from '../../src/frontend/components/AppNavigationDropdown.vue';
+import ActionButton from '../../src/frontend/components/ActionButton.vue';
 import App from '../../src/frontend/app/App.vue';
 import type {components} from '../../src/types/api/v1';
 import type {PilotEventPickerSource} from '../../src/types/FrontendPilotUiTypes';
@@ -344,6 +345,9 @@ describe('visible resource recovery', () => {
             .toEqual(['/api/v1/packing-lists/' + eventId, '/api/v1/session']);
         expect(context.ready.value).toBe(true);
         expect(context.mayRead()).toBe(false);
+        const refresh = wrapper.get<HTMLButtonElement>('button[aria-label="Refresh"]');
+        expect(refresh.element.disabled).toBe(true);
+        expect(input.element.disabled).toBe(false);
 
         // Explicit API callers cannot bypass observer enablement. Command/response
         // scope stays valid while only new reads are paused.
@@ -363,6 +367,7 @@ describe('visible resource recovery', () => {
         expect(input.element.value).toBe('Retained packing draft');
         expect([input.element.selectionStart, input.element.selectionEnd]).toEqual([2, 8]);
         expect(document.activeElement).toBe(input.element);
+        expect(refresh.element.disabled).toBe(true);
 
         // Only a later admitted bootstrap restores automatic read dispatch.
         recovered = true;
@@ -373,6 +378,52 @@ describe('visible resource recovery', () => {
         expect(request.mock.calls.filter(([value]) => new URL((value as Request).url).pathname === '/api/v1/packing-lists/' + eventId))
             .toHaveLength(2);
         expect(wrapper.get('#quick-title').element).toBe(input.element);
+        expect(refresh.element.disabled).toBe(false);
+    });
+
+    it('pauses picker paging while retaining local draft controls and resumes without replay', async function coordinatesPickerActions() {
+        const bootstrap = deferred<Response>();
+        const search = vi.fn<PilotEventPickerSource['search']>(async () => ({items: [event], selected: null,
+            nextCursor: 'next-batch'}));
+        const {wrapper, context} = await mounted(EventPicker,
+            {prefix: 'action-picker', modelValue: null, source: pickerSource(search)}, async () => bootstrap.promise);
+        await wrapper.get('#action-picker-event-button').trigger('click');
+        await flushPromises();
+        const next = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('eventPicker.nextPage'))!;
+        const cancel = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.cancel'))!;
+        const reset = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('eventPicker.resetFilters'))!;
+        const checking = context.refreshSession();
+        await nextTick();
+
+        expect(next.attributes('disabled')).toBeDefined();
+        expect(cancel.attributes('disabled')).toBeUndefined();
+        expect(reset.attributes('disabled')).toBeUndefined();
+        expect(wrapper.get<HTMLInputElement>('#action-picker-search').element.disabled).toBe(false);
+        expect(search).toHaveBeenCalledOnce();
+        bootstrap.resolve(json(session));
+        await checking;
+        await flushPromises();
+        expect(next.attributes('disabled')).toBeUndefined();
+        expect(search).toHaveBeenCalledOnce();
+        await next.trigger('click');
+        await flushPromises();
+        expect(search).toHaveBeenCalledTimes(2);
+        await cancel.trigger('click');
+        expect(search).toHaveBeenCalledTimes(2);
+    });
+
+    it('retires a retained Help Retry callback with its mounted action owner', async function retiresReadAction() {
+        const {wrapper, root, request} = await mounted(HelpPage, {}, async () => readFailure(403, 'future'),
+            '/frontend-pilot/help?doc=fixture');
+        const retry = wrapper.findComponent(ActionButton);
+        expect(retry.attributes('disabled')).toBeUndefined();
+        // Retain the real parent handler supplied to the reusable control. DOM
+        // removal alone cannot establish that this delayed callback is retired.
+        const delayed = retry.vm.$attrs.onClick as () => Promise<void>;
+        const reads = request.mock.calls.length;
+        root.unmount();
+        await delayed();
+        expect(request).toHaveBeenCalledTimes(reads);
     });
 
     it('changes locale without canceling or refetching a mounted machine projection', async function preservesMachineRead() {

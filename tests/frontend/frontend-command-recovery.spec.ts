@@ -22,6 +22,9 @@ afterEach(() => { cleanups.splice(0).forEach(cleanup => cleanup()); vi.restoreAl
 
 async function mountedCommand(review = false, request?: typeof fetch) {
     const context = createPilotContext({session}, false, request);
+    // This fixture exercises initialized command ownership; startup admission has
+    // its own assertions and must not be bypassed by the shared action state.
+    context.hydrated.value = true;
     const refresh = vi.fn(async (): Promise<void> => undefined);
     let command!: ReturnType<typeof useCommand>;
     const component = defineComponent({
@@ -44,6 +47,7 @@ async function mountedCommand(review = false, request?: typeof fetch) {
  * The router/context remain mounted, as they do when a denied read closes an editor. */
 async function mountedRetirableCommand(refresh: () => Promise<unknown> = async () => undefined) {
     const context = createPilotContext({session}, false);
+    context.hydrated.value = true;
     const visible = ref(true);
     let command!: ReturnType<typeof useCommand>;
     const editor = defineComponent({
@@ -70,6 +74,30 @@ function unloadAttempt(): Event {
 }
 
 describe('reconcile-only commands', () => {
+    it('admits initialized commands and bootstrap recovery independently of the resource-read barrier', async function separatesActionAdmission() {
+        const {context, command} = await mountedCommand();
+        const write = vi.fn(async () => ({changed: true}));
+        context.hydrated.value = false;
+        expect(command.action.disabled.value).toBe(true);
+        expect(await command.run(write, false)).toBeUndefined();
+        expect(await command.recover()).toBe(false);
+        expect(write).not.toHaveBeenCalled();
+
+        context.hydrated.value = true;
+        // A real bootstrap failure closes only resource reads. Deliberate API
+        // commands retain their existing captured actor, while recovery can reopen it.
+        vi.spyOn(context.api, 'bootstrap').mockRejectedValueOnce(new TypeError('Session unavailable'));
+        await context.refreshSession().catch(() => {});
+        expect(context.mayRead()).toBe(false);
+        expect(command.action.disabled.value).toBe(false);
+        expect(await command.run(write, false)).toEqual({changed: true});
+        expect(write).toHaveBeenCalledOnce();
+        vi.spyOn(context.api, 'bootstrap').mockResolvedValueOnce(session);
+        expect(await command.recover(async () => { await context.refreshSession(); })).toBe(true);
+        expect(context.mayRead()).toBe(true);
+        expect(write).toHaveBeenCalledOnce();
+    });
+
     it.each(['future', 'known', 'malformed'] as const)('presents only validated %s server diagnostics while retaining unknown command protection', async representation => {
         const status = representation === 'known' ? 500 : 503;
         const safeDetail = 'The server could not confirm this write.';
@@ -443,6 +471,7 @@ describe('reconcile-only commands', () => {
 
     it('aggregates parent and child drafts into one departure, preserving cancellation and blocking pending work', async () => {
         const context = createPilotContext({session}, false);
+        context.hydrated.value = true;
         const parentDirty = ref(true);
         const childDirty = ref(true);
         const refresh = async () => undefined;

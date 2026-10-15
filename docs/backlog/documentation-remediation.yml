@@ -175,6 +175,7 @@ implementation_defects:
     severity: high
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
+    out_of_scope_for_frontend_migration: true
     title: Deactivating the final full-account profile can complete deletion and then fail while selecting another profile
     evidence:
       - src/controller/userController.ts deletes the previous user when profile deactivation leaves no profiles
@@ -183,6 +184,9 @@ implementation_defects:
     impact: The destructive operation can succeed while the user receives an error instead of a clean account-closure result.
     documentation_contract: D01 describes final-profile deactivation as a clean permanent account closure and does not
       expose the post-deletion failure.
+    disposition: The maintainer's explicit 2026-10-14 parity-only decision excludes R3 deactivation finality repair
+      and existing backlog remedies from frontend migration. This defect remains open for a separate effort; its
+      remedy or another approval request is not a prerequisite for migrating the existing frontend journey.
     closes_when:
       - final-profile deactivation terminates or clears the session without attempting another profile selection
       - multi-profile and final-profile outcomes have route-level tests
@@ -526,10 +530,16 @@ implementation_defects:
     severity: medium
     owner: application maintainers
     out_of_scope_for_documentation_migration: true
-    title: Packing-item creation passes position while persistence reads pos
+    title: Native Packing-item creation does not persist the intended item order
     evidence:
-      - src/controller/packingController.ts supplies position for initial and quick-added items
-      - src/modules/database/services/PackingService.ts persists item.pos in both createPackingListTx and addPackingItems
+      - Original discovery at native comparator 2dfa2573c64178f54684cc4877b5a945f66e24c8 found
+        src/controller/packingController.ts supplying position for initial and quick-added items while
+        src/modules/database/services/PackingService.ts persisted pos in createPackingListTx and addPackingItems.
+      - The current shared createEntity and addPackingItem controller operations preserve that native ordering
+        behavior by omitting pos. Native Quick Add now reaches PackingService.createPackingItem; the unset position
+        retains its database default instead of persisting the intended next sequence.
+      - Versioned creation explicitly supplies pos through those same shared owners. This scoped migration behavior
+        does not repair or close the native defect; its runtime remediation remains separately authorized work.
       - subsequent reads and reorder operations use the pos column
     impact: Initial and newly added row ordering can be stored without the intended sequence until an explicit reorder occurs.
     documentation_contract: D10 states the coherent working contract in which creation order and later drag reordering are
@@ -1310,6 +1320,87 @@ implementation_defects:
         an idempotent active flag alone is not acceptance evidence.
     evidence_limit: The mixed-writer/reissue consequences are source-inferred and were not runtime reproduced.
       Accepted cooperating-pilot concurrency does not certify native continuations; no general remedy is approved.
+  - id: IMP-058
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    out_of_scope_for_frontend_migration: true
+    title: Profile migration token writes do not recheck current authority with the mutation
+    evidence:
+      - src/routes/users.ts profile/migrate/request passes the admitted session profile ID to getMigrationToken;
+        UserService.generateMigrationToken updates that ID without checking its current owner at the write.
+      - userController.getProfileToMigrate verifies token and expiry before moveProfileToUserTx begins. That transaction
+        moves the profile and clears its token by profile ID without rechecking the submitted token or expiry.
+    impact: An ownership change after route admission can leave an earlier token request authorized by stale ownership.
+      Concurrent transfer admissions, token reissue or expiry can likewise outlive the token authority checked earlier.
+    history: P1 source review on 2026-10-14 established these native/shared boundaries; their original rationale or a
+      deliberate exception is unknown. This is separate from the transfer completion defect IMP-059.
+    disposition: The maintainer's explicit 2026-10-14 parity-only decision excludes R1A current-owner issuance and
+      R1B current-token consumption strengthening from frontend migration. This defect remains open for separate work;
+      its remedy or another approval request is not a prerequisite for migrating the existing transfer journey.
+    documentation_contract: Issuance must reflect current profile ownership, and transfer must reflect the submitted
+      token's current authority. The detailed shared-writer contract remains for separately authorized work.
+    closes_when:
+      - Separately authorized shared-owner work establishes and verifies current issuance and consumption authority,
+        including cooperating native/new-frontend writers, with independent semantic review.
+    evidence_limit: Consequences are inferred from production source ordering, not reproduced concurrent requests.
+      Route middleware already validates the session; this finding concerns changes after that admission, not an
+      arbitrary caller-selected profile ID. No token or ownership behavior has been changed.
+  - id: IMP-059
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    out_of_scope_for_frontend_migration: true
+    title: Profile transfer commits before required previous-owner cleanup and completion preparation
+    evidence:
+      - src/controller/userController.ts migrateProfile commits UserService.moveProfileToUserTx before loading the
+        destination owner for migration mail and calling handlePreviousProfileOwner.
+      - handlePreviousProfileOwner reads remaining profiles, deletes a final previous account or guest, and prepares
+        its deletion mail after the ownership/token transaction. These required steps do not share that commit.
+      - src/modules/email.ts prepares mail and initializes the native sender outside its delivery-error catch;
+        ordinary SMTP delivery failures inside that catch are logged rather than propagated.
+    impact: A later lookup, cleanup or mail-preparation failure can reject an already committed transfer or leave its
+      previous-owner cleanup incomplete, without rolling back the transferred profile or consumed token.
+    history: P1 source review on 2026-10-14 established the ordering; its original rationale or deliberate finality
+      exception is unknown. Token authority is recorded separately as IMP-058; final-profile deactivation remains IMP-006.
+    disposition: The maintainer's explicit 2026-10-14 parity-only decision excludes R2 transfer finality/cleanup repair
+      from frontend migration. This defect remains open for separate work; its remedy or another approval request is
+      not a prerequisite for migrating the existing transfer journey. No backend behavior change is authorized here.
+    documentation_contract: Transfer completion must distinguish its committed ownership outcome from delivery and
+      establish a coherent boundary for required previous-owner cleanup and result preparation.
+    closes_when:
+      - Separately authorized shared-owner work establishes and verifies the intended transfer/cleanup completion
+        contract and failure outcomes, with independent semantic review and preserved deliberate identity behavior.
+    evidence_limit: Partial completion is source-inferred, not a runtime-reproduced database or mail failure.
+      This entry does not claim that caught SMTP delivery failures reject the native operation.
+  - id: IMP-060
+    status: open
+    severity: high
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    out_of_scope_for_frontend_migration: true
+    title: Account deletion commits before required session and completion preparation
+    evidence:
+      - src/controller/userController.ts deleteUser and deleteGuest call their UserService deletion before deletion
+        mail and logoutUserOidc. The DBAL delete is not atomic with the following stored-session transition.
+      - src/modules/email.ts mail preparation/native sender initialization and src/modules/oidc.ts persistSession
+        remain fallible after account deletion; ordinary caught SMTP delivery errors are not propagated.
+    impact: Preparation or stored-session failure can reject after permanent deletion, leaving the request's previous
+      identity or a missing completion despite an irreversible account outcome.
+    history: P1 source review on 2026-10-14 established the ordering; its original rationale or a deliberate finality
+      exception is unknown. Provider destination preparation after local logout is separately tracked in IMP-056.
+    disposition: The maintainer's explicit 2026-10-14 parity-only decision excludes R4 account-deletion finality repair
+      from frontend migration. This defect remains open for separate work; its remedy or another approval request is
+      not a prerequisite for migrating the existing deletion journey. No backend/session/provider remedy is authorized here.
+    documentation_contract: Permanent account deletion requires a coherent committed account/session outcome and
+      prepared completion, with delivery and provider termination distinguished from business rejection.
+    closes_when:
+      - Separately authorized shared-owner work establishes and verifies deletion/session completion and actual
+        failure outcomes, with independent semantic review and the provider-specific IMP-056 boundary preserved.
+    evidence_limit: Failure consequences are source-inferred, not runtime reproduced; no live SMTP/provider outcome
+      or native behavior change is established. This does not duplicate the final-profile deactivation defect IMP-006.
 findings:
   - id: DOC-PERMISSION-POLICY-REVIEW
     status: open

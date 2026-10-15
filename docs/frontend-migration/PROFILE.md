@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved return to readable delta staging, generic task-context delivery, digest-checked reconciliation and prepared-output review; production-guide-only freeze and active governance/runtime Help retained; no cutover or runtime change
+verification-scope: approved parity-only migration clarification excludes inherited backend remedies and prerequisites; readable delta staging, production-guide freeze and active governance/runtime Help retained; no cutover or runtime change
 source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; src/frontend/; docs/user-guide/en/; docs/user-guide/de/
 next-review: next-authorized-migration-slice-or-cutover
 activation-scope: frontend framework migration, frontend pilot review/maintenance, migration documentation or associated cutover preparation
@@ -46,6 +46,16 @@ temporary and ends at authorized cutover; it never becomes a permanent policy or
 business owners for both frontends. Controllers own decisions and DBAL owns persistence; no parallel backend cleanup
 layer is permitted. General application defects remain a separately authorized effort, even when a proposed remedy
 includes a minor frontend edit. Record their evidence and disposition without implementing them through migration.
+
+**Approved parity-only clarification (2026-10-14):** the maintainer explicitly limits the migration to visual and
+behavioral parity, except for previously approved frontend changes. Minor backend transport/presentation adaptation
+may reuse existing shared implementation; general backend fixes, stronger legacy transaction/token guarantees and
+existing backlog remedies are excluded and must not become migration prerequisites. This expressly defers R1A
+current-owner token issuance, R1B current-token consumption, R2 transfer completion, R3 profile-deactivation completion
+and R4 account-deletion completion. Their defects remain open in the central backlog; the decisions are exclusions,
+not pending approval requests. Continue the corresponding frontend journeys against the existing shared behavior.
+Previously approved bounded corrections retain their scope. New frontend/adapter code still follows security,
+private-projection, contract, readability, no-replay and delivery requirements without claiming a repaired backend.
 
 Use the [Development amendments](staged/DEVELOPMENT.md) alongside unchanged canonical development guidance and
 the active engineering policy. They retain the frontend playbook, ownership contracts and worked examples without

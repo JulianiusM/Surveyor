@@ -1,10 +1,10 @@
-import {computed, inject, ref, shallowRef, watch} from 'vue';
+import {computed, inject, onScopeDispose, ref, shallowRef, watch} from 'vue';
 import type {InjectionKey} from 'vue';
 import {useTranslation} from 'i18next-vue';
 import {QueryClient} from '@tanstack/vue-query';
 import type {QueryCacheNotifyEvent} from '@tanstack/vue-query';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
-import type {PilotContext, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {PilotActionInputs, PilotActionState, PilotContext, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale, MessageKey} from '../../types/LocalizationTypes';
 import type {components} from '../../types/api/v1';
 import type {RouteLocationNormalized, Router} from 'vue-router';
@@ -27,6 +27,31 @@ export function useClientInitialization() {
     return computed(() => !context || context.hydrated.value);
 }
 
+/** Derive one operation state for both rendered controls and deliberate dispatch.
+ * Admission belongs to the operation: a scoped read can wait for bootstrap while
+ * session recovery and local draft controls remain available. No input, request,
+ * retry or outcome is copied here, and an admitted operation keeps its lifetime. */
+export function useActionState(inputs: PilotActionInputs = {}): PilotActionState {
+    const initialized = useClientInitialization();
+    // Disposal retires only future admission. Pending promises keep their existing
+    // command/read settlement owners and are never canceled or replayed here.
+    let active = true;
+    onScopeDispose(() => { active = false; });
+    const pending = computed(() => inputs.pending?.() ?? false);
+    // A read barrier is not itself progress on this action. Keep its spinner
+    // tied to the owning operation rather than every routine session check.
+    const available = computed(isAvailable);
+
+    /** Recheck nonreactive lifetime fences at dispatch too: a retained callback
+     * can run after its component's final render and cached computed evaluation. */
+    function isAvailable(): boolean {
+        return active && initialized.value && !(inputs.pending?.() ?? false)
+            && !(inputs.blocked?.() ?? false) && (inputs.eligible?.() ?? true);
+    }
+
+    return {available, disabled: computed(() => !available.value), pending, isAvailable};
+}
+
 /** Route metadata owns interactive delivery. An admitted error or completed
  * message can remain immediately readable; ordinary form feedback cannot make
  * an otherwise interactive page expose controls before browser initialization. */
@@ -41,7 +66,7 @@ export function requiresClientInitialization(route: Pick<RouteLocationNormalized
 
     // These server-admitted results contain only readable feedback/navigation.
     // All other interactive route content starts with the same shared skeleton.
-    const readableResult = initial?.pageEntry?.kind === 'denied' || !!initial?.packingError
+    const readableResult = !!initial?.commonPage || initial?.pageEntry?.kind === 'denied' || !!initial?.packingError
         || !!initial?.identityProblem || !!(initial?.passwordReset && 'status' in initial.passwordReset) || completed;
     return route.meta.javascriptRequired === true && !readableResult;
 }
@@ -227,13 +252,19 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         updates.observe(current.deployment);
     }
 
-    /** One bootstrap gate precedes focus/reconnect reads, preventing automatic fetches with an old cookie scope. */
-    function refreshSession(): Promise<void> {
+    /** Gate focus/reconnect reads on current session evidence. A confirmed command
+     * requests fresh=true to drain an older in-flight bootstrap before its display
+     * refresh; failures retain the same shared read notice and server cooldown. */
+    function refreshSession(fresh = false): Promise<void> {
         // Close dispatch synchronously, before visibility can re-enable a stale query.
         // Failure and server cooldown retain this barrier; presentation stays mounted.
         readsReady.value = false;
         if (disposed) return Promise.reject(new ObsoleteRequestError());
-        if (bootstrapRequest) return bootstrapRequest;
+        if (bootstrapRequest) {
+            // Confirmed commands need a read started after their acknowledgement.
+            // Drain an older bootstrap before requesting that fresh display data.
+            return fresh ? bootstrapRequest.catch(ignoreEarlierBootstrapFailure).then(refreshAfterEarlierBootstrap) : bootstrapRequest;
+        }
         // Every session caller shares the existing server deadline. Reject with
         // the retained failure rather than implying that a skipped GET succeeded.
         if (!canRetryRead(sessionRead.value.error)) return Promise.reject(sessionRead.value.error);
@@ -312,6 +343,14 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
 
         bootstrapRequest = api.bootstrap().then(receiveBootstrap).catch(rejectBootstrap).finally(finishBootstrap);
         return bootstrapRequest;
+    }
+
+    function ignoreEarlierBootstrapFailure(): void {
+        // The existing bootstrap owner retains its failure and retry deadline.
+    }
+
+    function refreshAfterEarlierBootstrap(): Promise<void> {
+        return refreshSession();
     }
 
     /** Serialize preference writes and share their completion across rapid clicks.

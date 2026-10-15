@@ -1,0 +1,199 @@
+# Identity administration exposes deliberate projections rather than ORM/session rows.
+# Read-only preview is separate from inherited transfer/deletion document commands.
+schemas:
+  ProfileSettings:
+    type: object
+    additionalProperties: false
+    required: [id, name, isDefault]
+    properties:
+      id: {$ref: './common.yaml#/schemas/Uuid'}
+      name: {type: string}
+      isDefault: {type: boolean}
+  ProfileManagement:
+    type: object
+    additionalProperties: false
+    required: [profiles, activeProfileId]
+    properties:
+      profiles:
+        type: array
+        items: {$ref: '#/schemas/ProfileSettings'}
+      activeProfileId: {$ref: './common.yaml#/schemas/NullableUuid'}
+  ProfileCreateInput:
+    type: object
+    additionalProperties: false
+    required: [name]
+    properties:
+      name: {type: string, minLength: 1}
+  ProfileUpdateInput:
+    type: object
+    additionalProperties: false
+    required: [name, isDefault]
+    properties:
+      name: {type: string, minLength: 1}
+      isDefault: {type: boolean}
+  ProfileMigrationInput:
+    type: object
+    additionalProperties: false
+    required: [token]
+    properties:
+      token: {type: string}
+  ProfileMigrationPreview:
+    type: object
+    additionalProperties: false
+    required: [kind, token, profile]
+    properties:
+      kind: {type: string, const: preview}
+      token: {type: string}
+      profile:
+        type: object
+        additionalProperties: false
+        required: [id, name, owner]
+        properties:
+          id: {$ref: './common.yaml#/schemas/Uuid'}
+          name: {type: string}
+          owner:
+            oneOf:
+              - type: object
+                additionalProperties: false
+                required: [kind, name, username, email]
+                properties:
+                  kind: {type: string, const: account}
+                  name: {type: string}
+                  username: {type: string}
+                  email: {type: string}
+              - type: object
+                additionalProperties: false
+                required: [kind, username, email]
+                properties:
+                  kind: {type: string, const: guest}
+                  username: {type: string}
+                  email:
+                    type:
+                      - string
+                      - "null"
+              - type: 'null'
+  ProfileMigrationPreviewOutcome:
+    oneOf:
+      - {$ref: '#/schemas/ProfileMigrationPreview'}
+      - type: object
+        additionalProperties: false
+        required: [kind, status, messageKey]
+        properties:
+          kind: {type: string, const: denied}
+          status: {type: integer, const: 401}
+          messageKey: {type: string, const: profile.invalidMigrationToken}
+paths:
+  migrationPreview:
+    post:
+      operationId: previewIdentityProfileMigration
+      x-surveyor-command: {retryPolicy: natural-idempotent, precondition: none}
+      summary: Preview a submitted transfer token without changing ownership or consuming it
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/schemas/ProfileMigrationInput'}
+      responses:
+        '200':
+          description: Private native preview or invalid-capability presentation, independently of session admission
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/ProfileMigrationPreviewOutcome'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  entry:
+    get:
+      operationId: getProfileAdministrationEntry
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read account or guest page admission without disclosing profile data
+      security: []
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - name: view
+          in: query
+          required: true
+          schema: {type: string, enum: [edit, manage, create]}
+        - name: returnTo
+          in: query
+          schema: {type: string, maxLength: 2048}
+      responses:
+        '200':
+          description: Canonical page admission
+          content:
+            application/json:
+              schema: {$ref: './common.yaml#/schemas/PageEntryOutcome'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  profiles:
+    get:
+      operationId: getIdentityProfiles
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read only the signed-in account's profiles
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+      responses:
+        '200':
+          description: Account-owned profile management
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/ProfileManagement'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+    post:
+      operationId: createIdentityProfile
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Create an account profile without selecting it
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/schemas/ProfileCreateInput'}
+      responses:
+        '200':
+          description: Confirmed native profile creation; display data is refreshed separately
+          content:
+            application/json:
+              schema: {$ref: './packing.yaml#/schemas/MutationResult'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  current:
+    get:
+      operationId: getIdentityProfile
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read the active account or guest profile's editable fields
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+      responses:
+        '200':
+          description: Active-profile settings
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/ProfileSettings'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+    patch:
+      operationId: updateIdentityProfile
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Save active-profile fields through the unchanged native operation
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/schemas/ProfileUpdateInput'}
+      responses:
+        '200':
+          description: Confirmed native profile update; display data is refreshed separately
+          content:
+            application/json:
+              schema: {$ref: './packing.yaml#/schemas/MutationResult'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}

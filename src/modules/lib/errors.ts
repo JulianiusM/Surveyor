@@ -17,7 +17,8 @@
 // lib/errors.js
 // Custom error types for centralized error handling in Express routes
 
-import type {Severity} from "../../types/ErrorTypes";
+import type {ExpectedErrorOptions, Severity} from "../../types/ErrorTypes";
+import type {MessageKey} from '../../types/LocalizationTypes';
 
 /**
  * Represents a validation or business logic error that should render
@@ -88,6 +89,8 @@ export class ExpectedError extends Error {
     data: object;
     severity: Severity;
     status: number;
+    /** Optional localization identity; the existing literal message remains the native contract. */
+    readonly messageKey?: MessageKey;
 
     /**
      * @param {string} message - Error message to display.
@@ -96,12 +99,15 @@ export class ExpectedError extends Error {
      * @param {object} data - Data to re-populate the form or context.
      * @param {ErrorOptions} options - ErrorOptions
      */
-    constructor(message: string, severity: Severity = 'error', status: number = 400, data: object = {}, options?: ErrorOptions) {
+    constructor(message: string, severity: Severity = 'error', status: number = 400, data: object = {}, options?: ExpectedErrorOptions) {
         super(message, options);
         this.name = 'ExpectedError';
         this.severity = severity;
         this.data = data;
         this.status = status;
+        // Callers which already own a catalog message can retain it across a
+        // client language change without another prose-to-error mapping table.
+        this.messageKey = options?.messageKey;
         if (Error.captureStackTrace) {
             Error.captureStackTrace(this, this.constructor);
         }

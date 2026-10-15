@@ -4,7 +4,7 @@ import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {PilotMetadataFieldPolicy, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {usePackingApi} from './api';
-import {usePilot, refreshInterval} from '../../app/context';
+import {useActionState, usePilot, refreshInterval} from '../../app/context';
 import {isReadDenial} from '../../app/transport';
 import {MetadataDraft} from '../../composables/metadataDraft';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
@@ -146,6 +146,10 @@ const canReview = computed(
 const requiresReview = computed(() => !!draft.value?.remote);
 const dirty = computed(() => !!draft.value?.dirty);
 const awaitingAuthority = computed(() => !!draft.value?.awaitingAuthority);
+const refreshAction = useActionState({eligible: mayRefreshMetadata, pending: () => refreshing.value,
+    blocked: () => !!props.busy || pending.value});
+
+function mayRefreshMetadata(): boolean { return active && context.mayRead() && retryAvailable.value; }
 
 /** A current read can offer review after partial field revocation. A denied read
  * or retired actor/resource still forbids presenting any late result. */
@@ -170,7 +174,7 @@ function mayLeave(): boolean {
 
 /** Offer the latest authority for review without replaying an uncertain PATCH. */
 async function refresh(discard = false): Promise<void> {
-    if (props.busy || pending.value || refreshing.value || !retryAvailable.value) return;
+    if (!refreshAction.isAvailable()) return;
     discardAfterSettings ||= discard;
     let current = false;
     try {
@@ -321,8 +325,8 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
          and failed reads. Keep its node while an unknown command's read fails so
          the focused control is retained rather than replaced by another Refresh. -->
     <div v-if="(unknown || awaitingAuthority || metadata.error.value) && !lostAuthority" class="mb-3">
-        <ActionButton :variant="unknown || awaitingAuthority ? 'outline-warning' : 'outline-secondary'" :pending="refreshing"
-            :disabled="busy || pending || refreshing || !retryAvailable" @click="refresh()">
+        <ActionButton :variant="unknown || awaitingAuthority ? 'outline-warning' : 'outline-secondary'" :state="refreshAction"
+            @click="refresh()">
             {{ messages.t('common.refresh') }}
         </ActionButton>
     </div>

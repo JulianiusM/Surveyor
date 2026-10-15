@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved readiness transport restoration, server-integration classification, policy context, current build/focused application checks and 32 individually reviewed captures recorded with failures/limits; staged guide consolidation and preview safety reviewed separately; no cutover or deployment claimed
-source-anchors: src/controller/packingController.ts; src/controller/entityAdminController.ts; src/controller/eventController.ts; src/controller/userController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/modules/lib/fileCommons.ts; src/modules/overview/api.ts; src/routes/api/v1/overview.ts; src/controller/helpController.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/unit/frontend-generation.spec.ts; tests/frontend/frontend-page-entry.spec.ts; tests/frontend/frontend-command-recovery.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/browser/; tests/integration/authentication-workflows.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/integration/packing-management-api.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; .gitignore; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml
+verification-scope: maintainer-directed definition-guard removal verified by actual generator/standalone-validator tests and compiler checks; A1-A4 runtime evidence retained within its original scope; no new HTTP transport verification
+source-anchors: src/controller/packingController.ts; src/controller/entityAdminController.ts; src/controller/eventController.ts; src/controller/userController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/modules/lib/fileCommons.ts; src/modules/overview/api.ts; src/routes/api/v1/overview.ts; src/controller/helpController.ts; src/modules/permissionEngine.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/unit/frontend-generation.spec.ts; tests/frontend/frontend-page-entry.spec.ts; tests/frontend/frontend-command-recovery.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/browser/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/authentication-workflows.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/integration/packing-management-api.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; .gitignore; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml
 next-review: next-migration-slice-or-permission-policy-review
 -->
 
@@ -422,6 +422,11 @@ backend, API, default route or runtime Help content change belongs to this docum
 
 ## Approved readiness implementation verification (2026-10-14)
 
+**Historical implementation account:** its definition guards and their passing tests do not establish approval.
+The maintainer's [2026-10-15 correction](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15)
+identifies the restriction interpretation as agent overreach and directs removal; the recorded executions below
+retain their historical scope.
+
 The current readiness work implements the maintainer's separately approved transport-scope restorations and the
 conditionally approved classification of genuine Express/Vite/SSR/HTTP integration. Existing generator/transport
 owners now reject query arrays/plain-text API responses while preserving authored scalar, JSON-array, multipart and
@@ -451,3 +456,173 @@ Live-source and final-path documentation diagnostics remain advisory. The histor
 reference-count findings are retained rather than rebaselined. Complete prepared output still requires independent
 and root review bound to its actual input/output identities; that review does not authorize publication or cutover.
 Full-app suites, hosted CI, operator rollback, live OIDC and successful SMTP delivery remain outside these receipts.
+
+## P0 foundation verification (2026-10-14)
+
+The maintainer explicitly authorized P0 readiness: diagnose the generation-test timeout, complete explanations in
+migration-changed operations and correct maintenance evidence. The six-file change contains the existing generator
+fixture, Help/permission comments and three maintenance records. Native UI/Help, business behavior, the production
+watcher, API contracts, default routes and later migration phases remain unchanged.
+
+The earlier review's watcher case exceeded its 90-second limit; its exact failing phase remains unknown.
+Diagnostic full-contract runs completed within that unchanged limit. One measured run took 49.86 seconds, with
+five API generation batches consuming about 40.5 seconds and locale generation about 4.5 seconds. This establishes
+fixture cost, not a reproduced production-watcher defect. The detached fixture now uses the actual session operation
+and its real schemas, complete catalogs/permission inputs and actual generators. All five lifecycle/assertion cycles,
+the existing full-contract checks and deadlines remain; failures now identify their phase and generation progress.
+
+| Executed check | P0 result and boundary |
+|---|---|
+| Normal build and compiler scopes | `npm run build` passed, including Vue client/SSR checks and the full 54-operation/106-schema generation with unchanged API hash `b27540d1769e`; two locales/469 messages remain. `npm run typecheck:tests --ignore-scripts` then passed against those generated inputs. |
+| Normal database-free suite | `npm run test:quick` with JSON/default reporters passed all 61 files/1,400 tests in 136.84 seconds at the normal two workers, including all seven generator tests. The watcher case took 44.379 seconds within its unchanged 90-second limit; its complete generator file took 104.45 seconds. The genuine Express/Vite integration fixture's two tests passed in 9.90 seconds. This is not database-backed or built-system E2E evidence. |
+| Comments and independent review | The scoped development check covered both changed runtime files, 20 nontrivial operations and all eleven DBAL services with zero findings. Independent and root review checked meaningful method contracts and internal explanations. TypeScript parsing found zero diagnostics, and comment-free AST output for both runtime files matched HEAD. Independent reviewers also accepted the fixture's actual-input adoption and retained assertions. |
+| Maintenance evidence | IMP-023 remains open: original `position` evidence is dated, current native omission/default behavior and versioned explicit `pos` are distinguished. The coverage map labels original refresh/visual gaps locally and retains its heading anchors/history. Root and independent source review accepted those factual corrections. |
+| Preservation and diagnostics | Whitespace checks passed. The documentation boundary reported zero production/amendment findings and 558 public review inputs. Strict documentation reporting retained only the historical fingerprint and optional private-path reference-count advisory; Help authoring diagnostics were clean. No baseline was reset. The final process audit found no matching owned watcher/generator children after the runner closed. |
+
+Current P0 logs/results remain under ignored `artifacts/frontend-p0/`. This work renews no database, system E2E,
+browser, PDF, visual, provider, SMTP or deployment receipt. Prior checks above retain their original scope; no next
+feature, prepared-guide publication or cutover is authorized by this verification.
+
+## P1 migration verification (2026-10-14)
+
+The maintainer authorized full P1 and explicitly resolved R1A/R1B/R2/R3/R4 by excluding their backend remedies from
+frontend migration. Profile administration (P1A), transfer (P1B), destructive identity journeys (P1C) and common
+presentation (P1D) are implemented. The dated policy/profile/design clarification preserves native visual and
+behavioral parity; minor transport/presentation reuse is permitted. IMP-006 and IMP-058–060 stay open and deferred,
+and all existing backlog remedies remain outside migration. These are exclusions, not pending approval requests.
+
+Both native and versioned profile writes use the existing controller's name/default and creation operations.
+**Original P1 implementation, superseded by A2 below:**
+The versioned wrappers add fresh locked ownership, stored-session completion and precommit prepared responses;
+creation does not select the new profile. Account-only document and mounted admission share one controller
+outcome, preserving a valid guest identity through login redirection. Query keys, switching, private-cache
+retirement, dirty input and uncertain-command recovery retain their existing owners.
+
+Transfer and destructive journeys render one shared Vue workflow page. Their mutations use deliberate pilot document
+POSTs to existing controller operations, in native order; no second business implementation, transaction strengthening
+or atomic mutation receipt was added. Explicit read-only JSON preview reuses the native token lookup and keeps the
+draft/result in the mounted feature. Fixed nonsecret fragment history preserves Back/Forward; reload cannot recover
+or replay the private result. Invalid capability presentation does not clear an otherwise valid session. Shared
+transport checks fresh stored context, CSRF, origin and compatibility before the operation. Private fields remain
+outside URL, query cache and browser storage; native token issuance on GET runs once per document. The document owner
+protects dirty fields, pending/unknown siblings, identity changes, Router navigation and updates without fetch or
+replay. Persisted Back/Forward restoration releases only its delivery fence. Wrong confirmations retain native 500
+and submitted values; final-profile deactivation retains native 400 after deletion. Existing provider/root destinations
+and escaped source-owned controller completion prose remain unchanged; newly authored interface text is localized.
+
+Overview retains the pilot root; landing is explicitly opt-in. Common documents admit no URL-selected messages
+or diagnostics, preserve contextual ExpectedError wording, retranslate source-owned plain keys and expose stacks
+only under development admission. Native Help messages retain their existing literals with optional catalog
+identity. The existing warning-body omission is preserved. Native views, browser code, styles, runtime Help,
+default routes, configured external privacy/imprint destinations and the Express health endpoint are unchanged.
+
+The following original P1 receipts predate A2. Their profile-wrapper rollback/atomicity assertions describe the
+superseded implementation; they do not establish current profile field-edit/create guarantees.
+
+| Executed check | Original P1 result and boundary |
+|---|---|
+| Normal build and compiler | `npm run build` passed with 60 operations/113 schemas, API hash `0d3e45c7c0a1`, and two locales/588 messages. Server/native assets and Vue client/SSR checks are coherent. Final `npm run typecheck:tests --ignore-scripts` passed; a subsequent frontend build also passed after sharing the already eager common view directly with the router. This is not deployment evidence. |
+| Normal database-free suite | All 64 files/1,444 tests passed in 135.06 seconds with the configured two workers. The final three P1 frontend files separately passed all 45 cases in 9.92 seconds, including 21 workflow cases protecting stable denial expiry and exact encoded-query preservation through preview/Back/Forward. The broad run preceded that final regression and URL correction. Existing migrated-header assertions retain their navigation/identity checks. |
+| Persistence and HTTP | All 31 cases across the profile-administration and workflow files passed in 25.43 seconds on an independently owned, exactly restricted MariaDB 10.11 schema at original timeouts. They protect field/default/session agreement, creation without selection, guest/account distinctions, foreign ownership, prepared-receipt rollback and stale actors, plus real HTTP transfer/confirmation/deletion. Form guards assert exact 403/409 outcomes before mutation. Both account/guest preview projections are bounded; invalid tokens preserve the viewer, and the removed document preview POST returns 404. The final-profile case deliberately retains its native post-deletion 400. Only external mail acceptance is replaced; delivery is not asserted. Common HTTP checks cover landing/Overview separation, contextual Help, safe 404/400 and API/health/asset boundaries. Source Express with built Vue rendering remains integration evidence. |
+| Built system and visual scope | All 17 managed Chromium system cases passed in 1.1 minutes against the built application and its fully prepared, separately owned E2E schema. They exercise profile create/switch/edit and native reread, explicit guest transfer, native Back input retention, mounted Back/Forward, blank reload without replay, and full/guest confirmation rejection/deletion. Ten native/pilot workflow pairs cover token, entry, preview, deactivation and account deletion at 1280/390 pixels. Heading/field/submit positions and dimensions, scroll and computed submit colors match; screenshots settle finite animations equally for both frontends. Profile-edit controls/footer retain their paired assertions. Actual browser Back coverage does not certify persisted BFCache, which the runner disables; the mounted persisted-pageshow case covers its local fence release. These checks do not certify every state or a general whole-screen image match. |
+| Mounted recovery and common outcomes | New profile consumers protect explicit false, dirty text/checkbox/focus, route reuse, rejection versus unknown creation without replay, switching/cache retirement, denial and guest admission. Workflow assertions cover exact body/proof fields, token retirement, one-read mounted history, execution from the validated preview, persisted Back/Forward delivery-fence release and transient confirmation/denial expiry across language changes. Common assertions compare native templates and exercise actual SSR/decoder adoption, strict scalar shapes, escaped details and forged URL rejection. HTTP substitution in these frontend tests is not system E2E evidence. |
+| Engineering and documentation | The complete P1 runtime readability scope covers 23 files/59 nontrivial operations with zero findings, alongside the global declaration/eleven-service DBAL inventory. Root and independent semantic review accepted actual shared adoption, ownership and meaningful comments. The documentation boundary reports zero production/amendment findings; staged guidance and the coverage map describe these accepted owners and assertions. |
+| Native preservation and cleanup | A fresh root AST comparison found all eight inherited transfer/deletion controller bodies and seven token/transfer/deletion DBAL bodies unchanged against HEAD. Native user routes, provider and mail modules match HEAD; native views/styles/browser code have no changes. Both exactly owned tmpfs database containers and their private runtime/credential trees were removed after verification. No task-owned application listener or parity-labeled container remains; unrelated resources were preserved. |
+
+Original P1 logs and captures belong to ignored `artifacts/frontend-p1/`. At that verification, strict documentation
+diagnostics retained historical fingerprint/private-path advisories plus missing metadata and an exported absolute
+source link in the user-supplied plan. Only its two dated scope passages had been corrected under the explicit
+backend-remedy exclusion. The subsequently approved A3 editorial correction (2026-10-14) adds the plan's metadata
+and portable source link; the earlier report remains historical evidence, not its current defect status.
+Intentional Markdown hard-break spaces remain. Other original task-owned whitespace was clean.
+No baseline, report waiver or frozen production guide was changed; active policy alignment was expressly authorized.
+These receipts renew no live OIDC/SMTP, full database suite, financial/PDF, deployment, guide publication or cutover
+evidence.
+
+### A2 direct profile-operation reuse correction (2026-10-14)
+
+The maintainer explicitly requires existing backend reuse. Ordinary field editing/profile creation now call native
+`updateProfile`/`createProfile` directly; the added transaction wrappers and exclusively supporting manager/lock
+parameters are removed. Existing identity transitions retain their approved transaction owner. Adapter context,
+CSRF, generated request validation, account/guest distinctions and private read projections remain enforced.
+
+The unreleased P1 success payload is now the existing generated `MutationResult`, prepared before the native call.
+No response-time context/roster query can reject that completed call. Client confirmation releases submitted fields
+before separate display refresh; the existing retained navigation receipt retries session reads/navigation only,
+including server cooldown and retired-actor checks. A fresh observer supplies the same-route editor's new baseline.
+Native name/default/session-save partial failure behavior is inherited, not repaired or certified as atomic.
+
+The earlier rollback-specific administration assertions are replaced with real native-login/cookie HTTP cases for
+saved fields/session agreement, creation without selection, account/guest admission, private ownership, context/CSRF
+and malformed-input rejection, plus independent sessions concurrently selecting defaults. Mounted cases protect a
+usable fresh same-route editor, failed display refresh without replay, retired actors, pre-command bootstrap draining
+and rendered Retry deadline wakeup. The focused administration/page-entry run passed 2 files/37 cases in 10.73 seconds.
+Current build, real database and built-browser execution of this correction are recorded by the root follow-up review.
+
+## Pilot review follow-up (2026-10-14)
+
+The maintainer's A1 decision requires one generic action-state mechanism. The existing context owner now derives
+`useActionState` from live operation eligibility, pending and blocked inputs, with initialization and disposal
+fences. `ActionButton`, command/document/admission owners and read-backed feature controls consume the same state
+as their handlers. This includes Help, identity/profile workflows, Packing creation/list/metadata/settings/profile
+discovery, Overview navigation and confirmed-delivery recovery. State contains no server data, draft or copied
+authority. Session recovery, local Cancel/Reset, modified-link navigation and already admitted work retain their
+independent lifetimes. The staged playbook and coverage map describe actual adoption for subsequent migrations.
+
+A2 restores native profile-operation reuse as described above; it does not strengthen the excluded backend
+remedies. A3 reconciles the existing full plan's metadata, portable playbook link and recorded versus future work.
+A4 labels DEC-005's completed dependencies as historical while preserving the survey permission decision.
+
+**Superseded A5 agent interpretation (2026-10-14):** the agent treated DEC-006's transport-scope account and the
+foundation's readiness amendment as contrary approval for definition restrictions, and left the generator guards
+unchanged. Git established the implementation history, but the earlier conversation answer was not available for
+independent inspection. The account incorrectly extended removal of unused implementation into a prohibition on
+future definitions; JSON body/response arrays remained supported and no object/union definition guards were added.
+
+The maintainer explicitly resolves that interpretation on 2026-10-15: the approval removed unused implementation,
+not authored schema freedom. The [DEC-006 correction](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15)
+identifies the definition restrictions as agent overreach and directs their removal. The preceding A5 account is
+history, not a current prohibition; schema/metadata acceptance does not restore HTTP decoding or delivery behavior.
+
+Root and independent nonauthor reviews accept shared production adoption, operation boundaries, readable lifecycle
+comments and preserved decisions. Current executed checks and their limits follow; older receipts above retain
+their original scopes.
+
+| Executed check | Follow-up result and boundary |
+|---|---|
+| Build and compilers | Normal `npm run build` passed with 60 operations/113 schemas, API hash `9395b1c2a298` and two locales/588 messages. A final `npm run build:frontend --ignore-scripts` passed after the completion cooldown dependency correction. `npm run typecheck:tests --ignore-scripts` passed after two nullable fixture assertions were corrected; no runtime behavior changed in that correction. |
+| Database-free suite | `npm run test:quick --ignore-scripts` passed all 64 files/1,455 tests in 155.90 seconds. Focused A1 and A2 selections separately passed 313 and 37 cases. The mounted frontend cases substitute HTTP, operation or discovery collaborators and do not establish integrated backend/browser behavior; the suite's generation and genuine server-infrastructure cases retain their own boundaries. |
+| Real persistence and HTTP | Both profile-administration/workflow integration files passed all 28 cases in 30.37 seconds against the exactly restricted, independently owned MariaDB 10.11.14 schema. Two sessions selecting different defaults both received 200 and retained one default. The initial run had 27 passes and one cold application-import timeout; startup moved into suite setup, keeping the five-second test timeout unchanged. Native partial-failure behavior remains inherited; stronger legacy guarantees were not implemented. |
+| Built system and isolated browsers | The 17 profile administration/workflow Chromium system cases passed in 1.4 minutes through the built application and a separate fully prepared E2E schema. They retain the existing desktop/mobile presentation assertions and no-replay journeys; no new whole-application visual acceptance is inferred. The independent built-client runner passed all 17 startup/invoice seam cases in 17.2 seconds; its controlled fixtures are client evidence, not system E2E. |
+| Engineering and preservation | `npm run check:development` passed with zero findings. The complete frontend/API readability selection passed 67 files/255 nontrivial operations, alongside the global 293-source and eleven-service DBAL inventories. Against HEAD, 121 native UI/route/DBAL files have no normalized-content changes; all 19 inspected native and approved identity controller functions retain identical comment-free syntax trees. Root and independent nonauthor semantic review accepted actual adoption and lifecycle behavior. |
+
+Logs and ownership receipts remain in ignored `artifacts/frontend-p1/`. The whitespace check reports only the
+full plan's twelve original intentional Markdown hard breaks; client/backend changes add no whitespace findings.
+The final documentation boundary has zero production/amendment findings; the advisory report has zero broken links
+or metadata errors and retains only the existing fingerprint and private `.env.e2e` reference-count advisories.
+Both exactly owned tmpfs databases and their private runtime/credential directories were removed after the runs.
+Documentation diagnostics remain advisory. These results do not renew live provider/SMTP, full database-suite,
+financial/PDF, deployment, publication or cutover evidence.
+
+## Definition-guard correction verification (2026-10-15)
+
+The [maintainer's correction](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15) is implemented:
+the generator no longer rejects parameter arrays or restricts response media to an application-owned whitelist.
+Existing metadata, serialization, schema-validity and reference-security checks retain their separate purposes.
+Unused runtime query-array decoding and plain-text response writers remain removed; native/backend operations and
+authored endpoints are unchanged.
+
+The complete `frontend-generation.spec.ts` selection passed all seven cases in 96.79 seconds. The replacement
+regression compiles referenced array parameters, object and tagged-union parameters and a plain-text response
+definition through the real generator. Actual emitted server and browser validators accept valid instances and
+reject malformed instances under their authored constraints. Isolated output paths prevent module-cache reuse;
+owned temporary fixtures and dependency junctions are released by the existing guarded cleanup.
+
+`npm run generate:api -- --check` confirms identical existing artifacts: 60 operations/113 schemas, API hash
+`9395b1c2a298`. The test compiler, generator syntax and engineering checks passed. Independent nonauthor and root
+reviews accept the correction and its approval provenance. The documentation boundary has zero findings, and the
+advisory report has zero broken links or metadata errors; the existing fingerprint/private-runtime-reference
+advisories and the plan's twelve intentional Markdown hard breaks remain. No baseline or waiver was changed.
+
+Current receipts are in ignored `artifacts/frontend-p1/shape-guard-*`. This correction ran no HTTP application,
+database or browser suite and renews none of the earlier runtime, deployment or cutover evidence.

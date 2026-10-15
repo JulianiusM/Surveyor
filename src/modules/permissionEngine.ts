@@ -73,7 +73,9 @@ export function getEntityPermissionQueryScope(session: SessionLike, permission: 
     return {profileId: session.profile?.id ?? null, audiences: activeAudiences(session), requiredMask: PERM[permission]};
 }
 
-/** Core: compute effective mask for ONE subject (no parent) */
+/** Combine one subject's owner, individual and active-audience grants without
+ * importing its parent's mask. Caches belong to this actor's evaluation; a supplied
+ * manager keeps uncached reads inside the caller's authorization transaction. */
 async function computeMaskFor(
     t: CombEntityType,
     id: string,
@@ -88,11 +90,13 @@ async function computeMaskFor(
 
     const profileId = session.profile?.id ?? null;
 
-    // The effective ACL including all inheritances
+    // Individual grants accumulate with audience defaults; neither source overrides
+    // the other. A missing profile contributes no individual permission lookup.
     let eff = 0;
     eff |= await loadUserPerms(t, id, profileId, caches, manager);
 
-    // Load Default ACLs
+    // Reuse this subject's defaults within the evaluation, including an empty result.
+    // An uncached lookup uses the same manager as its individual/participant reads.
     let defaults: Record<string, number> | undefined;
     const kd = keyEnt(t, id);
     if (caches?.defaults?.has(kd)) {
@@ -104,18 +108,25 @@ async function computeMaskFor(
 
     for (const audience of activeAudiences(session)) eff |= defaults?.[audience] ?? 0;
 
-    // Participant audience
+    // Participation activates this subject's own participant default. It does not
+    // import administrative permissions from the associated event.
     eff |= await loadEventParticipantPerms(eventId, profileId, defaults, caches, manager);
 
     return eff;
 }
 
+/** Read only this profile's named grant for the selected subject. Cache keys include
+ * subject type, ID and profile; uncached reads retain the caller's optional manager. */
 async function loadUserPerms(t: CombEntityType, id: string, profileId: string | null, caches?: PermEngineCaches, manager?: EntityManager) {
+    // Anonymous sessions cannot have a profile-specific grant. Preserve a cached
+    // zero as a loaded result rather than repeatedly querying an absent ACL row.
     if (profileId) {
         const k = keyUser(t, id, profileId);
         if (caches?.userPerms?.has(k)) {
             return caches.userPerms.get(k)!;
         } else {
+            // Publish the DBAL result only in this evaluation's caller-owned cache.
+            // Passing the manager preserves the locked command's read boundary.
             const u = await getProfilePerms(t, id, profileId, manager);
             caches?.userPerms?.set?.(k, u);
             return u;
@@ -124,13 +135,21 @@ async function loadUserPerms(t: CombEntityType, id: string, profileId: string | 
     return 0;
 }
 
+/** Activate the subject's participant audience through the existing event-membership
+ * rule. The event-only cache is valid for one actor's evaluation; it stores membership,
+ * while each subject still supplies its own participant permission mask. */
 async function loadEventParticipantPerms(eventId: string | null | undefined, profileId: string | null, defaults?: Record<string, number>, caches?: PermEngineCaches, manager?: EntityManager) {
+    // A standalone subject has no event-derived participant audience. For linked
+    // subjects, false is a complete cached membership result, not a cache miss.
     if (eventId) {
         let isPart: boolean | undefined = caches?.participant?.get(eventId);
         if (isPart === undefined) {
+            // Use the shared membership owner, including its event-owner rule, in
+            // the same transaction as any other uncached permission inputs.
             isPart = await isRegisteredForEvent(profileId || '', eventId, manager);
             caches?.participant?.set?.(eventId, isPart);
         }
+        // Membership alone grants no bit: the evaluated subject must define it.
         if (isPart && defaults?.participant) return defaults.participant;
     }
     return 0;
@@ -155,13 +174,17 @@ function makePermView(mask: number, parentMask: number): PermView {
     };
 }
 
-/** Evaluate one subject (entity or item-with-parent) into a PermView */
+/** Evaluate a root or an item with its parent into separate permission masks.
+ * Shared actor-scoped caches avoid repeated reads; the optional manager reaches
+ * both masks so locked callers do not mix transaction and application snapshots. */
 export async function evaluateSubject(
     subject: Subject,
     session: SessionLike,
     caches?: PermEngineCaches,
     manager?: EntityManager,
 ): Promise<PermView> {
+    // A root has no parent fallback. Item callers receive both masks and select
+    // their operation's permitted fallback through PermView rather than merging ACLs.
     if (subject.kind === 'entity') {
         const m = await computeMaskFor(
             subject.entity.entityType,
@@ -173,6 +196,8 @@ export async function evaluateSubject(
         );
         return makePermView(m, 0);
     } else {
+        // Evaluate parent and item independently. An item may use its parent's
+        // event membership without inheriting every parent permission bit.
         const parentMask = await computeMaskFor(
             subject.parent.entityType,
             subject.parent.entityId,
@@ -309,24 +334,28 @@ export async function can(
     requiredParentPerm?: number | number[],
     manager?: EntityManager,
 ): Promise<boolean> {
+    // Fresh caches belong to this one decision; a previous request's grants or
+    // membership cannot stand in for authorization under the supplied manager.
     const view = await evaluateSubject(subject, session, {
         participant: new Map(),
         userPerms: new Map(),
         defaults: new Map(),
     }, manager);
 
-    // self
+    // A direct subject grant satisfies the command before any parent fallback.
     if (hasPerm(view.mask, requiredPerm)) return true;
 
     const parentPerms = normalizeToArray(requiredParentPerm, [requiredPerm]) as number[];
 
-    // item: optionally allow via parent
+    // Only the caller-selected parent bits can satisfy an item fallback. The
+    // default uses the same required bit and preserves ordinary native callers.
     return 'parentMask' in view && parentPerms.some((perm) => hasPerm(view.parentMask, perm));
 
 
 }
 
-// Load current defaultPerms (bitmasks per audience) from DB
+/** Read persisted audience defaults through the optional transaction manager.
+ * Creation without an entity ID uses the existing initial defaults instead. */
 export async function getDefaultPerms(entityType: CombEntityType, entityId?: string, manager?: EntityManager) {
     if (!entityId) return getInitialPerms(entityType);
     return await entityAdminService.getDefaultPerms(entityType, entityId, manager);

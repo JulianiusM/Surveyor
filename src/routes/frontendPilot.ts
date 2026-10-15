@@ -1,7 +1,7 @@
 import {Router} from 'express';
 import type {NextFunction, Request, Response} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
-import {captureApiActor, sessionView} from '../modules/api/session';
+import {captureApiActor, requireFrontendFormContext, sessionView} from '../modules/api/session';
 import {ApiProblem, classifyApiError, requestLocale, validatedProblemBody} from '../modules/api/problem';
 import {createTranslator, isPlainMessageKey, localeManifest} from '../modules/localization/translator';
 import {renderFrontendPilot} from '../modules/frontendPilotRenderer';
@@ -16,7 +16,8 @@ import settings from '../modules/settings';
 import * as packingService from '../modules/database/services/PackingService';
 import type {components} from '../types/api/v1';
 import {paramHandler} from '../middleware/paramHandler';
-import {getResource} from '../modules/lib/util';
+import {ENTITIES, getResource} from '../modules/lib/util';
+import type {FrontendLandingQuickCreate} from '../types/FrontendPilotTypes';
 import type {PackingList} from '../modules/database/entities/packing/PackingList';
 import {readPackingCreateEntry, readPackingDuplicate, readPackingResourceEntry} from '../controller/packingController';
 import {resolvePilotHelpQuery} from '../modules/lib/helpNavigation';
@@ -84,6 +85,19 @@ async function bootstrap(req: Request): Promise<FrontendPilotBootstrap> {
     const flashes = readFlash.call(flashRequest, 'frontend-pilot');
     const feedback = frontendIdentityFeedback.find(key => Array.isArray(flashes) && flashes.includes(key));
     const state: FrontendPilotBootstrap = {session, ...(feedback ? {identityFeedback: feedback} : {})};
+    // These are the existing controller's completion words, including its former-
+    // owner cleanup result. Do not infer that business outcome again in this adapter.
+    // The dedicated internal channel accepts only this admitted actor's receipt.
+    const workflowNotices = readFlash.call(flashRequest, 'frontend-pilot-workflow');
+    if (Array.isArray(workflowNotices)) {
+        for (const notice of workflowNotices) {
+            if (typeof notice !== 'string') continue;
+            try {
+                const value = JSON.parse(notice) as {context?: unknown; message?: unknown};
+                if (value.context === session.context && typeof value.message === 'string') state.workflowNotice = value.message;
+            } catch { /* A malformed internal receipt cannot supply presentation or authority. */ }
+        }
+    }
     // Flash storage remains an untyped boundary. Accept only a known plain catalog
     // message, never submitted text or interpolation/options through this channel.
     const notices = readFlash.call(flashRequest, 'frontend-pilot-notice');
@@ -140,6 +154,152 @@ router.get('/', asyncHandler(async function renderOverviewPilot(req, res) {
     // retains its complete server projection and disabled-JavaScript contract.
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
+
+/** The landing page is opt-in during coexistence; Overview retains the pilot root. */
+router.get('/home', asyncHandler(async function renderLandingPilot(req, res) {
+    const state = await bootstrap(req);
+    // Native landing selects one uniform quick-create shortcut per document.
+    // Send that choice with SSR so hydration cannot choose a different href.
+    const choices = Object.values(ENTITIES) as FrontendLandingQuickCreate[];
+    state.landing = {quickCreate: choices[Math.floor(Math.random() * choices.length)]};
+    await renderFrontendPilot(res, req.originalUrl, state);
+}));
+
+/** Message content comes only from admitted feedback, never request-supplied text. */
+router.get('/message', asyncHandler(async function renderMessagePilot(req, res) {
+    const state = await bootstrap(req);
+    const notice = state.pageNotice;
+    const messageKey = notice && isPlainMessageKey(notice.messageKey) ? notice.messageKey : 'common.infoTitle';
+    state.commonPage = {kind: 'message', severity: notice?.kind ?? 'info', messageKey,
+        message: createTranslator(state.session.locale).t(messageKey)};
+    // This is a complete message, rather than a duplicate transient shell alert.
+    state.pageNotice = undefined;
+    await renderFrontendPilot(res, req.originalUrl, state);
+}));
+
+/** Preserve native account/guest admission before sending administration's progressive shell. */
+router.get(['/users/profile', '/users/profile/manage', '/users/profile/create'],
+    asyncHandler(async function renderProfileAdministration(req, res) {
+        const state = await bootstrap(req);
+        const actor = await captureApiActor(req);
+        // Guests edit their active profile, while creating/managing profiles is
+        // the established full-account workflow. Login retains this exact return.
+        const view = req.path.endsWith('/manage') ? 'manage' : req.path.endsWith('/create') ? 'create' : 'edit';
+        const entry = userController.getProfileAdministrationEntry(actor, view, req.originalUrl);
+        if (await applyPageEntry(req, res, state, entry)) return;
+        await renderFrontendPilot(res, req.originalUrl, state);
+    }));
+
+/**
+ * Keep inherited mutations on document delivery. Their native controller
+ * operations can partially complete before throwing; a JSON command receipt must
+ * not claim atomic completion or definite rejection on their behalf. The shared
+ * backend defects remain separately backlogged under the parity-only decision.
+ * The generated read-only preview separately retains its mounted entry draft.
+ */
+router.get('/users/profile/migrate/request', asyncHandler(async function renderMigrationToken(req, res) {
+    const state = await admitProfileWorkflow(req, res, false);
+    if (!state) return;
+
+    // Native entry issues/replaces a token on GET. Invoke that existing operation
+    // once per document, never from a refresh query, hydration or automatic retry.
+    state.profileWorkflow = {kind: 'token', token: await userController.getMigrationToken(req.session.profile!.id)};
+    await renderFrontendPilot(res, req.originalUrl, state);
+}));
+
+/** Admit the native full-account token-entry form without resolving or generating a token. */
+router.get('/users/profile/migrate/show', asyncHandler(async function renderMigrationEntry(req, res) {
+    const state = await admitProfileWorkflow(req, res, true);
+    if (!state) return;
+    state.profileWorkflow = {kind: 'entry'};
+    await renderFrontendPilot(res, req.originalUrl, state);
+}));
+
+/** Execute the existing explicitly confirmed transfer and deliver its ordinary document redirect. */
+router.post('/users/profile/migrate/execute', asyncHandler(async function executeProfileMigration(req, res) {
+    await requireFrontendFormContext(req, res);
+    if (!await admitProfileWorkflow(req, res, true)) return;
+
+    // Preserve the exact native operation, including existing token checks,
+    // previous-owner cleanup, mail ordering and receiver-profile selection.
+    const message = await userController.migrateProfile(req.session.auth!.user!.id, workflowField(req, 'token'));
+    flashWorkflowNotice(req, message);
+    res.redirect(nativeFrontendReturn(req, '/frontend-pilot/users/profile/manage'));
+}));
+
+/** Admit account-only deactivation or account/guest deletion with an initially empty confirmation. */
+router.get(['/users/profile/delete', '/users/account/delete'], asyncHandler(async function renderIdentityDeletion(req, res) {
+    const profile = req.path === '/users/profile/delete';
+    const state = await admitProfileWorkflow(req, res, profile);
+    if (!state) return;
+    state.profileWorkflow = {kind: profile ? 'deactivate' : 'delete-account', value: ''};
+    await renderFrontendPilot(res, req.originalUrl, state);
+}));
+
+/**
+ * Adapt account-only deactivation and account/guest deletion to the native call
+ * sequence, preserving its mail/session/provider and partial-failure outcomes.
+ * Only a controller confirmation ValidationError redisplays submitted text at the
+ * native 500 status; later operation failures retain their ordinary error result.
+ */
+router.post(['/users/profile/delete', '/users/account/delete'], asyncHandler(async function submitIdentityDeletion(req, res) {
+    await requireFrontendFormContext(req, res);
+    const profile = req.path === '/users/profile/delete';
+    const state = await admitProfileWorkflow(req, res, profile);
+    if (!state) return;
+
+    try {
+        // Confirmations and destructive decisions belong to the existing owner.
+        // Keep the route sequence, including native final-profile failure, intact.
+        if (profile) {
+            const message = await userController.deactivateProfile({name: workflowField(req, 'name')}, req.session);
+            flashWorkflowNotice(req, message);
+            await userController.changeActiveProfile(req.session);
+            // Selection rotates the frontend context. Rebind only this transport
+            // receipt after success; a native selection failure keeps its earlier flash.
+            flashWorkflowNotice(req, message);
+            res.redirect(nativeFrontendReturn(req, '/frontend-pilot/users/profile/manage'));
+        } else {
+            const destination = await userController.deleteAccount({username: workflowField(req, 'username')}, req.session);
+            // The existing logout owner supplies provider/root navigation. Do not
+            // rewrite it, preflight it, or introduce another session transaction.
+            req.flash('success', 'Account successfully deleted');
+            res.redirect(destination);
+        }
+    } catch (error) {
+        // Native confirmation failures render the same form and submitted value
+        // at status 500. Only this known validation category reopens a form;
+        // a later partial-completion failure retains the ordinary error outcome.
+        if (!(error instanceof ValidationError)) throw error;
+        state.profileWorkflow = profile
+            ? {kind: 'deactivate', value: workflowField(req, 'name'), error: 'profile.invalidDeactivation'}
+            : {kind: 'delete-account', value: workflowField(req, 'username'), error: 'profile.invalidAccountDeletion'};
+        res.status(500);
+        await renderFrontendPilot(res, req.originalUrl, state);
+    }
+}));
+
+/** Use existing account/guest admission for private documents without a second business rule. */
+async function admitProfileWorkflow(req: Request, res: Response, accountOnly: boolean): Promise<FrontendPilotBootstrap | null> {
+    const state = await bootstrap(req);
+    // The existing administration entry already shares native full-account versus
+    // account/guest distinctions. A redirect never receives the private projection.
+    const entry = userController.getProfileAdministrationEntry(await captureApiActor(req), accountOnly ? 'manage' : 'edit', req.originalUrl);
+    return await applyPageEntry(req, res, state, entry) ? null : state;
+}
+
+/** URL-encoded fields retain exact native whitespace while excluding duplicate/object parser values. */
+function workflowField(req: Request, field: 'name' | 'username' | 'token'): string {
+    return typeof req.body?.[field] === 'string' ? req.body[field] : '';
+}
+
+/** Keep the shared controller's completion wording scoped to its resulting identity. */
+function flashWorkflowNotice(req: Request, message: string): void {
+    // Native session persistence/redirect ordering remains unchanged. Flash storage
+    // is consumed only by the next matching admitted pilot document.
+    req.flash('frontend-pilot-workflow');
+    req.flash('frontend-pilot-workflow', JSON.stringify({context: req.session.frontendContext, message}));
+}
 
 router.get('/packing/create', asyncHandler(async function renderPackingCreatePilot(req, res) {
     const state = await bootstrap(req);
@@ -349,7 +509,7 @@ router.get('/help', asyncHandler(renderHelpPilot));
 router.get('/help/assets/:assetName', asyncHandler(async function readPilotHelpAsset(req, res) {
     const locale = requestLocale(req);
     const source = resolveHelpAssetSource(String(req.params.assetName), locale);
-    if (!source) throw new ExpectedError(createTranslator(locale).t('help.notFound'), 'error', 404);
+    if (!source) throw new ExpectedError(createTranslator(locale).t('help.notFound'), 'error', 404, {}, {messageKey: 'help.notFound'});
     // The article has already selected one complete language bundle. Asset requests
     // stay in that exact corpus; an absent file is 404 rather than an English figure
     // substituted into translated text. Whole-article fallback emits English URLs.
@@ -382,5 +542,44 @@ router.use(async function renderPackingAdmissionError(error: unknown, req: Reque
     }
 });
 router.use(function missingPilotRoute(_req, _res, next) {next(new ApiProblem('NOT_FOUND'));});
+
+/** Keep opt-in document errors within the same Vue presentation and their actual HTTP status. */
+router.use(async function renderCommonPilotError(error: unknown, req: Request, res: Response, next: NextFunction) {
+    if (res.headersSent) return next(error);
+    try {
+        // Fresh admission prevents an error document from embedding obsolete
+        // private authority. A store/renderer outage still reaches the outer owner.
+        const state = await bootstrap(req);
+        // Express reports malformed path escapes as its own URIError/400. Keep
+        // that transport outcome without trusting arbitrary status-shaped data.
+        const problem = error instanceof URIError && 'status' in error && error.status === 400
+            ? new ApiProblem('VALIDATION_FAILED') : classifyApiError(error);
+        const status = nativeDocumentErrorStatus(error, problem);
+        const body = validatedProblemBody(problem, state.session.locale);
+        // ExpectedError already owns safe contextual document wording. Preserve
+        // it, with its optional source-owned key; API classification owns only
+        // other errors and must not replace a Help-specific message with prose
+        // for a generic missing resource.
+        const message = error instanceof ExpectedError ? error.message : body.detail;
+        const key = error instanceof ExpectedError ? error.messageKey : body.messageKey;
+        const localizedKey = isPlainMessageKey(key) ? {messageKey: key} : {};
+        state.commonPage = error instanceof ExpectedError
+            ? {kind: 'message', severity: error.severity, message, status, ...localizedKey}
+            : {kind: 'error', message, status, ...localizedKey,
+                ...(req.app.get('env') === 'development' && error instanceof Error ? {stack: error.stack} : {})};
+        res.status(status);
+        await renderFrontendPilot(res, req.originalUrl, state);
+        // A handled document no longer reaches the outer error logger. Preserve
+        // operational reporting without putting tokens, URLs or error data in it.
+        if (status >= 500) {
+            const category = error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,63}$/u.test(error.name)
+                ? error.name : 'UnexpectedError';
+            console.error('[frontend]', {method: req.method, status, category});
+        }
+    } catch (renderError) {
+        // Error delivery cannot turn a failed rendering/admission into success.
+        next(renderError);
+    }
+});
 
 export default router;

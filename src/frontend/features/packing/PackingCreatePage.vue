@@ -5,7 +5,7 @@ import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {usePackingApi} from './api';
-import {usePilot} from '../../app/context';
+import {useActionState, usePilot} from '../../app/context';
 import {isReadDenial} from '../../app/transport';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
 import {useCommand} from '../../composables/command';
@@ -171,11 +171,17 @@ const lastUpdatedAt = computed(() => {
 const initialLoading = computed(() => !formContext.value && !loadError.value
     && (sourceId.value ? duplicate.isPending.value : creation.pending.value));
 const reading = computed(() => sourceId.value ? duplicate.isFetching.value : creation.reading.value);
+const readAction = useActionState({eligible: mayRetryCreationRead,
+    pending: () => reading.value});
+
+function mayRetryCreationRead(): boolean {
+    return sourceId.value ? context.mayRead() && retryAvailable.value : creation.retryAction.isAvailable();
+}
 
 /** Retry only the current admission read, respecting the shared server backoff.
  * Query state owns progress and recovered errors; this operation never submits the form. */
 async function retryRead(): Promise<void> {
-    if (!context.mayRead() || reading.value || !retryAvailable.value) return;
+    if (!readAction.isAvailable()) return;
     // Explicit recovery remains available when terminal errors disable observation.
     if (sourceId.value) await duplicate.refetch({cancelRefetch: false});
     else await creation.retry();
@@ -232,8 +238,19 @@ const command = useCommand(context.refreshSession, true, {
     busy: () => admittingSubmission.value,
     unknownMessage: 'packing.leaveUnknown',
 });
-const blocked = computed(() => submitted.value || command.pending.value || command.uncertain.value
+const blocked = computed(() => submitted.value || command.action.disabled.value
     || admittingSubmission.value || !submissionRetryAvailable.value);
+const submissionRetryAction = useActionState({eligible: mayAdmitSubmission, pending: () => admittingSubmission.value});
+// A command with a required read preflight waits for that admission on its submit
+// control. The fieldset keeps its existing local-draft locks during session checks.
+const createAction = useActionState({eligible: mayCreate, pending: () => command.pending.value || admittingSubmission.value,
+    blocked: () => command.action.disabled.value});
+
+function mayAdmitSubmission(): boolean {
+    return !submitted.value && context.mayRead() && submissionRetryAvailable.value;
+}
+
+function mayCreate(): boolean { return mayAdmitSubmission() && !!defaults.value && !!formContext.value; }
 function chooseImage(event: Event): void {
     image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
 }
@@ -280,7 +297,7 @@ async function admitSubmission(purpose: 'submission' | 'recovery'): Promise<bool
 /** Recover only account admission. A successful GET leaves this form intact and
  * requires a separate explicit Create before collecting and sending its draft. */
 async function retrySubmissionAdmission(): Promise<void> {
-    if (submitted.value || admittingSubmission.value || !context.mayRead() || !submissionRetryAvailable.value) return;
+    if (!submissionRetryAction.isAvailable()) return;
     await admitSubmission('recovery');
 }
 
@@ -308,7 +325,7 @@ function updateCapacity(row: Row, event: Event): void {
  * a confirmed creation transfers its destination to the shared navigation owner so
  * a canceled or failed route load cannot make the creation command available again. */
 async function create(): Promise<void> {
-    if (!defaults.value || !formContext.value || blocked.value) return;
+    if (!createAction.isAvailable()) return;
     // A held preflight cannot reuse definitions retired by another confirmed read.
     if (!(await admitSubmission('submission')) || !formContext.value) return;
 
@@ -370,21 +387,21 @@ async function create(): Promise<void> {
             <StatusNotice v-if="destination.target.value" kind="success">
                 {{ messages.t('state.saved') }}
                 <ActionButton class="btn-sm ms-2" variant="outline-light"
-                    :pending="destination.pending.value" @click="destination.retry">
+                    :state="destination.retryAction" @click="destination.retry">
                     {{ messages.t('common.retry') }}
                 </ActionButton>
             </StatusNotice>
             <StatusNotice v-if="loadError" kind="danger" :last-updated-at="lastUpdatedAt"
                 :retry-at="retryAt" :read-error="loadError">
                 {{ messages.t(lastUpdatedAt ? 'state.stale' : 'state.loadFailed') }}
-                <ActionButton class="btn-sm ms-2" variant="outline-light" :pending="reading"
-                    :disabled="!retryAvailable" @click="retryRead">{{ messages.t('common.retry') }}</ActionButton>
+                <ActionButton class="btn-sm ms-2" variant="outline-light" :state="readAction"
+                    @click="retryRead">{{ messages.t('common.retry') }}</ActionButton>
             </StatusNotice>
             <StatusNotice v-if="submissionAdmissionError" kind="warning" :last-updated-at="submissionAdmittedAt"
                 :retry-at="submissionRetryAt" :read-error="submissionAdmissionError">
                 {{ messages.t(submissionAdmittedAt ? 'state.stale' : 'state.loadFailed') }}
-                <ActionButton class="btn-sm ms-2" variant="outline-light" :pending="admittingSubmission"
-                    :disabled="!submissionRetryAvailable" @click="retrySubmissionAdmission">{{ messages.t('common.retry') }}</ActionButton>
+                <ActionButton class="btn-sm ms-2" variant="outline-light" :state="submissionRetryAction"
+                    @click="retrySubmissionAdmission">{{ messages.t('common.retry') }}</ActionButton>
             </StatusNotice>
             <!-- Both create and duplicate use one admitted initial projection. The
                  event picker loads independently; a refresh never replaces this draft. -->
@@ -533,7 +550,7 @@ async function create(): Promise<void> {
                         <ActionButton variant="outline-info" @click="rows.push(newRow())"
                             ><i class="bi bi-plus-circle me-1" aria-hidden="true"></i
                             >{{ messages.t('packing.addRow') }}</ActionButton
-                        ><ActionButton type="submit" variant="success" :pending="command.pending.value"
+                        ><ActionButton type="submit" variant="success" :state="createAction"
                             ><i class="bi bi-check-lg me-1" aria-hidden="true"></i
                             >{{ messages.t('packing.createList') }}</ActionButton
                         >

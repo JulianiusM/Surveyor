@@ -6,6 +6,9 @@ import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from './context';
 import App from './App.vue';
+// The shell also renders admitted common outcomes, so this shared view is
+// already part of the entry bundle rather than an independent route chunk.
+import CommonPage from '../features/common/CommonPage.vue';
 import {mountPreservingDrafts} from './mountPreservingDrafts';
 
 // Route chunks own their feature validators and views. The initial shell remains
@@ -15,6 +18,9 @@ const IdentityPage = () => import('../features/identity/IdentityPage.vue');
 const PackingCreatePage = () => import('../features/packing/PackingCreatePage.vue');
 const OverviewPage = () => import('../features/overview/OverviewPage.vue');
 const HelpPage = () => import('../features/help/HelpPage.vue');
+const ProfileAdministrationPage = () => import('../features/identity/ProfileAdministrationPage.vue');
+const ProfileWorkflowPage = () => import('../features/identity/ProfileWorkflowPage.vue');
+const LandingPage = () => import('../features/common/LandingPage.vue');
 
 // One route declaration drives the initial skeleton for every interactive page.
 // Readable admitted errors/completions are classified by the shared context owner.
@@ -35,13 +41,26 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
     const releaseInitialReloadGuard = initialReloadGuard
         ? context.updates.registerGuard(initialReloadGuard) : () => {};
     const app = createSSRApp(App);
-    // TODO (docs/frontend-migration/FRONTEND_PILOT.md): Add the remaining native feature/account routes in
-    // their migration increments before default-route cutover. This route table covers
-    // help, packing and their necessary existing identity journeys, not the complete app.
+    // TODO (docs/frontend-migration/FRONTEND_PILOT.md): Add remaining feature
+    // routes in their authorized increments. Common presentation and the
+    // complete profile/account presentation now join Help/Packing; default
+    // routing remains a separately authorized cutover after the remaining migrations.
     const router = createRouter({
         history: browser ? createWebHistory() : createMemoryHistory(),
         routes: [
             {path: '/frontend-pilot', component: OverviewPage, meta: {javascriptRequired: true}},
+            {path: '/frontend-pilot/home', component: LandingPage},
+            {path: '/frontend-pilot/message', component: CommonPage},
+            {path: '/frontend-pilot/users/profile', component: ProfileAdministrationPage, meta: {...javascriptPage, profileMode: 'edit'}},
+            {path: '/frontend-pilot/users/profile/manage', component: ProfileAdministrationPage, meta: {...javascriptPage, profileMode: 'manage'}},
+            {path: '/frontend-pilot/users/profile/create', component: ProfileAdministrationPage, meta: {...javascriptPage, profileMode: 'create'}},
+            // These deliberate document journeys receive ephemeral server projections.
+            // Ordinary entry anchors prevent Router from issuing tokens or replaying POSTs.
+            {path: '/frontend-pilot/users/profile/migrate/request', component: ProfileWorkflowPage, meta: {...javascriptPage, profileWorkflow: 'token'}},
+            {path: '/frontend-pilot/users/profile/migrate/show', component: ProfileWorkflowPage,
+                meta: {...javascriptPage, profileWorkflow: 'entry', profilePreviewHash: '#migration-preview'}},
+            {path: '/frontend-pilot/users/profile/delete', component: ProfileWorkflowPage, meta: {...javascriptPage, profileWorkflow: 'deactivate'}},
+            {path: '/frontend-pilot/users/account/delete', component: ProfileWorkflowPage, meta: {...javascriptPage, profileWorkflow: 'delete-account'}},
             {path: '/frontend-pilot/packing/create', component: PackingCreatePage, meta: {javascriptRequired: true}},
             {path: '/frontend-pilot/packing/:listId/duplicate', component: PackingCreatePage, meta: {javascriptRequired: true}},
             {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry, meta: {...javascriptPage}},
@@ -56,12 +75,20 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {...javascriptPage, identityMode: 'recovery'}},
             {path: '/frontend-pilot/help', component: HelpPage},
             {path: '/frontend-pilot/help/:doc', component: HelpPage},
+            // Unknown opt-in destinations retain a readable 404 presentation;
+            // Express owns the corresponding HTTP status on document requests.
+            {path: '/frontend-pilot/:pathMatch(.*)*', component: CommonPage},
         ],
         /** Browser history owns saved positions; independently loaded Overview
          * regions own query-transition focus/scroll. Ordinary fragments and new
          * documents retain Router's explicit target/top behavior. */
         scrollBehavior(to, from, saved) {
             if (saved) return saved;
+            // This fragment records a local preview visit, not a DOM anchor.
+            // Match native document navigation's top while keeping browser-owned
+            // saved positions for Back/Forward ahead of this presentation rule.
+            const previewHash = to.meta.profilePreviewHash;
+            if (typeof previewHash === 'string' && (to.hash === previewHash || from.hash === previewHash)) return {top: 0};
             // Overview's independent regions restore focus/scroll after their authorized
             // read renders. A query transition must not jump to the top before that result.
             if (to.path === '/frontend-pilot' && from.path === to.path

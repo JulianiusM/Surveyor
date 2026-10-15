@@ -6,7 +6,7 @@ owner: project maintainers
 status: current
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved informed-decision context, explicit what/how fields and answer-scoped approval identifiers; genuine database-free server integration classification; shared engineering and task-context boundaries retained
+verification-scope: approved scope-preserving adaptation clarification distinguishes existing defects from new operation requirements; informed individual decisions, server integration and shared engineering boundaries retained
 source-anchors: AGENTS.md; docs/policies/DOCUMENTATION_POLICY.md; docs/DEVELOPMENT.md; docs/ARCHITECTURE.md; docs/TESTING_GUIDE.md; docs/DATABASE.md; src/; tests/; package.json
 next-review: explicit-maintainer-policy-amendment
 -->
@@ -51,6 +51,15 @@ Reuse and transport adaptation preserve existing business behavior rather than i
 Record each general defect once with its evidence, scope and disposition. A backlog entry does not authorize its
 implementation. A separate effort requires explicit authorization under the required change explanation below.
 Previously valid approvals retain their recorded scope; this rule grants no permission for further changes.
+
+The maintainer's 2026-10-14 scope clarification permits a presentation or transport adaptation to reuse an existing
+business operation with its recorded behavior without making repair of its existing defects a prerequisite. A new
+consumer does not by itself make that business operation new. Record inherited defects and their disposition;
+explicitly excluded remedies remain deferred rather than pending approvals for the adaptation. Operation-finality
+requirements govern newly introduced or deliberately changed business behavior and must not become authority for an
+unapproved legacy repair. New adapter code still enforces its own authentication, authorization, privacy, decoding
+and delivery boundaries; it must not add avoidable postcommit rejection, automatic replay or stronger guarantees
+than the shared operation provides. This clarification does not weaken security or authorize new behavior.
 
 ### Required change explanation (2026-10-13)
 
@@ -128,9 +137,10 @@ decision. Delegation or successful checks cannot grant approval or certify the q
   clear values which the admitted route, actor or completed operation has released. Browser caching, autofill and
   DOM reuse must not leave an old value visible while requests silently omit or overwrite it. Review text, select,
   checkbox and file controls with their actual ownership and lifecycle, rather than applying a blanket reset.
-- Treat a committed operation as final. Complete fallible admission, business checks, dependent persistence and
-  result preparation before its commit. A later mutable-context check or session write must not reject an already
-  committed creation and leave unintended records. Required identity/session changes share that operation's
+- Treat a committed operation as final within the [authorized operation scope](#scope-of-separately-authorized-work).
+  For new or deliberately changed business behavior, complete fallible admission, business checks, dependent
+  persistence and result preparation before its commit. A later mutable-context check or session write must not reject
+  an already committed creation and leave unintended records. Required identity/session changes share that operation's
   transaction; delivery failure remains distinct from business rejection. Network uncertainty is not rollback
   evidence and must never cause automatic replay or speculative deletion.
 - Put shared type-only contracts in `.d.ts` files under `src/types/`; executable code belongs in `.ts`, and private

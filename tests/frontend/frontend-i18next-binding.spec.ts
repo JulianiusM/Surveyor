@@ -100,7 +100,7 @@ describe('typed i18next-vue binding', () => {
             expect(submit).not.toBeNull();
             expect(submit.form?.getAttribute('method')).toBeNull();
             expect(submit.form?.getAttribute('action')).toBeNull();
-            expect(document.querySelector('a[href="/users/profile/manage"]')).not.toBeNull();
+            expect(document.querySelector('a[href="/frontend-pilot/users/profile/manage"]')).not.toBeNull();
             expect(document.querySelector('#pilot-profile')).toBeNull();
             const input = document.getElementById('binding-draft') as HTMLInputElement;
             input.value = 'My unfinished edit';

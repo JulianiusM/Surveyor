@@ -2,7 +2,7 @@
 import {computed, watch} from 'vue';
 import {RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {PilotOverviewCardInteraction, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {PilotActionState, PilotOverviewCardInteraction, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {usePilot} from '../../app/context';
 import {useAuthorizedImage} from '../../composables/authorizedImage';
 import {ObsoleteRequestError} from '../../app/transport';
@@ -17,6 +17,7 @@ const props = defineProps<{
     card: components['schemas']['OverviewCard'];
     interaction: PilotOverviewCardInteraction;
     disabled?: boolean;
+    navigationState?: PilotActionState;
     expansion?: boolean;
     expansionHref?: string;
     filtered?: boolean;
@@ -60,7 +61,7 @@ function recoverHeaderAfterRead(): void {
 function expand(event: MouseEvent): void {
     if (!isOrdinaryNavigation(event)) return;
     event.preventDefault();
-    if (!props.disabled) emit('expand');
+    if (!props.disabled && props.navigationState?.isAvailable() !== false) emit('expand');
 }
 </script>
 <template>
@@ -191,6 +192,7 @@ function expand(event: MouseEvent): void {
                 class="btn btn-sm mt-2 btn-outline-primary"
                 :aria-label="messages.t('overview.showLinked', {title: card.title})"
                 :href="expansionHref"
+                :aria-disabled="disabled || navigationState?.disabled.value"
                 :data-overview-event="card.id"
                 @click="expand"
                 ><i class="bi bi-collection me-1" aria-hidden="true"></i

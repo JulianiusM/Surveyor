@@ -2,7 +2,7 @@
 import {computed, nextTick, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
-import {usePilot} from '../../app/context';
+import {useActionState, usePilot} from '../../app/context';
 import {useHelpApi} from './api';
 import {usePageTitle} from '../../composables/pageTitle';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
@@ -84,8 +84,11 @@ function submitSearch(): void {
 /** Static help does not poll. A failed read therefore always offers a deliberate
  * read-only recovery using the same server cooldown and current article/locale key.
  * Refetch retains the mounted search draft and never navigates or replays a command. */
+const retryAction = useActionState({eligible: () => context.mayRead() && retryAvailable.value,
+    pending: () => help.isFetching.value});
+
 async function retryHelp(): Promise<void> {
-    if (!context.mayRead() || !context.hydrated.value || !retryAvailable.value || help.isFetching.value) return;
+    if (!retryAction.isAvailable()) return;
     await help.refetch();
 }
 /** Enhance ordinary reviewed article links only. Modified clicks and packaged
@@ -120,8 +123,8 @@ watch(() => [pageTitle.value, route.hash], async () => {
     <PageMessage v-if="notFound" kind="error" renewal="help.notFound" :message="messages.t('help.notFound')">
         <!-- A confirmed missing document suspends automatic observation. Retain
              native Error/Home presentation while offering deliberate read recovery. -->
-        <ActionButton variant="outline-light" :pending="help.isFetching.value"
-            :disabled="!context.mayRead() || !retryAvailable" @click="retryHelp">{{ messages.t('common.retry') }}</ActionButton>
+        <ActionButton variant="outline-light" :state="retryAction"
+            @click="retryHelp">{{ messages.t('common.retry') }}</ActionButton>
     </PageMessage>
     <section v-else class="card bg-dark text-white mb-3">
         <div class="card-header d-flex justify-content-between align-items-center gap-2">
@@ -184,7 +187,7 @@ watch(() => [pageTitle.value, route.hash], async () => {
                         :last-updated-at="page ? help.dataUpdatedAt.value : undefined">{{
                         messages.t(page ? 'state.stale' : 'state.loadFailed')
                     }}<ActionButton class="btn-sm ms-2" variant="outline-light"
-                        :pending="help.isFetching.value" :disabled="!retryAvailable" @click="retryHelp">{{
+                        :state="retryAction" @click="retryHelp">{{
                         messages.t('common.retry')
                     }}</ActionButton></StatusNotice>
                     <LoadingSkeleton v-if="initialLoading" variant="article" />

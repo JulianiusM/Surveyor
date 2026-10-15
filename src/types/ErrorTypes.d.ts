@@ -14,4 +14,11 @@
  * limitations under the License.
  */
 
+import type {MessageKey} from './LocalizationTypes';
+
 export type Severity = 'error' | 'info' | 'warning';
+
+/** Optional catalog identity belongs to the error's actual business/presentation owner. */
+export interface ExpectedErrorOptions extends ErrorOptions {
+    messageKey?: MessageKey;
+}

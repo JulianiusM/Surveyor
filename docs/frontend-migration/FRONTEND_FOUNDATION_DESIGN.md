@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current API contribution rules and original future targets consolidated into staged guides/active DEC-006; approved transport scope restoration and bounded server integration recorded; original amendments and temporary publication boundaries retained
+verification-scope: maintainer correction reconciles unauthorized definition restrictions with unused implementation removal; prior parity-only exclusions, bounded corrections and publication boundaries retained; no new runtime transport verification
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -399,6 +399,11 @@ independent nonauthor and root comparison remains required.
 
 ### Authorized readiness consolidation (2026-10-14)
 
+**Historical agent interpretation, superseded on 2026-10-15:** the scalar-only description in this paragraph
+overstated approval to remove unused implementation. The
+[maintainer correction](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15) distinguishes
+authored definitions from implemented HTTP transport and directs removal of the unauthorized definition guards.
+
 The maintainer explicitly authorizes the reviewed readiness work and separately approves restoring scalar-only query
 transport and removing unused plain-text API output. Both unused additions first appeared in the 2026-10-08 correction;
 no current endpoint depends on them, and their original rationale/specific authorization was not established.
@@ -419,6 +424,38 @@ The same policy's [approval explanation](../policies/DEVELOPMENT_POLICY.md#requi
 now owns sufficient decision context, explicit scope/approach and answer-specific request identifiers. The historical
 four-field amendments above retain their original scope; they are not the current template.
 No new module migration, default route, native retirement or deployment follows from this readiness work.
+
+### Authorized parity-only migration clarification (2026-10-14)
+
+After the P1 finality review, the maintainer explicitly excludes the proposed current-owner token-issuance check
+(R1A), current-token consumption strengthening (R1B), transfer cleanup/completion repair (R2), profile-deactivation
+finality repair (R3) and account-deletion finality repair (R4). These and all existing backlog remedies remain separate
+deferred work. The review records existing behavior; it does not make remediation or another approval request a
+prerequisite for completing the frontend journeys. IMP-006 and IMP-058–060 retain the exact defect evidence.
+
+The authorized migration preserves native visual and behavioral contracts, except for already explicitly approved
+frontend changes. Minor backend transport/presentation reuse is permitted through existing controller/DBAL owners;
+general backend fixes or new business guarantees are outside this scope. Earlier explicitly approved bounded
+corrections above remain valid. New frontend/adapter code must still preserve security, private projections,
+contract validation, draft/identity lifetimes and honest command outcomes without adding replay or claiming that an
+inherited defect is repaired. The [development policy](../policies/DEVELOPMENT_POLICY.md#scope-of-separately-authorized-work)
+records the general distinction between scope-preserving consumers and newly introduced/changed business behavior.
+
+This dated clarification corrects the full implementation plan's P1B/C finality-remedy prerequisite and dependent
+decision wording. It retains the original plan and prior decision history; it grants no cutover or later-phase scope.
+
+### Authorized direct profile-operation reuse correction (2026-10-14)
+
+The maintainer's A2 follow-up requires adapters to reuse the existing backend as-is wherever possible. The first P1
+implementation shared profile name/default helpers but added pilot-only field-edit/create transactions, session locks
+and full roster receipts. No specific approval for those stronger ordinary-profile guarantees was established;
+the earlier atomic identity-registration/login/profile-switch decisions remain separate and unchanged.
+
+The correction invokes native `updateProfile` and `createProfile` directly after adapter admission. A generated simple
+acknowledgement is prepared before the call, then delivered without a new business rejection boundary. Session/roster
+display refresh and destination retry follow confirmed success through existing client owners. The unreleased P1
+responses change from `IdentityResult` to `MutationResult`; visual workflows, submitted values and native backend
+behavior remain unchanged. Existing native partial failures remain inherited/excluded rather than repaired.
 
 #### Migration contribution handoff
 

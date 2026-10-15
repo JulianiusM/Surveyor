@@ -1,5 +1,8 @@
 /* Keep the rendered Bootstrap theme while giving Vue exclusive ownership of interactive state. */
 .pilot-app { color: var(--bs-body-color); }
+/* Paused enhanced reads retain their real href for modified/new-tab navigation.
+   Ordinary clicks use the same action admission as the visible disabled state. */
+.pilot-app a.btn[aria-disabled="true"]:not(.disabled) { opacity: var(--bs-btn-disabled-opacity, .65); }
 /* Full message pages move native alerts into their card. Ordinary pages retain
    the separate mt-1 live-alert host after any initial, non-sticky flash messages. */
 #pilot-main:has(> .pilot-page-message) > .pilot-page-notices:has(> #liveAlerts:only-child:empty) { display: none; }

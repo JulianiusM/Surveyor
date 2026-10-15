@@ -41,7 +41,7 @@ import type {SessionLike} from "../types/PermissionTypes";
 import {archiveKey, isHiddenInOverview} from "../modules/archive/policy";
 import {getArchivePresentations} from "./entityAdminController";
 import {evaluateEntities} from "../modules/permissionEngine";
-import type {components} from '../types/api/v1';
+import type {components, operations} from '../types/api/v1';
 
 const CREATE_TEMPLATE = 'users/register';
 
@@ -1166,6 +1166,69 @@ export async function createProfile(body: any, userId: number) {
         throw new ValidationError("users/profile/create", "Invalid profile name", body);
     }
     return await userService.createProfile(userId, name);
+}
+
+/**
+ * Project only editable profile fields after verifying their current owner.
+ * Sessions and ORM rows contain capabilities and credentials which never belong
+ * in this administration projection.
+ */
+export async function getIdentityProfile(session: SessionLike): Promise<components['schemas']['ProfileSettings']> {
+    // A persisted session label is not authority after transfer or deletion.
+    const profile = session.profile ? await userService.getProfileById(session.profile.id) : null;
+    if (!profile || !(session.auth?.user || session.auth?.guest)
+        || (session.auth?.user ? profile.userId !== session.auth.user.id : profile.guestId !== session.auth?.guest?.id)) {
+        throw new ApiProblem('AUTH_REQUIRED');
+    }
+    return {id: profile.id, name: profile.name, isDefault: profile.defaultForOwner};
+}
+
+/** Read an account's own profiles; guests retain their separate single-profile workflow. */
+export async function getIdentityProfiles(session: SessionLike): Promise<components['schemas']['ProfileManagement']> {
+    // Identity is server-selected. No request field can choose another account.
+    if (!session.auth?.user) throw new ApiProblem(session.auth?.guest ? 'FORBIDDEN' : 'AUTH_REQUIRED');
+    const profiles = await userService.getProfilesForUser(session.auth.user.id);
+    return {profiles: profiles.map(profile => ({id: profile.id, name: profile.name, isDefault: profile.defaultForOwner})),
+        activeProfileId: session.profile?.id ?? null};
+}
+
+/**
+ * Project the unchanged native capability preview for an admitted full account.
+ * Invalid capability presentation is distinct from loss of the viewing session;
+ * this read never consumes the token or changes ownership/previous-owner cleanup.
+ */
+export async function getProfileMigrationPreview(session: SessionLike, token: string): Promise<components['schemas']['ProfileMigrationPreviewOutcome']> {
+    // Keep account admission with the business owner. The transport separately
+    // authenticates the captured session/context and validates the submitted shape.
+    if (!hasAccountProfile(session)) throw new ApiProblem(session.auth?.guest ? 'FORBIDDEN' : 'AUTH_REQUIRED');
+    let profile: Profile;
+    try {
+        profile = await getProfileToMigrate(token);
+    } catch (error) {
+        // The native read's known invalid-token result owns a full 401 message,
+        // not authentication loss. Preserve that presentation without clearing an
+        // otherwise valid account or interpreting arbitrary exception prose.
+        if (!(error instanceof ExpectedError) || error.status !== 401) throw error;
+        return {kind: 'denied', status: 401, messageKey: 'profile.invalidMigrationToken'};
+    }
+
+    // Token holders see exactly the existing native preview fields. Never expose
+    // ORM account credentials, private guest links or unrelated relationships.
+    const owner = profile.user ? {kind: 'account' as const, name: profile.user.name,
+        username: profile.user.username, email: profile.user.email}
+        : profile.guest ? {kind: 'guest' as const, username: profile.guest.username, email: profile.guest.email ?? null} : null;
+    return {kind: 'preview', token: profile.migrationToken!, profile: {id: profile.id, name: profile.name, owner}};
+}
+
+/** Share native-document and mounted-navigation admission without returning private fields. */
+export function getProfileAdministrationEntry(session: SessionLike,
+    view: operations['getProfileAdministrationEntry']['parameters']['query']['view'], returnTo?: unknown): components['schemas']['PageEntryOutcome'] {
+    // A guest remains a valid identity when a full-account page redirects to login.
+    // The adapter supplies the view; the established account owner decides admission.
+    const destination = safeFrontendReturn(returnTo ?? `/frontend-pilot/users/profile${view === 'edit' ? '' : `/${view}`}`);
+    if (view !== 'edit') return getAccountPageEntry(session, '/frontend-pilot/users/login', destination);
+    return session.profile ? {kind: 'render'}
+        : {kind: 'redirect', url: `/frontend-pilot/users/login?next=${encodeURIComponent(destination)}`, notice: null};
 }
 
 export function getDefaultProfile(profiles: Profile[]) {

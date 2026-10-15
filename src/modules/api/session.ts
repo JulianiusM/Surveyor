@@ -84,22 +84,54 @@ export async function captureApiActor(req: Request, preserveForNativeLogout = fa
 
 /** Admit the operation's identity/context, then apply the existing mutation-only transport protections. */
 export async function requireApiContext(req: Request, res: Response, requireProfile = false): Promise<ApiActor> {
+    return requireContextEvidence(req, res, requireProfile, {context: req.get('X-Surveyor-Context'),
+        csrf: req.get('X-CSRF-Token'), compatibility: req.get('X-Surveyor-Api-Compatibility')});
+}
+
+/**
+ * Ordinary HTML POSTs cannot set the SPA's request headers. Read their explicit
+ * hidden transport fields instead, then apply the same session/origin protections.
+ * This adapts delivery only: native business operations retain their existing order.
+ */
+export async function requireFrontendFormContext(req: Request, res: Response): Promise<ApiActor> {
+    // Arrays, missing fields and object-shaped parser input are never credentials.
+    // Keep these values separate from headers so callers cannot overwrite origin evidence.
+    const body = req.body;
+    return requireContextEvidence(req, res, true, {
+        context: typeof body?._context === 'string' ? body._context : undefined,
+        csrf: typeof body?._csrf === 'string' ? body._csrf : undefined,
+        compatibility: typeof body?._compat === 'string' ? body._compat : undefined,
+    });
+}
+
+/** Private transport evidence has no business authority independent of the stored session. */
+interface ContextEvidence {
+    context?: string;
+    csrf?: string;
+    compatibility?: string;
+}
+
+/** Share admission for header and form transports without changing either business workflow. */
+async function requireContextEvidence(req: Request, res: Response, requireProfile: boolean,
+    evidence: ContextEvidence): Promise<ApiActor> {
+    // Capture once after authoritative store reload. Later workflow failures must
+    // not be reinterpreted by validating an already changed/deleted identity again.
     const actor = await captureApiActor(req);
     res.set('X-Surveyor-Context', actor.context);
     if (requireProfile && (!actor.profile || !(actor.auth?.user || actor.auth?.guest))) throw new ApiProblem('AUTH_REQUIRED');
 
-    const suppliedContext = req.get('X-Surveyor-Context');
+    const suppliedContext = evidence.context;
     if (!suppliedContext) throw new ApiProblem('CONTEXT_REQUIRED');
     if (!sameToken(suppliedContext, actor.context)) throw new ApiProblem('SESSION_CONTEXT_CHANGED');
 
     if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
         // Reject an incompatible loaded client before controller admission or any side effect.
-        if (!compatibleApiClient(req.get('X-Surveyor-Api-Compatibility'))) throw new ApiProblem('CLIENT_UPDATE_REQUIRED');
+        if (!compatibleApiClient(evidence.compatibility)) throw new ApiProblem('CLIENT_UPDATE_REQUIRED');
         const fetchSite = req.get('Sec-Fetch-Site');
         const origin = req.get('Origin');
         const expectedOrigin = `${req.protocol}://${req.get('host')}`;
         if ((fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') || (origin && origin !== expectedOrigin)
-            || !sameToken(req.get('X-CSRF-Token'), req.session.frontendCsrfToken)) throw new ApiProblem('CSRF_INVALID');
+            || !sameToken(evidence.csrf, req.session.frontendCsrfToken)) throw new ApiProblem('CSRF_INVALID');
     }
     return actor;
 }

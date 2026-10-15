@@ -177,6 +177,60 @@ router.put('/auth/profile', asyncHandler(async function switchIdentityProfile(re
     sendPreparedJson(req, res, committed.result);
 }));
 
+/** Account-only navigation redirects a valid guest without treating it as lost identity. */
+router.get('/profiles/entry', asyncHandler(async function getProfileAdministrationEntry(req, res) {
+    await admit(req, res, 'getProfileAdministrationEntry');
+    const view = req.query.view as 'edit' | 'manage' | 'create';
+    sendValidatedJson(req, res, 'getProfileAdministrationEntry', 200,
+        userController.getProfileAdministrationEntry(req.apiActor!, view, req.query.returnTo));
+}));
+
+/** Resolve an explicit private capability preview without changing the admitted identity or profile. */
+router.post('/profiles/migration/preview', asyncHandler(async function previewIdentityProfileMigration(req, res) {
+    await admit(req, res, 'previewIdentityProfileMigration');
+    // Pure preview uses its generated read projection. Explicit document execution
+    // remains the only transfer command and retains the existing native semantics.
+    sendValidatedJson(req, res, 'previewIdentityProfileMigration', 200,
+        await userController.getProfileMigrationPreview(req.apiActor!, req.body.token));
+}));
+
+/** Read settings through the business owner's current profile ownership check. */
+router.get('/profiles/current', asyncHandler(async function getIdentityProfile(req, res) {
+    await admit(req, res, 'getIdentityProfile');
+    sendValidatedJson(req, res, 'getIdentityProfile', 200, await userController.getIdentityProfile(req.apiActor!));
+}));
+
+/** Only full accounts have a managed roster; guest editing remains a separate current-profile view. */
+router.get('/profiles', asyncHandler(async function getIdentityProfiles(req, res) {
+    await admit(req, res, 'getIdentityProfiles');
+    sendValidatedJson(req, res, 'getIdentityProfiles', 200, await userController.getIdentityProfiles(req.apiActor!));
+}));
+
+/** Adapt native field editing without changing its persistence or session-save boundary. */
+router.patch('/profiles/current', asyncHandler(async function updateIdentityProfile(req, res) {
+    await admit(req, res, 'updateIdentityProfile');
+    // Admission captures current ownership. Profile selection remains server-owned;
+    // no submitted ID or later mutable-context read can change the acting profile.
+    if (!req.apiActor!.profile) throw new ApiProblem('AUTH_REQUIRED');
+    const reply = prepareValidatedJson(req, 'updateIdentityProfile', 200, {changed: true});
+    await userController.updateProfile(req.body, req.session);
+    // Only delivery follows the unchanged shared operation. The client refreshes
+    // display data separately after this simple acknowledgement is confirmed.
+    sendPreparedJson(req, res, reply);
+}));
+
+/** Add a profile through the existing account operation without selecting it. */
+router.post('/profiles', asyncHandler(async function createIdentityProfile(req, res) {
+    await admit(req, res, 'createIdentityProfile');
+    // Mirror native account admission using the captured actor. Neither the
+    // request body nor response preparation introduces another business owner.
+    const user = req.apiActor!.auth?.user;
+    if (!user) throw new ApiProblem(req.apiActor!.auth?.guest ? 'FORBIDDEN' : 'AUTH_REQUIRED');
+    const reply = prepareValidatedJson(req, 'createIdentityProfile', 200, {changed: true});
+    await userController.createProfile(req.body, user.id);
+    sendPreparedJson(req, res, reply);
+}));
+
 router.get('/packing-lists/:listId/guest', asyncHandler(async function getPackingGuestEntry(req, res) {
     await admit(req, res, 'getPackingGuestEntry');
     sendValidatedJson(req, res, 'getPackingGuestEntry', 200, await readPackingGuestEntry(String(req.params.listId)));

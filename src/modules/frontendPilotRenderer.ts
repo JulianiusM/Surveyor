@@ -5,6 +5,7 @@ import type {Response} from 'express';
 import type {FrontendPilotBootstrap, FrontendPilotRenderResult, FrontendPreparedDocument} from '../types/FrontendPilotTypes';
 import {createTranslator, localeManifest} from './localization/translator';
 import {frontendDevelopmentServer} from './frontendDevelopment';
+import settings from './settings';
 
 interface AssetChunk {file: string; css?: string[]; imports?: string[]}
 interface PilotRenderer {render(url: string, bootstrap: FrontendPilotBootstrap): Promise<FrontendPilotRenderResult>}
@@ -126,8 +127,16 @@ export async function prepareFrontendPilot(res: Response, url: string, bootstrap
     const direction = localeManifest.find(entry => entry.locale === locale)?.direction ?? 'ltr';
     res.set('Cache-Control', 'private, no-store').set('Content-Language', locale);
     const title = escapeHtml(rendered.title);
+    // Landing keeps the native discovery/social metadata. Other documents retain
+    // their existing head, and private profile values never enter these fields.
+    const messages = createTranslator(locale);
+    const landingMetadata = bootstrap.landing ? `<meta name="description" content="${escapeHtml(messages.t('landing.metaDescription'))}">
+<meta name="keywords" content="${escapeHtml(messages.t('landing.metaKeywords'))}"><meta name="author" content="Surveyor">
+<meta property="og:title" content="${title}"><meta property="og:description" content="${escapeHtml(messages.t('landing.metaSocialDescription'))}">
+<meta property="og:image" content="/img/logo.png"><meta property="og:url" content="${escapeHtml(settings.value.rootUrl)}">
+<meta name="twitter:card" content="summary_large_image">` : '';
     const head = `<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title}</title><link rel="icon" href="/img/favicon-32x32.png">
+<title>${title}</title>${landingMetadata}<link rel="icon" href="/img/favicon-32x32.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <link rel="stylesheet" href="/style/style.css"><link rel="stylesheet" href="/style/help.css">`;

@@ -6,7 +6,7 @@ import type {components} from '../../../types/api/v1';
 import type {PilotRead} from '../../../types/FrontendPilotUiTypes';
 import type {QueryFunctionContext} from '@tanstack/vue-query';
 import {usePackingApi} from './api';
-import {usePilot, refreshInterval} from '../../app/context';
+import {useActionState, usePilot, refreshInterval} from '../../app/context';
 import {isReadDenial, ObsoleteRequestError} from '../../app/transport';
 import {evictQueryFamilies, observeQueryReads, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
 import {belongsToQueryFamily, overviewKeys, packingKeys} from '../../app/queryKeys';
@@ -181,7 +181,11 @@ const command = useCommand(refreshAfterCommand, false, {
     unknownMessage: 'draft.leaveUnknown',
     problemKey: packingProblemKey,
 });
-const blocked = computed(() => command.pending.value || command.recovering.value || command.uncertain.value);
+const blocked = computed(() => command.action.disabled.value);
+const readAction = useActionState({eligible: mayRefreshList, pending: () => list.isFetching.value,
+    blocked: () => command.recoveryAction.disabled.value});
+
+function mayRefreshList(): boolean { return active && context.mayRead() && retryAvailable.value; }
 
 /** Packed state is optional browser-local presentation using the native keys.
  * SSR never probes browser storage. A rejected getter becomes an unavailable
@@ -339,7 +343,7 @@ function isFull(item: Item): boolean {
  * Command reconciliation owns confirmed/unknown status; failed recovery keeps
  * the existing stale presentation and never repeats the original write. */
 async function refresh(): Promise<boolean> {
-    if (!retryAvailable.value) return false;
+    if (!readAction.isAvailable()) return false;
     try {
         return await command.reconcile(refreshCurrentList);
     } catch {
@@ -552,7 +556,7 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                 >{{ messages.t(command.notice.value) }}
                 <template v-if="command.uncertain.value && quickAddDirty">
                     <p class="mb-2">{{ messages.t('packing.reviewUnknownItem') }}</p>
-                    <ActionButton variant="outline-warning" :pending="list.isFetching.value" @click="reviewUnknownItem">
+                    <ActionButton variant="outline-warning" :state="readAction" @click="reviewUnknownItem">
                         {{ messages.t('draft.review') }}
                     </ActionButton>
                 </template>
@@ -625,8 +629,7 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                     <ActionButton
                         class="btn-sm ms-auto"
                         variant="outline-secondary"
-                        :pending="list.isFetching.value"
-                        :disabled="command.pending.value || command.recovering.value || !retryAvailable"
+                        :state="readAction"
                         :aria-label="messages.t('common.refresh')"
                         :title="messages.t('common.refresh')"
                         @click="refresh"

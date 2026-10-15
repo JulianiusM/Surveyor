@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers
 owner: frontend maintainers
 status: current
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original framework/API toolchain and deferred localization/domain targets consolidated; approved scalar-query and response-subset restoration recorded; current cookie/catalog scope distinguished from future choices; no default-route or deployment change
+verification-scope: maintainer correction separates unused transport implementation removal from unauthorized definition restrictions; original framework/API choices and history retained; no new runtime transport verification
 source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
 next-review: frontend-technology-or-rendering-boundary-change
 -->
@@ -166,6 +166,9 @@ Current authoring and released-version compatibility procedures belong in the De
 
 ### Authorized transport scope restoration (2026-10-14)
 
+**Superseded agent interpretation:** the account below extended removal of unused implementation into definition
+restrictions. The maintainer's 2026-10-15 correction below resolves that overreach; the original account remains as history.
+
 The original supported transport binds single path/query/header values, JSON, Packing multipart and scoped binary
 images. The 2026-10-08 correction also added repeated scalar query arrays and plain-text API responses. Review found
 no authored endpoint or production consumer for those additions and no specific authorization in the inspected
@@ -175,6 +178,18 @@ The maintainer separately approved removing repeated-query-array support and unu
 the current readiness work. This restores the documented subset in the existing generator and transport owner.
 JSON body/response arrays, existing API operations, native document/download boundaries and shared business behavior
 retain their existing contracts. The approval grants neither another transport style nor a new frontend framework.
+
+#### Maintainer correction (2026-10-15)
+
+The maintainer explicitly clarifies that the approval removed unused implementation only. It did not authorize
+generator bans on parameter schema shapes or response media definitions. Treating the earlier removal as approval
+for those restrictions was agent overreach; the maintainer directs their removal.
+
+Authored definitions may use arrays, objects and unions and declare response media such as `text/plain`. Generation
+must not reject them solely for those shapes or media. The existing HTTP decoder still binds single scalar
+path/query/header values, and runtime repeated-query-array decoding and plain-text response delivery have not been
+restored. Generated contracts, metadata and validators do not by themselves implement those HTTP behaviors.
+Existing serialization/metadata mechanics and strict schema validation retain their own scope.
 
 ## Deferred localization and domain integration targets
 

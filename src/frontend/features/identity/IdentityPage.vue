@@ -4,7 +4,7 @@ import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {WatchCallback} from 'vue';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {FrontendIdentityOperation} from '../../../types/IdentityTypes';
-import {usePilot} from '../../app/context';
+import {useActionState, usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {problemMessage, useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {usePageTitle} from '../../composables/pageTitle';
@@ -62,8 +62,10 @@ const passwordState = computed(() => mode.value === 'register' && fields.passwor
     ? isRegistrationPasswordValid(fields.password) ? 'valid' as const : 'invalid' as const : undefined);
 const repeatState = computed(() => mode.value === 'register' && (fields.password || fields.passwordRepeat)
     ? fields.password === fields.passwordRepeat ? 'valid' as const : 'invalid' as const : undefined);
+const sessionRetryAvailable = useReadRetry(() => context.sessionRead.value.error);
 const command = useCommand(context.refreshSession, true, {dirty: isDirty,
-    unknownMessage: 'auth.leaveUnknown', problemKey: identityProblemKey});
+    unknownMessage: 'auth.leaveUnknown', problemKey: identityProblemKey,
+    recoveryEligible: () => sessionRetryAvailable.value});
 const reconciling = command.recovering;
 const formLocation = computed(() => {
     // A new return destination is a new native form visit, even when Vue reuses its
@@ -197,12 +199,17 @@ const resetDenial = computed(() => {
     if (!problem || !('code' in problem)) return null;
     return problemMessage(messages.value, problem, identityProblemKey);
 });
-const blocked = computed(() => command.pending.value || reconciling.value || command.uncertain.value || !!confirmedNavigation.target.value);
+const blocked = computed(() => command.action.disabled.value || !!confirmedNavigation.target.value);
+const resetRetryAction = useActionState({eligible: mayRetryReset});
+
+function mayRetryReset(): boolean {
+    return context.mayRead() && resetRetryAvailable.value && !!resetReadFailure.value;
+}
 
 /** Checking a token is read-only. Honor its existing cooldown and current actor before
  * requesting another admission; never consume the token or replay password submission. */
 function retryResetAdmission(): void {
-    if (context.mayRead() && resetRetryAvailable.value && resetReadFailure.value) resetAttempt.value++;
+    if (resetRetryAction.isAvailable()) resetAttempt.value++;
 }
 
 /** Check identity authority without replaying mail, registration or sign-in commands. */
@@ -391,7 +398,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
         :message="identityDenial || resetDenial || ''" :transient="!!identityDenial || !resetReadFailure"
         :read-error="identityDenial ? undefined : resetReadFailure" :retry-at="identityDenial ? undefined : resetRetryAt">
         <ActionButton v-if="resetReadFailure && !identityDenial" variant="outline-light"
-            :disabled="!resetRetryAvailable" @click="retryResetAdmission">{{ messages.t('common.retry') }}</ActionButton>
+            :state="resetRetryAction" @click="retryResetAdmission">{{ messages.t('common.retry') }}</ActionButton>
     </PageMessage>
     <PageMessage v-else-if="finished" :kind="mode === 'register' ? 'info' : 'success'" :message="messages.t(finishedMessage)" />
     <PageMessage v-else-if="pageCompleted" kind="success" :renewal="context.pageCompletion.value"
@@ -403,7 +410,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
         <StatusNotice v-if="confirmedNavigation.target.value" kind="success">
             {{ messages.t('state.saved') }}
             <ActionButton class="btn-sm ms-2" variant="outline-light"
-                :pending="confirmedNavigation.pending.value" @click="confirmedNavigation.retry">
+                :state="confirmedNavigation.retryAction" @click="confirmedNavigation.retry">
                 {{ messages.t('common.retry') }}
             </ActionButton>
         </StatusNotice>
@@ -425,7 +432,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                     :variant="needsOidc ? 'lines' : 'form'" :rows="2" />
                 <StatusNotice v-if="command.uncertain.value" kind="warning"
                     >{{ messages.t('state.unknownOutcome')
-                    }} {{ messages.t('auth.unconfirmedRequest') }}<ActionButton class="ms-2" variant="outline-light" :pending="reconciling" :disabled="reconciling" @click="refreshIdentityState">{{
+                    }} {{ messages.t('auth.unconfirmedRequest') }}<ActionButton class="ms-2" variant="outline-light" :state="command.recoveryAction" @click="refreshIdentityState">{{
                         messages.t('common.refresh')
                     }}</ActionButton></StatusNotice
                 >

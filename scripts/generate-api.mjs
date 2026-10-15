@@ -187,13 +187,11 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
             const identity = `${parameter.in}:${parameter.name}`;
             if (names.has(identity)) throw new Error(`Duplicate parameter: ${identity}`);
             names.add(identity);
-            const parameterType = resolve(document, parameter.schema)?.type;
-
-            // URL/header parameters use the existing scalar decoder. Arrays belong
-            // to JSON bodies; another parameter encoding needs an explicit contract decision.
+            // Check the binding representation, not the authored schema's shape.
+            // The generated validators preserve arrays, objects and unions; their
+            // declaration alone does not install a corresponding runtime codec.
             if (!['path', 'query', 'header'].includes(parameter.in) || parameter.content
-                || (parameter.style && parameter.style !== (parameter.in === 'query' ? 'form' : 'simple'))
-                || parameterType === 'array') {
+                || (parameter.style && parameter.style !== (parameter.in === 'query' ? 'form' : 'simple'))) {
                 throw new Error(`Unsupported pilot parameter serialization: ${identity}`);
             }
             // Runtime transport metadata must contain resolved shapes, not a second reference resolver.
@@ -214,8 +212,11 @@ for (const [route, unresolvedPathItem] of Object.entries(document.paths)) {
             const response = resolve(document, unresolved);
             if (!response.content) { responseSchemas[status] = null; continue; }
             const entries = Object.entries(response.content);
-            if (entries.length !== 1 || !['application/json', 'application/problem+json', 'application/octet-stream'].includes(entries[0][0])) {
-                throw new Error('Unsupported pilot response media type');
+            // One status has one schema/media slot in the existing manifest.
+            // Preserve the authored media name rather than ban future outputs;
+            // an HTTP writer remains responsible for implementing its encoding.
+            if (entries.length !== 1) {
+                throw new Error('An API response must declare exactly one media type');
             }
             responseMediaTypes[status] = entries[0][0];
             responseSchemas[status] = schemaName(entries[0][1].schema);

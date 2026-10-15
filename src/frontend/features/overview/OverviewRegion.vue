@@ -7,7 +7,7 @@ import type {components, paths} from '../../../types/api/v1';
 import type {PilotOverviewCardInteraction, PilotOverviewCountRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {overviewQueryParameters, useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
-import {usePilot, refreshInterval} from '../../app/context';
+import {useActionState, usePilot, refreshInterval} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {isOrdinaryNavigation, useConfirmedNavigation} from '../../composables/pageEntry';
 import {useDebouncedValue} from '../../composables/debounced';
@@ -227,15 +227,35 @@ function refetchRegion(): Promise<unknown> {
     return overview.refetch({throwOnError: true});
 }
 const command = useCommand(refresh);
-const blocked = computed(() => command.pending.value || command.recovering.value || command.uncertain.value
+const blocked = computed(() => command.action.disabled.value
     || !!destination.target.value);
 const actionsBlocked = computed(() => blocked.value || !!pendingRead.value || !overview.data.value || !displayed.value);
+// Filters can replace an earlier in-flight filter. Only their existing admission
+// and command locks apply; Refresh separately waits for current read progress.
+const navigationAction = useActionState({eligible: mayNavigateRegion, blocked: () => blocked.value});
+const retryNavigationAction = useActionState({eligible: mayRetryNavigation,
+    pending: () => !!pendingRead.value, blocked: () => blocked.value});
+const refreshAction = useActionState({eligible: mayRefreshRegion,
+    pending: () => overview.isFetching.value || !!pendingRead.value,
+    blocked: () => command.recoveryAction.disabled.value});
+
+function mayNavigateRegion(): boolean {
+    return mounted && props.active !== false && context.mayRead() && retryAvailable.value;
+}
+
+function mayRetryNavigation(): boolean {
+    return !!failedRead.value && context.mayRead(failedRead.value.scope, true) && retryAvailable.value;
+}
+
+function mayRefreshRegion(): boolean {
+    return failedRead.value ? retryNavigationAction.isAvailable() : mayNavigateRegion();
+}
 
 /** A failed explicit read is already represented by its region's query warning.
  * Keep that read-owned recovery surface without leaking a rejected Vue event promise
  * or replacing another region's command feedback with duplicate error state. */
 async function refreshOverview(): Promise<void> {
-    if (!retryAvailable.value) return;
+    if (!refreshAction.isAvailable()) return;
     if (failedRead.value) { await retryNavigation(); return; }
     try { await command.reconcile(); }
     catch { /* Each failed query retains its durable warning and last confirmed cards. */ }
@@ -334,7 +354,7 @@ function editSearch(event: Event): void {
 }
 
 function submitSearch(): void {
-    if (blocked.value) return;
+    if (!navigationAction.isAvailable()) return;
     searchPending.value = false;
     void navigate({q: search.value || undefined, page: undefined, childPage: undefined}, 'replace');
 }
@@ -397,7 +417,7 @@ function filterKey(parameters: Query): string {
  * leaves its cards, focus and browser history unchanged; Retry retains the exact target. */
 async function navigate(values: Record<string, string | undefined>, history: 'push' | 'replace' = 'push',
                         action: NavigationAction = 'filter'): Promise<void> {
-    if (blocked.value || props.active === false || !context.mayRead() || !retryAvailable.value) return;
+    if (!navigationAction.isAvailable()) return;
     const parameters = regionParameters(navigationQuery(values));
     searchPending.value = false;
     retireReads();
@@ -408,7 +428,7 @@ async function navigate(values: Record<string, string | undefined>, history: 'pu
  * client retains server cooldown/retry policy; the descriptor holds request data and delivery policy only. */
 async function retryNavigation(): Promise<void> {
     const failed = failedRead.value;
-    if (!failed || blocked.value || !context.mayRead(failed.scope, true) || !retryAvailable.value) return;
+    if (!failed || !retryNavigationAction.isAvailable()) return;
     retireReads();
     await deliverNavigation({...failed, generation: readGeneration});
 }
@@ -481,7 +501,7 @@ function targetQuery(parameters: Query): LocationQuery {
 /** Native event expansion remembers its originating card and scroll position. Filter
  * changes retain that origin so Back can reveal the card instead of restoring an obsolete offset. */
 function expand(card: components['schemas']['OverviewCard']): void {
-    if (blocked.value) return;
+    if (!navigationAction.isAvailable()) return;
     returnPosition = {eventId: card.id, filters: filterKey(query.value), scrollY: window.scrollY};
     void navigate({event: card.id, childPage: undefined}, 'push', 'expand');
 }
@@ -605,7 +625,7 @@ function page(next: number): void {
         <h3 class="visually-hidden js-overview-heading" tabindex="-1">{{ title }}</h3>
         <StatusNotice v-if="destination.target.value" kind="success">
             {{ messages.t('packing.deleted') }}<ActionButton class="ms-2" variant="outline-light"
-                :pending="destination.pending.value" @click="destination.retry">{{ messages.t('common.retry') }}</ActionButton>
+                :state="destination.retryAction" @click="destination.retry">{{ messages.t('common.retry') }}</ActionButton>
         </StatusNotice>
         <!-- Lifecycle/visibility commands use native global inline feedback. Read
              failures and unknown outcomes retain this region's recovery surface. -->
@@ -623,8 +643,7 @@ function page(next: number): void {
         <StatusNotice v-if="readError || failedRead" kind="warning" :last-updated-at="lastUpdatedAt" :retry-at="retryAt"
             :read-error="navigationError ?? readError">{{
             messages.t(displayed ? 'state.stale' : 'state.loadFailed')
-        }}<ActionButton class="ms-2" variant="outline-light" :pending="overview.isFetching.value || !!pendingRead"
-            :disabled="!retryAvailable"
+        }}<ActionButton class="ms-2" variant="outline-light" :state="refreshAction"
             @click="refreshOverview">{{ messages.t('common.retry') }}</ActionButton></StatusNotice>
         <!-- Pending authority and an unsent local search draft keep the
              progressive controls mounted. Once an empty unfiltered region is confirmed
@@ -657,7 +676,7 @@ function page(next: number): void {
                     "
                 />
             </div>
-            <ActionButton type="submit" class="btn-sm" variant="outline-secondary"
+            <ActionButton type="submit" class="btn-sm" variant="outline-secondary" :state="navigationAction"
                 :name="prefix + 'type'" :value="query.type ?? 'all'">{{
                 messages.t('overview.search')
             }}</ActionButton>
@@ -669,13 +688,13 @@ function page(next: number): void {
                 trigger-class="btn btn-outline-secondary btn-sm dropdown-toggle">
                 <li>
                     <button class="dropdown-item" type="submit" :name="prefix + 'type'"
-                        value="all" data-type="all" :aria-pressed="(query.type ?? 'all') === 'all'"
+                        value="all" data-type="all" :aria-pressed="(query.type ?? 'all') === 'all'" :disabled="navigationAction.disabled.value"
                         @click.prevent="filterType('all')">{{ messages.t('overview.allTypes') }}</button>
                 </li>
                 <li><hr class="dropdown-divider" /></li>
                 <li v-for="type in filterTypes" :key="type">
                     <button class="dropdown-item" type="submit" :name="prefix + 'type'"
-                        :value="type" :data-type="type" :aria-pressed="query.type === type"
+                        :value="type" :data-type="type" :aria-pressed="query.type === type" :disabled="navigationAction.disabled.value"
                         @click.prevent="filterType(type)">{{ messages.t(`overview.types.${type}`) }}</button>
                 </li>
             </AppNavigationDropdown>
@@ -685,8 +704,7 @@ function page(next: number): void {
             <ActionButton
                 class="btn-sm ms-auto"
                 variant="outline-secondary"
-                :pending="overview.isFetching.value || !!pendingRead"
-                :disabled="!retryAvailable"
+                :state="refreshAction"
                 @click="refreshOverview"
                 >{{ messages.t('common.refresh') }}</ActionButton
             >
@@ -696,7 +714,7 @@ function page(next: number): void {
             <template v-if="displayed.parent">
                 <a
                     class="btn btn-sm mb-3 btn-outline-secondary"
-                    :href="navigationHref({event: undefined, childPage: undefined})"
+                    :href="navigationHref({event: undefined, childPage: undefined})" :aria-disabled="navigationAction.disabled.value"
                     @click="followNavigation($event, {event: undefined, childPage: undefined}, 'push', 'back')"
                 >
                     <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>{{ messages.t('overview.back') }}
@@ -705,6 +723,7 @@ function page(next: number): void {
                     :card="displayed.parent"
                     :interaction="cardInteraction(displayed.parent)"
                     :disabled="actionsBlocked"
+                    :navigation-state="navigationAction"
                     :read-revision="imageReadRevision"
                     :active="active"
                     @visibility="setVisibility(displayed.parent, $event)"
@@ -723,7 +742,7 @@ function page(next: number): void {
                         <a
                             v-if="query.q || (query.type && query.type !== 'all')"
                             class="btn btn-sm btn-outline-secondary"
-                            :href="navigationHref({q: undefined, type: undefined, page: undefined, childPage: undefined})"
+                            :href="navigationHref({q: undefined, type: undefined, page: undefined, childPage: undefined})" :aria-disabled="navigationAction.disabled.value"
                             @click="followNavigation($event, {q: undefined, type: undefined, page: undefined, childPage: undefined}, 'replace')"
                             >{{ messages.t('overview.showAllLinked') }}</a
                         >
@@ -731,6 +750,7 @@ function page(next: number): void {
                     <OverviewItems
                         :view="displayed"
                         :disabled="actionsBlocked"
+                        :navigation-state="navigationAction"
                         :read-revision="imageReadRevision"
                         :active="active"
                         :page-href="pageHref"
@@ -747,6 +767,7 @@ function page(next: number): void {
                 v-else
                 :view="displayed"
                 :disabled="actionsBlocked"
+                :navigation-state="navigationAction"
                 :read-revision="imageReadRevision"
                 :active="active"
                 :page-href="pageHref"

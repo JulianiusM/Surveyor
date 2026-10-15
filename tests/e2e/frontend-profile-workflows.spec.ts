@@ -1,0 +1,227 @@
+import {test, expect, type Browser, type Page} from '@playwright/test';
+import {writeFile} from 'node:fs/promises';
+import {loginForE2E, readProfileWorkflowFixtureForE2E, withProfileWorkflowFixtureForE2E} from '../keywords/e2eCoreKeywords';
+import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+
+/** Snapshot real browser geometry while retaining ordinary native/pilot page rendering. */
+function workflowPresentation() {
+    function bounds(selector: string) {
+        const element = document.querySelector(selector);
+        if (!element || !element.getClientRects().length) return null;
+        const rectangle = element.getBoundingClientRect();
+        return {x: rectangle.x, y: rectangle.y, width: rectangle.width, height: rectangle.height};
+    }
+
+    function submitColors() {
+        const button = document.querySelector('main button[type="submit"]');
+        if (!button) return null;
+        const style = getComputedStyle(button);
+        return {color: style.color, background: style.backgroundColor, border: style.borderColor};
+    }
+
+    return {heading: bounds('main h1'), field: bounds('main input:not([type="hidden"]):not([hidden])'),
+        submit: bounds('main button[type="submit"]'), token: bounds('main h3'),
+        submitColors: submitColors(), footer: bounds('footer'),
+        scrollWidth: document.documentElement.scrollWidth, scrollY: window.scrollY};
+}
+
+async function waitForWorkflowFonts(): Promise<void> { await document.fonts.ready; }
+
+/** Obtain the source token through its genuine built page under an independent guest cookie. */
+async function migrationTokenForWorkflow(browser: Browser, baseURL: string | undefined, loginPath: string): Promise<string> {
+    const sourceContext = await browser.newContext({baseURL, extraHTTPHeaders: {Connection: 'close'}});
+    try {
+        const source = await sourceContext.newPage();
+        expect((await source.request.get(loginPath, {maxRedirects: 0})).status()).toBe(302);
+        await source.goto('/frontend-pilot/users/profile/migrate/request?locale=en');
+        await waitForPilotHydration(source);
+        const token = (await source.locator('main h3').textContent())!.trim();
+        expect(token).not.toBe('');
+        return token;
+    } finally { await sourceContext.close(); }
+}
+
+/** Reach native preview by its document POST and pilot preview by its generated read-only JSON operation.
+ * Actual transfer remains a document POST; neither renderer receives manufactured HTML or intercepted results. */
+async function previewOnPage(page: Page, pilot: boolean, token: string): Promise<void> {
+    await page.goto(`${pilot ? '/frontend-pilot' : ''}/users/profile/migrate/show${pilot ? '?locale=en' : ''}`);
+    if (pilot) await waitForPilotHydration(page);
+    await page.locator('#token').fill(token);
+    // Unchanged native icons contribute a glyph prefix to accessible names.
+    // Match the precise action suffix in both renderers without omitting its label.
+    await page.getByRole('button', {name: /Show migration profile$/u}).click();
+    if (pilot) await waitForPilotHydration(page);
+    const execute = page.getByRole('button', {name: /Permanently migrate profile$/u});
+    await expect(execute).toBeVisible();
+    await expect(execute).toBeEnabled();
+    if (pilot) await expect(page).toHaveURL(/#migration-preview$/u);
+}
+
+test('transfers only after explicit built-browser preview and retains the receiving active profile', async function transferThroughBuiltPage({page, browser, baseURL}) {
+    await withProfileWorkflowFixtureForE2E(async function exerciseTransfer(fixture) {
+        const token = await migrationTokenForWorkflow(browser, baseURL, fixture.guest.loginPath);
+        await loginForE2E(page.request, fixture.account);
+        await previewOnPage(page, true, token);
+        await expect(page.locator('main')).toContainText(fixture.guest.username);
+        expect(new URL(page.url()).searchParams.has('token')).toBe(false);
+
+        // Preview leaves the original owner/token intact. The explicit native
+        // execute form is the only action allowed to change these real rows.
+        const preview = await readProfileWorkflowFixtureForE2E(fixture);
+        expect(preview.profiles.find(profile => profile.id === fixture.guest.profileId))
+            .toMatchObject({guestId: fixture.guest.id, userId: null, hasMigrationToken: true});
+        await page.getByRole('button', {name: 'Permanently migrate profile', exact: true}).click();
+        await expect(page).toHaveURL(/\/frontend-pilot\/users\/profile\/manage(?:\?[^#]*)?$/u);
+        const saved = await readProfileWorkflowFixtureForE2E(fixture);
+        expect(saved.guestCount).toBe(0);
+        expect(saved.profiles.find(profile => profile.id === fixture.guest.profileId))
+            .toMatchObject({guestId: null, userId: fixture.account.id, hasMigrationToken: false});
+        const session = await (await page.request.get('/api/v1/session')).json();
+        expect(session.activeProfile.id).toBe(fixture.account.profileId);
+    });
+});
+
+test('returns from preview with native entry state without automatically repeating its POST', async function restoresEntryOnBack({page, browser, baseURL}) {
+    await withProfileWorkflowFixtureForE2E(async function exerciseBack(fixture) {
+        const token = await migrationTokenForWorkflow(browser, baseURL, fixture.guest.loginPath);
+        await loginForE2E(page.request, fixture.account);
+        // Browser history restoration is the oracle, including the unchanged
+        // native document's actual field value under this browser configuration.
+        await previewOnPage(page, false, token);
+        await page.goBack();
+        await page.evaluate(waitForWorkflowFonts);
+        const nativeValue = await page.locator('#token').inputValue();
+        const nativeEnabled = await page.getByRole('button', {name: /Show migration profile$/u}).isEnabled();
+        const submitted: string[] = [];
+        page.on('request', function observeSubmission(request) {
+            if (request.method() === 'POST') submitted.push(new URL(request.url()).pathname);
+        });
+        await previewOnPage(page, true, token);
+        expect(submitted).toEqual(['/api/v1/profiles/migration/preview']);
+        await page.goBack();
+        await waitForPilotHydration(page);
+
+        // The pilot marker changes this mounted visit only. Back and Forward must
+        // retain its native field/result behavior without another preview request
+        // or execution. A later reload cannot reconstruct that private local result.
+        await expect(page.locator('#token')).toHaveValue(nativeValue);
+        expect(await page.getByRole('button', {name: 'Show migration profile', exact: true}).isEnabled()).toBe(nativeEnabled);
+        expect(submitted).toEqual(['/api/v1/profiles/migration/preview']);
+        await page.goForward();
+        await expect(page.getByRole('button', {name: 'Permanently migrate profile', exact: true})).toBeVisible();
+        expect(submitted).toEqual(['/api/v1/profiles/migration/preview']);
+        await page.goBack();
+        await expect(page.locator('#token')).toHaveValue(nativeValue);
+        await page.locator('#token').fill(token);
+        await page.getByRole('button', {name: 'Show migration profile', exact: true}).click();
+        await expect(page.getByRole('button', {name: 'Permanently migrate profile', exact: true})).toBeVisible();
+        expect(submitted).toEqual(['/api/v1/profiles/migration/preview', '/api/v1/profiles/migration/preview']);
+        await page.reload();
+        await waitForPilotHydration(page);
+        await expect(page.locator('#token')).toHaveValue('');
+        await expect(page.getByRole('button', {name: 'Permanently migrate profile', exact: true})).toHaveCount(0);
+        expect(submitted).toEqual(['/api/v1/profiles/migration/preview', '/api/v1/profiles/migration/preview']);
+        const saved = await readProfileWorkflowFixtureForE2E(fixture);
+        expect(saved.profiles.find(profile => profile.id === fixture.guest.profileId))
+            .toMatchObject({guestId: fixture.guest.id, hasMigrationToken: true});
+    });
+});
+
+for (const kind of ['account', 'guest'] as const) {
+    test(`retains wrong ${kind} deletion input and completes its explicit built document confirmation`, async function deleteThroughBuiltPage({page}) {
+        await withProfileWorkflowFixtureForE2E(async function exerciseDeletion(fixture) {
+            if (kind === 'account') await loginForE2E(page.request, fixture.account);
+            else expect((await page.request.get(fixture.guest.loginPath, {maxRedirects: 0})).status()).toBe(302);
+            await page.goto('/frontend-pilot/users/account/delete?locale=en');
+            await waitForPilotHydration(page);
+            await expect(page.locator('#username')).toHaveValue('');
+            await page.locator('#username').fill('Incorrect confirmation');
+            const rejected = page.waitForResponse(response => response.request().method() === 'POST'
+                && new URL(response.url()).pathname === '/frontend-pilot/users/account/delete');
+            await page.getByRole('button', {name: 'Permanently delete account', exact: true}).click();
+            expect((await rejected).status()).toBe(500);
+            await waitForPilotHydration(page);
+            await expect(page.locator('#username')).toHaveValue('Incorrect confirmation');
+            const unchanged = await readProfileWorkflowFixtureForE2E(fixture);
+            expect(kind === 'account' ? unchanged.accountCount : unchanged.guestCount).toBe(1);
+
+            // The existing empty/absent-contact branch reaches ordinary logout
+            // without SMTP. This does not claim provider or delivery finality.
+            await page.locator('#username').fill(kind === 'account' ? fixture.account.username : fixture.guest.username);
+            const completed = page.waitForResponse(response => response.request().method() === 'POST'
+                && new URL(response.url()).pathname === '/frontend-pilot/users/account/delete');
+            await page.getByRole('button', {name: 'Permanently delete account', exact: true}).click();
+            expect((await completed).status()).toBe(302);
+            const session = await (await page.request.get('/api/v1/session')).json();
+            expect(session.kind).toBe('anonymous');
+            const saved = await readProfileWorkflowFixtureForE2E(fixture);
+            expect(kind === 'account' ? saved.accountCount : saved.guestCount).toBe(0);
+        }, kind === 'account' ? 'absent' : 'ordinary');
+    });
+}
+
+const presentations = [
+    {name: 'token', path: '/users/profile/migrate/request'},
+    {name: 'entry', path: '/users/profile/migrate/show'},
+    {name: 'preview', path: '/users/profile/migrate/show'},
+    {name: 'deactivate', path: '/users/profile/delete'},
+    {name: 'delete-account', path: '/users/account/delete'},
+] as const;
+
+for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) {
+    for (const presentation of presentations) {
+        test(`${presentation.name} document retains native presentation at ${viewport.width}px`, async function compareNativePresentation({page, browser, baseURL}, testInfo) {
+            await withProfileWorkflowFixtureForE2E(async function compareDocuments(fixture) {
+                await page.setViewportSize(viewport);
+                const browserErrors: string[] = [];
+                page.on('pageerror', error => browserErrors.push(error.message));
+                await loginForE2E(page.request, fixture.account);
+                // Consume setup's native login flash before taking either comparator.
+                await page.request.get('/users/profile');
+                let token: string | undefined;
+                if (presentation.name === 'preview') {
+                    token = await migrationTokenForWorkflow(browser, baseURL, fixture.guest.loginPath);
+                }
+
+                // Both renderers use identical actors, the existing preview check,
+                // viewport and built assets. Native document POST and pilot JSON
+                // preview are exercised through their actual browser controls.
+                if (token) await previewOnPage(page, false, token);
+                else await page.goto(presentation.path);
+                await page.evaluate(waitForWorkflowFonts);
+                // Bootstrap animates a reused button's variant. Capture both
+                // renderers after finite transitions finish, rather than comparing
+                // an arbitrary intermediate color with native's fresh document.
+                await page.screenshot({path: testInfo.outputPath('native-workflow.png'), fullPage: true, animations: 'disabled'});
+                const native = await page.evaluate(workflowPresentation);
+                const nativeHeading = await page.locator('main h1').innerText();
+                if (token) await previewOnPage(page, true, token);
+                else {
+                    await page.goto('/frontend-pilot' + presentation.path + '?locale=en');
+                    await waitForPilotHydration(page);
+                }
+                await page.evaluate(waitForWorkflowFonts);
+                await page.screenshot({path: testInfo.outputPath('pilot-workflow.png'), fullPage: true, animations: 'disabled'});
+                const pilot = await page.evaluate(workflowPresentation);
+                expect(await page.locator('main h1').innerText()).toBe(nativeHeading);
+                expect(browserErrors).toEqual([]);
+                expect(pilot.scrollWidth).toBeLessThanOrEqual(Math.max(viewport.width, native.scrollWidth));
+                expect(pilot.scrollY).toBe(native.scrollY);
+                expect(pilot.submitColors).toEqual(native.submitColors);
+                await expect(page.locator('footer')).toBeVisible();
+                for (const control of ['heading', 'field', 'submit', 'token'] as const) {
+                    expect(!!pilot[control], control).toBe(!!native[control]);
+                    if (pilot[control] && native[control]) {
+                        for (const dimension of ['x', 'y', 'width', 'height'] as const) {
+                            expect(Math.abs(pilot[control]![dimension] - native[control]![dimension]),
+                                control + ' ' + dimension).toBeLessThanOrEqual(1);
+                        }
+                    }
+                }
+                const evidence = testInfo.outputPath('presentation.json');
+                await writeFile(evidence, JSON.stringify({scenario: presentation.name, viewport, native, pilot, browserErrors}, null, 2));
+                await testInfo.attach('native-pilot-presentation', {path: evidence, contentType: 'application/json'});
+            });
+        });
+    }
+}

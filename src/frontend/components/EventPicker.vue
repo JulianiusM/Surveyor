@@ -3,7 +3,7 @@ import {computed, onBeforeUnmount, reactive, ref, shallowRef, watch} from 'vue';
 import {useQuery} from '@tanstack/vue-query';
 import type {QueryFunctionContext} from '@tanstack/vue-query';
 import type {PilotEventPickerOption, PilotEventPickerQuery, PilotEventPickerSelection, PilotEventPickerSource} from '../../types/FrontendPilotUiTypes';
-import {usePilot, refreshInterval} from '../app/context';
+import {useActionState, usePilot, refreshInterval} from '../app/context';
 import {isReadDenial, ObsoleteRequestError} from '../app/transport';
 import {retireQueryFamily, useQueryAdmission} from '../app/queryCache';
 import {useDebouncedValue} from '../composables/debounced';
@@ -89,6 +89,10 @@ const options = useQuery({
 });
 const retryAvailable = useReadRetry(() => options.error.value);
 const retryAt = useReadRetryAt(() => options.error.value, retryAvailable);
+const readAction = useActionState({eligible: mayRequestOptions,
+    pending: () => searchPending.value || options.isFetching.value});
+
+function mayRequestOptions(): boolean { return mayReadOptions() && retryAvailable.value; }
 // TanStack placeholder data disappears on terminal pagination errors. Retain one confirmed
 // presentation explicitly, scoped to this actor/epoch/filter/locale; it is never edit authority.
 const displayed = computed(() => context.ready.value && !isReadDenial(options.error.value)
@@ -239,12 +243,12 @@ function choose(value: PilotEventPickerOption | null): void {
 }
 function next(): void {
     const cursor = displayed.value?.nextCursor;
-    if (!cursor || options.isFetching.value || !mayReadOptions() || !retryAvailable.value) return;
+    if (!cursor || !readAction.isAvailable()) return;
     requestPage('next', cursor, shownPage.value + 1);
 }
 function previous(): void {
     const prior = history.value.at(-2);
-    if (!prior || options.isFetching.value || !mayReadOptions() || !retryAvailable.value) return;
+    if (!prior || !readAction.isAvailable()) return;
     requestPage('previous', prior.cursor, prior.number);
 }
 
@@ -261,7 +265,7 @@ function requestPage(nextDirection: 'next' | 'previous', cursor: string | undefi
 }
 
 function retry(): void {
-    if (mayReadOptions() && !options.isFetching.value && retryAvailable.value) void options.refetch();
+    if (readAction.isAvailable()) void options.refetch();
 }
 /** Clear this browsing draft immediately without changing the selected event.
  * Reset the cursor/search generation together so delayed typing cannot restore
@@ -516,21 +520,21 @@ function details(event: PilotEventPickerOption): string {
                         v-if="history.length > 1"
                         class="btn-sm"
                         variant="outline-light"
-                        :disabled="disabled || searchPending || options.isFetching.value || !retryAvailable"
+                        :state="readAction"
                         @click="previous"
                         >{{ messages.t('eventPicker.previousPage') }}</ActionButton
                     ><ActionButton
                         v-if="displayed?.nextCursor"
                         class="btn-sm"
                         variant="outline-light"
-                        :disabled="disabled || searchPending || options.isFetching.value || !retryAvailable"
+                        :state="readAction"
                         @click="next"
                         >{{ messages.t('eventPicker.nextPage') }}</ActionButton
                     ><ActionButton
                         v-if="options.error.value"
                         class="btn-sm"
                         variant="outline-secondary"
-                        :disabled="disabled || searchPending || options.isFetching.value || !retryAvailable"
+                        :state="readAction"
                         @click="retry"
                         >{{ messages.t('common.retry') }}</ActionButton
                     >

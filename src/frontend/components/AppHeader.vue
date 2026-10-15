@@ -2,34 +2,34 @@
 import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {RouteLocationNormalized} from 'vue-router';
-import {usePilot} from '../app/context';
+import {useActionState, usePilot} from '../app/context';
 import {localeManifest} from '../../modules/localization/translator';
 import {safeFrontendReturn} from '../../modules/lib/frontendIdentity';
 import {pilotHelpUrl, resolveContextualHelpUrl} from '../../modules/lib/helpNavigation';
 import {completeIdentityEntry, useConfirmedNavigation} from '../composables/pageEntry';
 import {useCommand} from '../composables/command';
+import {useReadRetry} from '../composables/feedback';
 import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale} from '../../types/LocalizationTypes';
 import AppNavigationDropdown from './AppNavigationDropdown.vue';
 import ActionButton from './ActionButton.vue';
 import StatusNotice from './StatusNotice.vue';
 
-// TODO (docs/frontend-migration/FRONTEND_PILOT.md): Migrate the remaining creation, profile-management and
-// account-administration destinations in their feature increments. Keep their native links
-// until those workflows have pilot owners; the current help/packing iteration does not replace them.
+// Remaining feature creation destinations migrate in their own increments.
+// The accepted identity destinations use their existing shared backend owners.
 const emit = defineEmits<{localeError: []; localeRecovered: []}>();
 const context = usePilot();
 const {messages, session, locale, ready, hydrated} = context;
 const route = useRoute();
 const router = useRouter();
 const completion = useConfirmedNavigation();
+const sessionRetryAvailable = useReadRetry(() => context.sessionRead.value.error);
 const logoutCommand = useCommand(context.refreshSession, true, {dirty: noHeaderDraft,
-    unknownMessage: 'auth.leaveUnknown'});
-const reconcilingIdentity = logoutCommand.recovering;
-const identityBlocked = computed(() => logoutCommand.pending.value || logoutCommand.uncertain.value
-    || reconcilingIdentity.value || completion.target.value !== null);
+    unknownMessage: 'auth.leaveUnknown', recoveryEligible: () => sessionRetryAvailable.value});
+const identityBlocked = computed(() => logoutCommand.action.disabled.value || completion.target.value !== null);
 const expanded = ref(false);
 const changingLocale = ref(false);
+const localeAction = useActionState({eligible: () => ready.value, pending: () => changingLocale.value});
 let pendingNavigation: RouteLocationNormalized | undefined;
 let localeUrlNeedsSync = false;
 let active = true;
@@ -96,6 +96,7 @@ function synchronizeHelpLocale(): void {
  * the active actor or discarding mounted drafts. Report the command's outcome,
  * then let the settled Help URL owner preserve article/query/fragment navigation. */
 async function selectLocale(event: Event): Promise<void> {
+    if (!localeAction.isAvailable()) return;
     changingLocale.value = true;
     try {
         // Confirm the shared serialized preference command before marking the
@@ -256,15 +257,15 @@ async function retryCompletion(): Promise<void> {
                                 >
                             </li>
                             <li>
-                                <a class="dropdown-item" href="/users/profile"
+                                <RouterLink class="dropdown-item" to="/frontend-pilot/users/profile"
                                     ><i class="bi bi-gear-fill me-1" aria-hidden="true"></i
-                                    >{{ messages.t('app.profileSettings') }}</a
+                                    >{{ messages.t('app.profileSettings') }}</RouterLink
                                 >
                             </li>
                             <li v-if="session.kind === 'account'">
-                                <a class="dropdown-item" href="/users/profile/manage"
+                                <RouterLink class="dropdown-item" to="/frontend-pilot/users/profile/manage"
                                     ><i class="bi bi-person-lines-fill me-1" aria-hidden="true"></i
-                                    >{{ messages.t('app.yourProfiles') }}</a
+                                    >{{ messages.t('app.yourProfiles') }}</RouterLink
                                 >
                             </li>
                             <li><hr class="dropdown-divider" /></li>
@@ -282,7 +283,7 @@ async function retryCompletion(): Promise<void> {
                                 </form>
                             </li>
                             <li>
-                                <a class="dropdown-item text-danger" href="/users/account/delete"
+                                <a class="dropdown-item text-danger" href="/frontend-pilot/users/account/delete"
                                     ><i class="bi bi-trash me-1" aria-hidden="true"></i
                                     >{{ messages.t('app.deleteAccount') }}</a
                                 >
@@ -319,7 +320,7 @@ async function retryCompletion(): Promise<void> {
                                 id="pilot-locale"
                                 class="form-select form-select-sm pilot-locale"
                                 :value="locale"
-                                :disabled="changingLocale || !ready || !hydrated"
+                                :disabled="localeAction.disabled.value"
                                 @change="selectLocale"
                             >
                                 <option
@@ -343,7 +344,7 @@ async function retryCompletion(): Promise<void> {
                 @dismiss="logoutCommand.setError(null)">{{ logoutCommand.error.value }}</StatusNotice>
             <StatusNotice v-if="logoutCommand.uncertain.value" kind="warning" no-margin>
                 {{ messages.t('state.unknownOutcome') }}
-                <ActionButton class="ms-2" variant="outline-light" :pending="reconcilingIdentity"
+                <ActionButton class="ms-2" variant="outline-light" :state="logoutCommand.recoveryAction"
                     @click="refreshLogoutState">{{ messages.t('common.refresh') }}</ActionButton>
             </StatusNotice>
         </nav>
@@ -351,7 +352,8 @@ async function retryCompletion(): Promise<void> {
              only for header-owned navigation or after its originating form has unmounted. -->
         <StatusNotice v-if="!completion.pending.value && (completion.target.value || completion.fallbackTarget.value)" kind="warning" class="mb-0">
             {{ messages.t('state.loadFailed') }}
-            <ActionButton class="ms-2" variant="outline-light" :pending="completion.pending.value" @click="retryCompletion">
+            <ActionButton class="ms-2" variant="outline-light"
+                :state="completion.target.value ? completion.retryAction : completion.fallbackRetryAction" @click="retryCompletion">
                 {{ messages.t('common.retry') }}
             </ActionButton>
         </StatusNotice>

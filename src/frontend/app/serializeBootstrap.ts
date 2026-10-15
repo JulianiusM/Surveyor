@@ -12,6 +12,10 @@ import {isPlainMessageKey} from '../../modules/localization/translator';
  * reconstruction whitelist that can silently discard a server-owned outcome. */
 const bootstrapValidators = {
     session: validateSessionView,
+    landing: validateLanding,
+    commonPage: validateCommonPage,
+    profileWorkflow: validateProfileWorkflow,
+    workflowNotice: validateString,
     pageEntry: validatePageEntryOutcome,
     pageNotice: validateEntryNotice,
     pageCompletion: validateCompletion,
@@ -51,6 +55,43 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function validateString(value: unknown): boolean {
     return typeof value === 'string';
+}
+
+/** Landing randomness is presentation only; require a known feature before using it as a link target. */
+function validateLanding(value: unknown): boolean {
+    return isRecord(value) && Object.keys(value).length === 1
+        && typeof value.quickCreate === 'string'
+        && ['survey', 'event', 'activity', 'packing', 'drivers'].includes(value.quickCreate);
+}
+
+/** Admit the exact private document projection, never a serialized profile/account row. */
+function validateProfileWorkflow(value: unknown): boolean {
+    if (!isRecord(value)) return false;
+    // Each variant owns only its native presentation fields. In particular, an
+    // input form cannot acquire another variant's preview, token or error identity.
+    if (value.kind === 'entry') return Object.keys(value).length === 1;
+    if (value.kind === 'token') return typeof value.token === 'string' && Object.keys(value).length === 2;
+    if (value.kind !== 'deactivate' && value.kind !== 'delete-account' || typeof value.value !== 'string') return false;
+    const error = value.kind === 'deactivate' ? 'profile.invalidDeactivation' : 'profile.invalidAccountDeletion';
+    return (value.error === undefined || value.error === error)
+        && Object.keys(value).every(key => ['kind', 'value', 'error'].includes(key));
+}
+
+/** Validate every readable server outcome without admitting URL-selected HTML or diagnostic objects. */
+function validateCommonPage(value: unknown): boolean {
+    // Both variants render escaped text. Explicit fields keep error stacks out of
+    // message data and bound status to the document's HTTP presentation range.
+    if (!isRecord(value) || typeof value.message !== 'string'
+        || value.messageKey !== undefined && !isPlainMessageKey(value.messageKey)) return false;
+    const validStatus = Number.isInteger(value.status) && Number(value.status) >= 100 && Number(value.status) <= 599;
+    if (value.kind === 'error') {
+        return validStatus && (value.stack === undefined || typeof value.stack === 'string')
+            && Object.keys(value).every(key => ['kind', 'message', 'messageKey', 'status', 'stack'].includes(key));
+    }
+    return value.kind === 'message' && typeof value.severity === 'string'
+        && ['info', 'success', 'warning', 'error'].includes(value.severity)
+        && (value.status === undefined || validStatus)
+        && Object.keys(value).every(key => ['kind', 'severity', 'message', 'messageKey', 'status'].includes(key));
 }
 
 /** Completion is application presentation, not an API result. Its actor and destination

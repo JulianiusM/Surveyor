@@ -9,7 +9,7 @@ import {evictQueryFamilies} from '../../app/queryCache';
 import {usePackingApi} from './api';
 import {usePageEntry} from '../../composables/pageEntry';
 import {usePageTitle} from '../../composables/pageTitle';
-import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
+import {useReadRetryAt} from '../../composables/feedback';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
 import PageMessage from '../../components/PageMessage.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
@@ -92,8 +92,7 @@ function admissionErrorText(): string | undefined {
 // A transport failure is recoverable without changing the typed native denial
 // outcome. Keep one deadline owner; Retry repeats only this resource admission GET.
 const recoverableRead = computed(() => !!admission.error.value && admission.outcome.value?.kind !== 'denied');
-const retryAvailable = useReadRetry(() => admission.error.value);
-const retryAt = useReadRetryAt(() => admission.error.value, retryAvailable);
+const retryAt = useReadRetryAt(() => admission.error.value, admission.retryAvailable);
 usePageTitle(() => admissionError.value ? context.messages.value.t('common.errorTitle') : undefined);
 </script>
 
@@ -105,8 +104,8 @@ usePageTitle(() => admissionError.value ? context.messages.value.t('common.error
         :transient="admission.outcome.value?.kind === 'denied'"
         :retry-at="recoverableRead ? retryAt : undefined"
         :read-error="recoverableRead ? admission.error.value : undefined">
-        <ActionButton v-if="recoverableRead" variant="outline-light" :pending="admission.reading.value"
-            :disabled="!retryAvailable" @click="admission.retry">{{ context.messages.value.t('common.retry') }}</ActionButton>
+        <ActionButton v-if="recoverableRead" variant="outline-light" :state="admission.retryAction"
+            @click="admission.retry">{{ context.messages.value.t('common.retry') }}</ActionButton>
     </PageMessage>
     <template v-else-if="admission.outcome.value?.kind === 'render'">
         <!-- Admission can fail independently of the child's resource read. Keep
@@ -115,8 +114,8 @@ usePageTitle(() => admissionError.value ? context.messages.value.t('common.error
         <StatusNotice v-if="recoverableRead" kind="warning" :last-updated-at="admission.admittedAt.value"
             :retry-at="retryAt" :read-error="admission.error.value">
             {{ context.messages.value.t(admission.admittedAt.value ? 'state.stale' : 'state.loadFailed') }}
-            <ActionButton class="btn-sm ms-2" variant="outline-light" :pending="admission.reading.value"
-                :disabled="!retryAvailable" @click="admission.retry">{{ context.messages.value.t('common.retry') }}</ActionButton>
+            <ActionButton class="btn-sm ms-2" variant="outline-light" :state="admission.retryAction"
+                @click="admission.retry">{{ context.messages.value.t('common.retry') }}</ActionButton>
         </StatusNotice>
         <PackingGuestPage v-if="guestRoute" :entry="admission.data.value?.guest ?? undefined" />
         <PackingPage v-else />

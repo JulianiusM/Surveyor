@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: digest-guarded frontend amendments consolidate current contract authoring, transport, versioning and localization guidance; unchanged production procedures stay in their existing owners; no cutover or operator execution claimed
+verification-scope: maintainer-corrected definition freedom distinguished from implemented transport; shared action-state and native profile-operation reuse guidance retained; no new runtime transport or cutover verification
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -73,10 +73,10 @@ tagged `oneOf` unions. JSON null uses a type union rather than OpenAPI 3.0 `null
 fields; browser response validation accepts compatible additions while error parameters retain their authored shape.
 Separate create/update/read semantics and permitted projections. Avoid recursive polymorphism, arbitrary maps,
 deep `allOf`, remote references and custom executable vocabulary; `readOnly`/`writeOnly` cannot enforce disclosure.
-These shape preferences require author/reviewer judgment; the generator does not reject every complex schema that
-Ajv understands. Unknown schema vocabulary and unsupported transport styles fail generation. Do not disable Ajv
-strictness or enable coercion, default insertion or additional-field removal. Timezone existence and cross-field
-business checks remain named controller operations.
+These shape preferences require author/reviewer judgment, not generator bans on arrays, objects or unions.
+Strict Ajv validation still rejects unknown schema vocabulary. Do not disable strictness or enable coercion,
+default insertion or additional-field removal. Timezone existence and cross-field business checks remain named
+controller operations.
 
 Two implemented constraints preserve existing field behavior. Registration/reset author
 `x-surveyor-min-length-utf16: 8`, because native password validation counts UTF-16 units; ordinary JSON Schema string
@@ -85,12 +85,15 @@ primitive union and passes the raw scalar to the existing signed nullable SQL co
 remain authoritative; creation/new-item validation stays separate. Do not generalize either extension into coercion
 or a copied database-limit policy. Native metadata diagnostics remain owned by their native adapter.
 
-Bind only declared single path/query/header scalars, JSON, Packing multipart and scoped binary image responses.
-Creation decodes the `data` JSON part once against its authored nested schema and handles `image` separately.
-Repeated query parameters, absent/empty values and malformed input stay distinct. Query arrays and plain-text API
-responses are outside this supported subset; JSON arrays remain valid where the authored body/response declares them.
-New transport styles require a separately approved capability change. Validate actual standalone consumers and
-compile-time null/false/optional/tagged cases rather than handwritten copies of the wire contract.
+The current HTTP adapter decodes single scalar path/query/header values, JSON and Packing multipart, and delivers
+JSON or scoped binary image responses. Creation decodes the `data` JSON part once against its authored nested schema
+and handles `image` separately. Repeated query parameters, absent/empty values and malformed input stay distinct.
+The maintainer's [2026-10-15 correction](decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15)
+clarifies that removal of unused implementation did not authorize definition restrictions. Parameter schemas may
+use arrays, objects and unions; response definitions may declare media such as `text/plain`. Generating their
+contracts, metadata and validators does not restore repeated-query-array decoding or plain-text response delivery.
+Validate actual standalone consumers and compile-time null/false/optional/tagged cases rather than handwritten copies
+of the wire contract.
 
 Use each operation's declared status/media rather than the native envelope. Handle `204`/`304` before JSON parsing;
 HTML `200` or invalid delivery cannot confirm a command. RFC 9457 Problems keep code/status/messageKey/parameters
@@ -134,6 +137,15 @@ until consumer retirement is authorized. The unreleased-v1 correction does not a
    failure retains confirmed scoped data/drafts and its stale notice. Validated denial clears private content.
    Explicit Retry is an eligible read which observes its actual deadline and last successful receipt. A canceled
    observer refetch may fulfill with retained data; fresh authority requires a new admitted read.
+
+   Use the existing context-owned `useActionState` for an operation's live eligibility, pending and blocked inputs.
+   Pass that state to `ActionButton` (or its disabled/pending refs to a native control), and call its `isAvailable()`
+   before dispatch. The control and handler must share this decision, including session revalidation and cooldowns;
+   an enabled-looking action must not silently stop at an undisclosed read gate. `usePageEntry`, `useCommand` and
+   `useDocumentForm` expose their own action states so callers reuse their lifecycle decisions. Keep read admission
+   in the read owner: session recovery must remain available while ordinary reads wait, local Cancel/draft controls
+   need no read admission, and already admitted commands retain their captured completion lifetime. This derived
+   state stores no drafts, server data or authority and never retries an operation automatically.
 
 6. **Add independent drafts and commands.** Use the existing draft/command owners with feature normalization and
    operation-specific feedback. Original, local and remote values stay separate. Current-value comparisons check
@@ -233,7 +245,9 @@ Keep a short operation account in its contract/test evidence: decoding, actor/pa
 no-op outcomes, lock/check location, response/feedback and destinations. Inspect deliberate differences rather than
 turn peer behavior into policy. General defects and unrelated backend behavior changes follow the
 [separate-work boundary](policies/DEVELOPMENT_POLICY.md#scope-of-separately-authorized-work); a contract or backlog
-entry does not authorize their implementation.
+entry does not authorize their implementation. Reusing an existing business operation does not make its recorded
+defects a prerequisite for a presentation/transport adaptation. Apply new-code security and delivery requirements
+without claiming stronger legacy guarantees or introducing another postcommit rejection.
 
 #### Entry, canonical delivery and outcomes
 
@@ -248,6 +262,12 @@ cannot consume a reset/activation/guest capability or submit a creation. A confi
 journey uses its full error presentation rather than an empty form. Confirmed recovery/guest registration uses its
 canonical destination; inline success on the old form is not equivalent. Pending/unknown states retain input and
 explicit review.
+
+Common landing/message/error presentation consumes explicit request-local data through the existing bootstrap codec.
+Validate scalar shapes without coercion; retain a captured landing suggestion through SSR/hydration. Known plain
+message keys translate in place; literal details remain escaped, and stacks follow server-owned development admission.
+Route query data cannot create outcomes or diagnostics. Reused feedback retains its original completion lifetime
+through locale changes. Optional complete-title and Home-destination inputs preserve existing consumer defaults.
 
 Fragments and modified-click hrefs preserve ordinary navigation semantics. Region navigation reads the target before
 history commit, merges only its region into current query state and adopts server-clamped pages/parent removal.
@@ -282,6 +302,22 @@ Unknown outcomes are reviewed through reads without automatic replay. Reconcilia
 creation failed; preserve submitted input and require deliberate review or acknowledged departure. Financial and
 recommendation commands retain their specific revision/fingerprint protocol rather than a generic comparison rule.
 
+For inherited mutations which can partially complete, use deliberate document POSTs through existing controller
+owners and native operation order, rather than a new atomic JSON envelope or backend repair. Keep interactive
+skeleton/readiness and ordinary href entry with private bootstrap projections. Invoke a side-effecting capability
+GET once per document admission, never through query refresh/prefetch. A read-only capability preview may use an
+explicit generated POST contract: keep its secret in the body and retain the entry draft/validated result only in
+mounted feature state. A fixed nonsecret fragment supports Back/Forward without secret URLs, query caches,
+persistent storage or replay; capability denial is a presentation outcome, not loss of the viewing identity.
+Document commands use `requireFrontendFormContext` for shared context, CSRF, origin and compatibility checks.
+`useDocumentForm` shares draft protection, admits only the deliberate POST's unload and keeps guards for other pending
+or unknown commands, identity changes, Router navigation and updates. It never fetches or retries that command.
+Preserve native `ValidationError` confirmation status 500 and submitted values, `ExpectedError` statuses, and the
+existing logout/provider destination. Existing controller
+completion words remain escaped source-owned output when no message key is supplied; do not parse them to reconstruct
+cleanup decisions. Newly authored interface and validation text uses the shared catalog. This transport does not
+claim stronger backend completion guarantees.
+
 Guest registration, API account signup and activation use the existing user controller's `commitIdentityCompletion`
 through `UserService.withIdentitySessionTransaction`. The controller owns expiry/context checks, staged identity and
 result preparation; pure DBAL owns the manager, row lock and persistence. Prepare required projections and serialized
@@ -307,6 +343,15 @@ before locked identity save commits; delivery adopts the prepared receipt outsid
 guest-link GET prepares its notice/302 under that owner. Credential, profile ownership and return-path decisions
 remain shared. An inactive account's activation resend belongs before the identity transaction: its refreshed
 token must survive intended login rejection. Provider logout keeps its separate operation boundary.
+
+Profile administration uses `getIdentityProfile` for account/guest fields and `getIdentityProfiles` for the account-only
+roster. The original P1 implementation wrapped field editing and additional-profile creation in the identity
+completion transaction. The maintainer's A2 correction (2026-10-14) restores direct reuse of `updateProfile` and
+`createProfile`, with their native persistence/session-save behavior. Prepare the simple generated `MutationResult`
+before invoking either operation; deliver it without another context read, projection or save. This does not extend
+registration/login/profile-switch atomicity to ordinary profile fields. Shared confirmed navigation refreshes session
+display after acknowledgement and retains read/navigation-only Retry. Retire old profile/roster snapshots before
+adopting fresh settings; display failure never rejects, repeats or reopens the confirmed write.
 
 Explicit API logout uses `logoutUserWithSession` only when `session.tokens` is not truthy; an empty object still
 selects the protected provider path. Recheck that classification on locked staging before clearing authority.
@@ -655,9 +700,12 @@ optional feature state still uses renderer `data` and explicit arguments, never 
 <!-- delta:amendment-13 -->
 - Use the established page renderer and response adapters rather than create another response convention.
 
-Versioned adapters use the generated request/result contracts and `ApiProblem` boundary. Prepare and validate a final
-mutation receipt before commit; a later mutable-context check or session save must not reject an already committed
-operation. Delivery failure remains distinct from business rejection. Services never own transport-specific errors.
+Versioned adapters use the generated request/result contracts and `ApiProblem` boundary. For new or deliberately
+changed business behavior, prepare and validate a final mutation receipt before commit; a later mutable-context check
+or session save must not reject an already committed operation. Scope-preserving consumers follow the
+[existing-operation boundary](policies/DEVELOPMENT_POLICY.md#scope-of-separately-authorized-work) without requiring
+unapproved legacy repairs. Delivery failure remains distinct from business rejection. Services never own
+transport-specific errors.
 Vue HTML is produced by the existing `src/modules/frontendPilotRenderer.ts` owner; existing adapters under
 `src/modules/renderer.ts` retain their actual consumers. Both reuse controller projections rather than duplicate
 business behavior inside templates or components.
@@ -816,7 +864,9 @@ npm run test:all           # Vitest + build + client browser + system E2E
 ## Add or change an API action — amendment-31
 
 <!-- delta:amendment-31 -->
-4. Use generated validation and the shared API error chain; prepare a mutation's validated receipt before commit.
+4. Use generated validation and the shared API error chain. Prepare a mutation's validated receipt before commit for
+   new or deliberately changed business behavior; unchanged shared operations retain their recorded scope under the
+   [development policy](policies/DEVELOPMENT_POLICY.md#scope-of-separately-authorized-work).
 
 <!-- /delta:amendment-31 -->
 

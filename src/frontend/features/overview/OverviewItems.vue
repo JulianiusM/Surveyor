@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import type {components} from '../../../types/api/v1';
-import type {PilotOverviewCardInteraction} from '../../../types/FrontendPilotUiTypes';
+import type {PilotActionState, PilotOverviewCardInteraction} from '../../../types/FrontendPilotUiTypes';
 import {usePilot} from '../../app/context';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import StatusNotice from '../../components/StatusNotice.vue';
 import OverviewCard from './OverviewCard.vue';
 
 type Card = components['schemas']['OverviewCard'];
-const props = defineProps<{view: components['schemas']['OverviewRegion']; disabled: boolean; readRevision?: number; active?: boolean;
+const props = defineProps<{view: components['schemas']['OverviewRegion']; disabled: boolean; navigationState?: PilotActionState; readRevision?: number; active?: boolean;
     pageHref: (page: number) => string; expandHref: (card: Card) => string;
     cardInteraction: (card: Card) => PilotOverviewCardInteraction}>();
 const emit = defineEmits<{
@@ -45,7 +45,7 @@ const range = computed(() => ({
 function followPage(event: MouseEvent, page: number, available: boolean): void {
     if (!isOrdinaryNavigation(event)) return;
     event.preventDefault();
-    if (available && !props.disabled) emit('page', page);
+    if (available && !props.disabled && props.navigationState?.isAvailable() !== false) emit('page', page);
 }
 </script>
 <template>
@@ -55,6 +55,7 @@ function followPage(event: MouseEvent, page: number, available: boolean): void {
                 :card="card"
                 :interaction="cardInteraction(card)"
                 :disabled="disabled"
+                :navigation-state="navigationState"
                 :expansion="!view.parent"
                 :filtered="filtered"
                 :read-revision="readRevision"
@@ -83,14 +84,14 @@ function followPage(event: MouseEvent, page: number, available: boolean): void {
         >
             <a
                 class="btn btn-sm btn-outline-secondary" :class="{disabled: !view.hasPrevious || disabled}"
-                :aria-disabled="!view.hasPrevious || disabled"
+                :aria-disabled="!view.hasPrevious || disabled || navigationState?.disabled.value"
                 :href="view.hasPrevious && !disabled ? pageHref(currentPage - 1) : undefined"
                 @click="followPage($event, currentPage - 1, view.hasPrevious)"
                 >{{ messages.t('overview.previous') }}</a
             >
             <a
                 class="btn btn-sm btn-outline-secondary" :class="{disabled: !view.hasNext || disabled}"
-                :aria-disabled="!view.hasNext || disabled"
+                :aria-disabled="!view.hasNext || disabled || navigationState?.disabled.value"
                 :href="view.hasNext && !disabled ? pageHref(currentPage + 1) : undefined"
                 @click="followPage($event, currentPage + 1, view.hasNext)"
                 >{{ messages.t('overview.next') }}</a

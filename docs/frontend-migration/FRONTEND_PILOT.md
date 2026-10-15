@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-14
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: pilot/shared-controller/permission/runtime-Help decisions retained; refined Req6A initial skeleton/static delivery, failure notice and retired interactive POST boundaries reconciled; execution owned by paired review
+verification-scope: complete P1 frontend route ownership and parity-only document delivery; excluded backend remedies remain deferred; current execution owned by paired review
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -18,12 +18,22 @@ Native application routes remain available as the visual/behavioral reference. T
 This guide describes ownership and scope; the [paired review](PILOT_PARITY_REVIEW.md) owns
 completed scoped acceptance and execution evidence, including its remaining limits.
 
-## Migration boundary and current iteration (2026-10-08)
+## Migration boundary and current iteration
 
-Help/Packing and required entry/foundation behavior must be complete before this iteration is accepted.
-Overview and other scaffolds retain their remaining migration TODOs; implemented portions still meet native behavior
-and maintainability requirements. Subsequent slices cover surveys, events, activity plans, drivers lists, invoice
-pools and full account/profile administration.
+The original 2026-10-08 iteration requires complete Help/Packing and their entry/foundation behavior.
+The 2026-10-14 P1 implementation adds profile editing, account profile listing/creation and existing switching (P1A),
+profile-token issuance, entry, private preview and explicit transfer (P1B), profile deactivation and full/guest account
+deletion (P1C), plus opt-in landing and common message/error presentation (P1D). The maintainer's
+[parity-only clarification](FRONTEND_FOUNDATION_DESIGN.md#authorized-parity-only-migration-clarification-2026-10-14)
+excludes existing backend remedies rather than making them prerequisites. Their backlog records remain open.
+Overview and other scaffolds retain their remaining migration TODOs. Subsequent slices cover surveys, events,
+activity plans, drivers lists and invoice pools. Implemented portions retain native behavior and maintainability
+requirements; the paired review records actual scoped checks.
+
+The maintainer's 2026-10-14 A2 correction supersedes P1's added profile field-edit/create transaction wrappers.
+Their adapters now invoke the unchanged native operations and confirm with a simple prepared acknowledgement.
+Session/roster display refresh remains separate from confirmed success; its Retry performs reads/navigation only.
+Earlier registration/login/profile-switch atomicity and the exclusion of general backend remedies remain intact.
 
 Preserve native UI/UX and business behavior except for explicitly approved changes. Native guide prose/images remain
 the reference; approved reference cleanup does not import pilot behavior into production guidance. The optional
@@ -46,6 +56,11 @@ The exact duplicate URL after login is an explicitly approved native exception.
 | Pilot route family | Contract |
 |---|---|
 | `/frontend-pilot` | Bounded mixed overview; native membership, search and personal visibility; other feature destinations remain native until migrated. |
+| `/frontend-pilot/home` | Explicit opt-in native-equivalent landing; captured quick-create suggestion, account/guest welcome and migrated Packing versus native remaining creation destinations. The Overview root stays unchanged. |
+| `/frontend-pilot/message` | Admitted informational/command feedback; route query data cannot supply message authority. Common error presentation retains server-selected status and development-only diagnostics. |
+| `/frontend-pilot/users/profile`, `/frontend-pilot/users/profile/manage`, `/frontend-pilot/users/profile/create` | Current profile editing for accounts/guests; account-only owned roster/creation and existing profile switching. Creation preserves the active profile. |
+| `/frontend-pilot/users/profile/migrate/request`, `/frontend-pilot/users/profile/migrate/show`, `/frontend-pilot/users/profile/migrate/execute` | Native token issuance and explicit transfer retain document delivery. An explicit generated read-only POST previews the token while the mounted Vue form owns its draft/result; a fixed nonsecret fragment preserves Back/Forward without storing capabilities. The receiving active profile and former-owner cleanup rules stay unchanged; no stronger backend token/transaction guarantee is introduced. |
+| `/frontend-pilot/users/profile/delete`, `/frontend-pilot/users/account/delete` | Native profile-name/username confirmations, account/guest distinctions, remaining-profile selection and provider/root logout destinations. Document delivery preserves existing error statuses and partial-failure behavior; it does not repair the excluded backend defects. |
 | `/frontend-pilot/packing/create` | Account/profile admission, event preselection, initial items and optional image. |
 | `/frontend-pilot/packing/<id>` | Authorized Packing detail; guest/event admission precedes page rendering. |
 | `/frontend-pilot/packing/<id>/duplicate` | Existing duplicate permission/copy boundaries; rejected submission returns login to this exact duplicate destination. |
@@ -55,7 +70,8 @@ The exact duplicate URL after login is an explicitly approved native exception.
 | `/api/v1` | Generated JSON/multipart contract; existing controllers own policy and pure DBAL owns persistence. |
 
 Inspect the route table and authored contract for exact paths. These families do not authorize a wildcard HTML
-fallback for APIs, missing assets, tokens or exports.
+fallback for APIs, missing assets, tokens or exports. Privacy/imprint links keep their configured external
+destinations; `/healthz` remains Express-owned.
 
 Standalone Packing without an active profile enters its equivalent guest journey. Attached lists retain the existing
 event-registration/effective-view policy. Duplicate GET permission is independent of account-only creation POST.

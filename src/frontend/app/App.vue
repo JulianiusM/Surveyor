@@ -2,7 +2,7 @@
 import {computed, onBeforeUnmount, onMounted, ref, shallowRef} from 'vue';
 import {RouterLink, RouterView, useRoute, useRouter} from 'vue-router';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
-import {requiresClientInitialization, usePilot} from './context';
+import {requiresClientInitialization, useActionState, usePilot} from './context';
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import StatusNotice from '../components/StatusNotice.vue';
@@ -10,6 +10,7 @@ import ActionButton from '../components/ActionButton.vue';
 import AppHeader from '../components/AppHeader.vue';
 import AppFooter from '../components/AppFooter.vue';
 import LoadingSkeleton from '../components/LoadingSkeleton.vue';
+import CommonPage from '../features/common/CommonPage.vue';
 import {useDraftProtection} from '../composables/command';
 import {useReadRetry, useReadRetryAt} from '../composables/feedback';
 
@@ -19,6 +20,8 @@ const {messages, session, epoch, ready, notice} = context;
 // wakeup presents availability without another session request or timer policy.
 const sessionRetryAvailable = useReadRetry(() => context.sessionRead.value.error);
 const sessionRetryAt = useReadRetryAt(() => context.sessionRead.value.error, sessionRetryAvailable);
+const sessionRetryAction = useActionState({eligible: () => sessionRetryAvailable.value,
+    pending: () => context.sessionRead.value.pending});
 const localeError = ref(false);
 const router = useRouter();
 const route = useRoute();
@@ -26,6 +29,14 @@ const route = useRoute();
 // mount only after initialization; later lazy navigation preserves mounted drafts.
 const interactiveContent = computed(() => requiresClientInitialization(route, context.initialDocumentFor(route.fullPath)));
 const initialLoading = computed(() => !context.hydrated.value && !context.initialContentReady.value && interactiveContent.value);
+// A document error can belong to an otherwise valid interactive route. Render its
+// admitted outcome without mounting private editors; retirement follows the same
+// initial-document/actor boundary as every other bootstrap projection.
+const commonPage = computed(() => context.initialDocumentFor(route.fullPath)?.commonPage);
+// Legacy workflow completion words come from the shared native controller. The
+// initial-document owner retires this escaped notice with its actor and visit.
+const workflowNotice = computed(() => context.initialDocumentFor(route.fullPath)?.workflowNotice);
+const dismissedWorkflowNotice = ref(false);
 // Header commands and routed editors share one whole-page departure decision.
 // Their fields stay with their own component; this shell contributes no draft.
 useDraftProtection({dirty: noShellDraft, unknownMessage: 'draft.leaveUnknown'});
@@ -112,7 +123,7 @@ function failNavigation(_error: unknown, to: RouteLocationNormalized): void {
 }
 
 async function retrySession(): Promise<void> {
-    if (!sessionRetryAvailable.value) return;
+    if (!sessionRetryAction.isAvailable()) return;
     try { await context.refreshSession(); }
     // Session recovery shares the authoritative read owner's failure lifetime.
     // Its successful Retry clears this warning without clearing locale failures.
@@ -148,6 +159,8 @@ function dismissPersonalLink(): void {
                     transient :renewal="context.pageNotice.value" @dismiss="dismissPageNotice">
                     {{ pageNoticeText }}
                 </StatusNotice>
+                <StatusNotice v-if="workflowNotice && !dismissedWorkflowNotice" kind="success" transient
+                    :renewal="workflowNotice" @dismiss="dismissedWorkflowNotice = true">{{ workflowNotice }}</StatusNotice>
                 <StatusNotice v-if="notice" :kind="notice === 'auth.logoutDone' ? 'success' : 'warning'"
                     :transient="notice === 'auth.logoutDone'" :renewal="notice"
                     :last-updated-at="notice === 'state.stale' && ready ? context.sessionRead.value.updatedAt : undefined"
@@ -157,7 +170,7 @@ function dismissPersonalLink(): void {
                     <!-- Ordinary session failure keeps the mounted route and its drafts.
                          Offer the same explicit recovery as the closed identity view. -->
                     <ActionButton v-if="notice === 'state.stale' && ready" class="btn-sm ms-2" variant="outline-light"
-                        :pending="context.sessionRead.value.pending" :disabled="!sessionRetryAvailable" @click="retrySession">
+                        :state="sessionRetryAction" @click="retrySession">
                         {{ messages.t('common.retry') }}
                     </ActionButton>
                 </StatusNotice>
@@ -174,6 +187,7 @@ function dismissPersonalLink(): void {
                  would discard mounted edits and turn navigation latency into input loss. -->
             <LoadingSkeleton v-if="ready && pendingNavigation" class="pilot-navigation-loading mb-3" :rows="1" />
             <LoadingSkeleton v-if="ready && initialLoading" data-pilot-initial-loading variant="form" />
+            <CommonPage v-else-if="ready && commonPage" :page="commonPage" />
             <RouterView v-else-if="ready" :key="epoch" />
             <section v-else class="card bg-dark text-white p-4">
                 <p>{{ messages.t('state.sessionChanged') }}</p>
@@ -181,7 +195,7 @@ function dismissPersonalLink(): void {
                     {{ messages.t('common.reauthenticate') }}
                 </RouterLink>
                 <ActionButton class="align-self-start mt-2" variant="outline-light"
-                    :pending="context.sessionRead.value.pending" :disabled="!sessionRetryAvailable" @click="retrySession">
+                    :state="sessionRetryAction" @click="retrySession">
                     {{ messages.t('common.retry') }}
                 </ActionButton>
             </section>

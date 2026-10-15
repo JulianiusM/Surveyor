@@ -56,6 +56,15 @@ export const helpKeys = {
         [...helpKeys.all(context), {locale}, parameters] as const,
 };
 
+/** Private profile administration uses actor-scoped, language-independent machine projections. */
+export const identityAdministrationKeys = {
+    all: (context: string | undefined) => ['v1', context, 'identity-administration'] as const,
+    entry: (context: string | undefined, view: 'edit' | 'manage' | 'create') =>
+        [...identityAdministrationKeys.all(context), 'entry', view] as const,
+    current: (context: string | undefined) => [...identityAdministrationKeys.all(context), 'current'] as const,
+    profiles: (context: string | undefined) => [...identityAdministrationKeys.all(context), 'profiles'] as const,
+};
+
 export function belongsToQueryFamily(query: Parameters<typeof matchQuery>[1], family: readonly unknown[]): boolean {
     return matchQuery({queryKey: family}, query);
 }

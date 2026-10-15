@@ -83,6 +83,14 @@ paths:
     $ref: ./auth.yaml#/paths/~1auth~1guest-recovery
   /auth/guest-email-exists:
     $ref: ./auth.yaml#/paths/~1auth~1guest-email-exists
+  /profiles:
+    $ref: ./profiles.yaml#/paths/profiles
+  /profiles/entry:
+    $ref: ./profiles.yaml#/paths/entry
+  /profiles/current:
+    $ref: ./profiles.yaml#/paths/current
+  /profiles/migration/preview:
+    $ref: ./profiles.yaml#/paths/migrationPreview
   /auth/profile:
     $ref: ./auth.yaml#/paths/~1auth~1profile
   /packing-lists/{listId}/guest:
@@ -1165,6 +1173,14 @@ components:
       $ref: ./auth.yaml#/schemas/TokenInput
     GuestLoginInput:
       $ref: ./auth.yaml#/schemas/GuestLoginInput
+    ProfileSettings:
+      $ref: ./profiles.yaml#/schemas/ProfileSettings
+    ProfileManagement:
+      $ref: ./profiles.yaml#/schemas/ProfileManagement
+    ProfileCreateInput:
+      $ref: ./profiles.yaml#/schemas/ProfileCreateInput
+    ProfileUpdateInput:
+      $ref: ./profiles.yaml#/schemas/ProfileUpdateInput
     ProfileSwitchInput:
       $ref: ./auth.yaml#/schemas/ProfileSwitchInput
     GuestRegistrationInput:
