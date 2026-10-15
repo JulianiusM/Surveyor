@@ -4,7 +4,7 @@ import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
-import {createPilotContext, hasStaticPageOutcome, observeInitialDocument, pilotContextKey} from './context';
+import {createPilotContext, observeInitialDocument, pilotContextKey} from './context';
 import App from './App.vue';
 // The shell also renders admitted common outcomes, so this shared view is
 // already part of the entry bundle rather than an independent route chunk.
@@ -118,7 +118,7 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
         // A server-admitted error/completion remains static even at a dynamic URL.
         // Reuse rendering's existing outcome policy and its live document lifetime.
         return route.meta.dynamicContent === true
-            && !hasStaticPageOutcome(route, context.initialDocumentFor(route.fullPath));
+            && !context.hasStaticPageOutcome(route);
     }
 
     observeInitialDocument(context, router);

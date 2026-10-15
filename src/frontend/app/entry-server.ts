@@ -2,7 +2,6 @@ import {renderToString} from 'vue/server-renderer';
 import type {FrontendPilotBootstrap, FrontendPilotRenderResult} from '../../types/FrontendPilotTypes';
 import {createPilotApp} from './createApp';
 import {serializeBootstrap} from './serializeBootstrap';
-import {requiresClientInitialization} from './context';
 
 /** Express supplies the already-authorized session/help projection; SSR never calls its own HTTP server. */
 export async function render(url: string, bootstrap: FrontendPilotBootstrap): Promise<FrontendPilotRenderResult> {
@@ -16,7 +15,7 @@ export async function render(url: string, bootstrap: FrontendPilotBootstrap): Pr
         const html = await renderToString(app);
         // App and the document renderer use the same route/evidence classification.
         // SSR remains the matching hydration tree, including readable Help/results.
-        const javascriptRequired = requiresClientInitialization(router.currentRoute.value, initial);
+        const javascriptRequired = context.requiresClientInitialization(router.currentRoute.value);
         return {html, title: context.pageTitle.value, state: serializeBootstrap(initial), javascriptRequired};
     } finally { context.start()(); }
 }

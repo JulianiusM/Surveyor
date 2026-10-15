@@ -18,6 +18,7 @@ import {identityAdministrationKeys} from '../../app/queryKeys';
 import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 
@@ -261,7 +262,9 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
     <LoadingSkeleton v-else-if="pageAdmission.outcome.value?.kind !== 'render'" variant="form" />
     <PageMessage v-else-if="denied" kind="error" :message="messages.t('common.notAllowed')"
         :read-error="projection.error.value" :retry-at="retryAt" :transient="false">
-        <StatusNotice v-if="command.uncertain.value" kind="warning">{{ messages.t('state.unknownOutcome') }} {{ messages.t('auth.unconfirmedRequest') }}</StatusNotice>
+        <CommandFeedback :feedback="command.feedback" part="uncertain">
+            <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
+        </CommandFeedback>
         <ActionButton variant="outline-light" :state="resourceRecovery" @click="recover">{{ messages.t('common.retry') }}</ActionButton>
     </PageMessage>
     <section v-else class="card bg-dark text-white mb-3">
@@ -269,23 +272,24 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
         <div class="card-body">
             <!-- Read and command receipts retain independent recovery, pending and uncertainty lifetimes. -->
             <StatusNotice v-if="pageAdmission.error.value" kind="warning" :read-error="pageAdmission.error.value"
-                :retry-at="entryRetryAt" :last-updated-at="pageAdmission.admittedAt.value">
+                :retry-at="entryRetryAt" :last-updated-at="pageAdmission.admittedAt.value"
+                :action="{state: pageAdmission.retryAction, label: messages.t('common.retry'), class: 'ms-2'}"
+                @action="pageAdmission.retry">
                 {{ messages.t('state.stale') }}
-                <ActionButton class="ms-2" variant="outline-light" :state="pageAdmission.retryAction"
-                    @click="pageAdmission.retry">{{ messages.t('common.retry') }}</ActionButton>
             </StatusNotice>
             <StatusNotice v-if="projection.error.value" kind="warning" :read-error="projection.error.value"
-                :retry-at="retryAt" :last-updated-at="data ? projection.dataUpdatedAt.value : undefined">
+                :retry-at="retryAt" :last-updated-at="data ? projection.dataUpdatedAt.value : undefined"
+                :action="{state: resourceRecovery, label: messages.t('common.retry'), class: 'ms-2'}" @action="recover">
                 {{ messages.t(data ? 'state.stale' : 'state.loadFailed') }}
-                <ActionButton class="ms-2" variant="outline-light" :state="resourceRecovery" @click="recover">{{ messages.t('common.retry') }}</ActionButton>
             </StatusNotice>
-            <StatusNotice v-if="command.error.value" kind="danger" :transient="command.transientError.value"
-                :renewal="command.errorRenewal.value" @dismiss="command.setError(null)">{{ command.error.value }}</StatusNotice>
-            <StatusNotice v-if="command.uncertain.value" kind="warning">{{ messages.t('state.unknownOutcome') }} {{ messages.t('auth.unconfirmedRequest') }}
-                <ActionButton class="ms-2" variant="outline-light" :state="resourceRecovery" @click="recover">{{ messages.t('common.refresh') }}</ActionButton>
-            </StatusNotice>
-            <StatusNotice v-if="completion.target.value" kind="success">{{ messages.t('state.saved') }}
-                <ActionButton class="ms-2" variant="outline-light" :state="completion.retryAction" @click="completion.retry">{{ messages.t('common.retry') }}</ActionButton>
+            <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" :inline="false" />
+            <CommandFeedback :feedback="command.feedback" part="uncertain"
+                :action="{state: resourceRecovery, label: messages.t('common.refresh'), class: 'ms-2'}" @action="recover">
+                <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
+            </CommandFeedback>
+            <StatusNotice v-if="completion.target.value" kind="success"
+                :action="{state: completion.retryAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="completion.retry">
+                {{ messages.t('state.saved') }}
             </StatusNotice>
             <LoadingSkeleton v-if="!data && !projection.error.value" variant="form" />
             <template v-if="data">

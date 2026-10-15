@@ -2,16 +2,19 @@ import {expect, test, type Dialog, type Page, type Route} from '@playwright/test
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {compile, Logger} from 'sass';
 import type {Response} from 'express';
 import {createBrowserReadGate as readGate, waitForPilotHydration} from '../../keywords/frontendDynamicKeywords';
 import type {components} from '../../../src/types/api/v1';
 import type {FrontendPilotBootstrap, FrontendPreparedDocument} from '../../../src/types/FrontendPilotTypes';
 
 type Session = components['schemas']['SessionView'];
-const deliveries = new WeakMap<Page, {documents: number; commands: number}>();
+const deliveries = new WeakMap<Page, {documents: number; commands: number; nativeStyles: number}>();
+let referenceStyles: string | undefined;
 
 test.afterEach(async ({page}) => {
     expect(deliveries.get(page)?.commands ?? 0, 'Isolated startup must not dispatch commands').toBe(0);
+    expect(deliveries.get(page)?.nativeStyles ?? 0, 'Pilot documents must not depend on native stylesheets').toBe(0);
     deliveries.delete(page);
 });
 
@@ -43,7 +46,7 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendPilo
     // production HTML, module loading and application behavior remain intact.
     const html = prepared.html.replace(/\s+integrity="[^"]*"/gu, '');
     const url = new URL(path, 'http://surveyor-startup.test').href;
-    const observed = {documents: 0, commands: 0};
+    const observed = {documents: 0, commands: 0, nativeStyles: 0};
     deliveries.set(page, observed);
     await page.route('**/*', deliverStartupRequest);
     return {url, observed};
@@ -93,8 +96,8 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendPilo
             return;
         }
         if (pathname === '/style/style.css' || pathname === '/style/help.css') {
-            await route.fulfill({status: 200, contentType: 'text/css',
-                body: readFileSync(resolve('dist/public', pathname.slice(1)))});
+            observed.nativeStyles++;
+            await route.abort('blockedbyclient');
             return;
         }
         if (pathname === '/img/logo.png') {
@@ -104,6 +107,9 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendPilo
         let data: unknown;
         if (pathname === '/api/v1/session') data = bootstrap.session;
         else if (pathname === '/api/v1/help') data = bootstrap.help;
+        else if (/^\/api\/v1\/packing-lists\/[a-f0-9-]+\/entry$/u.test(pathname)
+            && bootstrap.packingError === 'packing.notFound')
+            data = {entry: {kind: 'denied', status: 404, messageKey: bootstrap.packingError}, guest: null};
         else if (pathname === '/api/v1/packing-lists/create-entry' && bootstrap.packingCreateContext)
             data = {entry: {kind: 'render'}, context: bootstrap.packingCreateContext, selectedEvent: null};
         if (data !== undefined) {
@@ -113,6 +119,17 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendPilo
         }
         await route.fulfill({status: 404, contentType: 'text/plain', body: 'No startup fixture for this request.'});
     }
+}
+
+/** Compile the unchanged native authored styles in memory for a temporary visual
+ * comparator. Production delivery uses only Vite assets; no native file is changed
+ * or served by this reference, and generated CSS is never an authored fixture. */
+function nativeStyleReference(): string {
+    if (referenceStyles !== undefined) return referenceStyles;
+    const base = compile(resolve('src/public/style/style.sass'), {logger: Logger.silent}).css;
+    const help = compile(resolve('src/public/style/help.sass'), {logger: Logger.silent}).css;
+    referenceStyles = base + '\n' + help + '\n' + readFileSync('src/frontend/styles/pilot.css', 'utf8');
+    return referenceStyles;
 }
 
 /** Hold the first real module request so static Help can be edited before failure.
@@ -263,6 +280,39 @@ test('initial startup never automatically reopens token issuance and permits del
         expect(delivery.observed.documents).toBe(2);
         expect(delivery.observed.commands).toBe(0);
     } finally { module.restore(); }
+});
+
+test('a hydrated Packing denial retains its static document through a detected release', async ({page}) => {
+    const session = startupSession();
+    const delivery = await startupDocument(page,
+        '/frontend-pilot/packing/22222222-2222-4222-8222-222222222222', {session, packingError: 'packing.notFound'});
+    await page.goto(delivery.url);
+    await waitForPilotHydration(page);
+    const denial = page.locator('main').getByText('packing not found', {exact: true});
+    await expect(denial).toBeVisible();
+    await expect(page.locator('[data-pilot-initial-loading]')).toHaveCount(0);
+
+    // Change only the ordinary session read's deployment projection. The actual
+    // browser context observes that release after a mounted denial has retired
+    // bootstrap; this exercises the lifecycle an unmounted route test cannot.
+    await page.route('**/api/v1/session', async function deliverReplacementSession(route): Promise<void> {
+        await route.fulfill({status: 200, contentType: 'application/json', headers: {
+            'X-Surveyor-Context': session.context}, body: JSON.stringify({...session,
+                deployment: {...session.deployment, buildId: 'mounted-denial-replacement'}})});
+    });
+    await page.evaluate(function resumeSession(): void { window.dispatchEvent(new Event('focus')); });
+    const recovery = page.locator('#surveyor-pilot').getByRole('button', {name: 'Refresh page', exact: true});
+    await expect(recovery).toBeVisible();
+    await settleStartup(page);
+    expect(delivery.observed.documents).toBe(1);
+    await expect(denial).toBeVisible();
+
+    // Static classification leaves deliberate document recovery available.
+    // This remains isolated client evidence and makes no persistence claim.
+    await recovery.click();
+    await waitForPilotHydration(page);
+    await expect(denial).toBeVisible();
+    expect(delivery.observed.documents).toBe(2);
 });
 
 test('initial startup offers deliberate recovery without looping when attempt storage is inaccessible', async ({page}) => {
@@ -424,6 +474,45 @@ test('initial startup preserves real Help navigation and guarded GET search afte
 
 test.describe('JavaScript unavailable', () => {
     test.use({javaScriptEnabled: false});
+
+    for (const width of [390, 1280]) {
+        test(`copied frontend styles preserve the native cascade before JavaScript at ${width}px`, async ({page}, testInfo) => {
+            const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Stylesheet comparison',
+                content: '<h2 id="task">Styled before initialization</h2><p>A readable article with ordinary links and a table.</p>'
+                    + '<table><thead><tr><th>Setting</th><th>Description</th></tr></thead><tbody><tr>'
+                    + '<td><code>AN_EXTENDED_CONFIGURATION_VALUE</code></td><td>Preserved dark-theme article geometry.</td>'
+                    + '</tr></tbody></table><h3>Following section</h3><p>Content after the table remains readable.</p>',
+                currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: [{id: 'task', title: 'Styled before initialization', level: 2}]};
+            const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession(), help});
+            await page.setViewportSize({width, height: 900});
+            await page.goto(delivery.url, {waitUntil: 'networkidle'});
+            await expect(page.locator('.help-content h2')).toBeVisible();
+            await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-hydrated', 'true');
+            const applicationStyles = page.locator('link[rel="stylesheet"][href^="/app/"]');
+            expect(await applicationStyles.count()).toBeGreaterThan(0);
+            const copied = await page.screenshot({path: testInfo.outputPath('copied-styles.png'),
+                fullPage: true, animations: 'disabled', caret: 'hide'});
+
+            // Keep the same real SSR, viewport and vendor fixture. Replace only
+            // its Vite CSS with the untouched native Sass compilation and the
+            // existing pilot overrides, making cascade drift visible pixel by pixel.
+            await applicationStyles.evaluateAll(function disableApplicationStyles(links) {
+                for (const link of links) (link as HTMLLinkElement).disabled = true;
+            });
+            // Driver evaluation can update a JS-disabled document synchronously.
+            // Avoid a helper that waits for a page-side stylesheet load callback.
+            await page.evaluate(function applyReferenceStyles(content) {
+                const style = document.createElement('style');
+                style.textContent = content;
+                document.head.append(style);
+            }, nativeStyleReference());
+            const reference = await page.screenshot({path: testInfo.outputPath('native-style-reference.png'),
+                fullPage: true, animations: 'disabled', caret: 'hide'});
+            expect(copied.equals(reference), 'Copied CSS must preserve the unchanged reference presentation').toBe(true);
+            expect(delivery.observed.nativeStyles).toBe(0);
+        });
+    }
+
     test('initial startup keeps static Help search/navigation and disabled client controls without any executed script', async ({page}) => {
         const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synthetic Help',
             content: '<h2 id="task">Readable without JavaScript</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};

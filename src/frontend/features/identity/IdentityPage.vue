@@ -12,6 +12,7 @@ import {completeIdentityEntry, completePageEntry, useConfirmedNavigation} from '
 import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {ApiFailure, ObsoleteRequestError} from '../../app/transport';
@@ -407,20 +408,15 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
     <template v-else>
         <!-- A delivered command stays confirmed even if its destination cannot load.
              Retry belongs to the shared receipt and never resubmits credentials or mail. -->
-        <StatusNotice v-if="confirmedNavigation.target.value" kind="success">
+        <StatusNotice v-if="confirmedNavigation.target.value" kind="success"
+            :action="{state: confirmedNavigation.retryAction, label: messages.t('common.retry')}"
+            @action="confirmedNavigation.retry">
             {{ messages.t('state.saved') }}
-            <ActionButton class="btn-sm ms-2" variant="outline-light"
-                :state="confirmedNavigation.retryAction" @click="confirmedNavigation.retry">
-                {{ messages.t('common.retry') }}
-            </ActionButton>
         </StatusNotice>
         <!-- Identity validation and activation feedback occupy the same shared region
              above the form card as native account pages. Keep it outside the form. -->
-        <StatusNotice v-if="command.error.value" kind="danger"
-            :inline="command.errorPresentation.value === 'inline'" :target="command.feedbackTarget.value"
-            :disabled="command.pending.value || command.recovering.value"
-            :transient="command.transientError.value" :renewal="command.errorRenewal.value"
-            @dismiss="command.setError(null)">{{ command.error.value }}</StatusNotice>
+        <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger"
+            :disabled="command.pending.value || command.recovering.value" />
         <section class="card bg-dark text-white mb-3">
             <h1 class="card-header text-center">
                 <i class="bi me-2" :class="titleIcon" aria-hidden="true"></i>{{ title }}
@@ -430,12 +426,11 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                      fields wait. Errors retain their existing presentation owner. -->
                 <LoadingSkeleton v-if="needsOidc || mode === 'reset' && !resetAllowed"
                     :variant="needsOidc ? 'lines' : 'form'" :rows="2" />
-                <StatusNotice v-if="command.uncertain.value" kind="warning"
-                    >{{ messages.t('state.unknownOutcome')
-                    }} {{ messages.t('auth.unconfirmedRequest') }}<ActionButton class="ms-2" variant="outline-light" :state="command.recoveryAction" @click="refreshIdentityState">{{
-                        messages.t('common.refresh')
-                    }}</ActionButton></StatusNotice
-                >
+                <CommandFeedback :feedback="command.feedback" part="uncertain"
+                    :action="{state: command.recoveryAction, label: messages.t('common.refresh'), class: 'ms-2'}"
+                    @action="refreshIdentityState">
+                    <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
+                </CommandFeedback>
                 <template v-if="mode === 'login' && !needsOidc"
                     ><h2 class="text-center">{{ messages.t('auth.loginIntroTitle') }}</h2>
                     <p class="text-center">{{ messages.t('auth.loginIntro') }}</p></template

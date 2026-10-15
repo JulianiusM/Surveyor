@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref, shallowRef} from 'vue';
+import {computed, onBeforeUnmount, onMounted, ref} from 'vue';
 import {RouterLink, RouterView, useRoute, useRouter} from 'vue-router';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
-import {requiresClientInitialization, useActionState, usePilot} from './context';
+import {useActionState, usePilot} from './context';
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import StatusNotice from '../components/StatusNotice.vue';
@@ -13,6 +13,7 @@ import LoadingSkeleton from '../components/LoadingSkeleton.vue';
 import CommonPage from '../features/common/CommonPage.vue';
 import {useDraftProtection} from '../composables/command';
 import {useReadRetry, useReadRetryAt} from '../composables/feedback';
+import {observePageNavigation} from '../composables/pageNavigation';
 
 const context = usePilot();
 const {messages, session, epoch, ready, notice} = context;
@@ -27,7 +28,7 @@ const router = useRouter();
 const route = useRoute();
 // SSR and the first browser render contain the identical skeleton. Feature owners
 // mount only after initialization; later lazy navigation preserves mounted drafts.
-const interactiveContent = computed(() => requiresClientInitialization(route, context.initialDocumentFor(route.fullPath)));
+const interactiveContent = computed(() => context.requiresClientInitialization(route));
 const initialLoading = computed(() => !context.hydrated.value && !context.initialContentReady.value && interactiveContent.value);
 // A document error can belong to an otherwise valid interactive route. Render its
 // admitted outcome without mounting private editors; retirement follows the same
@@ -40,7 +41,10 @@ const dismissedWorkflowNotice = ref(false);
 // Header commands and routed editors share one whole-page departure decision.
 // Their fields stay with their own component; this shell contributes no draft.
 useDraftProtection({dirty: noShellDraft, unknownMessage: 'draft.leaveUnknown'});
-const pendingNavigation = shallowRef<RouteLocationNormalized>();
+// The shared observer owns subscriptions and overlapping delivery. The shell
+// contributes only its path-progress boundary and feedback commitment policy.
+const navigation = observePageNavigation(router, {scope: 'path', finished: finishNavigation});
+const pendingNavigation = navigation.destination;
 const pageNoticeText = computed(() => {
     const key = context.pageNotice.value?.messageKey;
     return key ? messages.value.t(isPlainMessageKey(key) ? key : 'common.error') : null;
@@ -53,13 +57,8 @@ function noShellDraft(): boolean { return false; }
 // Lazy route modules resolve before currentRoute commits. Keep that current view
 // mounted, including its drafts and focused controls, while indicating delivery.
 // These guards are application-owned, never shared between server-rendered requests.
-const removeNavigationStart = router.beforeEach(beginNavigation);
-const removeNavigationFinish = router.afterEach(finishNavigation);
-const removeNavigationError = router.onError(failNavigation);
 onBeforeUnmount(() => {
-    removeNavigationStart();
-    removeNavigationFinish();
-    removeNavigationError();
+    navigation.dispose();
     document.removeEventListener('click', keepInitialNativeNavigation, true);
     document.removeEventListener('submit', keepInitialNativeSubmission, true);
 });
@@ -88,19 +87,11 @@ function keepInitialNativeSubmission(event: Event): void {
     if (event.target.getAttribute('method')?.toLowerCase() !== 'get') event.preventDefault();
 }
 
-function beginNavigation(to: RouteLocationNormalized, from: RouteLocationNormalized): void {
-    // Query/fragment updates have their own already mounted resource owners.
-    pendingNavigation.value = to.path !== from.path ? to : undefined;
-}
-
 /** Commit shell feedback only for an accepted path/query change. Fragment-only
  * movement keeps the current receipt, and an obsolete or canceled lazy navigation
  * cannot consume a command's destination-specific success message. */
 function finishNavigation(to: RouteLocationNormalized, from?: RouteLocationNormalized,
                           failure?: NavigationFailure | void): void {
-    // A cancelled older import must not clear the newer destination's indicator.
-    if (pendingNavigation.value === to) pendingNavigation.value = undefined;
-
     // Redirect feedback is applied after its destination commits. Clear it on the next
     // accepted visit, never while a cancelled guard keeps the user on the same form.
     const changedDocument = from && frontendDocumentUrl(to.fullPath) !== frontendDocumentUrl(from.fullPath);
@@ -116,10 +107,6 @@ function finishNavigation(to: RouteLocationNormalized, from?: RouteLocationNorma
         && frontendDocumentUrl(context.pageCompletion.value.destination) !== frontendDocumentUrl(to.fullPath)) {
         context.pageCompletion.value = null;
     }
-}
-
-function failNavigation(_error: unknown, to: RouteLocationNormalized): void {
-    finishNavigation(to);
 }
 
 async function retrySession(): Promise<void> {
@@ -166,20 +153,17 @@ function dismissPersonalLink(): void {
                     :last-updated-at="notice === 'state.stale' && ready ? context.sessionRead.value.updatedAt : undefined"
                     :retry-at="notice === 'state.stale' ? sessionRetryAt : undefined"
                     :read-error="notice === 'state.stale' ? context.sessionRead.value.error : undefined"
+                    :action="notice === 'state.stale' && ready
+                        ? {state: sessionRetryAction, label: messages.t('common.retry')} : undefined"
+                    @action="retrySession"
                     @dismiss="dismissNotice">{{ messages.t(notice) }}
                     <!-- Ordinary session failure keeps the mounted route and its drafts.
                          Offer the same explicit recovery as the closed identity view. -->
-                    <ActionButton v-if="notice === 'state.stale' && ready" class="btn-sm ms-2" variant="outline-light"
-                        :state="sessionRetryAction" @click="retrySession">
-                        {{ messages.t('common.retry') }}
-                    </ActionButton>
                 </StatusNotice>
                 <StatusNotice v-if="localeError" kind="danger">{{ messages.t('common.error') }}</StatusNotice>
-                <StatusNotice v-if="context.updates.available.value" kind="warning">
+                <StatusNotice v-if="context.updates.available.value" kind="warning"
+                    :action="{label: messages.t('state.refreshPage')}" @action="context.updates.requestRecoveryReload">
                     {{ messages.t('state.updateAvailable') }}
-                    <ActionButton class="btn-sm ms-2" variant="outline-light" @click="context.updates.requestRecoveryReload">
-                        {{ messages.t('state.refreshPage') }}
-                    </ActionButton>
                 </StatusNotice>
                 <div id="liveAlerts" class="sticky-top mt-1"></div>
             </div>

@@ -7,16 +7,19 @@ import type {components, paths} from '../../../types/api/v1';
 import type {PilotOverviewCardInteraction, PilotOverviewCountRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {overviewQueryParameters, useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
+import {createPackingLifecycle} from '../packing/lifecycle';
 import {useActionState, usePilot, refreshInterval} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {isOrdinaryNavigation, useConfirmedNavigation} from '../../composables/pageEntry';
 import {useDebouncedValue} from '../../composables/debounced';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
+import {observePageNavigation} from '../../composables/pageNavigation';
 import {ApiFailure, isReadDenial, isTerminalReadFailure, ObsoleteRequestError} from '../../app/transport';
 import {overviewKeys} from '../../app/queryKeys';
 import {observeQueryReads, refetchFreshQueries, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 import OverviewCard from './OverviewCard.vue';
@@ -50,20 +53,15 @@ const router = useRouter();
 const destination = useConfirmedNavigation(props.collection + ':' + props.region);
 // TODO (docs/frontend-migration/FRONTEND_PILOT.md): Complete the remaining Overview migration before its
 // default-route cutover; non-packing administration stays with its native feature owner meanwhile.
-let pendingNavigation: RouteLocationNormalized | undefined;
 let readGeneration = 0;
 let mounted = true;
 const element = ref<HTMLElement | null>(null);
 const searchPending = ref(false);
-const removeNavigationStart = router.beforeEach(rememberNavigation);
-const removeNavigationFinish = router.afterEach(finishNavigation);
-const removeNavigationError = router.onError((_error, to) => finishNavigation(to));
+const navigation = observePageNavigation(router, {scope: 'all', started: rememberNavigation, finished: finishNavigation});
 onBeforeUnmount(() => {
     mounted = false;
     readGeneration++;
-    removeNavigationStart();
-    removeNavigationFinish();
-    removeNavigationError();
+    navigation.dispose();
 });
 const title = computed(() =>
     messages.value.t(props.collection === 'participant' ? 'overview.participation' : 'overview.managed'),
@@ -227,6 +225,7 @@ function refetchRegion(): Promise<unknown> {
     return overview.refetch({throwOnError: true});
 }
 const command = useCommand(refresh);
+const packingLifecycle = createPackingLifecycle(packingApi, command, messages);
 const blocked = computed(() => command.action.disabled.value
     || !!destination.target.value);
 const actionsBlocked = computed(() => blocked.value || !!pendingRead.value || !overview.data.value || !displayed.value);
@@ -307,14 +306,13 @@ function retireDeniedRegion(scope: PilotRequestScope, error: ApiFailure): void {
 
 function mayPresentRead(scope: PilotRequestScope, generation: number): boolean {
     return mounted && props.active !== false && generation === readGeneration && context.isCurrent(scope, true)
-        && route.path === '/frontend-pilot' && (!pendingNavigation || pendingNavigation.path === '/frontend-pilot');
+        && route.path === '/frontend-pilot' && (!navigation.destination.value || navigation.destination.value.path === '/frontend-pilot');
 }
 
 /** Fence this region when Router starts a relevant Back/Forward or page change.
  * Its own prepared read stays attached to that destination; sibling regions
  * retain their requests and only a later admitted render may restore focus. */
 function rememberNavigation(to: RouteLocationNormalized): void {
-    pendingNavigation = to;
     // Back/Forward can start outside this component. Only changed parameters for this
     // region retire its requests; another region's navigation must leave them running.
     const parameters = ['q', 'type', 'page', 'childPage', 'event'];
@@ -329,7 +327,6 @@ function rememberNavigation(to: RouteLocationNormalized): void {
 }
 
 function finishNavigation(to: RouteLocationNormalized, _from?: RouteLocationNormalized, failure?: NavigationFailure | void): void {
-    if (pendingNavigation === to) pendingNavigation = undefined;
     if (failure && pendingFocus?.key === navigationKey(regionParameters(to.query))) pendingFocus = undefined;
 }
 
@@ -373,7 +370,7 @@ watch(() => props.active, active => {
 function navigationQuery(values: Record<string, string | undefined>) {
     // Native typing during Back targets the requested destination rather than the
     // still-rendered old event. Merge only this region into the latest whole-page URL.
-    const next = {...(pendingNavigation?.query ?? route.query)};
+    const next = {...(navigation.destination.value?.query ?? route.query)};
     for (const [key, value] of Object.entries(values)) {
         if (value === undefined) delete next[prefix.value + key];
         else next[prefix.value + key] = value;
@@ -579,19 +576,7 @@ async function setVisibility(
  * regions and cannot silently turn restore/archive into personal hiding. */
 async function archive(card: components['schemas']['OverviewCard'], restore: boolean): Promise<void> {
     if (actionsBlocked.value) return;
-    if (
-        window.confirm(
-            messages.value.t(
-                restore
-                    ? 'packing.confirmRestore'
-                    : card.inheritedArchived
-                      ? 'packing.confirmArchiveIndependent'
-                      : 'packing.confirmArchive',
-            ),
-        )
-    )
-        await command.run((scope) => packingApi.archive(card.id, restore, scope), true, false,
-            {presentation: 'inline', success: restore ? 'overview.restored' : 'overview.archived'});
+    await packingLifecycle.archive(card.id, restore, card.inheritedArchived);
 }
 
 /** Deliver permanent deletion through the existing confirmed-navigation owner.
@@ -623,28 +608,18 @@ function page(next: number): void {
     <section ref="element" :id="regionId" class="js-overview-region" :data-collection="collection" :data-region="region"
         :aria-busy="!!displayed && (overview.isFetching.value || !!pendingRead)">
         <h3 class="visually-hidden js-overview-heading" tabindex="-1">{{ title }}</h3>
-        <StatusNotice v-if="destination.target.value" kind="success">
-            {{ messages.t('packing.deleted') }}<ActionButton class="ms-2" variant="outline-light"
-                :state="destination.retryAction" @click="destination.retry">{{ messages.t('common.retry') }}</ActionButton>
+        <StatusNotice v-if="destination.target.value" kind="success"
+            :action="{state: destination.retryAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="destination.retry">
+            {{ messages.t('packing.deleted') }}
         </StatusNotice>
         <!-- Lifecycle/visibility commands use native global inline feedback. Read
              failures and unknown outcomes retain this region's recovery surface. -->
-        <StatusNotice v-if="command.error.value" :inline="command.errorPresentation.value === 'inline'"
-            :target="command.feedbackTarget.value" :kind="command.feedbackKind.value"
-            :disabled="command.pending.value || command.recovering.value"
-            :transient="command.transientError.value" :renewal="command.errorRenewal.value"
-            @dismiss="command.setError(null)">{{ command.error.value }}</StatusNotice
-        ><StatusNotice v-if="command.notice.value" :inline="command.noticeInline.value" :target="command.feedbackTarget.value"
-            :disabled="command.pending.value || command.recovering.value" :kind="command.noticeKind.value"
-            :transient="command.transientNotice.value" :notice="command.notice.value"
-            :renewal="command.noticeRenewal.value" @dismiss="command.notice.value = null">{{
-            messages.t(command.notice.value)
-        }}</StatusNotice>
+        <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value" />
         <StatusNotice v-if="readError || failedRead" kind="warning" :last-updated-at="lastUpdatedAt" :retry-at="retryAt"
-            :read-error="navigationError ?? readError">{{
+            :read-error="navigationError ?? readError"
+            :action="{state: refreshAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="refreshOverview">{{
             messages.t(displayed ? 'state.stale' : 'state.loadFailed')
-        }}<ActionButton class="ms-2" variant="outline-light" :state="refreshAction"
-            @click="refreshOverview">{{ messages.t('common.retry') }}</ActionButton></StatusNotice>
+        }}</StatusNotice>
         <!-- Pending authority and an unsent local search draft keep the
              progressive controls mounted. Once an empty unfiltered region is confirmed
              without a local draft, omit the toolbar as the native presentation does. -->

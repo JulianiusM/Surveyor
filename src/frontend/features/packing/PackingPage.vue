@@ -18,6 +18,7 @@ import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import ActionButton from '../../components/ActionButton.vue';
 import InlineCell from '../../components/InlineCell.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PackingSettings from './PackingSettings.vue';
 
@@ -543,25 +544,16 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
         <div class="card-body">
             <!-- Native item/assignment commands present transient feedback in the
                  shared page alert host; durable reconciliation stays beside the list. -->
-            <StatusNotice v-if="command.error.value" :inline="command.errorPresentation.value === 'inline'"
-                :target="command.feedbackTarget.value" :kind="command.feedbackKind.value"
-                :disabled="command.pending.value || command.recovering.value"
-                :transient="command.transientError.value" :renewal="command.errorRenewal.value"
-                @dismiss="command.setError(null)">{{ command.error.value }}</StatusNotice>
-            <StatusNotice
-                v-if="command.notice.value" :inline="command.noticeInline.value" :target="command.feedbackTarget.value"
-                :disabled="command.pending.value || command.recovering.value"
-                :kind="command.noticeKind.value" :transient="command.transientNotice.value"
-                :notice="command.notice.value" :renewal="command.noticeRenewal.value" @dismiss="command.notice.value = null"
-                >{{ messages.t(command.notice.value) }}
-                <template v-if="command.uncertain.value && quickAddDirty">
-                    <p class="mb-2">{{ messages.t('packing.reviewUnknownItem') }}</p>
-                    <ActionButton variant="outline-warning" :state="readAction" @click="reviewUnknownItem">
-                        {{ messages.t('draft.review') }}
-                    </ActionButton>
+            <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value">
+                <template #notice>
+                    <template v-if="command.uncertain.value && quickAddDirty">
+                        <p class="mb-2">{{ messages.t('packing.reviewUnknownItem') }}</p>
+                        <ActionButton variant="outline-warning" :state="readAction" @click="reviewUnknownItem">
+                            {{ messages.t('draft.review') }}
+                        </ActionButton>
+                    </template>
                 </template>
-            </StatusNotice
-            >
+            </CommandFeedback>
             <StatusNotice v-if="denied" kind="danger" :retry-at="retryAt" :read-error="list.error.value">
                 {{ messages.t('state.forbidden') }}
             </StatusNotice>

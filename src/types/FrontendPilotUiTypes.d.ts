@@ -1,6 +1,7 @@
 import type {ComputedRef, Ref, ShallowRef} from 'vue';
 import type {QueryClient} from '@tanstack/vue-query';
 import type {i18n} from 'i18next';
+import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import type {components} from './api/v1';
 import type {LocalizationContext, Locale, MessageKey, MessageParameters} from './LocalizationTypes';
 import type {FrontendPageCompletion, FrontendPilotBootstrap} from './FrontendPilotTypes';
@@ -227,6 +228,11 @@ export interface PilotContext {
     /** Initial native presentation belongs to one actor and one committed visit. */
     initialDocumentFor(url: string): FrontendPilotBootstrap | undefined;
     retireInitialDocument(destination?: string): void;
+    /** Mounted admission contributes presentation only, without retaining its query payload.
+     * Registration belongs to the captured actor and the source's current document visit. */
+    registerPageOutcome(route: Readonly<Ref<string>>, isStatic: () => boolean): () => void;
+    hasStaticPageOutcome(route: Pick<RouteLocationNormalized, 'meta' | 'fullPath'>): boolean;
+    requiresClientInitialization(route: Pick<RouteLocationNormalized, 'meta' | 'fullPath'>): boolean;
     isCurrent(scope: PilotRequestScope, checkLocale?: boolean): boolean;
     /** Check dispatch admission separately from a previously captured response's lifetime. */
     mayRead(scope?: PilotRequestScope, checkLocale?: boolean): boolean;
@@ -239,4 +245,20 @@ export interface PilotContext {
     changeLocale(locale: Locale): Promise<void>;
     invalidateIdentity(): void;
     start(): () => void;
+}
+
+/** Each consumer selects which navigation changes pause its work. Feature-specific
+ * read retirement, locale synchronization and feedback remain explicit callbacks. */
+export interface PilotPageNavigationOptions {
+    scope?: 'all' | 'document' | 'path';
+    started?(to: RouteLocationNormalized, from: RouteLocationNormalized): void;
+    finished?(to: RouteLocationNormalized, from?: RouteLocationNormalized, failure?: NavigationFailure | void): void;
+}
+
+/** Observe lazy delivery before Router commits, without clearing a newer target
+ * when an older navigation is cancelled or fails. The caller owns disposal. */
+export interface PilotPageNavigation {
+    destination: Readonly<ShallowRef<RouteLocationNormalized | undefined>>;
+    pending(): boolean;
+    dispose(): void;
 }

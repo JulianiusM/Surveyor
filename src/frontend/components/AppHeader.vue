@@ -9,11 +9,13 @@ import {pilotHelpUrl, resolveContextualHelpUrl} from '../../modules/lib/helpNavi
 import {completeIdentityEntry, useConfirmedNavigation} from '../composables/pageEntry';
 import {useCommand} from '../composables/command';
 import {useReadRetry} from '../composables/feedback';
+import {observePageNavigation} from '../composables/pageNavigation';
 import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale} from '../../types/LocalizationTypes';
 import AppNavigationDropdown from './AppNavigationDropdown.vue';
 import ActionButton from './ActionButton.vue';
 import StatusNotice from './StatusNotice.vue';
+import CommandFeedback from './CommandFeedback.vue';
 
 // Remaining feature creation destinations migrate in their own increments.
 // The accepted identity destinations use their existing shared backend owners.
@@ -30,22 +32,17 @@ const identityBlocked = computed(() => logoutCommand.action.disabled.value || co
 const expanded = ref(false);
 const changingLocale = ref(false);
 const localeAction = useActionState({eligible: () => ready.value, pending: () => changingLocale.value});
-let pendingNavigation: RouteLocationNormalized | undefined;
 let localeUrlNeedsSync = false;
 let active = true;
 const removeUpdateGuard = context.updates.registerGuard(() => !changingLocale.value);
 // currentRoute changes only after a lazy destination finishes loading. Observe the
 // earlier navigation phase so a late locale response cannot replace the old help
 // URL and cancel the user's pending destination. Each completion clears only itself.
-const removeNavigationStart = router.beforeEach(to => { pendingNavigation = to; });
-const removeNavigationFinish = router.afterEach(finishNavigation);
-const removeNavigationError = router.onError((_error, to) => { finishNavigation(to); });
+const navigation = observePageNavigation(router, {scope: 'all', finished: finishNavigation});
 onBeforeUnmount(() => {
     active = false;
     removeUpdateGuard();
-    removeNavigationStart();
-    removeNavigationFinish();
-    removeNavigationError();
+    navigation.dispose();
 });
 // Retain the native contextual target as the shared source for route activation and
 // enhanced delivery. The pilot URL adapter moves article paths into a doc query.
@@ -74,14 +71,13 @@ watch(
     },
 );
 
-function finishNavigation(to: RouteLocationNormalized): void {
-    if (pendingNavigation === to) pendingNavigation = undefined;
+function finishNavigation(_to: RouteLocationNormalized): void {
     // Let Vue Router finish notifying the destination before a query-only update.
     if (localeUrlNeedsSync) queueMicrotask(synchronizeHelpLocale);
 }
 
 function synchronizeHelpLocale(): void {
-    if (!active || !localeUrlNeedsSync || changingLocale.value || pendingNavigation) return;
+    if (!active || !localeUrlNeedsSync || changingLocale.value || navigation.pending()) return;
     localeUrlNeedsSync = false;
     const current = router.currentRoute.value;
     if ((current.path !== '/frontend-pilot/help' && !current.path.startsWith('/frontend-pilot/help/'))
@@ -339,23 +335,17 @@ async function retryCompletion(): Promise<void> {
             </div>
             <!-- A rejected logout owns one feedback receipt. Translating its body must
                  keep the original expiry; a repeated rejection supplies a new receipt. -->
-            <StatusNotice v-if="logoutCommand.error.value" kind="danger" no-margin
-                :transient="logoutCommand.transientError.value" :renewal="logoutCommand.errorRenewal.value"
-                @dismiss="logoutCommand.setError(null)">{{ logoutCommand.error.value }}</StatusNotice>
-            <StatusNotice v-if="logoutCommand.uncertain.value" kind="warning" no-margin>
-                {{ messages.t('state.unknownOutcome') }}
-                <ActionButton class="ms-2" variant="outline-light" :state="logoutCommand.recoveryAction"
-                    @click="refreshLogoutState">{{ messages.t('common.refresh') }}</ActionButton>
-            </StatusNotice>
+            <CommandFeedback :feedback="logoutCommand.feedback" part="error" error-kind="danger" :inline="false" no-margin />
+            <CommandFeedback :feedback="logoutCommand.feedback" part="uncertain" no-margin
+                :action="{state: logoutCommand.recoveryAction, label: messages.t('common.refresh'), class: 'ms-2'}"
+                @action="refreshLogoutState" />
         </nav>
         <!-- Confirmed commands keep their own feedback. This shared recovery surface appears
              only for header-owned navigation or after its originating form has unmounted. -->
-        <StatusNotice v-if="!completion.pending.value && (completion.target.value || completion.fallbackTarget.value)" kind="warning" class="mb-0">
+        <StatusNotice v-if="!completion.pending.value && (completion.target.value || completion.fallbackTarget.value)" kind="warning" class="mb-0"
+            :action="{state: completion.target.value ? completion.retryAction : completion.fallbackRetryAction,
+                label: messages.t('common.retry'), class: 'ms-2'}" @action="retryCompletion">
             {{ messages.t('state.loadFailed') }}
-            <ActionButton class="ms-2" variant="outline-light"
-                :state="completion.target.value ? completion.retryAction : completion.fallbackRetryAction" @click="retryCompletion">
-                {{ messages.t('common.retry') }}
-            </ActionButton>
         </StatusNotice>
     </header>
 </template>

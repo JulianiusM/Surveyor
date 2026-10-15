@@ -28,25 +28,30 @@ const loginUrl = computed(() => '/frontend-pilot/users/login?next=' + encodeURIC
 const registerUrl = computed(() => '/frontend-pilot/users/register?next=' + encodeURIComponent(route.fullPath));
 const signedInPoints = ['landing.signedOverview', 'landing.signedCreate', 'landing.signedPacking', 'landing.signedRights'] as const;
 const publicPoints = ['landing.plan', 'landing.share', 'landing.link', 'landing.dashboard'] as const;
+// Account/guest admission changes the copy and actions, not the welcome layout.
+// Keep the repeated list in one feature-owned presentation without copying state.
+const welcomePoints = computed(() => session.value?.activeProfile ? signedInPoints : publicPoints);
+const welcomeText = computed(() => session.value?.activeProfile
+    ? messages.value.t('landing.welcome', {name: session.value.activeProfile.name}) : messages.value.t('landing.intro'));
 
 // Preserve the native three-card/two-card rows. This is static feature copy, not a
 // permission or route registry; unfinished creation journeys stay ordinary links.
 const featureRows = [
     {classes: 'row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4 mb-4', features: [
-        {type: 'survey', icon: 'bi-bar-chart-steps', points: [
+        {type: 'survey', points: [
             'landing.features.survey.point1',
             'landing.features.survey.point2',
             'landing.features.survey.point3',
             'landing.features.survey.point4',
         ]},
-        {type: 'event', icon: 'bi-calendar-event', points: [
+        {type: 'event', points: [
             'landing.features.event.point1',
             'landing.features.event.point2',
             'landing.features.event.point3',
             'landing.features.event.point4',
             'landing.features.event.point5',
         ]},
-        {type: 'packing', icon: 'bi-bag-fill', points: [
+        {type: 'packing', points: [
             'landing.features.packing.point1',
             'landing.features.packing.point2',
             'landing.features.packing.point3',
@@ -54,7 +59,7 @@ const featureRows = [
         ]},
     ]},
     {classes: 'row row-cols-1 row-cols-md-2 g-4 mb-4', features: [
-        {type: 'activity', icon: 'bi-clock-history', points: [
+        {type: 'activity', points: [
             'landing.features.activity.point1',
             'landing.features.activity.point2',
             'landing.features.activity.point3',
@@ -62,7 +67,7 @@ const featureRows = [
             'landing.features.activity.point5',
             'landing.features.activity.point6',
         ]},
-        {type: 'drivers', icon: 'bi-car-front-fill', points: [
+        {type: 'drivers', points: [
             'landing.features.drivers.point1',
             'landing.features.drivers.point2',
             'landing.features.drivers.point3',
@@ -88,15 +93,15 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
         <div class="card-body">
             <!-- Account and guest profiles share the native welcome presentation.
                  Identity remains application-owned; no private profile copy is retained here. -->
+            <div class="text-center mb-4">
+                <p class="lead mb-2">{{ welcomeText }}</p>
+                <ul class="list-unstyled small d-inline-block text-start mb-0">
+                    <li v-for="(point, index) in welcomePoints" :key="point" :class="{'mb-1': index < welcomePoints.length - 1}">
+                        <i class="bi bi-check-circle-fill me-2" aria-hidden="true"></i>{{ messages.t(point) }}
+                    </li>
+                </ul>
+            </div>
             <template v-if="session?.activeProfile">
-                <div class="text-center mb-4">
-                    <p class="lead mb-2">{{ messages.t('landing.welcome', {name: session.activeProfile.name}) }}</p>
-                    <ul class="list-unstyled small d-inline-block text-start mb-0">
-                        <li v-for="(point, index) in signedInPoints" :key="point" :class="{'mb-1': index < signedInPoints.length - 1}">
-                            <i class="bi bi-check-circle-fill me-2" aria-hidden="true"></i>{{ messages.t(point) }}
-                        </li>
-                    </ul>
-                </div>
                 <div class="d-flex flex-wrap justify-content-center gap-2 mb-4">
                     <RouterLink class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" to="/frontend-pilot">
                         <i class="bi bi-speedometer2" aria-hidden="true"></i>{{ messages.t('landing.openDashboard') }}
@@ -109,14 +114,6 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
                 </div>
             </template>
             <template v-else>
-                <div class="text-center mb-4">
-                    <p class="lead mb-2">{{ messages.t('landing.intro') }}</p>
-                    <ul class="list-unstyled small d-inline-block text-start mb-0">
-                        <li v-for="(point, index) in publicPoints" :key="point" :class="{'mb-1': index < publicPoints.length - 1}">
-                            <i class="bi bi-check-circle-fill me-2" aria-hidden="true"></i>{{ messages.t(point) }}
-                        </li>
-                    </ul>
-                </div>
                 <div class="d-flex flex-wrap justify-content-center gap-2 mb-3">
                     <RouterLink class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" :to="registerUrl">
                         <i class="bi bi-person-plus" aria-hidden="true"></i>{{ messages.t('auth.createAccount') }}
@@ -141,7 +138,7 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
                     <div class="card h-100 text-bg-dark border-secondary">
                         <div class="card-body">
                             <h2 class="h5 mb-1">
-                                <i class="bi me-2" :class="feature.icon" aria-hidden="true"></i>{{ messages.t(`landing.features.${feature.type}.title`) }}
+                                <i class="bi me-2" :class="creationTargets[feature.type].icon" aria-hidden="true"></i>{{ messages.t(`landing.features.${feature.type}.title`) }}
                             </h2>
                             <p class="mb-2 text-white-50">{{ messages.t(`landing.features.${feature.type}.description`) }}</p>
                             <ul class="small mb-0">

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: dynamic-page-only automatic document reload and confirmed-command follow-up guidance reconciled with scoped client/build verification in pilot review; definition freedom, action-state and native profile-operation reuse retained
+verification-scope: frontend-owned timer, copied Sass and Vite client/SSR delivery source-reviewed; reviewed static/feedback/navigation/lifecycle adoption retains earlier scopes; no cutover claimed
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -44,8 +44,9 @@ endpoints or permission policy. The following contracts describe how those owner
 
 Frontend paths in this table are relative to `src/frontend/`. Create a module only when an existing logical owner
 cannot comfortably hold its responsibility. Do not add another router, HTTP wrapper, state store, controller,
-validator or service simply to make this table symmetrical. Reuse existing styles, logo/favicon and pure browser
-helpers through their actual owners rather than copying them into a frontend-specific asset tree.
+validator or service simply to make this table symmetrical. Application presentation helpers and styles belong to
+their existing owners under `src/frontend/`, with one implementation for matching consumers. Shared logo/favicon,
+third-party dependencies and browser-safe backend/domain/catalog owners retain their actual shared ownership.
 
 #### Contract authoring and generated consumers
 
@@ -108,6 +109,11 @@ or outcome is breaking: obtain an explicit version/migration decision and retain
 until consumer retirement is authorized. The unreleased-v1 correction does not authorize another pilot version.
 
 #### Adding or changing a feature view
+
+Inspect all current consumers of a repeated new-frontend interaction. Share meaningful overlap in its logical owner
+and adopt that owner in every matching current consumer in the same change; a future migration is no reason to defer
+existing duplication. Distinct feature behavior stays explicit, and an imagined future caller does not justify an
+unused abstraction or a general CRUD engine. Shared backend/domain/catalog ownership remains separate and unchanged.
 
 1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;
@@ -250,6 +256,11 @@ defects a prerequisite for a presentation/transport adaptation. Apply new-code s
 without claiming stronger legacy guarantees or introducing another postcommit rejection.
 
 #### Entry, canonical delivery and outcomes
+
+`observePageNavigation` owns repeated router subscription, pending-destination retirement and disposal. App, Header,
+Overview and page-entry/confirmed-transition consumers adopt it with their existing all/document/path boundary and
+callbacks. Features still decide admission, feedback and focus; the observer keeps no server data or navigation
+authority. Preserve the newest destination when an older lazy delivery settles and dispose each caller's subscription.
 
 Keep server-owned admission/canonical navigation separate from temporary resource reads. `usePageEntry` owns the
 entry decision. Capture the intended destination/notice once and commit it through the shared confirmed-navigation
@@ -480,7 +491,11 @@ commands to recover startup.
 Automatic full-document reload additionally requires an explicitly eligible dynamic route and dynamic admitted
 content. Overview and Packing detail opt in; creation, duplication, user-management and Help remain excluded even
 when pristine. Static admitted errors/completions on a dynamic URL remain excluded through the existing shared
-content classifier, rather than a copied list of bootstrap fields. Declare this policy in route metadata and supply
+content classifier, rather than a copied list of bootstrap fields. `usePageEntry` registers its live static predicate
+and document visit with the context; registration captures the actor/epoch and retires on unmount, identity change or
+disposal. The context owns no second query payload. A visible denial stays static after initial-data retirement;
+fresh render admission restores dynamic content. App, SSR and update recovery consume that same classifier.
+Declare this policy in route metadata and supply
 its live value to the existing update coordinator so release observation, missing chunks and command settlement
 share one decision, including after route changes. Draft/command/initialization/loop guards still apply. Excluded
 pages retain update notices and deliberate recovery. Periodic content reads and session/security revalidation are
@@ -492,6 +507,10 @@ owner, so generated query keys identify the same data. An old seed or manual cac
 post-command authority.
 
 Express serves shared static/Help resources; Vite transforms entry/style URLs before inserting the Vue tree.
+Keep cascade composition in authored `styles/application.sass`, consumed by both the client entry and development
+renderer. It orders base `style.sass`, `help.sass` and `pilot.css` once; do not maintain another list in a caller.
+Its source link and built-manifest delivery remain usable before JavaScript, including static Help. `style.sass`
+retains its accordion/timezone graph and installed Bootstrap layer alongside the CDN layer.
 Test emitted URLs and mounted usable controls, not a hydration marker. HMR/authored-input restart checks are relevant
 when their owners change; they are not required again for every unrelated feature view.
 
@@ -537,13 +556,24 @@ even when follow-up fails; the editor clears the same input through the shared r
 selected again. Rejection, unknown delivery and background reads retain bytes/input. Do not infer release from changed
 header URL, token or translated filename, recreate the input or emit another selection event to reset it.
 
-`feedback.ts` binds notices to semantic receipts and reuses `scheduleAlertDismissal` from
-`src/public/js/shared/alerts.ts` with its ten-second lifetime. Repeated outcomes renew; locale/render changes neither
-renew expiry nor revive dismissed notices. Persistent conditions use status semantics and remain visible. Capture
+`feedback.ts` binds notices to semantic receipts and owns their ten-second scheduling/cancellation lifetime.
+Repeated outcomes renew; locale/render changes neither renew expiry nor revive dismissed notices. Persistent
+conditions use status semantics and remain visible. Capture
 initiating elements before awaits. Inline notices own Close, focus/scroll placement and a live modal/page fallback
 when their initiator detaches/hides, without restoring revoked controls. Full flashes retain their presentation.
 Confirmed destinations/receipts survive failed delivery; warnings clear only through their own successful recovery.
 Dispose timers/listeners and preserve page-cache restoration behavior.
+
+`CommandFeedback` presents the existing command owner's read-only error, notice and uncertainty refs across identity,
+Packing and Overview consumers. Features retain native placement, custom wording, commands, drafts and recovery.
+`StatusNotice` receives an action label and optional existing action state, then emits the user's action. When state
+is omitted, its `ActionButton` still applies shared initialization and the caller's handler retains its own guards.
+The notice does not choose read eligibility or perform recovery. Their contracts live in
+`src/types/FrontendFeedbackTypes.d.ts`. Share repeated receipt/action presentation through these owners rather than
+copy their expiry, disabled state or dismissal wiring.
+Pass existing dismissal locks and margin choices explicitly; the shared presentation must not infer them from pending
+status. Omitted inline/target overrides defer to the receipt; an explicit null target retains a caller's local host.
+Check feedback inside real local/global alert hosts so extraction cannot silently move an inline result elsewhere.
 
 Dialogs share one focus trap/dismissal owner, pending close lock and actual invoker return. Features can supply the
 body-field initial target. Tabs retain independent drafts and freeze while necessary work is pending. Avoid
@@ -801,6 +831,11 @@ Vue controls receive feature-owned generated operations rather than calling thes
 `setOverviewVisibility` through its API owner. Each uses the shared transport/validated result and existing
 `entityAdminController` or `userController` operation. Neither reusable lifecycle presentation nor a second
 controller/service duplicates grants, root/parent policy or visibility eligibility.
+
+`createPackingLifecycle` in `src/frontend/features/packing/lifecycle.ts` shares Packing's archive/restore confirmation,
+desired-state dispatch and inline success policy across Settings and Overview. It composes each consumer's existing
+API, command and current translator without retaining state. Callers supply direct/inherited state and the optional
+initiator while retaining eligibility and refresh dependencies. Personal visibility and permanent deletion stay separate.
 
 Never accept profile IDs, timestamps, stored parent state, or other arbitrary fields from the browser. Follow the [archival authority contract](PERMISSIONS_REFERENCE.md#archival-authority-and-personal-visibility), including the survey exception. A private preference may change placement only after existing overview membership is established.
 

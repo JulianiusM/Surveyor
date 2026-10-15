@@ -184,12 +184,10 @@ watch(() => [pageTitle.value, route.hash], async () => {
                 <div class="col-lg-9" :aria-busy="!!page && help.isFetching.value">
                     <StatusNotice v-if="help.error.value" kind="danger"
                         :read-error="help.error.value" :retry-at="retryAt"
-                        :last-updated-at="page ? help.dataUpdatedAt.value : undefined">{{
+                        :last-updated-at="page ? help.dataUpdatedAt.value : undefined"
+                        :action="{state: retryAction, label: messages.t('common.retry')}" @action="retryHelp">{{
                         messages.t(page ? 'state.stale' : 'state.loadFailed')
-                    }}<ActionButton class="btn-sm ms-2" variant="outline-light"
-                        :state="retryAction" @click="retryHelp">{{
-                        messages.t('common.retry')
-                    }}</ActionButton></StatusNotice>
+                    }}</StatusNotice>
                     <LoadingSkeleton v-if="initialLoading" variant="article" />
                     <div v-else-if="page && page.searchResults !== undefined" class="card bg-dark text-white">
                         <div class="card-body help-search-results">

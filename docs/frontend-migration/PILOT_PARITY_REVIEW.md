@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: dynamic-page-only document reload and confirmed-command follow-up corrections verified through current client/build and genuine server-component checks; definition-guard and earlier runtime evidence retain their original scopes
+verification-scope: native-isolation decision/history and bounded frontend-owned timer/style implementation recorded; prior runtime checks retain their scopes; no full feature migration or cutover claimed
 source-anchors: src/controller/packingController.ts; src/controller/entityAdminController.ts; src/controller/eventController.ts; src/controller/userController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/modules/lib/fileCommons.ts; src/modules/overview/api.ts; src/routes/api/v1/overview.ts; src/controller/helpController.ts; src/modules/permissionEngine.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/unit/frontend-generation.spec.ts; tests/frontend/frontend-page-entry.spec.ts; tests/frontend/frontend-command-recovery.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/browser/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/authentication-workflows.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/integration/packing-management-api.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; .gitignore; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml
 next-review: next-migration-slice-or-permission-policy-review
 -->
@@ -473,11 +473,10 @@ the existing full-contract checks and deadlines remain; failures now identify th
 
 | Executed check | P0 result and boundary |
 |---|---|
-| Normal build and compiler scopes | `npm run build` passed, including Vue client/SSR checks and the full 54-operation/106-schema generation with unchanged API hash `b27540d1769e`; two locales/469 messages remain. `npm run typecheck:tests --ignore-scripts` then passed against those generated inputs. |
-| Normal database-free suite | `npm run test:quick` with JSON/default reporters passed all 61 files/1,400 tests in 136.84 seconds at the normal two workers, including all seven generator tests. The watcher case took 44.379 seconds within its unchanged 90-second limit; its complete generator file took 104.45 seconds. The genuine Express/Vite integration fixture's two tests passed in 9.90 seconds. This is not database-backed or built-system E2E evidence. |
+| Build, compilers and database-free suite | Normal build, Vue client/SSR and test-graph compiler checks passed. The normal two-worker quick suite passed, including the complete generator file within its retained watcher deadline and genuine Express/Vite integration. These historical source/generation checks establish no database-backed or built-system E2E result; their superseded counts/hashes remain in Git and ignored P0 output. |
 | Comments and independent review | The scoped development check covered both changed runtime files, 20 nontrivial operations and all eleven DBAL services with zero findings. Independent and root review checked meaningful method contracts and internal explanations. TypeScript parsing found zero diagnostics, and comment-free AST output for both runtime files matched HEAD. Independent reviewers also accepted the fixture's actual-input adoption and retained assertions. |
 | Maintenance evidence | IMP-023 remains open: original `position` evidence is dated, current native omission/default behavior and versioned explicit `pos` are distinguished. The coverage map labels original refresh/visual gaps locally and retains its heading anchors/history. Root and independent source review accepted those factual corrections. |
-| Preservation and diagnostics | Whitespace checks passed. The documentation boundary reported zero production/amendment findings and 558 public review inputs. Strict documentation reporting retained only the historical fingerprint and optional private-path reference-count advisory; Help authoring diagnostics were clean. No baseline was reset. The final process audit found no matching owned watcher/generator children after the runner closed. |
+| Preservation and diagnostics | Whitespace, production/amendment boundaries and Help authoring checks passed; strict reporting retained the historical fingerprint/private-path-count advisories without a baseline reset. The final process audit found no matching owned watcher/generator children after the runner closed. |
 
 Current P0 logs/results remain under ignored `artifacts/frontend-p0/`. This work renews no database, system E2E,
 browser, PDF, visual, provider, SMTP or deployment receipt. Prior checks above retain their original scope; no next
@@ -651,3 +650,154 @@ Current implementation and executed verification follow. Earlier receipts retain
 semantic review. Automatic document reload follows the explicit R1 scope without changing periodic reads or shared
 backend behavior. No database-backed or system E2E suite was run for this frontend-only correction. These results
 renew no live provider/SMTP, full visual/state matrix, financial/PDF, deployment, guide-publication or cutover evidence.
+
+## Mounted outcome and shared presentation readiness (2026-10-15)
+
+The next full review found `IMP-062`: the earlier automatic-reload classifier read only eligible initial bootstrap.
+`usePageEntry` retires that bootstrap when a denial becomes current, and warm admission has no initial result to use.
+The static route test above did not mount App/PackingEntry, so it could not exercise that lifetime. Its passing
+receipt remains valid for router/startup policy, without certifying mounted denial after initial-data retirement.
+
+The existing context now classifies current admitted presentation for App, SSR and automatic recovery. Page-entry
+owners register only a live static predicate and document visit, captured for their actor/epoch; unmount, identity
+retirement and disposal release it. No second query payload is retained. A visible denial remains static after
+bootstrap retirement; fresh render admission restores dynamic eligibility. Deliberate recovery retains its separate
+draft/command guards. This enforces the already approved exclusion rather than changing the decision or native UI.
+
+The maintainer also explicitly requires all meaningful current overlap to share actual owners. Existing command
+receipts now feed `CommandFeedback` across identity, Packing and Overview. `StatusNotice` presents injected action
+state and emits the selected action. Features retain native placement, wording, authorization, drafts and recovery;
+no new business owner or backend operation is introduced. The staged contribution playbook requires matching
+current consumers to adopt their shared owner together. Distinct behavior and the future guest-family timing choice
+remain explicit; unconsumed generic abstractions are not added.
+
+Independent review found a feedback-placement risk during extraction: metadata's local inline result could inherit
+the global alert target. The actual Properties host and flash-only fallback are now explicit, as are caller-owned
+dismissal locks and Header spacing. Mounted regressions exercise pristine Save and rejected PATCH with a real global
+alert host, so source-level component reuse alone does not certify their placement.
+
+`observePageNavigation` now supplies the repeated router subscriptions, latest pending destination and disposal for
+App, Header, Overview and page-entry/confirmed-transition consumers. Each retains its existing all/document/path
+boundary, feedback and focus callbacks; stale lazy completion cannot retire its successor. Landing's repeated welcome
+markup and creation-icon lookup are consolidated inside its existing feature owner, without a new global registry.
+
+Preview diagnostics use the existing checker's reference-root projection to account for omitted control records and
+changed guide text. JSON retains configured/live/projected counts, and inherited live mismatches plus genuine missing
+target paths remain findings. Policy configuration, baseline hashes and prepared production bytes are not rewritten.
+Completed P0/P1 sequences and superseded P0 run counts are condensed in their existing owners; unique decisions,
+evidence boundaries and future phase contracts remain. No document destination, native retirement or cutover changes.
+
+| Executed check | Result and practical boundary |
+|---|---|
+| Build and compiler scopes | Normal `npm run build` passed. A later `npm run build:frontend --ignore-scripts` passed after the final source corrections, including the frontend compiler and client/SSR builds. Final `npm run typecheck:tests --ignore-scripts` passed after a newly authored absent-element assertion was corrected from `get` to `find`; no production change follows from that assertion correction. |
+| Final client and genuine server-component suite | `npm exec -- vitest run --config vitest.config.mts --project database-free tests/frontend tests/integration/frontend-development-runtime.spec.ts` passed all 40 files/930 tests in 64.42 seconds after final source/test corrections. This includes actual SSR/hydrated App/PackingEntry static denial, fresh admission/resource/actor retirement, five shared navigation lifecycle cases, identity/command consumers, pristine Save/rejected PATCH in local/global alert hosts, caller locks and Header spacing. Mounted HTTP/reload substitutions remain client evidence; genuine Express/Vite integration retains its separate production-server-component boundary. |
+| Built client delivery | All 19 Chromium client cases passed in 19.9 seconds, including the hydrated Packing denial retaining its document through actual session-based release detection and guarded deliberate recovery. Controlled HTTP fixtures exercise built modules and real document requests; this is client-browser evidence, not integrated system E2E. |
+| Engineering and independent review | The complete frontend readability scan covered 61 files/225 nontrivial operations with zero findings. The changed-worktree check covered 33 sources and 18 nontrivial operations in 22 readability files, also with zero findings. Root and independent source reviews accept actual shared adoption, static-outcome lifetime, caller-owned placement/spacing and guard preservation. Native/backend path comparisons have no changes. |
+| Documentation tooling | All 69 dependency-free checker tests passed, including projected counts, preserved live count drift, genuine missing target paths and unchanged default enforcement; both projection cases also passed after the final equivalent arithmetic/readability adjustment. Three selected real-Git guard regressions passed: malformed inventories, exact-byte preparation and copying/pinning only the four reviewed untracked public owners while excluding an unlisted neighbor. No complete guard-suite rerun is claimed. Node syntax and owned whitespace checks passed; configuration and immutable baselines are unchanged. |
+
+`IMP-062` is closed by actual shared-owner adoption, the final mounted/built-client assertions and root/independent
+semantic review. No database-backed, system E2E, full visual, provider/SMTP, deployment or guide-publication result
+follows from this frontend-only work. Prepared guide identities, locations and advisory diagnostics remain ignored
+review artifacts and task-handoff evidence. Preparation is not assembled-guide semantic acceptance or permission to publish.
+
+### Archive sharing and notice-action accuracy (2026-10-15)
+
+A subsequent bounded follow-up shares the existing Packing archive/restore confirmation, dispatch and inline success
+policy through feature-owned `createPackingLifecycle`, adopted by Settings and Overview. Existing API, command,
+translator, eligibility and refresh owners remain; personal visibility/deletion and native/backend behavior are unchanged.
+The staged notice guidance now accurately describes optional action state: omission retains shared `ActionButton`
+initialization and caller-handler guards. This wording correction adds no runtime admission rule.
+
+The post-extraction `npm run build:frontend --ignore-scripts` passed client/SSR checks and both production bundles.
+Final `npm run typecheck:tests --ignore-scripts` passed after the fixture updates. Root and independent nonauthor
+source review accept actual adoption and behavior preservation. The separate
+40-file/930-test client/genuine server-component run in 77.27 seconds preceded this extraction and retains that
+earlier scope; it is not post-extraction verification. Exact public-file preview admission includes only the new
+authored helper, with the existing regular-file/private-path restrictions and immutable baselines retained.
+
+The post-extraction mounted editor/refresh-navigation selection passed both files/all 133 tests in 10.68 seconds,
+including six new Settings/Overview archive/restore variants. They protect cancellation, current-language confirmation,
+one desired-state command, existing local/global feedback hosts and Overview refresh. An initial fixture attempt
+needed its happy-dom confirmation stub and portal selectors corrected; production source remained unchanged.
+
+After extraction, all 19 isolated Chromium client cases passed in 21.5 seconds. The development-policy check reported
+zero findings across 34 changed sources, including 20 nontrivial operations in 23 readability files; the explicit full
+frontend scan covered 62 files/225 operations with the full eleven-service DBAL inventory and zero findings. These
+checks establish no new database-backed, built-system E2E or full visual result. The exact five-file public-preview
+copy/pin regression passed with the unlisted-neighbor exclusion retained; Node syntax and owned whitespace are clean.
+
+At that review checkpoint, [IMP-063](../backlog/documentation-remediation.yml) recorded duplicate native/Vue registration
+password criteria with the protected sharing decision unresolved. The subsequent explicit decision below supersedes
+that disposition; no extraction was implemented and server enforcement remains unchanged.
+
+### Native-frontend isolation decision and current dependencies (2026-10-15)
+
+The maintainer's later R1 answer rejects the native-password-helper/browser-build sharing proposal and requires native
+frontend code to remain untouched until full migration and separately authorized removal. This is distinct from the
+earlier automatic-document-reload R1. The [dated foundation amendment](FRONTEND_FOUNDATION_DESIGN.md#authorized-native-frontend-isolation-decision-2026-10-15)
+preserves the original direct-sharing choice and the new boundary. IMP-063 is resolved by approved temporary native/new
+duplication, not by an extraction. Matching new-frontend consumers still share their implementation; backend/domain,
+controller/DBAL/catalog owners, common packages and shared images remain shared.
+
+At that decision-only checkpoint, source still contained one direct native JavaScript dependency: `feedback.ts`
+imported the alert scheduler from `src/public/js/shared/alerts.ts`. The renderer also linked `/style/style.css` and
+`/style/help.css`. Their authored sources include `style.sass`, its accordion/timezone imports and `help.sass`;
+the accordion brings its installed
+Bootstrap layer in addition to the renderer's CDN layer. The plan recorded the bounded timer/style adaptation
+and preservation constraints. The decision-only documentation change implemented neither the new-side ownership
+target nor elimination of those dependencies; the implementation receipt below supersedes that pending state.
+
+That source inspection and decision/guide reconciliation introduced no runtime, native, backend or build changes.
+Earlier tests/captures retain their original inputs and proved no new dependency independence at that checkpoint.
+Native removal, publication and cutover remain separately authorized actions after complete migration.
+
+### Native-frontend isolation implementation (2026-10-15)
+
+The maintainer subsequently instructed implementation of the bounded plan. `feedback.ts` now owns its transient
+receipt timer and cancellation without importing the native alert scheduler. Vue still owns dismissal; receipt
+renewal, first disclosure, translation, disposal and page-cache lifetimes retain their established semantics.
+No native global alert registry, second module or backend owner is introduced. IMP-063 remains resolved by approved
+coexistence duplication, not by a password-criteria extraction.
+
+Four authored Sass files are copied into the existing frontend styles owner: `style.sass`, `accordion.sass`,
+`timezone-select.sass` and `help.sass`. The new `application.sass` composition owns their base/Help/pilot override order
+once; both the client import and development renderer reference that root. The renderer supplies its Vite source
+stylesheet link in development and manifest CSS in installed releases, including before JavaScript;
+native `/style/style.css` and `/style/help.css` links are removed only from
+the new frontend's document. The copied dependency graph retains installed Bootstrap 5.3.8 alongside the existing
+CDN Bootstrap 5.3.3/icons layer. Native sources/build inputs, shared assets, controllers, domain/catalog and DBAL
+owners remain intact; future feature phases, native removal, cutover and guide publication are outside this work.
+
+The four authored copies are byte-identical to their native sources, and in-memory compilation of their base/Help
+graphs produces identical CSS. The final source-development Express/Vite integration passed both cases in 20.99
+seconds, fetching the single real composed stylesheet URL and asserting installed Bootstrap, accordion/timezone,
+Help and pilot cascade order after the retained CDN layer. Final `npm run build:frontend --ignore-scripts` passed
+client/SSR checks and bundles; the standalone server compiler passed through `npm exec -- tsc --project tsconfig.server.json`.
+The normal native-inclusive build was intentionally not run. Existing Sass/Bootstrap deprecation warnings remain
+visible; no dependency or stylesheet-language change is made.
+
+Final `npm run typecheck:tests --ignore-scripts` passed. The isolated built-client selection passed all 21 Chromium
+cases in 23.6 seconds. Both JavaScript-disabled 390px/1280px screenshots are pixel-identical between Vite delivery
+and the in-memory native stylesheet reference. This establishes synthetic Help SSR/style parity with controlled
+vendor delivery, not full native UI acceptance, backend persistence or system E2E.
+
+The frontend-only Vitest selection before the composition correction passed all 39 files/935 tests in 77.45 seconds,
+including the concurrent-notice lifetime case. It remains core/timer evidence from before the final composition
+wiring, distinct from the final genuine server-component and built-browser checks above.
+The final development-policy report has zero findings across 37 changed sources, including 26 nontrivial operations
+in 26 readability files. The earlier explicit full-frontend scope covered 62 files/225 operations, with the full
+eleven-service DBAL inventory and zero findings. The final independent source/test review accepts 111 local dependency files,
+including 36 generated files, with no native frontend or unresolved edge, together with the frontend-owned Sass graph.
+
+The final preservation check against 711 task-start authored files found exactly 17 owned existing paths changed
+and five authored Sass paths added. All 253 native files, including ignored native JS/CSS outputs, retain their byte
+hashes, with no native file added. Protected native/views/controller/DBAL/routes/contracts/root-Help/esbuild/package/lock
+paths are unchanged. Forty built client/SSR source maps contain no native JavaScript/style/view source entry.
+Exact optional generated-CSS ignores cover only the five Sass owners; authored `pilot.css` and future authored CSS
+remain visible. Only verified frontend-side watcher outputs were removed.
+
+Exact preview admission adds only the four copied Sass files and their authored `application.sass` composition through
+the existing regular-file mechanism. The final ten-owner real-Git copy/pin regression passed in 35.90 seconds and
+excludes an unlisted Sass sibling. No directory, private-file, immutable-baseline or live-reference-count rule is
+weakened. Earlier preparation receipts are stale after these source/amendment changes; any new preparation remains
+distinct from semantic acceptance and publication.

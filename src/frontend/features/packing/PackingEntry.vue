@@ -112,10 +112,9 @@ usePageTitle(() => admissionError.value ? context.messages.value.t('common.error
              that authorized subtree and its local draft mounted while exposing
              this read's own stale receipt, deadline and read-only recovery. -->
         <StatusNotice v-if="recoverableRead" kind="warning" :last-updated-at="admission.admittedAt.value"
-            :retry-at="retryAt" :read-error="admission.error.value">
+            :retry-at="retryAt" :read-error="admission.error.value"
+            :action="{state: admission.retryAction, label: context.messages.value.t('common.retry')}" @action="admission.retry">
             {{ context.messages.value.t(admission.admittedAt.value ? 'state.stale' : 'state.loadFailed') }}
-            <ActionButton class="btn-sm ms-2" variant="outline-light" :state="admission.retryAction"
-                @click="admission.retry">{{ context.messages.value.t('common.retry') }}</ActionButton>
         </StatusNotice>
         <PackingGuestPage v-if="guestRoute" :entry="admission.data.value?.guest ?? undefined" />
         <PackingPage v-else />

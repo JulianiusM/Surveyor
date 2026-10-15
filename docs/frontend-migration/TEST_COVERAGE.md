@@ -6,7 +6,7 @@ owner: project maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: confirmed-command follow-up and automatic document reload assertion boundaries added alongside retained action-state/profile evidence; original gaps stay historical and new execution belongs to paired review
+verification-scope: current frontend-owned timer/style delivery, mounted static-denial, shared-feedback and shared Packing lifecycle assertions mapped; prior evidence remains scoped; execution belongs to paired review
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -50,7 +50,8 @@ extend this map with their own IDs rather than copy whole completed plans or cla
 
 | Baseline IDs | Current owner | Assertion and practical limit |
 |---|---|---|
-| **SHL-01/04; HLP-01; foundation development delivery** source SSR/assets | Existing Express/Vite development middleware and shared SSR renderer | [Runtime integration](../../tests/integration/frontend-development-runtime.spec.ts), `renders source SSR and serves Vue HMR through the existing HTTP origin`, exercises actual emitted entry/styles, source Vue transformation, same HTTP/WebSocket origin, namespace isolation and initial Help versus interactive skeleton output. `does not initialize Vite in an installed production release` protects production admission. Vitest's existing database-free project owns this fixture; it does not exercise stored sessions, ORM or a mounted real browser. |
+| **SHL-01/04; HLP-01; foundation development delivery** source SSR/assets | Existing Express/Vite development middleware, shared SSR renderer and frontend-owned Sass graph | [Runtime integration](../../tests/integration/frontend-development-runtime.spec.ts), `renders source SSR and serves Vue HMR through the existing HTTP origin`, fetches the actual composed `application.sass` stylesheet through Express/Vite, asserting installed Bootstrap 5.3.8, accordion/timezone, Help and pilot CSS in cascade order alongside the retained CDN 5.3.3 layer and no native `/style/` link. It also exercises source Vue transformation, same HTTP/WebSocket origin, namespace isolation and initial Help versus interactive skeleton output. `does not initialize Vite in an installed production release` protects production admission. This database-free fixture establishes real server-component delivery, not stored sessions, ORM, a mounted browser or visual equivalence. |
+| **SHL-03/04; EC-UI-03–05** frontend-owned transient feedback | Existing `feedback.ts` notice lifetime and actual shared notice/command consumers | [Mounted shell](../../tests/frontend/frontend-pilot-shell.spec.ts), `expires a native flash, renews the same outcome, and preserves durable warnings`, `starts transient feedback only on disclosure and clears Vue state without removing its node`, and `pauses transient timers on pagehide and renews them after page-cache restoration`, protect the copied ten-second behavior through actual consumers. They assert receipt renewal, hidden-first disclosure, Vue-owned dismissal, cancellation on unmount and page-cache pause/resume; locale/deadline cases separately protect no renewal through translation. Controlled DOM/timers establish client lifetime behavior, not backend integration or rendered geometry. |
 | **PCK-01, ENT-10; EC-ID-09** creation/duplication | Existing Packing controller operations and native/v1 entry adapters; `PackingCreatePage.vue` | [Packing management persistence](../../tests/integration/packing-management-api.spec.ts), `duplicates content and defaults without assignments, files, or lifecycle`, protects persisted exclusions. [Entry HTTP](../../tests/e2e/frontend-pilot-api.spec.ts), `keeps exact native and SPA duplicate destinations including query context through account-only submission`, protects return flow; [mounted creation](../../tests/frontend/packing-management-ui.spec.ts), `creates a duplicate from ordered rows and current form values`, protects deliberate submitted input. These are separate ownership/HTTP/client boundaries. |
 | **PCK-02; EC-PART-001–004** assignment, identity/capacity | Controller assignment business operation; Packing DBAL locked membership | [Packing API persistence](../../tests/integration/packing-api.spec.ts), `serializes two actors competing for the final place` and `retries desired membership idempotently`, protects capacity/idempotence. [Packing HTTP](../../tests/e2e/frontend-pilot-api.spec.ts), `applies captured self-membership idempotently and reports capacity without accepting a body actor`, protects session admission. [Coexistence persistence](../../tests/integration/packing-coexistence.spec.ts), `commits a native assignment before an overlapping versioned root/item command without a deadlock`, `holds native assignment before its item lock until the versioned root/item command commits` and `retains concurrent native assignments on different items of the same list`, protects the approved 2026-10-12 root-S-before-item-X remedy against both arrival orders and loss of native parallelism. Additional cases preserve deletion-during-discovery, native removal and later overwrite outcomes. This bounded proof does not certify unrelated writer schedules. |
 | **PCK-04/05; EC-PART-005** Everyone and local Packed state | `PackingPage.vue`, controller counters, native storage key | [Mounted editor](../../tests/frontend/frontend-pilot-editor.spec.ts), `preserves historical blank capacities, existing Everyone removals and packed color restoration`, asserts actual rendered restoration. [Packing persistence](../../tests/integration/packing-api.spec.ts), `preserves everyone-item counter rules and removes all historical duplicate self rows`, protects distinct shared semantics. [Pilot browser](../../tests/e2e/frontend-pilot.spec.ts), `pilot navigates without replacing the document and preserves the legacy Packed key`, exercises the actual browser store. |
@@ -90,6 +91,14 @@ extend this map with their own IDs rather than copy whole completed plans or cla
 | **ENT-03/08; REF-05** Packing lifecycle completion | Existing entity administrator completion callbacks and Packing's resulting-admission/invariant receipt | [Packing management persistence](../../tests/integration/packing-management-api.spec.ts), `prepares the Packing relink receipt for the resulting association and retains authorized no-op order` and `rolls back archive and restore completion failures and preserves repeated command acknowledgements`, protect preparation, changed/no-op/unlink admission, rollback and native default presentation. `rolls back a relink when preparing its resulting admission receipt fails` independently preserves the prior association. Actual execution belongs to the review; no broader lifecycle or header-cleanup guarantee is inferred. |
 | **ENT-09; OVR-06; REF-05/06** personal visibility completion | Existing user controller's optional manager-bound completion and one Overview wire projection | [Archival persistence](../../tests/integration/entity-archival.spec.ts), `rolls back a pilot preference when the actual archival permission projection fails` and `rolls back a pilot preference when the generated response preparation rejects its completion`, protect the original preference. `preserves native visibility presentation and the exact pilot DTO while preparing immutable transport output` checks the default/native result, v1 fields and captured receipt across later archive/context changes. The review owns execution; private placement remains distinct from shared archive/restore. |
 
+The isolated [built-client startup](../../tests/frontend/browser/frontend-startup.spec.ts) suite's
+`copied frontend styles preserve the native cascade before JavaScript at ${width}px` cases compare complete
+screenshots at 390px and 1280px. JavaScript remains disabled; the same SSR Help/table/sidebar document and controlled
+vendor assets first use Vite CSS, then in-memory compilation of the unchanged native authored styles with existing
+pilot overrides. All startup fixtures also reject/count native stylesheet URLs. This isolates stylesheet cascade
+and pre-JavaScript delivery; it is not full-feature visual acceptance or a built-system/backend E2E workflow.
+Actual execution belongs to the paired review.
+
 ### Shared action admission follow-up (2026-10-14)
 
 The context-owned `useActionState` coordinates rendered controls and deliberate dispatch without storing operation
@@ -105,12 +114,40 @@ fresh same-route state and cooldown expiry without another write. These isolated
 their HTTP, operation or discovery collaborators; they do not exercise the integrated backend or a real browser.
 Actual integration/browser execution and limits belong to the [paired review](PILOT_PARITY_REVIEW.md).
 
+Current identity, Packing and Overview consumers share `CommandFeedback` around the same command refs; repeated
+notice actions use `StatusNotice` with optional existing action state. The mounted suites above continue to protect
+feature placement, input retention, disabled/dispatch agreement and receipt lifetime through actual adopted controls.
+This presentation extraction supplies no new backend or visual acceptance by itself.
+
+Shared Packing archive/restore uses the actual Settings and Overview consumers. [Mounted editor](../../tests/frontend/frontend-pilot-editor.spec.ts),
+`preserves Settings confirmation, cancellation and initiating host for $confirmation`, and
+[refresh/navigation](../../tests/frontend/frontend-refresh-navigation.spec.ts), `preserves Overview confirmation,
+cancellation and global feedback for $confirmation`, each cover ordinary/inherited archive and restore over inherited
+state. They assert zero writes after cancellation, current German wording after owner creation, one confirmed write
+and the existing local/global feedback host; Overview also refreshes its projection. These are substituted-HTTP client
+assertions, not integrated persistence or visual certification. Execution remains in the paired review.
+
 ### Confirmed commands and automatic document reload (2026-10-15)
 
 | Baseline IDs | Current owner | Assertion and practical limit |
 |---|---|---|
 | **PCK-03; REF-02/05/06; EC-UI-01–03** confirmed result through paused reads | Existing shared command owner, session admission and actual Packing Quick Add | [Command recovery](../../tests/frontend/frontend-command-recovery.spec.ts), `retains a confirmed result when only its same-actor follow-up read becomes obsolete`, protects returned confirmation, failed-refresh warning and read-only reconciliation. `keeps intentional disposal before write confirmation obsolete` and the retained active-identity-change case protect the separate retirement boundaries. [Mounted Quick Add](../../tests/frontend/frontend-pilot-editor.spec.ts), `releases confirmed input once while session verification is %s`, covers pending/failed real context bootstrap, one validated creation, cleared title/description/capacity, no unknown-review state and later read-only recovery preserving a new draft. Its substituted HTTP is mounted client evidence, not real persistence or browser execution; current executed checks belong to the review. |
 | **SHL-04; REF-05; EC-UI-03/10** dynamic-page-only automatic document reload | Existing route metadata/admitted-content classifier and update coordinator | [Update coordinator](../../tests/frontend/frontend-update-coordinator.spec.ts), `keeps a static document through release and chunk failures without blocking guarded deliberate recovery` and `consults live route policy when a delayed command releases an automatic replacement`, protect live eligibility, unconsumed automatic marker and retained deliberate draft/command guards. [Actual app routes](../../tests/frontend/frontend-route-recovery.spec.ts) assert static create/duplicate/guest/identity/Help/common destinations, dynamic Overview/Packing startup, static denial at a dynamic URL and subsequent committed visits. [Built client startup](../../tests/frontend/browser/frontend-startup.spec.ts), `initial startup reloads a pristine dynamic route once and permits deliberate recovery from its stored marker` and `initial startup never automatically reopens token issuance and permits deliberate recovery`, inspect real built entry/chunk behavior and document requests. Their controlled HTTP fixtures establish client delivery, not backend token persistence or system E2E. Earlier startup-browser receipts retain their original policy inputs. Periodic content reads and session/security checks are outside this full-document change; current execution belongs to the review. |
+
+The later mounted outcome correction extends the router-only evidence above. In
+[route recovery](../../tests/frontend/frontend-route-recovery.spec.ts), `preserves a readable denial after bootstrap
+retirement (initial=%s)` renders actual SSR, hydrates App/PackingEntry and exercises both initial and warm denial.
+Release and chunk failures retain that static page; deliberate recovery still consults its independent guards.
+The remaining mounted cases restore dynamic eligibility only after fresh render admission and retire the earlier
+classification across resource and actor replacement. Substituted HTTP/reload makes this client composition evidence,
+not a real-browser or integrated system test. The review records execution separately.
+
+[Shared page navigation](../../tests/frontend/frontend-page-navigation.spec.ts) exercises actual router/lazy delivery:
+an older canceled import cannot retire the newer destination; all/document/path subscribers retain different query,
+fragment and path boundaries; failed delivery and disposal retire only their owner's callbacks. Existing App, Header,
+Overview and page-entry suites exercise actual adoption. The new built-client startup case, `a hydrated Packing denial
+retains its static document through a detected release`, exercises built modules and real document requests with
+controlled HTTP. It is a client-browser assertion; its execution belongs to the review rather than this source map.
 
 ## Retained native starting-point evidence
 

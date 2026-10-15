@@ -81,9 +81,9 @@ function fixture(t) {
     return root;
 }
 
-function inspect(root, strict = false) {
+function inspect(root, strict = false, args = []) {
     const report = path.join(root, 'artifacts/report.json');
-    const result = run(script, ['--root', root, ...(strict ? ['--strict'] : []), '--json', report]);
+    const result = run(script, ['--root', root, ...(strict ? ['--strict'] : []), ...args, '--json', report]);
     assert.ok(fs.existsSync(report), result.stderr);
     return {result, report: JSON.parse(fs.readFileSync(report, 'utf8'))};
 }
@@ -420,6 +420,59 @@ test('creating optional/generated files changes neither reference counts nor fin
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.equal(report.sourceFingerprint, before.sourceFingerprint);
     assert.equal(report.allowlistedMissingDocumentedPaths.length, 0);
+});
+
+test('projected path counts account for omitted and repeated references without editing configuration', t => {
+    const source = fixture(t);
+    const projected = fixture(t);
+    const configPath = 'docs/policies/documentation-check.json';
+    const sourceConfig = fs.readFileSync(path.join(source, configPath));
+    const projectedConfig = fs.readFileSync(path.join(projected, configPath));
+    // Assemble a different guide corpus: retain two paths, repeat one and omit
+    // another. The source's fixed expectations still match its own authored text.
+    write(projected, 'README.md', `# Projection\n${metadata}\n\n`
+        + `${optionalPaths.slice(0, -1).map(name => `\`${name}\``).join('\n')}\n\`${optionalPaths[0]}\`\n`);
+    const {result, report} = inspect(projected, true, ['--reference-root', source]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(report.summary.totalErrors, 0, JSON.stringify(report.errors));
+    const projection = report.documentedPathReferenceProjection;
+    assert.equal(projection.referenceRepository, source);
+    assert.deepEqual(projection.counts[0], {repositoryPath: optionalPaths[0], configuredExpected: 1,
+        referenceActual: 1, projectedActual: 2, projectedExpected: 2});
+    assert.deepEqual(projection.counts.at(-1), {repositoryPath: optionalPaths.at(-1), configuredExpected: 1,
+        referenceActual: 1, projectedActual: 0, projectedExpected: 0});
+    assert.deepEqual(fs.readFileSync(path.join(source, configPath)), sourceConfig);
+    assert.deepEqual(fs.readFileSync(path.join(projected, configPath)), projectedConfig);
+    assert.equal(inspect(source).report.summary.totalErrors, 0);
+    // The ordinary target report retains fixed counts rather than inheriting a
+    // preview-only expectation after this explicitly selected projection mode.
+    assert.equal(inspect(projected).report.errors.filter(function countDrift(error) {
+        return error.type === 'documented-path-allowlist-count-mismatch';
+    }).length, 2);
+});
+
+test('a projected report preserves source count drift and genuinely missing target paths', t => {
+    const source = fixture(t);
+    const projected = fixture(t);
+    fs.appendFileSync(path.join(source, 'README.md'), `\n\`${optionalPaths[0]}\`\n`);
+    fs.appendFileSync(path.join(projected, 'README.md'), '\n`src/missing-projected.ts`\n');
+    const {report} = inspect(projected, true, ['--reference-root', source]);
+    const mismatch = report.errors.find(function sourceCountDrift(error) {
+        return error.type === 'documented-path-allowlist-count-mismatch';
+    });
+    assert.equal(mismatch.repositoryPath, optionalPaths[0]);
+    assert.equal(mismatch.referenceExpected, 1);
+    assert.equal(mismatch.referenceActual, 2);
+    assert.equal(mismatch.actual - mismatch.expected, 1);
+    assert.ok(report.errors.some(function missingFinalPath(error) {
+        return error.type === 'missing-documented-repository-path'
+            && error.repositoryPath === 'src/missing-projected.ts';
+    }));
+    const liveMismatch = inspect(source).report.errors.find(function liveCountDrift(error) {
+        return error.type === 'documented-path-allowlist-count-mismatch';
+    });
+    assert.equal(liveMismatch.expected, 1);
+    assert.equal(liveMismatch.actual, 2);
 });
 
 for (const present of [false, true]) {

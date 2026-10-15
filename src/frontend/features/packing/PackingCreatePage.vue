@@ -18,6 +18,7 @@ import {useQueryAdmission} from '../../app/queryCache';
 import {usePageTitle} from '../../composables/pageTitle';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import EventPicker from '../../components/EventPicker.vue';
@@ -370,9 +371,7 @@ async function create(): Promise<void> {
          different native limits and must not lend them to this creation form. -->
     <!-- Native rejected creation POSTs render their ordinary flash above the card.
          Admission denials remain the separate full Error/Home outcome below. -->
-    <StatusNotice v-if="!admissionError && command.error.value" kind="danger"
-        :transient="command.transientError.value" :renewal="command.errorRenewal.value"
-        @dismiss="command.setError(null)">{{ command.error.value }}</StatusNotice>
+    <CommandFeedback v-if="!admissionError" :feedback="command.feedback" part="error" error-kind="danger" :inline="false" />
     <!-- Use the shared error card/Home action for initial route denials. These
          denials mount no form, issue no resource queries and disclose no copy. -->
     <PageMessage v-if="admissionError" kind="error" :message="admissionError" :renewal="admissionMessage" />
@@ -381,27 +380,20 @@ async function create(): Promise<void> {
             <i class="bi bi-bag-plus me-2" aria-hidden="true"></i>{{ messages.t('packing.create') }}
         </h1>
         <div class="card-body">
-            <StatusNotice v-if="command.uncertain.value" kind="warning">{{
-                messages.t('packing.creationUnknown')
-            }}</StatusNotice>
-            <StatusNotice v-if="destination.target.value" kind="success">
+            <CommandFeedback :feedback="command.feedback" part="uncertain" unknown-message="packing.creationUnknown" />
+            <StatusNotice v-if="destination.target.value" kind="success"
+                :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">
                 {{ messages.t('state.saved') }}
-                <ActionButton class="btn-sm ms-2" variant="outline-light"
-                    :state="destination.retryAction" @click="destination.retry">
-                    {{ messages.t('common.retry') }}
-                </ActionButton>
             </StatusNotice>
             <StatusNotice v-if="loadError" kind="danger" :last-updated-at="lastUpdatedAt"
-                :retry-at="retryAt" :read-error="loadError">
+                :retry-at="retryAt" :read-error="loadError"
+                :action="{state: readAction, label: messages.t('common.retry')}" @action="retryRead">
                 {{ messages.t(lastUpdatedAt ? 'state.stale' : 'state.loadFailed') }}
-                <ActionButton class="btn-sm ms-2" variant="outline-light" :state="readAction"
-                    @click="retryRead">{{ messages.t('common.retry') }}</ActionButton>
             </StatusNotice>
             <StatusNotice v-if="submissionAdmissionError" kind="warning" :last-updated-at="submissionAdmittedAt"
-                :retry-at="submissionRetryAt" :read-error="submissionAdmissionError">
+                :retry-at="submissionRetryAt" :read-error="submissionAdmissionError"
+                :action="{state: submissionRetryAction, label: messages.t('common.retry')}" @action="retrySubmissionAdmission">
                 {{ messages.t(submissionAdmittedAt ? 'state.stale' : 'state.loadFailed') }}
-                <ActionButton class="btn-sm ms-2" variant="outline-light" :state="submissionRetryAction"
-                    @click="retrySubmissionAdmission">{{ messages.t('common.retry') }}</ActionButton>
             </StatusNotice>
             <!-- Both create and duplicate use one admitted initial projection. The
                  event picker loads independently; a refresh never replaces this draft. -->

@@ -178,6 +178,57 @@ async function mounted(component: Component, props: Record<string, unknown>,
     return {wrapper: root.findComponent(component), root, router, context, request, update};
 }
 
+describe('Overview Packing lifecycle actions', () => {
+    it.each([
+        {restore: false, inherited: false, confirmation: 'packing.confirmArchive', success: 'overview.archived'},
+        {restore: false, inherited: true, confirmation: 'packing.confirmArchiveIndependent', success: 'overview.archived'},
+        {restore: true, inherited: true, confirmation: 'packing.confirmRestore', success: 'overview.restored'},
+    ] as const)('preserves Overview confirmation, cancellation and global feedback for $confirmation', async action => {
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
+        const confirmation = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
+        vi.stubGlobal('confirm', confirmation);
+        const globalAlerts = document.createElement('div');
+        globalAlerts.id = 'liveAlerts';
+        document.body.append(globalAlerts);
+        let writes = 0;
+        const packingCard: components['schemas']['OverviewCard'] = {...card, type: 'packing',
+            url: `/frontend-pilot/packing/${card.id}`, inheritedArchived: action.inherited,
+            capabilities: {...card.capabilities, archive: !action.restore, restore: action.restore}};
+        const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async function readLifecycle(captured): Promise<Response> {
+                if (captured.method === 'POST') {
+                    expect(new URL(captured.url).pathname).toBe(`/api/v1/packing-lists/${card.id}/${action.restore ? 'restore' : 'archive'}`);
+                    writes++;
+                    return json({changed: true});
+                }
+                return json({...region(captured), availableTypes: ['packing'], items: [packingCard]});
+            });
+
+        // The existing region's query, command and API owners survive a locale
+        // change; the shared action still obtains current confirmation wording.
+        context.locale.value = 'de';
+        await flushPromises();
+        const button = wrapper.findAll('button.dropdown-item').find(candidate => candidate.text()
+            === context.messages.value.t(action.restore ? 'common.restore' : 'common.archive'))!;
+        (button.element.closest('details') as HTMLDetailsElement).open = true;
+        await button.trigger('click');
+        await flushPromises();
+        expect(confirmation).toHaveBeenLastCalledWith(context.messages.value.t(action.confirmation));
+        expect(writes).toBe(0);
+        expect(globalAlerts.textContent).toBe('');
+        const readsBeforeConfirmation = request.mock.calls.length;
+
+        // Overview deliberately supplies no initiating section. Its inline receipt
+        // uses the existing global host and its existing post-command region read.
+        (button.element.closest('details') as HTMLDetailsElement).open = true;
+        await button.trigger('click');
+        await flushPromises();
+        expect(writes).toBe(1);
+        expect(request.mock.calls.length).toBeGreaterThan(readsBeforeConfirmation + 1);
+        expect(globalAlerts.textContent).toContain(context.messages.value.t(action.success));
+    });
+});
+
 describe('visible resource recovery', () => {
     it('admits a new mounted GET after a cached terminal denial without waiting for cache expiry', async function admitsColdRead() {
         let denied = true;

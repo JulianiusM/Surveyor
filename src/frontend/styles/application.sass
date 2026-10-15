@@ -1,0 +1,6 @@
+// Own the pilot cascade once for client imports and pre-JavaScript SSR delivery.
+// Keep installed Bootstrap/base styling, Help and pilot overrides in this order;
+// the copied native Sass and authored pilot.css retain their independent bytes.
+@use "style"
+@use "help"
+@use "pilot.css"

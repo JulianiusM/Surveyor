@@ -115,8 +115,11 @@ export async function prepareFrontendPilot(res: Response, url: string, bootstrap
     const development = frontendDevelopmentServer();
     // Vite's HTML transform applies its configured base to source URLs exactly once.
     // Installed-release manifest paths already include that base and skip the transform.
+    // The same composition imported by the client styles readable Help/startup
+    // recovery before JavaScript. Ordering belongs to that authored stylesheet;
+    // installed releases resolve its emitted CSS through Vite's manifest.
     const assets = development ? {script: '/src/frontend/app/entry-client.ts',
-        styles: ['/src/frontend/styles/pilot.css']} : clientAssets();
+        styles: ['/src/frontend/styles/application.sass']} : clientAssets();
     // Production resolves only the current release. Development uses the same renderer
     // source through Vite so SSR and hydrated components share module invalidation/HMR.
     const renderer = development
@@ -138,8 +141,7 @@ export async function prepareFrontendPilot(res: Response, url: string, bootstrap
     const head = `<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title}</title>${landingMetadata}<link rel="icon" href="/img/favicon-32x32.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-<link rel="stylesheet" href="/style/style.css"><link rel="stylesheet" href="/style/help.css">`;
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">`;
     // All shells contain JS-only enhancements, including otherwise static Help.
     // Keep the notice outside Vue's hydration tree and its default safe without JS.
     const body = `${javascriptInitializationNotice(locale)}<div id="surveyor-pilot">${rendered.html}</div>

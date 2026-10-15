@@ -6,7 +6,8 @@ import {hasHydrationDrafts} from './mountPreservingDrafts';
 import {createTranslator, localeManifest} from '../../modules/localization/translator';
 import type {Locale, LocalizationContext} from '../../types/LocalizationTypes';
 import type {PilotContext} from '../../types/FrontendPilotUiTypes';
-import '../styles/pilot.css';
+// Client loading and SSR links consume one frontend-owned cascade composition.
+import '../styles/application.sass';
 
 /** Keep the browser document's language and reading direction aligned with the
  * application locale, including the first hydrated render and later switches. */

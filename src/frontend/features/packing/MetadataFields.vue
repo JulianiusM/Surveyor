@@ -13,6 +13,7 @@ import {packingKeys} from '../../app/queryKeys';
 import {observeQueryReads, refetchFreshQuery, useQueryAdmission} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 
 // Mutation admission and pending interaction are distinct. An uncertain parent
@@ -51,8 +52,7 @@ const command = useCommand(readMetadata, true, {
     unknownMessage: 'draft.leaveUnknown',
     problemKey: metadataProblem,
 });
-const {pending, recovering: refreshing, uncertain: unknown, error, transientError, errorRenewal,
-    feedbackKind, setError, setInformation, clearRecoveredError} = command;
+const {pending, recovering: refreshing, uncertain: unknown, setInformation, clearRecoveredError} = command;
 
 function noIndependentDraft(): boolean { return false; }
 
@@ -319,8 +319,7 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
 </script>
 
 <template>
-    <StatusNotice v-if="error && !draft" :kind="feedbackKind" :transient="transientError" :renewal="errorRenewal"
-        @dismiss="setError(null)">{{ error }}</StatusNotice>
+    <CommandFeedback v-if="!draft" :feedback="command.feedback" part="error" :inline="false" :target="null" />
     <!-- One recovery action covers uncertainty, confirmed values awaiting authority
          and failed reads. Keep its node while an unknown command's read fails so
          the focused control is retained rather than replaced by another Refresh. -->
@@ -350,17 +349,11 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
         <!-- Native inline feedback belongs to Properties, before its form/disclosures.
              It stays visible when Details closes and never disables recovery by itself. -->
         <div data-command-feedback aria-live="polite">
-            <StatusNotice v-if="error" inline :kind="feedbackKind" :transient="transientError" :renewal="errorRenewal"
-                :disabled="busy || pending || refreshing" @dismiss="setError(null)">{{ error }}</StatusNotice>
-            <StatusNotice v-if="command.notice.value" inline :kind="command.noticeKind.value"
-                :transient="command.transientNotice.value" :renewal="command.noticeRenewal.value"
-                :last-updated-at="command.notice.value === 'state.savedRefreshFailed' && metadata.data.value && !lostAuthority
+            <CommandFeedback :feedback="command.feedback" inline :target="null" :disabled="busy || pending || refreshing"
+                :notice-last-updated-at="command.notice.value === 'state.savedRefreshFailed' && metadata.data.value && !lostAuthority
                     ? metadata.dataUpdatedAt.value : undefined"
-                :retry-at="command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"
-                :read-error="command.notice.value === 'state.savedRefreshFailed' ? metadata.error.value : undefined"
-                :disabled="busy || pending || refreshing" @dismiss="command.notice.value = null">
-                {{ messages.t(command.notice.value) }}
-            </StatusNotice>
+                :notice-retry-at="command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"
+                :notice-read-error="command.notice.value === 'state.savedRefreshFailed' ? metadata.error.value : undefined" />
         </div>
         <form ref="form" id="packing-metadata-form" novalidate @submit.prevent="save">
             <fieldset :disabled="disabled || busy || pending || refreshing || unknown || awaitingAuthority || lostAuthority"

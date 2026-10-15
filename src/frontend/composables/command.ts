@@ -7,6 +7,7 @@ import type {PilotCommandDraft, PilotCommandFeedback, PilotCommandOutcome, Pilot
     PilotRecoveryRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import {inlineFeedbackTarget, useFeedbackError} from './feedback';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import type {PilotCommandPresentation} from '../../types/FrontendFeedbackTypes';
 
 /** These collaborators are private to the mounted draft tree. No draft values or callbacks
  * enter server rendering data, query caches, browser storage or another application request. */
@@ -649,7 +650,17 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         return confirmed ? result : undefined;
     }
 
-    return {action, recoveryAction, pending, recovering, uncertain, error, transientError, errorRenewal, errorPresentation, feedbackKind, feedbackTarget,
+    /** Presentation clears only its own receipt. It never acknowledges uncertainty,
+     * releases a draft/status lease or changes the admitted command's outcome. */
+    function dismissError(): void { setError(null); }
+    function dismissNotice(): void { notice.value = null; }
+
+    // Share the actual refs rather than copying their current values into another
+    // reactive store. Components receive no operation, draft or recovery callback.
+    const feedback: PilotCommandPresentation = {error, transientError, errorRenewal, errorPresentation, feedbackKind, feedbackTarget,
+        notice, noticeKind, transientNotice, noticeInline, noticeRenewal, uncertain, dismissError, dismissNotice};
+
+    return {action, recoveryAction, pending, recovering, uncertain, feedback, error, transientError, errorRenewal, errorPresentation, feedbackKind, feedbackTarget,
         notice, noticeKind, transientNotice, noticeInline, noticeRenewal, outcome, setError, setInformation, setNotice,
         clearRecoveredError, captureFeedback, run, reconcile, recover, acknowledge,
         mayLeave: protection.mayLeave, prepareDeparture: protection.prepareDeparture};

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: editorial reconciliation of P0/P1 delivery, follow-up disposition and the maintainer's definition-guard correction; original future phase contracts retained; no new runtime verification
+verification-scope: implemented bounded native-isolation ownership reconciled with completed P0/P1 and future phases; actual execution remains in paired review; no full migration or cutover claimed
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -31,6 +31,26 @@ in force, alongside the [approved decision history](FRONTEND_FOUNDATION_DESIGN.m
 
 ## Phase contracts
 
+The maintainer's [native-frontend isolation decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-native-frontend-isolation-decision-2026-10-15)
+answers the later R1 native-helper/browser-build proposal, separately from the earlier automatic-reload R1. It rejects
+shared native-password extraction. Native frontend code stays untouched and is removed only after full
+migration and authorized cutover. The new frontend owns required copied behavior; temporary native/new duplication
+is accepted. New-frontend consumers still share their owners, while backend/domain/controller/DBAL/catalog code remains
+shared. The subsequent instruction to implement the bounded adaptation is realized in the existing frontend feedback
+owner and `src/frontend/styles/`: receipt-owned ten-second scheduling/cancellation replaces the native timer import,
+and authored `style.sass`, `accordion.sass`, `timezone-select.sass` and `help.sass` replace native stylesheet links.
+`application.sass` is their single cascade-composition owner with existing pilot overrides, consumed by both the client
+entry and development renderer. No native global alert system, second command/state owner or generated CSS copy is
+introduced.
+
+The copied graph retains installed Bootstrap SCSS, currently 5.3.8, alongside the renderer's existing Bootstrap 5.3.3
+CDN layer. Preserve that effective cascade, stylesheet order, dark geometry and Help rules; this is not authorization
+to deduplicate vendor layers. Ordered Vite client/SSR delivery keeps SSR/static Help styled before JavaScript runs.
+Native Sass/browser/build inputs, shared logo/favicon assets and third-party packages remain intact. The
+[implementation receipt](PILOT_PARITY_REVIEW.md#native-frontend-isolation-implementation-2026-10-15) owns the current
+dependency, notice-lifetime and presentation evidence with its limits. Original frontend sharing choices remain in
+dated history; general backend defects, future feature phases and separately authorized cutover retain their exclusions.
+
 Use **small vertical migrations with parallel feature streams**, keeping Events on the main dependency path and
 splitting Activities and finance into independently reviewable packages.
 
@@ -40,40 +60,26 @@ Surveys do not need the Vue Event pages to be finished, and finance does not dep
 Every package should follow the
 existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature-view).
 
-1. **P0 — Close the identified readiness gaps**  
-   **Complexity:** Medium. **Prerequisites:** None.
+1. **P0 — Foundation readiness; recorded complete.** The original package covered generation-timeout diagnosis,
+   meaningful permission/Help comments, corrected maintenance evidence and an honest build/compiler/test handoff.
+   Its [receipt](PILOT_PARITY_REVIEW.md#p0-foundation-verification-2026-10-14) preserves the unresolved original timeout
+   cause, measured fixture cost, unchanged assertions/deadlines and actual verification limits. Completed execution
+   steps remain in Git rather than another active checklist.
 
-    - Diagnose the generator watcher failure using recorded phases, child output, and cleanup evidence. Correct its
-      demonstrated cause without weakening assertions.
-    - Complete method contracts and internal comments in migration-modified permission and Help operations.
-    - Correct stale maintenance evidence while preserving original discoveries and approved decisions.
-    - Establish the current build, generation, compiler, and focused-test results that subsequent agents will inherit.
+2. **P1 — Identity administration and common presentation; recorded complete.** P1 used the existing identity
+   foundation after P0. Its original packages remain identifiable:
 
-   **Completion:** the watcher failure has an explained disposition, changed operations satisfy readability
-   requirements, and the handoff distinguishes passing checks from remaining limitations. Read-only feature inventories
-   can proceed alongside this phase.
+    - **P1A:** current-profile editing, account-owned roster/creation and existing profile switching.
+    - **P1B:** token issuance, entry, private preview and explicit profile transfer.
+    - **P1C:** profile deactivation and full/guest account deletion with distinct confirmations, remaining-profile,
+      mail, session and provider consequences.
+    - **P1D:** opt-in landing, message and error presentation. `/frontend-pilot` remains Overview; configured
+      privacy/imprint links remain external and `/healthz` remains Express-owned.
 
-2. **P1 — Complete identity administration and common presentation**  
-   **Complexity:** High. **Prerequisites:** P0 for implementation; existing pilot identity infrastructure remains the
-   foundation.
-
-   Split this into separate packages:
-
-    - **P1A: Profile management.** Active-profile editing, account-owned profile listing and creation, and adoption of
-      the existing profile-switch operation.
-    - **P1B: Profile transfer.** Migration-token issuance, token entry, private preview, and explicit execution.
-    - **P1C: Destructive identity workflows.** Profile deactivation and full/guest account deletion, with their distinct
-      confirmations, remaining-profile selection, mail, session, and provider consequences.
-    - **P1D: Common presentation.** Landing page, message pages, and error presentation. Use an explicit opt-in landing
-      route; preserve `/frontend-pilot` as Overview during coexistence. Keep configured privacy/imprint destinations as
-      external links and `/healthz` as an Express endpoint.
-
-   **Existing owners:** `userController`, `UserService`, existing identity components and session-completion
-   infrastructure.
-
-   **Completion:** account/guest distinctions, ownership, token handling, rejected and unknown outcomes, and
-   private-cache retirement are protected. Login, registration, recovery, activation, and profile switching are reused
-   rather than implemented again.
+   Existing `userController`, `UserService`, identity components and session-completion owners retain responsibility.
+   The [receipt and direct-reuse correction](PILOT_PARITY_REVIEW.md#p1-migration-verification-2026-10-14) distinguish
+   account/guest admission, ownership, private-cache retirement, rejected/unknown outcomes and current native reuse
+   from superseded stronger wrappers. Login, registration, recovery, activation and profile switching are reused.
 
    **Approved correction (2026-10-14):** the original P1B/C finality-review prerequisite does not require backend
    remediation before frontend migration. The review identified existing defects; the maintainer explicitly excludes
@@ -264,10 +270,13 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
     - Adopt default routes while preserving bookmarks, provider/token links, downloads, exports, and correct
       error/status handling.
     - Publish independently reviewed documentation from its exact prepared bytes.
-    - Retire superseded native interactive views, browser modules, adapters, and comparator tooling using the existing
-      retirement inventory.
-    - Retain shared controllers, DBAL, domain engines, assets/helpers still consumed, and mail/PDF/print/download
-      owners.
+    - After native browser-pipeline retirement and before verbatim guide publication, reconcile exact staged mappings,
+      commands, generated-file/watch instructions and source inventories with the final executable configuration.
+      Current native/esbuild inventories remain truthful until that retirement; do not invent replacement commands.
+    - Remove all native frontend code after full migration, then retire native adapters and comparator tooling through
+      the existing inventory. Required copied behavior already belongs to new-frontend owners.
+    - Retain shared controllers, DBAL, domain engines/catalogs, common image assets, third-party packages and
+      mail/PDF/print/download owners; none justifies retaining native frontend application code.
 
     Native preservation ends at authorized cutover. It must not become a permanent second frontend.
 
@@ -281,6 +290,8 @@ Every agent handoff must contain:
 - Actual authorization, governing context, owned files, prerequisites, and unresolved decisions.
 - Selected behavior and edge-case IDs from the existing inventories.
 - Native/v1 callers adopting the same business operations.
+- New-frontend consumers adopting one frontend owner without direct native frontend imports; any temporary
+  native/new copy and the actual dependency/parity evidence under the approved isolation decision.
 - Draft, identity, permission, file, concurrency, and completion boundaries.
 - Executed checks and their limits, plus independent semantic review.
 - Remaining work and the next package’s producer contracts.

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved dynamic-page-only automatic document reload and confirmed-command follow-up correction reconciled with scoped execution in paired review; original amendments, parity-only exclusions and publication boundaries retained
+verification-scope: native-isolation decision/history and implemented frontend-owned timer/style delivery reconciled; prior amendments and execution retain their scopes; no full migration or cutover claimed
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -491,6 +491,35 @@ general-defect disposition. Native source/UI/Help stay the temporary visual/beha
 Historic D2 schema/reset decisions apply only to inspected disposable targets; no production reset or default-route
 replacement follows from a successful local run.
 
+### Authorized native-frontend isolation decision (2026-10-15)
+
+The maintainer explicitly rejects the later conversation's R1 native-password-helper/browser-build sharing proposal.
+This is distinct from the earlier R1 automatic-document-reload answer recorded above; answer-scoped identifiers
+do not transfer approval between those decisions. Native frontend code must remain
+untouched and all of it is to be removed after full migration. Required native frontend behavior may be copied into
+new-frontend owners, but the new frontend must not directly consume native frontend code. This permits temporary
+native/new duplication; matching consumers within the new frontend still share their implementation. Shared backend
+business/domain operations, controllers, DBAL and catalogs remain shared. Common Bootstrap/icons dependencies and
+logo/favicon assets are not native application code.
+
+Earlier guidance directly reused the native alert timer and retained native style/helper consumers. This amendment
+supersedes that frontend dependency choice without changing the preserved appearance or behavior. At the decision-only
+checkpoint, the timer import and renderer stylesheet links still required the bounded adaptation in the existing
+plan; the decision itself implemented no independence. The password duplication finding is resolved as an
+approved coexistence disposition, not by extraction. Earlier decisions and executed checks retain their original scope.
+
+Native code removal follows complete feature migration and separate cutover authorization. Shared images, third-party
+packages and backend owners retain their real consumers; this does not authorize deleting all of `src/public/`,
+duplicating backend logic, changing native builds or publishing guides.
+Preserve the current approved comparator and its dated exceptions; no rollback of earlier approved changes is directed.
+
+The subsequent explicit instruction to implement the plan authorizes that bounded adaptation. The existing frontend
+feedback owner now owns the transient timer, and copied authored Sass belongs to `src/frontend/styles/`.
+`application.sass` owns its cascade once for client imports and Vite client/SSR delivery before JavaScript.
+Native source/build inputs and shared backend owners remain unchanged.
+The [implementation receipt](PILOT_PARITY_REVIEW.md#native-frontend-isolation-implementation-2026-10-15) owns the actual
+checks and limits; full feature migration, native removal and publication remain future separately authorized work.
+
 ## Cutover retirement inventory
 
 The [boundary manifest](documentation-boundary.json) is the sole amendment-to-destination inventory.
@@ -501,8 +530,9 @@ default-route change, native removal or production edit is authorized by this in
 
 | Other temporary material | Cutover disposition |
 |---|---|
-| Native view/browser/Help consumers | Retire superseded consumers and root-native corpus references only after migrated callers are complete. `docs/user-guide/` remains the canonical parent; its flat native corpus is temporary comparison material. |
-| Shared browser helper and assets | Vue feedback uses `src/public/js/shared/alerts.ts`; renderer/header consumers still use `/style/style.css`, `/style/help.css`, `/img/logo.png` and `/img/favicon-32x32.png`. Retain or relocate each dependency once with all consumers updated; do not delete all of `src/public/` or duplicate shared backend owners. |
+| Native view/browser/style/Help consumers | After full migration and authorized cutover, remove all native frontend code and retire root-native corpus references. Required copied behavior belongs to new-frontend owners before removal. `docs/user-guide/` remains the canonical parent; its flat native corpus is temporary comparison material. |
+| Copied native presentation behavior | The frontend feedback owner supplies notice timing; authored native Sass is copied into `src/frontend/styles/` and composed with pilot overrides by `application.sass` for Vite delivery. Preserve its effective cascade and pre-JavaScript styling. Native source/build inputs remain comparison material until authorized removal, not permanent new-frontend dependencies. |
+| Shared dependencies and assets | Retain actual backend/domain/catalog owners, third-party Bootstrap/icons and `/img/logo.png`/`/img/favicon-32x32.png` consumers. These are distinct from native application code. Do not delete all of `src/public/` or duplicate shared backend owners. |
 | Comparator fixtures and capture tooling | Review `tests/frontend/`, `tests/integration/`, `tests/e2e/` and maintained capture scripts. Retire/adapt native-only comparison assertions and corpus/routes; retain shared persistence, privacy, recovery and new-frontend behavior checks. |
 | Migration profile, control and staged tooling | Retire the profile, completed baselines, recipes, inventories, review/status records and this guard/manifest only after authorized cutover and review of their remaining unique contracts. Original API rationale and intended future targets now belong to active DEC-006; current contribution rules are mapped to the existing guide amendments. Reconcile any remaining unique decision into its durable owner before retiring its source. Unresolved defects retain their existing owner; generic discovery still works with this directory absent. Do not create another archive or carry migration links into replacement bytes. |
 | Historical evidence | Existing Git history and ignored images/results describe their original verification scope. They impose no continuing native preservation requirement or deployed-version claim. |

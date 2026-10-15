@@ -1432,6 +1432,68 @@ implementation_defects:
       - Root and independent source review accept the confirmed-result, admission, lifetime and no-replay boundaries.
     evidence_limit: The Quick Add checks substitute HTTP and establish mounted production-client behavior, not actual
       persisted duplication or system E2E. No database, provider or native-backend guarantee is claimed by this closure.
+  - id: IMP-062
+    status: closed
+    closed_on: 2026-10-15
+    severity: medium
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Mounted static denial loses automatic-reload exclusion after bootstrap retirement
+    evidence:
+      - src/frontend/app/createApp.ts previously classified static outcomes only through initialDocumentFor.
+        src/frontend/composables/pageEntry.ts retires that initial document when a typed or transport denial becomes
+        current; warm admission has no eligible initial bootstrap to classify.
+      - tests/frontend/frontend-route-recovery.spec.ts originally exercised the router and update coordinator without
+        mounting App and PackingEntry, so its static-bootstrap case did not exercise this retirement boundary.
+    impact: A readable denial on a dynamic resource URL can become eligible for automatic document replacement,
+      contrary to the approved static-outcome exclusion. Initial rendering and reload can disagree about the same page.
+    history: The full pilot source review on 2026-10-15 identified the mounted lifetime gap in the earlier
+      dynamic-page-only correction; earlier passing route fixtures retain their narrower unmounted scope.
+    authorization: The maintainer directly authorized the reviewed readiness plan and extraction of meaningful
+      existing overlap. This correction applies the existing static-outcome decision without changing native behavior.
+    documentation_contract: Rendering and automatic document replacement share the current actor/visit's admitted
+      static outcome. Initial-data retirement cannot change a still-visible denial into dynamic content. Fresh render
+      admission restores dynamic eligibility; deliberate recovery retains its independent draft/command guards.
+    closure_evidence:
+      - The existing context consumes only scoped mounted outcome predicates from usePageEntry; App, createApp and
+        entry-server share its classifier without mirroring private query data.
+      - Actual SSR and hydrated App/PackingEntry cases protect initial/warm denial, release/chunk recovery, retained
+        deliberate guards, fresh render restoration and retirement across resource/actor changes. The final combined
+        client/genuine server-component suite and built-client browser selection passed; the current pilot review
+        owns exact commands, counts and practical limits.
+      - Normal build, final frontend/client/SSR and test compiler checks passed. Root and independent nonauthor review
+        accept current ownership, scoped lifetime, actual shared adoption and preserved navigation/admission guards.
+    evidence_limit: Mounted cases substitute HTTP; controlled built-browser delivery is client evidence. Neither is
+      system E2E, real persistence, a full visual matrix or deployment verification. No general backend remedy is included.
+  - id: IMP-063
+    status: resolved
+    resolved_on: 2026-10-15
+    severity: medium
+    owner: frontend migration maintainers
+    out_of_scope_for_documentation_migration: true
+    title: Native and pilot registration duplicate the same client password criteria
+    related_defects: [IMP-003]
+    evidence:
+      - src/public/js/core/password-validation.ts separately calculates length, letter and digit requirements in
+        isPasswordValid and verifyPassword. Native registration loads this implementation through verify_password.ts.
+      - src/modules/lib/frontendIdentity.ts repeats those criteria for the mounted Vue registration form's validity
+        and feedback. At the original review its dependency-avoidance comment did not establish an approved exception.
+    impact: The original review identified divergence risk between native and Vue criteria and found behavior tests
+      insufficient to establish shared implementation. The later explicit isolation decision accepts that temporary
+      cross-frontend duplication; it is no longer an unresolved readiness defect under the approved boundary.
+    history: Independent source review on 2026-10-15 found both live owners after the readiness extraction, without a
+      recorded scoped exception. A shared native-helper/browser-build proposal was then presented as the later R1;
+      the maintainer explicitly rejected it through the native-frontend isolation decision. This R1 is distinct from
+      the earlier automatic-document-reload answer.
+    resolution: The explicit 2026-10-15 decision permits temporary native/new frontend duplication while native code
+      remains untouched and is later removed after full migration and authorized cutover. The new frontend must not
+      directly consume native frontend code. This finding is resolved as an approved coexistence disposition, not by
+      extraction or repaired criteria. See the dated native-frontend isolation amendment in FRONTEND_FOUNDATION_DESIGN.
+    documentation_contract: Matching new-frontend consumers share their own implementation; backend/domain/controller/DBAL
+      owners and catalogs remain shared. Existing password criteria, reset behavior and server enforcement are unchanged;
+      the separate IMP-003 backend remedy remains excluded.
+    evidence_limit: The observed duplication remains present under the explicit exception. No extraction, native or
+      browser-build change, behavioral correction or new runtime verification is claimed by this disposition.
 findings:
   - id: DOC-PERMISSION-POLICY-REVIEW
     status: open

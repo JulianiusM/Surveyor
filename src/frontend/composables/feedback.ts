@@ -6,7 +6,10 @@ import type {LocalizationContext, MessageKey} from '../../types/LocalizationType
 import type {components} from '../../types/api/v1';
 import type {PilotPlainMessageKey, PilotProblemPresentation} from '../../types/FrontendPilotUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
-import {scheduleAlertDismissal} from '../../public/js/shared/alerts';
+
+// Preserve the existing transient-feedback interval in this frontend's owner.
+// Native browser code remains an independent comparison implementation.
+const transientNoticeLifetimeMs = 10_000;
 
 /** Make the shared server cooldown reactive even when a failed read has no polling observer.
  * The wakeup changes availability only; the caller owns explicit retry and request scope. */
@@ -61,7 +64,7 @@ export function isElementVisible(element: HTMLElement): boolean {
         && !element.closest('[hidden], .d-none, [aria-hidden="true"]') && !!element.getClientRects().length;
 }
 
-/** Bind the native transient-alert lifetime to a reactive renderer's state owner.
+/** Own the established transient-alert lifetime within the reactive renderer.
  * Hidden messages wait for disclosure, renewed receipts get a fresh interval, and
  * page-cache restoration restarts observation without accumulating timers/listeners. */
 export function useTransientNotice(element: Ref<HTMLElement | null>, transient: () => boolean,
@@ -70,7 +73,7 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
     let paused = false;
     let listening = false;
     let observer: MutationObserver | undefined;
-    type NoticeLifetime = {element: HTMLElement; renewal: unknown; cancel?: () => void};
+    type NoticeLifetime = {element: HTMLElement; renewal: unknown; timer?: ReturnType<typeof setTimeout>};
     let lifetime: NoticeLifetime | undefined;
     let presented: {element: HTMLElement; renewal: unknown} | undefined;
 
@@ -80,7 +83,9 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
     }
 
     function cancelLifetime(): void {
-        lifetime?.cancel?.();
+        // This receipt owns its timer directly. Retiring it cannot cancel another
+        // notice's interval or depend on a native DOM observer's global registry.
+        if (lifetime?.timer !== undefined) clearTimeout(lifetime.timer);
         lifetime = undefined;
     }
 
@@ -100,10 +105,8 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
         // fallback belong to the same outcome. Only the semantic receipt watcher
         // may renew its deadline or inline focus; explicit lifecycle cleanup stops it.
         if (lifetime && (lifetime.element !== element.value || !Object.is(lifetime.renewal, renewal()))) cancelLifetime();
-        // Vue owns this node and its ancestors. The unchanged native observer is
-        // reserved for native documents; it cannot remove or renew a Vue receipt.
-        // Observe disclosure and relocation, while the shared existing scheduler
-        // remains the sole owner of the ten-second interval.
+        // Vue owns this node and its ancestors, including disclosure, relocation
+        // and the receipt's timer. No other frontend can remove or renew it.
         observer = new MutationObserver(refreshVisibility);
         observer.observe(document.body, {subtree: true, childList: true,
             attributes: true, attributeFilter: ['class', 'style', 'hidden', 'role', 'aria-hidden']});
@@ -120,9 +123,12 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
         if (!lifetime) {
             const started: NoticeLifetime = {element: target, renewal: renewal()};
             lifetime = started;
-            started.cancel = scheduleAlertDismissal(target, expireReceipt);
+            started.timer = setTimeout(expireReceipt, transientNoticeLifetimeMs);
 
             function expireReceipt(): void {
+                // Retain the expired receipt until renewal/retirement, so a later
+                // DOM change cannot schedule the same completed outcome again.
+                started.timer = undefined;
                 if (mounted && !paused && lifetime === started && transient()
                     && Object.is(started.renewal, renewal())) dismiss();
             }

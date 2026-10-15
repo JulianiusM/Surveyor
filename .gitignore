@@ -278,6 +278,13 @@ src/public/js/**/*.gen.js.map
 src/public/style/**/*.css
 src/public/style/**/*.css.map
 
+# Optional Sass IDE output; Vite consumes the authored Sass and pilot.css directly.
+src/frontend/styles/accordion.css
+src/frontend/styles/application.css
+src/frontend/styles/help.css
+src/frontend/styles/style.css
+src/frontend/styles/timezone-select.css
+
 src.zip
 /playwright.config.js
 /scripts/e2e.db.init.js

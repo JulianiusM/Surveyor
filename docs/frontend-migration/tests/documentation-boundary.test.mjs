@@ -402,6 +402,7 @@ test('prepares complete delta output at final paths using the real advisory chec
     // Its target resolves in the preview without rewriting any replacement bytes.
     const diagnostics = JSON.parse(fs.readFileSync(path.join(preview, 'documentation-preview.json'), 'utf8'));
     assert.equal(diagnostics.advisory, true);
+    assert.equal(diagnostics.documentedPathReferenceProjection.referenceRepository, fixture.root);
     const brokenReadmeLinks = diagnostics.errors.filter(function readmeLinkFailure(finding) {
         return finding.type === 'broken-link' && finding.path === 'README.md';
     });
@@ -442,6 +443,37 @@ test('pins the exact untracked public runtime fixture in a real Git preparation'
     assert.equal(stale.status, 1, stale.stdout + stale.stderr);
     assert.match(stale.stderr, /Preparation inputs changed/);
     assert.equal(fs.readFileSync(contained(fixture.root, 'README.md'), 'utf8'), originalReadme);
+});
+
+test('copies only exact reviewed untracked shared frontend owners', function publicFrontendOwners(t) {
+    const fixture = createFixture(t);
+    const owners = ['src/types/FrontendFeedbackTypes.d.ts', 'src/frontend/components/CommandFeedback.vue',
+        'src/frontend/composables/pageNavigation.ts', 'src/frontend/features/packing/lifecycle.ts',
+        'src/frontend/styles/application.sass',
+        'src/frontend/styles/style.sass', 'src/frontend/styles/accordion.sass',
+        'src/frontend/styles/timezone-select.sass', 'src/frontend/styles/help.sass',
+        'tests/frontend/frontend-page-navigation.spec.ts'];
+    for (const relative of owners) write(fixture, relative, `// Synthetic reviewed public owner: ${relative}\n`);
+    const unlisted = 'src/frontend/styles/unlisted-neighbor.sass';
+    write(fixture, unlisted, '// Unlisted source must not enter the copied tree.\n');
+    fixture.manifest.previewInputs = owners;
+    writeManifest(fixture);
+
+    const result = runBoundary(fixture, {preview: true});
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const prepared = fixtureReceipt(fixture);
+    // All named files remain untracked in the source. Neither their containing
+    // directories nor an unrelated sibling become preview-copy permissions.
+    for (const relative of owners) {
+        const content = fs.readFileSync(contained(fixture.root, relative), 'utf8');
+        assert.equal(fs.readFileSync(contained(prepared.preview, relative), 'utf8'), content);
+        assert.equal(git(fixture, ['ls-files', '--', relative]), '');
+        const source = prepared.receipt.inputs.files.find(function reviewedPublicSource(input) {
+            return input.path === relative;
+        });
+        assert.equal(source?.sha256, documentationDigest(content));
+    }
+    assert.equal(fs.existsSync(contained(prepared.preview, unlisted)), false);
 });
 
 test('rejects an admitted public file replaced by a directory before preview writes', function publicFileKind(t) {

@@ -11,6 +11,7 @@ import {canRetryRead, useActionState, usePilot} from '../app/context';
 import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../app/transport';
 import {retireQueryFamily, useQueryAdmission} from '../app/queryCache';
 import {useReadRetry} from './feedback';
+import {observePageNavigation} from './pageNavigation';
 
 /** Admit SPA navigation only for an ordinary primary click. Modified clicks, downloads
  * and explicit targets retain their captured href and native tab/window behavior. */
@@ -29,39 +30,6 @@ function pageDestination(router: Router, url: string): string {
     // Router redirects may reserialize a decoded query. Resolve its structured location
     // once so equivalent encoded return paths do not appear to be a failed commitment.
     return router.resolve({path: resolved.path, query: resolved.query, hash: resolved.hash}).fullPath;
-}
-
-/** Lazy delivery starts before currentRoute changes. Reads and confirmed continuations share
- * this observation rule, while each caller releases its own application-owned subscriptions. */
-function observePageNavigation(router: Router, onFinish?: () => void) {
-    let destination: RouteLocationNormalized | undefined;
-    const removeStart = router.beforeEach(rememberDestination);
-    const removeFinish = router.afterEach(finishDestination);
-    const removeError = router.onError(failDestination);
-
-    function rememberDestination(to: RouteLocationNormalized, from: RouteLocationNormalized): void {
-        destination = frontendDocumentUrl(to.fullPath) !== frontendDocumentUrl(from.fullPath) ? to : undefined;
-    }
-
-    function finishDestination(to: RouteLocationNormalized): void {
-        if (destination === to) destination = undefined;
-        onFinish?.();
-    }
-
-    function failDestination(_error: unknown, to: RouteLocationNormalized): void {
-        finishDestination(to);
-    }
-
-    function pending(): boolean {
-        return destination !== undefined;
-    }
-
-    function dispose(): void {
-        removeStart();
-        removeFinish();
-        removeError();
-    }
-    return {pending, dispose};
 }
 
 /** Apply a server-owned entry decision to the captured route and identity. This operation is
@@ -158,7 +126,7 @@ const identityNavigations = new WeakMap<PilotContext['session'], () => void>();
 function retainIdentityNavigation(context: PilotContext, router: Router, confirmedContext: string,
                                  outcome: components['schemas']['PageEntryOutcome'], origin: string,
                                  completion?: PilotConfirmedNavigation): void {
-    const navigation = observePageNavigation(router, resumeNavigation);
+    const navigation = observePageNavigation(router, {finished: resumeNavigation});
     const stop = watch(() => [context.ready.value, context.session.value?.context, context.epoch.value], resumeNavigation);
     identityNavigations.set(context.session, retireNavigation);
 
@@ -628,6 +596,15 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
     // falls back to the original denial without reviving an old render snapshot.
     const error = computed(() => query.error.value
         ?? (deniedEntry.value instanceof ApiFailure ? deniedEntry.value : null));
+    // The denial owner already fences current actor/resource/read generations.
+    // Publish only its visible static classification, so retiring private initial
+    // data cannot make this error look interactive or eligible for automatic reload.
+    const retirePageOutcome = context.registerPageOutcome(documentRoute, hasStaticOutcome);
+    onBeforeUnmount(retirePageOutcome);
+
+    function hasStaticOutcome(): boolean {
+        return outcome.value?.kind === 'denied' || isReadDenial(error.value);
+    }
     // A denied resource/actor may not present an earlier successful read as its
     // current authority. No command confirmation or copied form value is a receipt.
     const admittedAt = computed(() => context.ready.value && !deniedEntry.value && !isReadDenial(error.value)

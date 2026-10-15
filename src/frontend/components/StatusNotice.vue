@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import {computed, inject, onBeforeUnmount, onMounted, ref, shallowRef, watch} from 'vue';
 import type {MessageKey} from '../../types/LocalizationTypes';
+import type {PilotNoticeAction} from '../../types/FrontendFeedbackTypes';
 import {createTranslator, formatReadTime} from '../../modules/localization/translator';
 import {pilotContextKey, useClientInitialization, usePilot} from '../app/context';
 import {isElementVisible, readFailureMessage, useTransientNotice} from '../composables/feedback';
+import ActionButton from './ActionButton.vue';
 
 // Teleport has no DOM element for automatic fallthrough. Preserve the original
 // alert's caller classes, IDs, ARIA attributes and listeners on its actual node.
@@ -28,8 +30,11 @@ const props = withDefaults(defineProps<{
     // A current read can add its validated issue to the generic stale/cold warning.
     // The transport remains the trust boundary; arbitrary exception text is hidden.
     readError?: Error | null;
+    // The caller retains dispatch, admission and cooldown. Only the repeated
+    // in-notice action layout belongs here, before the read diagnostics below.
+    action?: PilotNoticeAction;
 }>(), {kind: 'info', noMargin: false, marginBottom: 3, transient: false, inline: false, disabled: false});
-const emit = defineEmits<{dismiss: []}>();
+const emit = defineEmits<{dismiss: []; action: [source: MouseEvent]}>();
 const element = ref<HTMLElement | null>(null);
 // Standalone flashes do not require an application context. Mounted pilot notices
 // localize Close, read diagnostics and timestamps; standalone callers retain the
@@ -107,7 +112,8 @@ function dismiss(): void {
              {'alert-dismissible': inlineNotice, fade: inlineNotice, show: inlineNotice}]"
              :role="transientNotice || noticeKind === 'danger' ? 'alert' : 'status'"
              :tabindex="inlineNotice ? -1 : undefined">
-            <slot />
+            <slot /><ActionButton v-if="action" :class="action.class ?? 'btn-sm ms-2'" variant="outline-light"
+                :state="action.state" @click="emit('action', $event)">{{ action.label }}</ActionButton>
             <div v-if="readIssue" class="mt-2" data-read-issue>{{ readIssue }}</div>
             <!-- This is the last successful read, not the time of the failed retry.
                  Its owner omits it after actor/resource changes or confirmed denial. -->

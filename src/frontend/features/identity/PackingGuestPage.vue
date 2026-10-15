@@ -16,6 +16,7 @@ import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {isReadDenial} from '../../app/transport';
 
@@ -174,27 +175,25 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
             <!-- The entry title loads independently of the generic identity choices and
                  editable draft. Never replace those mounted fields during a title refresh. -->
             <LoadingSkeleton v-if="!guestEntry && !entry.error.value" :rows="1" />
-            <StatusNotice v-if="command.error.value" kind="danger"
-                :transient="!!command.error.value && command.transientError.value" :renewal="command.errorRenewal.value" @dismiss="command.setError(null)">{{
-                command.error.value
-            }}</StatusNotice>
+            <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" :inline="false" />
             <StatusNotice v-if="entry.error.value && !props.entry" kind="danger"
                 :read-error="entry.error.value" :retry-at="titleRetryAt"
-                :last-updated-at="guestEntry ? entry.dataUpdatedAt.value : undefined">{{
+                :last-updated-at="guestEntry ? entry.dataUpdatedAt.value : undefined"
+                :action="{state: titleRetryAction, label: messages.t('common.retry')}" @action="retryGuestTitle">{{
                 messages.t(guestEntry ? 'state.stale' : 'state.loadFailed')
-            }}<ActionButton class="btn-sm ms-2" variant="outline-light" :state="titleRetryAction"
-                @click="retryGuestTitle">{{ messages.t('common.retry') }}</ActionButton></StatusNotice>
+            }}</StatusNotice>
             <!-- A confirmed identity/mail result is never submitted again because a route
                  chunk failed. Keep delivery Retry with this mounted form when it owns it. -->
-            <StatusNotice v-if="completion.target.value" kind="warning">
+            <StatusNotice v-if="completion.target.value" kind="warning"
+                :action="{state: completion.retryAction, label: messages.t('common.retry'), class: 'ms-2'}"
+                @action="completion.retry">
                 {{ messages.t('state.loadFailed') }}
-                <ActionButton class="ms-2" variant="outline-light" :state="completion.retryAction" @click="completion.retry">
-                    {{ messages.t('common.retry') }}
-                </ActionButton>
             </StatusNotice>
-            <StatusNotice v-if="command.uncertain.value" kind="warning">{{
-                messages.t('state.unknownOutcome')
-            }} {{ messages.t('auth.unconfirmedRequest') }}<ActionButton class="ms-2" variant="outline-light" :state="command.recoveryAction" @click="refreshIdentityState">{{ messages.t('common.refresh') }}</ActionButton></StatusNotice>
+            <CommandFeedback :feedback="command.feedback" part="uncertain"
+                :action="{state: command.recoveryAction, label: messages.t('common.refresh'), class: 'ms-2'}"
+                @action="refreshIdentityState">
+                <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
+            </CommandFeedback>
             <div class="text-center mb-4">
                 <h3 class="mb-2">{{ messages.t('auth.guestIntro') }}</h3>
                 <ul class="list-unstyled small d-inline-block text-start mb-0">

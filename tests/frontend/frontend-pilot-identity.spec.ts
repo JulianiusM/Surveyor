@@ -299,6 +299,8 @@ describe('identity forms and packing overview navigation', () => {
         await flushPromises();
         expect(confirmation).not.toHaveBeenCalled();
         expect(wrapper.text()).toContain(context.messages.value.t('state.unknownOutcome'));
+        expect(wrapper.get('header .status-notice.alert-warning').classes()).toContain('mb-0');
+        expect(wrapper.get('header .status-notice.alert-warning').classes()).not.toContain('mb-3');
         expect(wrapper.get('header form button').attributes('disabled')).toBeDefined();
         await router.push('/frontend-pilot/users/forgot-password');
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');

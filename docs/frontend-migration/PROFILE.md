@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; AI coding agents
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-14
+last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved parity-only migration clarification excludes inherited backend remedies and prerequisites; readable delta staging, production-guide freeze and active governance/runtime Help retained; no cutover or runtime change
+verification-scope: native-isolation decision and implemented frontend-owned timer/style delivery reconciled; temporary cross-frontend duplication and shared backend ownership retained; no cutover claimed
 source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; src/frontend/; docs/user-guide/en/; docs/user-guide/de/
 next-review: next-authorized-migration-slice-or-cutover
 activation-scope: frontend framework migration, frontend pilot review/maintenance, migration documentation or associated cutover preparation
@@ -46,6 +46,19 @@ temporary and ends at authorized cutover; it never becomes a permanent policy or
 business owners for both frontends. Controllers own decisions and DBAL owns persistence; no parallel backend cleanup
 layer is permitted. General application defects remain a separately authorized effort, even when a proposed remedy
 includes a minor frontend edit. Record their evidence and disposition without implementing them through migration.
+
+The [native-frontend isolation decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-native-frontend-isolation-decision-2026-10-15)
+keeps native frontend code untouched until full migration and its separately authorized removal. The new frontend
+copies required native behavior into its own owners rather than importing native frontend code. Temporary duplication
+between those frontends is approved; matching consumers within the new frontend still share one owner. Existing
+backend/domain/controller/DBAL operations and catalogs remain shared. Third-party dependencies and shared image assets
+are outside this application-code boundary. The existing feedback owner now supplies its own transient timer, and
+copied authored Sass is composed once by `styles/application.sass` and delivered through Vite's client/SSR asset
+handling rather than native frontend imports/links.
+The [review](PILOT_PARITY_REVIEW.md#native-frontend-isolation-implementation-2026-10-15) records the bounded dependency
+and parity checks; this implementation does not complete feature migration or authorize cutover.
+Preserve the current approved comparator with its dated exceptions; this decision does not direct a rollback of
+previously approved changes.
 
 **Approved parity-only clarification (2026-10-14):** the maintainer explicitly limits the migration to visual and
 behavioral parity, except for previously approved frontend changes. Minor backend transport/presentation adaptation

@@ -546,6 +546,11 @@ describe('native shell and help presentation contract', () => {
             await flushPromises();
             expect(wrapper.get('.alert-danger').text()).toBe(context.messages.value.t(problem.messageKey, problem.params));
 
+            // Header feedback has no bottom gap; the shared composite must pass
+            // that explicit presentation input through its fragment roots.
+            expect(wrapper.get('.alert-danger').classes()).toContain('mb-0');
+            expect(wrapper.get('.alert-danger').classes()).not.toContain('mb-3');
+
             // Translation changes this receipt's text near expiry. It must neither
             // start another interval nor resurrect the body after it expires.
             await vi.advanceTimersByTimeAsync(9000);
@@ -990,6 +995,40 @@ describe('native shell and help presentation contract', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
+    it('keeps concurrent notice deadlines independent when one receipt renews and another retires', async function independentNotices() {
+        vi.useFakeTimers();
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
+        const firstDismiss = vi.fn();
+        const secondDismiss = vi.fn();
+        const first = mount(StatusNotice, {props: {transient: true, renewal: 0, onDismiss: firstDismiss},
+            slots: {default: 'First outcome'}, attachTo: document.body});
+        let second: ReturnType<typeof mount> | undefined;
+        try {
+            await vi.advanceTimersByTimeAsync(4000);
+            second = mount(StatusNotice, {props: {transient: true, onDismiss: secondDismiss},
+                slots: {default: 'Second outcome'}, attachTo: document.body});
+            await vi.advanceTimersByTimeAsync(5000);
+
+            // An identical new outcome renews only its own deadline. The other
+            // notice retains the interval begun when it was first displayed.
+            await first.setProps({renewal: 1});
+            await vi.advanceTimersByTimeAsync(4999);
+            expect(firstDismiss).not.toHaveBeenCalled();
+            expect(secondDismiss).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(secondDismiss).toHaveBeenCalledOnce();
+            expect(firstDismiss).not.toHaveBeenCalled();
+
+            // Removing an expired sibling cannot cancel the still-live receipt.
+            second.unmount();
+            await vi.advanceTimersByTimeAsync(4999);
+            expect(firstDismiss).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(1);
+            expect(firstDismiss).toHaveBeenCalledOnce();
+        } finally { first.unmount(); second?.unmount(); }
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
     it('starts transient feedback only on disclosure and clears Vue state without removing its node', async () => {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
@@ -1012,7 +1051,7 @@ describe('native shell and help presentation contract', () => {
             expect(dismiss).toHaveBeenCalledOnce();
             expect(wrapper.find('.alert-success').exists()).toBe(true);
             // The actual reactive owner can renew an identical receipt. Disposal
-            // before its deadline must cancel the shared scheduler rather than
+            // before its deadline must cancel this receipt's timer rather than
             // emit a late dismissal into a retired component.
             receipt.value++;
             await flushPromises();

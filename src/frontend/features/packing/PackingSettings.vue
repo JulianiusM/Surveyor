@@ -8,6 +8,7 @@ import type {EntityHeaderLabels, EntityLifecycleLabels} from '../../../types/Fro
 import type {PilotMetadataSnapshot, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {permissionLabel as translatedPermissionLabel} from '../../../modules/localization/permissionLabels';
 import {usePackingApi} from './api';
+import {createPackingLifecycle} from './lifecycle';
 import {useActionState, usePilot, refreshInterval} from '../../app/context';
 import {isReadDenial} from '../../app/transport';
 import {useCommand} from '../../composables/command';
@@ -20,6 +21,7 @@ import {observeQueryReads, refetchFreshQuery, retireQueryFamily, useQueryAdmissi
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import AppTabList from '../../components/AppTabList.vue';
 import MetadataFields from './MetadataFields.vue';
@@ -269,6 +271,7 @@ const command = useCommand(refreshAfterCommand, false, {
     uncertain: () => !!fields.value?.unknown,
     unknownMessage: 'draft.leaveUnknown',
 });
+const lifecycle = createPackingLifecycle(api, command, messages);
 // Observe ordinary DTO changes for initial/clean drafts. Equal background network
 // successes restore confirmed editors too; idle/cancel and manual aliases do not.
 watch(settings.data, value => receiveSettings(value), {immediate: true});
@@ -720,16 +723,7 @@ async function addAdmin(source?: Event): Promise<void> {
  * command. These are shared resource actions; personal visibility and permanent
  * deletion remain separate operations with their own confirmation and authority. */
 async function archive(restore: boolean, source?: Event): Promise<void> {
-    const confirmation = restore
-        ? 'packing.confirmRestore'
-        : data.value?.archive.inherited
-          ? 'packing.confirmArchiveIndependent'
-          : 'packing.confirmArchive';
-
-    if (window.confirm(messages.value.t(confirmation))) {
-        await command.run((scope) => api.archive(props.listId, restore, scope), true, false,
-            {initiator: source, presentation: 'inline', success: restore ? 'overview.restored' : 'overview.archived'});
-    }
+    await lifecycle.archive(props.listId, restore, !!data.value?.archive.inherited, source);
 }
 /** Delete only after the command owner has approved departure of every mounted draft.
  * A confirmed deletion retains its destination/consent through failed navigation;
@@ -825,18 +819,9 @@ function permissionLabel(key: string): string {
              one receipt owner here; only transient inline messages move to that host.
              Commands without a section use this same native modal fallback. -->
         <div data-dialog-feedback aria-live="polite">
-            <StatusNotice v-if="command.error.value" :inline="command.errorPresentation.value === 'inline'"
-                :kind="command.feedbackKind.value" :target="command.feedbackTarget.value"
-                :disabled="controlsPending" :transient="command.transientError.value" :renewal="command.errorRenewal.value"
-                @dismiss="command.setError(null)">{{ command.error.value }}</StatusNotice>
-            <StatusNotice
-                v-if="command.notice.value" :inline="command.noticeInline.value" :target="command.feedbackTarget.value" :disabled="controlsPending"
-                :kind="command.noticeKind.value" :transient="command.transientNotice.value"
-                :retry-at="command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"
-                :read-error="command.notice.value === 'state.savedRefreshFailed' ? settings.error.value : undefined"
-                :notice="command.notice.value" :renewal="command.noticeRenewal.value" @dismiss="command.notice.value = null"
-                >{{ messages.t(command.notice.value) }}</StatusNotice
-            >
+            <CommandFeedback :feedback="command.feedback" :disabled="controlsPending"
+                :notice-retry-at="command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"
+                :notice-read-error="command.notice.value === 'state.savedRefreshFailed' ? settings.error.value : undefined" />
         </div>
         <StatusNotice v-if="settings.error.value" kind="warning"
             :last-updated-at="settings.data.value && !isReadDenial(settings.error.value) ? settings.dataUpdatedAt.value : undefined"
@@ -1054,10 +1039,9 @@ function permissionLabel(key: string): string {
                         <div data-command-feedback aria-live="polite"></div>
                         <StatusNotice v-if="profiles.error.value" kind="warning"
                             :last-updated-at="profiles.data.value ? profiles.dataUpdatedAt.value : undefined"
-                            :retry-at="profileRetryAt" :read-error="profiles.error.value">
+                            :retry-at="profileRetryAt" :read-error="profiles.error.value"
+                            :action="{state: profileRetryAction, label: messages.t('common.retry')}" @action="retryProfiles">
                             {{ messages.t(profiles.data.value ? 'state.stale' : 'state.loadFailed') }}
-                            <ActionButton class="btn-sm ms-2" variant="outline-light" :state="profileRetryAction"
-                                @click="retryProfiles">{{ messages.t('common.retry') }}</ActionButton>
                         </StatusNotice>
                         <div class="mb-3">
                             <label class="form-label" for="profile-search"

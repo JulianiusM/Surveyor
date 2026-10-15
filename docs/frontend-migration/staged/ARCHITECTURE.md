@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-15
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved dynamic-page-only automatic document reload and confirmed-command follow-up ownership reconciled; API/localization and bounded server integration retained; no cutover or operator execution claimed
+verification-scope: frontend-owned timer, copied Sass and Vite client/SSR delivery source-reviewed; earlier static/feedback composition and API/localization scopes retained; no cutover claimed
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -38,7 +38,10 @@ inputs. Startup protection exists before route loading and transfers to mounted 
 reload additionally requires explicitly eligible dynamic route/content, clean state and a working loop marker.
 Overview and Packing detail opt in; creation, duplication, user-management, Help and static admitted errors/completions
 remain excluded. Route metadata and the existing content classifier feed the shared update owner without copied
-field policy. Deliberate recovery retains draft consent and pending/unknown guards on every page. Recovery never
+field policy. The context consumes actor/visit-bound static predicates from mounted `usePageEntry` owners without
+mirroring query data. Initial-bootstrap retirement does not retire a visible denial; fresh admission restores dynamic
+eligibility, and owner/actor disposal releases classification. App, SSR and automatic recovery share this result.
+Deliberate recovery retains draft consent and pending/unknown guards on every page. Recovery never
 persists secrets/files or replays writes. Session/security revalidation and scoped reads remain separate.
 
 ### Shared contracts, state and commands
@@ -73,8 +76,18 @@ so the feature can release completed input; actual captured-actor retirement sti
 
 `command.ts`, `pageEntry.ts` and `feedback.ts` share status, departure protection, canonical delivery and receipt-owned
 messages. Pending/unknown status may outlive an editor without retaining its fields. Confirmed navigation retries
-delivery only. Transient notices use the existing `scheduleAlertDismissal`; persistent conditions remain visible.
+delivery only. The frontend feedback owner manages transient notice scheduling/cancellation; persistent conditions
+remain visible.
+`observePageNavigation` shares router subscriptions, latest pending destination and disposal across App, Header,
+Overview and page-entry/confirmed-transition consumers, retaining each caller's URL boundary and callbacks.
 Controls and feature drafts share an explicit value lifetime, including file release after confirmation.
+`CommandFeedback` shares command receipt presentation across actual identity, Packing and Overview consumers;
+`StatusNotice` presents actions with optional injected state and emits actions. Omitting state retains shared
+`ActionButton` initialization and caller-handler guards. Features retain placement, wording and recovery operations.
+These controls introduce no second receipt, query or draft owner.
+Packing's feature-owned `createPackingLifecycle` shares archive/restore confirmation, desired-state dispatch and
+inline success policy between Settings and Overview through their existing API, command and current translator.
+Callers retain eligibility, initiator and refresh lifetimes; the helper adds no state or backend business policy.
 
 Financial interaction retains its domain boundaries: pool actions lock relevant controls, report delayed progress
 after five seconds and display saved state only after confirmation. Payment feedback stays outside filtered share
@@ -91,18 +104,17 @@ invoice-specific inputs while retaining the available pool selection; pending/un
 
 Vue application code lives under `src/frontend/`. Feature `api.ts` owners consume generated operations/validators
 through `app/transport.ts`; app-owned controls receive explicit values, capabilities, events and injected operations.
-Existing browser modules under `src/public/js/` retain separate consumers:
+Application presentation helpers and styles belong under `src/frontend/`, shared by their actual consumers.
+The client entry and development renderer reference the same authored `styles/application.sass` root. It owns the
+cascade once: base `style.sass`, `help.sass`, then `pilot.css`. `style.sass` owns its accordion/timezone imports,
+including the installed Bootstrap layer. Vite emits separate client/SSR artifacts; the existing renderer uses that
+source stylesheet link in development and the client manifest in installed releases, including styled
+server-rendered/static content before JavaScript initialization. Preserve the
+effective stylesheet order, CDN/compiled Bootstrap layers and geometry; generated output is never an authored source.
 
-- `core/` contains shared HTTP, form, navigation, permission, and DOM helpers;
-- `shared/` contains reusable page behaviors; and
-- feature modules/page entry files implement survey, event, activity, packing, drivers, and account interactions.
-
-`esbuild.client.js` discovers every `.ts` file recursively and emits a corresponding `.gen.js` ES module while preserving the directory layout. Development output is written beside the source and ignored by Git; production output goes to `dist/public/js/`. Relative extensionless imports are rewritten to generated module names.
-
-Sass sources under `src/public/style/` compile to ignored CSS before assets are copied to `dist/public/`.
-Vue feedback directly reuses `src/public/js/shared/alerts.ts`; the renderer/header use the shared styles, logo and
-favicon. These helpers/assets belong to their actual consumers, not to one renderer. Vite emits separate client/SSR
-artifacts; Express-hosted Vite middleware supplies development HMR, while production uses coherent built artifacts.
+The frontend feedback owner supplies notice lifetime; existing backend/domain/catalog owners remain shared.
+Logo/favicon image assets and third-party Bootstrap/icons retain their real consumers independently of application
+presentation code. Express-hosted Vite middleware supplies development HMR; production uses coherent built artifacts.
 
 
 <!-- /delta:amendment-02 -->

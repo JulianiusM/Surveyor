@@ -37,6 +37,7 @@ function parseArguments(argv) {
         purpose: null,
         expectedContext: null,
         noProfile: false,
+        referenceRoot: null,
     };
 
     for (let index = 0; index < argv.length; index += 1) {
@@ -78,6 +79,12 @@ function parseArguments(argv) {
                 throw new Error('--root requires a path');
             }
             options.root = argv[index];
+        } else if (argument === '--reference-root') {
+            index += 1;
+            if (!argv[index] || argv[index].startsWith('--')) {
+                throw new Error('--reference-root requires a path');
+            }
+            options.referenceRoot = argv[index];
         } else if (argument === '--help' || argument === '-h') {
             options.help = true;
         } else {
@@ -91,10 +98,14 @@ function parseArguments(argv) {
         options.jsonPath = path.resolve(options.root, options.jsonPath);
     }
     if (options.expectedContext) options.expectedContext = path.resolve(options.root, options.expectedContext);
+    if (options.referenceRoot) options.referenceRoot = path.resolve(options.root, options.referenceRoot);
     if ([options.profilesOnly, options.context, options.fingerprintOnly].filter(Boolean).length > 1) {
         throw new Error('--profiles, --context and --fingerprint are separate modes');
     }
     if (options.noProfile && options.selectedProfiles.length) throw new Error('--no-profile and --profile are mutually exclusive');
+    if (options.referenceRoot && (options.profilesOnly || options.context || options.fingerprintOnly)) {
+        throw new Error('--reference-root applies only to a documentation report');
+    }
     if (!options.context && (options.noProfile || options.selectedProfiles.length || options.ownedPaths.length
         || options.purpose !== null || options.expectedContext)) {
         throw new Error('--profile, --path, --purpose and --expect-context require --context');
@@ -117,6 +128,7 @@ function printHelp() {
         `  --json <path>       Write the full result as JSON\n` +
         `  --config <path>     Use a different configuration file\n` +
         `  --root <path>       Check a different repository root\n` +
+        `  --reference-root <path> Project authored-path counts from this source tree without changing configuration\n` +
         `  -h, --help          Show this help`);
 }
 
@@ -794,12 +806,10 @@ function normalizeRepositoryPathToken(rawToken, config) {
     return token;
 }
 
-function collectRepositoryPathErrors(root, config, markdownFiles) {
+/** Read authored path occurrences once for live reports and assembled projections.
+ * Filesystem presence does not affect the count of a documented local/generated path. */
+function collectRepositoryPathReferences(root, config, markdownFiles) {
     const references = [];
-    const allowlisted = [];
-    const errors = [];
-    const allowlist = config.documentedPathAllowlist ?? [];
-
     for (const relativePath of markdownFiles) {
         const text = fs.readFileSync(path.join(root, relativePath), 'utf8');
         for (const match of text.matchAll(INLINE_CODE_RE)) {
@@ -813,22 +823,42 @@ function collectRepositoryPathErrors(root, config, markdownFiles) {
                 repositoryPath,
             };
             references.push(occurrence);
-            if (fs.existsSync(path.resolve(root, repositoryPath))) {
-                continue;
-            }
+        }
+    }
+    return references;
+}
 
-            const allowed = allowlist.find(entry => entry.path === repositoryPath);
-            if (allowed) {
-                allowlisted.push({...occurrence, reason: allowed.reason, package: allowed.package});
-            } else {
-                errors.push({
-                    type: 'missing-documented-repository-path',
-                    path: relativePath,
-                    line: occurrence.line,
-                    repositoryPath,
-                    message: `${relativePath}:${occurrence.line} references missing repository path ${repositoryPath}`,
-                });
-            }
+/** Preserve fixed live-tree expectations while accounting for a deliberate document
+ * projection. Its reference delta moves the expected count by the same amount, so
+ * an existing source mismatch remains a finding rather than approving itself. */
+function collectRepositoryPathErrors(root, config, markdownFiles, referenceRoot) {
+    const references = collectRepositoryPathReferences(root, config, markdownFiles);
+    const referenceOccurrences = referenceRoot
+        ? collectRepositoryPathReferences(referenceRoot, config, collectMarkdownFiles(referenceRoot, config)) : references;
+    const allowlisted = [];
+    const errors = [];
+    const projection = [];
+    const allowlist = config.documentedPathAllowlist ?? [];
+
+    // Validate every final-path occurrence independently of projection accounting.
+    // An omitted task directory cannot excuse a genuinely missing target path.
+    for (const occurrence of references) {
+        const {repositoryPath} = occurrence;
+        if (fs.existsSync(path.resolve(root, repositoryPath))) {
+            continue;
+        }
+
+        const allowed = allowlist.find(entry => entry.path === repositoryPath);
+        if (allowed) {
+            allowlisted.push({...occurrence, reason: allowed.reason, package: allowed.package});
+        } else {
+            errors.push({
+                type: 'missing-documented-repository-path',
+                path: occurrence.document,
+                line: occurrence.line,
+                repositoryPath,
+                message: `${occurrence.document}:${occurrence.line} references missing repository path ${repositoryPath}`,
+            });
         }
     }
 
@@ -836,19 +866,28 @@ function collectRepositoryPathErrors(root, config, markdownFiles) {
         // Count authored references, not missing files: generated/local files may
         // exist in a developer checkout but are absent in CI before setup.
         const actualCount = references.filter(occurrence => occurrence.repositoryPath === entry.path).length;
-        if (actualCount !== entry.expectedOccurrences) {
+        const referenceCount = referenceOccurrences.filter(occurrence => occurrence.repositoryPath === entry.path).length;
+        const projectionDelta = actualCount - referenceCount;
+        const expectedCount = entry.expectedOccurrences + projectionDelta;
+        if (referenceRoot) projection.push({repositoryPath: entry.path, configuredExpected: entry.expectedOccurrences,
+            referenceActual: referenceCount, projectedActual: actualCount, projectedExpected: expectedCount});
+        if (actualCount !== expectedCount) {
             errors.push({
                 type: 'documented-path-allowlist-count-mismatch',
                 repositoryPath: entry.path,
-                expected: entry.expectedOccurrences,
+                expected: expectedCount,
                 actual: actualCount,
                 package: entry.package,
-                message: `${entry.path} has ${actualCount} documented reference(s); configuration expects ${entry.expectedOccurrences}`,
+                ...(referenceRoot ? {referenceExpected: entry.expectedOccurrences, referenceActual: referenceCount} : {}),
+                message: referenceRoot
+                    ? `${entry.path} has ${actualCount} projected documented reference(s); expected ${expectedCount}; `
+                        + `source retains ${referenceCount} reference(s) against configured ${entry.expectedOccurrences}`
+                    : `${entry.path} has ${actualCount} documented reference(s); configuration expects ${entry.expectedOccurrences}`,
             });
         }
     }
 
-    return {references, allowlisted, errors};
+    return {references, allowlisted, errors, projection};
 }
 
 function collectNpmScriptErrors(root, markdownFiles) {
@@ -1274,14 +1313,14 @@ function validateCurrentBaseline(config, fingerprint) {
     return {current, matches, errors};
 }
 
-function buildReport(root, config, strict) {
+function buildReport(root, config, strict, referenceRoot = null) {
     const markdownFiles = collectMarkdownFiles(root, config);
     const fingerprint = computeSourceFingerprint(root, config);
     const metadata = validateMetadata(root, config, markdownFiles);
     const profiles = discoverTaskProfiles(root, config, metadata);
     const links = collectLinkErrors(root, markdownFiles, profiles);
     const npmScripts = collectNpmScriptErrors(root, markdownFiles);
-    const repositoryPaths = collectRepositoryPathErrors(root, config, markdownFiles);
+    const repositoryPaths = collectRepositoryPathErrors(root, config, markdownFiles, referenceRoot);
     const staleTerms = collectStaleTerms(root, config, markdownFiles, strict);
     const canonicalErrors = validateCanonicalUserGuide(root, config, markdownFiles);
     const releaseErrors = validateReleaseBundle(root, config);
@@ -1335,6 +1374,8 @@ function buildReport(root, config, strict) {
         deferredMigrationDebt: staleTerms.deferred,
         staleTermOccurrences: staleTerms.occurrences,
         documentedRepositoryPaths: repositoryPaths.references,
+        ...(referenceRoot ? {documentedPathReferenceProjection: {referenceRepository: referenceRoot,
+            counts: repositoryPaths.projection}} : {}),
         allowlistedMissingDocumentedPaths: repositoryPaths.allowlisted,
         metadata: metadata.records,
         sourceFingerprintFiles: fingerprint.files,
@@ -1345,6 +1386,10 @@ function printReport(report) {
     const summary = report.summary;
     console.log(`Surveyor documentation report (${report.mode} mode; advisory)`);
     console.log(`Repository: ${report.repository}`);
+    if (report.documentedPathReferenceProjection) {
+        console.log(`Authored-path counts projected from: ${report.documentedPathReferenceProjection.referenceRepository}; `
+            + 'configured source expectations and inherited drift are retained');
+    }
     console.log(`Source fingerprint: ${report.sourceFingerprint}`);
     console.log(`Current baseline matches source: ${report.baselineMatchesCurrent ? 'yes' : 'no'}`);
     console.log(
@@ -1424,7 +1469,7 @@ function main() {
         return;
     }
 
-    const report = buildReport(options.root, config, options.strict);
+    const report = buildReport(options.root, config, options.strict, options.referenceRoot);
     printReport(report);
 
     if (options.jsonPath) {

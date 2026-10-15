@@ -414,6 +414,59 @@ describe('mounted Packing creation file selection', () => {
     });
 });
 
+describe('mounted Packing lifecycle actions', () => {
+    it.each([
+        {restore: false, inherited: false, confirmation: 'packing.confirmArchive', success: 'overview.archived'},
+        {restore: false, inherited: true, confirmation: 'packing.confirmArchiveIndependent', success: 'overview.archived'},
+        {restore: true, inherited: true, confirmation: 'packing.confirmRestore', success: 'overview.restored'},
+    ] as const)('preserves Settings confirmation, cancellation and initiating host for $confirmation', async action => {
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
+        const confirmation = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
+        vi.stubGlobal('confirm', confirmation);
+        const globalAlerts = document.createElement('div');
+        globalAlerts.id = 'liveAlerts';
+        document.body.append(globalAlerts);
+        let writes = 0;
+        const lifecycleSettings = {...settings, archive: {...settings.archive, inherited: action.inherited},
+            capabilities: {...settings.capabilities, manageArchive: true, archive: !action.restore, restore: action.restore}};
+        const mounted = await mountPackingView(list, async function readLifecycle(request): Promise<Response> {
+            const path = new URL(request.url).pathname;
+            if (request.method === 'POST') {
+                expect(path).toBe(`/api/v1/packing-lists/${listId}/${action.restore ? 'restore' : 'archive'}`);
+                writes++;
+                return json({changed: true});
+            }
+            return json(path.endsWith('/settings') ? lifecycleSettings : path.endsWith('/metadata') ? metadata : list);
+        });
+        try {
+            await mounted.wrapper.findAll('button').find(button => button.text() === 'Entity settings')!.trigger('click');
+            await flushPromises();
+            // Wording follows the selected language at invocation, without
+            // recreating the existing lifecycle, command or API owner.
+            mounted.context.locale.value = 'de';
+            await flushPromises();
+            document.getElementById('pilot-settings-tab-actions')!.click();
+            await nextTick();
+            const section = document.querySelector<HTMLElement>('[data-entity-section="archival"]')!;
+            const button = [...section.querySelectorAll('button')].find(candidate => candidate.textContent?.trim()
+                === mounted.context.messages.value.t(action.restore ? 'common.restore' : 'common.archive'))!;
+            button.click();
+            await flushPromises();
+            expect(confirmation).toHaveBeenLastCalledWith(mounted.context.messages.value.t(action.confirmation));
+            expect(writes).toBe(0);
+            expect(section.querySelector('[data-command-feedback]')!.textContent).toBe('');
+
+            // The actual click supplies its live initiator. Success remains in
+            // this archival section rather than the modal/global fallback host.
+            button.click();
+            await flushPromises();
+            expect(writes).toBe(1);
+            expect(section.querySelector('[data-command-feedback]')!.textContent).toContain(mounted.context.messages.value.t(action.success));
+            expect(globalAlerts.textContent).toBe('');
+        } finally { await mounted.dispose(); }
+    });
+});
+
 describe('mounted Packing header upload selection', () => {
     it.each(['healthy', 'failed'] as const)('clears confirmed bytes on the same input after a %s follow-up read',
         async function confirmedHeaderSelection(followUp) {
@@ -920,6 +973,43 @@ describe('mounted Packing checklist persistence', () => {
 });
 
 describe('packing presentation compatibility', () => {
+    it('keeps actual metadata no-op and rejected-save feedback in Properties when global alerts exist', async () => {
+        // A captured fallback target is intentionally available and visible. The
+        // local metadata contract must still keep its own inline feedback host.
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
+        const globalAlerts = document.createElement('div');
+        globalAlerts.id = 'liveAlerts';
+        document.body.append(globalAlerts);
+        const mounted = await mountPackingView(list, async function metadataFeedback(request): Promise<Response> {
+            const path = new URL(request.url).pathname;
+            if (request.method === 'PATCH') return new Response(JSON.stringify({type: 'about:blank',
+                title: 'Validation failed', status: 400, detail: 'Review the entered fields.',
+                requestId: 'metadata-local-feedback', code: 'VALIDATION_FAILED',
+                messageKey: 'api:errors.VALIDATION_FAILED', params: {}}), {status: 400,
+                headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+            return json(path.endsWith('/metadata') ? metadata : path.endsWith('/settings') ? settings : list);
+        });
+        try {
+            await mounted.wrapper.findAll('button').find(button => button.text() === 'Entity settings')!.trigger('click');
+            await flushPromises();
+            const fields = mounted.wrapper.findComponent(MetadataFields);
+            const local = fields.get('[data-command-feedback]');
+
+            // Pristine Save and the rejected PATCH both capture the ordinary
+            // fallback without a DOM initiator; neither may teleport out of Properties.
+            await fields.get('#packing-metadata-form').trigger('submit');
+            await flushPromises();
+            expect(local.text()).toContain(mounted.context.messages.value.t('metadata.noChanges'));
+            expect(globalAlerts.textContent).toBe('');
+            await fields.get('input[name="title"]').setValue('Rejected metadata title');
+            await fields.get('#packing-metadata-form').trigger('submit');
+            await flushPromises();
+            expect(local.text()).toContain(mounted.context.messages.value.t('api:errors.VALIDATION_FAILED'));
+            expect(globalAlerts.textContent).toBe('');
+            expect(fields.get<HTMLInputElement>('input[name="title"]').element.value).toBe('Rejected metadata title');
+        } finally { await mounted.dispose(); }
+    });
+
     it.each([
         ['metadata', 403, 'html', false],
         ['metadata', 401, 'mismatched', true],

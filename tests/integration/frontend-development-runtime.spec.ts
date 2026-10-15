@@ -81,13 +81,30 @@ describe('Express-integrated frontend development', () => {
             expect(entry.headers.get('content-type')).toContain('javascript');
             expect(await entry.text()).toContain('createPilotApp');
             const styles = [...html.matchAll(/<link\b[^>]*\bhref="([^"]+)"/gu)].map(match => match[1]);
-            const pilotStyleUrl = styles.find(source => source.includes('/src/frontend/styles/pilot.css'));
-            expect(pilotStyleUrl).toBeDefined();
-            const pilotStyle = await fetch(new URL(pilotStyleUrl!, origin), {headers: {Accept: 'text/css'}});
-            expect(pilotStyle.status).toBe(200);
-            expect(pilotStyle.headers.get('content-type')).toContain('css');
-            expect(html).toContain('href="/style/style.css"');
-            expect(html).toContain('href="/style/help.css"');
+            // Fetch the actual composition link through Express/Vite. It styles
+            // the SSR document before entry execution; a JS-only style import
+            // would leave static Help unstyled and duplicate the cascade policy.
+            const sourceStyles = styles.filter(source => source.includes('/src/frontend/styles/'));
+            expect(sourceStyles.map(source => new URL(source, origin).pathname)).toEqual([
+                '/app/src/frontend/styles/application.sass',
+            ]);
+            const stylesheet = await fetch(new URL(sourceStyles[0]!, origin), {headers: {Accept: 'text/css'}});
+            expect(stylesheet.status).toBe(200);
+            expect(stylesheet.headers.get('content-type')).toContain('css');
+            const compiledStyle = await stylesheet.text();
+            expect(compiledStyle).toContain('Bootstrap  v5.3.8');
+            expect(compiledStyle).toContain('.accordion-dark');
+            expect(compiledStyle).toContain('.tz-picker');
+            expect(compiledStyle).toContain('.help-content');
+            expect(compiledStyle).toContain('.help-toc');
+            expect(compiledStyle).toContain('.pilot-app');
+            expect(compiledStyle.indexOf('.accordion-dark')).toBeLessThan(compiledStyle.indexOf('.tz-picker'));
+            expect(compiledStyle.indexOf('.tz-picker')).toBeLessThan(compiledStyle.indexOf('.help-content'));
+            expect(compiledStyle.indexOf('.help-content')).toBeLessThan(compiledStyle.indexOf('.pilot-app'));
+            const bootstrapLayer = styles.find(source => source.includes('bootstrap@5.3.3/dist/css/bootstrap.min.css'));
+            expect(bootstrapLayer).toBeDefined();
+            expect(html.indexOf(bootstrapLayer!)).toBeLessThan(html.indexOf(sourceStyles[0]!));
+            expect(html).not.toContain('href="/style/');
             expect(html).toContain('href="/img/favicon-32x32.png"');
             expect(html).toContain('src="/img/logo.png"');
             expect(html).toContain('src="/frontend-pilot/help/assets/diagram.png?locale=en"');

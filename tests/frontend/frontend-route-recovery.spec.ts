@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
-import {createPilotApp} from '../../src/frontend/app/createApp';
+import {flushPromises} from '@vue/test-utils';
+import {createPilotApp, initializePilotApp} from '../../src/frontend/app/createApp';
+import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
 
 const session: components['schemas']['SessionView'] = {kind: 'anonymous',
@@ -26,7 +28,67 @@ beforeAll(async function prepareRouteComponents(): Promise<void> {
     ]);
 }, 30_000);
 
-afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); });
+const cleanups: Array<() => Promise<void>> = [];
+
+afterEach(async () => {
+    for (const cleanup of cleanups.splice(0)) await cleanup();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    sessionStorage.clear();
+    document.body.innerHTML = '';
+});
+
+const firstList = '22222222-2222-4222-8222-222222222222';
+const secondList = '33333333-3333-4333-8333-333333333333';
+const firstPacking = `/frontend-pilot/packing/${firstList}`;
+
+/** Keep the real SSR tree, initialization, router, admission, validation and
+ * update coordinator. Only HTTP and the final document reload are substituted;
+ * mounting is essential because denial retires bootstrap during component setup. */
+async function mountedDenial(initial: boolean) {
+    const state = {denied: true, session};
+    const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
+    const request = vi.fn(readProjection);
+
+    async function readProjection(input: RequestInfo | URL): Promise<Response> {
+        const path = new URL((input as Request).url).pathname;
+        let value: unknown;
+        if (path === '/api/v1/session') value = state.session;
+        else if (path.endsWith('/entry')) {
+            value = {entry: state.denied && path.includes(firstList)
+                ? {kind: 'denied', status: 404, messageKey: 'packing.notFound'} : {kind: 'render'}, guest: null};
+        } else if (path.startsWith('/api/v1/packing-lists/')) {
+            const id = path.includes(secondList) ? secondList : firstList;
+            value = {entityType: 'packing', id, title: `Admitted ${id}`, description: null,
+                headerUrl: null, headerVersion: null, orderToken: '"order"', currentEventId: null, currentEventUrl: null,
+                archived: false, inheritedArchived: false,
+                capabilities: {editTitle: false, editDescription: false, selfAssign: false, addItem: false,
+                    reorder: false, manageSettings: false}, counters: {participants: 0, open: 0, empty: 0}, items: []};
+        } else throw new Error(`Unexpected mounted-denial read: ${path}`);
+        return new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json',
+            'X-Surveyor-Context': state.session.context}});
+    }
+
+    const path = initial ? firstPacking : '/frontend-pilot/home';
+    const rendered = await render(path, {session, ...(initial ? {packingError: 'packing.notFound' as const} : {})});
+    const host = document.createElement('div');
+    host.innerHTML = rendered.html;
+    document.body.append(host);
+    window.history.replaceState({}, '', path);
+    vi.stubGlobal('fetch', request);
+    const application = createPilotApp(JSON.parse(rendered.state), true);
+    await application.router.isReady();
+    const stop = await initializePilotApp(application, host);
+    cleanups.push(async function disposeMountedDenial(): Promise<void> {
+        application.app.unmount();
+        stop();
+        application.router.options.history.destroy();
+        await application.context.queryClient.cancelQueries();
+    });
+    if (!initial) await application.router.push(firstPacking);
+    await flushPromises();
+    return {host, application, state, reload, request};
+}
 
 describe('retired route module recovery', () => {
     it.each([
@@ -191,5 +253,73 @@ describe('dynamic-content automatic document replacement', () => {
             router.options.history.destroy();
             context.start()();
         }
+    });
+});
+
+describe('mounted static admission and automatic document replacement', () => {
+    it.each([true, false])('preserves a readable denial after bootstrap retirement (initial=%s)', async initial => {
+        const {host, application, reload} = await mountedDenial(initial);
+        const {context, router} = application;
+        expect(host.textContent).toContain(context.messages.value.t('packing.notFound'));
+        expect(host.querySelector('[data-pilot-initial-loading]')).toBeNull();
+        expect(context.initialDocumentFor(firstPacking)).toBeUndefined();
+        expect(context.requiresClientInitialization(router.currentRoute.value)).toBe(false);
+
+        context.updates.observe({...session.deployment, buildId: 'mounted-replacement'});
+        await flushPromises();
+        context.updates.chunkFailed();
+        await flushPromises();
+        expect(reload).not.toHaveBeenCalled();
+        expect(context.updates.requestReload()).toBe(false);
+
+        // Static classification limits automatic recovery only. Existing draft or
+        // unresolved-command guards still protect a deliberate recovery attempt.
+        const releaseGuard = context.updates.registerGuard(() => false);
+        expect(context.updates.requestRecoveryReload()).toBe(false);
+        releaseGuard();
+        expect(context.updates.requestRecoveryReload()).toBe(true);
+        expect(reload).toHaveBeenCalledOnce();
+    });
+
+    it('restores dynamic eligibility only after fresh mounted render admission', async () => {
+        const {host, application, state, reload} = await mountedDenial(true);
+        const {context, router} = application;
+        context.updates.observe({...session.deployment, buildId: 'restored-replacement'});
+        await flushPromises();
+        expect(reload).not.toHaveBeenCalled();
+        state.denied = false;
+        await context.queryClient.refetchQueries({type: 'active'});
+        await flushPromises();
+        await vi.waitFor(() => expect(host.textContent).toContain(`Admitted ${firstList}`));
+        expect(context.hasStaticPageOutcome(router.currentRoute.value)).toBe(false);
+        expect(context.updates.requestReload()).toBe(true);
+        expect(reload).toHaveBeenCalledOnce();
+    });
+
+    it('does not let one resource denial classify a later admitted resource', async () => {
+        const {host, application, reload} = await mountedDenial(true);
+        const {context, router} = application;
+        await router.push(`/frontend-pilot/packing/${secondList}`);
+        await flushPromises();
+        await vi.waitFor(() => expect(host.textContent).toContain(`Admitted ${secondList}`));
+        expect(host.textContent).not.toContain(context.messages.value.t('packing.notFound'));
+        context.updates.observe({...session.deployment, buildId: 'next-resource-replacement'});
+        await flushPromises();
+        expect(reload).toHaveBeenCalledOnce();
+    });
+
+    it('retires the denied actor before admitting a replacement session at the same URL', async () => {
+        const {host, application, state, reload} = await mountedDenial(true);
+        const {context, router} = application;
+        state.denied = false;
+        state.session = {...session, context: 'replacement-actor-context'};
+        context.invalidateIdentity();
+        await context.refreshSession();
+        await flushPromises();
+        await vi.waitFor(() => expect(host.textContent).toContain(`Admitted ${firstList}`));
+        expect(context.hasStaticPageOutcome(router.currentRoute.value)).toBe(false);
+        context.updates.observe({...session.deployment, buildId: 'next-actor-replacement'});
+        await flushPromises();
+        expect(reload).toHaveBeenCalledOnce();
     });
 });

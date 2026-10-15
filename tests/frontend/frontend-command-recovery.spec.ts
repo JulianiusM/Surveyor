@@ -7,6 +7,7 @@ import I18NextVue from 'i18next-vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../../src/frontend/app/transport';
 import {useCommand} from '../../src/frontend/composables/command';
+import CommandFeedback from '../../src/frontend/components/CommandFeedback.vue';
 import type {components} from '../../src/types/api/v1';
 import type {PilotRequestScope} from '../../src/types/FrontendPilotUiTypes';
 
@@ -74,6 +75,31 @@ function unloadAttempt(): Event {
 }
 
 describe('reconcile-only commands', () => {
+    it('presents a command receipt without inferring another caller\'s dismissal lock', async () => {
+        const {context, command} = await mountedCommand();
+        command.setError('common.error', 'transient', 'inline');
+        const presentation = mount(CommandFeedback, {attachTo: document.body,
+            props: {feedback: command.feedback, part: 'error'}, global: {
+                plugins: [[I18NextVue, {i18next: context.i18next}]],
+                provide: {[pilotContextKey as symbol]: context},
+            }});
+        try {
+            // Receipt-owned inline presentation survives an omitted Boolean prop.
+            // Only the feature's explicit disabled input can lock its Close action.
+            expect(presentation.find('.alert-dismissible').exists()).toBe(true);
+            command.pending.value = true;
+            await nextTick();
+            expect(presentation.get<HTMLButtonElement>('.btn-close').element.disabled).toBe(false);
+            await presentation.setProps({disabled: true});
+            expect(presentation.get<HTMLButtonElement>('.btn-close').element.disabled).toBe(true);
+            await presentation.get('.btn-close').trigger('click');
+            expect(command.error.value).not.toBeNull();
+            await presentation.setProps({disabled: false});
+            await presentation.get('.btn-close').trigger('click');
+            expect(command.error.value).toBeNull();
+        } finally { command.pending.value = false; presentation.unmount(); }
+    });
+
     it('admits initialized commands and bootstrap recovery independently of the resource-read barrier', async function separatesActionAdmission() {
         const {context, command} = await mountedCommand();
         const write = vi.fn(async () => ({changed: true}));

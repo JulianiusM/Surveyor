@@ -1,5 +1,5 @@
 import {computed, inject, onScopeDispose, ref, shallowRef, watch} from 'vue';
-import type {InjectionKey} from 'vue';
+import type {InjectionKey, Ref} from 'vue';
 import {useTranslation} from 'i18next-vue';
 import {QueryClient} from '@tanstack/vue-query';
 import type {QueryCacheNotifyEvent} from '@tanstack/vue-query';
@@ -50,32 +50,6 @@ export function useActionState(inputs: PilotActionInputs = {}): PilotActionState
     }
 
     return {available, disabled: computed(() => !available.value), pending, isAvailable};
-}
-
-/** Route metadata owns interactive delivery. An admitted error or completed
- * message can remain immediately readable; ordinary form feedback cannot make
- * an otherwise interactive page expose controls before browser initialization. */
-export function requiresClientInitialization(route: Pick<RouteLocationNormalized, 'meta' | 'fullPath'>,
-                                             initial?: FrontendPilotBootstrap): boolean {
-    return route.meta.javascriptRequired === true && !hasStaticPageOutcome(route, initial);
-}
-
-/** Rendering and release recovery share the admitted static-outcome boundary.
- * A dynamic resource URL can deliver a readable denial/completion document;
- * its route alone does not make that outcome live collaborative content. */
-export function hasStaticPageOutcome(route: Pick<RouteLocationNormalized, 'meta' | 'fullPath'>,
-                                     initial?: FrontendPilotBootstrap): boolean {
-    // A completion belongs only to its admitted actor and canonical destination.
-    // Retired initial-document evidence must not authorize a later visit.
-    const completion = initial?.pageCompletion;
-    const completed = (!!initial?.identityFeedback && frontendIdentityMessageFeedback.includes(initial.identityFeedback))
-        || (!!completion && completion.context === initial?.session.context
-            && frontendDocumentUrl(completion.destination) === frontendDocumentUrl(route.fullPath));
-
-    // These server-admitted results contain only readable feedback/navigation.
-    // All other interactive route content starts with the same shared skeleton.
-    return !!initial?.commonPage || initial?.pageEntry?.kind === 'denied' || !!initial?.packingError
-        || !!initial?.identityProblem || !!(initial?.passwordReset && 'status' in initial.passwordReset) || completed;
 }
 
 export function usePilot(): PilotContext {
@@ -169,6 +143,10 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     let channel: BroadcastChannel | undefined;
     let disposed = false;
     const identityGuards = new Set<() => boolean>();
+    // Admission keeps its query/denial descriptor. Context retains only a live
+    // presentation predicate and its actor fence, shared by rendering and reload.
+    const pageOutcomes = shallowRef(new Set<{scope: PilotRequestScope;
+        route: Readonly<Ref<string>>; isStatic: () => boolean}>());
 
     /** Explicit cookie-changing controls must pass the same draft/pending checks as navigation.
      * External identity changes remain authoritative and clear the previous identity immediately. */
@@ -203,6 +181,54 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
      * Identity retirement independently revokes eligibility even if the URL stays unchanged. */
     function retireInitialDocument(destination?: string): void {
         if (destination === undefined || frontendDocumentUrl(destination) !== initialDocumentUrl) initialDocumentActive.value = false;
+    }
+
+    /** Keep mounted presentation independent of retired bootstrap authority. An
+     * admission owner supplies its current visit and releases this reference on
+     * unmount; the captured actor prevents an old component classifying a new one. */
+    function registerPageOutcome(route: Readonly<Ref<string>>, isStatic: () => boolean): () => void {
+        const source = {scope: capture(), route, isStatic};
+        // Publish registration reactively: a seeded denial can retire bootstrap
+        // during setup, before the shell has observed this mounted owner once.
+        pageOutcomes.value = new Set([...pageOutcomes.value, source]);
+
+        return function retirePageOutcome(): void {
+            const remaining = new Set(pageOutcomes.value);
+            remaining.delete(source);
+            pageOutcomes.value = remaining;
+        };
+    }
+
+    /** Rendering and automatic release recovery share the displayed outcome,
+     * including mounted admission after initial GET evidence has been retired.
+     * This is presentation policy only; it neither admits reads nor blocks the
+     * separate deliberate-recovery path's ordinary draft/command protection. */
+    function hasStaticPageOutcome(route: Pick<RouteLocationNormalized, 'meta' | 'fullPath'>): boolean {
+        const initial = initialDocumentFor(route.fullPath);
+        const destination = frontendDocumentUrl(route.fullPath);
+        const completion = pageCompletion.value;
+
+        // Completion belongs to its current actor/destination. Ordinary field
+        // feedback cannot turn an interactive form into a static document.
+        const completed = !!completion && completion.context === session.value.context
+            && frontendDocumentUrl(completion.destination) === destination;
+        if (completed || (!!initial?.identityFeedback && frontendIdentityMessageFeedback.includes(initial.identityFeedback))
+            || initial?.commonPage || initial?.pageEntry?.kind === 'denied' || initial?.packingError
+            || initial?.identityProblem || (initial?.passwordReset && 'status' in initial.passwordReset)) return true;
+
+        // Read the actual mounted owner's reactive classification rather than a
+        // copied snapshot. Other actors, resources and disposed owners cannot
+        // classify this document; fresh admission can restore dynamic content.
+        for (const source of pageOutcomes.value) {
+            if (isCurrent(source.scope) && source.route.value === destination && source.isStatic()) return true;
+        }
+        return false;
+    }
+
+    /** Static admitted outcomes remain readable during startup. All other
+     * interactive routes retain the shared skeleton until initialization. */
+    function requiresClientInitialization(route: Pick<RouteLocationNormalized, 'meta' | 'fullPath'>): boolean {
+        return route.meta.javascriptRequired === true && !hasStaticPageOutcome(route);
     }
 
     function isCurrent(scope: PilotRequestScope, checkLocale = false): boolean {
@@ -240,6 +266,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
         sessionRead.value = {error: null, pending: false};
         ready.value = false;
         readsReady.value = false;
+        pageOutcomes.value = new Set();
         epoch.value++;
         void queryClient.cancelQueries();
         queryClient.clear();
@@ -431,6 +458,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             epoch.value++;
             stopLanguage();
             updates.dispose();
+            pageOutcomes.value = new Set();
             queryClient.clear();
         };
         hydrated.value = true;
@@ -491,13 +519,15 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
             stopLanguage();
             updates.dispose();
             identityGuards.clear();
+            pageOutcomes.value = new Set();
             void queryClient.cancelQueries();
             queryClient.clear();
         };
     }
 
     return {api, bootstrap, browser, queryClient, session, epoch, locale, i18next, visible, hydrated, initialContentReady, ready, readsReady, sessionRead, notice, pageNotice, pageCompletion, personalLink, messages, pageTitle, updates,
-        capture, initialDocumentFor, retireInitialDocument, isCurrent, mayRead, mayObserve, refreshSession, acceptIdentity, registerIdentityGuard, mayChangeIdentity,
+        capture, initialDocumentFor, retireInitialDocument, registerPageOutcome, hasStaticPageOutcome, requiresClientInitialization,
+        isCurrent, mayRead, mayObserve, refreshSession, acceptIdentity, registerIdentityGuard, mayChangeIdentity,
         changeLocale, invalidateIdentity, start};
 }
 

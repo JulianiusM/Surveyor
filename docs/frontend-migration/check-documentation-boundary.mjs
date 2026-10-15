@@ -24,8 +24,14 @@ import {parseMetadata, parseMetadataBlock, parseDocumentationDelta, discoverTask
 const toolDirectory = path.dirname(fileURLToPath(import.meta.url));
 const transientReference = /frontend-migration\/|canonical-merge-target:|production-reference:|status:\s*migration-pending|\]\([^\n)]*staged\//i;
 // Exact reviewed public owners may be copied before a normal commit makes them
-// tracked. This does not admit another test, a directory or ignored private state.
+// tracked. This does not admit an unlisted test, a directory or ignored private state.
 const publicPreviewOwners = new Set(['src/types/api/', 'src/types/LocalizationTypes.d.ts',
+    'src/types/FrontendFeedbackTypes.d.ts', 'src/frontend/components/CommandFeedback.vue',
+    'src/frontend/composables/pageNavigation.ts', 'tests/frontend/frontend-page-navigation.spec.ts',
+    'src/frontend/features/packing/lifecycle.ts',
+    'src/frontend/styles/application.sass',
+    'src/frontend/styles/style.sass', 'src/frontend/styles/accordion.sass',
+    'src/frontend/styles/timezone-select.sass', 'src/frontend/styles/help.sass',
     'src/modules/localization/generated/', 'scripts/package-documentation.mjs',
     'tests/integration/frontend-development-runtime.spec.ts']);
 const publicEnvironmentTemplates = new Set(['.env.e2e.example', 'tests/.env.test.example']);
@@ -631,9 +637,12 @@ function createPreview(root, manifest, inspection) {
 function reportPreview(root, preview) {
     // Invoke the existing real checker at final paths. Its report remains
     // advisory; the raw report hash below pins exactly what reviewers saw.
+    // Project authored-path counts from the live tree: omitted task records and
+    // reconciled guides change occurrences without changing policy configuration.
+    // Existing live count drift and actual missing target paths remain findings.
     const report = path.join(preview, 'documentation-preview.json');
     const result = spawnSync(process.execPath, [path.join(root, 'scripts/check-documentation.mjs'),
-        '--root', preview, '--strict', '--json', report], {encoding: 'utf8', windowsHide: true});
+        '--root', preview, '--reference-root', root, '--strict', '--json', report], {encoding: 'utf8', windowsHide: true});
     if (result.error || result.status !== 0) throw new Error(result.error?.message || result.stderr || 'Preview checker failed');
     const diagnostics = JSON.parse(fs.readFileSync(report, 'utf8'));
     console.log(`Prepared documentation preview: ${preview}`);

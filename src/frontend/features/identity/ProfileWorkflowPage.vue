@@ -189,9 +189,9 @@ function formAction(): string {
              and alert. It is presentation, never a stronger backend completion receipt. -->
         <StatusNotice v-if="validationError && !validationDismissed" kind="danger" transient
             :renewal="validationError" @dismiss="validationDismissed = true">{{ messages.t(validationError) }}</StatusNotice>
-        <StatusNotice v-if="readError" kind="danger" :read-error="readError" :retry-at="readRetryAt">
+        <StatusNotice v-if="readError" kind="danger" :read-error="readError" :retry-at="readRetryAt"
+            :action="{state: previewAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="requestPreview">
             {{ messages.t('state.loadFailed') }}
-            <ActionButton class="ms-2" variant="outline-light" :state="previewAction" @click="requestPreview">{{ messages.t('common.retry') }}</ActionButton>
         </StatusNotice>
         <section class="card bg-dark text-white mb-3">
             <h1 class="card-header text-center"><i class="bi me-2" :class="destructive ? 'bi-trash-fill' : 'bi-archive-fill'" aria-hidden="true"></i>{{ heading }}</h1>
