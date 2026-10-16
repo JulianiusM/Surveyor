@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current P0-P2 scope reconciled; original choices, transport provenance, withdrawn R1 acceptance and approved native anonymous flash retained; no full-application or cutover acceptance
+verification-scope: current P0-P2 scope and direct 2026-10-16 R1, S1, T1, conditional C1, E1 exclusion and D1 SPA correction reconciled; source adoption and scoped verification recorded in review; original choices and withdrawn acceptances retained; no full-application or cutover acceptance
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -526,6 +526,15 @@ Native source/build inputs and shared backend owners remain unchanged.
 The [implementation receipt](PILOT_PARITY_REVIEW.md#native-frontend-isolation-implementation-2026-10-15) owns the actual
 checks and limits; full feature migration, native removal and publication remain future separately authorized work.
 
+#### Direct native-isolation clarification (2026-10-16)
+
+The maintainer's direct reply to **R1 in the full pilot review** retains the October 15 isolation decision. The
+requirement to share presentation and frontend logic applies to matching consumers **within Vue**. Required native
+frontend behavior is copied into separately mutable Vue owners specifically to remove Vue dependencies on native
+implementations; it is not extracted into an owner consumed by both frontends. Native remains the unchanged
+comparison reference until its removal after cutover. This clarification preserves shared backend/domain,
+controller/DBAL and catalog ownership; it authorizes no duplicated backend implementation, native edit or cutover.
+
 ### Session ownership restoration and stateless initial visits (2026-10-15)
 
 The original Oct4 design retained Express session ownership but chose a context and session-bound CSRF token even
@@ -590,6 +599,84 @@ initialization or a second session owner. Native source remains unchanged.
 verification and unification review. It is separately scoped future work, not permission for a new lifecycle or a
 prerequisite for parity migration. The [full pilot re-review](PILOT_PARITY_REVIEW.md#full-pilot-baseline-and-migration-readiness-re-review-2026-10-15)
 records the bounded readiness disposition; resolving this choice alone does not certify the rest of the implementation.
+
+### Authorized implemented-pilot scope (2026-10-16)
+
+The maintainer directly resolves **S1 in the full pilot correction**: complete the authorized work through the
+implemented P2 slice only. P3–P11 remain later phase contracts. They begin after stable repeated reviews of the
+implemented slice and an explicit future maintainer trigger; the plan's existence or a readiness statement never
+starts those migrations automatically. This decision does not waive a current P2 finding or relabel unfinished
+P2 functionality as future work. Native isolation, existing backend-remedy exclusions and separate cutover,
+publication and native-removal decisions retain their boundaries.
+
+### Authorized dietary parity assertion correction (2026-10-16)
+
+The original organizer comparison required equal dietary sequences across separate native/Vue responses. Two broad
+runs exposed differing badge sequences; tracing then showed unchanged native reads returning the same dietary
+choices in different orders. Both frontends use the same controller/service, which does not specify nested dietary
+row order. That observed implementation does not establish an intended fixed order or authorize a backend remedy.
+
+The maintainer directly approves **T1, the dietary-order parity assertion request**, as a test-only correction.
+Each frontend must render its own ordinary response's complete dietary values and derived totals in that response's
+order. The test observes responses without replacing them, verifies delivered order separately for each frontend,
+then compares corresponding dietary entries by choice with their counts, appearance and component layout. Other
+exact text/control assertions and deadlines remain. Different delivered sequence positions alone may pass; missing,
+duplicated, incorrect, misordered-against-response or incorrectly styled entries must still fail. Native/Vue runtime,
+shared backend queries and the native comparator remain unchanged. Approval supplies no passing implementation or
+execution receipt; the paired review owns actual results and retains both preceding broad failures.
+
+### Conditional fixture-check usefulness review and removal (2026-10-16)
+
+Pilot commit `f45dad7` introduced fixture-only credential inspection; `7a983c4` later accepted raw schema patterns,
+and P1 reused the owner. Specific original maintainer authorization for that automatic check was not established.
+G1's proposed literal-matcher repair could not authorize the original responsibility and was withdrawn pending a
+separate decision about keeping the check. Neither its history nor earlier passing tests retroactively supplies
+that approval.
+
+The maintainer now conditionally approves **C1**: obtain an unbiased independent review of the check's usefulness
+and implement its recommendations; G1 fixes are approved only if the check is kept. Fresh reviewer
+`/root/fixture_guard_review`, with no authorship of the check, requests or earlier proposed repairs, recommends
+removal. Its fixture-only timing follows destructive managed E2E preparation, its claimed privilege proof is too
+broad, and its parser rejects otherwise sufficient restricted grant forms. Root accepts that recommendation under
+the current conditional authorization, which is forward-only.
+
+The existing fixture owner therefore removes the grant inspection/parser and unused read/fixture selector while
+retaining selected-database checks, built metadata, unique rows, exact-ID cleanup and connection teardown. The
+three obsolete E2E-only CI environment/comment lines also retire; integration configuration and grant provisioning
+remain unchanged. No replacement infrastructure checker is introduced. Because the check is removed, G1's retention
+condition is false and its CI grant repair is not applied. Dedicated disposable credentials remain a setup
+requirement; staged literal-grant examples retain that intended configuration. Raw CI grant patterns predate the
+pilot and remain a separate inherited provisioning concern, without a new P2 blocker or implied repair approval.
+
+### Direct production-coexistence exclusion and SPA correction (2026-10-16)
+
+The maintainer directly resolves **E1 in the Event permission/transport review**: native and Vue frontends will
+never coexist in production, so the native-versus-versioned Event permission-write coordination finding is outside
+production scope and must not be repaired in this migration. `IMP-066` closes by this explicit exclusion, not by a
+claim that the source interleaving was repaired or exercised. Native remains a development comparison reference;
+R1 isolation and the previously approved Packing coordination remedy remain unchanged.
+
+The same reply rejects **D1's proposed retention of document POST for Event creation/duplication** as contrary to
+the SPA rewrite. It reinforces the original ordinary-JavaScript JSON/multipart command and client-navigation choice,
+and requests its full adoption across equivalent implemented P0–P2 Vue forms and links, with an explicit plan and
+prevention guidance. Earlier code, playbook descriptions and successful document-form tests did not establish a
+specific transport exception; this decision supplies forward implementation authority, not retrospective approval.
+
+The correction covers Event creation/duplication, profile token issuance and transfer/deactivation/deletion,
+Event-rendered child deletion and ordinary links between admitted migrated pages. Matching Vue consumers use the
+existing shared command, navigation, feedback, draft, file and destructive-action owners, with generated contracts
+around the existing shared backend operations. Internal token issuance is a deliberate command, never a background
+read, prefetch or history replay. Private capability input/output stays in its admitted mounted lifetime, outside
+URLs, query caches and persistent storage. True provider/capability arrivals, print/downloads, initial hard loads
+and explicitly unmigrated destinations retain their distinct document boundaries.
+
+Existing native operation order and possible partial completion remain inherited. JSON transport does not imply a
+new transaction, repaired identity/token authority, guaranteed rollback or automatic replay. Confirmed results stay
+confirmed through failed follow-up reads/navigation; uncertain outcomes retain input and require explicit review.
+The [current plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#current-spa-correction-plan-2026-10-16) owns the bounded
+implementation sequence. `DESIGN-EVENT-CREATION-TRANSPORT` now closes for reviewed current-consumer adoption and
+fresh scoped same-document evidence, with failed broad runs and focused receipts distinguished in the review.
+This correction does not start P3–P11 or authorize cutover.
 
 ## Cutover retirement inventory
 

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented P2 composition reconciled for displayed headers, denial-family dispatch, metadata handles/normalization, current roster notes and root/child lifecycle; shared controller rules and optional-session declarations retained; no execution or cutover claim
+verification-scope: current P0-P2 SPA source adoption reconciled with shared creation/removal/navigation/draft owners and form/link prevention guidance; native isolation/backend exclusions retained; scoped execution recorded separately in review; no cutover
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -48,6 +48,8 @@ cannot comfortably hold its responsibility. Do not add another router, HTTP wrap
 validator or service simply to make this table symmetrical. Application presentation helpers and styles belong to
 their existing owners under `src/frontend/`, with one implementation for matching consumers. Shared logo/favicon,
 third-party dependencies and browser-safe backend/domain/catalog owners retain their actual shared ownership.
+During native coexistence, required native frontend behavior has separately mutable Vue copies. Native application
+presentation/frontend logic remains isolated; new Vue consumers share Vue owners rather than depend on native code.
 
 #### Contract authoring and generated consumers
 
@@ -87,8 +89,8 @@ primitive union and passes the raw scalar to the existing signed nullable SQL co
 remain authoritative; creation/new-item validation stays separate. Do not generalize either extension into coercion
 or a copied database-limit policy. Native metadata diagnostics remain owned by their native adapter.
 
-The current HTTP adapter decodes single scalar path/query/header values, JSON and Packing multipart, and delivers
-JSON or scoped binary image responses. Creation decodes the `data` JSON part once against its authored nested schema
+The current HTTP adapter decodes single scalar path/query/header values, JSON and Event/Packing multipart, and
+delivers JSON or scoped binary image responses. Creation decodes the `data` JSON part once against its authored nested schema
 and handles `image` separately. Repeated query parameters, absent/empty values and malformed input stay distinct.
 The maintainer's [2026-10-15 correction](decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15)
 clarifies that removal of unused implementation did not authorize definition restrictions. Parameter schemas may
@@ -119,6 +121,10 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
 1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;
    feedback; focus; and hidden/empty/archived states. Peer features are evidence to inspect, not a universal policy.
+   Classify every form and link, including shell, parent/context and destructive controls: ordinary migrated
+   command/navigation, initial or external capability arrival, provider handoff, output/download or unmigrated
+   destination. Inspect actual targets and side effects; an old anchor, token-related name or partial backend
+   failure does not independently make an ordinary Vue workflow a document boundary.
 
 2. **Expose the smallest useful projection.** Author the operation/schema once in its v1 YAML. Reuse the owning
    controller projection and method permission definition; do not serialize entities, sessions, permission internals
@@ -132,7 +138,9 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
    Shared keys/families name dependencies without teaching generic owners a feature.
 
 4. **Wire entry, routing and SSR before editing.** Extend explicit Express/Vue routes rather than a wildcard HTML
-   fallback. Preserve provider, token, email-link, print and download boundaries. Entry preflights use `usePageEntry`
+   fallback. Use Router for ordinary admitted migrated destinations, including warm entry and shell/context links;
+   preserve modified clicks and meaningful hrefs. Preserve true provider, external token/email arrival, print and
+   download boundaries rather than treating every token-related internal action as document navigation. Entry preflights use `usePageEntry`
    where the journey has an admission decision; public read-only views can use a direct query. Request-local SSR
    renders the same Vue tree without self-HTTP. Initial seeds check live document/scope eligibility when evaluated;
    Back, eviction or actor change cannot replay retired SSR data. Use `requiresClientInitialization` and existing
@@ -160,8 +168,8 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
    Use the existing context-owned `useActionState` for an operation's live eligibility, pending and blocked inputs.
    Pass that state to `ActionButton` (or its disabled/pending refs to a native control), and call its `isAvailable()`
    before dispatch. The control and handler must share this decision, including session revalidation and cooldowns;
-   an enabled-looking action must not silently stop at an undisclosed read gate. `usePageEntry`, `useCommand` and
-   `useDocumentForm` expose their own action states so callers reuse their lifecycle decisions. Keep read admission
+   an enabled-looking action must not silently stop at an undisclosed read gate. `usePageEntry` and `useCommand`
+   expose their own action states so callers reuse their lifecycle decisions. Keep read admission
    in the read owner: session recovery must remain available while ordinary reads wait, local Cancel/draft controls
    need no read admission, and already admitted commands retain their captured completion lifetime. This derived
    state stores no drafts, server data or authority and never retries an operation automatically.
@@ -193,6 +201,21 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
    affected mounted controls/reads/commands. Use equivalent records, actors and sizes for visual checks. Obtain an
    independent semantic review and report actual commands, failures and limits. A build, helper test or screenshot
    alone cannot establish feature completeness.
+
+   For an ordinary migrated form/link, extend its existing built-application E2E with a document marker and
+   observation of main-frame navigation requests, then assert the generated request, visible result and persisted
+   effect. Exercise warm entry and completion, rejected input, canceled departure, pending/unknown no-replay and
+   failed follow-up navigation/read where the change crosses those boundaries. Explicitly exercise allowed
+   provider/capability/output transitions separately. A final URL or successful database write alone cannot prove
+   SPA delivery; synthetic documents cannot supply application E2E evidence. This is contribution review and
+   existing application coverage, not a new infrastructure scanner, test framework or CI gate.
+
+   Compare every affected visible control's wording, value/state, constraints, typography and relative geometry,
+   including surrounding form actions and common footer where relevant. Assert recorded browser errors and layout
+   measurements: collecting JSON or screenshots alone does not protect their result. Separate approved shell
+   differences from the compared component instead of weakening assertions until they pass. Record the actual
+   database version and SQL mode before interpreting persistence-dependent outcomes; preserve the shared native
+   behavior and diagnose environment differences without introducing validation solely to satisfy a local fixture.
 
 Readable source is part of every step. Keep template controls and render branches in logical groups with purposeful
 blank lines, explain inputs and non-obvious lifecycle steps, and prefer named operations to nested anonymous flows.
@@ -376,11 +399,17 @@ guest-registration operation, query key and exact destination. Event retains `re
 only a deliberate registration command spends that capability. `EntityEntryPage.vue` shares resource admission
 presentation and recovery while feature entry owners retain read intent and denial invalidation.
 
-Event creation remains a deliberate document POST through `frontendPilotEvent.ts` and `useDocumentForm`; generated
-reads supply creation/duplicate context without creating an Event. The adapter uses native preprocessing, image
-assignment, creation and default-permission initialization in their existing order. Repeated named permission fields
-use the native decoder. Redisplay retains submitted scalar/checkbox values, with no file bytes or hidden Session.
-No atomic-creation or automatic-replay guarantee is added to the inherited operation.
+Event creation and duplication follow the same ordinary SPA command/navigation contract as Packing. Generated
+reads supply bounded creation/duplicate context without creating an Event; the deliberate generated multipart
+command uses existing native preprocessing, image assignment, creation and default-permission initialization in
+their existing order. Preserve raw optional capacity, audience masks, shared permission initialization and duplicate
+exclusions rather than inferring new rules from the transport. `useCreationCommand` in `src/frontend/composables/creation.ts` is adopted
+by both `PackingCreatePage.vue` and `EventCreatePage.vue`; it composes the existing command, feedback and
+confirmed-navigation owners while each feature owns its fields, native collection and File. Rejection or uncertainty
+retains submitted values and the chosen File. Confirmation marks creation submitted, disables replay and retains the canonical destination through failed
+navigation. Feature fields and the chosen File release on accepted route/actor retirement or unmount, rather than
+being cleared while that confirmed form still awaits destination delivery. Existing multi-step creation can
+partially complete: do not promise atomic creation, rollback or automatic replay.
 
 Common landing/message/error presentation consumes explicit request-local data through the existing bootstrap codec.
 Validate scalar shapes without coercion; retain a captured landing suggestion through SSR/hydration. Known plain
@@ -399,6 +428,12 @@ state. `MetadataDraft` applies feature normalization consistently to dirtiness a
 null/false/empty remain distinct. No-op validation/feedback precedes confirmation, cross-form discard and writes
 where the workflow requires it. Machine/raw number drafts survive framework coercion: inline capacity acceptance,
 creation bounds and SQL persistence are different policies.
+
+`EntityMetadataEditor` formats Original/Mine/Current values once for matching feature consumers. Display booleans
+with the shared localized Yes/No catalog keys and preserve numeric zero; reserve the empty placeholder for null,
+undefined or empty text. Presentation never changes draft normalization, comparison evidence or submitted values.
+Exercise the actual feature's review/recovery controls so a false setting cannot appear absent behind a passing
+standalone formatting assertion.
 
 Use application-root draft protection with feature/dialog subtrees. Dialog close resolves its own work; route,
 identity/update and whole-page destructive departures resolve every affected descendant. Pending/unknown command
@@ -424,21 +459,28 @@ Unknown outcomes are reviewed through reads without automatic replay. Reconcilia
 creation failed; preserve submitted input and require deliberate review or acknowledged departure. Financial and
 recommendation commands retain their specific revision/fingerprint protocol rather than a generic comparison rule.
 
-For inherited mutations which can partially complete, use deliberate document POSTs through existing controller
-owners and native operation order, rather than a new atomic JSON envelope or backend repair. Keep interactive
-skeleton/readiness and ordinary href entry with private bootstrap projections. Invoke a side-effecting capability
-GET once per document admission, never through query refresh/prefetch. A read-only capability preview may use an
-explicit generated POST contract: keep its secret in the body and retain the entry draft/validated result only in
-mounted feature state. A fixed nonsecret fragment supports Back/Forward without secret URLs, query caches,
-persistent storage or replay; capability denial is a presentation outcome, not loss of the viewing identity.
-Document commands use `requireFrontendFormContext` for shared context, CSRF, origin and compatibility checks.
-`useDocumentForm` shares draft protection, admits only the deliberate POST's unload and keeps guards for other pending
-or unknown commands, identity changes, Router navigation and updates. It never fetches or retries that command.
-Preserve native `ValidationError` confirmation status 500 and submitted values, `ExpectedError` statuses, and the
-existing logout/provider destination. Existing controller
-completion words remain escaped source-owned output when no message key is supplied; do not parse them to reconstruct
-cleanup decisions. Newly authored interface and validation text uses the shared catalog. This transport does not
-claim stronger backend completion guarantees.
+Ordinary migrated mutations use generated JSON/multipart commands and shared Vue command/navigation owners even
+when the inherited backend operation can partially complete. Transport adaptation preserves existing controller
+ownership, operation order and truthful known/unknown outcomes; it does not authorize a stronger transaction or
+excluded backend repair. Prepare fallible bounded reply material before invoking an inherited mutation where
+possible, and do not add a later mutable-context rejection of its confirmed result. A lost or ambiguous result
+requires deliberate review, never automatic replay or speculative rollback.
+
+Profile token issuance is an explicit user command, not a refreshable read. Never issue or replace a capability
+through query refresh, prefetch, remount or Back/Forward. True native/external capability entry retains its admitted
+compatibility behavior. Read-only preview and deliberate transfer use generated body contracts; keep secrets and
+private results in admitted mounted feature state, outside URLs, query caches and persistent storage. A fixed
+nonsecret fragment may support local history without replay. Capability denial is a presentation outcome, not loss
+of the viewing identity. Warm internal entry must obtain bounded admission without requiring a document refresh.
+
+Transfer, profile deactivation and account/guest deletion reuse existing native controller operations and sequencing
+through the SPA adapter. Shared command and destructive-navigation owners retain confirmation, pending/unknown
+guards and appropriate submitted input. Preserve native wrong-confirmation validation and `ExpectedError` meanings,
+including inherited partial failures; a server error after a possible write is not proof of rollback. Confirmed
+internal completion uses Router; a true external provider logout destination remains an explicit handoff. Existing
+controller completion words remain escaped source-owned output when no message key is supplied; do not parse them
+to reconstruct cleanup decisions. Newly authored interface and validation text uses the shared catalog. Retire
+unused document-only Vue adapters after actual consumers move, while retaining explicit compatibility entries.
 
 Guest registration, API account signup and activation use the existing user controller's `commitIdentityCompletion`
 through `UserService.withIdentitySessionTransaction`. The controller owns expiry/context checks, staged identity and
@@ -975,6 +1017,12 @@ confirmation, dispatch and inline result wording. Pause remains immediate; resum
 warning. The caller still owns current capability checks and root/parent-scoped operations, and the same command
 retains uncertain-result/read recovery. Personal visibility and permanent deletion stay separate.
 
+Permanent deletion uses `useEntityRemoval` in that same composable module. Its three current consumers are
+`EntitySettingsDialog.vue`, `OverviewRegion.vue` and `EventThingsToDo.vue`. The feature supplies its generated
+root/child operation and confirmation/success wording; the shared owner obtains whole-page consent before writing,
+dispatches once and retains the confirmed destination through failed delivery. Retry repeats navigation only.
+Private drafts and capability checks remain with their actual feature owners.
+
 Never accept profile IDs, timestamps, stored parent state, or other arbitrary fields from the browser. Follow the [archival authority contract](PERMISSIONS_REFERENCE.md#archival-authority-and-personal-visibility), including the survey exception. A private preference may change placement only after existing overview membership is established.
 
 <!-- /delta:amendment-22 -->
@@ -1090,3 +1138,10 @@ and recreates its selected schema. Read [Testing Guide](TESTING_GUIDE.md) before
 reuse development or production database names.
 
 <!-- /delta:amendment-35 -->
+
+## 2. Create a development database — amendment-36
+
+<!-- delta:amendment-36 -->
+GRANT ALL PRIVILEGES ON `surveyor\_dev`.* TO 'surveyor_dev'@'127.0.0.1';
+
+<!-- /delta:amendment-36 -->

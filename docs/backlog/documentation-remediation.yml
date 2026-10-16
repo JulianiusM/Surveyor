@@ -1556,7 +1556,194 @@ implementation_defects:
       expects rejection of changed stored B while preserving the original request Session and later C, not adoption of B.
       Prior documentation preparation acceptance is stale. No global session concurrency, live provider/mail behavior,
       production exploit, exhaustive visual/accessibility acceptance or completed stateless redirect is established.
+  - id: IMP-065
+    status: closed
+    closed_on: 2026-10-16
+    discovered_on: 2026-10-16
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    out_of_scope_for_documentation_migration: true
+    title: Shared metadata comparison presents false settings as absent values
+    evidence:
+      - EntityMetadataEditor used a truthiness fallback in Original, Mine and Current. A built Event stale-save
+        review reproduced disabled settings as em dashes, while the admitted values remained false.
+      - MetadataDraft and the generated Event projection preserve boolean and numeric scalar meaning; only
+        comparison presentation discarded false and raw zero.
+    authorization: The maintainer directly authorized the full pilot correction/readiness plan on 2026-10-16;
+      its R1 decision retains native isolation and shared presentation within Vue.
+    documentation_contract: Shared comparison presentation distinguishes localized boolean values and numeric zero
+      from null, absent or empty text without changing drafts, comparison evidence or submitted wire values.
+    resolution: The existing shared editor formats all three columns once through the shared locale catalogs.
+      Both mounted Event stale/unknown recovery cases pass within the complete 996-test frontend run. The real
+      built Event journey passes native concurrent mutation, actual 412, visible comparison and deliberate persisted
+      resolution on MariaDB 10.11.14 through ordinary E2E initialization. Root and independent review confirm that
+      draft, token, normalization and wire semantics are unchanged.
+    evidence_limit: Closure concerns scalar comparison only. Mounted delivery is substituted HTTP; the separate
+      built case supplies system evidence. Neither establishes every pilot state, locale or browser combination.
+  - id: IMP-066
+    status: closed
+    closed_on: 2026-10-16
+    discovered_on: 2026-10-16
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    out_of_scope_for_documentation_migration: true
+    title: Event permission comparisons do not coordinate intervening native writes
+    evidence:
+      - src/controller/eventController.ts withEventManagement holds an exclusive Event root lock through
+        updateEventDefaults and setEventAdmin comparison and persistence.
+      - src/modules/database/services/EntityAdminService.ts coordinates the Packing root only. Native Event
+        default and administrator writers can update polymorphic permission rows without taking the Event lock.
+      - Those permission rows have no Event foreign key supplying implicit coordination. An intervening native
+        write after comparison can be overwritten or removed by the versioned save without a 412 response.
+      - tests/integration/event-api.spec.ts exercises sequential setup adoption, not this competing-write schedule.
+    impact: A reviewed Vue Event access save can silently discard an overlapping native permission change.
+    authorization: The maintainer directly resolves E1 by excluding simultaneous native and Vue production use
+      and directs no native Event permission coordination fix. R1 native frontend isolation and S1 P0-P2 scope remain.
+    documentation_contract: The original conditional-write requirement prompted source review of compared values
+      through persistence. The direct E1 decision excludes simultaneous native and Vue production writers from this
+      migration's acceptance scope; it does not establish that the native interleaving is safe.
+    disposition: Closed by explicit production-scope exclusion, not by repair or a passing competing-write test.
+      The native development comparator remains. No new Event coordination or general native reauthorization repair
+      is authorized, and the previously approved Packing coordination remedy is not rolled back. A later request
+      introducing production coexistence would require its own scope and decision review.
+    evidence_limit: Source-confirmed unsafe interleaving, independently and root reviewed. No controlled database
+      reproduction has run. Passing full browser and sequential ORM cases do not exercise this schedule.
 findings:
+  - id: DESIGN-EVENT-CREATION-TRANSPORT
+    status: closed
+    closed_on: 2026-10-16
+    discovered_on: 2026-10-16
+    severity: medium
+    category: design-provenance
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    title: Ordinary Vue document workflows must adopt the original SPA command and navigation design
+    evidence: The original frontend foundation requires JSON commands for ordinary JavaScript workflows. At the
+      pre-D1 review, EventCreatePage and frontendPilotEvent.ts used document POST for Event creation and duplication;
+      staged Development described this transport and generalized it for inherited partial mutations. Existing provider,
+      token and output document boundaries do not independently establish approval for ordinary Event creation.
+    authorization: The maintainer directly rejects D1 retention of Event document creation as a SPA rewrite
+      violation and requests full implementation of the original ordinary JSON/multipart commands and client
+      navigation, including equivalent implemented P0-P2 Vue forms and links and prevention guidance. This supplies
+      forward correction authority, not retrospective approval for the earlier document transport.
+    disposition: Closed for the implemented current P0-P2 correction after independent actual-consumer review and
+      scoped fresh verification. Event and Packing creation adopt
+      useCreationCommand; Settings, Overview and Event-child deletion adopt useEntityRemoval. Profile token and
+      destructive workflows use generated commands, read-only warm admission and existing identity completion;
+      ordinary migrated links use Router, and displaced document-only Vue adapters/helpers are retired.
+      Existing shared controller and DBAL operations retain native ordering and possible partial outcomes; general
+      token, transfer, deactivation, deletion and transaction repairs remain excluded. True provider/capability
+      arrivals, outputs, initial hard loads and unmigrated destinations keep their distinct document boundaries.
+    closes_when:
+      - Event creation and duplication, profile token and destructive workflows, Event-rendered child deletion and
+        ordinary migrated links adopt generated SPA commands and shared Vue owners in every matching current consumer.
+      - Existing application-level E2E asserts same-document behavior, actual backend effects and meaningful
+        validation, retained draft/file, private-state and pending/unknown no-replay recovery boundaries.
+      - The existing playbook, coverage and review reflect actual source and executed evidence, preserve original
+        choices with the direct dated amendment and distinguish permitted document boundaries from ordinary commands.
+    evidence_limit: Original Git design, direct correction authority and actual source adoption reviewed. Fresh
+      build, complete test compiler and all 45 frontend files with 1004 tests pass; 84 distinct ORM cases have scoped
+      combined evidence after a test-only Event tinyint assertion correction. The broad 109-case built run had
+      103 passes, five failures and one appropriate configuration skip. The four fixture-only expectation/tab fixes
+      and unchanged drag case then passed together; three further unchanged drag repetitions passed. Across main
+      and corrected runs, 108 distinct normal cases have positive evidence, plus the separately configured alternate
+      case. This is not one uniform 109-case pass or a claimed drag-timeout repair. Independent review accepted
+      20 profile and 12 Event/German originals within their captured scope. The paired pilot review owns exact
+      receipts and remaining limits; no stronger backend atomicity, full-application or future-phase acceptance follows.
+  - id: TEST-FRONTEND-DIETARY-ORDER
+    status: closed
+    closed_on: 2026-10-16
+    severity: medium
+    category: verification
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    title: Organizer parity assumes stable ordering across independent native dietary reads
+    evidence: The confirmation trace records the same unchanged registration's dietary rows in orders 6/5/4
+      and 4/5/6 across two native GETs without an intervening mutation. Vue receives and renders 4/5/6 correctly.
+      Native and v1 call the same controller and DBAL query, which specifies registration but not dietary order.
+      The strict text assertion fails for both dietary badges and totals derived in delivered order.
+    authorization: The maintainer explicitly approved T1 on 2026-10-16 and separately resolved S1 as corrections
+      through implemented P2 only; later phases require stable repeated reviews and an explicit future trigger.
+    disposition: The approved test-only correction asserts each actual response's complete rendered dietary order
+      and compares corresponding content/counts/appearance/layout. Other exact text, controls and deadlines remain.
+      Independent source review and both focused built viewport cases pass, with actual differing delivered orders
+      at both sizes. The final ordinary nine-file pilot run passed all 104 cases for its active configuration, with
+      the one alternate-authentication case correctly skipped. No assertion deadline or runtime policy changed.
+      No backend sorting, native behavior change or parity waiver is authorized.
+  - id: TEST-DATABASE-GRANT-PATTERN
+    status: open
+    severity: medium
+    category: test-safety
+    owner: test maintainers
+    package: frontend-pilot-readiness
+    title: CI database grants retain raw underscore patterns after reviewed fixture-check removal
+    evidence: The CI workflow grants raw surveyor_test and surveyor_e2e database patterns. MariaDB interprets
+      unescaped underscores as database-name wildcards, allowing names beyond those two literal schemas.
+      The former fixture inspector also accepted raw patterns, but was removed following the C1 usefulness
+      review. Existing integration/E2E initialization retains its test/e2e name checks; no cross-schema mutation
+      was reproduced. Current application verification uses independently checked exact literal grants.
+    history: Pilot correction f45dad7 introduced literal-only matching; pilot correction 7a983c4 broadened the
+      shared guard to accept raw patterns for older CI credentials, and P1 reused it for profile fixtures. CI's
+      raw grants predate the pilot in cae7d42, but the guard relaxation is pilot-owned. The earlier classification
+      as unrelated inherited infrastructure is withdrawn; no specific original-check approval was substantiated.
+    authorization: On 2026-10-16 the maintainer conditionally approved C1 subject to a fresh unbiased independent
+      usefulness review and implementation of its recommendations. G1 repairs were approved only if the check
+      was kept. The independent reviewer recommended removal; this decision grants no historical authorization.
+    disposition: The fixture concern is resolved by removing the late grant inspector, its matcher and read/fixture
+      selector, plus the obsolete E2E-only CI environment entry. Existing selected-database checks, unique fixture
+      identities, exact-row cleanup and connection teardown remain. The review found limited extra warning value
+      after destructive setup and unjustified rejection of sufficient restricted credentials. No replacement checker
+      or checker test suite was added. This finding is not an application-parity acceptance blocker.
+    remaining_scope: Only the inherited CI grant provisioning remains open under this existing record. The removal
+      outcome does not activate conditional G1 permission, so those grant statements are unchanged. No provisioning
+      correction, policy waiver or new test-infrastructure requirement is inferred. Staged literal-schema examples
+      continue to describe the intended restricted setup.
+  - id: TEST-FRONTEND-PARITY-ASSERTIONS
+    status: closed
+    closed_on: 2026-10-16
+    severity: medium
+    category: verification
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    title: Profile parity collected form/footer evidence without complete assertions
+    evidence: The profile browser comparison measured only the name field while collecting unasserted footer
+      geometry and page errors. Existing Event/header comparisons did not close that separate gap.
+    disposition: The approved correction adds measured form/footer and error assertions, plus focused German
+      shared-settings keyboard/reflow and real stale-save review coverage. All 17 focused cases passed together;
+      the subsequent broad run also passed these cases. Root inspected four matched profile originals and four
+      German settings captures; independent review confirms retained deadlines and strict direct assertions.
+    evidence_limit: The 640x450 viewport approximates content reflow rather than actual browser zoom. Bounded
+      component surfaces and declared journeys do not establish complete pilot accessibility or visual acceptance.
+  - id: TEST-FRONTEND-SQL-MODE
+    status: closed
+    closed_on: 2026-10-16
+    severity: medium
+    category: verification
+    owner: test maintainers
+    package: frontend-pilot-readiness
+    title: Capacity rejection assertions require an explicit strict-SQL test environment
+    evidence: The audit's non-strict MariaDB 10.4.32 returned 200 and persisted zero for blank capacity through
+      both native and versioned operations; the existing strict-mode assertion expected 500.
+    disposition: Raw shared runtime behavior and the rejection assertions remain unchanged. Staged test guidance
+      and scoped test comments state the strict-SQL fixture precondition without requiring a production setting.
+      Ordinary setup and real persistence were verified on isolated MariaDB 10.11 with restricted credentials.
+    verification: Five real ORM files passed together, 87/87, through ordinary guarded TypeORM synchronization on
+      MariaDB 10.11.14 with STRICT_TRANS_TABLES. Both built capacity cases passed after normal E2E initialization
+      against the separate exact-grant disposable schema. No prepared-schema override, widened deadline, shared
+      database setting or runtime numeric validation was introduced.
+  - id: DOC-FRONTEND-REVIEW-HISTORY
+    status: closed
+    closed_on: 2026-10-16
+    severity: medium
+    category: maintenance
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    title: Pilot review repeats superseded execution transcripts and receipts
+    disposition: Authorized editorial consolidation retains current evidence, unique boundary limits, linked
+      historical checkpoints and decision provenance. Superseded run narratives remain in Git and ignored artifacts.
+      Independent and root review preserve live phase contracts, approved exclusions and original decision owners.
   - id: DOC-PERMISSION-POLICY-REVIEW
     status: open
     severity: medium

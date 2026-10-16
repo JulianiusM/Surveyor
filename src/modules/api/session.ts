@@ -87,22 +87,6 @@ export async function requireApiContext(req: Request, res: Response, requireProf
         csrf: req.get('X-CSRF-Token'), compatibility: req.get('X-Surveyor-Api-Compatibility')});
 }
 
-/**
- * Ordinary HTML POSTs cannot set the SPA's request headers. Read their explicit
- * hidden transport fields instead, then apply the same session/origin protections.
- * This adapts delivery only: native business operations retain their existing order.
- */
-export async function requireFrontendFormContext(req: Request, res: Response): Promise<ApiActor> {
-    // Arrays, missing fields and object-shaped parser input are never credentials.
-    // Keep these values separate from headers so callers cannot overwrite origin evidence.
-    const body = req.body;
-    return requireContextEvidence(req, res, true, {
-        context: typeof body?._context === 'string' ? body._context : undefined,
-        csrf: typeof body?._csrf === 'string' ? body._csrf : undefined,
-        compatibility: typeof body?._compat === 'string' ? body._compat : undefined,
-    });
-}
-
 /** Private transport evidence has no business authority independent of the stored session. */
 interface ContextEvidence {
     context?: string;
@@ -127,7 +111,7 @@ function requireRequestOrigin(req: Request, requireEvidence: boolean): void {
     if (requireEvidence && fetchSite !== 'same-origin' && origin !== expectedOrigin) throw new ApiProblem('CSRF_INVALID');
 }
 
-/** Share admission for header and form transports without changing either business workflow. */
+/** Verify captured header evidence without changing the admitted business workflow. */
 async function requireContextEvidence(req: Request, res: Response, requireProfile: boolean,
     evidence: ContextEvidence): Promise<ApiActor> {
     // Capture once after the read-only stored generation check. Later workflow failures must

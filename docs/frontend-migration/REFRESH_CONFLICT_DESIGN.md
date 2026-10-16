@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-15
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: stateless anonymous epoch versus stored actor context clarified alongside retained refresh/draft boundaries; repair execution remains in paired review; no new concurrency guarantee
-source-anchors: src/frontend/app/context.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/overview/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
+verification-scope: implemented P2 Event dynamic reload scope reconciled with the existing subsequent-route provision; retained refresh/draft boundaries and anonymous context distinction; no new concurrency guarantee
+source-anchors: src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/event/; src/frontend/features/overview/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
 next-review: next-refresh-migration-or-authorized-cutover
 -->
 
@@ -205,8 +205,10 @@ Failed/obsolete targets keep current cards/URL/focus. Preserve sibling state, mo
 fragments and pending drafts. Optional images inject feature operations and own cancellation/object-URL lifetime.
 
 D5 ordinary session refresh detects binary-folder replacement. The explicit 2026-10-15 amendment limits automatic
-full-document reload to eligible dynamic route/content, currently Overview and Packing detail. Creation, duplication,
-user-management, Help and static admitted error/completion content are excluded even when untouched. Compatible
+full-document reload to eligible dynamic route/content. Its initial Overview and Packing detail scope now also
+includes P2 Event detail/administration under the approved subsequent-dynamic-route provision (2026-10-16).
+Creation, duplication, user-management, Help and static admitted error/completion content are excluded even when
+untouched. Compatible
 loaded edits may finish; eligible reloads still require clean state, no pending/unknown command and working loop
 protection. Missing chunks/incompatible commands retain mounted drafts and guarded deliberate recovery on every
 page; no retained asset service is required. This document-replacement policy does not change periodic content reads

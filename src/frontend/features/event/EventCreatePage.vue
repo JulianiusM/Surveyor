@@ -4,10 +4,9 @@ import {useRoute, RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {EntityMetadataValues} from '../../../types/FrontendEntityMetadataTypes';
-import {apiCompatibility} from '../../../../.generated/api/v1/policy.mjs';
 import {usePilot} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
-import {useDocumentForm} from '../../composables/command';
+import {useCreationCommand} from '../../composables/creation';
 import {usePageEntry} from '../../composables/pageEntry';
 import {usePageTitle} from '../../composables/pageTitle';
 import {useReadRetryAt} from '../../composables/feedback';
@@ -19,6 +18,7 @@ import ActionButton from '../../components/ActionButton.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
 
 const context = usePilot();
 const {messages} = context;
@@ -30,13 +30,8 @@ type Creation = components['schemas']['EventCreateEntry'] & {values?: components
 const fields = reactive<EntityMetadataValues>({});
 const defaults = ref<components['schemas']['PermissionDefaults']>({participant: 0, guest: 0, authenticated: 0, public: 0});
 const baseline = ref<string | null>(null);
-const validation = ref(initial?.eventCreationSubmission?.error);
 const image = ref<File | null>(null);
 const imageInput = useFileSelectionRelease(() => image.value);
-// Proof belongs to this admitted form visit. A subsequent actor cannot silently
-// submit a restored document using fresh mutable session credentials.
-const proof = {context: context.session.value?.context ?? '', csrf: context.session.value?.csrfToken ?? '', compatibility: apiCompatibility};
-const form = useDocumentForm({dirty: isDirty});
 watch([sourceId, context.epoch], resetCreation, {flush: 'sync'});
 const entry = usePageEntry<Creation>({
     key: computed(() => sourceId.value ? eventKeys.duplicate(context.session.value?.context, sourceId.value)
@@ -45,11 +40,18 @@ const entry = usePageEntry<Creation>({
 });
 const definitions = computed(() => entry.outcome.value?.kind === 'render' ? entry.data.value?.context : undefined);
 const retryAt = useReadRetryAt(() => entry.error.value, entry.retryAvailable);
-const action = computed(() => sourceId.value ? `/frontend-pilot/event/${sourceId.value}/duplicate` : '/frontend-pilot/event/create');
+const submission = useCreationCommand<components['schemas']['EventCreated']>({
+    dirty: isDirty, eligible: () => !!definitions.value && baseline.value !== null,
+    readEntry: readSubmissionEntry, navigateEntry: entry.navigate,
+    destination: result => '/frontend-pilot/event/' + result.id,
+    success: 'event.created', unknownMessage: 'event.leaveUnknown',
+});
+const {command, destination, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
+    submissionRetryAt, submissionRetryAction, retrySubmissionAdmission} = submission;
 watch([entry.data, sourceId], receiveCreation, {immediate: true});
 usePageTitle(() => messages.value.t('event.create'));
 
-/** SSR definitions and validation fields are admitted only for the initial URL. */
+/** SSR creation/duplicate definitions belong only to their initial admitted URL. */
 function initialCreation(): Creation | undefined {
     if (!initial) return;
     if (initial.eventDuplicate) return {entry: initial.pageEntry ?? {kind: 'render'},
@@ -74,12 +76,13 @@ async function readCreation(scope: PilotRequestScope, signal: AbortSignal): Prom
 function receiveCreation(): void {
     if (baseline.value !== null || entry.outcome.value?.kind !== 'render' || !entry.data.value?.context) return;
     if ((entry.data.value.sourceId ?? null) !== sourceId.value) return;
-    const seed = context.initialDocumentFor(route.fullPath)?.eventCreationSubmission?.fields ?? entry.data.value.values;
+    const seed = entry.data.value.values;
     Object.assign(fields, {title: '', description: '', startDate: '', endDate: '', location: '', maxParticipants: '',
         bindingDeadline: '', deadlineTz: 'UTC', requireDietaryInfo: false, allowDietComment: false,
         allowRegDateUpdatesAfterDeadline: false, allowRegCancelationAfterDeadline: false, allowRegDietUpdateAfterDeadline: false});
     if (seed) {
-        // Default permissions are serialized separately with native form names.
+        // Keep masks separate from scalar fields; only the feature collector
+        // adapts the admitted draft to its generated creation contract.
         const {defaultPermissions, ...values} = seed;
         Object.assign(fields, values);
         defaults.value = {...defaultPermissions};
@@ -93,8 +96,8 @@ function isDirty(): boolean { return !!image.value || baseline.value !== null &&
 /** Committed create/duplicate navigation releases the old draft and chooser.
  * Fragments, failed navigation and background reads retain their current values. */
 function resetCreation(): void {
+    submission.reset();
     baseline.value = null;
-    validation.value = undefined;
     image.value = null;
     // Remove stale fields before the new admitted projection can initialize them.
     for (const field of Object.keys(fields)) delete fields[field];
@@ -103,20 +106,48 @@ function resetCreation(): void {
 
 function chooseImage(event: Event): void { image.value = (event.target as HTMLInputElement).files?.[0] ?? null; }
 
-/** Native creation decodes permission names, rather than numeric masks. Keep
- * all audience drafts submitted even while their presentation is switched. */
-function permissionKeys(mask: number): string[] {
-    return definitions.value?.permissions.filter(permission => !!(mask & permission.bit)).map(permission => permission.key) ?? [];
+/** Duplication admits copying, while creation retains its independent native
+ * account journey. The shared owner captures this read's actor and return URL. */
+async function readSubmissionEntry(scope: PilotRequestScope, returnTo: string): Promise<components['schemas']['PageEntryOutcome']> {
+    return (await api.createEntry(scope, undefined, returnTo)).entry;
+}
+
+async function create(): Promise<void> {
+    await submission.submit(collectCreation);
+}
+
+/** Preserve native lexical date/capacity/deadline values and all audience masks.
+ * Business parsing stays with the existing Event creation operation. */
+function collectCreation() {
+    const input: components['schemas']['EventCreateInput'] = {
+        title: String(fields.title ?? ''), description: String(fields.description ?? ''),
+        startDate: String(fields.startDate ?? ''), endDate: String(fields.endDate ?? ''),
+        location: String(fields.location ?? ''), maxParticipants: String(fields.maxParticipants ?? ''),
+        bindingDeadline: String(fields.bindingDeadline ?? ''), deadlineTz: String(fields.deadlineTz ?? 'UTC'),
+        requireDietaryInfo: fields.requireDietaryInfo === true, allowDietComment: fields.allowDietComment === true,
+        allowRegDateUpdatesAfterDeadline: fields.allowRegDateUpdatesAfterDeadline === true,
+        allowRegCancelationAfterDeadline: fields.allowRegCancelationAfterDeadline === true,
+        allowRegDietUpdateAfterDeadline: fields.allowRegDietUpdateAfterDeadline === true,
+        defaultPermissions: {...defaults.value},
+    };
+    const selectedImage = image.value;
+    return function createEvent(scope: PilotRequestScope) { return api.createEvent(input, selectedImage, scope); };
 }
 </script>
 
 <template>
-    <!-- Creation retains the deliberate native document submission, including its
-         existing backend ordering and validation redisplay, through one form owner. -->
+    <!-- Creation and duplication retain feature-owned fields while sharing
+         admitted command delivery and navigation with Packing creation. -->
 
     <section class="card bg-dark text-white mb-3">
         <h1 class="card-header text-center"><i class="bi bi-calendar2-plus me-2" aria-hidden="true"></i>{{ messages.t('event.create') }}</h1>
         <div class="card-body">
+            <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" :inline="false" />
+            <CommandFeedback :feedback="command.feedback" part="uncertain" unknown-message="event.creationUnknown" />
+            <StatusNotice v-if="destination.target.value" kind="success"
+                :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">
+                {{ messages.t('state.saved') }}
+            </StatusNotice>
             <PageMessage v-if="entry.outcome.value?.kind === 'denied'" kind="error"
                 :message="messages.t('common.notAllowed')" :renewal="entry.outcome.value" />
             <StatusNotice v-if="entry.error.value" kind="warning" :read-error="entry.error.value" :retry-at="retryAt"
@@ -124,47 +155,43 @@ function permissionKeys(mask: number): string[] {
                 :action="{state: entry.retryAction, label: messages.t('common.retry')}" @action="entry.retry">
                 {{ messages.t(definitions ? 'state.stale' : 'state.loadFailed') }}
             </StatusNotice>
-            <LoadingSkeleton v-if="!definitions && entry.outcome.value?.kind !== 'denied'" variant="form" :rows="5" />
+            <StatusNotice v-if="submissionAdmissionError" kind="warning" :last-updated-at="submissionAdmittedAt"
+                :retry-at="submissionRetryAt" :read-error="submissionAdmissionError"
+                :action="{state: submissionRetryAction, label: messages.t('common.retry')}" @action="retrySubmissionAdmission">
+                {{ messages.t(submissionAdmittedAt ? 'state.stale' : 'state.loadFailed') }}
+            </StatusNotice>
+            <LoadingSkeleton v-if="!definitions && baseline === null && entry.outcome.value?.kind !== 'denied'" variant="form" :rows="5" />
 
-            <!-- The admitted form captures its own context proof and submits native
-                 field names. No API create/retry path runs beside this document POST. -->
-            <form v-if="definitions && baseline !== null" id="eventForm" :action="action" method="POST"
-                enctype="multipart/form-data" @submit="form.submit">
-                <input type="hidden" name="_context" :value="proof.context" />
-                <input type="hidden" name="_csrf" :value="proof.csrf" />
-                <input type="hidden" name="_compat" :value="proof.compatibility" />
-                <StatusNotice v-if="validation" kind="danger">{{ validation }}</StatusNotice>
+            <!-- A denied read disables submission without replacing the mounted
+                 fields or chooser. Retry admits authority; it never creates. -->
+            <form v-if="baseline !== null" id="eventForm" @submit.prevent="create">
+                <fieldset :disabled="blocked || !definitions">
+                    <EventFields :values="fields" prefix="event-create" :disabled="blocked || !definitions" />
 
-                <EventFields :values="fields" prefix="event-create" />
-
-                <!-- The selected File and chooser share the feature's draft lifetime. -->
-                <div class="row mb-3">
-                    <div class="col-12">
-                        <label class="form-label" for="event-header-image"><i class="bi bi-card-image me-1" aria-hidden="true"></i>{{ messages.t('event.headerImage') }}</label>
-                        <input ref="imageInput" id="event-header-image" class="form-control text-bg-dark" type="file"
-                            name="headerImg" accept="image/jpeg,image/png,image/gif" @change="chooseImage" />
+                    <!-- The selected File and chooser share the feature's draft lifetime. -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label class="form-label" for="event-header-image"><i class="bi bi-card-image me-1" aria-hidden="true"></i>{{ messages.t('event.headerImage') }}</label>
+                            <input ref="imageInput" id="event-header-image" class="form-control text-bg-dark" type="file"
+                                name="headerImg" accept="image/jpeg,image/png,image/gif" @change="chooseImage" />
+                        </div>
                     </div>
-                </div>
 
-                <!-- Visible audience controls retain every audience's draft. Hidden
-                     named keys adapt masks to the existing native creation parser. -->
-                <div class="row mb-3">
-                    <div class="col-md-12">
-                        <AudiencePermissions v-model="defaults" :permissions="definitions.permissions"
-                            :presets="definitions.presets" prefix="event-create-permissions"
-                            :disabled="form.pending.value" />
-                        <template v-for="(mask, audience) in defaults" :key="audience">
-                            <input type="hidden" :name="`defaultPerms[${audience}][]`" value="" />
-                            <input v-for="permission in permissionKeys(mask)" :key="permission" type="hidden"
-                                :name="`defaultPerms[${audience}][]`" :value="permission" />
-                        </template>
+                    <!-- Visible audience controls retain every audience's draft;
+                         the command submits their masks independently of disclosure. -->
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <AudiencePermissions v-model="defaults" :permissions="definitions?.permissions ?? []"
+                                :presets="definitions?.presets ?? []" prefix="event-create-permissions"
+                                :disabled="blocked || !definitions" />
+                        </div>
                     </div>
-                </div>
 
-                <div class="d-flex justify-content-end gap-2">
-                    <RouterLink class="btn btn-outline-secondary" to="/frontend-pilot"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>{{ messages.t('common.cancel') }}</RouterLink>
-                    <ActionButton type="submit" variant="success" :state="form.action"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>{{ messages.t('event.create') }}</ActionButton>
-                </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <RouterLink class="btn btn-outline-secondary" to="/frontend-pilot"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>{{ messages.t('common.cancel') }}</RouterLink>
+                        <ActionButton type="submit" variant="success" :state="createAction"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>{{ messages.t('event.create') }}</ActionButton>
+                    </div>
+                </fieldset>
             </form>
         </div>
     </section>

@@ -8,7 +8,6 @@ import {validatePackingMetadata} from '../../../../.generated/api/v1/browser/val
 import {validatePackingMetadataPatch} from '../../../../.generated/api/v1/browser/validatePackingMetadataPatch.mjs';
 import {validatePackingAssignmentResult} from '../../../../.generated/api/v1/browser/validatePackingAssignmentResult.mjs';
 import {validatePackingSettings} from '../../../../.generated/api/v1/browser/validatePackingSettings.mjs';
-import {validatePackingCreateContext} from '../../../../.generated/api/v1/browser/validatePackingCreateContext.mjs';
 import {validatePackingDuplicate} from '../../../../.generated/api/v1/browser/validatePackingDuplicate.mjs';
 import {validatePackingCreateInput} from '../../../../.generated/api/v1/browser/validatePackingCreateInput.mjs';
 import {validatePackingCreated} from '../../../../.generated/api/v1/browser/validatePackingCreated.mjs';
@@ -106,20 +105,6 @@ export class PackingApi {
             return transport.read('getPackingSettings', {...response, signal}, validatePackingSettings, scope).data;
         }
         return transport.allowedRead(`packing/${listId}/settings`, scope, readSettings, signal);
-    }
-
-    /** Fetch creation definitions through the account-only creation boundary.
-     * Public duplicate admission never substitutes for this operation's actor
-     * policy, and recovering the read must not submit a new Packing list. */
-    async createContext(scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['PackingCreateContext']> {
-        const transport = this.transport;
-        async function readCreationContext(): Promise<components['schemas']['PackingCreateContext']> {
-            const response = await transport.client.GET('/packing-lists/create-context', {
-                params: {header: transport.headers(scope)}, signal, cache: 'no-store',
-            });
-            return transport.read('getPackingCreateContext', {...response, signal}, validatePackingCreateContext, scope).data;
-        }
-        return transport.allowedRead('packing/create-context', scope, readCreationContext, signal);
     }
 
     /** Creation admission is distinct from the public duplication projection. The caller supplies

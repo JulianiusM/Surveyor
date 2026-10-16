@@ -24,6 +24,15 @@ export interface EntityLifecycleOperations {
     automate?: (id: string, paused: boolean, scope: PilotRequestScope) => Promise<unknown>;
 }
 
+/** Permanent deletion shares whole-page departure consent and delivery recovery.
+ * The feature supplies its captured operation and established catalog wording. */
+export interface EntityRemovalRequest {
+    operation(scope: PilotRequestScope): Promise<unknown>;
+    confirmation: PilotPlainMessageKey;
+    success: PilotPlainMessageKey;
+    initiator?: Event;
+}
+
 /** Callers may preserve feature-specific wording without copying action policy. */
 export interface EntityAutomationMessages {
     confirmResume: PilotPlainMessageKey;

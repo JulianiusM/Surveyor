@@ -14,7 +14,6 @@ import type {PilotCommandPresentation} from '../../types/FrontendFeedbackTypes';
 interface DraftOwner {
     register(read: () => PilotDraftState): () => void;
     prepareDeparture(): (() => void) | undefined;
-    prepareDocumentSubmission(): (() => void) | undefined;
     retainCommand(read: () => PilotDraftState, scope: PilotRequestScope, onDeparture?: () => void): () => void;
 }
 
@@ -51,11 +50,10 @@ export function useDraftProtection(draft: PilotCommandDraft) {
     const ownerScope = context.capture();
     const children = new Set<() => PilotDraftState>();
     const approvedDepartures = new Set<{origin: string}>();
-    const documentSubmissions = new Set<{origin: string}>();
     const commands = new Set<RetainedCommand>();
     let mounted = true;
     let disposeRoot = () => {};
-    provide<DraftOwner>(draftOwnerKey, {register, prepareDeparture, prepareDocumentSubmission, retainCommand});
+    provide<DraftOwner>(draftOwnerKey, {register, prepareDeparture, retainCommand});
 
     /** Attach a child's live draft state to this owner until that child unmounts.
      * Only its reader is retained; field values remain in the child component. */
@@ -98,9 +96,6 @@ export function useDraftProtection(draft: PilotCommandDraft) {
     function mayLeave(): boolean {
         const state = readState();
 
-        // Browser POST navigation bypasses Router/identity controls. Until its
-        // result replaces this document, those competing in-app journeys wait.
-        if (documentSubmissions.size) return false;
         if (state.busy) return false;
         if (state.unknownMessage) return window.confirm(context.messages.value.t(state.unknownMessage));
         if (approvedDepartures.size) return true;
@@ -128,24 +123,6 @@ export function useDraftProtection(draft: PilotCommandDraft) {
             // Set removal is idempotent even after the root retired all leases.
             approvedDepartures.delete(departure);
         };
-    }
-
-    /** Accept a deliberate HTML POST after all other page owners permit departure.
-     * This narrowly releases its browser unload warning; it grants no JSON command
-     * certainty and does not allow automatic reload while the form is submitting. */
-    function prepareDocumentSubmission(): (() => void) | undefined {
-        if (parent) return parent.prepareDocumentSubmission();
-        // Another unresolved command cannot be acknowledged merely by posting a
-        // different form. Its owner must finish/review it before this submission.
-        const state = readState();
-        if (state.busy || state.unknownMessage) return;
-        if (!mayLeave()) return;
-
-        // The form already holds its own submitted values. Only navigation consent
-        // enters this shared owner, never its token, confirmation or other fields.
-        const departure = {origin: router.currentRoute.value.fullPath};
-        documentSubmissions.add(departure);
-        return function releaseDocumentSubmission(): void { documentSubmissions.delete(departure); };
     }
 
     /** A command outlives a component when a denied read retires that component first.
@@ -176,9 +153,6 @@ export function useDraftProtection(draft: PilotCommandDraft) {
         for (const departure of approvedDepartures) {
             if (frontendDocumentUrl(departure.origin) !== destination) approvedDepartures.delete(departure);
         }
-        for (const departure of documentSubmissions) {
-            if (frontendDocumentUrl(departure.origin) !== destination) documentSubmissions.delete(departure);
-        }
         // An accepted different visit acknowledges an orphaned unknown outcome. Pending
         // leases cannot reach this branch through our guard, and are never released early.
         for (const command of commands) {
@@ -198,7 +172,6 @@ export function useDraftProtection(draft: PilotCommandDraft) {
         // Consent belongs to the retired visit/actor and cannot authorize discard
         // under the replacement identity, even if this shell remains mounted.
         approvedDepartures.clear();
-        documentSubmissions.clear();
 
         // A persistent root can also hold newer commands. Remove only leases whose
         // captured scope retired, leaving current pending/unknown status intact.
@@ -218,10 +191,6 @@ export function useDraftProtection(draft: PilotCommandDraft) {
     }
 
     function beforeUnload(event: BeforeUnloadEvent): void {
-        // A form's deliberate POST navigates this document. Pending/unknown work
-        // owned elsewhere still wins; update/reload guards keep their normal rule.
-        const state = readState();
-        if (documentSubmissions.size && !state.busy && !state.unknownMessage) return;
         if (mayReload()) return;
         event.preventDefault();
         event.returnValue = '';
@@ -255,7 +224,6 @@ export function useDraftProtection(draft: PilotCommandDraft) {
             removeRouteGuard();
             lifetime.stop();
             approvedDepartures.clear();
-            documentSubmissions.clear();
             window.removeEventListener('beforeunload', beforeUnload);
         };
         onBeforeUnmount(() => {
@@ -266,81 +234,7 @@ export function useDraftProtection(draft: PilotCommandDraft) {
         });
         onMounted(() => window.addEventListener('beforeunload', beforeUnload));
     }
-    return {mayLeave, mayReload, prepareDeparture, prepareDocumentSubmission, retainCommand};
-}
-
-/**
- * Submit a deliberate browser-owned POST once, with the ordinary document result.
- * Inherited native workflows retain their existing partial-failure semantics;
- * this helper never fetches, retries or converts them into atomic API commands.
- */
-export function useDocumentForm(draft: {dirty: () => boolean}) {
-    const context = usePilot();
-    const scope = context.capture();
-    const pending = ref(false);
-    const action = useActionState({eligible: maySubmitDocument, pending: () => pending.value});
-    const protection = useDraftProtection({dirty: hasUnsubmittedDraft, unknownMessage: 'draft.leaveUnknown'});
-    const removeUpdateGuard = context.updates.registerGuard(mayReloadDocument);
-    let releaseSubmission: (() => void) | undefined;
-    onBeforeUnmount(releaseDocumentForm);
-    onMounted(function observeDocumentDelivery() {
-        document.addEventListener('click', keepSubmittingDocument, true);
-        window.addEventListener('pageshow', restoreDocumentForm);
-    });
-
-    function hasUnsubmittedDraft(): boolean { return !pending.value && draft.dirty(); }
-    function mayReloadDocument(): boolean { return !pending.value; }
-
-    function maySubmitDocument(): boolean { return context.mayRead(scope); }
-
-    /** A pending browser POST owns this document; ordinary anchors cannot replace
-     * its delivery. New-tab gestures retain their independent browser destination. */
-    function keepSubmittingDocument(event: MouseEvent): void {
-        if (!pending.value || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey
-            || !(event.target instanceof Element) || !event.target.closest('a[href]')) return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-    }
-
-    /** Back/Forward restores the original browser document after its POST left.
-     * Release only that delivery fence; retain fields/proof and let the existing
-     * session owner revalidate authority. Restoration never submits or fetches here. */
-    function restoreDocumentForm(event: PageTransitionEvent): void {
-        if (!event.persisted) return;
-        releaseSubmission?.();
-        releaseSubmission = undefined;
-        pending.value = false;
-    }
-
-    /** Leave successful controls enabled for browser serialization. Only the
-     * submit button presents pending; the browser owns delivery/error navigation. */
-    function submit(event: Event): void {
-        const form = event.currentTarget;
-        if (event.defaultPrevented || !action.isAvailable()
-            || !(form instanceof HTMLFormElement) || form.method.toLowerCase() !== 'post' || !form.checkValidity()) {
-            event.preventDefault();
-            return;
-        }
-
-        // Submitting the form accepts its current fields. Other mounted drafts,
-        // pending commands and unknown results still receive the shared decision.
-        pending.value = true;
-        releaseSubmission = protection.prepareDocumentSubmission();
-        if (!releaseSubmission) {
-            pending.value = false;
-            event.preventDefault();
-        }
-    }
-
-    /** Retiring a visit releases only local consent/update protection, never another request. */
-    function releaseDocumentForm(): void {
-        releaseSubmission?.();
-        removeUpdateGuard();
-        document.removeEventListener('click', keepSubmittingDocument, true);
-        window.removeEventListener('pageshow', restoreDocumentForm);
-    }
-
-    return {action, pending, submit};
+    return {mayLeave, mayReload, prepareDeparture, retainCommand};
 }
 
 /** One command owner per form/page. Commands never replay automatically: a missing response

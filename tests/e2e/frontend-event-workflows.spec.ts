@@ -44,6 +44,48 @@ async function nativeMetadata(request: APIRequestContext, id: string, data: Reco
     expect((await request.post(`/api/event/${id}/update`, {data})).status()).toBe(200);
 }
 
+test('distinguishes disabled settings from absent values when reviewing a real stale Event save', async ({page}) => {
+    const event = await createFrontendEventFixture(page.request);
+    await nativeMetadata(page.request, event.id, {requireDietaryInfo: false, allowDietComment: false, location: ''});
+    await page.goto(`/frontend-pilot/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
+    await waitForPilotHydration(page);
+    const dialog = await openSettings(page);
+    const localTitle = `Local ${event.title}`;
+    const currentTitle = `Remote ${event.title}`;
+    await dialog.locator('[name="title"]').fill(localTitle);
+
+    // The native consumer changes the real row after Vue captured its baseline.
+    // This must produce an actual conditional rejection, followed by the shared
+    // editor's independently admitted current read and three-way comparison.
+    await nativeMetadata(page.request, event.id, {title: currentTitle});
+    const rejected = page.waitForResponse(response => response.request().method() === 'PATCH'
+        && new URL(response.url()).pathname === `/api/v1/events/${event.id}/metadata`);
+    await dialog.getByRole('button', {name: 'Save properties', exact: true}).click();
+    expect((await rejected).status()).toBe(412);
+    await expect(dialog.getByRole('heading', {name: 'Changes are available', exact: true})).toBeVisible();
+    const title = dialog.getByRole('heading', {name: 'Title *', exact: true, level: 4}).locator('..');
+    await expect(title.locator('dd')).toHaveText([event.title, localTitle, currentTitle]);
+    for (const label of ['Require dietary info during registration', 'Allow diet comments during registration']) {
+        const comparison = dialog.getByRole('heading', {name: label, exact: true, level: 4}).locator('..');
+        await expect(comparison.locator('dd')).toHaveText(['No', 'No', 'No']);
+    }
+    const enabled = dialog.getByRole('heading', {name: 'Allow registration date update after deadline expired', exact: true, level: 4}).locator('..');
+    await expect(enabled.locator('dd')).toHaveText(['Yes', 'Yes', 'Yes']);
+    const absent = dialog.getByRole('heading', {name: 'Location (optional)', exact: true, level: 4}).locator('..');
+    await expect(absent.locator('dd')).toHaveText(['—', '—', '—']);
+
+    // Review is distinct from saving. Choosing the local title must preserve the
+    // raw false/null values; the display formatter never becomes a wire codec.
+    await title.getByRole('radio', {name: 'Use your change', exact: true}).check();
+    await dialog.getByRole('button', {name: 'Review changes', exact: true}).click();
+    const saved = page.waitForResponse(response => response.request().method() === 'PATCH'
+        && new URL(response.url()).pathname === `/api/v1/events/${event.id}/metadata`);
+    await dialog.getByRole('button', {name: 'Save properties', exact: true}).click();
+    expect((await saved).status()).toBe(200);
+    expect(await eventView(page.request, event.id)).toMatchObject({title: localTitle,
+        requireDietaryInfo: false, allowDietComment: false, location: null});
+});
+
 test('preserves native local deadline meaning across winter, summer and DST boundaries', async ({page}) => {
     test.setTimeout(90_000);
     const event = await createFrontendEventFixture(page.request);

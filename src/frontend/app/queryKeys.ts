@@ -82,6 +82,8 @@ export const identityAdministrationKeys = {
     all: (context: string | null | undefined) => ['v1', context, 'identity-administration'] as const,
     entry: (context: string | null | undefined, view: 'edit' | 'manage' | 'create') =>
         [...identityAdministrationKeys.all(context), 'entry', view] as const,
+    workflow: (context: string | null | undefined, kind: 'token' | 'entry' | 'deactivate' | 'delete-account') =>
+        [...identityAdministrationKeys.all(context), 'workflow-entry', kind] as const,
     current: (context: string | null | undefined) => [...identityAdministrationKeys.all(context), 'current'] as const,
     profiles: (context: string | null | undefined) => [...identityAdministrationKeys.all(context), 'profiles'] as const,
 };

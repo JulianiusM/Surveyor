@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises} from '@vue/test-utils';
-import type {Component} from 'vue';
+import {defineComponent, ref, type Component} from 'vue';
+import {useDraftProtection} from '../../src/frontend/composables/command';
 import {createFrontendEventSession, frontendEventId as eventId} from '../factories/frontendEventFactory';
 import {frontendEventJson as json, frontendEventButton as button, mountFrontendEvent} from '../keywords/frontendEventKeywords';
 import {eventKeys} from '../../src/frontend/app/queryKeys';
@@ -57,6 +58,52 @@ async function mounted(component: Component, handler: (request: Request) => Prom
 }
 
 describe('Event organizer workflows', () => {
+    it('approves sibling drafts before deleting a captured child and retries only confirmed navigation', async () => {
+        const host = defineComponent({inheritAttrs: false, components: {EventThingsToDo}, setup() {
+            const draft = ref('');
+            useDraftProtection({dirty: () => !!draft.value, unknownMessage: 'draft.leaveUnknown'});
+            return {draft, eventId};
+        }, template: '<input data-test="sibling-draft" v-model="draft" /><EventThingsToDo :event-id="eventId" admin />'});
+        const owned = {...card, capabilities: {...card.capabilities, remove: true}};
+        let finishDelete: (() => void) | undefined;
+        const {wrapper, request, router} = await mounted(host, async req => {
+            if (req.method === 'DELETE') {
+                expect(new URL(req.url).pathname).toBe(`/api/v1/events/${eventId}/things-to-do/activity/${childId}`);
+                expect(new URL(req.url).searchParams.get('view')).toBe('admin');
+                return new Promise<Response>(resolve => {finishDelete = () => resolve(json({changed: true}));});
+            }
+            return json({items: [owned]});
+        });
+        router.addRoute({path: '/frontend-pilot', component: defineComponent({template: '<p>Overview</p>'})});
+        router.onError(() => {});
+        await wrapper.findAll('.accordion-button')[1]!.trigger('click');
+        await wrapper.get('[data-test="sibling-draft"]').setValue('Retain this draft');
+        const confirmation = vi.mocked(window.confirm);
+        confirmation.mockReturnValue(false);
+        await button(wrapper, 'Delete').trigger('click'); await flushPromises();
+        expect(confirmation).toHaveBeenCalledWith('Discard changes?');
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(0);
+
+        confirmation.mockReset().mockReturnValueOnce(true).mockReturnValueOnce(false);
+        await button(wrapper, 'Delete').trigger('click'); await flushPromises();
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(0);
+        expect(wrapper.get<HTMLInputElement>('[data-test="sibling-draft"]').element.value).toBe('Retain this draft');
+
+        confirmation.mockReset().mockReturnValue(true);
+        const stopFailure = router.beforeResolve(to => {if (to.path === '/frontend-pilot') throw new Error('Destination chunk unavailable');});
+        await button(wrapper, 'Delete').trigger('click'); await flushPromises();
+        expect(finishDelete).toBeTypeOf('function');
+        expect(button(wrapper, 'Delete').attributes('disabled')).toBeDefined();
+        finishDelete!(); await flushPromises();
+        expect(wrapper.text()).toContain('Changes saved');
+        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/event/${eventId}`);
+        stopFailure();
+        await button(wrapper, 'Try again').trigger('click'); await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot');
+        expect(confirmation).toHaveBeenCalledTimes(2);
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
+    });
+
     it.each([
         {name: 'participant roster', component: EventParticipants, value: roster,
             props: {startDate: '2027-06-01', endDate: '2027-06-03'}, initiallyOpen: false},

@@ -527,7 +527,10 @@ export async function readPackingList(id: string, session: SessionLike) {
             const parentViews = await evaluateEntities([{
                 entityType: 'event', entityId: list.event.id, ownerId: list.event.ownerId, eventId: list.event.id,
             }], session, manager);
-            currentEventUrl = getAuthorizedEventUrl(list.event.id, parentViews.get(`event:${list.event.id}`)!);
+            const nativeUrl = getAuthorizedEventUrl(list.event.id, parentViews.get(`event:${list.event.id}`)!);
+            // Preserve the shared owner's admission and selected admin/detail path;
+            // this versioned projection supplies the corresponding Vue destination.
+            currentEventUrl = nativeUrl?.replace(/^\/event(?=\/|$)/u, '/frontend-pilot/event') ?? null;
         }
 
         // Group persisted assignments once before building rows and native counters.
@@ -857,7 +860,7 @@ async function applyPackingItemPatch(itemId: string, fields: components['schemas
  * Retain the established native number-control transport at the persistence boundary.
  * TypeORM's entity describes the integer after retrieval, while its parameterized update
  * also accepts the native raw numeric string. Passing that draft unchanged preserves
- * MariaDB's half-away rounding, signed bounds and invalid-blank failure; there is no
+ * MariaDB's half-away rounding, signed bounds and configured invalid-input handling; there is no
  * competing JavaScript converter or copied SQL range. The generated closed request
  * shape and locked field authorization have already constrained the supplied fields.
  * Keep this one transport-to-persistence assertion private to the operation owner.
@@ -1124,7 +1127,7 @@ export async function readPackingSettings(id: string, session: SessionLike): Pro
                 title: parent.title ?? null,
                 startDate: parent.startDate ?? null,
                 endDate: parent.endDate ?? null,
-                url: parent.url ?? null,
+                url: parent.url?.replace(/^\/event(?=\/|$)/u, '/frontend-pilot/event') ?? null,
             };
         }
 
@@ -1537,10 +1540,13 @@ export async function readPackingHeaderPath(id: string, session: SessionLike): P
 }
 
 /** Hard deletion stays the simple feature repository operation, separate from archival coordination. */
-export async function deletePackingList(id: string, session: SessionLike): Promise<components['schemas']['MutationResult']> {
+export async function deletePackingList(id: string, session: SessionLike, expectedEventId?: string): Promise<components['schemas']['MutationResult']> {
     actorId(session);
     const oldPath = await packingService.withPackingListLock(id, async function removeList(manager, row) {
         const list = requireList(row);
+        // An Event-hosted command must still address this parent when the existing
+        // root lock is acquired. Ordinary Packing deletion has no parent condition.
+        if (expectedEventId !== undefined && list.eventId !== expectedEventId) throw new ApiProblem('ENTITY_CONTEXT_CHANGED');
         // Check the locked current owner, independently of account-only creation admission
         // and administrator grants. Profile ownership also includes an established guest.
         await deleteEntity(list, session, manager);

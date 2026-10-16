@@ -13,6 +13,41 @@ import type {components} from '../../../types/api/v1';
 
 const router = Router();
 
+/** Warm Vue entry shares native account/guest admission without executing a command. */
+router.get('/profiles/workflow-entry', asyncHandler(async function getProfileWorkflowEntry(req, res) {
+    await admit(req, res, 'getProfileWorkflowEntry');
+    sendValidatedJson(req, res, 'getProfileWorkflowEntry', 200,
+        userController.getProfileWorkflowEntry(req.apiActor!, req.query.kind as 'token' | 'entry' | 'deactivate' | 'delete-account', req.query.returnTo));
+}));
+
+/** Explicit issuance is a non-replayed command; no query refresh calls this owner. */
+router.post('/profiles/migration/token', asyncHandler(async function requestProfileMigrationToken(req, res) {
+    await admit(req, res, 'requestProfileMigrationToken');
+    const result = await userController.requestProfileMigrationToken(req.apiActor!);
+    sendValidatedJson(req, res, 'requestProfileMigrationToken', 200, result);
+}));
+
+/** Retain the native transfer operation and return only its own scalar completion evidence. */
+router.post('/profiles/migration/execute', asyncHandler(async function executeIdentityProfileMigration(req, res) {
+    await admit(req, res, 'executeIdentityProfileMigration');
+    const result = await userController.executeIdentityProfileMigration(req, req.body.token);
+    sendPreparedJson(req, res, prepareValidatedJson(req, 'executeIdentityProfileMigration', 200, result, result.resultingContext));
+}));
+
+/** A late native selection failure remains uncertain after an entered deactivation. */
+router.post('/profiles/current/deactivate', asyncHandler(async function deactivateIdentityProfile(req, res) {
+    await admit(req, res, 'deactivateIdentityProfile');
+    const result = await userController.deactivateIdentityProfile(req, req.body);
+    sendPreparedJson(req, res, prepareValidatedJson(req, 'deactivateIdentityProfile', 200, result, result.resultingContext));
+}));
+
+/** Account deletion keeps provider handoff distinct from ordinary in-application navigation. */
+router.delete('/account', asyncHandler(async function deleteIdentityAccount(req, res) {
+    await admit(req, res, 'deleteIdentityAccount');
+    const result = await userController.deleteIdentityAccount(req, req.body);
+    sendPreparedJson(req, res, prepareValidatedJson(req, 'deleteIdentityAccount', 200, result, result.resultingContext));
+}));
+
 function requireLocalLogin(): void {
     if (!settings.value.localLoginEnabled) throw new ApiProblem('LOCAL_LOGIN_DISABLED');
 }

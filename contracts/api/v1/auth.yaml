@@ -5,6 +5,43 @@
 # Registration/reset minima explicitly count native DOM/JavaScript UTF-16 units. Standard
 # JSON Schema string lengths elsewhere retain their existing Unicode code-point semantics.
 schemas:
+  ProfileWorkflowEntry:
+    type: object
+    additionalProperties: false
+    required: [entry]
+    properties:
+      entry: {$ref: './common.yaml#/schemas/PageEntryOutcome'}
+  ProfileMigrationToken:
+    type: object
+    additionalProperties: false
+    required: [token]
+    properties:
+      token: {type: string, minLength: 1}
+  ProfileWorkflowCompletion:
+    type: object
+    additionalProperties: false
+    required: [resultingContext, destination, notice, redirect]
+    properties:
+      resultingContext: {type: [string, 'null']}
+      destination: {type: string}
+      notice:
+        anyOf:
+          - {$ref: './common.yaml#/schemas/EntryNotice'}
+          - {type: 'null'}
+      redirect: {type: [string, 'null']}
+      message: {type: string}
+  ProfileDeactivationInput:
+    type: object
+    additionalProperties: false
+    required: [name]
+    properties:
+      name: {type: string, minLength: 1}
+  AccountDeletionInput:
+    type: object
+    additionalProperties: false
+    required: [username]
+    properties:
+      username: {type: string, minLength: 1}
   FrontendReturn:
     type: string
     maxLength: 2048
@@ -211,6 +248,82 @@ schemas:
         description: Guest registration is committed independently of recovery-mail delivery; a failed delivery retains the confirmed personal link.
         "$ref": '#/schemas/EmailDelivery'
 paths:
+  /profiles/workflow-entry:
+    get:
+      operationId: getProfileWorkflowEntry
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Admit a profile workflow without issuing or consuming a capability
+      security: []
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {name: kind, in: query, required: true, schema: {type: string, enum: [token, entry, deactivate, delete-account]}}
+        - {name: returnTo, in: query, schema: {type: string, maxLength: 2048}}
+      responses:
+        '200':
+          description: Server-owned workflow admission
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/ProfileWorkflowEntry'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /profiles/migration/token:
+    post:
+      operationId: requestProfileMigrationToken
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Issue the active profile's existing migration token
+      parameters: &workflowHeaders
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+      responses:
+        '200':
+          description: Private capability issued by the existing owner
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/ProfileMigrationToken'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /profiles/migration/execute:
+    post:
+      operationId: executeIdentityProfileMigration
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Execute the existing profile transfer
+      parameters: *workflowHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './openapi.yaml#/components/schemas/TokenInput'}
+      responses: &workflowResponses
+        '200':
+          description: Existing workflow completed; identity display refresh is separate
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/ProfileWorkflowCompletion'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /profiles/current/deactivate:
+    post:
+      operationId: deactivateIdentityProfile
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Deactivate the active profile through its existing completion order
+      parameters: *workflowHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/schemas/ProfileDeactivationInput'}
+      responses: *workflowResponses
+  /account:
+    delete:
+      operationId: deleteIdentityAccount
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Delete the current account through its existing completion owner
+      parameters: *workflowHeaders
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/schemas/AccountDeletionInput'}
+      responses: *workflowResponses
   "/auth/login":
     post:
       operationId: "loginIdentity"

@@ -58,8 +58,8 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             {path: '/frontend-pilot/users/profile', component: ProfileAdministrationPage, meta: {...javascriptPage, profileMode: 'edit'}},
             {path: '/frontend-pilot/users/profile/manage', component: ProfileAdministrationPage, meta: {...javascriptPage, profileMode: 'manage'}},
             {path: '/frontend-pilot/users/profile/create', component: ProfileAdministrationPage, meta: {...javascriptPage, profileMode: 'create'}},
-            // These deliberate document journeys receive ephemeral server projections.
-            // Ordinary entry anchors prevent Router from issuing tokens or replaying POSTs.
+            // Warm workflow visits share read-only admission and command lifecycles.
+            // Explicit issuance/confirmation never belongs to Query or route refresh.
             {path: '/frontend-pilot/users/profile/migrate/request', component: ProfileWorkflowPage, meta: {...javascriptPage, profileWorkflow: 'token'}},
             {path: '/frontend-pilot/users/profile/migrate/show', component: ProfileWorkflowPage,
                 meta: {...javascriptPage, profileWorkflow: 'entry', profilePreviewHash: '#migration-preview'}},

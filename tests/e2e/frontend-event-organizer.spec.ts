@@ -1,5 +1,5 @@
 import {expect, test} from '@playwright/test';
-import type {Locator, Page, TestInfo} from '@playwright/test';
+import type {Locator, Page, Response, TestInfo} from '@playwright/test';
 import {writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {createE2EActivityPlan, createE2EDriversList, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
@@ -7,6 +7,14 @@ import {closeModalForE2E, createResourceViaForm, loginForE2E, openModalForE2E} f
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
+import type {ParticipantRow} from '../../src/types/EventTypes';
+
+/** Test-local projection of the two real roster protocols. Choice order is
+ * deliberately retained; the shared backend does not order dietary relations. */
+type DietaryRead = {
+    participants: {id: string; choices: string[]}[];
+    totals: {key: string; count: number}[];
+};
 
 /** Build attendance and three linked resources through actual native application
  * routes. The browser comparisons then read the same records in both frontends. */
@@ -38,6 +46,46 @@ async function organizerFixture(page: Page, children = false) {
     });
     expect(response.status()).toBe(200);
     return result;
+}
+
+for (const type of ['packing', 'activity', 'drivers'] as const) {
+    test(`deletes an organizer ${type} child with JSON and client navigation to Overview`, async ({page}) => {
+        const {event, children} = await organizerFixture(page, true);
+        const child = children.find(value => value.path.startsWith(`/${type}/`))!;
+        await page.goto(`/frontend-pilot/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
+        await waitForPilotHydration(page);
+        await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'event-child-delete';});
+        const groupIndex = ['packing', 'activity', 'drivers'].indexOf(type);
+        await page.locator('.dashboard-accordion-item > .accordion-header > button').nth(groupIndex).click();
+        const row = page.locator('.dashboard-list .list-group-item').filter({has: page.getByRole('link', {name: child.title, exact: true})});
+        await expect(row).toBeVisible();
+        const documentRequests: string[] = [];
+        const deletes: string[] = [];
+        page.on('request', request => {
+            if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documentRequests.push(request.url());
+            if (request.method() === 'DELETE') deletes.push(new URL(request.url()).pathname);
+        });
+
+        page.once('dialog', confirmation => confirmation.dismiss());
+        await row.getByRole('button', {name: 'Delete', exact: true}).click();
+        await expect(row).toBeVisible();
+        expect(deletes).toEqual([]);
+        const operation = `/api/v1/events/${event.id}/things-to-do/${type}/${child.id}`;
+        const deleted = page.waitForResponse(response => response.request().method() === 'DELETE'
+            && new URL(response.url()).pathname === operation);
+        page.once('dialog', confirmation => confirmation.accept());
+        await row.getByRole('button', {name: 'Delete', exact: true}).click();
+        expect((await deleted).status()).toBe(200);
+        await expect(page).toHaveURL(/\/frontend-pilot$/u);
+        expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('event-child-delete');
+        expect(documentRequests).toEqual([]);
+        expect(deletes).toEqual([operation]);
+        const remaining = await page.request.get(`/api/v1/events/${event.id}/things-to-do?view=admin`,
+            {headers: await frontendEventHeaders(page.request)});
+        expect(remaining.status()).toBe(200);
+        const projection = await remaining.json() as components['schemas']['EventThingsToDo'];
+        expect(projection.items.some(item => item.id === child.id)).toBe(false);
+    });
 }
 
 /** Capture actual authored component geometry, text and colors without replacing
@@ -95,6 +143,149 @@ function compare(native: Awaited<ReturnType<typeof metrics>>, pilot: Awaited<Ret
     if (!dialog) return;
     expect(Math.abs(pilot.x - native.x)).toBeLessThanOrEqual(1);
     expect(Math.abs(pilot.y - native.y)).toBeLessThanOrEqual(1);
+}
+
+/** Decode an ordinary observed roster response without another request or any
+ * substitution. Normalize only protocol names/IDs, preserving both sequences. */
+async function dietaryRead(response: Response, pilot: boolean): Promise<DietaryRead> {
+    expect(response.status()).toBe(200);
+    if (pilot) {
+        const data = await response.json() as components['schemas']['EventParticipants'];
+        return {participants: data.participants.map(function participantChoices(row) {
+            return {id: row.id, choices: row.dietary.map(choice => choice.choice)};
+        }), totals: data.totals};
+    }
+
+    // The native response wraps its existing entity-shaped rows and ordered
+    // totals object. Object.entries retains that delivered property sequence.
+    const {data} = await response.json() as {data: {participants: ParticipantRow[]; totals: Record<string, number>}};
+    return {participants: data.participants.map(function participantChoices(row) {
+        return {id: String(row.id), choices: row.dietaryChoices.map(choice => choice.choice)};
+    }), totals: Object.entries(data.totals).map(([key, count]) => ({key, count}))};
+}
+
+/** Measure just the dietary cells and derived totals of the actual roster.
+ * Record local positions for flow diagnostics; cross-frontend comparisons use
+ * choice identity because independent reads may deliver different sequences. */
+async function dietaryMetrics(roster: Locator) {
+    return roster.evaluate(function measureDietary(surface) {
+        const bounds = surface.getBoundingClientRect();
+
+        /** Include label attention colors as well as the outer badge's complete
+         * typography/box styling, so matching wording alone cannot mask drift. */
+        function badgeStyle(element: Element) {
+            const style = getComputedStyle(element);
+            return {color: style.color, background: style.backgroundColor, font: style.fontFamily,
+                fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.lineHeight,
+                letterSpacing: style.letterSpacing, whiteSpace: style.whiteSpace,
+                display: style.display, verticalAlign: style.verticalAlign,
+                padding: style.padding, margin: style.margin, border: style.border, borderRadius: style.borderRadius};
+        }
+
+        /** Positions are relative to the containing cell/group, independently
+         * of the approved surrounding navigation/one-time-flash page offsets. */
+        function measureGroup(element: HTMLElement) {
+            const box = element.getBoundingClientRect();
+            const badges = [];
+            for (const badge of element.querySelectorAll<HTMLElement>(':scope > .badge')) {
+                const rectangle = badge.getBoundingClientRect();
+                const label = badge.firstElementChild;
+                badges.push({text: badge.innerText.replace(/\s+/gu, ' ').trim(),
+                    x: rectangle.x - box.x, y: rectangle.y - box.y,
+                    width: rectangle.width, height: rectangle.height,
+                    style: badgeStyle(badge), labelStyle: label ? badgeStyle(label) : null});
+            }
+            return {text: element.innerText.replace(/\s+/gu, ' ').trim(),
+                x: box.x - bounds.x, y: box.y - bounds.y, width: box.width, height: box.height, badges};
+        }
+
+        // Only dietary cells and dietary totals participate in T1. Dates,
+        // notes, headings, search, actions and every other text remain exact.
+        const rows = [];
+        for (const row of surface.querySelectorAll<HTMLTableRowElement>('tbody > tr[data-id], tbody > tr[data-registration-id]')) {
+            rows.push({id: row.dataset.id ?? row.dataset.registrationId!, group: measureGroup(row.cells[3]!)});
+        }
+        return {rows, totals: measureGroup(surface.querySelector<HTMLElement>('.js-totals')!)};
+    });
+}
+
+/** Protect complete response order before allowing cross-frontend positions to
+ * differ. Geometry must still follow that order, stay visible and never overlap. */
+function assertDietaryRead(read: DietaryRead, rendered: Awaited<ReturnType<typeof dietaryMetrics>>): void {
+    expect(rendered.rows.map(row => row.id)).toEqual(read.participants.map(row => row.id));
+    for (const [index, row] of rendered.rows.entries()) {
+        expect(row.group.badges.map(badge => badge.text)).toEqual(read.participants[index]!.choices);
+        assertDietaryFlow(row.group);
+    }
+    const totals = read.totals.filter(entry => entry.count > 0);
+    expect(rendered.totals.badges.map(badge => badge.text)).toEqual(totals.map(entry => `${entry.key}: ${entry.count}`));
+    assertDietaryFlow(rendered.totals);
+}
+
+/** Check physical order separately from DOM order: CSS reordering, clipping or
+ * overlap must not pass an otherwise correct textual sequence assertion. */
+function assertDietaryFlow(group: Awaited<ReturnType<typeof dietaryMetrics>>['totals']): void {
+    // Removing a group from the remaining-text comparison is safe only when
+    // its complete visible text consists of the asserted badges and whitespace.
+    // Unexpected prose outside a badge must not disappear with that group.
+    const badgeText = group.badges.map(badge => badge.text.replace(/\s/gu, '')).join('');
+    expect(group.text.replace(/\s/gu, '')).toBe(badgeText);
+
+    let previous: typeof group.badges[number] | undefined;
+    for (const badge of group.badges) {
+        expect(badge.width).toBeGreaterThan(0);
+        expect(badge.height).toBeGreaterThan(0);
+        expect(badge.x).toBeGreaterThanOrEqual(-1);
+        expect(badge.y).toBeGreaterThanOrEqual(-1);
+        expect(badge.x + badge.width).toBeLessThanOrEqual(group.width + 1);
+        expect(badge.y + badge.height).toBeLessThanOrEqual(group.height + 1);
+        if (previous) {
+            if (Math.abs(badge.y - previous.y) <= 1) expect(badge.x).toBeGreaterThanOrEqual(previous.x + previous.width);
+            else expect(badge.y).toBeGreaterThanOrEqual(previous.y + previous.height);
+        }
+        previous = badge;
+    }
+}
+
+/** Remove only the already-asserted dietary groups from the existing exact
+ * text comparison. Each unique measured substring must occur once, preventing
+ * unrelated wording from disappearing behind a broad replacement or sort. */
+function remainingRosterText(text: string, dietary: Awaited<ReturnType<typeof dietaryMetrics>>): string {
+    const groups = [dietary.totals, ...dietary.rows.map(row => row.group)];
+    for (const [index, group] of groups.entries()) {
+        expect(group.text).not.toBe('');
+        const start = text.indexOf(group.text);
+        expect(start).toBeGreaterThanOrEqual(0);
+        expect(text.indexOf(group.text, start + group.text.length)).toBe(-1);
+        text = text.slice(0, start) + `[dietary group ${index}]` + text.slice(start + group.text.length);
+    }
+    return text;
+}
+
+/** Match complete badge contents/counts and presentation by choice, retaining
+ * the existing roster/table/control comparisons and their original tolerances. */
+function compareDietary(native: Awaited<ReturnType<typeof dietaryMetrics>>, pilot: Awaited<ReturnType<typeof dietaryMetrics>>): void {
+    expect(pilot.rows.map(row => row.id)).toEqual(native.rows.map(row => row.id));
+    compareGroup(native.totals, pilot.totals);
+    for (const [index, row] of native.rows.entries()) compareGroup(row.group, pilot.rows[index]!.group);
+
+    /** Sequence positions may differ; corresponding choice sizes/styles and
+     * the full containing layout must still match without sorting either DOM. */
+    function compareGroup(original: typeof native.totals, current: typeof pilot.totals): void {
+        for (const property of ['x', 'y', 'width', 'height'] as const) {
+            expect(Math.abs(current[property] - original[property])).toBeLessThanOrEqual(1);
+        }
+        expect(current.badges).toHaveLength(original.badges.length);
+        for (const badge of original.badges) {
+            const matches = current.badges.filter(candidate => candidate.text === badge.text);
+            expect(matches).toHaveLength(1);
+            const match = matches[0]!;
+            expect(match.width).toBe(badge.width);
+            expect(match.height).toBe(badge.height);
+            expect(match.style).toEqual(badge.style);
+            expect(match.labelStyle).toEqual(badge.labelStyle);
+        }
+    }
 }
 
 /** Compare actual control geometry, constraints and state independently of IDs
@@ -221,11 +412,18 @@ for (const width of [1280, 390]) {
         await page.setViewportSize({width, height: 900});
         const {event, children} = await organizerFixture(page, true);
         const evidence: Record<string, Awaited<ReturnType<typeof metrics>>> = {};
+        const dietary: Record<string, Awaited<ReturnType<typeof dietaryMetrics>>> = {};
         const errors: string[] = [];
         page.on('pageerror', error => errors.push(error.message));
 
         for (const pilot of [false, true]) {
             const prefix = pilot ? 'pilot' : 'native';
+            // Observe the ordinary read before navigation: native loads its
+            // roster immediately, while Vue admits the region independently.
+            const participantsPath = `/api/${pilot ? 'v1/events' : 'event'}/${event.id}/participants`;
+            const participantsResponse = page.waitForResponse(function isParticipantsRead(response) {
+                return response.request().method() === 'GET' && new URL(response.url()).pathname === participantsPath;
+            });
             await page.goto(`${pilot ? '/frontend-pilot' : ''}/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
             if (pilot) await waitForPilotHydration(page);
             // Root administration uses the same full-size settings control as
@@ -242,8 +440,23 @@ for (const width of [1280, 390]) {
             const roster = page.locator('.event-participants');
             await roster.locator('.accordion-button').click();
             await expect(roster.locator('tbody .fw-semibold')).toHaveCount(1);
+            const response = await participantsResponse;
+            const read = await dietaryRead(response, pilot);
+            dietary[prefix] = await dietaryMetrics(roster);
+            const dietaryPath = info.outputPath(`${prefix}-dietary-sequences.json`);
+            await writeFile(dietaryPath, JSON.stringify({url: response.url(), response: read, rendered: dietary[prefix]}, null, 2));
+            await info.attach(`${prefix}-dietary-sequences`, {path: dietaryPath, contentType: 'application/json'});
+            assertDietaryRead(read, dietary[prefix]!);
             evidence[`${prefix}-roster`] = await capture(page, info, `${prefix}-roster`, roster);
-            if (pilot) compare(evidence['native-roster']!, evidence['pilot-roster']!);
+            if (pilot) {
+                // T1 permits only independently delivered dietary positions to
+                // differ. All other visible roster text and controls stay exact.
+                const native = evidence['native-roster']!;
+                const current = evidence['pilot-roster']!;
+                compare({...native, text: remainingRosterText(native.text, dietary.native!)},
+                    {...current, text: remainingRosterText(current.text, dietary.pilot!)});
+                compareDietary(dietary.native!, dietary.pilot!);
+            }
 
             const nativeNotes = roster.locator('.modal').filter({has: page.locator('.js-allergy-list')});
             if (pilot) await roster.getByRole('button', {name: 'Allergy / Comment Details', exact: true}).click();

@@ -121,8 +121,8 @@
       "target": "README.md",
       "metadataOriginSha256": "628ca3f9f73e48cd4b464fb3305bf081032cdf33d1613d2264a63fca286ed0bb",
       "metadata": {
-        "last-verified": "2026-10-14",
-        "verification-scope": "setup and domain guidance retained; Vue/SSR development, generated contracts/catalogs, package commands and client/system test boundaries checked against source; no operator rehearsal claimed",
+        "last-verified": "2026-10-16",
+        "verification-scope": "setup and domain guidance retained; Vue/SSR development, generated inputs and test boundaries source-reviewed; development GRANT example reconciled with dedicated literal-schema scope; no operator rehearsal claimed",
         "source-anchors": "package.json; package-lock.json; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/oidc.ts; migrationDataSource.ts; scripts/runMigration.ts; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; docs/CONFIGURATION.md; docs/DATABASE.md; docs/OPERATIONS.md; docs/UPGRADING.md; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts"
       },
       "operations": [
@@ -221,6 +221,16 @@
           "payload": "amendment-11",
           "headingPath": [
             "## Test and release automation"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "GRANT ALL PRIVILEGES ON surveyor_dev.* TO 'surveyor_dev'@'127.0.0.1';\n",
+          "originSha256": "ca40903a973a6119b0068f43fb4f8d224ee7099e2a35def0938357c6d4298be0",
+          "payload": "amendment-12",
+          "headingPath": [
+            "## Development quick start",
+            "### 2. Create an empty development database"
           ]
         }
       ]
@@ -482,7 +492,7 @@
       "metadataOriginSha256": "cffc790b8d510c7edbee8ba8e6fb6212439350b8e27c9b164536f345bce94e13",
       "metadata": {
         "last-verified": "2026-10-16",
-        "verification-scope": "setup/domain guidance retained; P2 shared-owner composition, metadata/image/entry lifetimes and controller method policy reconciled with source and existing session/completion playbook; corrected transport history remains in the active ADR; no operator rehearsal claimed",
+        "verification-scope": "setup/domain guidance retained; P2 shared owners, scalar presentation, native isolation, measured parity, environment diagnosis and exact development-schema GRANT example source-reconciled; no operator rehearsal claimed",
         "source-anchors": "tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; tests/integration/frontend-session-admission.spec.ts"
       },
       "operations": [
@@ -824,6 +834,16 @@
           "headingPath": [
             "## Test selection"
           ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "GRANT ALL PRIVILEGES ON surveyor_dev.* TO 'surveyor_dev'@'127.0.0.1';\n",
+          "originSha256": "ca40903a973a6119b0068f43fb4f8d224ee7099e2a35def0938357c6d4298be0",
+          "payload": "amendment-36",
+          "headingPath": [
+            "## Clean-clone setup",
+            "### 2. Create a development database"
+          ]
         }
       ]
     },
@@ -832,7 +852,7 @@
       "target": "docs/TESTING_GUIDE.md",
       "metadataOriginSha256": "2828c430b419daaeeaa0090252c7740f10d713c63a45f5475081f891174c709b",
       "metadata": {
-        "verification-scope": "canonical setup/database safety retained; P2 shared presentation, current notes, entry retirement and actual built workflow assertions source-mapped alongside existing database-free/server integration; client/system and prepared-schema limits remain distinct; no hosted-CI or operator rehearsal claimed",
+        "verification-scope": "canonical setup/database safety retained; P2 source map, scalar recovery, measured parity, approved dietary response-order assertion, environment diagnosis and literal test-schema grants reconciled; client/system and prepared-schema limits remain distinct; no hosted-CI or operator rehearsal claimed",
         "source-anchors": "tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts",
         "last-verified": "2026-10-16"
       },
@@ -994,6 +1014,26 @@
           "headingPath": [
             "## Vitest configuration"
           ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "GRANT ALL PRIVILEGES ON surveyor_test.* TO 'surveyor_test'@'127.0.0.1';\n",
+          "originSha256": "37b1efdec7a244bf8de82b5041ecde5f91238bc85a8c6dec9cb64a0ebab31944",
+          "payload": "amendment-18",
+          "headingPath": [
+            "## Vitest setup",
+            "### 1. Create the integration database"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "GRANT ALL PRIVILEGES ON surveyor_e2e.* TO 'surveyor_e2e'@'127.0.0.1';\n",
+          "originSha256": "d31aaecc295789749a6d69bf9dbcc3ef03b8688d0bb6894a05e30724f7e17bfc",
+          "payload": "amendment-19",
+          "headingPath": [
+            "## E2E setup",
+            "### 1. Create the E2E database"
+          ]
         }
       ],
       "metadataReviewedCurrentSha256": "229687ea576b95736d10af1ecf48ba7eee2cb55a1c067d45a640054e4ffb71e4",
@@ -1035,8 +1075,8 @@
       "target": "docs/OPERATIONS.md",
       "metadataOriginSha256": "b582ce5f7ee913498694c7d3fe4bb0b4c41d9602f704e3632f629b60af733dda",
       "metadata": {
-        "last-verified": "2026-10-14",
-        "verification-scope": "Complete installation, configuration, storage, authentication and backup/restore procedures retained; compiled frontend distribution and loaded-client behavior source-reviewed; no new deployment, provider or delivery rehearsal claimed.",
+        "last-verified": "2026-10-16",
+        "verification-scope": "Complete installation, configuration, storage, authentication and backup/restore procedures retained; loaded-client recovery reconciled with implemented Event detail/admin alongside Overview/Packing; no deployment, provider or delivery rehearsal claimed.",
         "next-review": "release-layout-or-operational-procedure-change"
       },
       "operations": [

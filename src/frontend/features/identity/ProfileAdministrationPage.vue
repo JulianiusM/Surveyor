@@ -329,16 +329,16 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
                         </div>
                         <template v-else>
                             <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-primary" to="/frontend-pilot"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.backHome') }}</RouterLink></div>
-                            <div class="col-md-4 d-grid text-center mt-3"><a class="btn btn-outline-warning" href="/frontend-pilot/users/profile/migrate/request"><i class="bi bi-archive me-1" aria-hidden="true"></i>{{ messages.t('profile.showMigrationToken') }}</a></div>
-                            <div class="col-md-4 d-grid text-center mt-3"><a class="btn btn-outline-danger" href="/frontend-pilot/users/profile/delete"><i class="bi bi-trash me-1" aria-hidden="true"></i>{{ messages.t('profile.deleteProfile') }}</a></div>
+                            <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-warning" :to="{path: '/frontend-pilot/users/profile/migrate/request', state: {profileTokenRequest: true}}"><i class="bi bi-archive me-1" aria-hidden="true"></i>{{ messages.t('profile.showMigrationToken') }}</RouterLink></div>
+                            <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-outline-danger" to="/frontend-pilot/users/profile/delete"><i class="bi bi-trash me-1" aria-hidden="true"></i>{{ messages.t('profile.deleteProfile') }}</RouterLink></div>
                         </template>
                     </form>
                 </template>
-                <!-- Transfer entry is a real document request, preserving explicit
-                     native token/POST ownership and ordinary modified-click semantics. -->
+                <!-- Ordinary migrated entry stays in the SPA. RouterLink retains
+                     real hrefs for modified clicks and new browser documents. -->
                 <div v-if="mode === 'manage'" class="mt-2 row justify-content-center">
                     <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-primary" to="/frontend-pilot"><i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.backHome') }}</RouterLink></div>
-                    <div class="col-md-4 d-grid text-center mt-3"><a class="btn btn-secondary" href="/frontend-pilot/users/profile/migrate/show"><i class="bi bi-archive me-1" aria-hidden="true"></i>{{ messages.t('profile.migrateToAccount') }}</a></div>
+                    <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-secondary" to="/frontend-pilot/users/profile/migrate/show"><i class="bi bi-archive me-1" aria-hidden="true"></i>{{ messages.t('profile.migrateToAccount') }}</RouterLink></div>
                     <div class="col-md-4 d-grid text-center mt-3"><RouterLink class="btn btn-success" to="/frontend-pilot/users/profile/create"><i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('profile.createProfile') }}</RouterLink></div>
                 </div>
             </template>

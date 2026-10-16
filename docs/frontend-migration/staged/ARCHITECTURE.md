@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current P2 source ownership reconciled for displayed headers, entry retirement, metadata handles, read-only notes and root/child lifecycle consumers; shared Event policy and optional-auth declarations retained; no execution or cutover claim
+verification-scope: current P0-P2 ordinary SPA creation/removal/profile/navigation source adoption reconciled; existing shared backend sequence and true document boundaries retained; scoped execution recorded separately in review; no cutover
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -124,10 +124,16 @@ flags and methods retain one underlying draft/command owner. Their nullable text
 
 Event reads separate detail/admin intent, participant roster, link management, metadata and settings projections under
 their existing grants. Detail includes own attendance and counts, with only a bounded invoice-presence flag; it does
-not disclose a roster or finance aggregate. Registration alone spends a supplied bypass token. Event creation uses a
-deliberate document POST through `frontendPilotEvent.ts`, sharing native preprocessing, upload, creation and permission
-initialization in their existing order. Versioned reads and guest identity completion cannot create an Event, and the
-adapter does not strengthen inherited multi-step creation finality.
+not disclose a roster or finance aggregate. Registration alone spends a supplied bypass token. Event creation and
+duplication use the ordinary generated multipart command and shared Vue creation/navigation owners, preserving
+native preprocessing, upload, creation and permission initialization in their existing order. Packing/Event creation
+adopt `useCreationCommand`; Settings, Overview and Event-child deletion adopt `useEntityRemoval`. These shared Vue
+owners compose existing command/consent/confirmed-navigation lifetimes, while features retain their fields and
+generated operations. Versioned reads and guest identity completion cannot create an Event; the adapter does not strengthen inherited multi-step creation
+finality. Ordinary profile workflow and Event child-deletion commands follow the same SPA transport boundary,
+without importing their excluded backend repairs. Router owns ordinary migrated links; true provider/capability
+arrivals, outputs and unmigrated destinations retain explicit document ownership. Token issuance is deliberate
+command work, never Query, prefetch or history restoration; private output stays in its admitted mounted lifetime.
 The controller's capacity predicate serves native/v1 display and registration admission; its child-eligibility
 predicate serves native/v1 related projections and scoped lifecycle rechecks. DBAL supplies counts, rows, locks and
 persistence rather than deciding either rule. Optional-session method declarations describe the existing public

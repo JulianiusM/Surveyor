@@ -27,6 +27,16 @@ function workflowPresentation() {
 
 async function waitForWorkflowFonts(): Promise<void> { await document.fonts.ready; }
 
+/** Observe real main-frame requests alongside the document lifetime assertion.
+ * API requests and lazy assets cannot count as a successful SPA departure. */
+function observeDocumentNavigations(page: Page): string[] {
+    const paths: string[] = [];
+    page.on('request', function recordDocumentRequest(request) {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) paths.push(new URL(request.url()).pathname);
+    });
+    return paths;
+}
+
 /** Obtain the source token through its genuine built page under an independent guest cookie. */
 async function migrationTokenForWorkflow(browser: Browser, baseURL: string | undefined, loginPath: string): Promise<string> {
     const sourceContext = await browser.newContext({baseURL, extraHTTPHeaders: {Connection: 'close'}});
@@ -42,7 +52,7 @@ async function migrationTokenForWorkflow(browser: Browser, baseURL: string | und
 }
 
 /** Reach native preview by its document POST and pilot preview by its generated read-only JSON operation.
- * Actual transfer remains a document POST; neither renderer receives manufactured HTML or intercepted results. */
+ * Transfer uses its generated command; neither renderer receives manufactured HTML or intercepted results. */
 async function previewOnPage(page: Page, pilot: boolean, token: string): Promise<void> {
     await page.goto(`${pilot ? '/frontend-pilot' : ''}/users/profile/migrate/show${pilot ? '?locale=en' : ''}`);
     if (pilot) await waitForPilotHydration(page);
@@ -57,7 +67,7 @@ async function previewOnPage(page: Page, pilot: boolean, token: string): Promise
     if (pilot) await expect(page).toHaveURL(/#migration-preview$/u);
 }
 
-test('transfers only after explicit built-browser preview and retains the receiving active profile', async function transferThroughBuiltPage({page, browser, baseURL}) {
+test('transfers only after preview, then deactivates through JSON while retaining the same document', async function transferThroughBuiltPage({page, browser, baseURL}) {
     await withProfileWorkflowFixtureForE2E(async function exerciseTransfer(fixture) {
         const token = await migrationTokenForWorkflow(browser, baseURL, fixture.guest.loginPath);
         await loginForE2E(page.request, fixture.account);
@@ -65,19 +75,53 @@ test('transfers only after explicit built-browser preview and retains the receiv
         await expect(page.locator('main')).toContainText(fixture.guest.username);
         expect(new URL(page.url()).searchParams.has('token')).toBe(false);
 
-        // Preview leaves the original owner/token intact. The explicit native
-        // execute form is the only action allowed to change these real rows.
+        // Preview leaves the original owner/token intact. The explicit generated
+        // execute command is the only action allowed to change these real rows.
         const preview = await readProfileWorkflowFixtureForE2E(fixture);
         expect(preview.profiles.find(profile => profile.id === fixture.guest.profileId))
             .toMatchObject({guestId: fixture.guest.id, userId: null, hasMigrationToken: true});
+        const originalDocument = await page.evaluate(() => performance.timeOrigin);
+        const documentNavigations = observeDocumentNavigations(page);
+        const response = page.waitForResponse(result => result.request().method() === 'POST'
+            && new URL(result.url()).pathname === '/api/v1/profiles/migration/execute');
         await page.getByRole('button', {name: 'Permanently migrate profile', exact: true}).click();
+        expect((await response).status()).toBe(200);
         await expect(page).toHaveURL(/\/frontend-pilot\/users\/profile\/manage(?:\?[^#]*)?$/u);
+        expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
         const saved = await readProfileWorkflowFixtureForE2E(fixture);
         expect(saved.guestCount).toBe(0);
         expect(saved.profiles.find(profile => profile.id === fixture.guest.profileId))
             .toMatchObject({guestId: null, userId: fixture.account.id, hasMigrationToken: false});
         const session = await (await page.request.get('/api/v1/session')).json();
         expect(session.activeProfile.id).toBe(fixture.account.profileId);
+
+        // The transferred profile supplies the real remaining selection. Exercise
+        // deactivation through the shell and form without creating unowned rows.
+        await page.getByRole('button', {name: session.activeProfile.name, exact: true}).click();
+        await page.getByRole('link', {name: 'Profile settings', exact: true}).click();
+        await page.getByRole('link', {name: 'Delete profile', exact: true}).click();
+        await expect(page.locator('#name')).toBeVisible();
+        await page.locator('#name').fill('Incorrect confirmation');
+        const rejected = page.waitForResponse(result => result.request().method() === 'POST'
+            && new URL(result.url()).pathname === '/api/v1/profiles/current/deactivate');
+        await page.getByRole('button', {name: 'Permanently deactivate profile', exact: true}).click();
+        expect((await rejected).status()).toBe(400);
+        await expect(page.locator('#name')).toHaveValue('Incorrect confirmation');
+        expect((await readProfileWorkflowFixtureForE2E(fixture)).profiles.find(profile => profile.id === fixture.account.profileId))
+            .toMatchObject({userId: fixture.account.id});
+
+        await page.locator('#name').fill(session.activeProfile.name);
+        const deactivated = page.waitForResponse(result => result.request().method() === 'POST'
+            && new URL(result.url()).pathname === '/api/v1/profiles/current/deactivate');
+        await page.getByRole('button', {name: 'Permanently deactivate profile', exact: true}).click();
+        expect((await deactivated).status()).toBe(200);
+        await expect(page).toHaveURL(/\/frontend-pilot\/users\/profile\/manage(?:\?[^#]*)?$/u);
+        const after = await readProfileWorkflowFixtureForE2E(fixture);
+        expect(after.accountCount).toBe(1);
+        expect(after.profiles.find(profile => profile.id === fixture.account.profileId)).toMatchObject({userId: null});
+        expect((await (await page.request.get('/api/v1/session')).json()).activeProfile.id).toBe(fixture.guest.profileId);
+        expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+        expect(documentNavigations).toEqual([]);
     });
 });
 
@@ -128,7 +172,7 @@ test('returns from preview with native entry state without automatically repeati
 });
 
 for (const kind of ['account', 'guest'] as const) {
-    test(`retains wrong ${kind} deletion input and completes its explicit built document confirmation`, async function deleteThroughBuiltPage({page}) {
+    test(`retains wrong ${kind} deletion input and completes its same-document JSON confirmation`, async function deleteThroughBuiltPage({page}) {
         await withProfileWorkflowFixtureForE2E(async function exerciseDeletion(fixture) {
             if (kind === 'account') await loginForE2E(page.request, fixture.account);
             else expect((await page.request.get(fixture.guest.loginPath, {maxRedirects: 0})).status()).toBe(302);
@@ -136,10 +180,14 @@ for (const kind of ['account', 'guest'] as const) {
             await waitForPilotHydration(page);
             await expect(page.locator('#username')).toHaveValue('');
             await page.locator('#username').fill('Incorrect confirmation');
-            const rejected = page.waitForResponse(response => response.request().method() === 'POST'
-                && new URL(response.url()).pathname === '/frontend-pilot/users/account/delete');
+            const originalDocument = await page.evaluate(() => performance.timeOrigin);
+            const documentNavigations = observeDocumentNavigations(page);
+            const rejected = page.waitForResponse(response => response.request().method() === 'DELETE'
+                && new URL(response.url()).pathname === '/api/v1/account');
             await page.getByRole('button', {name: 'Permanently delete account', exact: true}).click();
-            expect((await rejected).status()).toBe(500);
+            expect((await rejected).status()).toBe(400);
+            expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+            expect(documentNavigations).toEqual([]);
             await waitForPilotHydration(page);
             await expect(page.locator('#username')).toHaveValue('Incorrect confirmation');
             const unchanged = await readProfileWorkflowFixtureForE2E(fixture);
@@ -148,10 +196,13 @@ for (const kind of ['account', 'guest'] as const) {
             // The existing empty/absent-contact branch reaches ordinary logout
             // without SMTP. This does not claim provider or delivery finality.
             await page.locator('#username').fill(kind === 'account' ? fixture.account.username : fixture.guest.username);
-            const completed = page.waitForResponse(response => response.request().method() === 'POST'
-                && new URL(response.url()).pathname === '/frontend-pilot/users/account/delete');
+            const completed = page.waitForResponse(response => response.request().method() === 'DELETE'
+                && new URL(response.url()).pathname === '/api/v1/account');
             await page.getByRole('button', {name: 'Permanently delete account', exact: true}).click();
-            expect((await completed).status()).toBe(302);
+            expect((await completed).status()).toBe(200);
+            await expect(page).toHaveURL(/\/frontend-pilot(?:\?|$)/u);
+            expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+            expect(documentNavigations).toEqual([]);
             const session = await (await page.request.get('/api/v1/session')).json();
             expect(session.kind).toBe('anonymous');
             const saved = await readProfileWorkflowFixtureForE2E(fixture);
@@ -159,6 +210,43 @@ for (const kind of ['account', 'guest'] as const) {
         }, kind === 'account' ? 'absent' : 'ordinary');
     });
 }
+
+test('enters profile workflows through Router and issues a token once without history replay', async function usesWarmWorkflowCommands({page}) {
+    await withProfileWorkflowFixtureForE2E(async function exerciseWarmToken(fixture) {
+        await loginForE2E(page.request, fixture.account);
+        await page.goto('/frontend-pilot/users/profile?locale=en');
+        await waitForPilotHydration(page);
+        const originalDocument = await page.evaluate(() => performance.timeOrigin);
+        const documentNavigations = observeDocumentNavigations(page);
+        const issued: string[] = [];
+        page.on('request', function observeIssuance(request) {
+            if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/profiles/migration/token') issued.push(request.url());
+        });
+
+        // The existing Show action carries public intent, never its bearer. Its
+        // mounted command is distinct from read admission and browser history.
+        await page.getByRole('link', {name: 'Show profile migration token', exact: true}).click();
+        await expect(page.locator('main h3')).not.toHaveText('');
+        expect(issued).toHaveLength(1);
+        expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+        expect(documentNavigations).toEqual([]);
+        await page.goBack();
+        await expect(page.locator('#name')).toBeVisible();
+        await page.goForward();
+        await expect(page.getByRole('button', {name: 'Show profile migration token', exact: true})).toBeVisible();
+        expect(issued).toHaveLength(1);
+        expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+
+        // Warm destructive entry must display its admitted form without asking
+        // for another document request before the controls can become usable.
+        await page.goBack();
+        await page.getByRole('link', {name: 'Delete profile', exact: true}).click();
+        await expect(page.locator('#name')).toBeVisible();
+        await expect(page.getByRole('button', {name: 'Permanently deactivate profile', exact: true})).toBeEnabled();
+        expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+        expect(documentNavigations).toEqual([]);
+    }, 'absent');
+});
 
 const presentations = [
     {name: 'token', path: '/users/profile/migrate/request'},

@@ -8,8 +8,10 @@ import {validateIdentityResult} from '../../../.generated/api/v1/browser/validat
 import {validateRegistrationResult} from '../../../.generated/api/v1/browser/validateRegistrationResult.mjs';
 import {validateMutationResult} from '../../../.generated/api/v1/browser/validateMutationResult.mjs';
 import {validateGuestEmailExists} from '../../../.generated/api/v1/browser/validateGuestEmailExists.mjs';
+import {validateProfileWorkflowCompletion} from '../../../.generated/api/v1/browser/validateProfileWorkflowCompletion.mjs';
 
 type Session = components['schemas']['SessionView'];
+type IdentityEvidence = {session: Pick<Session, 'context'>} | {resultingContext: Session['context']};
 
 /** Session and identity commands are needed by the shell; product feature operations stay with their routes. */
 export class PilotApi extends PilotTransport {
@@ -49,16 +51,31 @@ export class PilotApi extends PilotTransport {
      * Its response legitimately carries a new context; bind that header to the
      * returned session, leaving authoritative new-actor bootstrap to the context owner. */
     identity(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, scope: PilotRequestScope) {
+        return this.readIdentity(operationId, result, validateIdentityResult, scope);
+    }
+
+    /** Legacy workflow completion supplies a scalar actor receipt, not a fallible
+     * postcommit SessionView. The same confirmation boundary admits either shape. */
+    workflow(operationId: ApiOperationId, result: {data?: unknown; error?: unknown; response: Response}, scope: PilotRequestScope) {
+        return this.readIdentity(operationId, result, validateProfileWorkflowCompletion, scope);
+    }
+
+    /** Bind generated confirmation to the initiating actor and resulting header.
+     * Only the existing authoritative session read can open the resulting identity. */
+    private readIdentity<T extends IdentityEvidence>(operationId: ApiOperationId,
+        result: {data?: unknown; error?: unknown; response: Response},
+        validate: (value: unknown) => value is T, scope: PilotRequestScope): T {
         if (!this.isCurrent(scope)) throw new ObsoleteRequestError();
 
         // Intentionally omit the old scope from ordinary response validation:
         // login/logout/profile/guest success returns the resulting session context,
         // so comparing its header with the submitted actor would reject confirmation.
-        const value = this.read(operationId, result, validateIdentityResult).data;
+        const value = this.read(operationId, result, validate).data;
 
         // The new context must positively bind both header and validated payload.
         // Accepting this result alone does not open private views under that actor.
-        if (result.response.headers.get('X-Surveyor-Context') !== value.session.context) throw new UnconfirmedResponseError();
+        const resultingContext = 'session' in value ? value.session.context : value.resultingContext;
+        if (result.response.headers.get('X-Surveyor-Context') !== resultingContext) throw new UnconfirmedResponseError();
         return value;
     }
 

@@ -8,11 +8,10 @@ import {usePackingApi} from './api';
 import {useActionState, usePilot} from '../../app/context';
 import {isReadDenial} from '../../app/transport';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
-import {useCommand} from '../../composables/command';
+import {useCreationCommand} from '../../composables/creation';
 import {useFileSelectionRelease} from '../../composables/fileSelection';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
-import {frontendDocumentUrl} from '../../../modules/lib/frontendIdentity';
-import {useConfirmedNavigation, usePageEntry} from '../../composables/pageEntry';
+import {usePageEntry} from '../../composables/pageEntry';
 import {packingKeys} from '../../app/queryKeys';
 import {useQueryAdmission} from '../../app/queryCache';
 import {usePageTitle} from '../../composables/pageTitle';
@@ -28,7 +27,6 @@ const context = usePilot();
 const api = usePackingApi(context);
 const {messages} = context;
 const route = useRoute();
-const destination = useConfirmedNavigation();
 const sourceId = computed(() =>
     typeof route.params.listId === 'string' ? route.params.listId.toLowerCase() : null,
 );
@@ -67,17 +65,7 @@ const imageInput = useFileSelectionRelease(() => image.value);
 const rows = ref<Row[]>([]);
 const defaults = ref<components['schemas']['PermissionDefaults'] | null>(null);
 const baseline = ref<string | null>(null);
-const submitted = ref(false);
-const admittingSubmission = ref(false);
-const leavingAfterSubmission = ref(false);
 const retainedContext = ref<components['schemas']['PackingCreateContext'] | null>(null);
-// Submission admission is a read, independently of the form's initial query and
-// any later mutation. Its recovery displays the shared deadline and never POSTs
-// or clears an unrelated command validation/unknown outcome.
-const submissionAdmissionError = ref<Error | null>(null);
-const submissionAdmittedAt = ref<number>();
-const submissionRetryAvailable = useReadRetry(() => submissionAdmissionError.value);
-const submissionRetryAt = useReadRetryAt(() => submissionAdmissionError.value, submissionRetryAvailable);
 // Vue reuses this route component between creation/duplicate URLs. A confirmed navigation
 // starts a new draft instead of retaining a previous list's copied rows or uploaded file.
 // Watch each identity value independently. Router replaces its query object on a
@@ -87,12 +75,9 @@ watch([sourceId, initialEventId, context.epoch], resetCreationDraft);
 /** A cancelled guard never commits these inputs. Start the next admitted form only
  * after its route or actor changes, without carrying an unresolved prior command. */
 function resetCreationDraft(): void {
-    command.acknowledge();
+    submission.reset();
     baseline.value = null;
     retainedContext.value = null;
-    submissionAdmissionError.value = null;
-    submissionAdmittedAt.value = undefined;
-    submitted.value = false;
     title.value = '';
     description.value = '';
     defaults.value = null;
@@ -229,77 +214,26 @@ function initializeForm(): void {
     rows.value = copy ? copy.items.map(newRow) : [newRow()];
     baseline.value = snapshot();
 }
-const dirty = computed(
-    () =>
-        !submitted.value &&
-        (image.value !== null || (baseline.value !== null && snapshot() !== baseline.value)),
-);
-const command = useCommand(context.refreshSession, true, {
-    dirty: () => dirty.value && !leavingAfterSubmission.value,
-    busy: () => admittingSubmission.value,
-    unknownMessage: 'packing.leaveUnknown',
+const dirty = computed(() => image.value !== null || baseline.value !== null && snapshot() !== baseline.value);
+const submission = useCreationCommand<components['schemas']['PackingCreated']>({
+    dirty: () => dirty.value,
+    eligible: () => !!defaults.value && !!formContext.value,
+    readEntry: readSubmissionEntry,
+    navigateEntry: creation.navigate,
+    destination: result => '/frontend-pilot/packing/' + result.id,
+    success: 'packing.created', unknownMessage: 'packing.leaveUnknown',
 });
-const blocked = computed(() => submitted.value || command.action.disabled.value
-    || admittingSubmission.value || !submissionRetryAvailable.value);
-const submissionRetryAction = useActionState({eligible: mayAdmitSubmission, pending: () => admittingSubmission.value});
-// A command with a required read preflight waits for that admission on its submit
-// control. The fieldset keeps its existing local-draft locks during session checks.
-const createAction = useActionState({eligible: mayCreate, pending: () => command.pending.value || admittingSubmission.value,
-    blocked: () => command.action.disabled.value});
+const {command, destination, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
+    submissionRetryAt, submissionRetryAction, retrySubmissionAdmission} = submission;
 
-function mayAdmitSubmission(): boolean {
-    return !submitted.value && context.mayRead() && submissionRetryAvailable.value;
-}
-
-function mayCreate(): boolean { return mayAdmitSubmission() && !!defaults.value && !!formContext.value; }
 function chooseImage(event: Event): void {
     image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
 }
+
 /** A duplicate grant admits its form independently of creation. The server projects the
  * account-login journey and exact duplicate return; the browser does not duplicate that policy. */
-async function admitSubmission(purpose: 'submission' | 'recovery'): Promise<boolean> {
-    if (!context.mayRead()) return false;
-    const scope = context.capture();
-    // Fragments move within this document and cannot cancel a submitted form.
-    // Path/query, actor and locale changes still retire the admission receipt.
-    const expectedRoute = frontendDocumentUrl(route.fullPath);
-    admittingSubmission.value = true;
-    try {
-        const result = await api.createEntry(scope, undefined, expectedRoute);
-        if (!context.isCurrent(scope, true) || frontendDocumentUrl(route.fullPath) !== expectedRoute) return false;
-        submissionAdmissionError.value = null;
-        if (result.entry.kind === 'render') {
-            // This receipt belongs to the successful preflight itself. Initial
-            // creation/duplicate data is a different read, not proof of admission.
-            submissionAdmittedAt.value = Date.now();
-            return true;
-        }
-        submissionAdmittedAt.value = undefined;
-
-        // Submission already consents to its native admission journey. A read-only
-        // Retry retains the ordinary draft departure decision instead of treating
-        // recovered authority as consent to create or discard the entered form.
-        admittingSubmission.value = false;
-        leavingAfterSubmission.value = purpose === 'submission';
-        await creation.navigate(result.entry, scope, expectedRoute);
-        return false;
-    } catch (failure) {
-        if (context.isCurrent(scope, true) && frontendDocumentUrl(route.fullPath) === expectedRoute) {
-            submissionAdmissionError.value = failure instanceof Error ? failure : new Error('Admission read failed');
-            if (isReadDenial(failure)) submissionAdmittedAt.value = undefined;
-        }
-        return false;
-    } finally {
-        admittingSubmission.value = false;
-        leavingAfterSubmission.value = false;
-    }
-}
-
-/** Recover only account admission. A successful GET leaves this form intact and
- * requires a separate explicit Create before collecting and sending its draft. */
-async function retrySubmissionAdmission(): Promise<void> {
-    if (!submissionRetryAction.isAvailable()) return;
-    await admitSubmission('recovery');
+async function readSubmissionEntry(scope: PilotRequestScope, returnTo: string): Promise<components['schemas']['PageEntryOutcome']> {
+    return (await api.createEntry(scope, undefined, returnTo)).entry;
 }
 
 /** Mirror the native browser collector: omit blank titles, trim item strings and
@@ -326,10 +260,12 @@ function updateCapacity(row: Row, event: Event): void {
  * a confirmed creation transfers its destination to the shared navigation owner so
  * a canceled or failed route load cannot make the creation command available again. */
 async function create(): Promise<void> {
-    if (!createAction.isAvailable()) return;
-    // A held preflight cannot reuse definitions retired by another confirmed read.
-    if (!(await admitSubmission('submission')) || !formContext.value) return;
+    await submission.submit(collectCreation);
+}
 
+/** Packing alone owns its native row collector and empty-list validation. The
+ * shared creation owner calls it after admission, before opening a command. */
+function collectCreation() {
     const items = collectedItems();
     if (!items.length) {
         // Native collection omits blank rows, then redisplays this field error.
@@ -337,30 +273,19 @@ async function create(): Promise<void> {
         command.setError('packing.itemsRequired');
         return;
     }
-    const scope = context.capture();
-    const origin = route.fullPath;
-    const result = await command.run(
-        (scope) =>
-            api.createPacking(
-                {
-                    title: title.value,
-                    description: description.value || null,
-                    eventId: eventId.value,
-                    defaultPermissions: defaults.value!,
-                    items,
-                },
-                image.value,
-                scope,
-            ),
-        false,
-    );
-    if (result) {
-        // A created ID is confirmation even when delivery of its page fails. Retain
-        // that destination under the shared navigation owner and never submit again.
-        submitted.value = true;
-        await destination.navigate('/frontend-pilot/packing/' + result.id, scope, origin,
-            {kind: 'success', messageKey: 'packing.created'});
-    }
+    return function createPacking(scope: PilotRequestScope) {
+        return api.createPacking(
+            {
+                title: title.value,
+                description: description.value || null,
+                eventId: eventId.value,
+                defaultPermissions: defaults.value!,
+                items,
+            },
+            image.value,
+            scope,
+        );
+    };
 }
 </script>
 

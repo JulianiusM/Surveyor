@@ -15,7 +15,6 @@ const bootstrapValidators = {
     landing: validateLanding,
     commonPage: validateCommonPage,
     profileWorkflow: validateProfileWorkflow,
-    workflowNotice: validateString,
     pageEntry: validatePageEntryOutcome,
     pageNotice: validateEntryNotice,
     pageCompletion: validateCompletion,
@@ -31,7 +30,6 @@ const bootstrapValidators = {
     eventEntry: validateEventEntry,
     eventCreateContext: validateEventCreateContext,
     eventDuplicate: validateEventDuplicate,
-    eventCreationSubmission: validateEventCreationSubmission,
     personalLink: validateString,
     overview: validateOverview,
     initialUrl: validateString,
@@ -76,9 +74,7 @@ function validateProfileWorkflow(value: unknown): boolean {
     if (value.kind === 'entry') return Object.keys(value).length === 1;
     if (value.kind === 'token') return typeof value.token === 'string' && Object.keys(value).length === 2;
     if (value.kind !== 'deactivate' && value.kind !== 'delete-account' || typeof value.value !== 'string') return false;
-    const error = value.kind === 'deactivate' ? 'profile.invalidDeactivation' : 'profile.invalidAccountDeletion';
-    return (value.error === undefined || value.error === error)
-        && Object.keys(value).every(key => ['kind', 'value', 'error'].includes(key));
+    return Object.keys(value).every(key => ['kind', 'value'].includes(key));
 }
 
 /** Validate every readable server outcome without admitting URL-selected HTML or diagnostic objects. */
@@ -171,10 +167,6 @@ async function validateEventDuplicate(value: unknown): Promise<boolean> {
     return validate(value);
 }
 
-async function validateEventCreationSubmission(value: unknown): Promise<boolean> {
-    const {validateEventCreationSubmission: validate} = await import('../../../.generated/api/v1/browser/validateEventCreationSubmission.mjs');
-    return validate(value);
-}
 
 async function validateOverview(value: unknown): Promise<boolean> {
     const {validateOverviewRegion} = await import('../../../.generated/api/v1/browser/validateOverviewRegion.mjs');

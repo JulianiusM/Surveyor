@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: digest-guarded frontend amendments preserve complete reviewed candidate guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
+verification-scope: digest-guarded frontend amendments retained and inherited development GRANT example reconciled with dedicated literal-schema scope; production references unchanged; no runtime or cutover execution claimed
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -110,3 +110,10 @@ and owns the prepared database and compiled server through `npm run e2e:init`; i
 The CI workflow currently runs for manual dispatch, reusable workflow calls, and pushes or pull requests on `master`, `dev`, and `ts-migration`. It uses Node.js 24.15.0 and MariaDB 10.11, installs dependencies, runs application Vitest tests with coverage, builds the application, and then runs the separate Chromium client and system checks.
 
 <!-- /delta:amendment-11 -->
+
+## 2. Create an empty development database — amendment-12
+
+<!-- delta:amendment-12 -->
+GRANT ALL PRIVILEGES ON `surveyor\_dev`.* TO 'surveyor_dev'@'127.0.0.1';
+
+<!-- /delta:amendment-12 -->

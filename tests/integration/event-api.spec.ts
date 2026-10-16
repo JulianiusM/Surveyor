@@ -12,6 +12,7 @@ import {PERM} from '../../src/modules/lib/permissions';
 import {randomUUID} from 'node:crypto';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as driverService from '../../src/modules/database/services/DriverService';
+import * as packingService from '../../src/modules/database/services/PackingService';
 import type {Profile} from '../../src/modules/database/entities/user/Profile';
 import type {SessionLike} from '../../src/types/PermissionTypes';
 import {createIntegrationEvent, persistIntegrationProfile} from '../keywords/coreDomainKeywords';
@@ -51,6 +52,63 @@ beforeAll(async () => {
 afterAll(closeIntegrationDatabase);
 
 describe('versioned Event projections and native operation adoption', () => {
+    it('creates and duplicates through the shared native validation, creator and ordered defaults owners', async () => {
+        const values: components['schemas']['EventCreateInput'] = {title: 'Generated Event creator',
+            startDate: '2027-06-01', endDate: '2027-06-03', maxParticipants: '24',
+            bindingDeadline: '2027-05-20T12:30', deadlineTz: 'Europe/Berlin', requireDietaryInfo: true,
+            allowDietComment: true, defaultPermissions: {public: 0, authenticated: PERM.ACCESS_REGISTRATION,
+                guest: PERM.ACCESS_REGISTRATION, participant: PERM.ACCESS_ITEMS}};
+        const result = await eventApi.createEvent(values, undefined, sessionFor(owner));
+        expect(contractValidator('EventCreated')(result)).toBe(true);
+        // Native tinyint columns retain numeric flags; the bounded wire copy
+        // below independently projects those same true and false values.
+        expect(await eventService.getEventById(result.id)).toMatchObject({title: values.title, ownerId: owner.id,
+            maxParticipants: 24, requireDietaryInfo: 1, allowDietComment: 1,
+            allowRegDietUpdateAfterDeadline: 0, timezone: 'Europe/Berlin'});
+        expect(await adminService.getDefaultPerms('event', result.id)).toMatchObject(values.defaultPermissions);
+
+        const duplicate = await eventApi.readEventDuplicate(result.id, sessionFor(owner));
+        expect(duplicate.values).toMatchObject({requireDietaryInfo: true, allowDietComment: true, allowRegDietUpdateAfterDeadline: false});
+        const second = await eventApi.createEvent(duplicate.values, undefined, sessionFor(owner));
+        expect(second.id).not.toBe(result.id);
+        expect(await eventService.getEventById(second.id)).toMatchObject({title: values.title, headerImg: null});
+        expect(await adminService.getDefaultPerms('event', second.id)).toMatchObject(values.defaultPermissions);
+
+        // Native cross-field rejection finishes before the creator is entered;
+        // this outcome is confirmed validation rather than uncertain completion.
+        await expect(eventApi.createEvent({...values, startDate: '2027-06-05'}, undefined, sessionFor(owner)))
+            .rejects.toMatchObject({name: 'ValidationError'});
+        await expect(eventApi.createEvent(values, undefined, {})).rejects.toMatchObject({status: 401});
+    });
+
+    it('hard-deletes only currently linked owned children through their existing feature operations', async () => {
+        const id = await createEvent('Scoped hard deletion');
+        const foreignId = await createEvent('Foreign deletion host');
+        const activityId = randomUUID();
+        const packingId = randomUUID();
+        await activityService.createActivityPlan(activityId, owner.id, 'Delete Activity child', '', '2027-06-01', '2027-06-03', id);
+        await packingService.createPackingList(packingId, owner.id, 'Delete Packing child', '', id);
+        const driversId = await driverService.createDriversList(owner.id, 'Delete Drivers child', '', id);
+        await expect(eventApi.deleteEventChild(foreignId, 'activity', activityId, sessionFor(owner), 'admin'))
+            .rejects.toMatchObject({status: 404});
+        expect(await activityService.getActivityPlanById(activityId)).not.toBeNull();
+
+        // Event ownership or administration does not confer ownership of a child.
+        const otherChild = randomUUID();
+        await activityService.createActivityPlan(otherChild, participant.id, 'Other profile child', '', '2027-06-01', '2027-06-03', id);
+        await expect(eventApi.deleteEventChild(id, 'activity', otherChild, sessionFor(owner), 'admin'))
+            .rejects.toMatchObject({status: 403});
+        expect(await activityService.getActivityPlanById(otherChild)).not.toBeNull();
+
+        for (const [type, childId] of [['activity', activityId], ['packing', packingId], ['drivers', driversId]] as const) {
+            expect(await eventApi.deleteEventChild(id, type, childId, sessionFor(owner), 'admin')).toEqual({changed: true});
+        }
+        expect(await activityService.getActivityPlanById(activityId)).toBeNull();
+        expect(await packingService.getPackingListById(packingId)).toBeNull();
+        expect(await driverService.getDriversListById(driversId)).toBeNull();
+        expect(await eventService.getEventById(id)).not.toBeNull();
+    });
+
     it('keeps native detail, versioned detail and registration capacity policy aligned for absent, zero and reached limits', async () => {
         const id = await createEvent('Shared Event capacity policy');
         await eventService.register(id, '2027-06-01', '2027-06-03', participant.id);

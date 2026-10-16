@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount} from 'vue';
+import {RouterLink} from 'vue-router';
 import {hashKey} from '@tanstack/vue-query';
 import type {EntityHeaderProps} from '../../types/FrontendEntitySettingsTypes';
 import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
@@ -60,18 +61,18 @@ async function recoverHeaderAfterRead(): Promise<void> {
              beneath it on mobile, retaining the established flex geometry. -->
         <div class="p-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
             <div v-if="parentUrl" class="btn-group d-md-inline d-none">
-                <a class="btn btn-outline-light" :href="parentUrl">
+                <RouterLink class="btn btn-outline-light" :to="parentUrl">
                     <i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('packing.goToEvent') }}
-                </a>
+                </RouterLink>
             </div>
             <div v-else class="d-none d-md-inline"></div>
             <h1 class="mb-0 text-center">
                 <i class="bi me-2" :class="icon" aria-hidden="true"></i>{{ title }}
             </h1>
             <div v-if="parentUrl" class="btn-group d-md-none">
-                <a class="btn btn-outline-light" :href="parentUrl">
+                <RouterLink class="btn btn-outline-light" :to="parentUrl">
                     <i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('packing.goToEvent') }}
-                </a>
+                </RouterLink>
             </div>
             <!-- Features own availability and pending state. Opening settings is
                  an explicit presentation event, never an inferred permission. -->

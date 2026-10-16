@@ -32,6 +32,8 @@
         "yourTimezone": "Your timezone:",
         "deadlinePassed": "Deadline passed",
         "created": "Event created.",
+        "leaveUnknown": "The new event may already exist. Leave this form and check your overview before creating it again?",
+        "creationUnknown": "Creation could not be confirmed. Check your overview before creating it again.",
         "deleted": "Event deleted.",
         "notFound": "Event not found.",
         "full": "This event is full.",
@@ -145,6 +147,8 @@
           "notesTitle": "Allergies / Comments",
           "totalsEmpty": "Totals: —",
           "deleteChildConfirm": "Delete this item?",
+          "activityDeleted": "activity deleted",
+          "driversDeleted": "drivers deleted",
           "expiresHelp": "Leave empty to never expire.",
           "expiresLocal": "Expires (optional, local time)",
           "create": "Create",
@@ -385,6 +389,8 @@
         "duplicate": "Duplicate",
         "all": "All",
         "none": "None",
+        "yes": "Yes",
+        "no": "No",
         "active": "Active",
         "archived": "Archived",
         "infoTitle": "Info",
@@ -817,6 +823,7 @@
         "UNSUPPORTED_MEDIA_TYPE": "Send this request as JSON.",
         "INVALID_JSON": "The request does not contain valid JSON.",
         "CLIENT_UPDATE_REQUIRED": "An update is available. Keep your changes open and refresh after reviewing them.",
+        "WORKFLOW_OUTCOME_UNKNOWN": "The operation may have completed partly or fully. Review the current state before starting another operation.",
         "INTERNAL_ERROR": "The request could not be completed. Try again later."
       }
     }

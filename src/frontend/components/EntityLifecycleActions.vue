@@ -19,7 +19,7 @@ const {messages} = usePilot();
         <p>{{ inherited || direct ? labels.archivedHint : labels.activeHint }}</p>
         <p v-if="inherited">
             {{ labels.inheritedHint }}
-            <a v-if="eventUrl" class="ms-1" :href="eventUrl">{{ labels.openEvent }}</a>
+            <RouterLink v-if="eventUrl" class="ms-1" :to="eventUrl">{{ labels.openEvent }}</RouterLink>
         </p>
         <p v-if="automation?.paused">{{ automation.pausedHint }}</p>
         <div class="d-flex flex-wrap gap-2">

@@ -10,9 +10,9 @@ import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import ActionButton from '../../components/ActionButton.vue';
 import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 
-// TODO (docs/frontend-migration/FRONTEND_PILOT.md): Migrate non-packing detail/administration destinations
-// with their feature owners. These mixed Overview cards deliberately keep working native
-// links until then; their shared projection does not make those workflows complete.
+// TODO (docs/frontend-migration/FRONTEND_PILOT.md): Migrate remaining feature detail/administration
+// destinations with their owners. Packing and Event already use Vue; other mixed Overview cards
+// keep working native links until their explicit migration phases are implemented.
 const props = withDefaults(defineProps<{
     card: components['schemas']['OverviewCard'];
     interaction: PilotOverviewCardInteraction;
@@ -97,7 +97,7 @@ function expand(event: MouseEvent): void {
         <div class="card-footer">
             <p v-if="card.eventContext" class="small mb-2">
                 <i class="bi bi-calendar-event me-1" aria-hidden="true"></i
-                ><a :href="card.eventContext.url">{{ card.eventContext.title }}</a>
+                ><RouterLink :to="card.eventContext.url">{{ card.eventContext.title }}</RouterLink>
             </p>
             <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
                 <span class="badge bg-primary">{{

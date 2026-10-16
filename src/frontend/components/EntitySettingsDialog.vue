@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import {computed, onBeforeUnmount, ref, watch} from 'vue';
-import {useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
 import type {EntityHeaderLabels, EntityLifecycleLabels} from '../../types/FrontendEntitySettingsTypes';
 import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {EntitySettingsDialogProps, EntitySettingsProjection} from '../../types/FrontendEntityDialogTypes';
-import {createEntityLifecycle} from '../composables/entityLifecycle';
+import {createEntityLifecycle, useEntityRemoval} from '../composables/entityLifecycle';
 import {useActionState, usePilot, refreshInterval} from '../app/context';
 import {isReadDenial} from '../app/transport';
 import {useCommand} from '../composables/command';
@@ -44,9 +43,7 @@ const lifecycleLabels = computed<EntityLifecycleLabels>(() => ({
     inheritedHint: messages.value.t('packing.inheritedHint'), openEvent: messages.value.t('packing.openEvent'),
     otherActions: messages.value.t('packing.otherActions'), deletePermanently: messages.value.t('packing.deletePermanently'),
 }));
-const router = useRouter();
 const destination = useConfirmedNavigation();
-let releaseDeparture: (() => void) | undefined;
 let active = true;
 onBeforeUnmount(retireEditor);
 
@@ -54,7 +51,6 @@ onBeforeUnmount(retireEditor);
  * Keep that command's root status/confirmed consent, but start no new editor reads. */
 function retireEditor(): void {
     active = false;
-    releaseUnconfirmedDeparture();
 }
 type Settings = EntitySettingsProjection;
 const panel = ref(props.metadataAvailable === true ? 'general' : '');
@@ -194,6 +190,7 @@ const command = useCommand(refreshAfterCommand, false, {
     unknownMessage: 'draft.leaveUnknown',
 });
 const lifecycle = createEntityLifecycle(api, command, messages);
+const removal = useEntityRemoval(command, destination);
 // Observe ordinary DTO changes for initial/clean drafts. Equal background network
 // successes restore confirmed editors too; idle/cancel and manual aliases do not.
 watch(settings.data, value => receiveSettings(value), {immediate: true});
@@ -403,45 +400,14 @@ async function automate(paused: boolean, source?: Event): Promise<void> {
     // dialog retains current schedule admission and its related read dependencies.
     await lifecycle.automate(props.resourceId, paused, source, props.automationLabels);
 }
+
 /** Delete only after the command owner has approved departure of every mounted draft.
  * A confirmed deletion retains its destination/consent through failed navigation;
  * recovery repeats delivery, while the controller remains the deletion policy owner. */
 async function remove(source?: Event): Promise<void> {
     if (blocked.value) return;
-    const approval = command.prepareDeparture();
-    if (!approval) return;
-    if (!window.confirm(messages.value.t('packing.confirmDelete'))) {
-        approval();
-        return;
-    }
-
-    // Approve every mounted page/dialog draft before deletion. Consent releases no
-    // values on rejection; after confirmation it covers only the ensuing departure.
-    releaseDeparture = approval;
-    const scope = context.capture();
-    const origin = router.currentRoute.value.fullPath;
-    try {
-        const id = await command.run(deleteResource, false, false,
-            {initiator: source, success: props.deletedKey});
-        if (id) await destination.navigate('/frontend-pilot', scope, origin,
-            {kind: 'success', messageKey: props.deletedKey});
-    } finally {
-        // A failed route delivery retains the confirmed destination and its approval.
-        // Retry can only navigate; no DELETE or late discard prompt may run again.
-        if (!destination.target.value) releaseApprovedDeparture();
-    }
-}
-
-function releaseApprovedDeparture(): void {
-    releaseDeparture?.();
-    releaseDeparture = undefined;
-}
-
-/** A denied poll can close this editor after DELETE. Its confirmed departure consent
- * then remains with the root until navigation commits. Pending work releases through
- * remove's finally branch once its actual result is known; rejected work releases here. */
-function releaseUnconfirmedDeparture(): void {
-    if (!command.pending.value && command.outcome.value?.confirmation !== 'confirmed') releaseApprovedDeparture();
+    await removal.remove({operation: deleteResource, confirmation: 'packing.confirmDelete',
+        success: props.deletedKey, initiator: source});
 }
 
 async function deleteResource(scope: PilotRequestScope): Promise<string> {

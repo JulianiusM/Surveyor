@@ -63,13 +63,13 @@ export async function loginForE2E(request: APIRequestContext, credentials: {user
  * Supply an isolated real account/token for HTTP password-reset assertions without SMTP,
  * seed-account mutation, repository mocks, or schema resets. Use production metadata and
  * established entity factories; callers receive only HTTP credentials/token, never the
- * datasource or repositories. Verify the actual selected disposable schema and every
- * grant before inserting or deleting rows.
+ * datasource or repositories. Verify the actual selected E2E schema before inserting
+ * or deleting this fixture's records; dedicated credentials remain a setup responsibility.
  */
 export async function withPasswordResetAccountForE2E(
     exercise: (username: string, password: string, token: string) => Promise<void>,
 ): Promise<void> {
-    /** Keep fixture insertion, exercise and exact-row cleanup inside the guarded connection owner. */
+    /** Keep fixture insertion, exercise and exact-row cleanup inside the selected connection owner. */
     async function exerciseAccount(datasource: DataSource, requireBuilt: ReturnType<typeof createRequire>): Promise<void> {
         const {User} = requireBuilt('./dist/modules/database/entities/user/User.js') as typeof import('../../src/modules/database/entities/user/User');
         const {Profile} = requireBuilt('./dist/modules/database/entities/user/Profile.js') as typeof import('../../src/modules/database/entities/user/Profile');
@@ -77,7 +77,7 @@ export async function withPasswordResetAccountForE2E(
 
         try {
             // Persist only this factory's isolated account/profile after the wrapper
-            // has checked the actual database and every mutating credential grant.
+            // has checked the actual database selected by the test configuration.
             const password = 'Previous-password!A1';
             const fixture = createE2EPasswordResetAccount(await bcrypt.hash(password, 10));
             const user = await datasource.getRepository(User).save(fixture.user);
@@ -94,17 +94,17 @@ export async function withPasswordResetAccountForE2E(
         }
     }
 
-    await withBuiltE2EDatabase('fixture', exerciseAccount);
+    await withBuiltE2EDatabase(exerciseAccount);
 }
 
-/** These handles identify only this workflow's disposable rows; no ORM owner escapes the guarded fixture. */
+/** These handles identify only this workflow's disposable rows; no ORM owner escapes the fixture. */
 export interface E2EProfileWorkflowFixture {
     account: {id: number; username: string; password: string; profileId: string};
     guest: {id: string; username: string; profileId: string; loginPath: string};
 }
 
 /** Supply independent account/guest actors for destructive document and migration journeys.
- * Use the existing exact-schema/grant guard and built production metadata. Empty
+ * Use the existing selected-database checks and built production metadata. Empty
  * account contact can be selected for direct account deletion, while the guest has
  * no contact. No provider credentials or externally deliverable mailbox is installed. */
 export async function withProfileWorkflowFixtureForE2E(
@@ -146,7 +146,7 @@ export async function withProfileWorkflowFixtureForE2E(
         }
     }
 
-    await withBuiltE2EDatabase('fixture', exerciseWorkflow);
+    await withBuiltE2EDatabase(exerciseWorkflow);
 }
 
 /** Observe this fixture's actual saved ownership/token state without returning private credentials or relations. */
@@ -167,7 +167,7 @@ export async function readProfileWorkflowFixtureForE2E(fixture: E2EProfileWorkfl
         })};
     }
 
-    return withBuiltE2EDatabase('read', readWorkflow);
+    return withBuiltE2EDatabase(readWorkflow);
 }
 
 /** Read only this test's unique guest/profile names through the built entity metadata.
@@ -189,7 +189,7 @@ export async function readGuestRegistrationCountsForE2E(usernames: readonly stri
         return {guests, profiles};
     }
 
-    return withBuiltE2EDatabase('read', readCounts);
+    return withBuiltE2EDatabase(readCounts);
 }
 
 /** Observe signup completeness without returning the account's activation secret or password hash.
@@ -217,13 +217,14 @@ export async function readAccountRegistrationCountsForE2E(usernames: readonly st
         return {accounts: accounts.length, profiles, activationReady};
     }
 
-    return withBuiltE2EDatabase('read', readCounts);
+    return withBuiltE2EDatabase(readCounts);
 }
 
 /** Own one connection to the selected built-server schema, with no synchronization/reset.
- * Read-only observations use the same metadata/target boundary; fixture callbacks additionally
- * require the exact restricted grant proof before any insertion or cleanup can run. */
-async function withBuiltE2EDatabase<Result>(access: 'read' | 'fixture',
+ * Read-only observations and mutation fixtures use the same metadata/target boundary.
+ * Credential restrictions and database disposability belong to test setup: a fixture-only
+ * grant inspection would run after ordinary E2E preparation has already reset the schema. */
+async function withBuiltE2EDatabase<Result>(
     exercise: (datasource: DataSource, requireBuilt: ReturnType<typeof createRequire>) => Promise<Result>): Promise<Result> {
     const database = process.env.E2E_DB_NAME ?? '';
     if (!/e2e/i.test(database)) throw new Error('Refusing fixture access outside the selected E2E schema.');
@@ -242,47 +243,13 @@ async function withBuiltE2EDatabase<Result>(access: 'read' | 'fixture',
     try {
         const [target] = await datasource.query('SELECT DATABASE() AS name') as {name: string}[];
         if (target?.name !== database) throw new Error('Refusing an unexpected E2E fixture database.');
-        if (access === 'fixture') await requireE2EFixtureGrants(datasource, database);
 
-        // Private read callbacks issue SELECTs for their own unique test names
-        // and return counts only; no connection or private credential leaves this owner.
+        // Each callback owns its isolated fixture writes/cleanup or bounded observation.
+        // Keep the connection here and release it even when the application workflow fails.
         return await exercise(datasource, requireBuilt);
     } finally {
         await datasource.destroy();
     }
-}
-
-/** Prove mutating fixture credentials are limited to explicitly configured dedicated schemas.
- * CI uses the same account for E2E and integration; arbitrary extra schemas, role grants,
- * table patterns and global privileges remain refused rather than inferred from their names. */
-async function requireE2EFixtureGrants(datasource: DataSource, database: string): Promise<void> {
-    const permitted = new Set(schemaGrantPrefixes(database));
-    const integrationDatabase = process.env.TEST_DB_NAME;
-    if (integrationDatabase) {
-        if (!/test/i.test(integrationDatabase)) throw new Error('Refusing an unverified configured integration schema.');
-        for (const prefix of schemaGrantPrefixes(integrationDatabase)) permitted.add(prefix);
-    }
-
-    // The effective integration name must be supplied explicitly; importing another
-    // environment loader could redirect DB_* or silently infer a local schema.
-    const grants = await datasource.query('SHOW GRANTS') as Record<string, string>[];
-    for (const grant of grants) {
-        const prefix = String(Object.values(grant)[0]).split(' TO ')[0];
-        if (prefix !== 'GRANT USAGE ON *.*' && !permitted.has(prefix)) {
-            throw new Error('Refusing password-reset fixture credentials with privileges outside configured test schemas.');
-        }
-    }
-}
-
-/** Match only the configured name's exact quoted SHOW GRANTS representations.
- * MariaDB can report underscores directly or use the escaped-literal spelling;
- * accepting both must not admit a different schema, table or wildcard prefix. */
-function schemaGrantPrefixes(database: string): string[] {
-    const raw = database.replaceAll('`', '``');
-    const escaped = database.replaceAll('\\', '\\\\').replaceAll('_', '\\_').replaceAll('%', '\\%').replaceAll('`', '``');
-    const prefixes = [];
-    for (const quoted of new Set([raw, escaped])) prefixes.push(`GRANT ALL PRIVILEGES ON \`${quoted}\`.*`);
-    return prefixes;
 }
 
 export async function createResourceViaForm(request: APIRequestContext, testCase: E2ECreateCase<E2ECreateForm>): Promise<CreatedResource> {

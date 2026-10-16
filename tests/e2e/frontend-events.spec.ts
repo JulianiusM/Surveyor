@@ -144,11 +144,16 @@ function compareRegistrationBounds(native: {x: number; y: number; width: number;
     }
 }
 
-test('creates an Event with native document fields, image, timezone and permission initialization', async ({page}) => {
+test('creates and duplicates an Event through multipart SPA commands with native field, image and timezone meaning', async ({page}) => {
     await loginForE2E(page.request, createE2ELogin());
-    const title = `P2 document creation ${randomUUID().slice(0, 8)}`;
+    const title = `P2 SPA creation ${randomUUID().slice(0, 8)}`;
     await page.goto('/frontend-pilot/event/create?locale=en', {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);
+    await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'event-create';});
+    const documentRequests: string[] = [];
+    page.on('request', request => {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documentRequests.push(request.url());
+    });
     await page.locator('input[name="title"]').fill(title);
     await page.locator('input[name="startDate"]').fill('2030-06-01');
     await page.locator('input[name="endDate"]').fill('2030-06-04');
@@ -158,9 +163,9 @@ test('creates an Event with native document fields, image, timezone and permissi
     await page.locator('input[name="requireDietaryInfo"]').check();
     await page.locator('input[name="headerImg"]').setInputFiles('src/public/img/logo.png');
     const posted = page.waitForResponse(response => response.request().method() === 'POST'
-        && new URL(response.url()).pathname === '/frontend-pilot/event/create');
+        && new URL(response.url()).pathname === '/api/v1/events');
     await page.getByRole('button', {name: 'Create event', exact: true}).click();
-    expect((await posted).status()).toBe(302);
+    expect((await posted).status()).toBe(201);
     await expect(page).toHaveURL(/\/frontend-pilot\/event\/[a-f0-9-]+$/u);
     await expect(page.getByRole('heading', {name: title, exact: true})).toBeVisible();
     const id = new URL(page.url()).pathname.split('/').pop()!;
@@ -180,21 +185,27 @@ test('creates an Event with native document fields, image, timezone and permissi
 
     // Native duplication copies the form values, including its empty rendered
     // datetime-local deadline, while leaving the source image and attendance out.
-    await page.goto(`/frontend-pilot/event/${id}/duplicate?locale=en`, {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
+    await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
+    const settings = page.getByRole('dialog');
+    await expect(settings).toBeVisible();
+    await settings.getByRole('tab', {name: 'Actions', exact: true}).click();
+    await settings.getByRole('link', {name: 'Duplicate', exact: true}).click();
+    await expect(page).toHaveURL(`/frontend-pilot/event/${id}/duplicate`);
     await expect(page.locator('input[name="title"]')).toHaveValue(title);
     await expect(page.locator('input[name="bindingDeadline"]')).toHaveValue('');
     await page.locator('input[name="title"]').fill(`${title} copy`);
     const duplicated = page.waitForResponse(response => response.request().method() === 'POST'
-        && new URL(response.url()).pathname === `/frontend-pilot/event/${id}/duplicate`);
+        && new URL(response.url()).pathname === '/api/v1/events');
     await page.getByRole('button', {name: 'Create event', exact: true}).click();
-    expect((await duplicated).status()).toBe(302);
+    expect((await duplicated).status()).toBe(201);
     await expect(page).toHaveURL(/\/frontend-pilot\/event\/[a-f0-9-]+$/u);
     const copyId = new URL(page.url()).pathname.split('/').pop()!;
     expect(copyId).not.toBe(id);
     const copy = await (await page.request.get(`/api/v1/events/${copyId}`, {headers: await frontendEventHeaders(page.request)})).json() as components['schemas']['EventView'];
     expect(copy).toMatchObject({title: `${title} copy`, startDate: detail.startDate, endDate: detail.endDate,
         location: detail.location, maxParticipants: 12, registration: null, registrationCount: 0, headerUrl: null, bindingDeadline: null});
+    expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('event-create');
+    expect(documentRequests).toEqual([]);
 });
 
 test('updates one registration through the shared native persistence', async ({page}) => {

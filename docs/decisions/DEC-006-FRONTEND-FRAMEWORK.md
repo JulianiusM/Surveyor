@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers
 owner: frontend maintainers
 status: current
-last-verified: 2026-10-15
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original selected transport provenance corrected against the design baseline; approved runtime narrowing, definition correction and document reload amendment retained; readiness execution belongs to the pilot review
+verification-scope: direct original-SPA reinforcement and production-coexistence exclusion recorded with bounded current P0-P2 implementation scope; original selected transport, approved runtime narrowing and reload amendments retained; no full-application or cutover acceptance
 source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
 next-review: frontend-technology-or-rendering-boundary-change
 -->
@@ -88,6 +88,27 @@ No wildcard HTML handling for APIs, missing assets or exports.
 
 Complete component ownership prevents scripts from competing over one subtree.
 SSR HTML alone cannot prove active hydration.
+
+### Direct ordinary SPA reinforcement (2026-10-16)
+
+During the Event permission/transport review, the maintainer rejects D1's proposed retention of ordinary Event
+creation/duplication document POST as contrary to the SPA rewrite. The reply reinforces the original generated
+JSON/multipart command and client-navigation choice and requests correction of equivalent implemented P0–P2 Vue
+forms/links, with an explicit plan and prevention guidance. Existing implementation, agent descriptions and passing
+document-form tests supply no retrospective exception approval.
+
+The original provider/token/email/print/download boundary above concerns true external arrival and its established
+capability admission/consumption, external handoff or output. It does not exempt an internal token-issuance action,
+profile transfer/destructive command, Event creation or current child-deletion control from ordinary SPA transport. Keep explicit issuance out
+of Query refresh, prefetch and history replay, and retain private capabilities only within their admitted lifetime.
+Preserve genuine initial/native compatibility entries and modified-click destinations. Existing backend operations
+retain their order and possible partial completion; no new atomicity, replay or excluded token/identity remedy is
+authorized by transport adaptation. Current implementation and renewed application evidence remain separately reviewed.
+
+The same reply resolves E1 by excluding simultaneous native/Vue production use and directs no Event permission
+coordination repair for that scenario. The temporary native development comparator, separately mutable native/Vue
+presentation, matching shared Vue owners and previously approved Packing coordination remedy remain. This bounded
+current-phase correction does not authorize later phases, default-route cutover, publication or native removal.
 
 ## Shared components without a redesign
 

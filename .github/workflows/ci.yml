@@ -187,9 +187,6 @@ jobs:
         if: ${{ !cancelled() && matrix.stage == 'browser' && steps.application-build.outcome == 'success' && (steps.playwright-cache.outputs.cache-hit == 'true' || steps.playwright-install.outcome == 'success') }}
         env:
           CI: true
-          # The fixture guard accepts this explicitly prepared integration schema
-          # alongside the selected E2E schema, both owned by the same CI user.
-          TEST_DB_NAME: surveyor_test
           PLAYWRIGHT_JUNIT_OUTPUT: artifacts/junit-playwright.xml
           PLAYWRIGHT_HTML_OUTPUT_DIR: artifacts/playwright-report
         run: |

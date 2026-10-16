@@ -6,10 +6,55 @@ import {validateProfileManagement} from '../../../../.generated/api/v1/browser/v
 import {validatePageEntryOutcome} from '../../../../.generated/api/v1/browser/validatePageEntryOutcome.mjs';
 import {validateProfileMigrationPreviewOutcome} from '../../../../.generated/api/v1/browser/validateProfileMigrationPreviewOutcome.mjs';
 import {validateMutationResult} from '../../../../.generated/api/v1/browser/validateMutationResult.mjs';
+import {validateProfileWorkflowEntry} from '../../../../.generated/api/v1/browser/validateProfileWorkflowEntry.mjs';
+import {validateProfileMigrationToken} from '../../../../.generated/api/v1/browser/validateProfileMigrationToken.mjs';
 
 /** Administration owns its generated projections; cookie admission and identity completion stay shared. */
 export class IdentityAdministrationApi {
     constructor(private readonly transport: PilotApi) {}
+
+    /** Admit a warm workflow visit without issuing a token or executing a command.
+     * Read retries and Query refresh therefore remain free of mutation effects. */
+    async workflowEntry(kind: operations['getProfileWorkflowEntry']['parameters']['query']['kind'], returnTo: string,
+                        scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['ProfileWorkflowEntry']> {
+        const transport = this.transport;
+        async function readWorkflowEntry(): Promise<components['schemas']['ProfileWorkflowEntry']> {
+            const response = await transport.client.GET('/profiles/workflow-entry', {
+                params: {query: {kind, returnTo}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getProfileWorkflowEntry', {...response, signal}, validateProfileWorkflowEntry, scope).data;
+        }
+        return transport.allowedRead(`identity/workflow-entry/${kind}`, scope, readWorkflowEntry, signal);
+    }
+
+    /** Issue only from an explicit action; secrets stay in this mounted feature,
+     * never in a query key, URL, browser history payload or automatic read retry. */
+    async migrationToken(scope: PilotRequestScope): Promise<components['schemas']['ProfileMigrationToken']> {
+        return this.transport.read('requestProfileMigrationToken', await this.transport.client.POST('/profiles/migration/token', {
+            params: {header: this.transport.headers(scope)}, cache: 'no-store',
+        }), validateProfileMigrationToken, scope).data;
+    }
+
+    /** Execute the existing transfer once, retaining its native partial outcomes. */
+    async transfer(token: string, scope: PilotRequestScope): Promise<components['schemas']['ProfileWorkflowCompletion']> {
+        return this.transport.workflow('executeIdentityProfileMigration', await this.transport.client.POST('/profiles/migration/execute', {
+            params: {header: this.transport.headers(scope)}, body: {token}, cache: 'no-store',
+        }), scope);
+    }
+
+    /** Deactivation retains the shared controller's selection and cleanup order. */
+    async deactivate(name: string, scope: PilotRequestScope): Promise<components['schemas']['ProfileWorkflowCompletion']> {
+        return this.transport.workflow('deactivateIdentityProfile', await this.transport.client.POST('/profiles/current/deactivate', {
+            params: {header: this.transport.headers(scope)}, body: {name}, cache: 'no-store',
+        }), scope);
+    }
+
+    /** Full and guest account deletion share the existing server-selected owner. */
+    async deleteAccount(username: string, scope: PilotRequestScope): Promise<components['schemas']['ProfileWorkflowCompletion']> {
+        return this.transport.workflow('deleteIdentityAccount', await this.transport.client.DELETE('/account', {
+            params: {header: this.transport.headers(scope)}, body: {username}, cache: 'no-store',
+        }), scope);
+    }
 
     /** Read a token-holder preview explicitly, without consuming the token or caching its secret. */
     async preview(token: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['ProfileMigrationPreviewOutcome']> {

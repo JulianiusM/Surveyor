@@ -982,10 +982,13 @@ export async function getMigrationToken(profileId: string) {
     return await userService.generateMigrationToken(profileId);
 }
 
+/** Resolve the native migration capability before any transfer. Its stable rejection
+ * cause lets JSON distinguish an invalid token from an already entered transfer,
+ * while native routes retain the same status, message and validation order. */
 export async function getProfileToMigrate(token: string) {
     const profile = await userService.verifyMigrationToken(token);
     if (!profile) {
-        throw new ExpectedError('Invalid or mismatched token', 'error', 401);
+        throw new ExpectedError('Invalid or mismatched token', 'error', 401, {}, {cause: 'TOKEN_INVALID'});
     }
     return profile;
 }
@@ -1242,6 +1245,98 @@ export function getProfileAdministrationEntry(session: SessionLike,
     if (view !== 'edit') return getAccountPageEntry(session, '/frontend-pilot/users/login', destination);
     return session.profile ? {kind: 'render'}
         : {kind: 'redirect', url: `/frontend-pilot/users/login?next=${encodeURIComponent(destination)}`, notice: null};
+}
+
+/** Read-only workflow admission; selecting a page never issues or consumes its capability. */
+export function getProfileWorkflowEntry(session: SessionLike,
+    kind: 'token' | 'entry' | 'deactivate' | 'delete-account', returnTo?: unknown): components['schemas']['ProfileWorkflowEntry'] {
+    // Token issuance and account deletion retain guest support. Transfer and
+    // deactivation remain full-account workflows, independently of page rendering.
+    const view = kind === 'entry' || kind === 'deactivate' ? 'manage' : 'edit';
+    return {entry: getProfileAdministrationEntry(session, view, returnTo)};
+}
+
+/** Preserve native account/guest admission without a second identity or session owner. */
+function requireProfileWorkflow(session: SessionLike, accountOnly: boolean): void {
+    if (!session.profile || !(session.auth?.user || session.auth?.guest)) throw new ApiProblem('AUTH_REQUIRED');
+    if (accountOnly && !session.auth?.user) throw new ApiProblem('FORBIDDEN');
+}
+
+/** Issue once through the existing token owner; a lost result must never trigger automatic reissuance. */
+export async function requestProfileMigrationToken(session: SessionLike): Promise<components['schemas']['ProfileMigrationToken']> {
+    requireProfileWorkflow(session, false);
+    try {
+        return {token: await getMigrationToken(session.profile!.id)};
+    } catch {
+        // Token persistence may already have replaced the previous capability.
+        throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
+    }
+}
+
+/**
+ * Capture only scalar completion evidence from the existing operation's Session.
+ * A later authoritative GET owns identity/roster display; no postcommit store
+ * reload, flash save or full ORM projection can reject this completed workflow.
+ */
+function profileWorkflowCompletion(req: Request, destination: string, message?: string, redirect: string | null = null):
+    components['schemas']['ProfileWorkflowCompletion'] {
+    // Explicit selection/logout rotates a complete metadata pair. A transfer
+    // preserves the admitted actor, including read-only legacy fallback when a
+    // stored generation is partial. Its raw context alone is not that actor's scope.
+    const completeContext = req.session.frontendContext && req.session.frontendCsrfToken
+        ? req.session.frontendContext : req.apiActor?.context ?? null;
+    return {resultingContext: completeContext,
+        destination, notice: null, redirect, ...(message ? {message} : {})};
+}
+
+/** Reuse transfer and former-owner cleanup exactly; only the transport result changes. */
+export async function executeIdentityProfileMigration(req: Request, token: string): Promise<components['schemas']['ProfileWorkflowCompletion']> {
+    requireProfileWorkflow(req.apiActor!, true);
+    try {
+        // The native owner validates the capability before moving the profile,
+        // then performs its established mail and previous-owner cleanup sequence.
+        const message = await migrateProfile(req.apiActor!.auth!.user!.id, token);
+        return profileWorkflowCompletion(req, '/frontend-pilot/users/profile/manage', message);
+    } catch (error) {
+        // Only the shared owner's explicitly annotated initial token rejection
+        // proves no transfer occurred. Every later failure may be partial work.
+        if (error instanceof ExpectedError && error.cause === 'TOKEN_INVALID') throw error;
+        throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
+    }
+}
+
+/** Retain deactivation followed by ordinary remaining-profile selection, including its partial failures. */
+export async function deactivateIdentityProfile(req: Request, body: components['schemas']['ProfileDeactivationInput']):
+    Promise<components['schemas']['ProfileWorkflowCompletion']> {
+    requireProfileWorkflow(req.apiActor!, true);
+    try {
+        // Confirmation validation is the native operation's first step. Its
+        // existing separate deactivation and selection commits remain unchanged.
+        const message = await deactivateProfile(body, req.session);
+        await changeActiveProfile(req.session);
+        return profileWorkflowCompletion(req, '/frontend-pilot/users/profile/manage', message);
+    } catch (error) {
+        if (error instanceof ValidationError) throw error;
+        // In particular, the inherited last-profile 400 occurs after mutation;
+        // reporting it as a definite API rejection would invite an unsafe replay.
+        throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
+    }
+}
+
+/** Preserve ordinary account/guest deletion, mail and provider completion without adding atomicity. */
+export async function deleteIdentityAccount(req: Request, body: components['schemas']['AccountDeletionInput']):
+    Promise<components['schemas']['ProfileWorkflowCompletion']> {
+    requireProfileWorkflow(req.apiActor!, false);
+    try {
+        // The existing owner supplies the real provider/root destination. Do not
+        // preflight or replace that workflow with a new session transaction.
+        const redirect = await deleteAccount(body, req.session);
+        return profileWorkflowCompletion(req, '/frontend-pilot', 'Account successfully deleted',
+            redirect === settings.value.rootUrl ? null : redirect);
+    } catch (error) {
+        if (error instanceof ValidationError) throw error;
+        throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
+    }
 }
 
 export function getDefaultProfile(profiles: Profile[]) {

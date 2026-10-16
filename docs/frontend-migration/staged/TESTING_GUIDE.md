@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P2 shared header/lifecycle adoption, entry retirement, metadata handles, current read-only notes and public method contract assertions source-mapped; execution remains separately scoped; no cutover or operator execution claimed
+verification-scope: P0-P2 ordinary SPA assertions and permitted document boundaries source-mapped in existing suites; scoped client/ORM/built execution and failed-run limits recorded separately in review; scalar/parity and environment guidance retained; no cutover
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -109,6 +109,8 @@ Use actual Query/cache/transport consumers where they uniquely detect:
 
 - Missing pending data versus retained background content, independent regions and unknown membership counts.
 - Original/local/current values, sparse normalized input and independent settings-section drafts.
+- Original/Mine/Current presentation preserving false and numeric zero, with localized boolean wording and empty
+  placeholders confined to absent/empty text; test the mounted feature's recovery journey and unchanged write values.
 - Field write loss versus readable content, actor/resource retirement and validated denial of protected projections.
 - Actual fresh authority after a confirmed write; canceled retained data, idle flags and manual cache aliases are not receipts.
 - Saved operations with failed follow-up reads and unknown outcomes without replay or false rollback assumptions.
@@ -156,10 +158,35 @@ Use isolated built-browser checks for SSR/hydration/module delivery and focus wh
 needed. Use built-application E2E when actual routes, sessions, rendering and persistence are the boundary. Source
 development/HMR with real server/persistence belongs to browser integration. Configuration skips are unrun modes.
 
+For ordinary migrated forms and links, assert that the built workflow retains a marker on the current document
+and emits no unexpected main-frame navigation request. Observe the actual generated JSON/multipart operation,
+visible completion and persisted effect through the integrated backend. The existing pilot navigation test uses
+`document.documentElement.dataset.pilotDocument`; extend that technique in the affected existing suites rather
+than introducing another runner, scanner or test framework. A matching final URL, API status or screenshot alone
+cannot distinguish Router navigation from a document replacement.
+
+Cover Event creation/duplication and selected files, profile token issuance/preview/transfer/deactivation and
+account/guest deletion, Event-rendered child deletion and ordinary shell/parent/context links. Include warm entry,
+Back/Forward, retained validation input, deliberate cancellation, one pending dispatch, uncertain delivery without
+replay, confirmed completion through failed follow-up and actor/visit retirement where applicable. Token issuance
+is an explicit action, never a query/prefetch/history effect; secrets and private results remain outside URLs,
+Query caches and persistent storage. Keep actual partial backend outcomes rather than asserting new atomicity.
+
+Classify and separately exercise legitimate document transitions: initial/direct arrival, true external
+provider/token/email capabilities, provider logout handoff, print/downloads and unmigrated destinations. Preserve
+modified-click/new-tab href behavior. Do not reject every navigation request or silently intercept all anchors;
+the assertion must name the ordinary SPA operation it protects and the allowed boundary it encounters. These
+application assertions and semantic contribution review do not create a documentation or infrastructure CI gate.
+
 Verify request-local SSR identity/locale, escaped validated bootstrap and same-tree hydration. Interactive initial
 content uses shared skeletons; successful initialization reveals controls. Readable Help retains functional GET
 search, links and anchors. JavaScript-only shell selectors/actions/Retry/dismiss are unavailable before initialization.
 The localized startup notice must work independently of the missing/blocked entry module.
+
+Hydration confirms that client owners mounted; it does not admit a feature's independent reads. Before keyboard or
+layout assertions, wait for the current admitted fields and enabled top-level controls of the actual feature or
+dialog. Assert readiness through their observable values/states, then exercise the unchanged focus sequence and
+measure the complete surface. Fixed sleeps or measurements of a loading skeleton cannot establish that boundary.
 
 Exercise actual initial Vue setup, mount and first-readiness failures, including partial handlers: initialization stays
 unconfirmed, static navigation/search remains usable and edited-control recovery retains consent. Keep this bounded
@@ -181,6 +208,27 @@ Visual review uses equivalent synthetic records, actors and viewport sizes. Insp
 control; contact sheets and capture success do not establish parity. Test actual keyboard/scroll reachability where
 screenshots cannot show lower controls. Label bounded scenes and source scope; do not claim app-wide accessibility
 or deployment acceptance from selected checks.
+
+Compare affected surfaces completely: visible wording, control values/states/constraints, labels/help/icons,
+typography, wrapping, spacing and relative geometry. Include common form actions/footer when the workflow renders
+them. Turn measured expectations and recorded browser errors into assertions; a JSON attachment is evidence for
+inspection, not an assertion. Hold actor, persisted data, locale, viewport and loaded fonts equal. Explicitly identify
+approved navigation-shell differences instead of hiding real component differences with broad tolerances.
+
+Event organizer dietary comparisons observe each frontend's ordinary application response without replacing it.
+Assert that its rendered badges and derived dietary totals preserve that response's complete values and delivered
+order. Compare corresponding dietary entries/counts/appearance/component layout by choice when the two responses
+deliver different sequences; retain all remaining exact text/control assertions and deadlines. This approved
+comparison boundary concerns dietary badges/totals only. It does not authorize normalizing other collections,
+sorting runtime data or changing shared queries. Raw screenshots and evidence retain the actual rendered order.
+
+Before a database-dependent comparison, verify the effective dedicated target, grants, server version and session
+SQL mode. Use the supported CI database baseline and its configured defaults for acceptance. Do not change a shared
+database's mode, widen setup deadlines, or add frontend validation to force a native SQL outcome. An alternate local
+version/mode may explain diagnostics, but does not certify the supported environment. Report separate preparation
+and prepared-schema runs separately from a passing ordinary managed setup command.
+Packing's raw-capacity rejection fixtures require the strict SQL mode supplied by that disposable CI/test baseline.
+This is a test precondition, not a new production SQL-mode requirement or authorization to change global settings.
 
 ## Risk and test cost
 
@@ -293,3 +341,17 @@ fixture resets serialized; their requirement does not prohibit isolated database
 worker limits and project order belong to `vitest.config.mts`.
 
 <!-- /delta:amendment-17 -->
+
+## 1. Create the integration database — amendment-18
+
+<!-- delta:amendment-18 -->
+GRANT ALL PRIVILEGES ON `surveyor\_test`.* TO 'surveyor_test'@'127.0.0.1';
+
+<!-- /delta:amendment-18 -->
+
+## 1. Create the E2E database — amendment-19
+
+<!-- delta:amendment-19 -->
+GRANT ALL PRIVILEGES ON `surveyor\_e2e`.* TO 'surveyor_e2e'@'127.0.0.1';
+
+<!-- /delta:amendment-19 -->

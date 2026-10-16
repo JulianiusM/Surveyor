@@ -292,8 +292,9 @@ test('preserves native existing-capacity edits through the real browser and pers
         expect((await readPacking(page.request, resource.id)).items[0]!.maxAssignees).toBe(example.saved);
     }
 
-    // Clearing an existing numeric value is a failed native write, not Number('')
-    // becoming a successful zero. Observe the real safe API failure and unchanged row.
+    // The supported strict-SQL test environment rejects a raw blank numeric value.
+    // Preserve that native database outcome instead of converting Number('') to zero
+    // in the browser; a permissive server can legitimately coerce the same raw input.
     await row.locator('td').nth(4).dblclick();
     const empty = row.getByRole('spinbutton', {name: 'Assigned / Max', exact: true});
     await empty.fill('');
@@ -1298,7 +1299,7 @@ test('pilot settings manage delegated access, header images, event links and arc
             () => dialog.getByRole('button', {name: 'Save properties', exact: true}).click());
         await expect(dialog.getByRole('button', {name: 'Save properties', exact: true})).toBeEnabled();
         await dialog.getByRole('button', {name: 'Close', exact: true}).last().click();
-        await expect(page.getByRole('link', {name: 'Go to event', exact: true})).toHaveAttribute('href', event.path);
+        await expect(page.getByRole('link', {name: 'Go to event', exact: true})).toHaveAttribute('href', '/frontend-pilot' + event.path);
         expect((await readPacking(page.request, resource.id)).description).toBe('Preserved while visiting other settings');
     } finally { await delegate.close(); }
 });

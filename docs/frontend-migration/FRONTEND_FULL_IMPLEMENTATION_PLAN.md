@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P2 Event implementation and shared-consumer adoption reconciled; prior P0/P1 and native-isolation receipts retained; verification limits recorded separately; future phases and cutover separately authorized
+verification-scope: implemented P0-P2 SPA consumer adoption reconciled with direct E1 exclusion and D1 correction plan; scoped build/compiler/client/ORM/built/visual results and failed-run limits recorded in review; later phases and cutover separate
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -36,16 +36,73 @@ flash review and does not block parity migration. The
 finds the foundation ready for the next authorized parity-only slice with its recorded limits; this is not
 full-application acceptance or approval to implement every later phase.
 
-P2A–C are complete under the maintainer's request to fully implement P2, with the current evidence and limits in
+P2A–C have a prior scoped completion receipt under the maintainer's request to fully implement P2, with its evidence and limits in
 the [completion receipt](PILOT_PARITY_REVIEW.md#full-p2-implementation-completion-2026-10-16). Event creation/duplication,
 settings, attendance, organizer tools and related-resource context now use the opt-in frontend. Packing and Event
 adopt the shared displayed header, entry, guest, settings, metadata, access and lifecycle owners; invoice and unmigrated child pages
 retain their working native destinations. Native frontend inputs remain unchanged.
 
-P3–P10 remain future phase contracts. P11 retains its separate cutover, publication and retirement authorization
-requirements. This plan records the sequence and acceptance boundaries; implementation proceeds only within the
-maintainer's applicable authorization. The original phase contracts and dated backend-remedy exclusions below remain
-in force, alongside the [approved decision history](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
+The maintainer's [October 16 S1 decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-implemented-pilot-scope-2026-10-16)
+limits this delivery to the implemented P0–P2 slice. P3–P11 remain later phase contracts, triggered only after stable
+repeated reviews of the implemented slice and an explicit future maintainer instruction. P11 additionally retains
+separate cutover, publication and retirement authorization. This plan records sequence and acceptance, not automatic
+continuation. Existing phase contracts and backend-remedy exclusions remain in force alongside the
+[approved decision history](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
+
+The [October 16 full-pilot review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16)
+qualifies earlier readiness statements with its scalar-display, visual-assertion and verification-environment
+findings. The maintainer authorizes their correction and existing-guidance reconciliation. That review owns current
+results and remaining limits; finite phase checks do not certify full pilot visual/behavioral parity.
+
+## Current SPA correction plan (2026-10-16)
+
+The maintainer's [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
+excludes production coexistence coordination and rejects retaining ordinary Event document submissions. The
+following correction is current P0–P2 work, not a future phase. Earlier completion and test receipts do not certify
+the changed transport. Source adoption is now complete and independently reviewed at its recorded scope;
+`DESIGN-EVENT-CREATION-TRANSPORT` closes for the current correction after reviewed source adoption and fresh scoped
+built-application evidence. The review retains failed broad runs and focused positive receipts separately.
+
+1. **Classify the implemented surface and preserve decisions.** Inspect every current Vue form/link and its actual
+   consumers. Separate ordinary migrated commands/navigation from true provider/capability arrivals, outputs,
+   initial hard loads and unmigrated destinations. Record E1 as exclusion without native repair; retain R1, S1,
+   T1, C1 and existing backend-remedy exclusions.
+2. **Adapt the existing backend owners.** Author the smallest generated JSON/multipart contracts for Event
+   creation/duplication, profile token/workflow commands and Event-rendered child deletion. Reuse existing
+   controller/DBAL operations in their existing order, with private admission and honest partial/unknown outcomes.
+   Do not add a transaction guarantee, automatic replay or general identity/token repair.
+3. **Adopt shared Vue owners in every matching consumer.** Use the existing command, confirmed navigation,
+   feedback, draft/file and destructive-action owners. Use Router for ordinary migrated links. Preserve rejected
+   input and chosen files, release completed work deliberately and retire private state with its actor/visit.
+4. **Retire displaced document-only implementation.** Remove unused Vue document adapters/helpers after all
+   current consumers move. Preserve explicit native/capability/provider/output compatibility boundaries; no
+   blanket interception of anchors or forms is appropriate.
+5. **Protect the actual application behavior.** Extend existing client, real-ORM and built-application suites at
+   their actual boundaries. Assert a retained document marker and absence of unexpected main-frame navigation,
+   generated requests, persisted effects, validation/input retention, pending/unknown no-replay and failed
+   follow-up recovery. Include warm entry, Back/Forward and private-state retirement.
+6. **Reconcile and independently review evidence.** Update this existing plan, playbook, coverage, review and
+   backlog against actual source and results. Regenerate the existing staged preview only after source freeze;
+   independently review actual consumers and complete output. No new checker, framework or CI gate is introduced.
+
+| Current surface | Intended visible consequence | Existing verification owner |
+|---|---|---|
+| Event create/duplicate, including chosen image | Save and reach the canonical Event in the same document; rejection/uncertainty retains appropriate draft/file state | Event foundation client, Event API persistence and Event organizer/workflow E2E suites |
+| Profile token issuance, preview/transfer, deactivation and account/guest deletion | Warm entry works; deliberate commands retain confirmation/privacy and use client completion where internal; true external logout handoff remains explicit | Identity client, profile-workflow persistence and profile-workflow/identity E2E suites |
+| Event-rendered child deletion and migrated parent/context links | Shared confirmation/command recovery and Router history without incidental document replacement | Shared entity presentation client, Event persistence and Event/header/pilot E2E suites |
+| Common command/draft/file/navigation behavior | Matching current consumers share one owner; no duplicate dispatch, stale private completion or lost confirmed result after failed refresh | Existing command/draft/navigation client suites plus the affected built workflows |
+
+The implementation now follows this sequence: Event/Packing use `useCreationCommand`; Settings, Overview and Event
+children use `useEntityRemoval`; private profile workflows use generated commands, read-only warm admission and the
+existing minimal identity-completion owner. Ordinary migrated parent, context, shell and workflow links use Router.
+Displaced document-only Vue command adapters/helpers are retired. Build, test compiler, complete client, selected
+ORM and configured built workflows now have scoped results in the review. The failed broad run, focused corrections
+and unchanged-drag repetitions remain separate evidence; this is no uniform full-run pass or full-application certification.
+
+This table retains the authorized implementation/coverage plan, not a claim of complete application acceptance. The
+[current review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16) owns actual execution
+and remaining limits. General backend completion defects remain excluded; document transport never supplies an
+atomicity guarantee in their place.
 
 ## Phase contracts
 
@@ -60,6 +117,9 @@ and authored `style.sass`, `accordion.sass`, `timezone-select.sass` and `help.sa
 `application.sass` is their single cascade-composition owner with existing pilot overrides, consumed by both the client
 entry and development renderer. No native global alert system, second command/state owner or generated CSS copy is
 introduced.
+The [October 16 R1 clarification](FRONTEND_FOUNDATION_DESIGN.md#direct-native-isolation-clarification-2026-10-16)
+confirms separately mutable Vue copies, with shared presentation/frontend logic required only among matching Vue
+consumers. Backend/domain/catalog ownership remains distinct from that native isolation boundary.
 
 The copied graph retains installed Bootstrap SCSS, currently 5.3.8, alongside the renderer's existing Bootstrap 5.3.3
 CDN layer. Preserve that effective cascade, stylesheet order, dark geometry and Help rules; this is not authorization

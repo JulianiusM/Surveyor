@@ -23,6 +23,7 @@ import {
 } from "./entityAdminController";
 import {getAccountPageEntry, hasAccountProfile} from './userController';
 import crypto from 'node:crypto';
+import path from 'node:path';
 // Business logic for the Event routes
 import Joi from 'joi';
 import type {EntityManager} from 'typeorm';
@@ -37,10 +38,16 @@ import * as eventService from '../modules/database/services/EventService';
 import * as adminService from '../modules/database/services/EntityAdminService';
 import * as userService from '../modules/database/services/UserService';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
+import activityController from './activityController';
+import driversController from './driversController';
+import {deletePackingList} from './packingController';
+import * as activityService from '../modules/database/services/ActivityService';
+import * as driverService from '../modules/database/services/DriverService';
+import * as packingService from '../modules/database/services/PackingService';
 import {archiveKey} from '../modules/archive/policy';
 import {ApiProblem} from '../modules/api/problem';
 import {APIError, ValidationError} from '../modules/lib/errors';
-import {performImageSwap, removeImage} from "../modules/lib/fileCommons";
+import {checkNewImage, performImageSwap, removeImage} from "../modules/lib/fileCommons";
 import {getInitialPerms, PERM} from '../modules/lib/permissions';
 import {
     buildDateTotals,
@@ -52,7 +59,7 @@ import {
     normalizeToArray,
     rewriteISOToZone
 } from "../modules/lib/util";
-import {can, evaluateEntities, evaluateSubject, getEntityPermissionQueryScope, saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import {can, evaluateEntities, evaluateSubject, getEntityPermissionQueryScope, isOwner, saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import {requireSessionProfileId} from '../modules/lib/session';
 import {safeFrontendReturn} from '../modules/lib/frontendIdentity';
 import {projectOverviewCard} from '../modules/overview/api';
@@ -294,9 +301,50 @@ async function createEntity(ownerId: string, eventData: WithRequired<Partial<Eve
     return await eventService.createEventTx(ownerId, eventData);
 }
 
-// No-op — nothing else created alongside the event at this step
-async function afterCreateItems(id: string, data: any) {
-    await saveDefaultPermsFromBody(ENTITIES.EVENT, id, data._body);
+// Native and versioned creation both persist defaults after the Event commit.
+async function afterCreateItems(id: string, data: any, inputFormat?: 'permissionKeys' | 'masks') {
+    await saveDefaultPermsFromBody(ENTITIES.EVENT, id, data._body, {inputFormat});
+}
+
+/**
+ * Adapt generated multipart values to the existing Event creation owners. Native
+ * creation and defaults remain separate commits; entering those owners makes a
+ * later failure uncertain, never proof that an Event or uploaded image is absent.
+ */
+export async function createEvent(body: components['schemas']['EventCreateInput'], file: Express.Multer.File | undefined,
+    session: SessionLike): Promise<components['schemas']['EventCreated']> {
+    requireEventCreation(session);
+    let parsed: ReturnType<typeof preprocessCreate>;
+    try {
+        // JSON booleans and nullable controls select the same native form values.
+        // The native parser remains the single owner of cross-field validation.
+        const nativeBody = {...body, maxParticipants: body.maxParticipants ?? '',
+            requireDietaryInfo: body.requireDietaryInfo ? 'on' : '', allowDietComment: body.allowDietComment ? 'on' : '',
+            allowRegDateUpdatesAfterDeadline: body.allowRegDateUpdatesAfterDeadline ? 'on' : '',
+            allowRegCancelationAfterDeadline: body.allowRegCancelationAfterDeadline ? 'on' : '',
+            allowRegDietUpdateAfterDeadline: body.allowRegDietUpdateAfterDeadline ? 'on' : ''};
+        delete (nativeBody as Partial<typeof nativeBody>).defaultPermissions;
+        checkNewImage(file);
+        parsed = preprocessCreate(nativeBody);
+    } catch (error) {
+        // No creation has started. This upload cannot be referenced by an Event.
+        if (file) removeImage(file.path);
+        throw error;
+    }
+
+    const data = {...parsed, ...(file ? {headerImg: path.relative(process.cwd(), file.path)} : {}),
+        _body: {defaultPerms: body.defaultPermissions}};
+    try {
+        // Preserve the inherited order and partial outcomes; no new encompassing
+        // transaction or later session/roster read changes the business boundary.
+        const id = await createEntity(session.profile!.id, data);
+        await afterCreateItems(id, data, 'masks');
+        return {id};
+    } catch {
+        // The client keeps its draft and must review before another deliberate
+        // creation. Retain an image that an already committed Event may reference.
+        throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
+    }
 }
 
 /**
@@ -1101,6 +1149,43 @@ export async function readEventThingsToDo(id: string, session: SessionLike, view
     const related = convertToSingleList({activityPlans, packingLists, driversLists});
     const decorated = await getArchiveView({type: 'event', id}, related, session);
     return {items: decorated.relatedEntities.map(card => projectOverviewCard(card, session, view === 'admin', true))};
+}
+
+/**
+ * Delete an owned child selected from the admitted Event host. Discovery scopes
+ * the command; the feature's existing deletion owner retains persistence/cascades.
+ * This does not route permanent deletion through archival or promise a new relink lock.
+ */
+export async function deleteEventChild(id: string, entityType: 'activity' | 'drivers' | 'packing', entityId: string,
+    session: SessionLike, view: 'detail' | 'admin' = 'detail'): Promise<components['schemas']['MutationResult']> {
+    const permitted = await readEventThingsToDo(id, session, view);
+    if (!permitted.items.some(card => card.type === entityType && card.id === entityId)) throw new ApiProblem('NOT_FOUND');
+
+    // A displayed child is neither deletion authority nor an enduring parent
+    // relationship. Resolve its current row and require actual profile ownership.
+    const child = entityType === 'activity' ? await activityService.getActivityPlanById(entityId)
+        : entityType === 'drivers' ? await driverService.getDriversListById(entityId)
+            : await packingService.getPackingListById(entityId);
+    if (!child || child.eventId !== id) throw new ApiProblem('NOT_FOUND');
+    if (!isOwner(session, child.ownerId)) throw new ApiProblem('FORBIDDEN');
+
+    try {
+        // Packing already owns its versioned deletion/file completion. The other
+        // existing hooks use only this admitted profile and their feature row;
+        // no Express lifecycle object is read or mutated by those deletion hooks.
+        if (entityType === 'packing') return await deletePackingList(entityId, session, id);
+        if (entityType === 'activity') await activityController.deleteEntity(child as import('../modules/database/entities/activity/ActivityPlan').ActivityPlan, session as Request['session']);
+        else await driversController.deleteEntity(child as import('../modules/database/entities/drivers/DriversList').DriversList, session as Request['session']);
+        if (child.headerImg) removeImage(child.headerImg);
+        return {changed: true};
+    } catch (error) {
+        // The Packing owner compares its parent under the existing root lock
+        // before deletion. That explicit stale-host result proves no write began.
+        if (error instanceof ApiProblem && error.code === 'ENTITY_CONTEXT_CHANGED') throw error;
+        // Neither an interrupted database completion nor failed delivery proves
+        // rollback. The SPA must not automatically repeat an irreversible command.
+        throw new ApiProblem('WORKFLOW_OUTCOME_UNKNOWN');
+    }
 }
 
 /** Scoped child lifecycle commands keep relationship admission outside the shared archive policy. */

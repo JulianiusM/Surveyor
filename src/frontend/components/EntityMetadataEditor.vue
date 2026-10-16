@@ -237,6 +237,16 @@ function review(): void {
     }
 }
 
+/** Present each comparison snapshot without changing its draft or wire value.
+ * False and zero are meaningful settings; only absent/empty scalars use the placeholder. */
+function comparisonValue(value: Values[string]): string {
+    // Keep empty presentation separate from feature-owned normalization: the
+    // review must still distinguish a disabled setting from an absent value.
+    if (value === null || value === undefined || value === '') return '—';
+    if (typeof value === 'boolean') return messages.value.t(value ? 'common.yes' : 'common.no');
+    return String(value);
+}
+
 /** Send one sparse conditional command and classify a missing response as an unknown outcome. */
 async function save(): Promise<void> {
     if (
@@ -365,15 +375,15 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
                     <div class="pilot-conflict-values">
                         <dl>
                             <dt>{{ messages.t('draft.original') }}</dt>
-                            <dd>{{ draft.baseline.values[field] || '—' }}</dd>
+                            <dd>{{ comparisonValue(draft.baseline.values[field]) }}</dd>
                         </dl>
                         <dl>
                             <dt>{{ messages.t('draft.mine') }}</dt>
-                            <dd>{{ draft.values[field] || '—' }}</dd>
+                            <dd>{{ comparisonValue(draft.values[field]) }}</dd>
                         </dl>
                         <dl>
                             <dt>{{ messages.t('draft.current') }}</dt>
-                            <dd>{{ draft.remote.data.values[field] || '—' }}</dd>
+                            <dd>{{ comparisonValue(draft.remote.data.values[field]) }}</dd>
                         </dl>
                     </div>
                     <fieldset

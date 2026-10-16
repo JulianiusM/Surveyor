@@ -449,7 +449,7 @@ describe('complete versioned packing management', () => {
         await expect(packing.setPackingSelfAssignment(id, first.id, true, actor(another))).rejects.toMatchObject({status: 409});
     });
 
-    it('preserves the native and versioned capacity inputs through actual MariaDB rounding and rollback', async () => {
+    it('preserves native and versioned capacity inputs through strict MariaDB rounding and rollback', async () => {
         const id = await fixture();
         const cases: {value: number | string | null; saved?: number | null}[] = [
             {value: '0', saved: 0}, {value: '-1', saved: -1}, {value: null, saved: null},
@@ -463,6 +463,8 @@ describe('complete versioned packing management', () => {
         ];
         // Two independent rows expose shared JS coercion mistakes as literal SQL outcomes.
         // Native persistence and the v1 transaction remain real; no SQL boundary is mocked.
+        // Blank/overflow rejection requires the supported strict-SQL test environment.
+        // The runtime forwards raw values and does not impose that server setting.
         for (const scenario of cases) {
             const before = (await packing.readPackingList(id, actor(owner))).data.items;
             const native = before[0];
@@ -945,13 +947,14 @@ describe('pilot mixed overview projection', () => {
         expect(contractValidator('OverviewRegion')(overview)).toBe(true);
         expect(overview.items.map(card => [card.type, card.id])).toEqual([['event', eventId]]);
         const children = await readOverview({collection: 'owner', region: 'main', eventId}, session);
-        // The selected event encloses the child collection as a complete card. Its native
-        // feature link and personal visibility survive without exposing event commands here.
+        // The selected Event encloses the child collection as a complete migrated
+        // card. Its destination and permitted owner actions use the same P2 projection
+        // as the main Overview; child membership and private placement stay independent.
         expect(contractValidator('OverviewRegion')(children)).toBe(true);
         expect(children.parent).toMatchObject({id: eventId, type: 'event', title: 'Container for packing',
-            description: 'A production-shaped integration workflow', url: `/event/${eventId}`,
+            description: 'A production-shaped integration workflow', url: `/frontend-pilot/event/${eventId}`,
             visibility: 'default', overviewHidden: false, children: {total: 1, matching: 1},
-            capabilities: {archive: false, restore: false, duplicate: false, remove: false}});
+            capabilities: {archive: true, restore: false, duplicate: true, remove: true}});
         expect(children).toMatchObject({totalChildren: 1, childPage: 1, hasPrevious: false, hasNext: false});
         await setOverviewVisibility('event', eventId, {visibility: 'shown'}, session);
         expect((await readOverview({collection: 'owner', region: 'main', eventId}, session)).parent)

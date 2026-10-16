@@ -1,7 +1,7 @@
 import {Router} from 'express';
 import type {NextFunction, Request, Response} from 'express';
 import {asyncHandler} from '../modules/lib/asyncHandler';
-import {captureApiActor, requireFrontendFormContext, sessionView} from '../modules/api/session';
+import {captureApiActor, sessionView} from '../modules/api/session';
 import {ApiProblem, classifyApiError, requestLocale, validatedProblemBody} from '../modules/api/problem';
 import {createTranslator, isPlainMessageKey, localeManifest} from '../modules/localization/translator';
 import {renderFrontendPilot} from '../modules/frontendPilotRenderer';
@@ -11,7 +11,6 @@ import * as userController from '../controller/userController';
 import {frontendIdentityFeedback, frontendIdentityPageEntry, readGuestLinkHandoff, safeFrontendReturn} from '../modules/lib/frontendIdentity';
 import type {FrontendIdentityOperation, IdentityCompletionReceipt} from '../types/IdentityTypes';
 import {persistSession} from '../modules/lib/session';
-import {readFrontendSessionMetadata} from '../modules/lib/frontendSession';
 import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
 import settings from '../modules/settings';
 import * as packingService from '../modules/database/services/PackingService';
@@ -84,19 +83,6 @@ async function bootstrap(req: Request): Promise<FrontendPilotBootstrap> {
     const flashes = readPilotFlash(req, 'frontend-pilot');
     const feedback = frontendIdentityFeedback.find(key => Array.isArray(flashes) && flashes.includes(key));
     const state: FrontendPilotBootstrap = {session, ...(feedback ? {identityFeedback: feedback} : {})};
-    // These are the existing controller's completion words, including its former-
-    // owner cleanup result. Do not infer that business outcome again in this adapter.
-    // The dedicated internal channel accepts only this admitted actor's receipt.
-    const workflowNotices = readPilotFlash(req, 'frontend-pilot-workflow');
-    if (Array.isArray(workflowNotices)) {
-        for (const notice of workflowNotices) {
-            if (typeof notice !== 'string') continue;
-            try {
-                const value = JSON.parse(notice) as {context?: unknown; message?: unknown};
-                if (value.context === session.context && typeof value.message === 'string') state.workflowNotice = value.message;
-            } catch { /* A malformed internal receipt cannot supply presentation or authority. */ }
-        }
-    }
     // Flash storage remains an untyped boundary. Accept only a known plain catalog
     // message, never submitted text or interpolation/options through this channel.
     const notices = readPilotFlash(req, 'frontend-pilot-notice');
@@ -198,9 +184,8 @@ router.get('/message', asyncHandler(async function renderMessagePilot(req, res) 
 }));
 
 // Event documents reuse this router's Session, shell and one-time notice owners.
-// Their controller projections and deliberate creation transport stay feature-owned.
-router.use('/event', createEventPilotRouter({bootstrap, applyPageEntry, flashNotice: flashPageNotice,
-    persistFeedback: persistCompletedWorkflowFeedback}));
+// Their controller projections and initial GET compatibility stay feature-owned.
+router.use('/event', createEventPilotRouter({bootstrap, applyPageEntry}));
 
 /** Preserve native account/guest admission before sending administration's progressive shell. */
 router.get(['/users/profile', '/users/profile/manage', '/users/profile/create'],
@@ -216,11 +201,9 @@ router.get(['/users/profile', '/users/profile/manage', '/users/profile/create'],
     }));
 
 /**
- * Keep inherited mutations on document delivery. Their native controller
- * operations can partially complete before throwing; a JSON command receipt must
- * not claim atomic completion or definite rejection on their behalf. The shared
- * backend defects remain separately backlogged under the parity-only decision.
- * The generated read-only preview separately retains its mounted entry draft.
+ * Keep the established initial-document token issuance for direct arrivals.
+ * Warm Vue navigation admits this page read-only, then issues a token through
+ * its explicit generated command. Neither path retries issuance automatically.
  */
 router.get('/users/profile/migrate/request', asyncHandler(async function renderMigrationToken(req, res) {
     const state = await admitProfileWorkflow(req, res, false);
@@ -241,19 +224,6 @@ router.get('/users/profile/migrate/show', asyncHandler(async function renderMigr
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
-/** Execute the existing explicitly confirmed transfer and deliver its ordinary document redirect. */
-router.post('/users/profile/migrate/execute', asyncHandler(async function executeProfileMigration(req, res) {
-    await requireFrontendFormContext(req, res);
-    if (!await admitProfileWorkflow(req, res, true)) return;
-
-    // Preserve the exact native operation, including existing token checks,
-    // previous-owner cleanup, mail ordering and receiver-profile selection.
-    const actor = await captureApiActor(req);
-    const message = await userController.migrateProfile(actor.auth!.user!.id, workflowField(req, 'token'));
-    flashWorkflowNotice(req, message);
-    await persistCompletedWorkflowFeedback(req);
-    res.redirect(nativeFrontendReturn(req, '/frontend-pilot/users/profile/manage'));
-}));
 
 /** Admit account-only deactivation or account/guest deletion with an initially empty confirmation. */
 router.get(['/users/profile/delete', '/users/account/delete'], asyncHandler(async function renderIdentityDeletion(req, res) {
@@ -264,56 +234,6 @@ router.get(['/users/profile/delete', '/users/account/delete'], asyncHandler(asyn
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
-/**
- * Adapt account-only deactivation and account/guest deletion to the native call
- * sequence, preserving its mail/session/provider and partial-failure outcomes.
- * Only a controller confirmation ValidationError redisplays submitted text at the
- * native 500 status; later operation failures retain their ordinary error result.
- */
-router.post(['/users/profile/delete', '/users/account/delete'], asyncHandler(async function submitIdentityDeletion(req, res) {
-    await requireFrontendFormContext(req, res);
-    const profile = req.path === '/users/profile/delete';
-    const state = await admitProfileWorkflow(req, res, profile);
-    if (!state) return;
-    const session = req.session;
-
-    try {
-        // Confirmations and destructive decisions belong to the existing owner.
-        // Keep the route sequence, including native final-profile failure, intact.
-        if (profile) {
-            const message = await userController.deactivateProfile({name: workflowField(req, 'name')}, session);
-            flashWorkflowNotice(req, message);
-            await userController.changeActiveProfile(session);
-            // Selection rotates the frontend context. Rebind only this transport
-            // receipt after success; a native selection failure keeps its earlier flash.
-            flashWorkflowNotice(req, message);
-            await persistCompletedWorkflowFeedback(req);
-            res.redirect(nativeFrontendReturn(req, '/frontend-pilot/users/profile/manage'));
-        } else {
-            const destination = await userController.deleteAccount({username: workflowField(req, 'username')}, session);
-            // The existing logout owner supplies provider/root navigation. Do not
-            // rewrite it, preflight it, or introduce another session transaction.
-            req.flash('success', 'Account successfully deleted');
-            await persistCompletedWorkflowFeedback(req);
-            res.redirect(destination);
-        }
-    } catch (error) {
-        // Native confirmation failures render the same form and submitted value
-        // at status 500. Only this known validation category reopens a form;
-        // a later partial-completion failure retains the ordinary error outcome.
-        if (!(error instanceof ValidationError)) {
-            // A native partial-failure continuation keeps its original error.
-            // Deliver any recorded notice without inserting a new rejection.
-            await persistCompletedWorkflowFeedback(req);
-            throw error;
-        }
-        state.profileWorkflow = profile
-            ? {kind: 'deactivate', value: workflowField(req, 'name'), error: 'profile.invalidDeactivation'}
-            : {kind: 'delete-account', value: workflowField(req, 'username'), error: 'profile.invalidAccountDeletion'};
-        res.status(500);
-        await renderFrontendPilot(res, req.originalUrl, state);
-    }
-}));
 
 /** Use existing account/guest admission for private documents without a second business rule. */
 async function admitProfileWorkflow(req: Request, res: Response, accountOnly: boolean): Promise<FrontendPilotBootstrap | null> {
@@ -324,20 +244,6 @@ async function admitProfileWorkflow(req: Request, res: Response, accountOnly: bo
     return await applyPageEntry(req, res, state, entry) ? null : state;
 }
 
-/** URL-encoded fields retain exact native whitespace while excluding duplicate/object parser values. */
-function workflowField(req: Request, field: 'name' | 'username' | 'token'): string {
-    return typeof req.body?.[field] === 'string' ? req.body[field] : '';
-}
-
-/** Keep the shared controller's completion wording scoped to its resulting identity. */
-function flashWorkflowNotice(req: Request, message: string): void {
-    // Preserve native controller/save ordering and use the resulting ordinary
-    // request session. Legacy admitted identities use the same read-only context
-    // projection as their document, without writing metadata during admission.
-    const context = readFrontendSessionMetadata(req.session, req.sessionID).context;
-    readPilotFlash(req, 'frontend-pilot-workflow');
-    req.flash('frontend-pilot-workflow', JSON.stringify({context, message}));
-}
 
 /**
  * Feedback delivery after a shared native operation cannot reject or interrupt

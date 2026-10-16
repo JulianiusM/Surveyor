@@ -1,5 +1,5 @@
 import {expect, test} from '@playwright/test';
-import type {APIRequestContext, Locator, Page, TestInfo} from '@playwright/test';
+import type {APIRequestContext, Locator, Page, Request, TestInfo} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import type {components} from '../../src/types/api/v1';
 import {createE2EPackingList} from '../factories/e2eCoreFactory';
@@ -39,8 +39,10 @@ async function measureHeader(surface: Locator) {
 }
 
 /** Compare the same entity and actor through both built application frontends. */
-async function compareHeader(page: Page, info: TestInfo, path: string, name: string): Promise<void> {
+async function compareHeader(page: Page, info: TestInfo, path: string, name: string,
+                             parent?: {path: string; title: string}): Promise<void> {
     let native: Awaited<ReturnType<typeof measureHeader>> | undefined;
+    const parentPath = parent?.path;
     for (const pilot of [false, true]) {
         await page.goto(`${pilot ? '/frontend-pilot' : ''}${path}?locale=en`, {waitUntil: 'domcontentloaded'});
         if (pilot) await waitForPilotHydration(page);
@@ -48,6 +50,12 @@ async function compareHeader(page: Page, info: TestInfo, path: string, name: str
         // Client initialization precedes its independent admitted detail read.
         // A skeleton's placeholder title is not the migrated header to compare.
         if (pilot) await expect(surface.locator('h1')).toHaveText(native!.title);
+        if (parentPath) {
+            // The admitted Event keeps its exact native route suffix, while the
+            // Vue consumer must target the migrated family rather than leave it.
+            await expect(surface.getByRole('link', {name: 'Go to event', exact: true}))
+                .toHaveAttribute('href', `${pilot ? '/frontend-pilot' : ''}${parentPath}`);
+        }
         const image = surface.locator('img');
         if (name.endsWith('image')) {
             await expect(image).toBeVisible();
@@ -61,8 +69,31 @@ async function compareHeader(page: Page, info: TestInfo, path: string, name: str
         const imagePath = info.outputPath(`${name}-${pilot ? 'pilot' : 'native'}.png`);
         await surface.screenshot({path: imagePath, animations: 'disabled'});
         await info.attach(`${name}-${pilot ? 'pilot' : 'native'}`, {path: imagePath, contentType: 'image/png'});
-        if (pilot) expect(measurement).toEqual(native);
-        else native = measurement;
+        if (pilot) {
+            // Normalize only the separately asserted parent route for this
+            // native comparison; every visible/style/geometry property stays exact.
+            const compared = parentPath ? {...measurement, controls: measurement.controls.map(function compareParent(control) {
+                return control.href === '/frontend-pilot' + parentPath ? {...control, href: parentPath} : control;
+            })} : measurement;
+            expect(compared).toEqual(native);
+            if (parent) {
+                await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'entity-header-parent';});
+                const documentRequests: string[] = [];
+                function observeNavigation(request: Request): void {
+                    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documentRequests.push(request.url());
+                }
+                page.on('request', observeNavigation);
+                try {
+                    await surface.getByRole('link', {name: 'Go to event', exact: true}).click();
+                    await expect(page).toHaveURL('/frontend-pilot' + parent.path);
+                    await expect(page.locator('.card-header h1')).toHaveText(parent.title);
+                    expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('entity-header-parent');
+                    expect(documentRequests).toEqual([]);
+                } finally {
+                    page.off('request', observeNavigation);
+                }
+            }
+        } else native = measurement;
     }
 }
 
@@ -76,6 +107,93 @@ async function uploadHeader(request: APIRequestContext, type: 'event' | 'packing
     const response = await request.put(root + '/header', {headers: {...proof, 'If-Match': baseline.settingsToken},
         multipart: {image: {name: 'header.png', mimeType: 'image/png', buffer: readFileSync('src/public/img/logo.png')}}});
     expect(response.status()).toBe(200);
+}
+
+/** A control can exist in the DOM while its dialog clips it. Scroll through the
+ * real body and verify the whole interactive target fits the current viewport. */
+async function expectReachable(control: Locator, page: Page): Promise<void> {
+    // Nearest-edge scrolling can leave a fractional border beneath a fixed
+    // dialog footer. Center the actual target, retaining strict full visibility.
+    await control.evaluate(function centerInScrollContainer(element) {
+        element.scrollIntoView({block: 'center', inline: 'nearest'});
+    });
+    await expect(control).toBeInViewport({ratio: 1});
+    const bounds = await control.boundingBox();
+    const viewport = page.viewportSize()!;
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(-1);
+    expect(bounds!.y).toBeGreaterThanOrEqual(-1);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width + 1);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height + 1);
+}
+
+/** Exercise the common header/settings keyboard owner through each real feature.
+ * German labels intentionally have no English native comparator; the separate
+ * English comparisons above protect the unchanged native presentation contract. */
+async function inspectGermanSettings(page: Page, info: TestInfo, path: string, kind: 'event' | 'packing'): Promise<void> {
+    await page.goto(`/frontend-pilot${path}?locale=de`, {waitUntil: 'domcontentloaded'});
+    await waitForPilotHydration(page);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+    const header = page.locator('.card-header').filter({has: page.locator('h1')}).first();
+    const opener = header.getByRole('button', {name: 'Entitätseinstellungen', exact: true});
+    await expectReachable(opener, page);
+    if (kind === 'packing') await expectReachable(header.getByRole('link', {name: 'Zur Veranstaltung', exact: true}), page);
+    await opener.focus();
+    await opener.press('Enter');
+    const dialog = page.getByRole('dialog', {name: 'Entitätseinstellungen', exact: true});
+    await expect(dialog).toBeVisible();
+    const tabs = dialog.locator('.entity-settings-nav').getByRole('tab');
+    const names = kind === 'event' ? ['Allgemein', 'Zugriff', 'Aktionen']
+        : ['Allgemein', 'Verknüpfte Veranstaltung', 'Zugriff', 'Aktionen'];
+    // Opening mounts the dialog before its independent admitted reads finish.
+    // Wait for the actual editable surface before testing its Tab sequence;
+    // the loading dialog legitimately contains only its dismissal controls.
+    await expect(tabs).toHaveText(names);
+    await expect(tabs.first()).toBeEnabled();
+    await expect(dialog.locator('[name="title"]')).toBeEnabled();
+
+    // The dialog starts on its container, then exposes a predictable keyboard
+    // sequence. Roving tabs activate their own panels without losing the trap.
+    await expect(dialog).toBeFocused();
+    const closes = dialog.getByRole('button', {name: 'Schließen', exact: true});
+    await page.keyboard.press('Tab');
+    await expect(closes.first()).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(tabs.first()).toBeFocused();
+    for (let index = 0; index < names.length; index++) {
+        const tab = tabs.nth(index);
+        await expect(tab).toBeFocused();
+        await expect(tab).toHaveAttribute('aria-selected', 'true');
+        await expectReachable(tab, page);
+        const panel = page.locator('#' + await tab.getAttribute('aria-controls'));
+        await expect(panel).toBeVisible();
+        await tab.press('ArrowRight');
+    }
+    await expect(tabs.first()).toBeFocused();
+
+    // Open the shared image disclosure without selecting a file or mutating
+    // data. Its field and upload button remain reachable in the scrolling body.
+    const summary = dialog.locator('[data-entity-section="image"] summary');
+    await summary.focus();
+    await summary.press('Enter');
+    const image = dialog.locator('[data-entity-section="image"]');
+    await expectReachable(image.locator('input[type="file"]'), page);
+    await expectReachable(image.getByRole('button', {name: 'Hochladen', exact: true}), page);
+    await expectReachable(dialog.getByRole('button', {name: 'Eigenschaften speichern', exact: true}), page);
+    await expectReachable(closes.last(), page);
+    const imagePath = info.outputPath(`${kind}-german-settings.png`);
+    await dialog.screenshot({path: imagePath, animations: 'disabled'});
+    await info.attach(`${kind}-german-settings`, {path: imagePath, contentType: 'image/png'});
+
+    // Tabbing beyond the last action must wrap inside the modal. Escape then
+    // returns focus to the actual feature's invoking header control.
+    await closes.last().focus();
+    await closes.last().press('Tab');
+    await expect(closes.first()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 }
 
 for (const width of [1280, 390]) {
@@ -93,13 +211,36 @@ for (const width of [1280, 390]) {
                 Object.assign(input.form, {event_id: event.id});
             }
             const packing = await createResourceViaForm(page.request, input);
-            await compareHeader(page, info, packing.path, linked ? 'linked-empty' : 'standalone-empty');
+            await compareHeader(page, info, packing.path, linked ? 'linked-empty' : 'standalone-empty', linked ? event : undefined);
             await uploadHeader(page.request, 'packing', packing.id);
-            await compareHeader(page, info, packing.path, linked ? 'linked-image' : 'standalone-image');
+            await compareHeader(page, info, packing.path, linked ? 'linked-image' : 'standalone-image', linked ? event : undefined);
         }
         await compareHeader(page, info, event.path, 'event-empty');
         await uploadHeader(page.request, 'event', event.id);
         await compareHeader(page, info, event.path, 'event-image');
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+    });
+}
+
+// Halving a 1280x900 layout viewport exercises the reflow pressure of 200% zoom.
+// This is a browser-content reflow approximation, not certification of browser
+// chrome zoom or assistive-technology behavior.
+for (const viewport of [{width: 390, height: 844, name: 'mobile'},
+    {width: 640, height: 450, name: '200% desktop reflow equivalent'}]) {
+    test(`keeps German shared headers and settings keyboard-reachable at ${viewport.name}`, async ({page}, info) => {
+        await page.setViewportSize({width: viewport.width, height: viewport.height});
+        const browserErrors: string[] = [];
+        page.on('pageerror', error => browserErrors.push(error.message));
+        const event = await createFrontendEventFixture(page.request);
+        const input = createE2EPackingList();
+        input.createPath += '?eventId=' + event.id;
+        Object.assign(input.form, {event_id: event.id});
+        const packing = await createResourceViaForm(page.request, input);
+
+        // Both consumers must adopt the same real focus, localization, settings
+        // and overflow owners; one standalone component fixture cannot prove it.
+        await inspectGermanSettings(page, info, event.path, 'event');
+        await inspectGermanSettings(page, info, packing.path, 'packing');
+        expect(browserErrors).toEqual([]);
     });
 }

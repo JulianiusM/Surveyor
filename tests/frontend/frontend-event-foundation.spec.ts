@@ -37,8 +37,8 @@ afterEach(async () => {
     document.body.innerHTML = '';
 });
 
-function json(value: unknown, token = '"metadata-original"'): Response {
-    return new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context, ETag: token}});
+function json(value: unknown, token = '"metadata-original"', status = 200): Response {
+    return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context, ETag: token}});
 }
 
 /** Mount actual controls/adapters/drafts while substituting HTTP delivery only.
@@ -143,28 +143,63 @@ describe('Event foundation production consumers', () => {
         expect(wrapper.find('[data-test="event-admitted"]').exists()).toBe(true);
     });
 
-    it('submits native document field names, raw optional capacity and named audience permissions without an API creation command', async () => {
-        const {wrapper, request} = await mounted(EventCreatePage, readCreation);
+    it('submits one admitted multipart creation with raw capacity, boolean flags, audience masks and its selected file', async () => {
+        const writes: components['schemas']['EventCreateInput'][] = [];
+        let deliveredImage: FormDataEntryValue | null = null;
+        let finishCreation: (() => void) | undefined;
+        const {wrapper, request, router} = await mounted(EventCreatePage, async request => {
+            if (request.method === 'GET') return readCreation(request);
+            expect(new URL(request.url).pathname).toBe('/api/v1/events');
+            expect(request.headers.get('X-Surveyor-Context')).toBe(session.context);
+            expect(request.headers.get('X-CSRF-Token')).toBe(session.csrfToken);
+            const body = await request.formData();
+            writes.push(JSON.parse(String(body.get('data'))));
+            deliveredImage = body.get('image');
+            return new Promise<Response>(resolve => {finishCreation = () => resolve(json({id: secondId}, undefined, 201));});
+        });
         await wrapper.get('[name="title"]').setValue('Summer camp');
         await wrapper.get('[name="startDate"]').setValue('2027-06-01');
         await wrapper.get('[name="endDate"]').setValue('2027-06-03');
         await wrapper.get('[name="maxParticipants"]').setValue('0');
         await wrapper.get('[name="allowRegDietUpdateAfterDeadline"]').setValue(true);
+        selectImage(wrapper.get<HTMLInputElement>('#event-header-image').element);
         const form = wrapper.get<HTMLFormElement>('#eventForm');
-        const submitted = new FormData(form.element);
-        expect(form.attributes('action')).toBe('/frontend-pilot/event/create');
-        expect(submitted.get('maxParticipants')).toBe('0');
-        expect(submitted.get('allowRegDietUpdateAfterDeadline')).toBe('on');
-        expect(submitted.get('deadlineTz')).toBe('UTC');
-        expect(submitted.getAll('defaultPerms[participant][]')).toEqual(['', 'ACCESS_ITEMS']);
-        expect(submitted.getAll('defaultPerms[guest][]')).toEqual(['']);
-        expect(submitted.get('_context')).toBe(session.context);
-        expect(submitted.get('_csrf')).toBe(session.csrfToken);
-        // The browser owns deliberate document submission; Vue never issues a
-        // non-idempotent JSON creation call or automatically retries the POST.
+        expect(form.attributes('action')).toBeUndefined();
+        expect(form.attributes('method')).toBeUndefined();
         await form.trigger('submit');
-        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+        await flushPromises();
+        expect(writes).toEqual([expect.objectContaining({title: 'Summer camp', maxParticipants: '0', deadlineTz: 'UTC',
+            allowRegDietUpdateAfterDeadline: true, requireDietaryInfo: false, defaultPermissions: defaults})]);
+        expect(deliveredImage).toBeInstanceOf(File);
+        expect((deliveredImage as File | null)?.name).toBe('selected.png');
         expect(form.get('button[type="submit"]').attributes('disabled')).toBeDefined();
+        // Repeated activation during delivery cannot create a second resource.
+        await form.trigger('submit'); await flushPromises();
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(1);
+        finishCreation!(); await flushPromises();
+        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/event/${secondId}`);
+    });
+
+    it('retains the entered Event and FileList after unknown delivery without replay during read recovery', async () => {
+        const {wrapper, request, context} = await mounted(EventCreatePage, async request => {
+            if (request.method === 'POST') throw new Error('Reply lost after creation dispatch');
+            return readCreation(request);
+        });
+        await wrapper.get('[name="title"]').setValue('Retained event');
+        await wrapper.get('[name="startDate"]').setValue('2027-06-01');
+        await wrapper.get('[name="endDate"]').setValue('2027-06-03');
+        const chooser = wrapper.get<HTMLInputElement>('#event-header-image').element;
+        const selected = selectImage(chooser);
+        await wrapper.get('#eventForm').trigger('submit'); await flushPromises();
+        expect(wrapper.text()).toContain('Creation could not be confirmed.');
+        expect(wrapper.get<HTMLInputElement>('[name="title"]').element.value).toBe('Retained event');
+        expect(chooser.files?.[0]).toBe(selected);
+        await context.queryClient.invalidateQueries({queryKey: eventKeys.creation(session.context)});
+        await flushPromises();
+        await wrapper.get('#eventForm').trigger('submit'); await flushPromises();
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(1);
+        expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined();
+        expect(chooser.files?.[0]).toBe(selected);
     });
 
     it('retains an entered duplicate and selected file after canceled departure, then releases both on accepted warm navigation', async () => {
@@ -243,6 +278,98 @@ describe('Event foundation production consumers', () => {
         await wrapper.get('#event-metadata-form').trigger('submit'); await flushPromises();
         expect(patches[1]).toEqual({deadlineTz: 'Europe/London', bindingDeadline: '2027-05-01T12:30:45'});
     });
+
+    it.each(['stale read', 'lost save response'] as const)(
+        'preserves false, zero and empty comparison values through Event %s review and translation',
+        async function reviewsEventScalarValues(outcome) {
+            const original: components['schemas']['EventMetadata'] = {id: eventId,
+                values: {title: 'Original', description: null, location: '', maxParticipants: 0,
+                    requireDietaryInfo: false, allowDietComment: true},
+                editableFields: ['title', 'description', 'location', 'maxParticipants', 'requireDietaryInfo', 'allowDietComment'],
+                editToken: '"edit-original"'};
+            let current = original;
+            const patches: components['schemas']['EventMetadataPatch'][] = [];
+            const {wrapper, context, request} = await mounted(EventMetadataFields, deliverMetadata,
+                '/frontend-pilot/event/create', {eventId});
+
+            /** Exercise the generated Event adapter while retaining wire scalar meaning.
+             * Only delivery is substituted; the shared editor owns reads, drafts and review. */
+            async function deliverMetadata(request: Request): Promise<Response> {
+                if (request.method === 'PATCH') {
+                    const patch = await request.json() as components['schemas']['EventMetadataPatch'];
+                    patches.push(patch);
+                    if (outcome === 'lost save response' && patches.length === 1) throw new TypeError('Response was lost');
+
+                    // The fixture returns a valid saved projection, just as the API
+                    // decodes raw numeric input before the next authoritative read.
+                    current = {...current, values: {...current.values, ...patch,
+                        maxParticipants: Number(patch.maxParticipants)}, editToken: '"edit-saved"'};
+                }
+                return json(current, current.editToken);
+            }
+
+            // Keep a nullable text field empty and edit both checkbox directions.
+            // Zero in the admitted snapshots is a value, even though a new entered
+            // property capacity follows Event's existing positive-input constraint.
+            await wrapper.get('[name="title"]').setValue('Local');
+            await wrapper.get('[name="description"]').setValue('');
+            await wrapper.get('[name="maxParticipants"]').setValue('1');
+            await wrapper.get('[name="requireDietaryInfo"]').setValue(true);
+            await wrapper.get('[name="allowDietComment"]').setValue(false);
+            current = {...original, values: {...original.values, title: 'Remote'}, editToken: '"edit-remote"'};
+
+            if (outcome === 'lost save response') {
+                await wrapper.get('#event-metadata-form').trigger('submit');
+                await flushPromises();
+                expect(patches).toHaveLength(1);
+                expect(wrapper.findAll('.pilot-conflict-values')).toHaveLength(0);
+
+                // Explicit recovery reads the latest values. It cannot replay the
+                // uncertain PATCH or silently adopt its new comparison baseline.
+                const refresh = wrapper.findAll('button').find(button => button.text() === 'Refresh')!;
+                await refresh.trigger('click');
+            } else {
+                await context.queryClient.invalidateQueries({queryKey: eventKeys.metadata(session.context, eventId)});
+            }
+            await flushPromises();
+
+            /** Read the visible Original/Mine/Current columns through their semantic
+             * definition lists rather than exposing the component's private formatter. */
+            function comparisonRows(): string[][] {
+                const rows: string[][] = [];
+                for (const row of wrapper.findAll('.pilot-conflict-values')) {
+                    rows.push(row.findAll('dd').map(cell => cell.text()));
+                }
+                return rows;
+            }
+
+            expect(comparisonRows()).toEqual([
+                ['Original', 'Local', 'Remote'], ['—', '—', '—'], ['—', '—', '—'],
+                ['0', '1', '0'], ['No', 'Yes', 'No'], ['Yes', 'No', 'Yes'],
+            ]);
+            const comparison = wrapper.get('.pilot-conflict-values').element;
+            const readsBeforeTranslation = request.mock.calls.length;
+            context.locale.value = 'de';
+            await flushPromises();
+            expect(comparisonRows()).toEqual([
+                ['Original', 'Local', 'Remote'], ['—', '—', '—'], ['—', '—', '—'],
+                ['0', '1', '0'], ['Nein', 'Ja', 'Nein'], ['Ja', 'Nein', 'Ja'],
+            ]);
+            expect(wrapper.get('.pilot-conflict-values').element).toBe(comparison);
+            expect(request.mock.calls).toHaveLength(readsBeforeTranslation);
+
+            // Localized display never changes machine values or acknowledges
+            // uncertainty. A deliberate review and Save retain sparse raw input.
+            await wrapper.get('[name="resolve-title"][value="mine"]').setValue();
+            const review = wrapper.findAll('button').find(button => button.text() === 'Änderungen prüfen')!;
+            await review.trigger('click');
+            await wrapper.get('#event-metadata-form').trigger('submit');
+            await flushPromises();
+            const patch = {title: 'Local', maxParticipants: '1', requireDietaryInfo: true, allowDietComment: false};
+            expect(patches).toEqual(outcome === 'lost save response' ? [patch, patch] : [patch]);
+            expect(wrapper.findAll('.pilot-conflict-values')).toHaveLength(0);
+        },
+    );
 
     it('retains a valid persisted timezone alias and searches the complete inventory while bounding rendered choices', async () => {
         const host = defineComponent({components: {TimezonePicker}, setup: () => ({zone: ref('US/Eastern')}),

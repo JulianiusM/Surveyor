@@ -5,11 +5,13 @@ import {flushPromises, mount} from '@vue/test-utils';
 import {resolve} from 'node:path';
 import * as pug from 'pug';
 import I18NextVue from 'i18next-vue';
+import {VueQueryPlugin} from '@tanstack/vue-query';
 import {createPilotApp, initializePilotApp} from '../../src/frontend/app/createApp';
 import {render} from '../../src/frontend/app/entry-server';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import {pilotContextKey} from '../../src/frontend/app/context';
-import {useDocumentForm, useDraftProtection} from '../../src/frontend/composables/command';
+import {useDraftProtection} from '../../src/frontend/composables/command';
+import ProfileWorkflowPage from '../../src/frontend/features/identity/ProfileWorkflowPage.vue';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendPilotBootstrap, FrontendProfileWorkflow} from '../../src/types/FrontendPilotTypes';
 
@@ -36,12 +38,23 @@ afterEach(() => {
     window.history.replaceState({}, '', '/');
 });
 
-/** Use the actual route table, SSR bootstrap, hydration, shell and document-submit owner.
- * This boundary has no server/DB substitute: document POST delivery remains a real-browser concern. */
+/** Use actual routes, SSR bootstrap, hydration, shell and SPA command owners.
+ * Only HTTP is substituted; persistence and real browser delivery belong to application E2E. */
 async function mounted(workflow: FrontendProfileWorkflow | undefined,
                        path = '/frontend-pilot/users/profile/migrate/show',
                        read: typeof fetch = rejectUnexpectedRequest) {
-    const request = vi.fn(read);
+    const request = vi.fn(function deliverWorkflowRequest(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+        const received = input as Request;
+        const pathname = new URL(received.url).pathname;
+        // These shared reads contain no capability or private preview. Keep their
+        // actor header tied to the captured request after an explicit retirement.
+        if (pathname === '/api/v1/session' && read === rejectUnexpectedRequest) return Promise.resolve(json(session));
+        if (pathname === '/api/v1/profiles/workflow-entry')
+            return Promise.resolve(json({entry: {kind: 'render'}}, 200,
+                received.headers.get('X-Surveyor-Context') ?? session.context));
+        if (pathname === '/api/v1/profiles/entry') return Promise.resolve(json({kind: 'render'}));
+        return read(input, init);
+    });
     vi.stubGlobal('fetch', request);
     const bootstrap: FrontendPilotBootstrap = {session, ...(workflow ? {profileWorkflow: workflow} : {})};
     const rendered = await render(path, bootstrap);
@@ -59,6 +72,27 @@ async function mounted(workflow: FrontendProfileWorkflow | undefined,
 
 function rejectUnexpectedRequest(): Promise<Response> {
     return Promise.reject(new Error('No unexpected workflow read or mutation may be dispatched.'));
+}
+
+/** Match authored response shapes while preserving actual generated validation. */
+function json(value: unknown, status = 200, responseContext = session.context): Response {
+    return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
+        'X-Surveyor-Context': responseContext}});
+}
+
+function rejection(status: 400 | 500): Response {
+    return new Response(JSON.stringify({type: 'about:blank', title: 'Workflow rejected', status,
+        code: status === 400 ? 'VALIDATION_FAILED' : 'WORKFLOW_OUTCOME_UNKNOWN',
+        messageKey: status === 400 ? 'api:errors.VALIDATION_FAILED' : 'api:errors.WORKFLOW_OUTCOME_UNKNOWN',
+        params: {}, detail: 'A workflow result.', requestId: 'workflow-response'}),
+    {status, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+}
+
+/** Query may hold admission, never token input, issued output or private preview. */
+function expectPrivateCache(context: ReturnType<typeof createPilotApp>['context']): void {
+    const cached = JSON.stringify(context.queryClient.getQueryCache().getAll().map(query => ({key: query.queryKey, data: query.state.data})));
+    for (const secret of [token, 'validated-response-token', preview.profile.name, 'owner@example.test'])
+        expect(cached).not.toContain(secret);
 }
 
 /** Substitute only the HTTP boundary; generated request/response validation remains actual. */
@@ -95,20 +129,18 @@ async function enterPreview(host: HTMLElement): Promise<void> {
     await flushPromises();
 }
 
-/** A sibling draft shares the same production root owner as the real document helper.
- * Only the rendered fixture is synthetic; navigation, identity and unload guards are actual. */
-async function guardedForm() {
+/** Mount the actual workflow alongside another draft under the production root
+ * owner. This protects cross-form consent through a real destructive action. */
+async function guardedWorkflow() {
     const busy = ref(false);
     const dirty = ref(false);
     const uncertain = ref(false);
-    window.history.replaceState({}, '', '/frontend-pilot/home');
-    const application = createPilotApp({session}, true);
+    const request = vi.fn(async function rejectConfirmedWorkflow() { return rejection(400); });
+    vi.stubGlobal('fetch', request);
+    window.history.replaceState({}, '', '/frontend-pilot/users/profile/delete');
+    const application = createPilotApp({session, initialUrl: '/frontend-pilot/users/profile/delete', profileWorkflow: {kind: 'deactivate', value: ''}}, true);
     await application.router.isReady();
     application.context.hydrated.value = true;
-    const Subject = defineComponent({
-        setup() { return {form: useDocumentForm({dirty: () => false})}; },
-        template: '<form method="post" action="/frontend-pilot/users/profile/delete" @submit="form.submit"><input name="name" value="kept input" /><button type="submit">Submit</button></form>',
-    });
     const Sibling = defineComponent({
         setup() {
             useDraftProtection({dirty: () => dirty.value, busy: () => busy.value, uncertain: () => uncertain.value,
@@ -118,18 +150,20 @@ async function guardedForm() {
         template: '<p>Other mounted work</p>',
     });
     const Owner = defineComponent({
-        components: {Subject, Sibling},
+        components: {ProfileWorkflowPage, Sibling},
         setup() { useDraftProtection({dirty: () => false, unknownMessage: 'draft.leaveUnknown'}); return {}; },
-        template: '<Subject /><Sibling />',
+        template: '<ProfileWorkflowPage /><Sibling />',
     });
     const wrapper = mount(Owner, {attachTo: document.body, global: {plugins: [application.router,
+        [VueQueryPlugin, {queryClient: application.context.queryClient}],
         [I18NextVue, {i18next: application.context.i18next}]],
         provide: {[pilotContextKey as symbol]: application.context}}});
     cleanups.push(function disposeGuards() { wrapper.unmount(); application.context.start()(); });
-    return {wrapper, context: application.context, busy, dirty, uncertain};
+    await flushPromises();
+    return {wrapper, request, context: application.context, busy, dirty, uncertain};
 }
 
-describe('document-owned profile workflows', () => {
+describe('SPA profile workflows', () => {
     it.each([
         {kind: 'entry', path: 'profile/migrate/show', field: 'token'},
         {kind: 'deactivate', path: 'profile/delete', field: 'name'},
@@ -141,7 +175,7 @@ describe('document-owned profile workflows', () => {
             : {kind: candidate.kind, value: ''}, `/frontend-pilot/users/${candidate.path}`,
         async function readWorkflow(request) {
             if (new URL((request as Request).url).pathname === '/api/v1/session') return bootstrap;
-            return previewResponse(preview);
+            return candidate.kind === 'entry' ? previewResponse(preview) : rejection(400);
         });
         const form = host.querySelector<HTMLFormElement>('#forgotForm')!;
         const input = form.querySelector<HTMLInputElement>('#' + candidate.field)!;
@@ -171,10 +205,10 @@ describe('document-owned profile workflows', () => {
         expect(request).toHaveBeenCalledOnce();
 
         // Reopening admission never submits. Only this second deliberate action
-        // starts a preview GET or permits the browser-owned POST with exact fields.
-        expect(submit(form).defaultPrevented).toBe(candidate.kind === 'entry');
+        // starts the generated body-only preview or destructive JSON command.
+        expect(submit(form).defaultPrevented).toBe(true);
         await flushPromises();
-        expect(request).toHaveBeenCalledTimes(candidate.kind === 'entry' ? 2 : 1);
+        expect(request).toHaveBeenCalledTimes(2);
     });
 
     it.each([
@@ -198,49 +232,51 @@ describe('document-owned profile workflows', () => {
         expect(Array.from(actual.querySelectorAll('label'), text)).toEqual(Array.from(native.querySelectorAll('label'), text));
         expect(Array.from(actual.querySelectorAll('form button'), text)).toEqual(Array.from(native.querySelectorAll('form button'), text));
         expect(request).toHaveBeenCalledTimes(withPreview ? 1 : 0);
-        expect(context.queryClient.getQueryCache().getAll()).toHaveLength(0);
+        expectPrivateCache(context);
         for (const anchor of host.querySelectorAll<HTMLAnchorElement>('a[href]')) expect(anchor.href).not.toContain(token);
         expect(actual.querySelector('profile')).toBeNull();
         if (withPreview) {
             const form = actual.querySelector('form')!;
             expect(new FormData(form).get('token')).toBe(token);
-            expect(form.action).toContain('/frontend-pilot/users/profile/migrate/execute?locale=en');
+            expect(form.hasAttribute('action')).toBe(false);
             expect(actual.querySelector('input[name="token"]')?.hasAttribute('hidden')).toBe(true);
         }
     });
 
-    it('keeps wrong confirmation text through native redisplay and locale changes', async function retainsConfirmation() {
-        const {host, context} = await mounted({kind: 'delete-account', value: 'Wrong username',
-            error: 'profile.invalidAccountDeletion'}, '/frontend-pilot/users/account/delete');
-        const input = host.querySelector<HTMLInputElement>('#username')!;
-        expect(input.value).toBe('Wrong username');
-        expect(host.textContent).toContain('Invalid account deletion verification');
-        context.locale.value = 'de';
-        await flushPromises();
-        expect(host.querySelector('#username')).toBe(input);
-        expect(input.value).toBe('Wrong username');
-        expect(host.querySelector('form[action*="/account/delete"]')?.getAttribute('action')).toContain('locale=de');
-    });
-
-    it('expires native confirmation feedback without reviving it on locale change or clearing the input', async function expiresConfirmationFeedback() {
+    it('expires actual confirmation rejection without reviving it on translation or clearing input', async function expiresConfirmationFeedback() {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
-        const {host, context} = await mounted({kind: 'deactivate', value: 'Incorrect confirmation',
-            error: 'profile.invalidDeactivation'}, '/frontend-pilot/users/profile/delete');
-        expect(host.querySelector('.alert-danger')).not.toBeNull();
+        const {host, context} = await mounted({kind: 'deactivate', value: ''}, '/frontend-pilot/users/profile/delete',
+            async function rejectConfirmation() { return rejection(400); });
+        const input = host.querySelector<HTMLInputElement>('#name')!;
+        input.value = 'Incorrect confirmation';
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        await nextTick();
+        submit(host.querySelector<HTMLFormElement>('#forgotForm')!);
+        await flushPromises();
+        expect(host.textContent).toContain(context.messages.value.t('profile.invalidDeactivation'));
         await vi.advanceTimersByTimeAsync(10_001);
         await flushPromises();
         expect(host.querySelector('.alert-danger')).toBeNull();
         context.locale.value = 'de';
         await flushPromises();
         expect(host.querySelector('.alert-danger')).toBeNull();
-        expect(host.querySelector<HTMLInputElement>('#name')!.value).toBe('Incorrect confirmation');
+        expect(host.querySelector('#name')).toBe(input);
+        expect(input.value).toBe('Incorrect confirmation');
     });
 
     it('keeps entry text through secret-free preview Back/Forward and uses only the validated token for execution', async function retainsPreviewHistory() {
+        let executedToken: string | undefined;
         const path = '/frontend-pilot/users/profile/migrate/show?locale=en&keep=hello%20world';
         const {host, router, context, request} = await mounted({kind: 'entry'}, path, async function readPreview(input) {
             const received = input as Request;
+            if (new URL(received.url).pathname === '/api/v1/profiles/migration/execute') {
+                expect(received.method).toBe('POST');
+                executedToken = (await received.json()).token;
+                expect(received.headers.get('X-Surveyor-Context')).toBe(session.context);
+                expect(received.headers.get('X-CSRF-Token')).toBe(session.csrfToken);
+                return rejection(400);
+            }
             expect(new URL(received.url).pathname).toBe('/api/v1/profiles/migration/preview');
             expect(received.method).toBe('POST');
             expect(await received.json()).toEqual({token});
@@ -266,7 +302,16 @@ describe('document-owned profile workflows', () => {
         await flushPromises();
         expect(host.textContent).toContain('Transferred <profile>');
         expect(request).toHaveBeenCalledTimes(1);
-        expect(context.queryClient.getQueryCache().getAll()).toHaveLength(0);
+        expectPrivateCache(context);
+        // Confirmation submits the validated preview bearer, not the entry draft.
+        const confirm = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirm);
+        submit(host.querySelector<HTMLFormElement>('#forgotForm')!);
+        await flushPromises();
+        expect(executedToken).toBe('validated-response-token');
+        expect(confirm).not.toHaveBeenCalled();
+        expect(request).toHaveBeenCalledTimes(2);
+        expectPrivateCache(context);
     });
 
     it('retains entry text through a failed preview read and retries only on explicit request', async function recoversPreviewRead() {
@@ -350,46 +395,75 @@ describe('document-owned profile workflows', () => {
         await flushPromises();
         expect(host.querySelector<HTMLInputElement>('#token')!.value).toBe(token);
         expect(context.pageTitle.value).toBe('Profil übertragen | Surveyor');
-        expect(request).toHaveBeenCalledTimes(1);
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(1);
+        expectPrivateCache(context);
     });
 
-    it('submits once without fetch, preserves exact successful inputs and fences other navigation', async function submitsDocumentOnce() {
-        const {host, context, router, request} = await mounted({kind: 'deactivate', value: ''}, '/frontend-pilot/users/profile/delete');
-        const input = host.querySelector<HTMLInputElement>('#name')!;
-        input.value = '  native token text  ';
+    it.each([
+        {kind: 'deactivate', path: 'profile/delete', field: 'name', method: 'POST', endpoint: '/profiles/current/deactivate'},
+        {kind: 'delete-account', path: 'account/delete', field: 'username', method: 'DELETE', endpoint: '/account'},
+    ] as const)('submits one captured $kind command while pending work fences navigation', async function submitsWorkflowOnce(candidate) {
+        let finish!: (response: Response) => void;
+        const held = new Promise<Response>(resolve => { finish = resolve; });
+        const {host, context, router, request} = await mounted({kind: candidate.kind, value: ''},
+            '/frontend-pilot/users/' + candidate.path, function holdWorkflow() { return held; });
+        const form = host.querySelector<HTMLFormElement>('#forgotForm')!;
+        const input = form.querySelector<HTMLInputElement>('#' + candidate.field)!;
+        input.value = '  native confirmation text  ';
         input.dispatchEvent(new Event('input', {bubbles: true}));
         await nextTick();
-        const form = host.querySelector<HTMLFormElement>('#forgotForm')!;
         const confirm = vi.fn(() => false);
         vi.stubGlobal('confirm', confirm);
-        expect(submit(form).defaultPrevented).toBe(false);
-        await nextTick();
+        expect(submit(form).defaultPrevented).toBe(true);
+        await flushPromises();
 
-        expect(new FormData(form).get('name')).toBe('  native token text  ');
-        expect(input.disabled).toBe(false);
+        // The real feature accepts its own submitted input without discard consent.
+        // Its captured command still protects every competing page departure.
+        expect(request).toHaveBeenCalledOnce();
+        const received = request.mock.calls[0][0] as Request;
+        expect(received.method).toBe(candidate.method);
+        expect(new URL(received.url).pathname).toBe('/api/v1' + candidate.endpoint);
+        expect(await received.clone().json()).toEqual({[candidate.field]: input.value});
+        expect(received.headers.get('X-Surveyor-Context')).toBe(session.context);
+        expect(received.headers.get('X-CSRF-Token')).toBe(session.csrfToken);
+        expect(received.headers.get('X-Surveyor-Locale')).toBe('en');
+        expect(received.headers.get('X-Surveyor-Api-Compatibility')).toBe(session.deployment.apiCompatibility);
         expect(form.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
-        expect(new FormData(form).get('_context')).toBe(session.context);
-        expect(new FormData(form).get('_csrf')).toBe(session.csrfToken);
+        expect(input.disabled).toBe(false);
         expect(submit(form).defaultPrevented).toBe(true);
         expect(context.mayChangeIdentity()).toBe(false);
+        expect(context.updates.requestRecoveryReload()).toBe(false);
         await router.push('/frontend-pilot/home');
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/profile/delete');
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/' + candidate.path);
         const unload = new Event('beforeunload', {cancelable: true});
         window.dispatchEvent(unload);
-        expect(unload.defaultPrevented).toBe(false);
+        expect(unload.defaultPrevented).toBe(true);
         expect(confirm).not.toHaveBeenCalled();
-        expect(request).not.toHaveBeenCalled();
+        expect(request).toHaveBeenCalledOnce();
+
+        finish(rejection(400));
+        await flushPromises();
+        expect(input.value).toBe('  native confirmation text  ');
+        expect(form.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(false);
+        expectPrivateCache(context);
     });
 
-    it('does not post or reconstruct a private projection on a warm route visit', async function requiresExplicitDocument() {
-        const {host, router, request} = await mounted(undefined, '/frontend-pilot/home');
-        await router.push('/frontend-pilot/users/profile/migrate/request');
+    it.each([
+        {path: 'profile/migrate/show', field: 'token'},
+        {path: 'profile/delete', field: 'name'},
+        {path: 'account/delete', field: 'username'},
+    ])('admits the warm $path form through a read without a Refresh dead end or command', async function admitsWarmWorkflow(candidate) {
+        const {host, router, request, context} = await mounted(undefined, '/frontend-pilot/home');
+        await router.push('/frontend-pilot/users/' + candidate.path);
         await flushPromises();
-        expect(host.querySelector('form#forgotForm')).toBeNull();
-        const reload = host.querySelector<HTMLAnchorElement>('main a[href="/frontend-pilot/users/profile/migrate/request"]');
-        expect(reload).not.toBeNull();
-        expect(host.textContent).toContain('Open this page again to continue.');
-        expect(request).not.toHaveBeenCalled();
+        expect(host.querySelector('form#forgotForm')).not.toBeNull();
+        expect(host.querySelector<HTMLInputElement>('#' + candidate.field)!.value).toBe('');
+        expect(host.textContent).not.toContain('Open this page again to continue.');
+        expect(request).toHaveBeenCalledOnce();
+        const received = request.mock.calls[0][0] as Request;
+        expect(received.method).toBe('GET');
+        expect(new URL(received.url).pathname).toBe('/api/v1/profiles/workflow-entry');
+        expectPrivateCache(context);
     });
 
     it('retires private token/confirmation controls when the admitted actor is lost', async function retiresActorProjection() {
@@ -401,8 +475,7 @@ describe('document-owned profile workflows', () => {
         context.epoch.value++;
         await flushPromises();
         expect(host.textContent).not.toContain('Transferred <profile>');
-        expect(host.querySelector('input[name="token"]')).toBeNull();
-        expect(host.querySelector('form#forgotForm')).toBeNull();
+        expect(host.querySelector<HTMLInputElement>('input[name="token"]')?.value ?? '').toBe('');
     });
 
     it('never publishes a preview read completed after the admitted actor is retired', async function rejectsLatePreview() {
@@ -418,8 +491,8 @@ describe('document-owned profile workflows', () => {
         finish(previewResponse(preview));
         await flushPromises();
         expect(host.textContent).not.toContain('Transferred <profile>');
-        expect(host.querySelector('form#forgotForm')).toBeNull();
-        expect(context.queryClient.getQueryCache().getAll()).toHaveLength(0);
+        expect(host.querySelector<HTMLInputElement>('input[name="token"]')?.value ?? '').toBe('');
+        expectPrivateCache(context);
     });
 
     it('rejects default-canceled and invalid submissions without releasing the input', async function rejectsCanceledSubmission() {
@@ -450,11 +523,145 @@ describe('document-owned profile workflows', () => {
         ]) await expect(decodeBootstrap({session, profileWorkflow})).rejects.toThrow('Invalid pilot bootstrap field: profileWorkflow');
     });
 
-    it('keeps sibling pending work and declined dirty/unknown decisions ahead of a document POST', async function protectsSiblingWork() {
-        const {wrapper, busy, dirty, uncertain} = await guardedForm();
+    it.each([
+        {kind: 'deactivate', path: 'profile/delete', field: 'name', key: 'profile.invalidDeactivation'},
+        {kind: 'delete-account', path: 'account/delete', field: 'username', key: 'profile.invalidAccountDeletion'},
+    ] as const)('retains rejected $kind confirmation in the same input through translation', async function retainsRejectedCommand(candidate) {
+        const {host, context, request} = await mounted({kind: candidate.kind, value: ''},
+            '/frontend-pilot/users/' + candidate.path, async function rejectConfirmation() { return rejection(400); });
+        const input = host.querySelector<HTMLInputElement>('#' + candidate.field)!;
+        input.value = 'Wrong confirmation';
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        await nextTick();
+        submit(host.querySelector<HTMLFormElement>('#forgotForm')!);
+        await flushPromises();
+        expect(host.textContent).toContain(context.messages.value.t(candidate.key));
+        expect(input.value).toBe('Wrong confirmation');
+        expect(host.querySelector<HTMLButtonElement>('main button[type="submit"]')!.disabled).toBe(false);
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(host.querySelector('#' + candidate.field)).toBe(input);
+        expect(input.value).toBe('Wrong confirmation');
+        expect(host.textContent).toContain(context.messages.value.t(candidate.key));
+        expect(request.mock.calls.filter(([input]) => (input as Request).method !== 'GET')).toHaveLength(1);
+    });
+
+    it.each([false, true])('keeps an uncertain command locked through recovery with bootstrap failure=%s', async function retainsUnknownCommand(bootstrapFailure) {
+        const {host, context, request} = await mounted({kind: 'deactivate', value: ''}, '/frontend-pilot/users/profile/delete',
+            async function readUnknownWorkflow(input) {
+                if (new URL((input as Request).url).pathname === '/api/v1/session') {
+                    if (bootstrapFailure) throw new TypeError('The authoritative session read failed.');
+                    return json(session);
+                }
+                return rejection(500);
+            });
+        const input = host.querySelector<HTMLInputElement>('#name')!;
+        input.value = 'Uncertain confirmation';
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        await nextTick();
+        const form = host.querySelector<HTMLFormElement>('#forgotForm')!;
+        submit(form);
+        await flushPromises();
+        expect(host.textContent).toContain(context.messages.value.t('state.unknownOutcome'));
+        expect(input.value).toBe('Uncertain confirmation');
+        expect(form.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+        submit(form);
+        const confirm = vi.fn(() => true);
+        vi.stubGlobal('confirm', confirm);
+        const review = Array.from(host.querySelectorAll('button')).find(button => text(button) === context.messages.value.t('common.refresh'))!;
+        review.click();
+        await flushPromises();
+        expect(host.querySelector('#name')).toBe(input);
+        expect(input.value).toBe('Uncertain confirmation');
+        expect(host.textContent).toContain(context.messages.value.t('state.unknownOutcome'));
+        expect(form.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(1);
+        expect(request.mock.calls.some(([input]) => new URL((input as Request).url).pathname === '/api/v1/session')).toBe(true);
+        expect(request.mock.calls.some(([input]) => new URL((input as Request).url).pathname === '/api/v1/profiles/workflow-entry')).toBe(!bootstrapFailure);
+        expect(confirm).not.toHaveBeenCalled();
+        expectPrivateCache(context);
+    });
+
+    it('issues once from the actual warm Show link, never from Back/Forward, and offers explicit issuance without intent', async function issuesFromDeliberateLink() {
+        let issued = 0;
+        const {host, context, request, router} = await mounted(undefined, '/frontend-pilot/home', async function handleTokenWorkflow(input) {
+            const received = input as Request;
+            const pathname = new URL(received.url).pathname;
+            if (pathname === '/api/v1/session') return json(session);
+            if (pathname === '/api/v1/profiles/current') return json({id: profileId, name: session.activeProfile!.name, isDefault: true});
+            expect(pathname).toBe('/api/v1/profiles/migration/token');
+            expect(received.method).toBe('POST');
+            expect(received.headers.get('X-Surveyor-Context')).toBe(session.context);
+            expect(received.headers.get('X-CSRF-Token')).toBe(session.csrfToken);
+            expect(window.history.state.profileTokenRequest).toBe(false);
+            issued++;
+            return json({token: issued === 1 ? token : token + '-second'});
+        });
+        await router.push('/frontend-pilot/users/profile');
+        await flushPromises();
+        const link = host.querySelector<HTMLAnchorElement>('a[href="/frontend-pilot/users/profile/migrate/request"]')!;
+        expect(link).not.toBeNull();
+        link.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+        await flushPromises();
+        expect(issued).toBe(1);
+        expect(host.querySelector('h3')?.textContent).toBe(token);
+        expect(router.currentRoute.value.fullPath).not.toContain(token);
+        expect(JSON.stringify(window.history.state)).not.toContain(token);
+        expectPrivateCache(context);
+
+        router.back();
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/profile');
+        router.forward();
+        await flushPromises();
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/profile/migrate/request');
+        expect(issued).toBe(1);
+        expect(host.querySelector('h3')).toBeNull();
+        const explicit = Array.from(host.querySelectorAll<HTMLButtonElement>('main button')).find(button => text(button) === context.messages.value.t('profile.showMigrationToken'))!;
+        expect(explicit).not.toBeUndefined();
+        explicit.click();
+        await flushPromises();
+        expect(issued).toBe(2);
+        expect(host.querySelector('h3')?.textContent).toBe(token + '-second');
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(2);
+        expectPrivateCache(context);
+    });
+
+    it('keeps lost token issuance unknown without automatic reissue during read recovery', async function retainsLostIssuance() {
+        const {host, context, request, router} = await mounted(undefined, '/frontend-pilot/home', async function loseTokenResponse(input) {
+            if (new URL((input as Request).url).pathname === '/api/v1/session') return json(session);
+            throw new TypeError('The issuance response was lost.');
+        });
+        await router.push({path: '/frontend-pilot/users/profile/migrate/request', state: {profileTokenRequest: true}});
+        await flushPromises();
+        expect(window.history.state.profileTokenRequest).toBe(false);
+        expect(host.textContent).toContain(context.messages.value.t('state.unknownOutcome'));
+        const issue = Array.from(host.querySelectorAll<HTMLButtonElement>('main button')).find(button => text(button) === context.messages.value.t('profile.showMigrationToken'))!;
+        expect(issue.disabled).toBe(true);
+        issue.click();
+        const confirm = vi.fn(() => true);
+        vi.stubGlobal('confirm', confirm);
+        const review = Array.from(host.querySelectorAll('button')).find(button => text(button) === context.messages.value.t('common.refresh'))!;
+        review.click();
+        await flushPromises();
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(host.querySelector('h3')).toBeNull();
+        expect(issue.disabled).toBe(true);
+        expect(confirm).not.toHaveBeenCalled();
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(1);
+        expectPrivateCache(context);
+    });
+
+    it('keeps sibling pending, dirty and unknown work ahead of the actual destructive command', async function protectsSiblingWork() {
+        const {wrapper, request, busy, dirty, uncertain} = await guardedWorkflow();
         const confirm = vi.fn(() => false);
         vi.stubGlobal('confirm', confirm);
         const form = wrapper.get('form').element as HTMLFormElement;
+        const input = form.querySelector<HTMLInputElement>('#name')!;
+        input.value = 'kept confirmation';
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        await nextTick();
         busy.value = true;
         expect(submit(form).defaultPrevented).toBe(true);
         expect(confirm).not.toHaveBeenCalled();
@@ -465,52 +672,13 @@ describe('document-owned profile workflows', () => {
         dirty.value = false;
         uncertain.value = true;
         expect(submit(form).defaultPrevented).toBe(true);
-        expect(confirm).toHaveBeenCalledTimes(1);
-        expect(form.querySelector<HTMLInputElement>('input')!.value).toBe('kept input');
-    });
-
-    it('keeps automatic reload blocked and ordinary anchors fenced during an admitted POST', async function fencesDocumentDelivery() {
-        const {host, context} = await mounted({kind: 'deactivate', value: ''}, '/frontend-pilot/users/profile/delete');
-        const input = host.querySelector<HTMLInputElement>('#name')!;
-        input.value = token;
-        input.dispatchEvent(new Event('input', {bubbles: true}));
-        await nextTick();
-        expect(submit(host.querySelector<HTMLFormElement>('#forgotForm')!).defaultPrevented).toBe(false);
-        expect(context.updates.requestRecoveryReload()).toBe(false);
-        const anchor = host.querySelector<HTMLAnchorElement>('a[href="/frontend-pilot/users/profile"]')!;
-        const ordinary = new MouseEvent('click', {bubbles: true, cancelable: true});
-        anchor.dispatchEvent(ordinary);
-        expect(ordinary.defaultPrevented).toBe(true);
-        const modified = new MouseEvent('click', {bubbles: true, cancelable: true, ctrlKey: true});
-        anchor.dispatchEvent(modified);
-        expect(modified.defaultPrevented).toBe(false);
-    });
-
-    it('releases only delivery state on an explicit back-forward document restore without replaying the POST', async function restoresDocumentVisit() {
-        const {host, request} = await mounted({kind: 'deactivate', value: ''}, '/frontend-pilot/users/profile/delete');
-        const input = host.querySelector<HTMLInputElement>('#name')!;
-        input.value = token;
-        input.dispatchEvent(new Event('input', {bubbles: true}));
-        await nextTick();
-        const form = host.querySelector<HTMLFormElement>('#forgotForm')!;
-        expect(submit(form).defaultPrevented).toBe(false);
-        await nextTick();
-        const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-        expect(button.disabled).toBe(true);
-
-        // Only the browser's persisted restore proves this is another visit.
-        // Ordinary initialization/visibility events cannot reopen a pending form.
-        const ordinary = new Event('pageshow');
-        Object.defineProperty(ordinary, 'persisted', {value: false});
-        window.dispatchEvent(ordinary);
-        await nextTick();
-        expect(button.disabled).toBe(true);
-        const restored = new Event('pageshow');
-        Object.defineProperty(restored, 'persisted', {value: true});
-        window.dispatchEvent(restored);
-        await nextTick();
-        expect(button.disabled).toBe(false);
-        expect(input.value).toBe(token);
+        expect(confirm).toHaveBeenCalledTimes(2);
         expect(request).not.toHaveBeenCalled();
+        expect(input.value).toBe('kept confirmation');
+        uncertain.value = false;
+        expect(submit(form).defaultPrevented).toBe(true);
+        await flushPromises();
+        expect(request).toHaveBeenCalledOnce();
+        expect(confirm).toHaveBeenCalledTimes(2);
     });
 });

@@ -13,6 +13,14 @@ export type PilotRequestScope = Pick<components['schemas']['SessionView'], 'cont
     locale: string;
 };
 
+/** Confirmation supplies only the resulting actor comparison and optional handoff.
+ * The existing session reader remains authoritative for every private projection;
+ * legacy workflow adapters must not manufacture a SessionView after committing work. */
+export type PilotIdentityConfirmation = Pick<components['schemas']['IdentityResult'], 'personalLink' | 'emailDelivery'>
+    & Partial<Pick<components['schemas']['IdentityResult'], 'redirect'>> & {
+    session: Pick<components['schemas']['SessionView'], 'context'>;
+};
+
 /** A control and its handler read the same derived operation state. Each owner
  * supplies its existing admission and locks; initialization is shared, while
  * drafts, query receipts and command outcomes remain with their current owners. */
@@ -244,7 +252,7 @@ export interface PilotContext {
     /** Automatic observer resume also respects its current terminal read rejection. */
     mayObserve(key: readonly unknown[], firstRead?: boolean): boolean;
     refreshSession(fresh?: boolean): Promise<void>;
-    acceptIdentity(result: components['schemas']['IdentityResult']): Promise<void>;
+    acceptIdentity(result: PilotIdentityConfirmation): Promise<void>;
     registerIdentityGuard(guard: () => boolean): () => void;
     mayChangeIdentity(): boolean;
     changeLocale(locale: Locale): Promise<void>;

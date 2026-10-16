@@ -6,11 +6,12 @@ import type {PilotOverviewCardInteraction} from '../../../types/FrontendPilotUiT
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {useActionState, usePilot} from '../../app/context';
 import {eventKeys} from '../../app/queryKeys';
-import {useCommand, useDocumentForm} from '../../composables/command';
+import {useCommand} from '../../composables/command';
+import {useConfirmedNavigation} from '../../composables/pageEntry';
 import {useEventApi} from './api';
 import {useEventSection} from './useEventSection';
 import {usePackingApi} from '../packing/api';
-import {createEntityLifecycle} from '../../composables/entityLifecycle';
+import {createEntityLifecycle, useEntityRemoval} from '../../composables/entityLifecycle';
 import OverviewCard from '../overview/OverviewCard.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
@@ -32,10 +33,12 @@ const key = computed(() => eventKeys.things(context.session.value?.context, prop
 const disclosed = computed(() => props.admin ? adminOpen.value !== null : expanded.value);
 const section = useEventSection(key, readThings, computed(() => props.active !== false), disclosed);
 const command = useCommand(section.refresh);
-const documentForm = useDocumentForm({dirty: () => false});
-const available = useActionState({eligible: mayUseThings, blocked: () => command.action.disabled.value || documentForm.pending.value});
+const destination = useConfirmedNavigation();
+const removal = useEntityRemoval(command, destination);
+const available = useActionState({eligible: mayUseThings, pending: () => command.pending.value,
+    blocked: () => command.action.disabled.value || !!destination.target.value});
 const refreshAction = useActionState({eligible: () => section.readAction.isAvailable(),
-    blocked: () => command.recoveryAction.disabled.value || documentForm.pending.value, pending: () => section.query.isFetching.value});
+    blocked: () => command.recoveryAction.disabled.value || !!destination.target.value, pending: () => section.query.isFetching.value});
 const search = ref('');
 const selectedType = ref('all');
 const adminSearch = reactive({packing: '', activity: '', drivers: ''});
@@ -144,15 +147,23 @@ function createChildLifecycle(card: Card) {
     }
 }
 
-/** Owner-only child deletion retains its existing native document destination.
- * The shared departure guard admits that submission without replaying it. */
-function deleteChild(event: Event): void {
-    if (!available.isAvailable() || !window.confirm(messages.value.t('event.organizer.deleteChildConfirm'))) {
-        event.preventDefault();
-        return;
+/** The P2 organizer owns deletion even when a child's detail page is native.
+ * Shared removal approves sibling drafts before writing and retains the existing
+ * dashboard destination as client navigation after its confirmed JSON receipt. */
+async function deleteChild(card: Card, initiator: Event): Promise<void> {
+    if (!available.isAvailable()) return;
+    const type = childType(card);
+    if (!type) return;
+    const eventId = props.eventId;
+    const admin = !!props.admin;
+    const childId = card.id;
+    const success = type === 'packing' ? 'packing.deleted'
+        : type === 'activity' ? 'event.organizer.activityDeleted' : 'event.organizer.driversDeleted';
+    await removal.remove({operation: removeChild, confirmation: 'event.organizer.deleteChildConfirm', success, initiator});
+
+    function removeChild(scope: PilotRequestScope) {
+        return api.deleteChild(eventId, type!, childId, scope, admin);
     }
-    // Existing native routes own deletion and its destination; never replay by fetch.
-    documentForm.submit(event);
 }
 async function refresh(): Promise<void> {
     if (!refreshAction.isAvailable()) return;
@@ -174,6 +185,10 @@ async function refresh(): Promise<void> {
                 @action="refresh"
             />
         </div>
+        <StatusNotice v-if="destination.target.value" kind="success"
+            :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">
+            {{ messages.t('state.saved') }}
+        </StatusNotice>
         <LoadingSkeleton v-if="section.loading.value" />
         <StatusNotice
             v-if="section.query.error.value"
@@ -187,7 +202,7 @@ async function refresh(): Promise<void> {
 
         <template v-if="section.data.value">
             <!-- Organizer groups keep independent title filters and their existing
-                 owner actions. Native child deletion/destinations stay explicit. -->
+                 owner actions. Unmigrated detail links remain explicit boundaries. -->
             <div v-if="admin" class="row">
                 <div class="accordion accordion-dark">
                     <div v-for="group in groups" :key="group.type" class="accordion-item dashboard-accordion-item">
@@ -248,12 +263,9 @@ async function refresh(): Promise<void> {
                                         >
                                             <i class="bi me-2" :class="group.itemIcon" aria-hidden="true"></i>{{ card.title }}
                                         </component>
-                                        <form
+                                        <div
                                             v-if="card.capabilities.duplicate || card.capabilities.remove"
                                             class="d-inline btn-group ms-2"
-                                            method="post"
-                                            :action="`/${card.type}/${card.id}/delete`"
-                                            @submit="deleteChild"
                                         >
                                             <component
                                                 :is="card.type === 'packing' ? RouterLink : 'a'"
@@ -266,15 +278,16 @@ async function refresh(): Promise<void> {
                                             </component>
                                             <ActionButton
                                                 v-if="card.capabilities.remove"
-                                                type="submit"
+                                                type="button"
                                                 class="btn-sm"
                                                 variant="outline-danger"
-                                                :state="documentForm.action"
+                                                :state="available"
                                                 :disabled="available.disabled.value"
+                                                @click="deleteChild(card, $event)"
                                             >
                                                 <i class="bi bi-trash me-1" aria-hidden="true"></i>{{ messages.t('overview.delete') }}
                                             </ActionButton>
-                                        </form>
+                                        </div>
                                     </div>
                                 </div>
                                 <StatusNotice v-else kind="info" class="mb-0">{{ messages.t(group.empty) }}</StatusNotice>

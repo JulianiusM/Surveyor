@@ -82,13 +82,13 @@ $dash-input-addon: #2a2f34
     color: var(--bs-accordion-color)
 
 
-// Entity card menus use Bootstrap/Popper for viewport placement. The card mixin opts the accordion item
-// into overflow-visible; without it, a correctly positioned menu would still be clipped by this theme.
+// Entity card menus use AppNavigationDropdown and useDropdownPlacement for viewport placement.
+// The card opts the accordion item into overflow-visible so this theme does not clip the positioned menu.
 // Keep this sizing scoped to entity overviews so other themed accordions preserve their existing behavior.
 .entity-overview
   .dropdown-menu
     // Leave a viewport gutter on small screens while preserving a readable action width on larger ones.
-    // Bootstrap still decides above/below placement; the browser module refreshes it after collapse ends.
+    // The shared dropdown placement owner selects above/below on disclosure, scrolling and viewport changes.
     min-width: min(18rem, calc(100vw - 2rem))
     max-width: calc(100vw - 2rem)
 

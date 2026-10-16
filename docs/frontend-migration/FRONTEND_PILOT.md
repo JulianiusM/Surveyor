@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current P0-P2 shared header, entry retirement, metadata, notes and lifecycle ownership source-reconciled; Event controller/public method contracts retained; execution limits remain in paired review; no cutover
+verification-scope: current P0-P2 ordinary SPA source adoption reconciled with direct E1 exclusion and D1 correction; shared owners and backend exclusions retained; scoped build/client/ORM/built/visual evidence and failed-run limits recorded in review; no later-phase or cutover authorization
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -17,6 +17,9 @@ Native application routes remain available as the visual/behavioral reference. T
 [foundation decision ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
 This guide describes ownership and scope; the [paired review](PILOT_PARITY_REVIEW.md) owns
 completed scoped acceptance and execution evidence, including its remaining limits.
+The [October 16 full-pilot review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16)
+qualifies prior acceptance with current findings; source mappings and earlier passing selections do not establish
+complete visual/behavioral parity for every implemented journey and relevant state.
 
 ## Migration boundary and current iteration
 
@@ -30,6 +33,16 @@ P2 adds Event creation/duplication, settings, registration, organizer tools and 
 [full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the remaining phase contracts for surveys, activity plans,
 drivers lists, invoice pools and eventual cutover. Implemented portions retain native behavior and maintainability
 requirements; the paired review records actual scoped checks, including the P2 review corrections.
+The maintainer's [S1 decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-implemented-pilot-scope-2026-10-16) limits the
+current delivery through implemented P2; later phases wait for stable repeated reviews and an explicit future trigger.
+
+The [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
+excludes native/Vue production coexistence coordination and rejects the ordinary Event document-POST exception.
+The [current six-step plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#current-spa-correction-plan-2026-10-16) restores
+generated JSON/multipart commands, shared Vue owners and Router navigation across equivalent current P0–P2
+forms/links. The route contracts below have reviewed source adoption and fresh scoped same-document application
+evidence in the review, including the failed broad run and focused positive receipts. Existing operation ordering and partial outcomes
+remain inherited, without new transactions or general identity/token repairs.
 
 The maintainer's 2026-10-14 A2 correction supersedes P1's added profile field-edit/create transaction wrappers.
 Their adapters now invoke the unchanged native operations and confirm with a simple prepared acknowledgement.
@@ -60,12 +73,12 @@ The exact duplicate URL after login is an explicitly approved native exception.
 | `/frontend-pilot/home` | Explicit opt-in native-equivalent landing; captured quick-create suggestion, account/guest welcome and migrated Packing/Event creation destinations. Other creation destinations remain native. The Overview root stays unchanged. |
 | `/frontend-pilot/message` | Admitted informational/command feedback; route query data cannot supply message authority. Common error presentation retains server-selected status and development-only diagnostics. |
 | `/frontend-pilot/users/profile`, `/frontend-pilot/users/profile/manage`, `/frontend-pilot/users/profile/create` | Current profile editing for accounts/guests; account-only owned roster/creation and existing profile switching. Creation preserves the active profile. |
-| `/frontend-pilot/users/profile/migrate/request`, `/frontend-pilot/users/profile/migrate/show`, `/frontend-pilot/users/profile/migrate/execute` | Native token issuance and explicit transfer retain document delivery. An explicit generated read-only POST previews the token while the mounted Vue form owns its draft/result; a fixed nonsecret fragment preserves Back/Forward without storing capabilities. The receiving active profile and former-owner cleanup rules stay unchanged; no stronger backend token/transaction guarantee is introduced. |
-| `/frontend-pilot/users/profile/delete`, `/frontend-pilot/users/account/delete` | Native profile-name/username confirmations, account/guest distinctions, remaining-profile selection and provider/root logout destinations. Document delivery preserves existing error statuses and partial-failure behavior; it does not repair the excluded backend defects. |
+| `/frontend-pilot/users/profile/migrate/request`, `/frontend-pilot/users/profile/migrate/show` | Ordinary warm entry, explicit generated token issuance and body-only preview/transfer use SPA command/navigation owners. Private draft/result/token state stays mounted; a fixed nonsecret fragment supports local history without replay. The existing initial token GET compatibility remains distinct. Receiving active profile and former-owner cleanup stay unchanged; no stronger backend token/transaction guarantee is introduced. |
+| `/frontend-pilot/users/profile/delete`, `/frontend-pilot/users/account/delete` | Native profile-name/username confirmations, account/guest distinctions and remaining-profile selection through shared SPA commands and internal completion. True provider logout remains an explicit handoff. Validation and possible partial/unknown outcomes remain honest; the excluded backend defects are not repaired. |
 | `/frontend-pilot/packing/create` | Account/profile admission, event preselection, initial items and optional image. |
 | `/frontend-pilot/packing/<id>` | Authorized Packing detail; guest/event admission precedes page rendering. |
 | `/frontend-pilot/packing/<id>/duplicate` | Existing duplicate permission/copy boundaries; rejected submission returns login to this exact duplicate destination. |
-| `/frontend-pilot/event/create`, `/frontend-pilot/event/<id>`, `/frontend-pilot/event/<id>/duplicate`, `/frontend-pilot/event/<id>/admin` | Native Event admission, creation/copy boundaries, detail, own registration and permission-filtered organizer/settings tools. PDF and unmigrated child features remain ordinary native links. |
+| `/frontend-pilot/event/create`, `/frontend-pilot/event/<id>`, `/frontend-pilot/event/<id>/duplicate`, `/frontend-pilot/event/<id>/admin` | Native Event admission, creation/copy boundaries through generated multipart and shared creation/navigation, detail, own registration and permission-filtered organizer/settings tools. Event-rendered child deletion uses its shared command owner; PDF and unmigrated child pages retain native destinations. |
 | `/frontend-pilot/event/<id>/guest`, `/frontend-pilot/event/<id>/register` | Guest entry and the register alias preserve `regToken` and return to admitted pilot detail. Native `/event/<id>` and `/event/<id>/register` destinations remain available unchanged. |
 | Packing/Event guest entry/recovery | Shared presentation with feature-specific native fields, notices, title, canonical detail/success destinations and invalid-token outcomes. |
 | Pilot login/register/recovery/reset | Existing account policy, return context and confirmed destinations; provider/token boundaries remain ordinary navigation. |

@@ -14,6 +14,46 @@ import settings from '../../../modules/settings';
 const router = Router();
 const uploadHeader = prepareFileUploader(settings.value.headerImgDir).single('image');
 
+/** Decode one generated multipart command without adding a second Event parser. */
+router.post('/', asyncHandler(async function createEvent(req, res) {
+    const actor = await requireApiContext(req, res, true);
+    eventApi.requireEventCreation(actor);
+    let enteredCreation = false;
+    try {
+        // Account admission precedes byte storage. Structural validation then
+        // decodes only the data part, retaining unknown fields for rejection.
+        await readEventImageUpload(req, res);
+        validateOperationRequest(req, 'createEvent', function decodeCreation(body) {
+            // Decode only the authored multipart JSON part. Retain every other
+            // field so the generated closed schema can reject unknown input.
+            const form = body as Record<string, unknown>;
+            if (Object.hasOwn(form, 'image') && !req.file) throw new ApiProblem('UPLOAD_INVALID');
+            let data: unknown;
+            try { data = typeof form.data === 'string' ? JSON.parse(form.data) : form.data; }
+            catch { throw new ApiProblem('VALIDATION_FAILED'); }
+            return {...form, data, ...(req.file ? {image: req.file.originalname} : {})};
+        });
+        // The controller cleans native validation failures before creation. Once
+        // its existing creation owner runs, an uploaded image may be committed.
+        enteredCreation = true;
+        const result = await eventApi.createEvent(req.body.data, req.file, actor);
+        res.location(`/api/v1/events/${encodeURIComponent(result.id)}`);
+        sendValidatedJson(req, res, 'createEvent', 201, result);
+    } finally {
+        if (!enteredCreation && req.file) removeImage(req.file.path);
+    }
+}));
+
+/** Prepare the invariant completion before entering an irreversible shared delete. */
+router.delete('/:eventId/things-to-do/:entityType/:entityId', asyncHandler(async function deleteEventChild(req, res) {
+    const actor = await requireApiContext(req, res, true);
+    validateOperationRequest(req, 'deleteEventChild');
+    const reply = prepareValidatedJson(req, 'deleteEventChild', 200, {changed: true});
+    await eventApi.deleteEventChild(String(req.params.eventId), req.params.entityType as 'activity' | 'drivers' | 'packing',
+        String(req.params.entityId), actor, req.query.view as 'detail' | 'admin' | undefined);
+    sendPreparedJson(req, res, reply);
+}));
+
 router.get('/create-entry', asyncHandler(async function getEventCreateEntry(req, res) {
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'getEventCreateEntry');

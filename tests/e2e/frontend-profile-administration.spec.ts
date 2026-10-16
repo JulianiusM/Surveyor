@@ -1,20 +1,63 @@
 import {test, expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
-import {writeFile} from 'node:fs/promises';
 import type {components} from '../../src/types/api/v1';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
 import {loginForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 
-/** Capture actual layout evidence rather than infer footer presence from SSR text. */
-function footerPresentation() {
-    const footer = document.querySelector('footer');
-    if (!footer) return {present: false, htmlHeight: document.documentElement.scrollHeight};
-    const bounds = footer.getBoundingClientRect();
-    const style = getComputedStyle(footer);
-    return {present: true, bounds: {x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height},
-        display: style.display, visibility: style.visibility, opacity: style.opacity,
-        htmlHeight: document.documentElement.scrollHeight, text: footer.textContent};
+/** Compare the actual form and footer, including their text, control states,
+ * typography and relative layout. The approved shell can navigate to Vue paths;
+ * it must not change the geometry or appearance of these migrated surfaces. */
+function profilePresentation() {
+    const form = document.querySelector<HTMLFormElement>('form:has(#name)')!;
+    const footer = document.querySelector('footer')!;
+    const formBounds = form.getBoundingClientRect();
+    const footerBounds = footer.getBoundingClientRect();
+    const name = form.querySelector<HTMLInputElement>('#name')!;
+    const checkbox = form.querySelector<HTMLInputElement>('#isDefault')!;
+
+    // Use stable semantic controls instead of comparing different framework DOM
+    // wrappers. Every field, its explanation, the submit row and onward actions
+    // participate; a matching name input alone cannot establish form parity.
+    const selectors = ['label.form-label', '#name', '.col-md-6:has(#isDefault)',
+        '#isDefault', '.form-check-label', 'button[type="submit"]', 'a.btn'];
+    const controls = [];
+    for (const selector of selectors) {
+        for (const element of form.querySelectorAll<HTMLElement>(selector)) {
+            controls.push(presentation(element, formBounds));
+        }
+    }
+    const links = [];
+    for (const link of footer.querySelectorAll<HTMLAnchorElement>('a')) {
+        links.push({...presentation(link, footerBounds), href: link.href});
+    }
+    return {
+        form: {width: formBounds.width, height: formBounds.height, controls,
+            name: name.value, placeholder: name.placeholder, required: name.required,
+            checked: checkbox.checked, nameDisabled: name.disabled, checkboxDisabled: checkbox.disabled},
+        footer: {...presentation(footer, footerBounds), links, x: footerBounds.x,
+            // scrollHeight is an integer CSS-pixel measurement; keep its derived
+            // gap at that precision rather than compare fractional rounding noise.
+            pageBottomGap: Math.round(document.documentElement.scrollHeight - footerBounds.bottom - window.scrollY)},
+    };
+
+    /** Normalize template whitespace without discarding visible wording. */
+    function text(element: HTMLElement): string {
+        // innerText preserves rendered block boundaries. textContent would join
+        // a following block label onto the preceding sentence in native Pug.
+        return element.innerText.replace(/\s+/gu, ' ').trim();
+    }
+
+    /** Relative coordinates exclude intentional navigation-shell positioning;
+     * fonts, wrapping, spacing and control appearance remain fully comparable. */
+    function presentation(element: HTMLElement, origin: DOMRect) {
+        const bounds = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return {text: text(element), x: bounds.x - origin.x, y: bounds.y - origin.y,
+            width: bounds.width, height: bounds.height, font: style.fontSize, weight: style.fontWeight,
+            lineHeight: style.lineHeight, color: style.color, background: style.backgroundColor,
+            border: style.borderColor, display: style.display, visibility: style.visibility, opacity: style.opacity};
+    }
 }
 
 test('profile creation, switching and editing share the built application and native persistence', async ({page}) => {
@@ -70,27 +113,25 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
         page.on('pageerror', error => browserErrors.push(error.message));
         await loginForE2E(page.request, createE2ELogin());
 
-        // Equivalent actor/data and viewport give the screenshots a useful
-        // comparator. Geometry assertions protect the actual text/checkbox row.
+        // Equivalent actor/data, loaded fonts and viewport make both screenshots
+        // and measured assertions meaningful. Persisted profile fields are shared.
         await page.goto('/users/profile');
         const nativeName = await page.locator('#name').inputValue();
-        const nativeBounds = await page.locator('#name').boundingBox();
-        const nativeFooter = await page.evaluate(footerPresentation);
+        await page.evaluate(() => document.fonts.ready);
+        const native = await page.evaluate(profilePresentation);
         await page.screenshot({path: testInfo.outputPath('native-profile.png'), fullPage: true});
         await page.goto('/frontend-pilot/users/profile?locale=en');
         await waitForPilotHydration(page);
         await expect(page.locator('#name')).toHaveValue(nativeName);
-        const pilotBounds = await page.locator('#name').boundingBox();
-        expect(nativeBounds).not.toBeNull();
-        expect(pilotBounds).not.toBeNull();
-        expect(Math.abs(pilotBounds!.width - nativeBounds!.width)).toBeLessThanOrEqual(1);
-        expect(Math.abs(pilotBounds!.height - nativeBounds!.height)).toBeLessThanOrEqual(1);
         await expect(page.locator('#isDefault')).toBeVisible();
-        const pilotFooter = await page.evaluate(footerPresentation);
-        const presentationPath = testInfo.outputPath('presentation.json');
-        await writeFile(presentationPath, JSON.stringify({native: nativeFooter, pilot: pilotFooter, browserErrors}, null, 2));
-        await testInfo.attach('footer-presentation', {path: presentationPath, contentType: 'application/json'});
         await expect(page.locator('footer')).toBeVisible();
+        await page.evaluate(() => document.fonts.ready);
+        const pilot = await page.evaluate(profilePresentation);
+        await testInfo.attach('profile-presentation', {
+            body: JSON.stringify({native, pilot, browserErrors}, null, 2), contentType: 'application/json',
+        });
+        expect(pilot).toEqual(native);
         await page.screenshot({path: testInfo.outputPath('pilot-profile.png'), fullPage: true});
+        expect(browserErrors).toEqual([]);
     });
 }

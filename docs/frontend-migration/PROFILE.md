@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; AI coding agents
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-15
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: native-isolation decision and implemented frontend-owned timer/style delivery reconciled; temporary cross-frontend duplication and shared backend ownership retained; no cutover claimed
+verification-scope: direct 2026-10-16 native isolation, production-coexistence exclusion and ordinary SPA source adoption reconciled with scoped verification; sharing within Vue, backend exclusions and production-guide freeze retained; no later-phase or cutover authorization
 source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; src/frontend/; docs/user-guide/en/; docs/user-guide/de/
 next-review: next-authorized-migration-slice-or-cutover
 activation-scope: frontend framework migration, frontend pilot review/maintenance, migration documentation or associated cutover preparation
@@ -40,7 +40,7 @@ The maintainer's explicit 2026-10-14 clarification corrects the earlier overbroa
 
 ## Native reference and shared implementation
 
-During coexistence, compare the unchanged native UI/behavior with approved exceptions from the
+During migration review, compare the unchanged native UI/behavior with approved exceptions from the
 [decision history](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments). Native preservation is
 temporary and ends at authorized cutover; it never becomes a permanent policy or API contract. Reuse actual backend
 business owners for both frontends. Controllers own decisions and DBAL owns persistence; no parallel backend cleanup
@@ -55,10 +55,18 @@ backend/domain/controller/DBAL operations and catalogs remain shared. Third-part
 are outside this application-code boundary. The existing feedback owner now supplies its own transient timer, and
 copied authored Sass is composed once by `styles/application.sass` and delivered through Vite's client/SSR asset
 handling rather than native frontend imports/links.
+The maintainer's [October 16 R1 clarification](FRONTEND_FOUNDATION_DESIGN.md#direct-native-isolation-clarification-2026-10-16)
+confirms that Vue copies are separately mutable: the sharing requirement concerns matching Vue consumers, and
+native application presentation/frontend logic does not become a common owner for both frontends.
 The [review](PILOT_PARITY_REVIEW.md#native-frontend-isolation-implementation-2026-10-15) records the bounded dependency
 and parity checks; this implementation does not complete feature migration or authorize cutover.
 Preserve the current approved comparator with its dated exceptions; this decision does not direct a rollback of
 previously approved changes.
+
+The [direct E1 production-scope decision](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
+excludes simultaneous native/Vue production use. Do not implement Event native/versioned permission coordination
+for that scenario; `IMP-066` closes by exclusion, not repair. This does not remove the temporary native development
+comparator, authorize cutover or roll back the previously approved Packing coordination remedy.
 
 **Approved parity-only clarification (2026-10-14):** the maintainer explicitly limits the migration to visual and
 behavioral parity, except for previously approved frontend changes. Minor backend transport/presentation adaptation
@@ -69,6 +77,14 @@ and R4 account-deletion completion. Their defects remain open in the central bac
 not pending approval requests. Continue the corresponding frontend journeys against the existing shared behavior.
 Previously approved bounded corrections retain their scope. New frontend/adapter code still follows security,
 private-projection, contract, readability, no-replay and delivery requirements without claiming a repaired backend.
+
+The same direct reply rejects D1's Event document-POST exception and reinforces ordinary SPA commands/navigation
+throughout implemented P0–P2. Classify every changed form/link by its actual purpose: ordinary internal commands
+use authored generated JSON/multipart contracts and shared Vue owners, while true provider/capability arrivals,
+outputs and unmigrated destinations retain their explicit boundaries. Partial backend completion is not a reason
+to submit an ordinary Vue form as a document. Preserve existing operation order and honest confirmed/unknown
+outcomes without importing excluded backend repairs. The existing playbook and built-application tests must show
+actual matching-consumer adoption and same-document behavior; no new infrastructure checker or CI gate is required.
 
 Use the [Development amendments](staged/DEVELOPMENT.md) alongside unchanged canonical development guidance and
 the active engineering policy. They retain the frontend playbook, ownership contracts and worked examples without

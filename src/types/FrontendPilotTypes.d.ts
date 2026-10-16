@@ -28,8 +28,8 @@ export interface FrontendIdentityRedirect {
 /** A request chooses the native landing shortcut once; hydration reuses that choice. */
 export type FrontendLandingQuickCreate = 'survey' | 'event' | 'activity' | 'packing' | 'drivers';
 
-/** Private document-only identity presentation. Tokens never enter URL/query-cache
- * state, and these projections confer no authority beyond the submitted native operation. */
+/** Initial private identity presentation shares the mounted workflow's markup.
+ * Tokens never enter URL/query caches and cannot confer backend authority. */
 export type FrontendProfileWorkflow = {
     kind: 'token';
     token: string;
@@ -38,11 +38,9 @@ export type FrontendProfileWorkflow = {
 } | {
     kind: 'deactivate';
     value: string;
-    error?: 'profile.invalidDeactivation';
 } | {
     kind: 'delete-account';
     value: string;
-    error?: 'profile.invalidAccountDeletion';
 };
 
 /** Escaped document presentation, supplied by the server's outcome owner rather than URL text. */
@@ -67,10 +65,8 @@ export interface FrontendPilotBootstrap {
     session: components['schemas']['SessionView'];
     landing?: {quickCreate: FrontendLandingQuickCreate};
     commonPage?: FrontendCommonPage;
-    /** One document/actor owns transfer secrets and confirmation redisplay. */
+    /** One initial document/actor owns its private token or empty workflow form. */
     profileWorkflow?: FrontendProfileWorkflow;
-    /** Escaped native controller feedback, scoped by its document flash owner. */
-    workflowNotice?: string;
     /** The initial document and SPA navigation consume the same server-owned admission decision. */
     pageEntry?: components['schemas']['PageEntryOutcome'];
     /** One-time native redirect feedback, rendered before and after hydration. */
@@ -94,8 +90,6 @@ export interface FrontendPilotBootstrap {
     eventEntry?: components['schemas']['EventResourceEntry'];
     eventCreateContext?: components['schemas']['EventCreateContext'];
     eventDuplicate?: components['schemas']['EventDuplicate'];
-    /** Submitted scalar drafts deliberately retain invalid values for native redisplay. */
-    eventCreationSubmission?: components['schemas']['EventCreationSubmission'];
     personalLink?: string;
     /** Controller-projected native regions hydrate under their ordinary identity-scoped query keys. */
     overview?: components['schemas']['OverviewRegion'][];

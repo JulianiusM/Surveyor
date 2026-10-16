@@ -4,7 +4,7 @@ import {useTranslation} from 'i18next-vue';
 import {QueryClient} from '@tanstack/vue-query';
 import type {QueryCacheNotifyEvent} from '@tanstack/vue-query';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
-import type {PilotActionInputs, PilotActionState, PilotContext, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {PilotActionInputs, PilotActionState, PilotContext, PilotIdentityConfirmation, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale, MessageKey} from '../../types/LocalizationTypes';
 import type {components} from '../../types/api/v1';
 import type {RouteLocationNormalized, Router} from 'vue-router';
@@ -136,7 +136,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
     let desiredLocale: Locale | null = null;
     // Retain only a confirmed identity receipt while its authoritative session read
     // is unavailable. Retry can deliver the private link without replaying registration.
-    let pendingIdentity: components['schemas']['IdentityResult'] | undefined;
+    let pendingIdentity: PilotIdentityConfirmation | undefined;
     // Identity and language have independent ordering. A confirmed language command retires
     // only older locale projections, without discarding authoritative identity/deployment data.
     let localeGeneration = 0;
@@ -438,7 +438,7 @@ export function createPilotContext(bootstrap: FrontendPilotBootstrap, browser: b
 
     /** Bootstrap remains authoritative after a cookie-changing command. A private guest link
      * is shown only when the confirmed identity is still current, and never survives a switch. */
-    async function acceptIdentity(result: import('../../types/api/v1').components['schemas']['IdentityResult']): Promise<void> {
+    async function acceptIdentity(result: PilotIdentityConfirmation): Promise<void> {
         // A focus/bootstrap read may have captured the cookie before the command changed it.
         // Retire that generation and drain its promise before asking for authoritative new state.
         // Reusing it would incorrectly compare a successful login to the old anonymous context.

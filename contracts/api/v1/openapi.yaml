@@ -13,6 +13,20 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /events:
+    $ref: ./events.yaml#/paths/~1events
+  /events/{eventId}/things-to-do/{entityType}/{entityId}:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1things-to-do~1{entityType}~1{entityId}
+  /profiles/workflow-entry:
+    $ref: ./auth.yaml#/paths/~1profiles~1workflow-entry
+  /profiles/migration/token:
+    $ref: ./auth.yaml#/paths/~1profiles~1migration~1token
+  /profiles/migration/execute:
+    $ref: ./auth.yaml#/paths/~1profiles~1migration~1execute
+  /profiles/current/deactivate:
+    $ref: ./auth.yaml#/paths/~1profiles~1current~1deactivate
+  /account:
+    $ref: ./auth.yaml#/paths/~1account
   /packing-lists/create-entry:
     get:
       operationId: getPackingCreateEntry
@@ -1263,6 +1277,20 @@ components:
       $ref: ./events.yaml#/schemas/EventResourceEntry
     EventMetadataPatch:
       $ref: ./events.yaml#/schemas/EventMetadataPatch
+    EventCreateForm:
+      $ref: ./events.yaml#/schemas/EventCreateForm
+    EventCreated:
+      $ref: ./events.yaml#/schemas/EventCreated
+    ProfileWorkflowEntry:
+      $ref: ./auth.yaml#/schemas/ProfileWorkflowEntry
+    ProfileMigrationToken:
+      $ref: ./auth.yaml#/schemas/ProfileMigrationToken
+    ProfileWorkflowCompletion:
+      $ref: ./auth.yaml#/schemas/ProfileWorkflowCompletion
+    ProfileDeactivationInput:
+      $ref: ./auth.yaml#/schemas/ProfileDeactivationInput
+    AccountDeletionInput:
+      $ref: ./auth.yaml#/schemas/AccountDeletionInput
     EventCreateInput:
       $ref: ./events.yaml#/schemas/EventCreateInput
     EventDuplicate:

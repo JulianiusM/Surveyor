@@ -32,6 +32,8 @@
         "yourTimezone": "Ihre Zeitzone:",
         "deadlinePassed": "Frist abgelaufen",
         "created": "Veranstaltung erstellt.",
+        "leaveUnknown": "Die neue Veranstaltung könnte bereits existieren. Dieses Formular verlassen und vor einem erneuten Erstellen die Übersicht prüfen?",
+        "creationUnknown": "Die Erstellung konnte nicht bestätigt werden. Prüfen Sie vor einem erneuten Erstellen Ihre Übersicht.",
         "deleted": "Veranstaltung gelöscht.",
         "notFound": "Veranstaltung nicht gefunden.",
         "full": "Diese Veranstaltung ist ausgebucht.",
@@ -145,6 +147,8 @@
           "notesTitle": "Allergien / Kommentare",
           "totalsEmpty": "Gesamtsummen: —",
           "deleteChildConfirm": "Diesen Eintrag löschen?",
+          "activityDeleted": "Aktivitätenplan gelöscht",
+          "driversDeleted": "Fahrtenliste gelöscht",
           "expiresHelp": "Leer lassen für unbegrenzte Gültigkeit.",
           "expiresLocal": "Ablauf (optional, Ortszeit)",
           "create": "Erstellen",
@@ -385,6 +389,8 @@
         "duplicate": "Duplizieren",
         "all": "Alle",
         "none": "Keine",
+        "yes": "Ja",
+        "no": "Nein",
         "active": "Aktiv",
         "archived": "Archiviert",
         "infoTitle": "Information",
@@ -817,6 +823,7 @@
         "UNSUPPORTED_MEDIA_TYPE": "Sende diese Anfrage als JSON.",
         "INVALID_JSON": "Die Anfrage enthält kein gültiges JSON.",
         "CLIENT_UPDATE_REQUIRED": "Eine Aktualisierung ist verfügbar. Lass deine Änderungen geöffnet und lade die Seite nach der Prüfung neu.",
+        "WORKFLOW_OUTCOME_UNKNOWN": "Der Vorgang kann teilweise oder vollständig abgeschlossen sein. Prüfe den aktuellen Zustand, bevor du einen weiteren Vorgang startest.",
         "INTERNAL_ERROR": "Die Anfrage konnte nicht abgeschlossen werden. Versuche es später erneut."
       }
     }

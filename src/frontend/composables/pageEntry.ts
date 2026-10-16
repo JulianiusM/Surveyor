@@ -3,7 +3,7 @@ import {isNavigationFailure, useRoute, useRouter} from 'vue-router';
 import type {RouteLocationNormalized, Router} from 'vue-router';
 import {hashKey, useQuery} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
-import type {PilotConfirmedNavigation, PilotContext, PilotPageEntryDenial, PilotPageEntrySource, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {PilotConfirmedNavigation, PilotContext, PilotIdentityConfirmation, PilotPageEntryDenial, PilotPageEntrySource, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {MessageKey} from '../../types/LocalizationTypes';
 import {frontendDocumentUrl, safeFrontendReturn} from '../../modules/lib/frontendIdentity';
 import {isPlainMessageKey} from '../../modules/localization/translator';
@@ -159,7 +159,7 @@ function retainIdentityNavigation(context: PilotContext, router: Router, confirm
  * actor and resumes this destination once. A mismatch or committed departure retires it.
  */
 export async function completeIdentityEntry(context: PilotContext, router: Router,
-                                            result: components['schemas']['IdentityResult'],
+                                            result: PilotIdentityConfirmation,
                                             outcome: components['schemas']['PageEntryOutcome'],
                                             origin: string = router.currentRoute.value.fullPath,
                                             navigation?: PilotConfirmedNavigation): Promise<boolean> {

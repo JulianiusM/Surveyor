@@ -94,6 +94,9 @@ schemas:
     additionalProperties: false
     required: [kind, messageKey]
     properties:
+      message:
+        description: Optional escaped text supplied by an existing server business outcome, never HTML.
+        type: string
       kind:
         type: string
         enum: [info, error, success]
@@ -236,6 +239,12 @@ schemas:
         items:
           $ref: "#/schemas/FieldError"
     oneOf:
+      - properties:
+          code: {const: WORKFLOW_OUTCOME_UNKNOWN}
+          messageKey: {const: 'api:errors.WORKFLOW_OUTCOME_UNKNOWN'}
+          status: {const: 500}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
       - properties:
           code: {const: CLIENT_UPDATE_REQUIRED}
           messageKey: {const: 'api:errors.CLIENT_UPDATE_REQUIRED'}

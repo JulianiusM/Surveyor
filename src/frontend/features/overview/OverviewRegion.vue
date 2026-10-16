@@ -8,7 +8,7 @@ import type {PilotOverviewCardInteraction, PilotOverviewCountRead, PilotRequestS
 import {overviewQueryParameters, useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
 import {useEventApi} from '../event/api';
-import {createEntityLifecycle} from '../../composables/entityLifecycle';
+import {createEntityLifecycle, useEntityRemoval} from '../../composables/entityLifecycle';
 import {useActionState, usePilot, refreshInterval} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {isOrdinaryNavigation, useConfirmedNavigation} from '../../composables/pageEntry';
@@ -55,7 +55,7 @@ const router = useRouter();
 // delivery scoped to this logical region through any actor-driven remount.
 const destination = useConfirmedNavigation(props.collection + ':' + props.region);
 // TODO (docs/frontend-migration/FRONTEND_PILOT.md): Complete the remaining Overview migration before its
-// default-route cutover; non-packing administration stays with its native feature owner meanwhile.
+// default-route cutover; unmigrated feature administration stays with its native owner meanwhile.
 let readGeneration = 0;
 let mounted = true;
 const element = ref<HTMLElement | null>(null);
@@ -230,6 +230,7 @@ function refetchRegion(): Promise<unknown> {
 const command = useCommand(refresh);
 const packingLifecycle = createEntityLifecycle(packingApi, command, messages);
 const eventLifecycle = createEntityLifecycle(eventApi, command, messages);
+const removal = useEntityRemoval(command, destination);
 const blocked = computed(() => command.action.disabled.value
     || !!destination.target.value);
 const actionsBlocked = computed(() => blocked.value || !!pendingRead.value || !overview.data.value || !displayed.value);
@@ -590,20 +591,12 @@ async function archive(card: components['schemas']['OverviewCard'], restore: boo
  * deleted card cannot become another eligible DELETE just because delivery failed. */
 async function remove(card: components['schemas']['OverviewCard']): Promise<void> {
     if (actionsBlocked.value) return;
-    if (!window.confirm(messages.value.t('overview.confirmDelete'))) return;
-    const scope = context.capture();
-    const origin = route.fullPath;
-    // Native permanent deletion returns to the canonical Overview with a flash.
-    // Retain that confirmed destination on failed delivery; Retry can navigate only.
     const success = card.type === 'event' ? 'event.deleted' : 'packing.deleted';
-    const result = await command.run(deleteCard, false, false, {success});
-    if (result) await destination.navigate('/frontend-pilot', scope, origin,
-        {kind: 'success', messageKey: success});
+    await removal.remove({operation: deleteCard, confirmation: 'overview.confirmDelete', success});
 
-    async function deleteCard(commandScope: PilotRequestScope): Promise<boolean> {
+    async function deleteCard(commandScope: PilotRequestScope): Promise<void> {
         if (card.type === 'event') await eventApi.deleteEvent(card.id, commandScope);
         else await packingApi.deletePacking(card.id, commandScope);
-        return true;
     }
 }
 function page(next: number): void {

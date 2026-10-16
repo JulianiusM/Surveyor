@@ -279,9 +279,9 @@ async function retryCompletion(): Promise<void> {
                                 </form>
                             </li>
                             <li>
-                                <a class="dropdown-item text-danger" href="/frontend-pilot/users/account/delete"
+                                <RouterLink class="dropdown-item text-danger" to="/frontend-pilot/users/account/delete"
                                     ><i class="bi bi-trash me-1" aria-hidden="true"></i
-                                    >{{ messages.t('app.deleteAccount') }}</a
+                                    >{{ messages.t('app.deleteAccount') }}</RouterLink
                                 >
                             </li>
                         </AppNavigationDropdown>

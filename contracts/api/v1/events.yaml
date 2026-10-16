@@ -1,4 +1,17 @@
 schemas:
+  EventCreateForm:
+    type: object
+    additionalProperties: false
+    required: [data]
+    properties:
+      data: {$ref: '#/schemas/EventCreateInput'}
+      image: {type: string, format: binary}
+  EventCreated:
+    type: object
+    additionalProperties: false
+    required: [id]
+    properties:
+      id: {$ref: './common.yaml#/schemas/Uuid'}
   EventCreateContext:
     $ref: ./packing.yaml#/schemas/PackingCreateContext
   EventCreateEntry:
@@ -702,6 +715,47 @@ schemas:
       error:
         type: string
 paths:
+  /events:
+    post:
+      operationId: createEvent
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Create an Event through the existing creation and default initialization owners
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: {$ref: '#/schemas/EventCreateForm'}
+      responses:
+        '201':
+          description: Existing creation and default initialization completed
+          content:
+            application/json:
+              schema: {$ref: '#/schemas/EventCreated'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/things-to-do/{entityType}/{entityId}:
+    delete:
+      operationId: deleteEventChild
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Delete an owned child from its admitted Event host
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: entityType, in: path, required: true, schema: {type: string, enum: [packing, activity, drivers]}}
+        - {name: entityId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: view, in: query, schema: {type: string, enum: [detail, admin]}}
+      responses:
+        '200':
+          description: Existing child deletion completed
+          content:
+            application/json:
+              schema: {$ref: './packing.yaml#/schemas/MutationResult'}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
   /events/create-entry:
     get:
       operationId: getEventCreateEntry

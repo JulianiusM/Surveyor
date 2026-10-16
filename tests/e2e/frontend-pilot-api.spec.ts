@@ -1219,6 +1219,8 @@ test('preserves native signed capacity edits and SQL rounding through the versio
     // The full signed/decimal/integer-boundary matrix belongs at the real MariaDB
     // integration boundary. These representatives protect HTTP parsing, native/v1
     // envelopes, safe SQL failures and unchanged persisted values after a rejection.
+    // Blank/overflow rejection uses the supported strict-SQL environment; changing
+    // server SQL mode changes native persistence too, not the frontend's wire policy.
     const cases: {value: number | string | null; status: number; saved?: number | null}[] = [
         {value: '0', status: 200, saved: 0},
         {value: '-1.5', status: 200, saved: -2},

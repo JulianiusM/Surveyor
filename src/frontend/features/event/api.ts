@@ -7,8 +7,9 @@ import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
 import {InvalidInputError} from '../../app/transport';
-import {validateEventCreateContext} from '../../../../.generated/api/v1/browser/validateEventCreateContext.mjs';
 import {validateEventCreateEntry} from '../../../../.generated/api/v1/browser/validateEventCreateEntry.mjs';
+import {validateEventCreateInput} from '../../../../.generated/api/v1/browser/validateEventCreateInput.mjs';
+import {validateEventCreated} from '../../../../.generated/api/v1/browser/validateEventCreated.mjs';
 import {validateEventDuplicate} from '../../../../.generated/api/v1/browser/validateEventDuplicate.mjs';
 import {validateEventMetadata} from '../../../../.generated/api/v1/browser/validateEventMetadata.mjs';
 import {validateEventMetadataPatch} from '../../../../.generated/api/v1/browser/validateEventMetadataPatch.mjs';
@@ -74,20 +75,6 @@ export class EventApi {
         return transport.allowedRead(`event/${eventId}/settings`, scope, readSettings, signal);
     }
 
-    /** Fetch creation definitions through the account-only creation boundary.
-     * Public duplicate admission never substitutes for this operation's actor
-     * policy, and recovering the read must not submit a new Event. */
-    async createContext(scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['EventCreateContext']> {
-        const transport = this.transport;
-        async function readCreationContext(): Promise<components['schemas']['EventCreateContext']> {
-            const response = await transport.client.GET('/events/create-context', {
-                params: {header: transport.headers(scope)}, signal, cache: 'no-store',
-            });
-            return transport.read('getEventCreateContext', {...response, signal}, validateEventCreateContext, scope).data;
-        }
-        return transport.allowedRead('event/create-context', scope, readCreationContext, signal);
-    }
-
     /** Creation admission is distinct from the public duplication projection. The caller supplies
      * its exact return destination; the server owns account admission and bounded destination policy. */
     async createEntry(scope: PilotRequestScope, signal?: AbortSignal,
@@ -100,6 +87,22 @@ export class EventApi {
             return transport.read('getEventCreateEntry', {...response, signal}, validateEventCreateEntry, scope).data;
         }
         return transport.allowedRead('event/create-entry/' + (returnTo ?? ''), scope, readCreationEntry, signal);
+    }
+
+    /** Adapt the generated Event draft to multipart without changing its native
+     * parsing/order. Only the declared JSON receipt confirms this creation. */
+    async createEvent(input: components['schemas']['EventCreateInput'], image: File | null,
+                      scope: PilotRequestScope): Promise<components['schemas']['EventCreated']> {
+        if (!validateEventCreateInput(input)) throw new InvalidInputError('Invalid Event creation.');
+        const form = new FormData();
+        form.append('data', JSON.stringify(input));
+        if (image) form.append('image', image);
+
+        // Captured actor/CSRF proof covers both file delivery and response
+        // classification; losing that response never authorizes a second POST.
+        return this.transport.read('createEvent', await this.transport.client.POST('/events', {
+            params: {header: this.transport.headers(scope)}, body: {data: input}, bodySerializer: () => form, cache: 'no-store',
+        }), validateEventCreated, scope).data;
     }
 
     /** Detail and explicit guest routes deliberately have different native admission. Never
@@ -361,6 +364,17 @@ export class EventApi {
         const result = restore ? await this.transport.client.POST('/events/{eventId}/things-to-do/{entityType}/{entityId}/restore', options)
             : await this.transport.client.POST('/events/{eventId}/things-to-do/{entityType}/{entityId}/archive', options);
         return this.transport.read(restore ? 'restoreEventChild' : 'archiveEventChild', result, validateMutationResult, scope).data;
+    }
+
+    /** Delete an owner-managed child only within its admitted parent/type scope.
+     * The existing feature operation owns deletion and best-effort file cleanup. */
+    async deleteChild(eventId: string, entityType: 'packing' | 'activity' | 'drivers', entityId: string,
+                      scope: PilotRequestScope, admin = false): Promise<components['schemas']['MutationResult']> {
+        const result = await this.transport.client.DELETE('/events/{eventId}/things-to-do/{entityType}/{entityId}', {
+            params: {path: {eventId, entityType, entityId}, query: {view: admin ? 'admin' : 'detail'},
+                header: this.transport.headers(scope)}, cache: 'no-store',
+        });
+        return this.transport.read('deleteEventChild', result, validateMutationResult, scope).data;
     }
 
     /** Pausing/resuming preserves shared archival state rather than editing personal placement. */

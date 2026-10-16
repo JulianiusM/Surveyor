@@ -81,6 +81,8 @@ function resetFields(registration: components['schemas']['EventRegistration'] | 
  * vegetarian or vegan clears the other meals. Non-meal requirements remain. */
 function selectDiet(choice: Dietary, event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
+    // Remove this choice first so unchecking releases only it. Checking then replaces
+    // incompatible meals while retaining independent allergies and comment requirements.
     let selected = fields.dietary.filter(value => value !== choice);
     if (checked) {
         if (choice === 'VEGETARIAN' || choice === 'VEGAN') selected = selected.filter(value => !meals.includes(value));
