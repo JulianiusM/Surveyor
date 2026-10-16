@@ -1,13 +1,17 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {defineComponent} from 'vue';
-import {createMemoryHistory, createRouter} from 'vue-router';
+import {defineComponent, h} from 'vue';
+import {createMemoryHistory, createRouter, useRoute} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
 import IdentityPage from '../../src/frontend/features/identity/IdentityPage.vue';
-import PackingGuestPage from '../../src/frontend/features/identity/PackingGuestPage.vue';
+import GuestEntryPage from '../../src/frontend/features/identity/GuestEntryPage.vue';
+import {usePackingApi} from '../../src/frontend/features/packing/api';
+import {usePilot} from '../../src/frontend/app/context';
+import {packingKeys} from '../../src/frontend/app/queryKeys';
+import type {PilotRequestScope} from '../../src/types/FrontendPilotUiTypes';
 import PackingHome from '../../src/frontend/features/overview/OverviewPage.vue';
 import AppHeader from '../../src/frontend/components/AppHeader.vue';
 import App from '../../src/frontend/app/App.vue';
@@ -38,6 +42,20 @@ afterEach(async () => {
     document.body.innerHTML = '';
 });
 
+/** Exercise shared guest presentation with Packing's real feature adapter. */
+const PackingGuestFixture = defineComponent({setup() {
+    const context = usePilot();
+    const route = useRoute();
+    const api = usePackingApi(context);
+    return () => {
+        const id = String(route.params.listId);
+        return h(GuestEntryPage, {resourceId: id, destination: '/frontend-pilot/packing/' + id,
+            titleKey: 'app.packing', queryKey: packingKeys.guest(context.session.value?.context, id),
+            readEntry: (scope: PilotRequestScope, signal?: AbortSignal) => api.guestEntry(id, scope, signal),
+            registerGuest: (input: components['schemas']['GuestRegistrationInput'], scope: PilotRequestScope) => api.registerGuest(id, input, scope)});
+    };
+}});
+
 /** Real route reuse, commands and generated validators; only the HTTP boundary is replaced. */
 async function mounted(path: string, handler: (request: Request) => Promise<Response>,
                        bootstrap: Partial<FrontendPilotBootstrap> = {}, useShell = false) {
@@ -53,7 +71,7 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
         {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {identityMode: 'activate'}},
         {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {identityMode: 'oidc'}},
         {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {identityMode: 'recovery'}},
-        {path: '/frontend-pilot/packing/:listId/guest', component: PackingGuestPage},
+        {path: '/frontend-pilot/packing/:listId/guest', component: PackingGuestFixture},
         {path: '/frontend-pilot/packing/:listId/duplicate', component: defineComponent({template: '<p>Duplicate destination</p>'})},
         {path: '/frontend-pilot/packing/:listId', component: defineComponent({template: '<p>Canonical detail</p>'})},
         {path: '/frontend-pilot', component: PackingHome},

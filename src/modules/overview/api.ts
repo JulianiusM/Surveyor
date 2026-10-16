@@ -24,21 +24,9 @@ export async function readOverview(query: operations['getOverview']['parameters'
     for (const key of ['q', 'page', 'childPage'] as const) if (query[key] !== undefined) navigation[`${prefix}${key}`] = query[key];
     if (query.eventId) navigation[`${prefix}event`] = query.eventId;
     const region = await getOverviewRegion(session, navigation);
+    // Both migrated feature families use the same bounded card owner.
     function projectCard(card: Entity): components['schemas']['OverviewCard'] {
-        const packingCard = card.type === 'packing';
-        // Native owner cards expose Duplicate/Delete for the owning profile, including
-        // existing guest-owned content. Account-only creation remains a later POST check;
-        // neither audience grants nor administrator permissions imply these owner actions.
-        const ownerActions = packingCard && region.collection === 'owner' && isOwner(session, card.ownerId);
-        return {id: card.id, type: card.type, title: card.title, description: card.description ?? null,
-            url: packingCard ? `/frontend-pilot/packing/${encodeURIComponent(card.id)}` : card.url,
-            headerUrl: card.imageUrl ? packingCard ? `/api/v1/packing-lists/${encodeURIComponent(card.id)}/header` : card.imageUrl : null,
-            headerVersion: card.imageVersion ?? null, eventContext: card.eventContext ?? null,
-            visibility: card.visibility ?? 'default', overviewHidden: Boolean(card.overviewHidden),
-            archived: Boolean(card.archive?.archived), inheritedArchived: Boolean(card.archive?.inheritedFromEventId),
-            capabilities: {archive: packingCard && Boolean(card.archive?.canArchive), restore: packingCard && Boolean(card.archive?.canRestore),
-                duplicate: ownerActions, remove: ownerActions},
-            children: card.overview ? {total: card.overview.total, matching: card.overview.matching} : null};
+        return projectOverviewCard(card, session, region.collection === 'owner');
     }
     return {collection: region.collection, region: region.region, q: region.q, type: region.type, availableTypes: region.availableTypes,
         page: region.page, childPage: region.childPage,
@@ -46,6 +34,35 @@ export async function readOverview(query: operations['getOverview']['parameters'
         regionEntities: region.regionEntities, matchingEntities: region.matchingEntities, totalCards: region.totalCards, totalChildren: region.totalChildren,
         hasPrevious: Boolean(region.previousUrl), hasNext: Boolean(region.nextUrl), parent: region.parent ? projectCard(region.parent) : null,
         items: region.items.map(projectCard)};
+}
+
+/**
+ * Project shared card presentation without widening membership or child admission.
+ * Event Things to do opts into existing shared lifecycle controls; personal Overview
+ * retains only migrated actions. Both callers use the same destination/image mapping.
+ */
+export function projectOverviewCard(card: Entity, session: SessionLike, ownerCollection = false,
+    sharedLifecycle = false): components['schemas']['OverviewCard'] {
+    // Native child destinations remain ordinary links until their own migrations.
+    const migrated = card.type === 'packing' || card.type === 'event';
+    const ownerActions = (migrated || sharedLifecycle) && ownerCollection && isOwner(session, card.ownerId);
+    const resource = encodeURIComponent(card.id);
+    const headerFamily = card.type === 'event' ? 'events' : 'packing-lists';
+    const eventContext = card.eventContext ? {...card.eventContext,
+        url: card.eventContext.url.replace(/^\/event\//u, '/frontend-pilot/event/')} : null;
+    return {id: card.id, type: card.type, title: card.title, description: card.description ?? null,
+        url: migrated ? `/frontend-pilot/${card.type}/${resource}` : card.url,
+        headerUrl: card.imageUrl ? migrated ? `/api/v1/${headerFamily}/${resource}/header` : card.imageUrl : null,
+        headerVersion: card.imageVersion ?? null, eventContext,
+        visibility: card.visibility ?? 'default', overviewHidden: Boolean(card.overviewHidden),
+        archived: Boolean(card.archive?.archived), inheritedArchived: Boolean(card.archive?.inheritedFromEventId),
+        capabilities: {archive: (migrated || sharedLifecycle) && Boolean(card.archive?.canArchive),
+            restore: (migrated || sharedLifecycle) && Boolean(card.archive?.canRestore),
+            duplicate: ownerActions, remove: ownerActions},
+        // Only the shared Event card host asks for this existing schedule context.
+        ...(sharedLifecycle && card.archive?.hasAutomaticSchedule ? {automation: {
+            paused: card.archive.autoArchivePaused, canManage: card.archive.canManageAutomation}} : {}),
+        children: card.overview ? {total: card.overview.total, matching: card.overview.matching} : null};
 }
 
 /** Desired personal visibility is naturally retryable and always belongs to the admitted profile. */

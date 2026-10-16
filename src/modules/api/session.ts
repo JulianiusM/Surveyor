@@ -238,7 +238,8 @@ export function prepareIdentityReply(req: Request, staged: Request['session'],
  * The controller calls this before its guest/profile/session transaction commits;
  * postcommit SMTP work selects a finished immutable string without projecting again.
  */
-export function prepareGuestIdentityReplies(req: Request, staged: Request['session'], personalLink: string):
+export function prepareGuestIdentityReplies(req: Request, staged: Request['session'], personalLink: string,
+    operation: 'registerPackingGuest' | 'registerEventGuest' = 'registerPackingGuest'):
     Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {
     // Only the new guest/profile supplied by this transaction contributes data.
     // Neither the original actor nor a later session-store generation is a source.
@@ -248,9 +249,9 @@ export function prepareGuestIdentityReplies(req: Request, staged: Request['sessi
 
     // Validate/serialize all alternatives now; delivery only chooses their key.
     return Object.freeze({
-        'not-requested': prepareValidatedJson(req, 'registerPackingGuest', 200, {...result, emailDelivery: 'not-requested'}, session.context),
-        sent: prepareValidatedJson(req, 'registerPackingGuest', 200, {...result, emailDelivery: 'sent'}, session.context),
-        failed: prepareValidatedJson(req, 'registerPackingGuest', 200, {...result, emailDelivery: 'failed'}, session.context),
+        'not-requested': prepareValidatedJson(req, operation, 200, {...result, emailDelivery: 'not-requested'}, session.context),
+        sent: prepareValidatedJson(req, operation, 200, {...result, emailDelivery: 'sent'}, session.context),
+        failed: prepareValidatedJson(req, operation, 200, {...result, emailDelivery: 'failed'}, session.context),
     });
 }
 

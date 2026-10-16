@@ -21,6 +21,8 @@ const HelpPage = () => import('../features/help/HelpPage.vue');
 const ProfileAdministrationPage = () => import('../features/identity/ProfileAdministrationPage.vue');
 const ProfileWorkflowPage = () => import('../features/identity/ProfileWorkflowPage.vue');
 const LandingPage = () => import('../features/common/LandingPage.vue');
+const EventEntry = () => import('../features/event/EventEntry.vue');
+const EventCreatePage = () => import('../features/event/EventCreatePage.vue');
 
 // One route declaration drives the initial skeleton for every interactive page.
 // Readable admitted errors/completions are classified by the shared context owner.
@@ -67,6 +69,11 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             {path: '/frontend-pilot/packing/:listId/duplicate', component: PackingCreatePage, meta: {javascriptRequired: true}},
             {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry, meta: {...javascriptPage}},
             {path: '/frontend-pilot/packing/:listId', component: PackingEntry, meta: {...javascriptPage, dynamicContent: true}},
+            {path: '/frontend-pilot/event/create', component: EventCreatePage, meta: javascriptPage},
+            {path: '/frontend-pilot/event/:eventId/duplicate', component: EventCreatePage, meta: javascriptPage},
+            {path: '/frontend-pilot/event/:eventId/guest', component: EventEntry, meta: javascriptPage},
+            {path: '/frontend-pilot/event/:eventId/admin', component: EventEntry, meta: {...javascriptPage, dynamicContent: true}},
+            {path: '/frontend-pilot/event/:eventId', component: EventEntry, meta: {...javascriptPage, dynamicContent: true}},
             {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'login'}},
             {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...javascriptPage, identityMode: 'register'}},
             {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'oidc'}},

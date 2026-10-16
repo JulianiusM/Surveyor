@@ -1,6 +1,7 @@
 import {Router, type Request, type Response} from 'express';
 import * as userController from '../../../controller/userController';
 import {readPackingGuestEntry} from '../../../controller/packingController';
+import {readEventGuestEntry} from '../../../controller/eventController';
 import {ApiProblem} from '../../../modules/api/problem';
 import {committedSessionView, prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, requireApiContext} from '../../../modules/api/session';
 import {prepareValidatedJson, sendPreparedJson, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
@@ -239,21 +240,41 @@ router.get('/packing-lists/:listId/guest', asyncHandler(async function getPackin
 router.post('/packing-lists/:listId/guest', asyncHandler(async function registerPackingGuest(req, res) {
     await admit(req, res, 'registerPackingGuest');
     const list = await readPackingGuestEntry(String(req.params.listId));
+    await registerGuestForEntry(req, res, `/frontend-pilot/packing/${list.id}`, 'registerPackingGuest');
+
+}));
+
+router.get('/events/:eventId/guest', asyncHandler(async function getEventGuestEntry(req, res) {
+    await admit(req, res, 'getEventGuestEntry');
+    sendValidatedJson(req, res, 'getEventGuestEntry', 200, await readEventGuestEntry(String(req.params.eventId)));
+}));
+
+router.post('/events/:eventId/guest', asyncHandler(async function registerEventGuest(req, res) {
+    await admit(req, res, 'registerEventGuest');
+    const event = await readEventGuestEntry(String(req.params.eventId));
+    // The opaque registration token remains only a return destination until a
+    // later explicit attendance submission; guest creation never consumes it.
+    const token = typeof req.query.regToken === 'string' ? `?${new URLSearchParams({regToken: req.query.regToken})}` : '';
+    await registerGuestForEntry(req, res, `/frontend-pilot/event/${event.id}${token}`, 'registerEventGuest');
+}));
+
+/**
+ * Share identity registration completion across actual feature guest consumers.
+ * Each caller already validated its operation and resolved its public entry;
+ * this owner prepares delivery outcomes and adopts only the committed Session.
+ */
+async function registerGuestForEntry(req: Request, res: Response, next: string,
+    operation: 'registerPackingGuest' | 'registerEventGuest'): Promise<void> {
     const body = req.body as components['schemas']['GuestRegistrationInput'];
-    /** Prepare every SMTP outcome while creation and stored-session writes can still roll back. */
+    /** Prepare both SMTP outcomes before identity/session persistence commits. */
     function prepareGuestReply(staged: Request['session'], personalLink: string): Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {
-        // Bind this request's locale/transport metadata to the transaction's
-        // isolated identity, using the common production receipt projection.
-        return prepareGuestIdentityReplies(req, staged, personalLink);
+        return prepareGuestIdentityReplies(req, staged, personalLink, operation);
     }
-
+    // The existing controller owns guest identity, durable context and delivery.
     const committed = await userController.registerGuestWithSession(body.username, body.email ?? undefined, req,
-        {frontend: true, next: `/frontend-pilot/packing/${list.id}`, context: req.apiActor!.context, prepareResult: prepareGuestReply});
-
-    // Adopt only the committed detached session. Its response-local save
-    // acknowledges existing persistence, preventing a second write after commit.
+        {frontend: true, next, context: req.apiActor!.context, prepareResult: prepareGuestReply});
     req.session = committed.session;
     sendPreparedJson(req, res, committed.result);
-}));
+}
 
 export default router;

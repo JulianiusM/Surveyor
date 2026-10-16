@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-15
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current database-free inventory and revised one-session/stateless admission assertions source-reconciled; repair execution remains distinct from prior results; no cutover or operator execution claimed
+verification-scope: P2 shared header/lifecycle adoption, entry retirement, metadata handles, current read-only notes and public method contract assertions source-mapped; execution remains separately scoped; no cutover or operator execution claimed
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -116,9 +116,26 @@ Use actual Query/cache/transport consumers where they uniquely detect:
 - Receipt-owned transient expiry, repeated renewal, locale reactivity and detached initiating hosts.
 - Session/bootstrap dispatch admission, visibility/disclosure pause, terminal rejection and Retry-After deadlines.
 - Eligible observer selection when shared-key consumers have different visibility or lifecycle.
+- Required owning reads with no optional dependent observers, and inactive cached dependencies remaining inactive.
+- Closed disclosures pausing recurring polling while retaining initial count reads, admitted snapshots and drafts.
+- Equal successful reads restoring a previously rejected binary image without relying on a changed version.
+- An already-open editor losing its method grant: visible dispatch controls and handlers agree, with readable drafts retained.
 - Aggregate totals/badges retiring with their source authority, while independently admitted siblings remain readable.
 - Locale changes canceling translated families only, leaving machine authority reads and drafts intact.
 - Explicit value lifetimes across warm/cold routes, actor changes and completion for text, select, checkbox and file inputs.
+
+Current focused source selections protect the shared P2 owners at their actual layer:
+
+| Boundary | Authored coverage and limit |
+|---|---|
+| Displayed header and root/child schedule actions | `tests/frontend/frontend-entity-presentation.spec.ts` mounts actual Event/Packing and Settings/child consumers, checking settings admission, image lifetime/removal and shared pause/resume behavior. Existing Event-page and Packing-editor cases retain equal-image-read and pending/draft coverage. HTTP substitution makes these client checks. |
+| Denial-producing admission and inactive visits | `tests/frontend/frontend-entry-retirement.spec.ts` uses real Query observers to retain a paused producing denial while removing older token visits and preserving another actor. Event foundation and existing Packing entry cases cover mounted feature adoption and restored admission. |
+| Metadata public workflow and read-only notes | Existing Event foundation/Packing management cases exercise the actual metadata adapters and shared editor handle. Event organizer cases update selected participant/summary notes through fresh roster reads, independently of search, and retire missing/empty sources while retaining separate date-draft coverage. |
+| Built visual/behavioral delivery | `tests/e2e/frontend-entity-header.spec.ts` compares native/Vue headers at desktop/mobile sizes with images, long titles and parent navigation. `frontend-event-workflows.spec.ts` exercises actual controls, sessions and persistence for attendance, links, notes, permissions, images/lifecycle, deadline/capacity outcomes, uncertain delivery and anonymous grants. Other Event E2E files retain their existing boundaries. |
+
+This is an assertion map, not a claim that a selection ran or passed. Executed inputs, results and limits belong to
+the migration review. Inspect equivalent surfaces and their controls rather than infer full parity from a container
+width, one representative input or capture success.
 
 Hold/cancel the real post-command read to prove one write and blocked authority until a new admitted read. Equal
 successful data is a valid receipt; object identity alone is not. A read cannot prove an unknown creation failed.

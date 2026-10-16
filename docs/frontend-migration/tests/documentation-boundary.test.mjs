@@ -447,16 +447,27 @@ test('pins the exact untracked public runtime fixture in a real Git preparation'
 
 test('copies only exact reviewed untracked public owners', function publicFrontendOwners(t) {
     const fixture = createFixture(t);
-    const owners = ['src/types/FrontendFeedbackTypes.d.ts', 'src/frontend/components/CommandFeedback.vue',
-        'src/frontend/composables/pageNavigation.ts', 'src/frontend/features/packing/lifecycle.ts',
-        'src/frontend/styles/application.sass',
-        'src/frontend/styles/style.sass', 'src/frontend/styles/accordion.sass',
-        'src/frontend/styles/timezone-select.sass', 'src/frontend/styles/help.sass',
-        'tests/frontend/frontend-page-navigation.spec.ts',
-        'tests/integration/frontend-session-admission.spec.ts'];
+    // Exercise every current exact authored input through the CLI's independent
+    // admission inventory. The two existing generated directory owners retain
+    // their separate contract and are not broadened by this P2 source update.
+    const liveManifest = JSON.parse(fs.readFileSync(path.join(repository, manifestPath), 'utf8'));
+    const owners = liveManifest.previewInputs.filter(function exactAuthoredOwner(relative) {
+        return !relative.endsWith('/');
+    });
+    for (const required of ['contracts/api/v1/events.yaml', 'src/frontend/components/EntityHeader.vue',
+        'src/frontend/composables/entityLifecycle.ts', 'src/frontend/composables/metadataEditor.ts',
+        'src/frontend/features/event/EventParticipants.vue', 'src/frontend/features/identity/GuestEntryPage.vue',
+        'src/routes/api/v1/events.ts', 'src/routes/frontendPilotEvent.ts', 'src/types/FrontendEntityMetadataTypes.d.ts',
+        'tests/e2e/frontend-entity-header.spec.ts', 'tests/e2e/frontend-event-workflows.spec.ts',
+        'tests/frontend/frontend-entry-retirement.spec.ts', 'tests/integration/event-api.spec.ts']) {
+        assert.ok(owners.includes(required), `Missing reviewed P2 preview owner: ${required}`);
+    }
+    const stale = 'src/frontend/features/packing/lifecycle.ts';
+    assert.equal(owners.includes(stale), false);
     for (const relative of owners) write(fixture, relative, `// Synthetic reviewed public owner: ${relative}\n`);
     const unlisted = 'src/frontend/styles/unlisted-neighbor.sass';
     write(fixture, unlisted, '// Unlisted source must not enter the copied tree.\n');
+    write(fixture, stale, '// Superseded owner must not regain preview admission.\n');
     fixture.manifest.previewInputs = owners;
     writeManifest(fixture);
 
@@ -465,21 +476,34 @@ test('copies only exact reviewed untracked public owners', function publicFronte
     const prepared = fixtureReceipt(fixture);
     // All named files remain untracked in the source. Neither their containing
     // directories nor an unrelated sibling become preview-copy permissions.
+    assert.equal(git(fixture, ['ls-files', '--', ...owners]), '');
     for (const relative of owners) {
         const content = fs.readFileSync(contained(fixture.root, relative), 'utf8');
         assert.equal(fs.readFileSync(contained(prepared.preview, relative), 'utf8'), content);
-        assert.equal(git(fixture, ['ls-files', '--', relative]), '');
         const source = prepared.receipt.inputs.files.find(function reviewedPublicSource(input) {
             return input.path === relative;
         });
         assert.equal(source?.sha256, documentationDigest(content));
     }
     assert.equal(fs.existsSync(contained(prepared.preview, unlisted)), false);
+    assert.equal(fs.existsSync(contained(prepared.preview, stale)), false);
+});
+
+test('rejects unlisted P2 preview siblings, private state and directory inputs', function unlistedP2PreviewInputs(t) {
+    const fixture = createFixture(t);
+    // Exact reviewed P2 files grant no admission to their former owner, another
+    // file in the same folder, a directory, or local runtime/private inputs.
+    for (const relative of ['src/frontend/features/packing/lifecycle.ts',
+        'src/frontend/features/event/UnreviewedNeighbor.vue', 'src/frontend/features/event/',
+        'tests/e2e/', '.env']) {
+        writeManifest(fixture, {...fixture.manifest, previewInputs: [relative]});
+        expectRejectedBeforePreview(fixture, runBoundary(fixture, {preview: true}), /Preview input is not an admitted public owner/);
+    }
 });
 
 test('rejects an admitted public file replaced by a directory before preview writes', function publicFileKind(t) {
     const fixture = createFixture(t);
-    const relative = 'tests/integration/frontend-development-runtime.spec.ts';
+    const relative = 'src/frontend/components/EntityHeader.vue';
     // A misleading file suffix must not admit a directory or its private-looking
     // synthetic child. The failure precedes even the ignored preparation directory.
     write(fixture, relative + '/.env', 'SYNTHETIC_PRIVATE_VALUE=fixture-only\n');

@@ -815,7 +815,7 @@ describe('native shell and help presentation contract', () => {
     it('renders the current navigation destinations, responsive toggle, public footer and help structure', async () => {
         const {wrapper, context} = await renderHelp();
         try {
-            for (const path of ['/frontend-pilot', '/survey/create', '/activity/create', '/event/create', '/frontend-pilot/packing/create', '/drivers/create']) {
+            for (const path of ['/frontend-pilot', '/survey/create', '/activity/create', '/frontend-pilot/event/create', '/frontend-pilot/packing/create', '/drivers/create']) {
                 expect(wrapper.find(`header a[href="${path}"]`).exists()).toBe(true);
             }
             expect(wrapper.get('main#pilot-main').classes()).toContain('container-fluid');

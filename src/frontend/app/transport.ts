@@ -3,6 +3,7 @@ import type {components, paths} from '../../types/api/v1';
 import type {PilotRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import {validateSafeProblemDetails} from '../../../.generated/api/v1/browser/validateSafeProblemDetails.mjs';
+import {validateComparisonToken} from '../../../.generated/api/v1/browser/validateComparisonToken.mjs';
 import {apiCompatibility, operationPolicies} from '../../../.generated/api/v1/policy.mjs';
 import type {ApiOperationId} from '../../types/ApiTransportTypes';
 
@@ -147,6 +148,33 @@ export class PilotTransport {
             throw new UnconfirmedResponseError();
         }
         return {data, etag: response.headers.get('ETag')};
+    }
+
+    /** Admit a header image through the same captured-scope/error policy as JSON
+     * reads. Features supply generated HTTP operations and retain their read key;
+     * binary decoding never introduces another actor or retry owner. */
+    headerImage(result: {data?: unknown; error?: unknown; response: Response}, scope: PilotRequestScope,
+                signal?: AbortSignal): Blob {
+        // Cancel before classifying errors so an obsolete response cannot publish
+        // identity loss or a Retry-After lease into a newer image visit.
+        this.checkReadCancellation(signal);
+        if (!result.response.ok) this.reject(result.response, result.error, scope);
+        this.checkScope(result.response, scope);
+        // Preserve the existing image boundary, including octet-stream delivery.
+        // HTML redirects and malformed success remain unconfirmed responses.
+        if (result.response.status !== 200 || !(result.data instanceof Blob)
+            || !['application/octet-stream', 'image/jpeg', 'image/png', 'image/gif'].includes(result.data.type))
+            throw new UnconfirmedResponseError();
+        return result.data;
+    }
+
+    /** A readable metadata response needs its opaque strong comparison header
+     * before any feature editor can write. The generated bound is shared with
+     * command bodies; the browser never decodes the token into authority. */
+    requireComparison(etag: string | null | undefined): asserts etag is string {
+        // Missing, malformed and oversized evidence cannot make a form writable.
+        if (!validateComparisonToken(etag) || typeof etag !== 'string' || !/^"[^"\r\n]+"$/u.test(etag))
+            throw new UnconfirmedResponseError();
     }
 
     /** Every read entry point shares one deadline: focus/manual callers cannot bypass Retry-After.

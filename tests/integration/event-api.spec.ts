@@ -1,0 +1,317 @@
+import {afterAll, beforeAll, describe, expect, it} from 'vitest';
+import * as eventApi from '../../src/controller/eventController';
+import eventController from '../../src/controller/eventController';
+import * as eventService from '../../src/modules/database/services/EventService';
+import * as adminService from '../../src/modules/database/services/EntityAdminService';
+import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
+import {contractValidator} from '../../src/modules/api/contracts';
+import {prepareValidatedJson} from '../../src/modules/api/transport';
+import type {Request} from 'express';
+import type {components} from '../../src/types/api/v1';
+import {PERM} from '../../src/modules/lib/permissions';
+import {randomUUID} from 'node:crypto';
+import * as activityService from '../../src/modules/database/services/ActivityService';
+import * as driverService from '../../src/modules/database/services/DriverService';
+import type {Profile} from '../../src/modules/database/entities/user/Profile';
+import type {SessionLike} from '../../src/types/PermissionTypes';
+import {createIntegrationEvent, persistIntegrationProfile} from '../keywords/coreDomainKeywords';
+import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
+
+let owner: Profile;
+let participant: Profile;
+let other: Profile;
+let editor: Profile;
+
+function sessionFor(profile: Profile): SessionLike {
+    return {profile, auth: {user: profile.user!}};
+}
+
+async function createEvent(title: string, capacity: number | null = 20): Promise<string> {
+    const id = await createIntegrationEvent(owner.id, title, capacity);
+    await eventController.afterCreateItems(id, {_body: {defaultPerms: {authenticated: ['ACCESS_REGISTRATION']}}});
+    return id;
+}
+
+/** These actors also remain isolated when a reviewed local run reuses an already
+ * prepared disposable schema. Production account constraints still apply; neither
+ * shared seed accounts nor the surrounding test rows need to be deleted. */
+function persistEventActor(name: string): Promise<Profile> {
+    const identity = randomUUID();
+    return persistIntegrationProfile({name, username: `event-${identity}`, email: `${identity}@example.invalid`});
+}
+
+beforeAll(async () => {
+    await initializeIntegrationDatabase();
+    owner = await persistEventActor('Event owner');
+    participant = await persistEventActor('Event participant');
+    other = await persistEventActor('Other participant');
+    editor = await persistEventActor('Event editor');
+}, 120_000);
+
+afterAll(closeIntegrationDatabase);
+
+describe('versioned Event projections and native operation adoption', () => {
+    it('keeps native detail, versioned detail and registration capacity policy aligned for absent, zero and reached limits', async () => {
+        const id = await createEvent('Shared Event capacity policy');
+        await eventService.register(id, '2027-06-01', '2027-06-03', participant.id);
+
+        // Persist the edge limits directly: creation still independently requires
+        // positive capacity, while existing stored zero and NULL retain their meaning.
+        for (const {limit, full} of [{limit: null, full: false}, {limit: 0, full: true},
+            {limit: 1, full: true}, {limit: 2, full: false}]) {
+            await eventService.updateEventProperties(id, {maxParticipants: limit});
+            const current = (await eventService.getEventById(id))!;
+
+            // Exercise the actual three production consumers with real persistence,
+            // preserving each projection's normal data acquisition and actor scope.
+            const native = await eventController.fetchForView(current, {session: sessionFor(owner)} as Request);
+            const versioned = await eventApi.readEvent(id, sessionFor(owner));
+            expect(native.isFull).toBe(full);
+            expect(versioned.isFull).toBe(full);
+            expect(versioned.registrationCount).toBe(1);
+            expect(await eventApi.isEventFull(id)).toBe(full);
+        }
+    });
+
+    it('shares related-content membership without letting administration or item admission substitute for attendance', async () => {
+        const id = await createEvent('Shared Event child admission');
+        const activityId = randomUUID();
+        await activityService.createActivityPlan(activityId, owner.id, 'Related activity', '', '2027-06-01', '2027-06-03', id);
+        await adminService.addAdmin('event', id, editor.id, PERM.ACCESS_ADMIN | PERM.ACCESS_ITEMS);
+        const event = (await eventService.getEventById(id))!;
+
+        /** Native and versioned consumers retain their own page/method admission. */
+        async function expectRelatedContent(expected: number): Promise<void> {
+            const native = await eventController.fetchForView(event, {session: sessionFor(editor)} as Request);
+            expect(native.relatedEntities).toHaveLength(expected);
+            expect((await eventApi.readEventThingsToDo(id, sessionFor(editor), 'detail')).items).toHaveLength(expected);
+            expect((await eventApi.readEventThingsToDo(id, sessionFor(editor), 'admin')).items).toHaveLength(expected);
+        }
+
+        // Detail/admin method grants alone do not supply the separate related-content
+        // membership. Either own attendance or assignment-management authority does.
+        await expectRelatedContent(0);
+        await eventService.register(id, '2027-06-01', '2027-06-03', editor.id);
+        await expectRelatedContent(1);
+        await eventService.deleteRegistrationFor(id, editor.id);
+        await adminService.updateAdminPerms('event', id, editor.id, PERM.ACCESS_ADMIN | PERM.ACCESS_ITEMS | PERM.MANAGE_ASSIGNMENTS);
+        await expectRelatedContent(1);
+    });
+
+    it('projects only own attendance and counts without roster, invoice, account or storage details', async () => {
+        const id = await createEvent('Private Event projections');
+        await eventService.updateHeaderImage(id, 'uploads/private-event-storage.png');
+        // Native header delivery precedes page admission. Its controller can
+        // resolve this public method while full Event details remain profile-only.
+        expect(await eventApi.readEventHeaderPath(id, {})).toBe('uploads/private-event-storage.png');
+        await eventService.register(id, '2027-06-01', '2027-06-03', participant.id, ['VEGAN']);
+        await eventService.register(id, '2027-06-02', '2027-06-02', other.id, ['MEAT', 'ALLERGIES'], 'Private allergy');
+
+        const view = await eventApi.readEvent(id, sessionFor(participant));
+        expect(contractValidator('EventView')(view)).toBe(true);
+        expect(view).toMatchObject({id, registrationCount: 2, isFull: false, hasInvoicePools: false,
+            registration: {arrivalDate: '2027-06-01', departureDate: '2027-06-03', dietary: ['VEGAN']},
+            capabilities: {participants: false, manageRegistrations: false, admin: false}});
+        const serialized = JSON.stringify(view);
+        for (const hidden of ['ownerId', 'participants', 'invoicePools', 'Private allergy', other.id,
+            other.user!.email, 'private-event-storage']) {
+            // The participants capability key is expected; a roster collection is forbidden.
+            if (hidden !== 'participants') expect(serialized).not.toContain(hidden);
+        }
+        expect(view).not.toHaveProperty('participants');
+        await invoiceService.createPool(id, 'Private pool name', undefined, 'EQUAL', false, false, false);
+        const withFinanceDestination = await eventApi.readEvent(id, sessionFor(participant));
+        expect(withFinanceDestination.hasInvoicePools).toBe(true);
+        expect(JSON.stringify(withFinanceDestination)).not.toContain('Private pool name');
+        expect((await eventApi.readEvent(id, sessionFor(owner))).hasInvoicePools).toBe(false);
+        await expect(eventApi.readEventParticipants(id, sessionFor(participant))).rejects.toMatchObject({status: 403});
+        await expect(eventApi.readEvent(id, {})).rejects.toMatchObject({status: 401});
+    });
+
+    it('keeps page, administration, roster and registration-management grants independent', async () => {
+        const id = await createEvent('Independent Event grants');
+        await eventService.register(id, '2027-06-01', '2027-06-03', participant.id);
+        await adminService.addAdmin('event', id, editor.id, PERM.ACCESS_ADMIN);
+        expect((await eventApi.readEventResourceEntry(id, 'admin', sessionFor(editor))).entry.kind).toBe('render');
+        await expect(eventApi.readEventParticipants(id, sessionFor(editor))).rejects.toMatchObject({status: 403});
+
+        await adminService.updateAdminPerms('event', id, editor.id, PERM.ACCESS_PARTICIPANTS);
+        expect((await eventApi.readEventResourceEntry(id, 'admin', sessionFor(editor))).entry)
+            .toMatchObject({kind: 'denied', status: 403});
+        const roster = await eventApi.readEventParticipants(id, sessionFor(editor));
+        expect(contractValidator('EventParticipants')(roster)).toBe(true);
+        expect(roster.participants).toHaveLength(1);
+        await expect(eventApi.removeEventRegistration(id, roster.participants[0].id, sessionFor(editor)))
+            .rejects.toMatchObject({status: 403});
+        expect((await eventApi.readEventResourceEntry(id, 'detail', sessionFor(editor))).entry.kind).toBe('render');
+    });
+
+    it('preserves local deadline meaning and omitted metadata through a title-only locked update', async () => {
+        const id = await createEvent('Zoned Event metadata');
+        await eventService.updateEventProperties(id, {bindingDeadline: '2027-06-01T10:20:30Z', timezone: 'Europe/Berlin',
+            allowRegDietUpdateAfterDeadline: true});
+        await adminService.addAdmin('event', id, editor.id, PERM.EDIT_TITLE);
+        const limited = await eventApi.readEventMetadata(id, sessionFor(editor));
+        expect(limited.values).toEqual({title: 'Zoned Event metadata'});
+        expect(limited.editableFields).toEqual(['title']);
+        await expect(eventApi.patchEventMetadata(id, {location: 'Hidden update'}, limited.editToken, sessionFor(editor)))
+            .rejects.toMatchObject({status: 403});
+
+        const baseline = await eventApi.readEventMetadata(id, sessionFor(owner));
+        expect(contractValidator('EventMetadata')(baseline)).toBe(true);
+        expect(baseline.values).toMatchObject({bindingDeadline: '2027-06-01T12:20:30', deadlineTz: 'Europe/Berlin',
+            allowRegDietUpdateAfterDeadline: true});
+        await eventApi.patchEventMetadata(id, {title: 'Changed Event title'}, baseline.editToken, sessionFor(owner));
+        const saved = (await eventService.getEventById(id))!;
+        expect(new Date(saved.bindingDeadline!).toISOString()).toBe('2027-06-01T10:20:30.000Z');
+        expect(saved.timezone).toBe('Europe/Berlin');
+        expect(Boolean(saved.allowRegDietUpdateAfterDeadline)).toBe(true);
+        await expect(eventApi.patchEventMetadata(id, {title: 'Stale title'}, baseline.editToken, sessionFor(owner)))
+            .rejects.toMatchObject({status: 412});
+    });
+
+    it('updates existing attendance at capacity without duplicate registrations and replaces dietary choices', async () => {
+        const id = await createEvent('Full Event update', 1);
+        await eventApi.saveEventRegistration(id, {arrivalDate: '2027-06-01', departureDate: '2027-06-03',
+            dietary: ['MEAT', 'MEAT']}, sessionFor(participant));
+        await eventApi.saveEventRegistration(id, {arrivalDate: '2027-06-02', departureDate: '2027-06-03',
+            dietary: ['VEGAN', 'ALLERGIES'], allergyNotes: 'Peanuts'}, sessionFor(participant));
+        expect(await eventService.getRegistrationsForEvent(id)).toHaveLength(1);
+        expect((await eventService.getRegistrationFor(participant.id, id))?.dietaryChoices)
+            .toMatchObject([{choice: 'VEGAN'}, {choice: 'ALLERGIES', additionalInfo: 'Peanuts'}]);
+        await expect(eventApi.saveEventRegistration(id, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'}, sessionFor(other)))
+            .rejects.toMatchObject({status: 403});
+    });
+
+    it('preserves native own-profile cancellation no-ops and checks the deadline before deleting attendance', async () => {
+        const id = await createEvent('Cancellation parity');
+        const event = (await eventService.getEventById(id))!;
+        // An admitted profile without attendance is a successful native no-op,
+        // including a second cancellation after another tab removed its row.
+        await expect(eventController.cancelRegistration(event, sessionFor(participant))).resolves.toBe('Registration cancelled');
+        await expect(eventApi.cancelEventRegistration(id, sessionFor(participant))).resolves.toEqual({changed: true});
+        await eventService.register(id, '2027-06-01', '2027-06-03', participant.id);
+        await expect(eventApi.cancelEventRegistration(id, sessionFor(participant))).resolves.toEqual({changed: true});
+        await expect(eventApi.cancelEventRegistration(id, sessionFor(participant))).resolves.toEqual({changed: true});
+        expect(await eventService.getRegistrationFor(participant.id, id)).toBeNull();
+
+        await eventService.register(id, '2027-06-01', '2027-06-03', participant.id);
+        await eventService.updateEventProperties(id, {bindingDeadline: '2000-01-01T00:00:00Z', allowRegCancelationAfterDeadline: false});
+        const closed = (await eventService.getEventById(id))!;
+        for (const profile of [participant, other]) {
+            await expect(eventController.cancelRegistration(closed, sessionFor(profile)))
+                .rejects.toMatchObject({status: 403, cause: 'EVENT_CANCELLATION_CLOSED'});
+            await expect(eventApi.cancelEventRegistration(id, sessionFor(profile)))
+                .rejects.toMatchObject({status: 403, cause: 'EVENT_CANCELLATION_CLOSED'});
+        }
+        expect(await eventService.getRegistrationFor(participant.id, id)).not.toBeNull();
+        await expect(eventApi.cancelEventRegistration(id, {})).rejects.toMatchObject({status: 401});
+    });
+
+    it('preserves anonymously granted metadata methods without disclosing detail or unrelated fields', async () => {
+        const id = await createEvent('Public Event description method');
+        await adminService.updatePerms('event', id, {public: PERM.EDIT_DESC, authenticated: 0, guest: 0, participant: 0});
+        const baseline = await eventApi.readEventMetadata(id, {});
+        expect(baseline.editableFields).toEqual(['description']);
+        expect(baseline.values).toEqual({description: 'A production-shaped integration workflow'});
+        await expect(eventApi.readEvent(id, {})).rejects.toMatchObject({status: 401});
+        await expect(eventApi.patchEventMetadata(id, {title: 'Forbidden title'}, baseline.editToken, {}))
+            .rejects.toMatchObject({status: 403});
+        await eventApi.patchEventMetadata(id, {description: 'Publicly edited description'}, baseline.editToken, {});
+        expect((await eventService.getEventById(id))!.description).toBe('Publicly edited description');
+
+        await adminService.updatePerms('event', id, {public: 0});
+        await expect(eventApi.readEventMetadata(id, {})).rejects.toMatchObject({status: 403});
+        await expect(eventApi.patchEventMetadata(id, {description: 'Revoked write'}, baseline.editToken, {}))
+            .rejects.toMatchObject({status: 403});
+    });
+
+    it('rolls back a metadata write when its actual generated response preparation rejects', async () => {
+        const id = await createEvent('Event before failed delivery preparation');
+        const baseline = await eventApi.readEventMetadata(id, sessionFor(owner));
+        await expect(eventApi.patchEventMetadata(id, {title: 'Must roll back'}, baseline.editToken, sessionFor(owner), saved => {
+            // Deliberately malformed output reaches the production generated validator,
+            // exercising its failure while the actual metadata transaction is still open.
+            const malformed = {...saved, values: {...saved.values, title: 42}} as unknown as components['schemas']['EventMetadata'];
+            return prepareValidatedJson({} as Request, 'updateEventMetadata', 200, malformed);
+        })).rejects.toMatchObject({code: 'INTERNAL_ERROR'});
+        expect((await eventService.getEventById(id))!.title).toBe('Event before failed delivery preparation');
+    });
+
+    it('carries a bypass token through entry reads without consumption and spends it only on submission', async () => {
+        const id = await createEvent('Token continuity');
+        await eventService.updateEventProperties(id, {bindingDeadline: '2000-01-01T00:00:00Z'});
+        const link = await eventApi.addEventRegistrationLink(id, {maxUses: 5}, sessionFor(owner));
+        expect((await eventApi.readEventResourceEntry(id, 'detail', {}, link.token)).entry)
+            .toMatchObject({kind: 'redirect', url: `/frontend-pilot/event/${id}/guest?regToken=${link.token}`});
+        expect((await eventApi.readEventResourceEntry(id, 'guest', {}, link.token)).guest).toEqual({id, title: 'Token continuity'});
+        expect(await eventApi.canBypassDeadlineWithToken(id, link.token)).toEqual({ok: true, linkId: link.id});
+        const nativeLink = (await eventService.listDeadlineBypassLinks(id))[0];
+        expect(nativeLink.usedCount).toBe(0);
+        expect(nativeLink.maxUses).toBe(1); // Existing Uses defect remains outside migration.
+
+        await eventApi.saveEventRegistration(id, {arrivalDate: '2027-06-01', departureDate: '2027-06-03', regToken: link.token}, sessionFor(participant));
+        expect(await eventApi.canBypassDeadlineWithToken(id, link.token)).toEqual({ok: false});
+        expect((await eventApi.readEventRegistrationLinks(id, sessionFor(owner))).items[0]).toMatchObject({status: 'consumed', used: true});
+    });
+
+    it('retains the existing final-use token lock across concurrent registrations', async () => {
+        const id = await createEvent('Concurrent token use');
+        await eventService.updateEventProperties(id, {bindingDeadline: '2000-01-01T00:00:00Z'});
+        const link = await eventApi.addEventRegistrationLink(id, {}, sessionFor(owner));
+        const body = {arrivalDate: '2027-06-01', departureDate: '2027-06-03', regToken: link.token};
+        const results = await Promise.allSettled([
+            eventApi.saveEventRegistration(id, body, sessionFor(participant)),
+            eventApi.saveEventRegistration(id, body, sessionFor(other)),
+        ]);
+        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+        expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+        expect(await eventService.getRegistrationsForEvent(id)).toHaveLength(1);
+        expect((await eventService.listDeadlineBypassLinks(id))[0].usedCount).toBe(1);
+    });
+
+    it('rejects foreign-event organizer edits and removals without changing the actual registration', async () => {
+        const id = await createEvent('Organizer target');
+        const foreignId = await createEvent('Other Event');
+        await eventService.register(foreignId, '2027-06-01', '2027-06-03', participant.id);
+        const registration = (await eventService.getRegistrationFor(participant.id, foreignId))!;
+        await expect(eventApi.editEventRegistration(id, String(registration.id),
+            {arrivalDate: '2027-06-02', departureDate: '2027-06-03'}, sessionFor(owner))).rejects.toMatchObject({status: 404});
+        await expect(eventApi.removeEventRegistration(id, String(registration.id), sessionFor(owner))).rejects.toMatchObject({status: 404});
+        expect((await eventService.getRegistrationFor(participant.id, foreignId))?.arrivalDate).toBe('2027-06-01');
+    });
+
+    it('reuses shared audience and administrator owners with independent reviewed comparisons', async () => {
+        const id = await createEvent('Shared Event access');
+        const defaults = await eventApi.readEventDefaultsBaseline(id, sessionFor(owner));
+        await eventApi.updateEventDefaults(id, {public: PERM.ACCESS_PARTICIPANTS}, sessionFor(owner), defaults.editToken);
+        expect((await eventApi.readEventParticipants(id, {})).participants).toEqual([]);
+        const administrator = await eventApi.readEventAdminBaseline(id, editor.id, sessionFor(owner));
+        await eventApi.setEventAdmin(id, editor.id, PERM.ACCESS_ADMIN, sessionFor(owner), administrator.editToken);
+        expect((await eventApi.readEventResourceEntry(id, 'admin', sessionFor(editor))).entry.kind).toBe('render');
+        const saved = await eventApi.readEventAdminBaseline(id, editor.id, sessionFor(owner));
+        await eventApi.setEventAdmin(id, editor.id, null, sessionFor(owner), saved.editToken);
+        expect((await eventApi.readEventResourceEntry(id, 'admin', sessionFor(editor))).entry.kind).toBe('denied');
+    });
+
+    it('retains organizer owner actions for Activity and Drivers children independently of participant cards', async () => {
+        const id = await createEvent('Mixed Event children');
+        const activityId = randomUUID();
+        await activityService.createActivityPlan(activityId, owner.id, 'Event activity', '', '2027-06-01', '2027-06-03', id);
+        const driversId = await driverService.createDriversList(owner.id, 'Event drivers', '', id);
+        await eventService.register(id, '2027-06-01', '2027-06-03', owner.id);
+
+        const admin = await eventApi.readEventThingsToDo(id, sessionFor(owner), 'admin');
+        expect(contractValidator('EventThingsToDo')(admin)).toBe(true);
+        expect(admin.items.map(card => card.id)).toEqual(expect.arrayContaining([activityId, driversId]));
+        for (const card of admin.items) expect(card.capabilities).toMatchObject({duplicate: true, remove: true});
+        const detail = await eventApi.readEventThingsToDo(id, sessionFor(owner), 'detail');
+        for (const card of detail.items) expect(card.capabilities).toMatchObject({duplicate: false, remove: false});
+
+        // A scoped URL cannot archive a card belonging to another Event.
+        const foreignEvent = await createEvent('Foreign child scope');
+        await expect(eventApi.setEventChildArchived(foreignEvent, 'activity', activityId, true, sessionFor(owner), 'admin'))
+            .rejects.toMatchObject({status: 404});
+        expect((await activityService.getActivityPlanById(activityId))!.archivedAt).toBeNull();
+    });
+});

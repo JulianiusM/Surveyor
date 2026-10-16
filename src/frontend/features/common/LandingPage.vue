@@ -17,7 +17,7 @@ const quickCreate = initialDocument?.landing?.quickCreate
     ?? (initialDocument || !context.browser ? 'survey' : chooseQuickCreate());
 const creationTargets = {
     survey: {url: '/survey/create', icon: 'bi-bar-chart-steps'},
-    event: {url: '/event/create', icon: 'bi-calendar-event'},
+    event: {url: '/frontend-pilot/event/create', icon: 'bi-calendar-event'},
     activity: {url: '/activity/create', icon: 'bi-clock-history'},
     packing: {url: '/frontend-pilot/packing/create', icon: 'bi-bag-fill'},
     drivers: {url: '/drivers/create', icon: 'bi-car-front-fill'},
@@ -106,7 +106,7 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
                     <RouterLink class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" to="/frontend-pilot">
                         <i class="bi bi-speedometer2" aria-hidden="true"></i>{{ messages.t('landing.openDashboard') }}
                     </RouterLink>
-                    <component :is="quickCreate === 'packing' ? RouterLink : 'a'"
+                    <component :is="['packing', 'event'].includes(quickCreate) ? RouterLink : 'a'"
                         class="btn btn-outline-light btn-lg d-inline-flex align-items-center gap-2"
                         :to="quickTarget.url" :href="quickTarget.url">
                         <i class="bi" :class="quickTarget.icon" aria-hidden="true"></i>{{ messages.t(`landing.quickCreate.${quickCreate}`) }}

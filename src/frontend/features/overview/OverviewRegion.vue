@@ -7,7 +7,8 @@ import type {components, paths} from '../../../types/api/v1';
 import type {PilotOverviewCardInteraction, PilotOverviewCountRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {overviewQueryParameters, useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
-import {createPackingLifecycle} from '../packing/lifecycle';
+import {useEventApi} from '../event/api';
+import {createEntityLifecycle} from '../../composables/entityLifecycle';
 import {useActionState, usePilot, refreshInterval} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {isOrdinaryNavigation, useConfirmedNavigation} from '../../composables/pageEntry';
@@ -34,6 +35,7 @@ const emit = defineEmits<{counts: [source: PilotOverviewCountRead | null, scope:
 const context = usePilot();
 const api = useOverviewApi(context);
 const packingApi = usePackingApi(context);
+const eventApi = useEventApi(context);
 // The mixed projection already owns feature command dispatch. Keep its bounded
 // migration decision here too; card components receive operations, never import
 // feature APIs or grow a registry as subsequent route families migrate.
@@ -41,6 +43,7 @@ const packingInteraction: PilotOverviewCardInteraction = {migrated: true, readHe
 const nativeInteraction: PilotOverviewCardInteraction = {migrated: false};
 
 function cardInteraction(card: components['schemas']['OverviewCard']): PilotOverviewCardInteraction {
+    if (card.type === 'event') return {migrated: true, readHeader: eventApi.header.bind(eventApi), duplicateUrl: card.url + '/duplicate'};
     if (card.type !== 'packing') return nativeInteraction;
     return {...packingInteraction, duplicateUrl: card.url + '/duplicate'};
 }
@@ -225,7 +228,8 @@ function refetchRegion(): Promise<unknown> {
     return overview.refetch({throwOnError: true});
 }
 const command = useCommand(refresh);
-const packingLifecycle = createPackingLifecycle(packingApi, command, messages);
+const packingLifecycle = createEntityLifecycle(packingApi, command, messages);
+const eventLifecycle = createEntityLifecycle(eventApi, command, messages);
 const blocked = computed(() => command.action.disabled.value
     || !!destination.target.value);
 const actionsBlocked = computed(() => blocked.value || !!pendingRead.value || !overview.data.value || !displayed.value);
@@ -576,7 +580,9 @@ async function setVisibility(
  * regions and cannot silently turn restore/archive into personal hiding. */
 async function archive(card: components['schemas']['OverviewCard'], restore: boolean): Promise<void> {
     if (actionsBlocked.value) return;
-    await packingLifecycle.archive(card.id, restore, card.inheritedArchived);
+    const lifecycle = card.type === 'event' ? eventLifecycle : packingLifecycle;
+    await lifecycle.archive(card.id, restore, card.inheritedArchived, undefined,
+        card.type === 'event' ? restore ? 'event.confirmRestore' : 'event.confirmArchive' : undefined);
 }
 
 /** Deliver permanent deletion through the existing confirmed-navigation owner.
@@ -589,12 +595,14 @@ async function remove(card: components['schemas']['OverviewCard']): Promise<void
     const origin = route.fullPath;
     // Native permanent deletion returns to the canonical Overview with a flash.
     // Retain that confirmed destination on failed delivery; Retry can navigate only.
-    const result = await command.run(deleteCard, false, false, {success: 'packing.deleted'});
+    const success = card.type === 'event' ? 'event.deleted' : 'packing.deleted';
+    const result = await command.run(deleteCard, false, false, {success});
     if (result) await destination.navigate('/frontend-pilot', scope, origin,
-        {kind: 'success', messageKey: 'packing.deleted'});
+        {kind: 'success', messageKey: success});
 
     async function deleteCard(commandScope: PilotRequestScope): Promise<boolean> {
-        await packingApi.deletePacking(card.id, commandScope);
+        if (card.type === 'event') await eventApi.deleteEvent(card.id, commandScope);
+        else await packingApi.deletePacking(card.id, commandScope);
         return true;
     }
 }

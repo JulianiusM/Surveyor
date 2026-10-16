@@ -4,14 +4,14 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers; AI agents
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-15
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: prior P0/P1 and native-isolation receipts retained; bounded session repair, native anonymous flash and full pilot readiness review reconciled; future phases and cutover separately authorized
+verification-scope: P2 Event implementation and shared-consumer adoption reconciled; prior P0/P1 and native-isolation receipts retained; verification limits recorded separately; future phases and cutover separately authorized
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
 
-## Current disposition (2026-10-15)
+## Current disposition (2026-10-16)
 
 P0 readiness and P1A–D identity/common presentation have recorded implementation and scoped verification in the
 [P0 receipt](PILOT_PARITY_REVIEW.md#p0-foundation-verification-2026-10-14) and
@@ -36,7 +36,13 @@ flash review and does not block parity migration. The
 finds the foundation ready for the next authorized parity-only slice with its recorded limits; this is not
 full-application acceptance or approval to implement every later phase.
 
-P2–P10 remain future phase contracts. P11 retains its separate cutover, publication and retirement authorization
+P2A–C are complete under the maintainer's request to fully implement P2, with the current evidence and limits in
+the [completion receipt](PILOT_PARITY_REVIEW.md#full-p2-implementation-completion-2026-10-16). Event creation/duplication,
+settings, attendance, organizer tools and related-resource context now use the opt-in frontend. Packing and Event
+adopt the shared displayed header, entry, guest, settings, metadata, access and lifecycle owners; invoice and unmigrated child pages
+retain their working native destinations. Native frontend inputs remain unchanged.
+
+P3–P10 remain future phase contracts. P11 retains its separate cutover, publication and retirement authorization
 requirements. This plan records the sequence and acceptance boundaries; implementation proceeds only within the
 maintainer's applicable authorization. The original phase contracts and dated backend-remedy exclusions below remain
 in force, alongside the [approved decision history](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
@@ -99,7 +105,7 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
    with all existing backlog remedies. Complete visual/behavioral parity through existing shared operations, allowing
    minor transport/presentation reuse. Those remedies stay deferred and do not block these frontend packages.
 
-3. **P2 — Migrate Events and establish shared event context**  
+3. **P2 — Migrate Events and establish shared event context; complete against the phase contract.**
    **Complexity:** High. **Prerequisites:** P0; existing identity and guest-entry contracts. Can overlap P1.
 
    Implement three packages in order:
@@ -123,11 +129,24 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
 
    Invoice controls may retain working native destinations until their phases finish.
 
+   The [P2 receipt](PILOT_PARITY_REVIEW.md#p2-event-migration-verification-2026-10-16) records actual source adoption,
+   native comparisons and executed checks. Its environmental and coverage limits do not imply full-application,
+   exhaustive timezone/race/accessibility or cutover acceptance. The original package and completion contracts above
+   remain the comparison boundary.
+   The later [full P2 review](PILOT_PARITY_REVIEW.md#full-p2-completeness-and-migration-readiness-review-2026-10-16)
+   records corrections to parity, shared method policy and read/disclosure lifetimes, plus the resulting readiness
+   assessment. It does not supersede the original design or authorize later phases.
+   The subsequent [completion receipt](PILOT_PARITY_REVIEW.md#full-p2-implementation-completion-2026-10-16) corrects
+   overlooked duplication and weak browser assertions, records actual shared header/metadata/lifecycle/entry adoption,
+   and verifies all P2 packages together through the final built selection. No task-owned P2 functionality is deferred.
+
 4. **P3 — Migrate Drivers as the first substantial reuse exercise**  
    **Complexity:** Medium–High. **Prerequisites:** P0 and a shared guest-entry interface. Can overlap P2.
 
     - Generalize the existing guest-entry owner when the first additional feature adopts it. Inject operations, query
       keys, context, and destinations; update Packing and the new consumer together. Do not copy `PackingGuestPage`.
+      **Fulfilled by P2's first additional consumer:** Drivers must now adopt `identity/GuestEntryPage` alongside
+      Packing and Event rather than perform another extraction or restore a feature-specific copy.
     - Define Drivers contracts and shared controller operations, including method-specific permissions.
     - Implement create/duplicate, entry/detail, settings, ride creation/editing/reordering/deletion, passenger
       assignment/removal, and organizer removal.

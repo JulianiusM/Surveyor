@@ -8,12 +8,11 @@ import type {QueryFunctionContext} from '@tanstack/vue-query';
 import {usePackingApi} from './api';
 import {useActionState, usePilot, refreshInterval} from '../../app/context';
 import {isReadDenial, ObsoleteRequestError} from '../../app/transport';
-import {evictQueryFamilies, observeQueryReads, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
+import {evictQueryFamilies, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
 import {belongsToQueryFamily, overviewKeys, packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
 import {readPacked, writePacked} from './packed';
 import {useCommand} from '../../composables/command';
-import {useAuthorizedImage} from '../../composables/authorizedImage';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import ActionButton from '../../components/ActionButton.vue';
 import InlineCell from '../../components/InlineCell.vue';
@@ -21,6 +20,7 @@ import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PackingSettings from './PackingSettings.vue';
+import EntityHeader from '../../components/EntityHeader.vue';
 
 type Item = components['schemas']['PackingItemView'];
 type ListRead = PilotRead<components['schemas']['PackingListView']>;
@@ -127,21 +127,9 @@ const items = computed(() =>
         (a, b) => Number(b.requiredByAll) - Number(a.requiredByAll) || a.position - b.position,
     ),
 );
-const headerImage = useAuthorizedImage(
-    listId,
-    computed(() => data.value?.headerVersion),
-    api.header.bind(api),
-);
-const header = headerImage.source;
-// A same-version JSON response may retain its object through structural sharing.
-// Observe actual success so manual Refresh and polling can recover a missing
-// image. Canceled/idle reads and manual aliases are no new read receipt.
-const stopListReads = observeQueryReads<ListRead>(context.queryClient, () => key.value, recoverHeaderAfterRead);
-onBeforeUnmount(stopListReads);
-
-function recoverHeaderAfterRead(): void {
-    if (active && data.value && !list.isFetching.value && !list.error.value) void headerImage.refresh();
-}
+// The shared displayed header owns binary lifetime/recovery. Packing still
+// supplies its admitted version, exact detail key and generated image operation.
+const readHeader = api.header.bind(api);
 
 async function refreshAfterCommand(): Promise<void> {
     // A completed write can settle after a concurrent read retires this view's
@@ -502,45 +490,19 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
 
 <template>
     <section class="card bg-dark text-white mb-3" :aria-busy="!!data && list.isFetching.value">
-        <div class="card-header p-0">
-            <img
-                v-if="header"
-                :src="header"
-                :alt="data?.title"
-                class="card-img-top"
-                style="object-fit: cover; height: 250px"
-            />
-            <!-- Follow the fixed native flex layout, including its empty desktop
-                 parent track. Migration must not center/reflow the native header
-                 by changing the reference template or its shared stylesheet. -->
-            <div class="p-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
-                <div v-if="data?.currentEventUrl" class="btn-group d-md-inline d-none">
-                    <a class="btn btn-outline-light" :href="data.currentEventUrl">
-                        <i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i
-                        >{{ messages.t('packing.goToEvent') }}
-                    </a>
-                </div>
-                <div v-else class="d-none d-md-inline"></div>
-                <h1 class="mb-0 text-center">
-                    <i class="bi bi-bag-check-check me-2" aria-hidden="true"></i
-                    >{{ data?.title || messages.t('packing.items') }}
-                </h1>
-                <div v-if="data?.currentEventUrl" class="btn-group d-md-none">
-                    <a class="btn btn-outline-light" :href="data.currentEventUrl">
-                        <i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i
-                        >{{ messages.t('packing.goToEvent') }}
-                    </a>
-                </div>
-                <ActionButton
-                    v-if="data?.capabilities.manageSettings"
-                    variant="outline-light"
-                    :disabled="blocked"
-                    @click="editorOpen = true"
-                >
-                    <i class="bi bi-gear me-1" aria-hidden="true"></i>{{ messages.t('packing.edit') }}
-                </ActionButton>
-            </div>
-        </div>
+        <EntityHeader
+            :resource-id="listId"
+            :title="data?.title || messages.t('packing.items')"
+            icon="bi-bag-check-check"
+            :image-version="data?.headerVersion"
+            :image-query-key="key"
+            :read-image="readHeader"
+            :image-enabled="!!data && !denied"
+            :parent-url="data?.currentEventUrl"
+            :settings-available="!!data?.capabilities.manageSettings"
+            :settings-disabled="blocked"
+            @settings="editorOpen = true"
+        />
         <div class="card-body">
             <!-- Native item/assignment commands present transient feedback in the
                  shared page alert host; durable reconciliation stays beside the list. -->

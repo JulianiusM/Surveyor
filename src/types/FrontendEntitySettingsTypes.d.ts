@@ -1,4 +1,35 @@
-import type {PilotEventPickerSelection, PilotEventPickerSource} from './FrontendPilotUiTypes';
+import type {PilotEventPickerSelection, PilotEventPickerSource, PilotImageRead, PilotPlainMessageKey,
+    PilotRequestScope} from './FrontendPilotUiTypes';
+
+/** One displayed entity header receives only its feature's admitted presentation.
+ * The exact query key supplies successful read receipts; it grants no image or
+ * settings authority. Parent URLs retain their existing feature-owned destination. */
+export interface EntityHeaderProps {
+    resourceId: string;
+    title: string;
+    icon: string;
+    imageVersion?: string | null;
+    imageQueryKey: readonly unknown[];
+    readImage: PilotImageRead;
+    imageEnabled?: boolean;
+    parentUrl?: string | null;
+    settingsAvailable?: boolean;
+    settingsDisabled?: boolean;
+}
+
+/** The feature selects the existing lifecycle operations; this shared contract
+ * has no endpoint, permission, draft, persistence or command-state ownership. */
+export interface EntityLifecycleOperations {
+    archive(id: string, restore: boolean, scope: PilotRequestScope): Promise<unknown>;
+    automate?: (id: string, paused: boolean, scope: PilotRequestScope) => Promise<unknown>;
+}
+
+/** Callers may preserve feature-specific wording without copying action policy. */
+export interface EntityAutomationMessages {
+    confirmResume: PilotPlainMessageKey;
+    pausedSuccess: PilotPlainMessageKey;
+    resumedSuccess: PilotPlainMessageKey;
+}
 
 /** Feature-owned wording for the shared header editor; all values come from the catalog. */
 export interface EntityHeaderLabels {
@@ -61,4 +92,6 @@ export interface EntityLifecycleActionsProps {
     canRemove: boolean;
     duplicateTo: string;
     disabled: boolean;
+    /** Only entities with an admitted automatic schedule expose this distinct action. */
+    automation?: {paused: boolean; pauseLabel: string; resumeLabel: string; pausedHint: string};
 }

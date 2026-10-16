@@ -1,0 +1,160 @@
+<script setup lang="ts">
+import {computed, ref, watch} from 'vue';
+import {useRoute} from 'vue-router';
+import {usePilot} from '../../app/context';
+import {belongsToQueryFamily, eventKeys, overviewKeys} from '../../app/queryKeys';
+import {refetchFreshQueries} from '../../app/queryCache';
+import {usePageTitle} from '../../composables/pageTitle';
+import {useEventApi} from './api';
+import {useEventSection} from './useEventSection';
+import EventSummary from './EventSummary.vue';
+import EventSettings from './EventSettings.vue';
+import EventRegistration from './EventRegistration.vue';
+import EventParticipants from './EventParticipants.vue';
+import EventBypassLinks from './EventBypassLinks.vue';
+import EventThingsToDo from './EventThingsToDo.vue';
+import ActionButton from '../../components/ActionButton.vue';
+import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
+import StatusNotice from '../../components/StatusNotice.vue';
+import EntityHeader from '../../components/EntityHeader.vue';
+
+const context = usePilot();
+const {messages} = context;
+const api = useEventApi(context);
+const route = useRoute();
+const eventId = computed(() => String(route.params.eventId).toLowerCase());
+const admin = computed(() => route.path.endsWith('/admin'));
+const key = computed(() => eventKeys.detail(context.session.value?.context, eventId.value, admin.value));
+const section = useEventSection(key, readEvent, computed(() => true));
+const event = section.data;
+const editorOpen = ref(false);
+// Event supplies its admitted image/query operation to the same displayed
+// header as Packing. Dashboard headings deliberately retain their native shape.
+const readHeader = api.header.bind(api);
+usePageTitle(pageTitle);
+watch(section.denied, closeDeniedSettings);
+
+function pageTitle(): string {
+    if (!event.value) return messages.value.t('event.create');
+    return admin.value ? messages.value.t('event.dashboard', {title: event.value.title}) : event.value.title;
+}
+function readEvent(scope: Parameters<typeof api.event>[1], signal: AbortSignal) {
+    return api.event(eventId.value, scope, signal, admin.value);
+}
+function closeDeniedSettings(denied: boolean): void {
+    if (denied) editorOpen.value = false;
+}
+function settingsAccessLost(): void {
+    editorOpen.value = false;
+    void refresh();
+}
+
+/** The own Event GET is required authority after a command. Mounted sibling
+ * projections refresh independently; absent or retired observers grant nothing. */
+async function refresh(): Promise<void> {
+    const scope = context.capture();
+    await section.refresh();
+    // Confirmed registration/settings changes also affect mounted authorized
+    // participant and Overview consumers. Refresh only their admitted observers.
+    await refetchFreshQueries(context.queryClient, {
+        type: 'active',
+        predicate: query => belongsToQueryFamily(query, eventKeys.participants(scope.context, eventId.value))
+            || belongsToQueryFamily(query, overviewKeys.all(scope.context)),
+    }, () => context.mayRead(scope), {allowEmpty: true});
+}
+</script>
+
+<template>
+    <section class="card bg-dark text-white mb-3">
+        <h1 v-if="admin" class="card-header text-center">
+            <i class="bi bi-speedometer2 me-2" aria-hidden="true"></i>{{ messages.t('event.dashboard', {title: event?.title ?? ''}) }}
+        </h1>
+        <EntityHeader
+            v-else
+            :resource-id="eventId"
+            :title="event?.title ?? ''"
+            icon="bi-calendar2-event"
+            :image-version="event?.headerVersion"
+            :image-query-key="key"
+            :read-image="readHeader"
+            :image-enabled="!!event && !section.denied.value"
+            :settings-available="!!event?.capabilities.settings"
+            @settings="editorOpen = true"
+        />
+        <div class="card-body">
+            <StatusNotice
+                v-if="section.query.error.value"
+                kind="warning"
+                :read-error="section.query.error.value"
+                :retry-at="section.retryAt.value"
+                :last-updated-at="event ? section.query.dataUpdatedAt.value : undefined"
+                :action="{state: section.readAction, label: messages.t('common.refresh')}"
+                @action="refresh"
+            >
+                {{ section.failure.value }}
+            </StatusNotice>
+            <LoadingSkeleton v-if="section.loading.value" variant="form" :rows="5" />
+
+            <template v-if="event">
+                <!-- One bounded projection drives both page intents. Registration,
+                     roster, management and export remain independent capabilities. -->
+                <div v-if="admin" class="d-flex justify-content-end mb-3">
+                    <ActionButton v-if="event.capabilities.settings" variant="outline-light" @click="editorOpen = true">
+                        <i class="bi bi-gear me-1" aria-hidden="true"></i>{{ messages.t('packing.edit') }}
+                    </ActionButton>
+                </div>
+                <StatusNotice v-if="event.archive.direct || event.archive.inherited" kind="info">
+                    {{ messages.t('packing.archived') }}
+                </StatusNotice>
+                <EventSummary :event="event" :admin="admin" />
+
+                <EventRegistration v-if="!admin" :event="event" :refresh="refresh" />
+                <EventBypassLinks v-if="admin && event.capabilities.manageRegistrations" :event-id="event.id" />
+                <EventParticipants
+                    v-if="event.capabilities.participants && (admin || !!event.registration)"
+                    :event-id="event.id"
+                    :start-date="event.startDate"
+                    :end-date="event.endDate"
+                    :manage-registrations="admin && event.capabilities.manageRegistrations"
+                />
+                <EventThingsToDo
+                    v-if="admin || (event.registration && event.capabilities.items)"
+                    :event-id="event.id"
+                    :admin="admin"
+                />
+
+                <!-- Finance retains its native authorized destination until its
+                     migration phases; this page never receives invoice aggregates. -->
+                <a
+                    v-if="event.registration && event.hasInvoicePools || (admin && event.capabilities.manageAssignments)"
+                    class="btn btn-outline-light mb-3"
+                    :href="`/event/${event.id}${admin ? '/admin' : ''}#${admin ? 'invoice-pools' : 'participantInvoiceAccordion'}`"
+                >
+                    {{ messages.t('event.invoiceLink') }}
+                </a>
+                <template v-if="admin && event.capabilities.exportParticipants">
+                    <hr />
+                    <h2 class="fs-3 mb-3">{{ messages.t('event.exports') }}</h2>
+                    <a
+                        class="btn btn-sm btn-outline-light"
+                        :href="`/event/${event.id}/export/participants`"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        <i class="bi bi-printer me-1" aria-hidden="true"></i>{{ messages.t('event.participantsPdf') }}
+                    </a>
+                </template>
+
+                <EventSettings
+                    v-if="editorOpen && event.capabilities.settings"
+                    :key="event.id"
+                    :event-id="event.id"
+                    :event-title="event.title"
+                    @close="editorOpen = false"
+                    @saved="refresh"
+                    @access-lost="settingsAccessLost"
+                />
+            </template>
+        </div>
+    </section>
+</template>

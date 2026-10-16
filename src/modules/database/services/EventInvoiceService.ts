@@ -217,6 +217,11 @@ export async function invalidateEventPools(manager: EntityManager, eventId: stri
     }
 }
 
+/** Read only Event pool existence; no invoice, assignment, share or amount data is loaded. */
+export async function hasEventPools(eventId: string, manager: EntityManager = AppDataSource.manager): Promise<boolean> {
+    return manager.getRepository(EventInvoicePool).exists({where: {event: {id: eventId}}});
+}
+
 /** Load an event's invoice pools and their collections from one repeatable-read snapshot. */
 export async function listPools(eventId: string) {
     /** Hydrate the existing list contract without multiplying independent child collections. */

@@ -4,7 +4,7 @@ jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Surveyor API
   version: 1.0.0
-  description: Versioned packing pilot and session bootstrap. Existing feature routes remain available.
+  description: Versioned frontend API for Help, Packing, Events, overview and identity. Existing feature routes remain available.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -1028,6 +1028,118 @@ paths:
                 $ref: "#/components/schemas/MutationResult"
         default:
           $ref: "#/components/responses/Problem"
+  /events/create-entry:
+    $ref: ./events.yaml#/paths/~1events~1create-entry
+  /events/create-context:
+    $ref: ./events.yaml#/paths/~1events~1create-context
+  /events/{eventId}/entry:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1entry
+  /events/{eventId}:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}
+  /events/{eventId}/duplicate:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1duplicate
+  /events/{eventId}/metadata:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1metadata
+  /events/{eventId}/settings:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1settings
+  /events/{eventId}/registration:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1registration
+  /events/{eventId}/participants:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1participants
+  /events/{eventId}/registrations/{registrationId}:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1registrations~1{registrationId}
+  /events/{eventId}/links:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1links
+  /events/{eventId}/links/{linkId}:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1links~1{linkId}
+  /events/{eventId}/things-to-do:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1things-to-do
+  /events/{eventId}/default-permissions:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1default-permissions
+  /events/{eventId}/admins/{profileId}/edit-baseline:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1admins~1{profileId}~1edit-baseline
+  /events/{eventId}/admins:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1admins
+  /events/{eventId}/admins/{profileId}:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1admins~1{profileId}
+  /events/{eventId}/profiles:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1profiles
+  /events/{eventId}/header/edit-baseline:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1header~1edit-baseline
+  /events/{eventId}/header:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1header
+  /events/{eventId}/archive:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1archive
+  /events/{eventId}/restore:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1restore
+  /events/{eventId}/things-to-do/{entityType}/{entityId}/archive:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1things-to-do~1{entityType}~1{entityId}~1archive
+  /events/{eventId}/things-to-do/{entityType}/{entityId}/restore:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1things-to-do~1{entityType}~1{entityId}~1restore
+  /events/{eventId}/things-to-do/{entityType}/{entityId}/automatic-archive:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1things-to-do~1{entityType}~1{entityId}~1automatic-archive
+  /events/{eventId}/automatic-archive:
+    $ref: ./events.yaml#/paths/~1events~1{eventId}~1automatic-archive
+  /events/{eventId}/guest:
+    get:
+      operationId: getEventGuestEntry
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read the public Event guest-entry title
+      security: []
+      parameters:
+        - &a1
+          $ref: "#/components/parameters/Context"
+        - &a2
+          $ref: "#/components/parameters/Locale"
+        - &a3
+          name: eventId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuestEntry"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: registerEventGuest
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Register a guest through the existing identity completion owner
+      security: []
+      parameters:
+        - *a1
+        - *a2
+        - *a3
+        - $ref: "#/components/parameters/Csrf"
+        - name: regToken
+          in: query
+          schema:
+            type: string
+            maxLength: 256
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestRegistrationInput"
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityResult"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   securitySchemes:
     sessionCookie:
@@ -1139,6 +1251,52 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    EventCreationSubmission:
+      $ref: ./events.yaml#/schemas/EventCreationSubmission
+    EventCreationFields:
+      $ref: ./events.yaml#/schemas/EventCreationFields
+    EventCreateContext:
+      $ref: ./events.yaml#/schemas/EventCreateContext
+    EventCreateEntry:
+      $ref: ./events.yaml#/schemas/EventCreateEntry
+    EventResourceEntry:
+      $ref: ./events.yaml#/schemas/EventResourceEntry
+    EventMetadataPatch:
+      $ref: ./events.yaml#/schemas/EventMetadataPatch
+    EventCreateInput:
+      $ref: ./events.yaml#/schemas/EventCreateInput
+    EventDuplicate:
+      $ref: ./events.yaml#/schemas/EventDuplicate
+    EventMetadataValues:
+      $ref: ./events.yaml#/schemas/EventMetadataValues
+    EventMetadata:
+      $ref: ./events.yaml#/schemas/EventMetadata
+    EventRegistration:
+      $ref: ./events.yaml#/schemas/EventRegistration
+    EventRegistrationInput:
+      $ref: ./events.yaml#/schemas/EventRegistrationInput
+    EventRegistrationDates:
+      $ref: ./events.yaml#/schemas/EventRegistrationDates
+    EventView:
+      $ref: ./events.yaml#/schemas/EventView
+    EventSettings:
+      $ref: ./events.yaml#/schemas/EventSettings
+    EventParticipant:
+      $ref: ./events.yaml#/schemas/EventParticipant
+    EventParticipants:
+      $ref: ./events.yaml#/schemas/EventParticipants
+    EventRegistrationLink:
+      $ref: ./events.yaml#/schemas/EventRegistrationLink
+    EventRegistrationLinks:
+      $ref: ./events.yaml#/schemas/EventRegistrationLinks
+    EventRegistrationLinkInput:
+      $ref: ./events.yaml#/schemas/EventRegistrationLinkInput
+    EventThingsToDo:
+      $ref: ./events.yaml#/schemas/EventThingsToDo
+    EventCreatedRegistrationLink:
+      $ref: ./events.yaml#/schemas/EventCreatedRegistrationLink
+    EventAutomaticArchivalInput:
+      $ref: ./events.yaml#/schemas/EventAutomaticArchivalInput
     EntryNotice:
       $ref: ./common.yaml#/schemas/EntryNotice
     PageEntryOutcome:

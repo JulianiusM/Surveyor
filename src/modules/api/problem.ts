@@ -54,6 +54,30 @@ export function isVersionedApiRequest(req: Request): boolean {
 export function classifyApiError(error: unknown): ApiProblem {
     if (error instanceof ApiProblem) return error;
 
+    // Event business owners annotate only recognized rejection identities. Keep
+    // native prose/data private and preserve the original action-specific status;
+    // a string-shaped external exception never enters this trusted cause mapping.
+    if (error instanceof APIError) {
+        switch (error.cause) {
+            case 'EVENT_FULL': return new ApiProblem('EVENT_FULL');
+            case 'EVENT_DATE_UPDATES_CLOSED': return new ApiProblem('EVENT_DATE_UPDATES_CLOSED');
+            case 'EVENT_DIET_UPDATES_CLOSED': return new ApiProblem('EVENT_DIET_UPDATES_CLOSED');
+            case 'EVENT_DEADLINE_PASSED': return new ApiProblem('EVENT_DEADLINE_PASSED');
+            case 'EVENT_DATES_INVALID': return new ApiProblem('EVENT_DATES_INVALID');
+            case 'EVENT_TOKEN_USED': return new ApiProblem('EVENT_TOKEN_USED');
+            case 'EVENT_ALLERGY_INFO_REQUIRED': return new ApiProblem('EVENT_ALLERGY_INFO_REQUIRED');
+            case 'EVENT_COMMENT_REQUIRED': return new ApiProblem('EVENT_COMMENT_REQUIRED');
+            case 'EVENT_MEAL_REQUIRED': return new ApiProblem('EVENT_MEAL_REQUIRED');
+            case 'EVENT_VEGETARIAN_CONFLICT': return new ApiProblem('EVENT_VEGETARIAN_CONFLICT');
+            case 'EVENT_VEGAN_CONFLICT': return new ApiProblem('EVENT_VEGAN_CONFLICT');
+            case 'EVENT_CANCELLATION_CLOSED': return new ApiProblem('EVENT_CANCELLATION_CLOSED');
+            case 'EVENT_TIMEZONE_INVALID': return new ApiProblem('EVENT_TIMEZONE_INVALID');
+            case 'EVENT_START_AFTER_END': return new ApiProblem('EVENT_START_AFTER_END');
+            case 'EVENT_DEADLINE_INVALID': return new ApiProblem('EVENT_DEADLINE_INVALID');
+            case 'EVENT_LINK_ACCOUNT_REQUIRED': return new ApiProblem('EVENT_LINK_ACCOUNT_REQUIRED');
+        }
+    }
+
     // Controllers retain their native renderer errors, but explicitly annotate stable identity
     // outcomes. Never interpret prose, arbitrary exception causes, or database error details.
     if (error instanceof ValidationError || error instanceof ExpectedError) {

@@ -9,6 +9,7 @@ import {fetchHelpDoc, fetchHelpIndex, fetchHelpSearch} from '../../controller/he
 import packingRouter from './v1/packing';
 import authRouter from './v1/auth';
 import overviewRouter from './v1/overview';
+import eventRouter from './v1/events';
 
 const router = Router();
 
@@ -42,6 +43,7 @@ router.get('/help', asyncHandler(async function getHelpPage(req, res) {
 router.use(authRouter);
 router.use('/overview', overviewRouter);
 router.use('/packing-lists', packingRouter);
+router.use('/events', eventRouter);
 router.use(function missingOperation(_req, _res, next) {next(new ApiProblem('NOT_FOUND'));});
 router.use(handleApiProblem);
 

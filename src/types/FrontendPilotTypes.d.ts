@@ -90,6 +90,12 @@ export interface FrontendPilotBootstrap {
     /** An initial event query is resolved by the shared native selection owner before drafting. */
     packingSelectedEvent?: components['schemas']['EventPickerOption'] | null;
     packingDuplicate?: components['schemas']['PackingDuplicate'];
+    /** Event document admission never carries the complete native invoice aggregate. */
+    eventEntry?: components['schemas']['EventResourceEntry'];
+    eventCreateContext?: components['schemas']['EventCreateContext'];
+    eventDuplicate?: components['schemas']['EventDuplicate'];
+    /** Submitted scalar drafts deliberately retain invalid values for native redisplay. */
+    eventCreationSubmission?: components['schemas']['EventCreationSubmission'];
     personalLink?: string;
     /** Controller-projected native regions hydrate under their ordinary identity-scoped query keys. */
     overview?: components['schemas']['OverviewRegion'][];

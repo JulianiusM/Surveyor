@@ -582,3 +582,99 @@ schemas:
           - messageKey
           - status
           - params
+      - properties:
+          code: {const: EVENT_FULL}
+          messageKey: {const: 'api:errors.EVENT_FULL'}
+          status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_DATE_UPDATES_CLOSED}
+          messageKey: {const: 'api:errors.EVENT_DATE_UPDATES_CLOSED'}
+          status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_DIET_UPDATES_CLOSED}
+          messageKey: {const: 'api:errors.EVENT_DIET_UPDATES_CLOSED'}
+          status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_DEADLINE_PASSED}
+          messageKey: {const: 'api:errors.EVENT_DEADLINE_PASSED'}
+          status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_DATES_INVALID}
+          messageKey: {const: 'api:errors.EVENT_DATES_INVALID'}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_TOKEN_USED}
+          messageKey: {const: 'api:errors.EVENT_TOKEN_USED'}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_ALLERGY_INFO_REQUIRED}
+          messageKey: {const: 'api:errors.EVENT_ALLERGY_INFO_REQUIRED'}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_COMMENT_REQUIRED}
+          messageKey: {const: 'api:errors.EVENT_COMMENT_REQUIRED'}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_MEAL_REQUIRED}
+          messageKey: {const: 'api:errors.EVENT_MEAL_REQUIRED'}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_VEGETARIAN_CONFLICT}
+          messageKey: {const: 'api:errors.EVENT_VEGETARIAN_CONFLICT'}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_VEGAN_CONFLICT}
+          messageKey: {const: 'api:errors.EVENT_VEGAN_CONFLICT'}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_CANCELLATION_CLOSED}
+          messageKey: {const: 'api:errors.EVENT_CANCELLATION_CLOSED'}
+          status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_TIMEZONE_INVALID}
+          messageKey: {const: 'api:errors.EVENT_TIMEZONE_INVALID'}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_START_AFTER_END}
+          messageKey: {const: 'api:errors.EVENT_START_AFTER_END'}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_DEADLINE_INVALID}
+          messageKey: {const: 'api:errors.EVENT_DEADLINE_INVALID'}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_LINK_ACCOUNT_REQUIRED}
+          messageKey: {const: 'api:errors.EVENT_LINK_ACCOUNT_REQUIRED'}
+          status: {const: 401}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]

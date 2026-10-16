@@ -15,10 +15,16 @@
  */
 
 import {Request} from "express";
-import {createHash} from 'node:crypto';
 import type {EntityManager} from 'typeorm';
 import {
     applyEntityAdministrator,
+    comparisonToken,
+    comparisonActor,
+    classifyArchiveCommandError,
+    requireFieldComparison,
+    entityTag,
+    completeDefaults,
+    permissionDefinitions,
     archiveEntity,
     assertEntityPropertyContext,
     changeEntityEvent,
@@ -49,13 +55,12 @@ import * as lifecycleService from '../modules/database/services/EntityLifecycleS
 import * as adminService from '../modules/database/services/EntityAdminService';
 import * as userService from '../modules/database/services/UserService';
 import {ApiProblem} from '../modules/api/problem';
-import {contractValidator} from '../modules/api/contracts';
 import {APIError, ValidationError} from '../modules/lib/errors';
 import {performImageSwap} from "../modules/lib/fileCommons";
 import {checkNewImage, removeImage} from '../modules/lib/fileCommons';
 import {ENTITIES, generateUniqueId, getHeaderImageVersion} from "../modules/lib/util";
 import {saveDefaultPermsFromBody, evaluateEntities, evaluateSubject, isOwner} from "../modules/permissionEngine";
-import {getInitialPerms, getPermMeta, getPresets} from '../modules/lib/permissions';
+import {getInitialPerms} from '../modules/lib/permissions';
 import {safeFrontendReturn} from '../modules/lib/frontendIdentity';
 import {SessionLike} from "../types/PermissionTypes";
 import type {EntityBase} from "../types/UserTypes";
@@ -436,82 +441,10 @@ function mayEditMetadataField(permissions: PermView, field: keyof components['sc
     return permissions.has(entityPropertyPermission('packing', field)!);
 }
 
-/** Hash only canonical machine data; localized labels never invalidate a metadata edit token. */
-function entityTag(scope: string, value: unknown): string {
-    return `"${scope}-${createHash('sha256').update(JSON.stringify(value)).digest('base64url')}"`;
-}
-
-/**
- * Capture field values as hashes, without counters or a stored edit history. Tokens contain no
- * submitted values or private record identifiers. Their scope also binds them to this resource
- * and acting profile/session when one exists. Public projections instead bind the available
- * field set, without inventing an anonymous identity; current authorization remains mandatory.
- */
-function comparisonToken(scope: string, id: string, session: SessionLike, values: Record<string, unknown>): string {
-    const actor = comparisonActor(session);
-    const context = entityTag(scope, {id, actor,
-        ...(actor === null ? {fields: Object.keys(values).sort()} : {})});
-    const fields = Object.fromEntries(Object.entries(values).map(([field, value]) => [field, entityTag('field', value)]));
-    return `"edit-${Buffer.from(JSON.stringify({context, fields})).toString('base64url')}"`;
-}
-
-/** Compare only submitted fields against the freshly authorized locked baseline.
- * Missing review is 428; malformed, foreign-context or changed selected-field evidence
- * is 412. Unrelated fields deliberately do not block an independent sparse edit. */
-function requireFieldComparison(expected: string | undefined, current: string, fields: string[]): void {
-    if (!expected) throw new ApiProblem('PRECONDITION_REQUIRED');
-
-    /** Admit the generated bounded strong-tag envelope before decoding its private
-     * comparison shape. Invalid evidence remains a failed precondition, not a parser error. */
-    function decode(token: string): {context: string; fields: Record<string, string>} | null {
-        // One operation's token has only a few hashes. The generated contract
-        // supplies its response/request bound and emitted strong-tag syntax before
-        // this owner allocates or parses the enclosed field-comparison evidence.
-        if (!contractValidator('FieldComparisonToken')(token)) return null;
-
-        try {
-            // The wire envelope contains machine context and field hashes only. Validate
-            // that shape before indexing it; submitted values are never trusted baselines.
-            const value = JSON.parse(Buffer.from(token.slice(6, -1), 'base64url').toString('utf8')) as unknown;
-            if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-            const data = value as {context?: unknown; fields?: unknown};
-            if (typeof data.context !== 'string' || !data.fields || typeof data.fields !== 'object' || Array.isArray(data.fields)) return null;
-            const hashes = data.fields as Record<string, unknown>;
-            if (!Object.values(hashes).every(hash => typeof hash === 'string' && /^"field-[A-Za-z0-9_-]{43}"$/.test(hash))) return null;
-            return {context: data.context, fields: hashes as Record<string, string>};
-        } catch { return null; }
-    }
-
-    // Bind the evidence to this actor/resource, then compare only the fields selected
-    // by this operation. Current authorization was checked before exposing either token.
-    const baseline = decode(expected);
-    const latest = decode(current);
-    if (!baseline || !latest || baseline.context !== latest.context
-        || fields.some(field => !Object.hasOwn(baseline.fields, field) || baseline.fields[field] !== latest.fields[field])) {
-        throw new ApiProblem('PRECONDITION_FAILED');
-    }
-}
-
 /** Require the already admitted actor; this module never re-reads a mutable Express session. */
 function actorId(session: SessionLike): string {
     if (!session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
     return session.profile.id;
-}
-
-/**
- * Preserve established profile and frontend-context token scopes. An anonymous
- * request without frontend context has no principal, even if native flash has
- * persisted its Session. Null describes a public projection, not a shared account
- * or permission. Resource/method/field scope and fresh controller grants still
- * govern every public comparison/write.
- */
-function comparisonActor(session: SessionLike): string | {context: string} | null {
-    if (session.profile?.id) return session.profile.id;
-    if ('context' in session && typeof session.context === 'string' && session.context) {
-        return {context: session.context};
-    }
-    if (!session.auth?.user && !session.auth?.guest) return null;
-    throw new ApiProblem('AUTH_REQUIRED');
 }
 
 /** Interpret nullable DB evidence here, keeping missing-resource policy outside the DBAL. */
@@ -1050,23 +983,6 @@ async function withPackingManagement<T>(id: string, session: SessionLike,
     return lifecycleService.withLockedArchiveTarget({type: 'packing', id}, manageLocked);
 }
 
-/** Normalize missing persisted audiences to zero for machine projections.
- * This is a read/form default only; sparse writes do not clear omitted audiences. */
-function completeDefaults(defaults: Partial<components['schemas']['PermissionDefaults']>): components['schemas']['PermissionDefaults'] {
-    return {
-        public: defaults.public ?? 0,
-        guest: defaults.guest ?? 0,
-        authenticated: defaults.authenticated ?? 0,
-        participant: defaults.participant ?? 0
-    };
-}
-
-/** Project the maintained permission/preset catalog for form controls instead
- * of duplicating those definitions in a versioned frontend or controller. */
-function permissionDefinitions() {
-    return {permissions: getPermMeta().map(({key, bit}) => ({key, bit})), presets: getPresets().map(({key, mask}) => ({key, mask}))};
-}
-
 /** Creation POST requires an account, including when a public/guest duplicate GET supplied its draft. */
 export function requirePackingCreation(session: SessionLike): void {
     actorId(session);
@@ -1563,12 +1479,7 @@ export async function setPackingArchived(id: string, archived: boolean, session:
         if (archived) return await archiveEntity({type: 'packing', id}, {}, session, undefined, completion);
         return await restoreEntity({type: 'packing', id}, {}, session, completion);
     } catch (error) {
-        if (error instanceof APIError && error.status === 409) {
-            // The shared restore owner supplies eventId only for inherited archival; a
-            // concurrent parent change is a different recovery action and message.
-            throw new ApiProblem(!archived && Object.hasOwn(error.data, 'eventId') ? 'ARCHIVE_INHERITED' : 'ENTITY_CONTEXT_CHANGED');
-        }
-        throw error;
+        throw classifyArchiveCommandError(error, archived);
     }
 }
 

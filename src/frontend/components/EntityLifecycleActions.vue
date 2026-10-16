@@ -7,7 +7,7 @@ import ActionButton from './ActionButton.vue';
 // The controller/feature supplies capabilities and destinations. This shared view
 // keeps archival, duplicate navigation and permanent deletion as distinct actions.
 defineProps<EntityLifecycleActionsProps>();
-const emit = defineEmits<{archive: [restore: boolean, source: Event]; remove: [source: Event]}>();
+const emit = defineEmits<{archive: [restore: boolean, source: Event]; remove: [source: Event]; automate: [paused: boolean, source: Event]}>();
 const {messages} = usePilot();
 </script>
 
@@ -21,11 +21,14 @@ const {messages} = usePilot();
             {{ labels.inheritedHint }}
             <a v-if="eventUrl" class="ms-1" :href="eventUrl">{{ labels.openEvent }}</a>
         </p>
+        <p v-if="automation?.paused">{{ automation.pausedHint }}</p>
         <div class="d-flex flex-wrap gap-2">
             <ActionButton v-if="canArchive" class="btn-sm" variant="outline-light" :disabled="disabled"
                 @click="emit('archive', false, $event)">{{ messages.t('common.archive') }}</ActionButton
             ><ActionButton v-if="canRestore" class="btn-sm" variant="outline-light" :disabled="disabled"
                 @click="emit('archive', true, $event)">{{ messages.t('common.restore') }}</ActionButton>
+            <ActionButton v-if="automation" class="btn-sm" variant="outline-light" :disabled="disabled"
+                @click="emit('automate', !automation.paused, $event)">{{ automation.paused ? automation.resumeLabel : automation.pauseLabel }}</ActionButton>
         </div>
     </section>
     <!-- Preserve ordinary duplicate-link semantics; deletion is a separately confirmed command. -->

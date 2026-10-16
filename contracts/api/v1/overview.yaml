@@ -24,6 +24,14 @@ schemas:
       overviewHidden: {type: boolean}
       archived: {type: boolean}
       inheritedArchived: {type: boolean}
+      automation:
+        description: Optional scheduled-child controls supplied only to an admitted Event Things to do projection.
+        type: object
+        additionalProperties: false
+        required: [paused, canManage]
+        properties:
+          paused: {type: boolean}
+          canManage: {type: boolean}
       capabilities:
         type: object
         additionalProperties: false

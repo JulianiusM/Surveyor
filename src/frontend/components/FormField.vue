@@ -4,11 +4,15 @@ withDefaults(
         id: string;
         name?: string;
         label: string;
+        labelClass?: string;
+        requiredMarker?: boolean;
         modelValue: string;
         type?: string;
         required?: boolean;
         maxLength?: number;
         minLength?: number;
+        min?: string | number;
+        max?: string | number;
         autocomplete?: string;
         disabled?: boolean;
         placeholder?: string;
@@ -19,7 +23,7 @@ withDefaults(
         state?: 'valid' | 'invalid';
         describedBy?: string;
     }>(),
-    {type: 'text'},
+    {type: 'text', labelClass: 'mb-1', requiredMarker: true},
 );
 const emit = defineEmits<{'update:modelValue': [value: string]; focus: []; blur: []}>();
 
@@ -34,8 +38,8 @@ function updateValue(event: Event): void {
         <!-- Label, native field name and accessible feedback remain one shared form contract.
              Native labels put text immediately after the icon: me-1 owns that gap.
              Extra template whitespace would widen it and change narrow-screen wrapping. -->
-        <label class="form-label mb-1" :for="id">
-            <i v-if="labelIcon" class="bi me-1" :class="labelIcon" aria-hidden="true"></i>{{ label }}<template v-if="required"> *</template>
+        <label class="form-label" :class="labelClass" :for="id">
+            <i v-if="labelIcon" class="bi me-1" :class="labelIcon" aria-hidden="true"></i>{{ label }}<template v-if="required && requiredMarker"> *</template>
         </label>
         <div :class="{'input-group': inputIcon || largeGroup, 'input-group-lg': largeGroup}">
             <span v-if="inputIcon" class="input-group-text">
@@ -51,6 +55,8 @@ function updateValue(event: Event): void {
                 :required="required"
                 :maxlength="maxLength"
                 :minlength="minLength"
+                :min="min"
+                :max="max"
                 :autocomplete="autocomplete"
                 :disabled="disabled"
                 :placeholder="placeholder"

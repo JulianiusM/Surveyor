@@ -16,7 +16,7 @@
 
 import express, {Request, Response} from 'express';
 import {getEntityPropertyPresentation} from '../controller/entityAdminController';
-import controller from '../controller/eventController';
+import controller, {eventMethodPermission} from '../controller/eventController';
 import invoiceController from '../controller/eventPoolController';
 import {createGuestFlowRouter} from '../middleware/guestFlowFactory';
 import {queryHandler} from "../middleware/paramHandler";
@@ -25,7 +25,6 @@ import * as eventService from '../modules/database/services/EventService';
 import {asyncHandler} from "../modules/lib/asyncHandler";
 import { createParticipantsPdf} from "../modules/lib/pdf";
 import {createInvoiceSharesPdf} from '../modules/invoice/exports';
-import {PERM} from "../modules/lib/permissions";
 import {ENTITIES, getResource} from "../modules/lib/util";
 import renderer from "../modules/renderer";
 import type {EntityDescriptor} from "../types/PermissionTypes";
@@ -58,7 +57,7 @@ app.use("/", createGuestFlowRouter({
 // convenience alias
 app.get('/:id/register', (req: Request, res: Response) => res.redirect(`/event/${req.params.id}`));
 
-app.get('/:id/admin', requirePermission(permFct, PERM.ACCESS_ADMIN), asyncHandler(async (req: Request, res: Response) => {
+app.get('/:id/admin', requirePermission(permFct, eventMethodPermission('admin')), asyncHandler(async (req: Request, res: Response) => {
     // Reuse the event view projection, including its shared archive snapshot and decorated
     // child cards. The dashboard passes that page data explicitly to its archival mixins;
     // entering administration does not require a separate feature-state middleware or locals.
@@ -67,14 +66,14 @@ app.get('/:id/admin', requirePermission(permFct, PERM.ACCESS_ADMIN), asyncHandle
     renderer.renderWithData(res, 'event/event-dashboard', {...data, entityProperties});
 }));
 
-app.get("/:id/export/participants", requirePermission(permFct, PERM.DATA_EXPORT | PERM.ACCESS_PARTICIPANTS), asyncHandler(async (req: Request, res: Response) => {
+app.get("/:id/export/participants", requirePermission(permFct, eventMethodPermission('exportParticipants')), asyncHandler(async (req: Request, res: Response) => {
     const data = await controller.getParticipantsExtended(resFct(req));
     //renderer.renderWithData(res, 'event/export/participants', data);
     res.contentType('application/pdf');
     res.send(await createParticipantsPdf(data).getBuffer());
 }));
 
-app.get('/:id/export/invoice-pools/:poolId/shares', isLoggedIn, requirePermission(permFct, PERM.MANAGE_ASSIGNMENTS), asyncHandler(async (req: Request, res: Response) => {
+app.get('/:id/export/invoice-pools/:poolId/shares', isLoggedIn, requirePermission(permFct, eventMethodPermission('manageAssignments')), asyncHandler(async (req: Request, res: Response) => {
     // The invoice controller orchestrates saved data and export policy; the route handles HTTP transport only.
     const data = await invoiceController.getInvoiceSharesPdfData(resFct(req), String(req.params.poolId), req.query);
     // Both downloads use the same authorized snapshot; only the optional example's visibility differs.

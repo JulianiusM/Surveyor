@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-15
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original choices, corrected transport provenance and withdrawn R1 acceptance retained; approved native anonymous flash and full pilot source/readiness re-review reconciled; no full-application or cutover acceptance
+verification-scope: current P0-P2 scope reconciled; original choices, transport provenance, withdrawn R1 acceptance and approved native anonymous flash retained; no full-application or cutover acceptance
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -19,7 +19,9 @@ queries, transactions, locks and persistence.
 The [baseline](FRONTEND_MIGRATION_BASELINE.md) and its 121 edge-case IDs describe the native contract.
 The original step-two design was based on `0a3662ae0a6e99e0df0a38f603831d3ac9ff4b61`; the native comparison reference
 is `2dfa2573c64178f54684cc4877b5a945f66e24c8`. The reference does not identify a deployed site's version.
-Help/Packing and necessary entry/foundation behavior are the current completeness obligation; other feature
+Help/Packing were the original pilot obligation. P1 identity/common presentation and P2 Events extend that scope;
+the [full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the remaining phase contracts. The
+[paired review](PILOT_PARITY_REVIEW.md) records current implementation evidence and its limits. Other feature
 migration and default-route cutover remain future work.
 
 ## Original decisions and dated amendments

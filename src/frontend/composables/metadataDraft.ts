@@ -1,5 +1,11 @@
 import type {PilotMetadataField, PilotMetadataFieldPolicy, PilotMetadataSnapshot} from '../../types/FrontendPilotUiTypes';
 
+/** Nullable text fields share empty-string comparison and sparse submission.
+ * Features opt in for their own fields; other scalar values stay untouched. */
+export function normalizeNullableMetadataText<T>(value: T): T | null {
+    return value === '' ? null : value;
+}
+
 function copyMetadata<TValues extends object, TMetadata extends PilotMetadataSnapshot<TValues>>(data: TMetadata): TMetadata {
     // Query results may be Vue readonly proxies; copy the known wire containers without structuredClone.
     return {...data, values: {...data.values}, editableFields: [...data.editableFields]};

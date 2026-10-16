@@ -1,5 +1,26 @@
 import {matchQuery} from '@tanstack/vue-query';
 
+/** Event projections have distinct grants and lifetimes. Admission keeps a stable
+ * intent prefix so resource denial can retire every cached visit of that intent. */
+export const eventKeys = {
+    all: (context: string | null | undefined) => ['v1', context, 'event'] as const,
+    resource: (context: string | null | undefined, id: string) => [...eventKeys.all(context), id] as const,
+    detail: (context: string | null | undefined, id: string, admin = false) => [...eventKeys.resource(context, id), 'detail', admin] as const,
+    entry: (context: string | null | undefined, id: string, view: 'detail' | 'guest' | 'admin', visit?: number) =>
+        [...eventKeys.resource(context, id), 'entry', view, ...(visit === undefined ? [] : [{visit}])] as const,
+    participants: (context: string | null | undefined, id: string) => [...eventKeys.resource(context, id), 'participants'] as const,
+    links: (context: string | null | undefined, id: string) => [...eventKeys.resource(context, id), 'links'] as const,
+    things: (context: string | null | undefined, id: string, admin = false) => [...eventKeys.resource(context, id), 'things', admin] as const,
+    guest: (context: string | null | undefined, id: string) => [...eventKeys.resource(context, id), 'guest'] as const,
+    creation: (context: string | null | undefined) => [...eventKeys.all(context), 'creation'] as const,
+    duplicate: (context: string | null | undefined, id: string) => [...eventKeys.resource(context, id), 'duplicate'] as const,
+    editors: (context: string | null | undefined, id: string) => [...eventKeys.resource(context, id), 'editors'] as const,
+    metadata: (context: string | null | undefined, id: string) => [...eventKeys.editors(context, id), 'metadata'] as const,
+    settings: (context: string | null | undefined, id: string) => [...eventKeys.editors(context, id), 'settings'] as const,
+    profilesFamily: (context: string | null | undefined, id: string) => [...eventKeys.editors(context, id), 'profiles'] as const,
+    profiles: (context: string | null | undefined, id: string, q: string) => [...eventKeys.profilesFamily(context, id), {q}] as const,
+};
+
 /** Query families put the captured identity before feature data. Include locale only when the
  * server representation contains translated content. Machine state, user-authored content and
  * authority have one current projection; language aliases could resurrect an older grant. */

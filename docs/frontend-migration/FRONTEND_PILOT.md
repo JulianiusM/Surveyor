@@ -4,14 +4,14 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-15
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: full pilot source/readiness review, one-session initial projection and approved native anonymous flash reconciled; scoped fixture/repair evidence retained; excluded backend remedies deferred; no cutover
+verification-scope: current P0-P2 shared header, entry retirement, metadata, notes and lifecycle ownership source-reconciled; Event controller/public method contracts retained; execution limits remain in paired review; no cutover
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/
 next-review: next-migration-slice-or-authorized-cutover
 -->
 
-The opt-in Vue pilot migrates Packing/Help and their necessary identity, overview and shared foundation journeys.
+The opt-in Vue pilot migrates Packing, Help, Events and their necessary identity, overview and shared foundation journeys.
 Native application routes remain available as the visual/behavioral reference. The comparator is
 `2dfa2573c64178f54684cc4877b5a945f66e24c8`, subject only to explicit exceptions in the
 [foundation decision ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
@@ -26,9 +26,10 @@ profile-token issuance, entry, private preview and explicit transfer (P1B), prof
 deletion (P1C), plus opt-in landing and common message/error presentation (P1D). The maintainer's
 [parity-only clarification](FRONTEND_FOUNDATION_DESIGN.md#authorized-parity-only-migration-clarification-2026-10-14)
 excludes existing backend remedies rather than making them prerequisites. Their backlog records remain open.
-Overview and other scaffolds retain their remaining migration TODOs. Subsequent slices cover surveys, events,
-activity plans, drivers lists and invoice pools. Implemented portions retain native behavior and maintainability
-requirements; the paired review records actual scoped checks.
+P2 adds Event creation/duplication, settings, registration, organizer tools and Things to do. The
+[full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the remaining phase contracts for surveys, activity plans,
+drivers lists, invoice pools and eventual cutover. Implemented portions retain native behavior and maintainability
+requirements; the paired review records actual scoped checks, including the P2 review corrections.
 
 The maintainer's 2026-10-14 A2 correction supersedes P1's added profile field-edit/create transaction wrappers.
 Their adapters now invoke the unchanged native operations and confirm with a simple prepared acknowledgement.
@@ -42,7 +43,7 @@ comes from approved canonical guides; complete reviewed temporary output is prep
 AI instructions, decision records and Help-authoring rules remain active. New localized pilot Help stays directly
 in its runtime corpus. Default-route cutover requires separate authorization.
 
-Packing business operations now share existing controller owners with removable native/v1 transport adapters and
+Packing and Event business operations now share existing controller owners with removable native/v1 transport adapters and
 central method permission definitions. Pilot action grants are independent of detail-page membership where native
 policy permits the action; private metadata/access projections remain bounded. Creation, metadata, item/membership
 writes and counters are shared, as are existing reorder/delete/default hooks and administration/event/image owners.
@@ -56,7 +57,7 @@ The exact duplicate URL after login is an explicitly approved native exception.
 | Pilot route family | Contract |
 |---|---|
 | `/frontend-pilot` | Bounded mixed overview; native membership, search and personal visibility; other feature destinations remain native until migrated. |
-| `/frontend-pilot/home` | Explicit opt-in native-equivalent landing; captured quick-create suggestion, account/guest welcome and migrated Packing versus native remaining creation destinations. The Overview root stays unchanged. |
+| `/frontend-pilot/home` | Explicit opt-in native-equivalent landing; captured quick-create suggestion, account/guest welcome and migrated Packing/Event creation destinations. Other creation destinations remain native. The Overview root stays unchanged. |
 | `/frontend-pilot/message` | Admitted informational/command feedback; route query data cannot supply message authority. Common error presentation retains server-selected status and development-only diagnostics. |
 | `/frontend-pilot/users/profile`, `/frontend-pilot/users/profile/manage`, `/frontend-pilot/users/profile/create` | Current profile editing for accounts/guests; account-only owned roster/creation and existing profile switching. Creation preserves the active profile. |
 | `/frontend-pilot/users/profile/migrate/request`, `/frontend-pilot/users/profile/migrate/show`, `/frontend-pilot/users/profile/migrate/execute` | Native token issuance and explicit transfer retain document delivery. An explicit generated read-only POST previews the token while the mounted Vue form owns its draft/result; a fixed nonsecret fragment preserves Back/Forward without storing capabilities. The receiving active profile and former-owner cleanup rules stay unchanged; no stronger backend token/transaction guarantee is introduced. |
@@ -64,7 +65,9 @@ The exact duplicate URL after login is an explicitly approved native exception.
 | `/frontend-pilot/packing/create` | Account/profile admission, event preselection, initial items and optional image. |
 | `/frontend-pilot/packing/<id>` | Authorized Packing detail; guest/event admission precedes page rendering. |
 | `/frontend-pilot/packing/<id>/duplicate` | Existing duplicate permission/copy boundaries; rejected submission returns login to this exact duplicate destination. |
-| Packing guest entry/recovery | Native fields, notices, title, canonical detail/success destinations and invalid-token outcomes. |
+| `/frontend-pilot/event/create`, `/frontend-pilot/event/<id>`, `/frontend-pilot/event/<id>/duplicate`, `/frontend-pilot/event/<id>/admin` | Native Event admission, creation/copy boundaries, detail, own registration and permission-filtered organizer/settings tools. PDF and unmigrated child features remain ordinary native links. |
+| `/frontend-pilot/event/<id>/guest`, `/frontend-pilot/event/<id>/register` | Guest entry and the register alias preserve `regToken` and return to admitted pilot detail. Native `/event/<id>` and `/event/<id>/register` destinations remain available unchanged. |
+| Packing/Event guest entry/recovery | Shared presentation with feature-specific native fields, notices, title, canonical detail/success destinations and invalid-token outcomes. |
 | Pilot login/register/recovery/reset | Existing account policy, return context and confirmed destinations; provider/token boundaries remain ordinary navigation. |
 | `/frontend-pilot/help` | Complete localized read-only Help SSR, search, links and SPA hydration. |
 | `/api/v1` | Generated JSON/multipart contract; existing controllers own policy and pure DBAL owns persistence. |
@@ -122,6 +125,22 @@ for the approved coexistence remedy.
 Reuse these owners rather than adding wrappers, forwarding modules, validators, state stores or policy copies.
 Shared type-only contracts are `.d.ts`. Comments explain nontrivial intent and boundary decisions; templates document
 required data and browser hooks. Feature state travels through renderer `data` and explicit template arguments.
+
+Event detail and Packing use the same displayed `EntityHeader`, retaining the native 250px cover image and responsive
+parent links. Features supply admitted data, exact image/query operations and current settings state; the separate
+Event dashboard heading remains intact. Actual successful query receipts recover missing images after current props
+render, with resource/key checks and the existing authorized-image owner. Image upload remains a settings draft.
+
+Both features also use `EntityEntryPage` for denial-family dispatch, the existing settings/metadata/access composites
+and `useMetadataEditorHandle` for one mounted metadata workflow. Field opt-in uses the shared nullable-text normalizer;
+Event schedule/capacity and Packing item/checklist semantics remain distinct. The existing stateless lifecycle owner
+shares archive/restore and Settings/Event-child pause/resume, retaining current caller capabilities, native warnings,
+command feedback and read-only recovery. These are adopted implementations, not unused helpers for later consumers.
+
+The existing Event controller shares capacity and child-eligibility rules across native/v1 consumers; DBAL supplies
+their data and persistence. Optional-session declarations for independently public methods describe unchanged runtime
+admission, with account/profile-required operations retaining their boundaries. The
+[Development amendments](staged/DEVELOPMENT.md#backend-and-method-policy-contracts) own the detailed contracts.
 
 Reka owns shared dialog/tab focus and keyboard behavior. Mixed navigation/overview disclosures use the existing
 `AppNavigationDropdown`: native details/Tab/embedded-control behavior, outside dismissal, Escape focus return and
@@ -187,14 +206,18 @@ A same-actor session-read pause cannot turn a confirmed write into an obsolete r
 only the completed input while presenting the failed-refresh warning. Actual actor retirement still retires its result.
 D2 compares touched current fields under locks, including useful setup fields, and preserves unrelated edits.
 Native last-write request shapes remain unchanged; the shared controller adapts their distinct transport guarantees.
+Read-only participant notes keep only their summary/participant selection and derive values from the current full
+admitted roster, independently of search. Missing sources close the selection; organizer date edits remain genuine
+local drafts. Admission denial retires feature-selected query families through the shared entry/cache owners while
+preserving the producing denial even when its observer is paused.
 
 Unknown writes never replay automatically. Reconcile/recover reads can inform review but cannot prove an unknown
 creation failed. Command state and draft protection can outlive retired editors. Whole-page deletion consent precedes
 the write; confirmed navigation retains its destination/receipt through canceled or failed delivery.
 Dialog close checks its own draft subtree; route/identity/release departures resolve the whole affected tree.
 
-D5 replacement detection uses ordinary session refresh. Under the explicit 2026-10-15 amendment, automatic
-full-document reload is limited to admitted dynamic Overview and Packing detail content; creation, duplication,
+D5 replacement detection uses ordinary session refresh and the explicit 2026-10-15 route/content classifier. Current
+eligible dynamic views are Overview, Packing detail and P2 Event detail/admin; creation, duplication,
 user-management, Help and static error/completion presentations are excluded. Eligible pages still require clean
 drafts, no pending/unknown command and working loop protection. Compatible mounted edits may finish; missing lazy
 chunks or incompatible commands preserve drafts and guarded deliberate recovery on every page. Periodic content

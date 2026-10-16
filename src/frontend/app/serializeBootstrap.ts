@@ -28,6 +28,10 @@ const bootstrapValidators = {
     packingCreateContext: validatePackingCreate,
     packingSelectedEvent: validatePackingSelectedEvent,
     packingDuplicate: validatePackingDuplicate,
+    eventEntry: validateEventEntry,
+    eventCreateContext: validateEventCreateContext,
+    eventDuplicate: validateEventDuplicate,
+    eventCreationSubmission: validateEventCreationSubmission,
     personalLink: validateString,
     overview: validateOverview,
     initialUrl: validateString,
@@ -150,6 +154,26 @@ async function validatePackingSelectedEvent(value: unknown): Promise<boolean> {
 async function validatePackingDuplicate(value: unknown): Promise<boolean> {
     const {validatePackingDuplicate: validatePayload} = await import('../../../.generated/api/v1/browser/validatePackingDuplicate.mjs');
     return validatePayload(value);
+}
+
+async function validateEventEntry(value: unknown): Promise<boolean> {
+    const {validateEventResourceEntry} = await import('../../../.generated/api/v1/browser/validateEventResourceEntry.mjs');
+    return validateEventResourceEntry(value);
+}
+
+async function validateEventCreateContext(value: unknown): Promise<boolean> {
+    const {validateEventCreateContext: validate} = await import('../../../.generated/api/v1/browser/validateEventCreateContext.mjs');
+    return validate(value);
+}
+
+async function validateEventDuplicate(value: unknown): Promise<boolean> {
+    const {validateEventDuplicate: validate} = await import('../../../.generated/api/v1/browser/validateEventDuplicate.mjs');
+    return validate(value);
+}
+
+async function validateEventCreationSubmission(value: unknown): Promise<boolean> {
+    const {validateEventCreationSubmission: validate} = await import('../../../.generated/api/v1/browser/validateEventCreationSubmission.mjs');
+    return validate(value);
 }
 
 async function validateOverview(value: unknown): Promise<boolean> {

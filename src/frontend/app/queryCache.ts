@@ -2,7 +2,7 @@ import {hashKey, matchQuery} from '@tanstack/vue-query';
 import type {QueryCacheNotifyEvent, QueryClient, QueryFilters} from '@tanstack/vue-query';
 import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import type {ComputedRef} from 'vue';
-import type {PilotContext, PilotQueryAdmission, PilotQueryReadPolicy} from '../../types/FrontendPilotUiTypes';
+import type {PilotContext, PilotQueryAdmission, PilotQueryReadPolicy, PilotQueryRefreshOptions} from '../../types/FrontendPilotUiTypes';
 import {belongsToQueryFamily} from './queryKeys';
 import {UnconfirmedResponseError} from './transport';
 
@@ -93,8 +93,11 @@ export async function refetchFreshQuery<T>(client: QueryClient, key: readonly un
 
 /** A family refresh certifies each currently readable active region independently.
  * The caller still owns which family/actor is relevant and whether its result may
- * be presented; this owner hides the query library's retained-cancellation behavior. */
-export async function refetchFreshQueries(client: QueryClient, filter: QueryFilters, mayRead: () => boolean): Promise<void> {
+ * be presented; this owner hides the query library's retained-cancellation behavior.
+ * Optional dependents may be absent after the caller's own required authority read.
+ * Selected read failures still propagate, and required recovery remains strict. */
+export async function refetchFreshQueries(client: QueryClient, filter: QueryFilters, mayRead: () => boolean,
+                                          options: PilotQueryRefreshOptions = {}): Promise<void> {
     const reads: Promise<unknown>[] = [];
     // TanStack's active filter excludes a terminal-paused observer. Inspect its
     // existing observer metadata instead; a closed region remains ineligible.
@@ -119,9 +122,10 @@ export async function refetchFreshQueries(client: QueryClient, filter: QueryFilt
             return mayRead() && (filter.type !== 'active' && !query.isDisabled() || hasEligibleReadObserver(query));
         }
     }
-    // An empty/disabled family has performed no authority read. It must not
-    // acknowledge an unknown command merely because Promise.all([]) resolves.
-    if (!reads.length) throw new UnconfirmedResponseError();
+    // An empty/disabled family has performed no authority read. Required recovery
+    // must not acknowledge an unknown command merely because Promise.all([])
+    // resolves. Optional refresh is for a caller whose own required read succeeded.
+    if (!reads.length && !options.allowEmpty) throw new UnconfirmedResponseError();
     await Promise.all(reads);
 }
 
@@ -180,11 +184,17 @@ export async function retireQueryFamily(client: QueryClient, family: readonly un
 
 /** Discard the feature owner's affected query families without redacting DTOs into
  * unauthoritative snapshots. Cancel first so held reads cannot restore private data.
- * Choosing the resource and containing projections remains the caller's policy. */
+ * Choosing the resource and containing projections remains the caller's policy.
+ * An optional producing admission family survives even while its observed query
+ * is disabled: TanStack counts that observer as inactive during initialization. */
 export async function evictQueryFamilies(client: QueryClient, families: readonly (readonly unknown[])[],
-                                         type: 'all' | 'active' | 'inactive' = 'all'): Promise<void> {
+                                         type: 'all' | 'active' | 'inactive' = 'all',
+                                         preservedFamily?: readonly unknown[]): Promise<void> {
     /** Match only caller-selected resource families, preserving unrelated actors and endpoints. */
     function belongsToAffectedFamily(query: Parameters<typeof belongsToQueryFamily>[0]): boolean {
+        // A producing denial belongs to the admission owner. Removing a paused
+        // observer here would lose that receipt before its subtree can render it.
+        if (preservedFamily && belongsToQueryFamily(query, preservedFamily)) return false;
         // Family prefixes keep this cache owner independent of feature tuple shapes.
         for (const family of families) {
             if (belongsToQueryFamily(query, family)) return true;

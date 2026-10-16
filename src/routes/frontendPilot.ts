@@ -22,6 +22,7 @@ import type {FrontendLandingQuickCreate} from '../types/FrontendPilotTypes';
 import type {PackingList} from '../modules/database/entities/packing/PackingList';
 import {readPackingCreateEntry, readPackingDuplicate, readPackingResourceEntry} from '../controller/packingController';
 import {resolvePilotHelpQuery} from '../modules/lib/helpNavigation';
+import {createEventPilotRouter} from './frontendPilotEvent';
 
 const router = Router();
 
@@ -195,6 +196,11 @@ router.get('/message', asyncHandler(async function renderMessagePilot(req, res) 
     state.pageNotice = undefined;
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
+
+// Event documents reuse this router's Session, shell and one-time notice owners.
+// Their controller projections and deliberate creation transport stay feature-owned.
+router.use('/event', createEventPilotRouter({bootstrap, applyPageEntry, flashNotice: flashPageNotice,
+    persistFeedback: persistCompletedWorkflowFeedback}));
 
 /** Preserve native account/guest admission before sending administration's progressive shell. */
 router.get(['/users/profile', '/users/profile/manage', '/users/profile/create'],

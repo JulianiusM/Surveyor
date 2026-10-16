@@ -13,7 +13,7 @@ import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 // TODO (docs/frontend-migration/FRONTEND_PILOT.md): Migrate non-packing detail/administration destinations
 // with their feature owners. These mixed Overview cards deliberately keep working native
 // links until then; their shared projection does not make those workflows complete.
-const props = defineProps<{
+const props = withDefaults(defineProps<{
     card: components['schemas']['OverviewCard'];
     interaction: PilotOverviewCardInteraction;
     disabled?: boolean;
@@ -23,11 +23,13 @@ const props = defineProps<{
     filtered?: boolean;
     readRevision?: number;
     active?: boolean;
-}>();
+    personalVisibility?: boolean;
+}>(), {personalVisibility: true});
 const emit = defineEmits<{
     visibility: [value: components['schemas']['OverviewVisibilityInput']['visibility']];
     expand: [];
     archive: [restore: boolean];
+    automate: [paused: boolean];
     remove: [];
 }>();
 const context = usePilot();
@@ -104,18 +106,18 @@ function expand(event: MouseEvent): void {
                 ><span v-if="card.archived" class="badge text-bg-secondary"
                     ><i class="bi bi-archive me-1" aria-hidden="true"></i
                     >{{ messages.t('common.archived') }}</span
-                ><span v-if="card.visibility !== 'default'" class="badge text-bg-info">{{
+                ><span v-if="personalVisibility && card.visibility !== 'default'" class="badge text-bg-info">{{
                     messages.t(card.visibility === 'hidden' ? 'overview.hiddenBadge' : 'overview.shown')
                 }}</span>
             </div>
             <div class="d-flex flex-wrap gap-2">
-                <AppNavigationDropdown :navigation="false" :label="messages.t('common.archival')"
+                <AppNavigationDropdown v-if="personalVisibility || (interaction.lifecycle ?? interaction.migrated) && (card.capabilities.archive || card.capabilities.restore || card.automation?.canManage)" :navigation="false" :label="messages.t('common.archival')"
                     trigger-class="btn btn-sm btn-outline-light dropdown-toggle"
                     :trigger-label="messages.t('overview.archiveMenu', {title: card.title})">
                         <template
                             v-if="
-                                interaction.migrated &&
-                                (card.capabilities.archive || card.capabilities.restore)
+                                (interaction.lifecycle ?? interaction.migrated) &&
+                                (card.capabilities.archive || card.capabilities.restore || card.automation?.canManage)
                             "
                             ><h6 class="dropdown-header">{{ messages.t('overview.forEveryone') }}</h6>
                             <button
@@ -135,8 +137,11 @@ function expand(event: MouseEvent): void {
                             >
                                 {{ messages.t('common.restore') }}
                             </button>
-                            <hr class="dropdown-divider"
+                            <button v-if="card.automation?.canManage" type="button" class="dropdown-item" :disabled="disabled"
+                                @click="emit('automate', !card.automation.paused)">{{ messages.t(card.automation.paused ? 'event.organizer.resumeAutomation' : 'event.organizer.pauseAutomation') }}</button>
+                            <hr v-if="personalVisibility" class="dropdown-divider"
                         /></template>
+                        <template v-if="personalVisibility">
                         <h6 class="dropdown-header">{{ messages.t('overview.onlyOverview') }}</h6>
                         <button
                             type="button"
@@ -164,6 +169,7 @@ function expand(event: MouseEvent): void {
                         >
                             {{ messages.t('overview.follow') }}
                         </button>
+                        </template>
                 </AppNavigationDropdown>
                 <div
                     v-if="card.capabilities.duplicate || card.capabilities.remove"

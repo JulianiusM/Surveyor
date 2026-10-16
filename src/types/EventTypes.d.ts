@@ -29,6 +29,10 @@ export type CreateEventDTO = {
 
 export type DIETARY = "MEAT" | "FISH" | "VEGETARIAN" | "VEGAN" | "HALAL" | "KOSHER" | "ALLERGIES" | "COMMENT";
 
+/** Native and versioned adapters share grant choices; actor/page admission stays with its existing owner. */
+export type EventMethod = 'register' | 'admin' | 'participants' | 'manageRegistrations' | 'items'
+    | 'manageAssignments' | 'exportParticipants' | 'managePermissions' | 'editHeader' | 'duplicate';
+
 /** Minimal, authorized event information shared by creation and entity settings pickers. */
 export interface EventLinkOption {
     id: string;

@@ -2,11 +2,10 @@ import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotEventPickerQuery, PilotEventPickerSource, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
 import {packingKeys} from '../../app/queryKeys';
-import {InvalidInputError, ObsoleteRequestError, UnconfirmedResponseError} from '../../app/transport';
+import {InvalidInputError} from '../../app/transport';
 import {validatePackingListView} from '../../../../.generated/api/v1/browser/validatePackingListView.mjs';
 import {validatePackingMetadata} from '../../../../.generated/api/v1/browser/validatePackingMetadata.mjs';
 import {validatePackingMetadataPatch} from '../../../../.generated/api/v1/browser/validatePackingMetadataPatch.mjs';
-import {validateComparisonToken} from '../../../../.generated/api/v1/browser/validateComparisonToken.mjs';
 import {validatePackingAssignmentResult} from '../../../../.generated/api/v1/browser/validatePackingAssignmentResult.mjs';
 import {validatePackingSettings} from '../../../../.generated/api/v1/browser/validatePackingSettings.mjs';
 import {validatePackingCreateContext} from '../../../../.generated/api/v1/browser/validatePackingCreateContext.mjs';
@@ -26,17 +25,6 @@ import {validatePackingResourceEntry} from '../../../../.generated/api/v1/browse
 type List = components['schemas']['PackingListView'];
 type Metadata = components['schemas']['PackingMetadata'];
 type Assignment = components['schemas']['PackingAssignmentResult'];
-
-/** Admit an opaque strong metadata ETag using the same authored token bound as commands.
- * The response header sits outside the DTO validator. Its private field evidence is
- * interpreted by the locked controller; the browser never decodes it into authority. */
-function requireMetadataComparison(etag: string | null | undefined): asserts etag is string {
-    // Preserve strong-tag admission while consuming the generated length contract.
-    // Missing, oversized or malformed header evidence cannot make the editor writable.
-    if (!validateComparisonToken(etag) || typeof etag !== 'string' || !/^"[^"\r\n]+"$/u.test(etag)) {
-        throw new UnconfirmedResponseError();
-    }
-}
 
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class PackingApi {
@@ -78,7 +66,7 @@ export class PackingApi {
             return transport.read('getPackingMetadata', {...response, signal}, validatePackingMetadata, scope, previous);
         }
         const result = await transport.allowedRead(`packing/${listId}/metadata`, scope, readMetadata, signal);
-        requireMetadataComparison(result.etag);
+        this.transport.requireComparison(result.etag);
         return result;
     }
 
@@ -94,7 +82,7 @@ export class PackingApi {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': etag}}, body: patch, cache: 'no-store',
         }), validatePackingMetadata, scope);
         // Response headers use the same generated bound as every field-token body.
-        requireMetadataComparison(result.etag);
+        this.transport.requireComparison(result.etag);
         return result;
     }
 
@@ -301,17 +289,7 @@ export class PackingApi {
             const result = await transport.client.GET('/packing-lists/{listId}/header', {
                 params: {path: {listId}, header: transport.headers(scope)}, signal, cache: 'no-store', parseAs: 'blob',
             });
-            // An adapter can finish despite cancellation. Retire its response before
-            // validated error classification, so a retired owner's Retry-After cannot
-            // publish a transport deadline over this resource's newer image read.
-            if (signal?.aborted) throw new ObsoleteRequestError();
-            if (!result.response.ok) transport.reject(result.response, result.error, scope);
-            transport.checkScope(result.response, scope);
-            if (result.response.status !== 200 || !(result.data instanceof Blob)
-                || !['application/octet-stream', 'image/jpeg', 'image/png', 'image/gif'].includes(result.data.type)) {
-                throw new UnconfirmedResponseError();
-            }
-            return result.data;
+            return transport.headerImage(result, scope, signal);
         }
 
         return transport.allowedRead(`packing/${listId}/header`, scope, readHeader, signal);

@@ -10,6 +10,12 @@ const props = withDefaults(
         subtitle?: string;
         pending?: boolean;
         compact?: boolean;
+        // Feature dialogs preserve native geometry/type without replacing this
+        // shared focus, pending-dismissal and portal owner. Defaults retain Settings.
+        standard?: boolean;
+        titleClass?: string;
+        contentClass?: string;
+        footerClass?: string;
         fullscreenOnSmall?: boolean;
         initialFocus?: string;
     }>(),
@@ -63,8 +69,8 @@ function restoreFocus(event: Event): void {
         <DialogPortal>
             <DialogOverlay class="pilot-dialog-backdrop" />
             <DialogContent
-                class="pilot-dialog modal-content bg-dark text-white"
-                :class="{'pilot-dialog-compact': compact, 'pilot-dialog-fullscreen': fullscreenOnSmall}"
+                class="pilot-dialog modal-content bg-dark"
+                :class="[contentClass ?? 'text-white', {'pilot-dialog-compact': compact, 'pilot-dialog-standard': standard, 'pilot-dialog-fullscreen': fullscreenOnSmall}]"
                 :aria-describedby="undefined"
                 @escape-key-down="preventPending"
                 @pointer-down-outside="preventPending"
@@ -73,7 +79,7 @@ function restoreFocus(event: Event): void {
             >
                 <header class="modal-header">
                     <div>
-                        <DialogTitle as="h2" class="modal-title" :class="{'fs-5': !compact}">{{
+                        <DialogTitle as="h2" class="modal-title" :class="[{'fs-5': !compact}, titleClass]">{{
                             title
                         }}</DialogTitle>
                         <p v-if="subtitle" class="small text-secondary mb-0 text-break">{{ subtitle }}</p>
@@ -86,7 +92,7 @@ function restoreFocus(event: Event): void {
                 </header>
                 <slot name="navigation" />
                 <div class="modal-body"><slot /></div>
-                <footer v-if="$slots.footer" class="modal-footer"><slot name="footer" /></footer>
+                <footer v-if="$slots.footer" class="modal-footer" :class="footerClass"><slot name="footer" /></footer>
             </DialogContent>
         </DialogPortal>
     </DialogRoot>

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-15
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: full pilot playbook/source review includes ordinary Express ownership, initial projection, native anonymous flash and explicit completion; corrected original transport provenance remains in the active ADR; no cutover claimed
+verification-scope: implemented P2 composition reconciled for displayed headers, denial-family dispatch, metadata handles/normalization, current roster notes and root/child lifecycle; shared controller rules and optional-session declarations retained; no execution or cutover claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -37,6 +37,7 @@ endpoints or permission policy. The following contracts describe how those owner
 | DTO to browser operation | `features/<feature>/api.ts`, `app/transport.ts`, generated operation and feature validators. |
 | Entry/read to authorized view | `composables/pageEntry.ts`, `app/queryKeys.ts`, `app/queryCache.ts`; the feature supplies policy/dependencies. |
 | Snapshot to draft/command/recovery | `metadataDraft.ts`, `command.ts`, shared feedback, confirmed-navigation and fresh-read owners. |
+| Matching entity interaction to its consumers | `EntityEntryPage`, `EntityHeader`, `EntitySettingsDialog`, `EntityMetadataEditor`, `EntityAccessEditor` and `identity/GuestEntryPage`; feature operations, query families and field normalization remain injected. |
 | Route to SSR/hydration | Existing Express route/renderer, `app/serializeBootstrap.ts`, `createApp.ts` and `mountPreservingDrafts.ts`. |
 | Initial content to usable controls | `app/context.ts` initialization helpers, route metadata and existing shell/shared controls. |
 | Repeated interaction to presentation | Shared components/composables; explicit props/events and injected operations. |
@@ -137,12 +138,24 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
    Back, eviction or actor change cannot replay retired SSR data. Use `requiresClientInitialization` and existing
    route metadata for initial content; shared controls use `useClientInitialization`. Cover shell controls as well
    as the feature body so JavaScript failure cannot leave a normal-looking action which cannot work.
+   `EntityEntryPage` owns cancellation/removal for a feature's explicit `deniedQueries` selection. Features return
+   affected families and any inactive-only copies; they do not repeat eviction dispatch. Preserve the producing
+   admission family when removing inactive visits: a paused observer can be inactive to Query while still owning
+   the visible denial. Do not clear a live independent creation draft or infer families from tuple positions.
 
 5. **Complete read/recovery behavior.** Start queries only when identity, hydration, visibility and activity permit.
    Retire obsolete generations and preserve server cooldowns. Missing pending data uses shared skeletons; temporary
    failure retains confirmed scoped data/drafts and its stale notice. Validated denial clears private content.
    Explicit Retry is an eligible read which observes its actual deadline and last successful receipt. A canceled
    observer refetch may fulfill with retained data; fresh authority requires a new admitted read.
+
+   Separate initial reads for counts from recurring disclosure polling. Closing a region pauses its polling while
+   retaining admitted snapshots and drafts; it does not revoke access. Show an unknown count until its source is
+   admitted. After a confirmed write, require the owning fresh read and refresh only eligible active dependent
+   observers. An absent optional dependent observer is not a failed owning read; a selected dependent read failure
+   still needs stale feedback. Keep that selection in the shared query owner rather than copying cache rules.
+   Bind binary-image recovery to successful query receipts, including equal-version background reads; watching
+   only changed data cannot restore an image after a validated terminal response.
 
    Use the existing context-owned `useActionState` for an operation's live eligibility, pending and blocked inputs.
    Pass that state to `ActionButton` (or its disabled/pending refs to a native control), and call its `isAvailable()`
@@ -152,6 +165,11 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
    in the read owner: session recovery must remain available while ordinary reads wait, local Cancel/draft controls
    need no read admission, and already admitted commands retain their captured completion lifetime. This derived
    state stores no drafts, server data or authority and never retries an operation automatically.
+   Reevaluate already-open dialogs when method grants change: readable content and local drafts may remain, while
+   dispatch controls must show the same current availability as their handlers.
+   Read-only dialogs retain selection, not copied server values. Event notes resolve the selected participant or
+   whole-roster summary from current admitted data even when local search hides its row. A removed row or empty
+   summary retires that selection; genuine date drafts remain independent.
 
 6. **Add independent drafts and commands.** Use the existing draft/command owners with feature normalization and
    operation-specific feedback. Original, local and remote values stay separate. Current-value comparisons check
@@ -175,6 +193,10 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
    affected mounted controls/reads/commands. Use equivalent records, actors and sizes for visual checks. Obtain an
    independent semantic review and report actual commands, failures and limits. A build, helper test or screenshot
    alone cannot establish feature completeness.
+
+Readable source is part of every step. Keep template controls and render branches in logical groups with purposeful
+blank lines, explain inputs and non-obvious lifecycle steps, and prefer named operations to nested anonymous flows.
+A syntax-clean checker result does not establish useful comments, actual reuse or human-readable formatting.
 
 When coordination changes, enumerate every active writer and actual lock order, including self/admin removal,
 item deletion, relationship changes and foreign-key locks. A comment claiming a shared lock is not scheduling
@@ -203,12 +225,42 @@ Adding an editable field follows one coherent path:
 A read-only view stops before editor/command work but still owns admission, privacy, cancellation, retry,
 localization and visual behavior. No universal CRUD engine or wrapper per HTML element is needed.
 
+#### Worked composition: Event and Packing
+
+The implemented consumers illustrate the migration handoff without another controller or state store:
+
+| Feature supplies | Shared owner actually adopted |
+|---|---|
+| Exact entry operation and actor/resource-dependent denial families | `EntityEntryPage` presents admission and dispatches scoped retirement through `app/queryCache.ts`. |
+| Title/icon, permitted parent URL, image operation/version/detail key and current settings state | `EntityHeader` renders the native layout and composes the existing authorized-image lifetime. |
+| Generated settings/metadata/access operations, query keys, field grants and controls | `EntitySettingsDialog`, `EntityMetadataEditor` and `EntityAccessEditor` retain their existing independent drafts and command boundaries. |
+| Current mounted metadata editor and field normalization | `useMetadataEditorHandle` exposes the same public workflow; nullable text uses `normalizeNullableMetadataText` in `metadataDraft.ts`. |
+| Root or captured Event-child operation, current capability, native wording and refresh dependencies | `createEntityLifecycle` shares archive/restore and pause/resume behavior through the caller's existing command. |
+
+Event keeps schedule/capacity rules, registration and actual date drafts in their feature owners. Packing keeps item
+commands and its browser-local checklist. Shared presentation neither constructs endpoints nor grants authority;
+matching current consumers adopt the shared owner together while feature differences remain explicit.
+
 #### Backend and method-policy contracts
 
 The [controller/DBAL rules](#controllers-and-services) apply to every transport. Central method permission definitions
 live in the existing controller. Adapters can decode/coerce differently, return different envelopes or apply their
 declared preconditions; capacity, ownership, deletion and access policy remain one shared business implementation.
 Page membership must not silently narrow a separately granted action, and edit-token projections stay private.
+Native route middleware, v1 admission and capability projection must consume the same method definition; matching
+duplicated permission literals are still separate owners. Preserve operation-specific native no-op outcomes and
+deadline ordering when adapting commands instead of adding an apparently helpful precondition in the v1 adapter.
+
+Event's controller shares `eventCapacityReached` between native/v1 presentation and registration admission, including
+the distinction between no limit and a stored zero. `mayReadEventChildren` shares attendance/assignment-management
+eligibility between native/v1 related projections and child lifecycle rechecks. Their callers supply existing counts,
+rows and locked context; DBAL remains queries/transactions/persistence, with no new concurrency guarantee.
+
+The Event roster GET, organizer attendance PATCH/DELETE and registration-link list/revoke operations declare optional
+session authentication because their existing method grants can be public. Those five OpenAPI declarations describe
+the unchanged route/controller admission. Link creation retains its account requirement; detail, own attendance and
+lifecycle retain their profile requirements. Optional authentication never bypasses origin/context checks or the
+server's independently evaluated method grant.
 
 Treat every browser-supplied identity, profile, context, security token and capability value as untrusted input.
 The session admission owner reconstructs identity from the server's stored session and loaded relations; context
@@ -317,6 +369,18 @@ cannot consume a reset/activation/guest capability or submit a creation. A confi
 journey uses its full error presentation rather than an empty form. Confirmed recovery/guest registration uses its
 canonical destination; inline success on the old form is not equivalent. Pending/unknown states retain input and
 explicit review.
+
+Packing and Event use the same `features/identity/GuestEntryPage.vue` for the name/email draft, advisory existing-email
+choice, confirmed identity completion and uncertain-delivery recovery. Each entry supplies its bounded title read,
+guest-registration operation, query key and exact destination. Event retains `regToken` through identity navigation;
+only a deliberate registration command spends that capability. `EntityEntryPage.vue` shares resource admission
+presentation and recovery while feature entry owners retain read intent and denial invalidation.
+
+Event creation remains a deliberate document POST through `frontendPilotEvent.ts` and `useDocumentForm`; generated
+reads supply creation/duplicate context without creating an Event. The adapter uses native preprocessing, image
+assignment, creation and default-permission initialization in their existing order. Repeated named permission fields
+use the native decoder. Redisplay retains submitted scalar/checkbox values, with no file bytes or hidden Session.
+No atomic-creation or automatic-replay guarantee is added to the inherited operation.
 
 Common landing/message/error presentation consumes explicit request-local data through the existing bootstrap codec.
 Validate scalar shapes without coercion; retain a captured landing suggestion through SSR/hydration. Known plain
@@ -538,7 +602,7 @@ pending/unknown command protection. Reuse startup, mount and update owners; neve
 commands to recover startup.
 
 Automatic full-document reload additionally requires an explicitly eligible dynamic route and dynamic admitted
-content. Overview and Packing detail opt in; creation, duplication, user-management and Help remain excluded even
+content. Overview, Packing detail and Event detail/admin opt in; creation, duplication, user-management and Help remain excluded even
 when pristine. Static admitted errors/completions on a dynamic URL remain excluded through the existing shared
 content classifier, rather than a copied list of bootstrap fields. `usePageEntry` registers its live static predicate
 and document visit with the context; registration captures the actor/epoch and retires on unmount, identity change or
@@ -585,22 +649,39 @@ owners or choose private query families; inject operations and let the feature n
 validation and financial semantics outside generic form/inline/action components. Native controls, semantic tables,
 Bootstrap-compatible geometry and suitable Reka dialog/tab primitives remain the shared presentation strategy.
 
-Extract a settings composite only when repeated interaction shares its data, events and injected operations. It
-owns repeated presentation/local interaction and focus through established controls/dialogs. The feature retains
-query dependencies, authorization input, draft reconciliation and command orchestration. Preserve independent panel
-drafts and layout. File size alone is not a module boundary, and extraction cannot justify a universal CRUD engine,
-forwarding controller or backend service. `EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions`
-demonstrate this boundary; their props contracts live in `src/types/FrontendEntitySettingsTypes.d.ts`. Packing supplies
-admitted state, independent file/relationship drafts, lifecycle commands, injected event discovery, tokens and labels.
+Extract a settings composite only when repeated interaction shares its data, events and injected operations.
+`EntitySettingsDialog` owns Packing and Event's matching settings reads, independent panel/file drafts, close locks,
+refresh and command composition. `EntityMetadataEditor` owns their shared original/local/current reconciliation and
+metadata command recovery; `EntityAccessEditor` owns audience/administrator drafts, discovery and reviewed commands.
+Features inject generated operations, query dependencies, normalization, field controls, authorization inputs and
+native wording. These owners compose the existing query/draft/command helpers rather than keep a second server store.
+`useMetadataEditorHandle` exposes the current mounted editor's public workflow from both field adapters, including
+its absent-editor defaults and propagated recovery failures. It derives flags rather than copying them. Nullable text
+normalization is shared by explicit field opt-in; it does not apply Event capacity or deadline policy to other fields.
+Preserve independent drafts and layout; file size alone is not a module boundary or justification for a universal CRUD
+engine, forwarding controller or backend service. `EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions`
+remain explicit lower controls. Their settings, dialog, metadata and access contracts live in the corresponding
+`src/types/FrontendEntity*.d.ts` declarations. Packing alone supplies its optional event-association operations.
+
+`TimezonePicker` and `TimezoneOptions` share Event creation/property timezone selection, search, common zones, browser
+detection, aliases and offsets. Feature metadata normalization coordinates a changed zone with its displayed local
+deadline; an unrelated sparse save omits both fields and preserves the stored instant.
+
+`EntityHeader` is the displayed header used by Event detail and Packing; `EntityHeaderEditor` handles the separate
+upload draft. Pass the admitted title/icon, parent URL, image read/version/exact query key and settings state to the
+displayed owner. It preserves the native 250px cover image, empty desktop parent track and mobile parent placement.
+Event's dashboard heading remains distinct. Its successful-read subscription includes equal-version responses;
+recovery waits until new props render and rechecks resource/key before the existing image owner reads. This prevents
+an admitted absence from retrying a retired image while preserving a healthy URL. Parent URLs are used as supplied.
 
 Audit logical value lifetime, including warm navigation. Feature drafts and controls must agree after accepted
 departure, target changes and confirmed reset. Ordinary reads, fragments and canceled departure retain live values;
 component lifetime alone cannot identify current form scope. `composables/fileSelection.ts` holds only a DOM ref and
 clears the same chooser when the feature releases its File to null. Its watcher is not immediate, so initial setup
 cannot erase pre-hydration selection before restoration. Release decisions, dirtiness, commands and tokens stay
-in their feature owners.
+in their owning feature or shared interaction composite.
 
-Header upload passes feature-owned `selectedFile` through the declaration contract. Confirmation releases the draft
+Header upload passes the settings owner's `selectedFile` through the declaration contract. Confirmation releases the draft
 even when follow-up fails; the editor clears the same input through the shared release owner so the same file can be
 selected again. Rejection, unknown delivery and background reads retain bytes/input. Do not infer release from changed
 header URL, token or translated filename, recreate the input or emit another selection event to reset it.
@@ -614,7 +695,7 @@ Confirmed destinations/receipts survive failed delivery; warnings clear only thr
 Dispose timers/listeners and preserve page-cache restoration behavior.
 
 `CommandFeedback` presents the existing command owner's read-only error, notice and uncertainty refs across identity,
-Packing and Overview consumers. Features retain native placement, custom wording, commands, drafts and recovery.
+Packing, Event and Overview consumers. Features retain native placement, custom wording, commands, drafts and recovery.
 `StatusNotice` receives an action label and optional existing action state, then emits the user's action. When state
 is omitted, its `ActionButton` still applies shared initialization and the caller's handler retains its own guards.
 The notice does not choose read eligibility or perform recovery. Their contracts live in
@@ -632,6 +713,9 @@ established native key policy.
 Authorized images use the shared injected read/lifetime owner with cancellation, generation checks and object-URL
 cleanup. A missing optional image does not fail the resource. Equal successful reads can restore a failed image;
 access denial cannot be repaired by a retained URL or foreign-scope result.
+`app/transport.ts` shares bounded binary response validation through `headerImage`; Packing and Event APIs retain their
+generated operation selection. Its `requireComparison` also shares strong comparison-header checks without choosing
+feature field policy.
 
 #### Localization and runtime Help
 
@@ -876,15 +960,20 @@ The existing adapter commands are explicit and retry-safe:
 
 <!-- delta:amendment-22 -->
 Vue controls receive feature-owned generated operations rather than calling these adapters directly. Packing injects
-`archivePackingList` and `restorePackingList` through `PackingApi`; Overview injects
+`archivePackingList` and `restorePackingList` through `PackingApi`; Event injects its root/child lifecycle operations;
+Overview injects
 `setOverviewVisibility` through its API owner. Each uses the shared transport/validated result and existing
 `entityAdminController` or `userController` operation. Neither reusable lifecycle presentation nor a second
 controller/service duplicates grants, root/parent policy or visibility eligibility.
 
-`createPackingLifecycle` in `src/frontend/features/packing/lifecycle.ts` shares Packing's archive/restore confirmation,
-desired-state dispatch and inline success policy across Settings and Overview. It composes each consumer's existing
-API, command and current translator without retaining state. Callers supply direct/inherited state and the optional
-initiator while retaining eligibility and refresh dependencies. Personal visibility and permanent deletion stay separate.
+`createEntityLifecycle` in `src/frontend/composables/entityLifecycle.ts` shares archive/restore confirmation,
+desired-state dispatch and inline success policy across Settings, Overview and Event Things to do. It composes each
+consumer's existing API, command and current translator without retaining state. Callers supply direct/inherited
+state, the optional initiator and any native confirmation-key override, retaining eligibility and refresh dependencies.
+This includes Event/Activity scheduled-restore wording. Settings and Event child cards also adopt its pause/resume
+confirmation, dispatch and inline result wording. Pause remains immediate; resume retains the native elapsed-schedule
+warning. The caller still owns current capability checks and root/parent-scoped operations, and the same command
+retains uncertain-result/read recovery. Personal visibility and permanent deletion stay separate.
 
 Never accept profile IDs, timestamps, stored parent state, or other arbitrary fields from the browser. Follow the [archival authority contract](PERMISSIONS_REFERENCE.md#archival-authority-and-personal-visibility), including the survey exception. A private preference may change placement only after existing overview membership is established.
 

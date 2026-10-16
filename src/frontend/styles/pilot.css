@@ -67,6 +67,7 @@
     .pilot-app .help-content table:has(td:first-child > strong) :not(pre) > code { white-space: nowrap; }
 }
 /* Guest identity choices use the native centered default modal, not the wide settings layout. */
+.pilot-dialog.pilot-dialog-standard { width: min(500px, calc(100vw - 1rem)); }
 .pilot-dialog.pilot-dialog-compact { inset: 50% auto auto 50%; transform: translate(-50%, -50%);
     width: min(500px, calc(100vw - 1rem)); height: auto; max-height: calc(100dvh - 1rem);
     border: 1px solid var(--bs-border-color-translucent); border-radius: var(--bs-border-radius-lg); }

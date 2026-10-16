@@ -16,6 +16,10 @@
 
 // src/controller/entityAdminController.ts
 import Joi from 'joi';
+import {createHash} from 'node:crypto';
+import type {components} from '../types/api/v1';
+import {ApiProblem} from '../modules/api/problem';
+import {contractValidator} from '../modules/api/contracts';
 import {archiveKey, automaticArchiveCutoff, isEffectivelyArchived} from '../modules/archive/policy';
 import type {EntityManager} from 'typeorm';
 import {invalidateGeneratedRecommendations} from '../modules/database/services/ActivityRecommendationService';
@@ -26,7 +30,7 @@ import * as eventService from '../modules/database/services/EventService';
 import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
 import * as userService from '../modules/database/services/UserService';
 import {APIError} from '../modules/lib/errors';
-import {getPresetMask, PERM, toMask} from "../modules/lib/permissions";
+import {getPermMeta, getPresets, getPresetMask, PERM, toMask} from "../modules/lib/permissions";
 import {requireSessionProfileId} from '../modules/lib/session';
 import {evaluateEntities, evaluateSubject} from '../modules/permissionEngine';
 import type {BasicEntityPropertyPatch, EntityEventChangeResult, EntityMutationCompletion, EntityPropertyField, EntityPropertyPresentation} from '../types/EntityPropertyTypes';
@@ -66,6 +70,82 @@ export function entityMethodPermission(method: keyof typeof entityMethodPermissi
     return entityMethodPermissions[method];
 }
 
+/** Hash canonical machine data; translated labels do not change edit evidence. */
+export function entityTag(scope: string, value: unknown): string {
+    return `"${scope}-${createHash('sha256').update(JSON.stringify(value)).digest('base64url')}"`;
+}
+
+/**
+ * Preserve profile and frontend-context comparison scopes without creating an
+ * anonymous identity. Current grants remain mandatory for public baselines.
+ */
+export function comparisonActor(session: SessionLike): string | {context: string} | null {
+    if (session.profile?.id) return session.profile.id;
+    if ('context' in session && typeof session.context === 'string' && session.context) {
+        return {context: session.context};
+    }
+    if (!session.auth?.user && !session.auth?.guest) return null;
+    throw new ApiProblem('AUTH_REQUIRED');
+}
+
+/**
+ * Bind hashed current values to an operation, resource and admitted actor. Public
+ * projections also bind their available field set; tokens never grant authority.
+ */
+export function comparisonToken(scope: string, id: string, session: SessionLike, values: Record<string, unknown>): string {
+    // Only field hashes leave the owner, never the underlying private values.
+    const actor = comparisonActor(session);
+    const context = entityTag(scope, {id, actor,
+        ...(actor === null ? {fields: Object.keys(values).sort()} : {})});
+    const fields = Object.fromEntries(Object.entries(values).map(([field, value]) => [field, entityTag('field', value)]));
+    return `"edit-${Buffer.from(JSON.stringify({context, fields})).toString('base64url')}"`;
+}
+
+/**
+ * Compare selected fields with the freshly authorized locked baseline. Missing
+ * review is 428; malformed, foreign or changed evidence is 412. Other fields may
+ * change independently without rejecting this sparse edit.
+ */
+export function requireFieldComparison(expected: string | undefined, current: string, fields: string[]): void {
+    if (!expected) throw new ApiProblem('PRECONDITION_REQUIRED');
+
+    /** Decode only the bounded generated envelope and its private hash shape. */
+    function decode(token: string): {context: string; fields: Record<string, string>} | null {
+        // Validate before allocating decoded bytes; request and response bounds
+        // come from the same authored contract rather than a second limit.
+        if (!contractValidator('FieldComparisonToken')(token)) return null;
+
+        try {
+            const value = JSON.parse(Buffer.from(token.slice(6, -1), 'base64url').toString('utf8')) as unknown;
+            if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+            const data = value as {context?: unknown; fields?: unknown};
+            if (typeof data.context !== 'string' || !data.fields || typeof data.fields !== 'object' || Array.isArray(data.fields)) return null;
+            const hashes = data.fields as Record<string, unknown>;
+            if (!Object.values(hashes).every(hash => typeof hash === 'string' && /^"field-[A-Za-z0-9_-]{43}"$/.test(hash))) return null;
+            return {context: data.context, fields: hashes as Record<string, string>};
+        } catch { return null; }
+    }
+
+    // Both tokens must describe this actor/resource and every submitted field.
+    const baseline = decode(expected);
+    const latest = decode(current);
+    if (!baseline || !latest || baseline.context !== latest.context
+        || fields.some(field => !Object.hasOwn(baseline.fields, field) || baseline.fields[field] !== latest.fields[field])) {
+        throw new ApiProblem('PRECONDITION_FAILED');
+    }
+}
+
+/** Fill absent audience masks for presentation; sparse writes retain omission. */
+export function completeDefaults(defaults: Partial<components['schemas']['PermissionDefaults']>): components['schemas']['PermissionDefaults'] {
+    return {public: defaults.public ?? 0, guest: defaults.guest ?? 0,
+        authenticated: defaults.authenticated ?? 0, participant: defaults.participant ?? 0};
+}
+
+/** Project the maintained permission/preset definitions for all creation/settings callers. */
+export function permissionDefinitions() {
+    return {permissions: getPermMeta().map(({key, bit}) => ({key, bit})), presets: getPresets().map(({key, mask}) => ({key, mask}))};
+}
+
 function propertyPermissions(type: EntityType): Partial<Record<EntityPropertyField, PermType>> {
     if (type === 'event') return eventPropertyPermissions;
     if (type === 'activity') return {...basicPropertyPermissions, startDate: 'EDIT_META', endDate: 'EDIT_META'};
@@ -78,7 +158,7 @@ export function entityPropertyPermission(type: EntityType, field: EntityProperty
 }
 
 /** Render the stored instant as local wall time in the same zone used by the edit parser. */
-function deadlineInputValue(value: unknown, timezone: unknown): string | null {
+export function deadlineInputValue(value: unknown, timezone: unknown): string | null {
     if (!value) return null;
     const date = new Date(value as string | Date);
     if (!Number.isFinite(date.getTime())) return null;
@@ -150,18 +230,21 @@ export function projectCurrentEntityEvent(
     return current;
 }
 
-/** Only editable values enter renderer data; action flags reflect their existing API guards. */
-export async function getEntityPropertyPresentation(type: EntityType, entity: EntityBase, session: SessionLike): Promise<EntityPropertyPresentation> {
+/** Only editable values enter the projection. Ordinary pages retain profile-based
+ * control admission; a method baseline exposes only independently granted fields
+ * using the same policy/formatter, without granting broader page access. */
+export async function getEntityPropertyPresentation(type: EntityType, entity: EntityBase, session: SessionLike,
+    manager?: EntityManager, fieldScope: 'page' | 'method' = 'page'): Promise<EntityPropertyPresentation> {
     const permissions = await evaluateSubject({kind: 'entity', entity: {
         entityType: type, entityId: entity.id, ownerId: entity.ownerId,
         eventId: type === 'event' ? entity.id : entity.eventId,
-    }}, session);
+    }}, session, undefined, manager);
     const owner = !!session.profile && session.profile.id === entity.ownerId;
     const editableFields: EntityPropertyField[] = [];
     const values: EntityPropertyPresentation['values'] = {};
     const source = entity as EntityBase & Record<string, unknown>;
     for (const [field, permission] of Object.entries(propertyPermissions(type))) {
-        if (!session.profile || !(type === 'survey' ? owner : permissions.has(permission))) continue;
+        if (fieldScope === 'page' && !session.profile || !(type === 'survey' ? owner : permissions.has(permission))) continue;
         const key = field as EntityPropertyField;
         editableFields.push(key);
         const value = source[key === 'deadlineTz' ? 'timezone' : key];
@@ -173,11 +256,11 @@ export async function getEntityPropertyPresentation(type: EntityType, entity: En
     let currentEvent: EntityPropertyPresentation['currentEvent'] = null;
     if (session.profile && entity.eventId) {
         currentEvent = {id: entity.eventId};
-        const event = await eventService.getEventById(entity.eventId);
+        const event = await eventService.getEventById(entity.eventId, manager);
         if (event) {
             const parentPermissions = await evaluateSubject({kind: 'entity', entity: {
                 entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
-            }}, session);
+            }}, session, undefined, manager);
             currentEvent = projectCurrentEntityEvent(event, parentPermissions);
         }
     }
@@ -657,19 +740,39 @@ export async function restoreEntity<Result>(reference: ArchiveReference, body: u
     return (await getArchivePresentations([reference], session)).get(archiveKey(reference));
 }
 
+/** Native pause/resume retains its existing postcommit presentation. */
+export function setAutomaticArchival(reference: ArchiveReference, body: unknown, session: SessionLike): Promise<ArchivePresentation | undefined>;
+/** A scoped adapter can prepare its acknowledgement under the existing lifecycle locks. */
+export function setAutomaticArchival<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
+    completion: EntityMutationCompletion<Result>): Promise<Result>;
 /** Explicit pause/resume affects scheduling only, never the current archive timestamp. */
-export async function setAutomaticArchival(reference: ArchiveReference, body: unknown, session: SessionLike) {
+export async function setAutomaticArchival<Result>(reference: ArchiveReference, body: unknown, session: SessionLike,
+    completion?: EntityMutationCompletion<Result>): Promise<ArchivePresentation | undefined | Result> {
+    // Admission and the schedule rule remain in their existing controller owner.
     const schema = Joi.object<{paused: boolean}>({paused: Joi.boolean().required()}).unknown(false);
     const value = validateArchiveBody(schema, body);
     requireSessionProfileId(session);
-    async function setPauseLocked(manager: EntityManager, context: LockedArchiveContext): Promise<void> {
+    async function setPauseLocked(manager: EntityManager, context: LockedArchiveContext): Promise<Result | undefined> {
         const root = requireLockedArchiveRoot(context);
         await requireArchiveManagement(reference, root, session, manager);
         if (!hasIndependentSchedule(reference, root)) throw new APIError('Automatic archival is controlled by an event or a standalone activity plan.', {}, 409);
         await lifecycleService.updateLifecycleMetadata(manager, reference, {autoArchivePaused: value.paused});
+        // The feature can recheck its captured parent scope and serialize a reply
+        // before commit; native callers keep their original presentation below.
+        return completion ? completion.prepare(manager, {changed: root.autoArchivePaused !== value.paused,
+            root: {...root, autoArchivePaused: value.paused}}) : undefined;
     }
-    await lifecycleService.withLockedArchiveTarget(reference, setPauseLocked);
+    const prepared = await lifecycleService.withLockedArchiveTarget(reference, setPauseLocked);
+    if (completion) return prepared as Result;
     return (await getArchivePresentations([reference], session)).get(archiveKey(reference));
+}
+
+/** Keep inherited restoration distinct from a changed root/parent relationship. */
+export function classifyArchiveCommandError(error: unknown, archived: boolean): unknown {
+    if (error instanceof APIError && error.status === 409) {
+        return new ApiProblem(!archived && Object.hasOwn(error.data, 'eventId') ? 'ARCHIVE_INHERITED' : 'ENTITY_CONTEXT_CHANGED');
+    }
+    return error;
 }
 
 /** Scheduled orchestration validates one clock/cutoff before the DBAL's conditional batch writes. */

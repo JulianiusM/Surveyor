@@ -31,6 +31,12 @@ export interface PilotActionState {
 
 export interface PilotRead<T> { data: T; etag: string | null; }
 
+/** A required authority family must perform a read. A separately confirmed owner
+ * may also refresh optional dependents; their absence supplies no new authority. */
+export interface PilotQueryRefreshOptions {
+    allowEmpty?: boolean;
+}
+
 /** Query metadata describes the owning observer's current dispatch eligibility.
  * It contains no DTO, grants or draft fields; the cache owner checks each actual
  * observer independently when a confirmed command names a read dependency. */
@@ -167,6 +173,7 @@ export interface PilotEventPickerSource {
  * an endpoint from its entity type. Unmigrated destinations retain native links. */
 export interface PilotOverviewCardInteraction {
     migrated: boolean;
+    lifecycle?: boolean;
     readHeader?: PilotImageRead;
     duplicateUrl?: string;
 }

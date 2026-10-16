@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-15
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: full pilot baseline, approval provenance, source ownership, readability and migration-readiness re-review completed; original transport history corrected and native anonymous flash verified; scoped prior receipts retained; no full-application or cutover acceptance
+verification-scope: P2 Event implementation, shared consumers and bounded persistence/browser parity reviewed; prior pilot receipts retained; current check results and environmental limits recorded; no full-application or cutover acceptance
 source-anchors: src/controller/packingController.ts; src/controller/entityAdminController.ts; src/controller/eventController.ts; src/controller/userController.ts; src/modules/database/services/PackingService.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/modules/lib/fileCommons.ts; src/modules/overview/api.ts; src/routes/api/v1/overview.ts; src/controller/helpController.ts; src/modules/permissionEngine.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/unit/frontend-generation.spec.ts; tests/frontend/frontend-page-entry.spec.ts; tests/frontend/frontend-command-recovery.spec.ts; tests/frontend/frontend-pilot-identity.spec.ts; tests/frontend/browser/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/authentication-workflows.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/integration/packing-management-api.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; tests/e2e/frontend-identity-api.spec.ts; .gitignore; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/routes/frontendPilot.ts; src/routes/api/v1/auth.ts; tests/integration/frontend-session-admission.spec.ts; tests/unit/frontend-entry-admission.spec.ts; vitest.config.mts; tests/integration/frontend-profile-workflows.spec.ts
 next-review: next-migration-slice-or-permission-policy-review
 -->
@@ -907,3 +907,192 @@ database-free, ORM, browser and built-system runs retain their dated scopes abov
 uniform full-suite run. This re-review ran no new complete visual/accessibility matrix, hosted CI, real provider/SMTP,
 operator/deployment rehearsal or full-application migration. Native removal, default routes and guide publication
 remain separately authorized actions.
+
+### P2 Event migration verification (2026-10-16)
+
+The maintainer's direct request to fully implement P2 authorizes the Event slice in the
+[full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md), including its visual/behavioral parity and shared-consumer
+requirements. It does not authorize native frontend changes, later feature phases, cutover or the previously
+excluded general backend remedies. The root agent reviewed those boundaries with independent backend and frontend
+agents before implementation and again against their actual changes. No new policy/design conflict required an
+approval decision; this receipt records implementation evidence rather than granting approval.
+
+P2A–C now have opt-in document/API entry, bounded Event projections, creation/duplication, metadata, images,
+permissions, archival, own registration/update/cancellation, organizer roster/totals/date edits/removal, bypass links,
+participant PDF and Things to do. Detail, administration, roster and management grants remain distinct. The detail
+DTO contains own attendance, a count and an admitted invoice-existence flag, without the native financial/roster
+aggregate. Invoice and unmigrated Activity/Drivers destinations remain native. Token entry carries the capability
+through guest identity without consuming it; only deliberate registration reaches the existing consumption owner.
+
+Matching new-frontend consumers actually adopt shared owners: Packing and Event use `EntityEntryPage`,
+`identity/GuestEntryPage`, `EntitySettingsDialog`, `EntityMetadataEditor` and `EntityAccessEditor`; creation/property
+controls use the shared timezone owners; Settings, Overview and Event children use `createEntityLifecycle`.
+`app/transport.ts` owns their matching binary-image and comparison-header handling. Controller comparison/property
+presentation and Overview card projection are shared directly, while existing controllers retain business policy
+and DBAL retains queries/transactions. Generated declarations/validators derive from authored contracts; shared
+type-only interfaces remain declaration files. No forwarding compatibility module, alternate request Session or
+parallel backend business implementation was introduced.
+
+Native behavior determines the copied form surface, full civil dates, timezone/deadline meaning, dietary choices,
+permission serialization, dialogs and child destinations. In particular, native duplication renders an empty
+datetime-local deadline; it is preserved. Native registration remains usable even without its write grant, with
+the server rejecting the deliberate attempt and the frontend retaining input. The browser fixture explicitly posts
+native initial permission fields instead of relying on owner privileges. Creation retains its inherited multi-step
+operation and uncertain late-failure behavior; no atomic-creation or legacy-finality repair is claimed.
+
+| Executed evidence | Scope and limitation |
+|---|---|
+| Build and types | `npm run build` passed. Final `build:server` and `build:frontend` passed after the last production changes, including client/SSR generation. Full test `vue-tsc --project tsconfig.test.json --noEmit` passed after the final test changes. |
+| Event client cases | The final three Event mounted files passed 22/22 after the comment-field, guest-form, recovery, dialog and entry-family corrections. The added admission regression warms detail/admin/guest and multiple token visits, then verifies missing-resource retirement and fresh-read restoration. These exercise actual mounted controls through the generated feature API, without claiming database persistence. |
+| Frontend regression | The final full selection passed 963/964; the sole failure was the existing profile-deactivation case exceeding its unchanged five-second deadline during concurrent verification. Its isolated unchanged file rerun passed 24/24, giving 964 distinct passing cases across those runs. The final Event selection adds the new admission regression, giving 965 distinct frontend cases across selections, rather than one uniform all-file pass. The earlier uncertain-link test used a wrong portal locator; the corrected test asserts the visible dialog's real recovery action and unchanged single-write/read behavior. |
+| Event errors and persistence | Event problem classification passed 17/17. Real ORM Event integration passed 11/11 after separate guarded schema preparation. The ordinary 120-second initialization hook timed out; external preparation took 268,875 ms. A reviewed temporary harness skipped only the already-completed schema setup, preserving seeds, assertions, production code and deadlines. This is prepared-schema persistence evidence, not a passing ordinary setup command. |
+| Built application | The combined Event selection passed 9/9 against the real built application and prepared database. It covers document creation/duplication, repeated registration, guest/token continuity, metadata/image/lifecycle/delete HTTP binding, organizer changes, link revocation, PDF bytes and desktop/mobile native comparisons. After final entry/style review, a targeted run passed 3/3: two new creation/settings comparisons and the repeated guest/token journey. Thus 11 distinct built cases pass across runs, not one uniform 11-case execution. No intercepted application responses or source-development server substitutes were used. |
+| Visual comparison | At 1280px and 390px, measured native/Vue roster, note/date/link dialogs, registered form, Things to do, creation form and General/expanded metadata/Access/open-image settings have equal widths/heights. Compared dialog coordinates, fonts, colors and visible field constraints/checkboxes/timezone values match. Screenshots and raw JSON are in ignored `test-results/p2-event-final/` and `test-results/p2-event-forms-final/`. Root inspected detail, registration, date-dialog, child-card, creation and settings pairs; the independent frontend reviewer inspected organizer/form pairs. The final form capture corrected a four-pixel timezone-help difference. Flash consumption and the approved locale control explain surrounding shell differences; native finance remains a linked destination. |
+| Shared generation regressions | Six database-free files passed 82/84 initially; the two failures were generation deadlines. The unchanged locale-case retry passed. Deterministic two-clean-tree generation still exceeded its unchanged 60-second limit in the final quieter retry (60,481 ms), without an assertion mismatch. This selection is not reported as fully passed. |
+| Engineering and documentation | The global development scan passed with 351 authored sources, 11 DBAL files and 61 changed readability files/150 nontrivial operations. Whitespace checks pass. The documentation boundary reports zero production-freeze/amendment findings; the advisory live report has no broken links, missing paths or metadata errors, with only the existing unregistered-source-fingerprint finding. No baseline was rewritten to hide drift. |
+
+The built-system schema was the dedicated local `cgd_e2e`; ORM integration used `surveyor_test`. Credentials were
+verified restricted to disposable test schemas before setup. Local MariaDB 10.4.32 synchronization exceeded the
+ordinary E2E server's 180-second preparation window. The exact unchanged `npm run e2e:prepare` therefore completed
+separately, followed by a reviewed temporary config running only `npm run run`; database settings, assertions,
+timeouts and real server/ORM delivery remained intact. This does not claim the ordinary combined setup command or
+the CI MariaDB version passed. Temporary harnesses/configs are removed after verification.
+
+Independent reviews checked controller/DBAL separation, public versus private grants, guest/server authority,
+generated response preparation, shared production adoption, draft/uncertain-result lifetime and native geometry.
+Root reviewed delegated changes, the staged Architecture/Development amendments and the
+[assertion map](TEST_COVERAGE.md#p2-event-source-assertions-2026-10-16). Earlier receipts retain their historical
+scope. No exhaustive timezone/DST, capacity/deletion race, all permission combinations, PDF layout, accessibility,
+hosted CI, deployment or full-application acceptance follows from these checks. Later phases, default routes,
+native removal and guide publication retain their separate authorization.
+
+### Full P2 completeness and migration-readiness review (2026-10-16)
+
+The maintainer requested a skeptical review of the complete P2 implementation, its original decisions and the
+repository's readiness for rapid subsequent migrations. Root and independent cross-feature reviewers compared actual
+native callers, controller/DBAL ownership, generated contracts, mounted consumers, staged guidance and test assertions.
+This review found gaps in the preceding P2 implementation; its earlier receipt is scoped evidence, not proof that
+those gaps did not exist. The corrections below restore already required parity, shared ownership and read lifetimes.
+No new technology, business guarantee, native frontend edit or design exception was selected.
+
+| Finding | Completed correction and ownership |
+|---|---|
+| Confirmed Event saves could report a failed refresh with no sibling observer, or refetch inactive Overview caches. | Event detail remains the required fresh read. The existing query-cache owner explicitly permits absent optional dependents, selects active eligible observers and still propagates selected failures. Its default empty-family authority check remains strict. |
+| A terminal header rejection could survive an equal successful background Event read. | EventPage observes actual successful detail receipts through the existing shared query/image owners; equal versions recover a missing image without replacing a healthy URL. |
+| Closed Event disclosures kept polling; initial counts appeared as known zero; empty note summaries remained visible. | Separate initial count admission from reactive recurring polling. Preserve admitted snapshots/drafts and explicit recovery while closed. Unknown badges and empty summaries now follow their actual source/native state. |
+| An open date editor could lose its management grant while Save remained enabled. | Inputs, Save and dispatch use the same current management action state; readable drafts and safe dismissal remain available. |
+| The new cancellation adapter rejected absent/repeated attendance although native acknowledges it. | Remove that extra precondition and invoke the unchanged profile-scoped, deadline-first cancellation owner. No general middleware or business repair is included. |
+| Event method grants were repeated across native middleware and new projections/adapters. | One controller-owned definition feeds native server routes, v1 checks and capability projection. Combined participant-export requirements and independent actor/page admission remain unchanged. |
+| Dashboard settings size and several child icons differed from native. | Match the native full-size settings action and exact group/item/create icons; extend the existing desktop/mobile comparison to the settings control. |
+
+| Review criterion | Current assessment |
+|---|---|
+| Original vision and completeness | P2A–C are implemented within their existing completion contract. The full application vision still requires P3–P11; retained native finance and unmigrated child destinations are explicit phase boundaries. |
+| Original design, choices and authorization | The selected Vue/TypeScript/Vite/Router/Query/Reka/i18next-vue/OpenAPI/Ajv stack is retained. Earlier dated decisions remain visible. The cancellation narrowing was an implementation deviation and is removed; no approval is invented for it. No remaining design conflict was found in this scope. |
+| Modularity and rapid extension | Matching Packing/Event interactions adopt shared entry, guest, settings, metadata, access, timezone, lifecycle, transport and command owners. Native and v1 use the same backend operations and Event method definitions. Distinct projections and drafts stay feature-owned; no speculative universal CRUD engine or second server-data store is needed. |
+| Architecture and coding principles | Controllers retain business/authorization/validation; DBAL retains queries, locks and persistence; adapters retain transport. Express still owns one request Session. Shared type-only contracts remain declaration files. Read/dependency/disclosure corrections implement the existing architecture rather than amend it to excuse drift. |
+| Comments, formatting and human maintenance | Root and independent reviewers inspected complex concurrency, permission, draft, image, disclosure and uncertain-result explanations and actual callers. Named helpers and internal step comments explain non-obvious constraints; scoped/global engineering and whitespace checks supplement semantic review. |
+| Documentation and staged consistency | Current-scope introductions now include Events while preserving historical decisions. The existing staged Development playbook adds concrete count/polling, active dependency, equal-image-read and live-dialog-grant guidance; Testing and the assertion map cover those boundaries. No new documentation destination or hidden approval request is introduced. |
+| Repository cleanliness | Completed execution is recorded as completed. The live phase plan, native inventories/comparator, profile and staged mappings remain necessary during coexistence and follow the existing cutover-retirement inventory. No unclassified material, active future contract or decision history is deleted. Native browser/Pug/build inputs, package/lockfile and permanent production guides remain unchanged. |
+| Debt, limits and next migration readiness | No known new P2 runtime/design blocker remains after these corrections and scoped checks. Existing general defects, current-value-comparison limits, inherited creation/token behavior and local verification limits remain explicit. The existing playbook and shared owners support the next authorized slice; every new module still proves its own policy, projection and parity. No full-application, exhaustive visual/accessibility/race or cutover acceptance is implied. |
+
+New verification is recorded separately from the preceding P2 runs. The focused eight-file frontend selection
+passed 291/291, including all four Event files and existing refresh/navigation, command recovery, Overview and
+Packing management consumers. Event error classification passed 17/17. Prepared-schema Event integration passed
+12/12 with real ORM and unchanged business assertions. The final two organizer browser comparisons passed at 1280px
+and 390px, including the added settings-button assertion; two added real built HTTP cases passed cancellation,
+no-op/deadline and independent native/v1 method grants, including both PDF bits. The HTTP cases explicitly establish
+a separate guest profile from the fixture owner.
+
+Preparation and test corrections are not hidden as passing ordinary setup: the initial prepared ORM attempt skipped
+all 12 assertions after deterministic fixture names collided with old test data. After verifying the exact
+`surveyor_test` target and 37 existing tables, separate data-only clearing restored its empty-data precondition;
+no schema synchronization or migration was performed in this review. The built system reused the previously fully
+prepared `cgd_e2e`. A temporary Playwright wrapper changed only the server command to the built application; a
+temporary ORM wrapper changed only destructive schema setup to production connection initialization. Both wrappers
+are removed. New HTTP fixtures initially reused the owner's identity, caught by independent source review before
+execution; the distinct-guest correction then exposed an omitted required nullable email field, corrected against
+the generated input contract before the passing rerun. No production assertion or deadline was weakened.
+
+The final `build:server`, frontend client/SSR build and complete test-project `vue-tsc` check passed. The global
+development scan reports 351 sources, 11 DBAL files and 65 changed readability files/154 nontrivial operations with
+zero findings; whitespace checks pass. Native frontend/Pug/browser-build inputs, package/lockfile and governance
+diffs are empty. Final visual JSON in ignored `test-results/p2-event-review-final/` records zero width/height deltas
+for all seven compared surfaces at both sizes; root inspected the roster/date pairs and checked the final settings
+metrics (145.140625 by 38 pixels in both frontends). Whole-page captures retain approved shell/flash differences and
+the explicitly deferred native finance surface, rather than claiming entire pages are pixel-identical.
+
+The documentation boundary reports zero production-freeze/amendment findings. The advisory live report has zero
+broken links, missing documented paths, metadata/profile/classification errors and stale terms; its sole finding
+is the existing unregistered source fingerprint. No baseline was rewritten. Independent frontend/server reviewers
+checked each other's changed responsibilities; a separate nonauthor documentation review and root review cover
+the current-scope corrections, playbook, source map and this receipt. Complete prepared guide publication remains
+a separately authorized cutover operation.
+
+The preceding ordinary database-setup and deterministic-generation deadline limits remain unresolved local
+verification debt, not newly claimed passes. Temporary context-receipt annotation was rejected by automatic approval
+review; generated receipts remain unchanged and actual conversational authorization is carried separately. No source
+work or approval decision is blocked by that rejected annotation.
+
+### Full P2 implementation completion (2026-10-16)
+
+The maintainer directly instructed implementation of the review plan in full and extraction of additional duplicate
+implementations. This dated correction preserves the preceding receipts and their actual limits: their readiness
+assessment overlooked duplicated displayed headers, metadata handles, lifecycle decisions and incomplete browser
+assertions. The following work completes those responsibilities within the original P2A–C contract. No new policy,
+technology, business guarantee, native frontend change or cutover decision is inferred from the implementation request.
+
+| Responsibility | Implemented owner and adopted consumers |
+|---|---|
+| Displayed entity header | `components/EntityHeader.vue` renders Event detail and Packing headers, including permitted parent links, settings action and the existing authorized-image lifetime. Equal successful detail receipts recover rejected images; prop delivery precedes recovery so a removed image cannot be read again from stale props. Administration's distinct heading remains its own surface. |
+| Archive/restore and pause/resume | `composables/entityLifecycle.ts` composes the consumer's existing command and scoped operation. Settings, Overview and Event children share their applicable actions; Event/Activity wording, pause immediacy, resume confirmation and uncertain-result recovery retain native behavior. |
+| Metadata public workflow | `composables/metadataEditor.ts` exposes the current mounted editor's derived flags and methods for Event/Packing. The underlying metadata editor retains the sole draft and command; nullable-text normalization stays in the existing pure draft module. |
+| Denied-entry retirement | `EntityEntryPage` dispatches feature-selected families through `app/queryCache.ts`. Inactive old-token/copy admissions retire while the producing denial remains even with a disabled observer. Actor/document/generation admission stays in the existing page-entry owner. |
+| Read-only participant notes | Event roster retains a selection, deriving participant/summary notes from the full current admitted roster independently of filtering. Fresh reads update an open dialog; removal, empty source, denial and actor changes retire it. Actual date edits remain intentional drafts. |
+| Capacity and related-child policy | Existing `eventController` owns one capacity predicate and one related-child eligibility predicate for native/v1 callers. Existing reads, snapshots, lock-time checks, no-limit/zero behavior and grants remain intact; DBAL and inherited concurrency limits are unchanged. |
+| Optional-profile API declarations | Exactly five Event method declarations now match their unchanged public-grant runtime admission: roster read, organizer date update/removal and link list/revoke. Link creation, detail and personal/lifecycle operations retain their existing authentication requirements. The real anonymous-method checks also retain origin/context protection. |
+| Human maintenance and migration guidance | Event templates have readable component/field steps and intent comments. Existing staged Architecture/Development/Testing and pilot guidance describe actual owners, production adoption, field/state lifetimes and the worked Event/Packing composition. Exact public preview inputs include current authored P2 files and remove the retired Packing lifecycle path. |
+
+Root and independent reviewers traced actual production adoption rather than accepting helper existence as reuse.
+The review also classified the similar entry, guest, settings, access, timezone, binary transport, Overview-card and
+comparison-header responsibilities: their current consumers already share their appropriate owners. Feature-specific
+metadata policy, attendance and distinct authorized projections remain in their existing modules. No forwarding
+controller/service, universal CRUD engine or writable server-data mirror was introduced.
+
+Native browser/Pug/Sass/build inputs remain the unchanged visual and behavioral reference. Temporary copying between
+native and Vue retains the explicit 2026-10-15 isolation decision; matching Vue consumers use one owner. Existing
+backend/domain/controller/DBAL operations and catalogs remain shared. Native finance, unmigrated child destinations
+and P10 navigation boundaries remain the original phase contracts, with no route change introduced by extraction.
+The separately excluded backend remedies remain recorded general defects, not unapproved deferred P2 functionality.
+
+| Final-source execution | Result and actual boundary |
+|---|---|
+| Complete build and types | `npm run build` passed, including authored-contract/catalog generation, server, native client, Vue client/SSR and copied runtime assets. Full `vue-tsc --project tsconfig.test.json --noEmit` passed after the final test edits. |
+| Complete frontend selection | All 45 files and 994 tests passed in one run (118.70 seconds), including Event, Packing, Overview, identity and the new presentation/retirement regressions. This replaces reliance on separate focused passes for the current frontend source. |
+| Event errors and persistence | Event error classification passed 17/17. All 14 real Event ORM tests passed against the verified existing local `surveyor_test` schema (15.13 seconds), including native/v1 capacity and related-child policy parity. A temporary harness replaced only destructive initialization with guarded production datasource initialization; no reset, truncation or synchronization ran. This remains prepared-schema evidence, not ordinary setup verification. |
+| Built application and parity | All four Event/header files passed together: 24/24 in one final run (2.5 minutes), using the current built application, integrated backend/session/ORM and prepared `cgd_e2e`. The temporary config changed only the server command to `npm run run`, retaining runner settings and actual assertions. The uncertain-delivery case lets the real route commit before losing delivery, then proves one write and read recovery. |
+| Engineering and whitespace | The global scan checked 353 authored sources, 11 DBAL files and 69 changed readability files/157 nontrivial operations with zero findings. `git diff --check` passed. Native frontend/Pug/browser-build inputs, package/lockfile, policies and production guides remain unchanged. |
+
+The final browser selection covers P2A creation/duplication/settings/permissions/images/lifecycle; P2B registration,
+updates/cancellation, guest/token continuity, independent deadline exceptions, capacity, pending/uncertain delivery
+and winter/summer/DST deadline meaning; P2C roster/totals/notes/date editing/removal, link create/copy/revoke, participant
+PDF and related child cards. Its visual comparisons inspect creation, General/expanded/Access/image settings,
+registered/unregistered forms, roster, notes/date/link dialogs, Things to do and displayed Event/Packing headers at
+1280px and 390px. Compared surfaces include text, geometry, styles and visible controls at their declared scopes;
+the registration card additionally compares every visible field's machine value/state/constraint and label/help/icon
+geometry. Root inspected final shared-header pairs; an independent reviewer inspected the final form/organizer pairs.
+Screenshots and raw measurement JSON remain in ignored `test-results/p2-implementation-final/`.
+
+Earlier expanded attempts exposed fixture/measurement issues: hidden native modal headings, icon-bearing accessible
+names, a not-yet-admitted skeleton, incorrect translated action labels, a scoped form locator and native reload timing.
+Corrections follow the actual native/production surface. Independent review also required persisted named-grant and
+image-absence assertions, and strengthened form comparisons and mixed deadline cases before the final passing run.
+No production assertion or deadline was weakened. Temporary verification configurations are removed after use.
+
+P2A–C are complete against the existing phase contract, including matching shared visual/behavioral owners and the
+recorded built-system comparisons. No known task-owned P2 functionality is relabeled future work. P3–P11, native
+finance/unmigrated child destinations, excluded general backend remedies and separate cutover authorization retain
+their original disposition. Browser/platform combinations, every possible timezone/DST input, exhaustive permission
+and concurrency schedules, PDF layout, accessibility, hosted CI and deployment are not certified by these finite
+checks. The earlier local ordinary-setup/generation deadline limits remain historical verification limits, without
+weakening those commands or claiming stronger inherited backend guarantees.

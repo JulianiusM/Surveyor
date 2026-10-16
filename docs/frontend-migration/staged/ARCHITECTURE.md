@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-15
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: full pilot architecture/source review includes one Express request Session, initial read-only projection, native anonymous flash and bounded compatibility; no cutover or operator rehearsal claimed
+verification-scope: current P2 source ownership reconciled for displayed headers, entry retirement, metadata handles, read-only notes and root/child lifecycle consumers; shared Event policy and optional-auth declarations retained; no execution or cutover claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -36,7 +36,7 @@ capture covers setup, mount and the first readiness render; later feature failur
 `mountPreservingDrafts` retains early edits on original admitted controls, with explicit opt-in for non-text/file
 inputs. Startup protection exists before route loading and transfers to mounted owners after restoration. Automatic
 reload additionally requires explicitly eligible dynamic route/content, clean state and a working loop marker.
-Overview and Packing detail opt in; creation, duplication, user-management, Help and static admitted errors/completions
+Overview, Packing detail and Event detail/admin opt in; creation, duplication, user-management, Help and static admitted errors/completions
 remain excluded. Route metadata and the existing content classifier feed the shared update owner without copied
 field policy. The context consumes actor/visit-bound static predicates from mounted `usePageEntry` owners without
 mirroring query data. Initial-bootstrap retirement does not retire a visible denial; fresh admission restores dynamic
@@ -68,12 +68,16 @@ plain text/cardinal plurals. Principal-language persistence and full email/PDF/i
 future decisions in [DEC-006](decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets),
 without an implemented production capability.
 
-TanStack Query owns authorized snapshots; feature drafts own original/local/current values and Router owns URL state.
+TanStack Query owns authorized snapshots; feature or shared interaction drafts own original/local/current values and Router owns URL state.
 `app/queryKeys.ts` names actor/resource/filter families, adding locale only for translated representations.
 `app/context.ts` coordinates identity generations, session admission, language and updates without another data store.
 Ordinary session recovery pauses dispatch while readable content/drafts remain; actual actor retirement and validated
 resource denial retire protected state. `useQueryAdmission` keeps each observer's eligibility bound to its logical key.
 A canceled refetch or manual cache alias is not a fresh receipt; shared fresh-read helpers distinguish actual success.
+`EntityEntryPage` dispatches denial retirement through that shared cache owner. Packing/Event select the affected
+query families; inactive copies retire without discarding a live creation draft. The producing admission family
+survives inactive-family removal even when initialization or session revalidation pauses its observer, because that
+query still owns the displayed denial. The shared component infers no feature permissions or query-key positions.
 
 Healthy active shared reads use 30-second polling and bounded recovery, honoring Retry-After, hidden tabs and disposal.
 Closed regions do not poll. Locale changes retire translated families only. `MetadataDraft` applies feature normalization
@@ -91,13 +95,47 @@ remain visible.
 `observePageNavigation` shares router subscriptions, latest pending destination and disposal across App, Header,
 Overview and page-entry/confirmed-transition consumers, retaining each caller's URL boundary and callbacks.
 Controls and feature drafts share an explicit value lifetime, including file release after confirmation.
-`CommandFeedback` shares command receipt presentation across actual identity, Packing and Overview consumers;
+`CommandFeedback` shares command receipt presentation across actual identity, Packing, Event and Overview consumers;
 `StatusNotice` presents actions with optional injected state and emits actions. Omitting state retains shared
 `ActionButton` initialization and caller-handler guards. Features retain placement, wording and recovery operations.
 These controls introduce no second receipt, query or draft owner.
-Packing's feature-owned `createPackingLifecycle` shares archive/restore confirmation, desired-state dispatch and
-inline success policy between Settings and Overview through their existing API, command and current translator.
-Callers retain eligibility, initiator and refresh lifetimes; the helper adds no state or backend business policy.
+`composables/entityLifecycle.ts` supplies `createEntityLifecycle` to Settings, Overview and Event Things to do through
+their existing API, command and current translator. It shares archive/restore confirmation, desired-state dispatch and
+inline success policy. Settings and Event child cards also share its pause/resume operation: only resume asks for the
+existing elapsed-schedule confirmation. Callers retain eligibility, wording, initiator and refresh lifetimes; the
+helper adds no state or backend business policy.
+
+Event detail and Packing adopt one displayed `EntityHeader`. Features supply the admitted title/icon, optional parent
+URL, image operation/version/query key and settings availability. The header preserves the 250px cover image and
+responsive parent tracks; Event's dashboard heading remains separate. It composes `useAuthorizedImage` and actual
+successful query receipts. Receipt recovery waits for current props after rendering and checks the same resource/key
+before consulting the image owner, so an admitted removal cannot recover old bytes. Parent destinations and feature
+authority remain unchanged. Image upload editing remains the distinct `EntityHeaderEditor` responsibility.
+
+Packing and Event adopt `EntityEntryPage` for admission presentation, `EntitySettingsDialog` for settings composition,
+`EntityMetadataEditor` for metadata draft/command reconciliation and `EntityAccessEditor` for audience/administrator
+interaction. Generated feature APIs, query families, field controls and normalization remain injected. Lower controls
+and declaration contracts retain explicit data/events rather than infer feature authority. The shared identity
+`GuestEntryPage` owns name/email, advisory lookup and confirmed/unknown identity completion for both resource types;
+each feature supplies its read, registration operation and exact return destination.
+Packing/Event metadata field adapters expose the same mounted editor through `useMetadataEditorHandle`; its derived
+flags and methods retain one underlying draft/command owner. Their nullable text fields use the existing
+`metadataDraft.ts` normalizer, while Event capacity and deadline semantics remain feature-owned.
+
+Event reads separate detail/admin intent, participant roster, link management, metadata and settings projections under
+their existing grants. Detail includes own attendance and counts, with only a bounded invoice-presence flag; it does
+not disclose a roster or finance aggregate. Registration alone spends a supplied bypass token. Event creation uses a
+deliberate document POST through `frontendPilotEvent.ts`, sharing native preprocessing, upload, creation and permission
+initialization in their existing order. Versioned reads and guest identity completion cannot create an Event, and the
+adapter does not strengthen inherited multi-step creation finality.
+The controller's capacity predicate serves native/v1 display and registration admission; its child-eligibility
+predicate serves native/v1 related projections and scoped lifecycle rechecks. DBAL supplies counts, rows, locks and
+persistence rather than deciding either rule. Optional-session method declarations describe the existing public
+grant boundary; they do not change runtime authentication or widen profile-required operations.
+
+Participant notes dialogs retain only a summary or participant-ID selection. Displayed notes derive from the full
+current admitted roster, independently of local search; removed sources close the selection. Organizer attendance
+dates are genuine local drafts and remain separate from those read-only notes and background replacements.
 
 Financial interaction retains its domain boundaries: pool actions lock relevant controls, report delayed progress
 after five seconds and display saved state only after confirmation. Payment feedback stays outside filtered share
@@ -248,11 +286,12 @@ and successful writes obtain fresh permissions/context. General, Linked event, A
 ## Entity settings — amendment-16
 
 <!-- delta:amendment-16 -->
-Feature composites remain separate where domain semantics differ. Repeated header, event and lifecycle panels use
-`EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions`; the feature retains drafts, tokens and query
-dependencies. Reka supplies suitable dialog/tab focus behavior. Mixed navigation uses the shared disclosure owner
-without competing Bootstrap DOM ownership. Time-zone search, detection, aliases and UTC offsets retain their
-feature-owned meaning alongside unchanged deadline instants.
+Feature composites remain separate where domain semantics differ. Packing and Event's `EntitySettingsDialog` owns
+matching settings drafts and captured tokens, composing `EntityMetadataEditor`, `EntityAccessEditor`,
+`EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions`. Features inject operations, query families,
+field policy and native wording; Packing alone supplies event association. Reka supplies dialog/tab focus behavior.
+Mixed navigation uses the shared disclosure owner without competing Bootstrap DOM ownership. Shared timezone
+controls retain feature-owned deadline meaning, including omission of unchanged instants.
 
 <!-- /delta:amendment-16 -->
 

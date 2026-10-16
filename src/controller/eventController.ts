@@ -16,7 +16,12 @@
 
 // controllers/eventController.ts
 import {Request} from "express";
-import {assertEditableEntityFields, getArchiveView} from "./entityAdminController";
+import {
+    applyEntityAdministrator, archiveEntity, assertEditableEntityFields, classifyArchiveCommandError, comparisonToken, completeDefaults,
+    entityMethodPermission, getArchivePresentations, getArchiveView, getEntityPropertyPresentation, permissionDefinitions,
+    requireFieldComparison, restoreEntity, setAutomaticArchival,
+} from "./entityAdminController";
+import {getAccountPageEntry, hasAccountProfile} from './userController';
 import crypto from 'node:crypto';
 // Business logic for the Event routes
 import Joi from 'joi';
@@ -29,27 +34,66 @@ import * as invoiceService from "../modules/database/services/EventInvoiceServic
 import {invoicePresentation} from '../modules/invoice/presentation';
 
 import * as eventService from '../modules/database/services/EventService';
+import * as adminService from '../modules/database/services/EntityAdminService';
+import * as userService from '../modules/database/services/UserService';
+import * as lifecycleService from '../modules/database/services/EntityLifecycleService';
+import {archiveKey} from '../modules/archive/policy';
+import {ApiProblem} from '../modules/api/problem';
 import {APIError, ValidationError} from '../modules/lib/errors';
-import {performImageSwap} from "../modules/lib/fileCommons";
-import {PERM} from '../modules/lib/permissions';
+import {performImageSwap, removeImage} from "../modules/lib/fileCommons";
+import {getInitialPerms, PERM} from '../modules/lib/permissions';
 import {
     buildDateTotals,
     convertToSingleList,
     ENTITIES,
     getResource,
+    getHeaderImageVersion,
     isWithinWindow,
     normalizeToArray,
     rewriteISOToZone
 } from "../modules/lib/util";
-import {can, evaluateEntities, getEntityPermissionQueryScope, saveDefaultPermsFromBody} from "../modules/permissionEngine";
+import {can, evaluateEntities, evaluateSubject, getEntityPermissionQueryScope, saveDefaultPermsFromBody} from "../modules/permissionEngine";
 import {requireSessionProfileId} from '../modules/lib/session';
-import type {DIETARY, EventLinkOption, EventLinkOptionsQuery, EventLinkOptionsResult} from "../types/EventTypes";
-import type {PermBundle, SessionLike} from "../types/PermissionTypes";
+import {safeFrontendReturn} from '../modules/lib/frontendIdentity';
+import {projectOverviewCard} from '../modules/overview/api';
+import type {DIETARY, EventLinkOption, EventLinkOptionsQuery, EventLinkOptionsResult, EventMethod} from "../types/EventTypes";
+import type {EntityAdministratorCommand, PermBundle, PermType, PermView, SessionLike} from "../types/PermissionTypes";
+import type {components} from '../types/api/v1';
+import type {ApiResponsePreparer} from '../types/ApiTransportTypes';
+import type {EntityMutationOutcome} from '../types/EntityPropertyTypes';
 import type {EntityBase} from "../types/UserTypes";
 import {WithRequired} from "../types/UtilTypes";
 
 // Template constant for create errors
 const CREATE_TEMPLATE = 'event/event-create';
+
+/** One declaration selects method grants for native middleware, v1 commands and
+ * capabilities. This preserves the existing independent bits and the participant
+ * export's combined requirement; profile/account/participant admission remains
+ * with the native route or shared operation rather than being inferred here. */
+const eventMethodPermissions: Record<EventMethod, readonly PermType[]> = {
+    register: ['ACCESS_REGISTRATION'], admin: ['ACCESS_ADMIN'], participants: ['ACCESS_PARTICIPANTS'],
+    manageRegistrations: ['MANAGE_REGISTRATIONS'], items: ['ACCESS_ITEMS'], manageAssignments: ['MANAGE_ASSIGNMENTS'],
+    exportParticipants: ['DATA_EXPORT', 'ACCESS_PARTICIPANTS'],
+    managePermissions: [entityMethodPermission('managePermissions')],
+    editHeader: [entityMethodPermission('editHeader')], duplicate: [entityMethodPermission('duplicate')],
+};
+
+/** Translate this owner's complete grant choice to the existing native middleware bitmask. */
+export function eventMethodPermission(method: EventMethod): number {
+    return eventMethodPermissions[method].reduce((mask, key) => mask | PERM[key], 0);
+}
+
+/** The permission engine interprets grants; this owner selects every required method bit. */
+function mayPerformEventMethod(permissions: PermView, method: EventMethod): boolean {
+    return permissions.all(...eventMethodPermissions[method]);
+}
+
+/** Related content requires own attendance or assignment-management authority.
+ * Page/method admission and each child's lifecycle grants remain separate checks. */
+function mayReadEventChildren(registration: EventRegistration | null, managesAssignments: boolean): boolean {
+    return Boolean(registration || managesAssignments);
+}
 
 // A grant can be revoked between candidate discovery and evaluation. Cursor positions may
 // therefore refer to a now-private event: encrypt them rather than exposing an encoded ID.
@@ -117,7 +161,7 @@ export async function authorizeEventLink(eventId: string | null | undefined, ses
     // Ownership, individual grants and audience membership all use the same engine.
     const allowed = await can({kind: 'entity', entity: {
         entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
-    }}, session, PERM.MANAGE_ASSIGNMENTS, undefined, manager);
+    }}, session, eventMethodPermission('manageAssignments'), undefined, manager);
     if (!allowed) throw new APIError('Not allowed to attach entities to this event.', {}, 403);
     return event;
 }
@@ -163,7 +207,9 @@ export async function getEventLinkOptions(query: unknown, session: SessionLike):
     // SQL prefilters the engine's exact one-bit eligibility inputs before LIMIT. Thousands
     // of denied rows therefore do not become empty user-facing pages. A final evaluation is
     // still required because grants may change between SQL discovery and this batch read.
-    const permissionScope = getEntityPermissionQueryScope(session, 'MANAGE_ASSIGNMENTS');
+    // The SQL candidate filter uses a necessary bit; the controller still checks
+    // the complete method rule after loading candidates, before disclosure.
+    const permissionScope = getEntityPermissionQueryScope(session, eventMethodPermissions.manageAssignments[0]!);
     const referenceTime = new Date();
     while (true) {
         const candidates = await eventService.getEventLinkCandidates(filters, permissionScope, referenceTime, position);
@@ -171,7 +217,8 @@ export async function getEventLinkOptions(query: unknown, session: SessionLike):
         const descriptors = candidates.map(event => ({entityType: 'event' as const, entityId: event.id, ownerId: event.ownerId, eventId: event.id}));
         const permissions = await evaluateEntities(descriptors, session);
         for (const event of candidates) {
-            if (!permissions.get(`event:${event.id}`)?.has('MANAGE_ASSIGNMENTS')) {
+            const permission = permissions.get(`event:${event.id}`);
+            if (!permission || !mayPerformEventMethod(permission, 'manageAssignments')) {
                 position = {startDate: event.startDate, id: event.id};
                 continue;
             }
@@ -188,7 +235,7 @@ export async function getEventLinkOptions(query: unknown, session: SessionLike):
     }
 }
 
-function preprocessCreate(body: any): Partial<Event> {
+function preprocessCreate(body: any): WithRequired<Partial<Event>, 'title' | 'startDate' | 'endDate'> {
     // Basic date validation as strings (YYYY-MM-DD) to match existing patterns
     const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -262,15 +309,15 @@ async function fetchForView(event: Event, req: Request) {
 
     // Associated plans/lists (will be empty until event_id exists in schema)
     // Only show lists/plans once the actor is registered (or is owner)
-    const isOwner = await can({
+    const managesAssignments = await can({
         entity: {
             entityId: event.id,
             ownerId: event.ownerId,
             entityType: "event"
         },
         kind: "entity"
-    }, req.session, PERM.MANAGE_ASSIGNMENTS);
-    const shouldShowScoped = !!(isOwner || registration);
+    }, req.session, eventMethodPermission('manageAssignments'));
+    const shouldShowScoped = mayReadEventChildren(registration, managesAssignments);
     const [activityPlans, packingLists, driverLists] = shouldShowScoped ? await Promise.all([
         eventService.getActivityPlansForEvent(event.id),
         eventService.getPackingListsForEvent(event.id),
@@ -284,7 +331,7 @@ async function fetchForView(event: Event, req: Request) {
 
     // Organizers also see participants list
     const participants = await eventService.getEventParticipants(event.id);
-    const isFull = (event.maxParticipants ?? Number.MAX_SAFE_INTEGER) <= participants.length;
+    const isFull = eventCapacityReached(event.maxParticipants, participants.length);
 
     const relatedEntities = convertToSingleList({activityPlans, packingLists, driversLists: driverLists});
     // The event notice and its attached cards must share one archival snapshot. Children
@@ -322,7 +369,10 @@ async function deleteEntity(event: Event, _session: Request['session']) {
     return await (eventService as any).deleteEvent(event.id);
 }
 
-async function registerAttendance(event: Event, body: any, req: Request) {
+/** Validate and save current-profile attendance through the unchanged native lifecycle.
+ * Stable causes let the versioned adapter localize known rejections while native
+ * callers retain their original literal messages, statuses and registration order. */
+async function registerAttendance(event: Event, body: any, req: {session: SessionLike; resource?: Record<string, unknown>}) {
     if (!event) throw new APIError('Event not found', body, 404);
     const session = req.session;
     if (!session.profile) throw new APIError('Authentication required', body, 401);
@@ -330,7 +380,7 @@ async function registerAttendance(event: Event, body: any, req: Request) {
     // Deny registration if not already registered (allow updates to registration)
     const registration = await eventService.getRegistrationFor(session.profile.id, event.id);
     if (!registration && await isEventFull(event.id)) {
-        throw new APIError('Event is full', body, 403);
+        throw new APIError('Event is full', body, 403, {cause: 'EVENT_FULL'});
     }
 
     const schema = Joi.object({
@@ -357,24 +407,24 @@ async function registerAttendance(event: Event, body: any, req: Request) {
         if (registration) {
             // Are date updates allowed?
             if (!event.allowRegDateUpdatesAfterDeadline && (registration.arrivalDate !== value.arrivalDate || registration.departureDate !== value.departureDate)) {
-                throw new APIError('Date updates not allowed after deadline has passed', {}, 403);
+                throw new APIError('Date updates not allowed after deadline has passed', {}, 403, {cause: 'EVENT_DATE_UPDATES_CLOSED'});
             }
             // Are diet updates allowed?
             if (!event.allowRegDietUpdateAfterDeadline && !isDietaryEqual(registration, dietary, value.allergyNotes, value.dietComment)) {
-                throw new APIError('Diet updates not allowed after deadline has passed', {}, 403);
+                throw new APIError('Diet updates not allowed after deadline has passed', {}, 403, {cause: 'EVENT_DIET_UPDATES_CLOSED'});
             }
         } else {
-            bypass = await canBypassDeadlineWithToken(event.id, body.regToken ?? getResource(req, 'regToken') ?? null);
+            bypass = await canBypassDeadlineWithToken(event.id, body.regToken ?? req.resource?.regToken ?? null);
             if (!bypass.ok) {
                 // owners/co-organizers may bypass via permission in your middleware;
                 // if you still reach here, reject:
-                throw new APIError('Registration deadline has passed', {}, 403);
+                throw new APIError('Registration deadline has passed', {}, 403, {cause: 'EVENT_DEADLINE_PASSED'});
             }
         }
     }
 
     if (!isWithinWindow(event.startDate, event.endDate, value.arrivalDate, value.departureDate)) {
-        throw new APIError('Arrival/Departure must be within event dates', body, 400);
+        throw new APIError('Arrival/Departure must be within event dates', body, 400, {cause: 'EVENT_DATES_INVALID'});
     }
 
     const allergyNotes: string = value.allergyNotes || '';
@@ -389,7 +439,7 @@ async function registerAttendance(event: Event, body: any, req: Request) {
         // controller owns that policy; DBAL only reads/locks and records the decided write.
         if (bypass.ok && bypass.linkId) {
             const link = await eventService.lockDeadlineBypassLink(manager, event.id, bypass.linkId);
-            if (!link || bypassStatus(link) !== 'active') throw new APIError('This link has already been used', {}, 409);
+            if (!link || bypassStatus(link) !== 'active') throw new APIError('This link has already been used', {}, 409, {cause: 'EVENT_TOKEN_USED'});
             await eventService.consumeDeadlineBypassToken(link.id, profileId, manager);
         }
         // Consumption and attendance commit together. A failed attendance write also
@@ -425,38 +475,43 @@ function isDietaryEqual(reg: EventRegistration, dietary: DIETARY[], allergyNotes
     return ok && localDiets.size === 0 && allergyNotes === localAllergy && dietComment === localComment;
 }
 
+/** Keep the native dietary combinations and note requirements under one business owner. */
 function checkMeals(dietary: DIETARY[], allergyNotes: string, dietComment: string, body: any) {
+    // A selected supplementary category needs its own note before meal-combination checks.
     if (dietary.includes("ALLERGIES") && !allergyNotes) {
-        throw new APIError('Allergies require additional information', body, 400);
+        throw new APIError('Allergies require additional information', body, 400, {cause: 'EVENT_ALLERGY_INFO_REQUIRED'});
     }
     if (dietary.includes("COMMENT") && !dietComment) {
-        throw new APIError('Comment requires additional information', body, 400);
+        throw new APIError('Comment requires additional information', body, 400, {cause: 'EVENT_COMMENT_REQUIRED'});
     }
 
+    // Supplementary requirements do not substitute for a selected meal preference.
     const meals = dietary.filter(d =>
         ['MEAT', 'FISH', 'VEGETARIAN', 'VEGAN'].includes(d)
     );
 
     if (dietary.length > 0 && meals.length === 0) {
-        throw new APIError('At least one meal preference must be selected.', body, 400);
+        throw new APIError('At least one meal preference must be selected.', body, 400, {cause: 'EVENT_MEAL_REQUIRED'});
     }
 
     if (meals.includes('VEGETARIAN')) {
         if (meals.includes('MEAT') || meals.includes('FISH') || meals.includes('VEGAN')) {
-            throw new APIError('Vegetarian cannot be combined with meat, fish or vegan.', body, 400);
+            throw new APIError('Vegetarian cannot be combined with meat, fish or vegan.', body, 400, {cause: 'EVENT_VEGETARIAN_CONFLICT'});
         }
     }
 
     if (meals.includes('VEGAN')) {
         if (meals.includes('MEAT') || meals.includes('FISH') || meals.includes('VEGETARIAN')) {
-            throw new APIError('Vegan cannot be combined with meat, fish or vegetarian.', body, 400);
+            throw new APIError('Vegan cannot be combined with meat, fish or vegetarian.', body, 400, {cause: 'EVENT_VEGAN_CONFLICT'});
         }
     }
 }
 
-async function cancelRegistration(event: Event, session: Request['session']) {
+/** Cancel the active profile's attendance under its independent post-deadline rule. */
+async function cancelRegistration(event: Event, session: SessionLike) {
+    // Cancellation has its own event flag; date/diet update flags confer no cancellation right.
     if (event.bindingDeadline && new Date(Date.parse(event.bindingDeadline)) < new Date() && !event.allowRegCancelationAfterDeadline) {
-        throw new APIError('Cancellation is not allowed after registration deadline has passed', {}, 403);
+        throw new APIError('Cancellation is not allowed after registration deadline has passed', {}, 403, {cause: 'EVENT_CANCELLATION_CLOSED'});
     }
     if (session.profile?.id) {
         await eventService.deleteRegistrationFor(event.id, session.profile.id);
@@ -468,7 +523,10 @@ async function cancelRegistration(event: Event, session: Request['session']) {
 
 /* ----------------------- API: Organizer edit ----------------------- */
 
-async function updateEventSettings(event: Event, body: any, permData?: PermBundle) {
+/** Normalize sparse Event properties under the existing field policy and locked current date/deadline context.
+ * Native calls retain their service-managed transaction; a versioned caller can supply its existing
+ * transaction so reviewed comparison and final result preparation share that lock. */
+async function updateEventSettings(event: Event, body: any, permData?: Pick<PermBundle, 'entity'>, manager?: EntityManager) {
     if (!event) throw new APIError('Event not found', {}, 404);
     const normalizedBody = {...body};
     // Retain the old date aliases at this request boundary only. The shared permission
@@ -507,7 +565,7 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
     if (value.maxParticipants !== undefined) patch.maxParticipants = value.maxParticipants || null;
     if (value.deadlineTz !== undefined) {
         try { new Intl.DateTimeFormat('en', {timeZone: value.deadlineTz || 'UTC'}); }
-        catch { throw new APIError('Invalid time zone.', {}, 400); }
+        catch { throw new APIError('Invalid time zone.', {}, 400, {cause: 'EVENT_TIMEZONE_INVALID'}); }
         patch.timezone = value.deadlineTz || null;
     }
     async function updateLocked(manager: import('typeorm').EntityManager): Promise<void> {
@@ -515,7 +573,7 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
         if (!current) throw new APIError('Event not found', {}, 404);
         const startDate = patch.startDate ?? current.startDate;
         const endDate = patch.endDate ?? current.endDate;
-        if (startDate > endDate) throw new APIError('Start date must be before end date', {}, 400);
+        if (startDate > endDate) throw new APIError('Start date must be before end date', {}, 400, {cause: 'EVENT_START_AFTER_END'});
         // An omitted deadline is never rewritten. A supplied local deadline uses the submitted
         // zone or the locked row's current zone, avoiding an earlier request-load snapshot.
         if (value.bindingDeadline !== undefined) {
@@ -524,12 +582,15 @@ async function updateEventSettings(event: Event, body: any, permData?: PermBundl
                     ? rewriteISOToZone(value.bindingDeadline, value.deadlineTz || current.timezone || 'UTC') : null;
                 if (patch.bindingDeadline && !Number.isFinite(Date.parse(patch.bindingDeadline))) throw new Error('Invalid deadline');
             } catch {
-                throw new APIError('Invalid binding deadline or time zone.', {}, 400);
+                throw new APIError('Invalid binding deadline or time zone.', {}, 400, {cause: 'EVENT_DEADLINE_INVALID'});
             }
         }
         await eventService.updateEventProperties(event.id, patch, manager);
     }
-    await eventService.withEventTransaction(updateLocked);
+    // Versioned metadata supplies its existing lock/field comparison transaction.
+    // Native callers retain the original service-managed transaction unchanged.
+    if (manager) await updateLocked(manager);
+    else await eventService.withEventTransaction(updateLocked);
     return 'Event updated';
 }
 
@@ -538,13 +599,21 @@ async function updateSettings(id: string, body: any) {
     return 'Settings saved';
 }
 
+/** One capacity policy serves native/v1 presentation and registration admission.
+ * Missing limits remain unlimited, while a persisted zero still closes admission.
+ * Callers supply their existing count so this rule introduces no read or lock. */
+function eventCapacityReached(limit: number | null | undefined, registrationCount: number): boolean {
+    return limit != null && registrationCount >= limit;
+}
+
 /** Capacity is policy over persisted event limits and registration counts. */
 export async function isEventFull(eventId: string): Promise<boolean> {
     const event = await eventService.getEventById(eventId);
     if (!event) throw new APIError('Event not found', {}, 404);
-    // Optional/NULL limits both mean unlimited. Keep zero meaningful for persisted data,
-    // rather than using a truthiness check that would accidentally turn zero into unlimited.
-    return event.maxParticipants != null && await eventService.getEventRegistrationCount(eventId) >= event.maxParticipants;
+    // Preserve the existing unlimited-event shortcut and separate count read;
+    // consolidating presentation policy does not strengthen its concurrency guarantee.
+    const registrationCount = event.maxParticipants == null ? 0 : await eventService.getEventRegistrationCount(eventId);
+    return eventCapacityReached(event.maxParticipants, registrationCount);
 }
 
 /** Keep display, preview and locked consumption aligned on the same eligibility rule. */
@@ -570,10 +639,13 @@ async function listDeadlineBypassLinks(event: Event) {
     });
 }
 
-async function createDeadlineBypassLink(event: Event, body: any, session: Request['session']) {
+/** Issue the existing single-use registration link for an admitted full-account organizer. */
+async function createDeadlineBypassLink(event: Event, body: any, session: SessionLike) {
     if (!event) throw new APIError('Event not found', body, 404);
-    if (!session.auth?.user) throw new APIError('Must be logged in', body, 401);
+    if (!session.auth?.user) throw new APIError('Must be logged in', body, 401, {cause: 'EVENT_LINK_ACCOUNT_REQUIRED'});
 
+    // Account-only issuance is an action rejection for a valid guest, never session expiry.
+    // Preserve the native optional-expiry parser and fixed single-use persistence behavior.
     const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
     return await eventService.createDeadlineBypassLink(
         event.id,
@@ -594,8 +666,9 @@ async function deleteRegistration(event: Event, registrationId: string) {
     return await eventService.deleteRegistration(event.id, registrationId);
 }
 
-// Update registration arrival and departure dates
-// Note: Permission check for MANAGE_REGISTRATIONS is enforced at the route level
+/** Update one event-scoped registration within the Event's inclusive date window.
+ * Native route middleware and the versioned method adapter independently enforce
+ * MANAGE_REGISTRATIONS before calling this shared validation/persistence owner. */
 async function updateRegistrationDates(event: Event, registrationId: string, body: any, permData?: PermBundle) {
     const schema = Joi.object({
         arrivalDate: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/).required(),
@@ -607,8 +680,10 @@ async function updateRegistrationDates(event: Event, registrationId: string, bod
         throw new APIError(msg, body, 400);
     }
 
+    // Organizer edits retain the same date-window policy as self-registration,
+    // while removal and cancellation have their own separately admitted operations.
     if (!isWithinWindow(event.startDate, event.endDate, value.arrivalDate, value.departureDate)) {
-        throw new APIError('Arrival/Departure must be within event dates', body, 400);
+        throw new APIError('Arrival/Departure must be within event dates', body, 400, {cause: 'EVENT_DATES_INVALID'});
     }
 
     const updated = await eventService.updateRegistrationDates(event.id, Number(registrationId), value.arrivalDate, value.departureDate);
@@ -682,6 +757,522 @@ async function updateHeaderImg(entity: EntityBase, file?: Express.Multer.File) {
 async function deleteHeaderImg(entity: EntityBase) {
     await performImageSwap(entity, eventService.updateHeaderImage);
     return 'Image deleted';
+}
+
+/** Interpret nullable persistence evidence without leaking ORM data or database errors. */
+function requireEvent(event: Event | null): Event {
+    if (!event) throw new ApiProblem('NOT_FOUND');
+    return event;
+}
+
+/** Every Event method uses the same event participant audience as native middleware. */
+async function eventPermissions(event: Event, session: SessionLike, manager?: EntityManager): Promise<PermView> {
+    return evaluateSubject({kind: 'entity', entity: {
+        entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
+    }}, session, undefined, manager);
+}
+
+/** Creation remains account-only even when an independently authorized duplicate supplied its draft. */
+export function requireEventCreation(session: SessionLike): void {
+    if (!session.profile) throw new ApiProblem('AUTH_REQUIRED');
+    if (!hasAccountProfile(session)) throw new ApiProblem('FORBIDDEN');
+}
+
+/** Form definitions reuse the shared maintained permission/preset catalog. */
+export function eventFormContext(): components['schemas']['EventCreateContext'] {
+    return {defaults: completeDefaults(getInitialPerms('event')), ...permissionDefinitions()};
+}
+
+/** Project account-page admission without creating an anonymous session or exposing Event content. */
+export function readEventCreateEntry(session: SessionLike, returnTo?: unknown): components['schemas']['EventCreateEntry'] {
+    const target = safeFrontendReturn(returnTo ?? '/frontend-pilot/event/create');
+    const entry = getAccountPageEntry(session, '/frontend-pilot/users/login', target);
+    return {entry, context: entry.kind === 'render' ? eventFormContext() : null};
+}
+
+/** Account-only initial forms and public duplicate forms share the same static definitions. */
+export function readEventCreateContext(session: SessionLike): components['schemas']['EventCreateContext'] {
+    requireEventCreation(session);
+    return eventFormContext();
+}
+
+/** The guest form intentionally receives only the existing public Event title. */
+export async function readEventGuestEntry(id: string): Promise<components['schemas']['GuestEntry']> {
+    const event = requireEvent(await eventService.getEventById(id));
+    return {id: event.id, title: event.title};
+}
+
+/**
+ * Share native page admission between SSR and client navigation. A token is
+ * navigation state only: neither guest entry nor prefetch consumes its use.
+ * Administration admission and the roster's later method grant stay separate.
+ */
+export async function readEventResourceEntry(id: string, view: 'detail' | 'guest' | 'admin', session: SessionLike,
+    regToken?: string): Promise<components['schemas']['EventResourceEntry']> {
+    return eventService.withEventReadSnapshot(id, async function readEntry(manager, row) {
+        if (!row) return {entry: {kind: 'denied', status: 404, messageKey: 'event.notFound'}, guest: null};
+        const detailUrl = `/frontend-pilot/event/${encodeURIComponent(id)}`;
+        const tokenQuery = regToken ? `?${new URLSearchParams({regToken})}` : '';
+        if (view === 'guest') {
+            return session.profile
+                ? {entry: {kind: 'redirect', url: `${detailUrl}${tokenQuery}`, notice: null}, guest: null}
+                : {entry: {kind: 'render'}, guest: {id: row.id, title: row.title}};
+        }
+        if (!session.profile) {
+            return {entry: {kind: 'redirect', url: `${detailUrl}/guest${tokenQuery}`, notice: null}, guest: null};
+        }
+        // Native Event detail admits an active profile independently of ACCESS_VIEW.
+        // Its admin route additionally requires ACCESS_ADMIN; no roster data enters admission.
+        if (view === 'admin' && !mayPerformEventMethod(await eventPermissions(row, session, manager), 'admin')) {
+            return {entry: {kind: 'denied', status: 403, messageKey: 'problem.forbidden'}, guest: null};
+        }
+        return {entry: {kind: 'render'}, guest: null};
+    });
+}
+
+/** Project only the current profile's attendance and its normalized dietary values. */
+function projectRegistration(registration: EventRegistration | null): components['schemas']['EventRegistration'] | null {
+    if (!registration) return null;
+    const dietary = registration.dietaryChoices ?? [];
+    return {id: String(registration.id), arrivalDate: registration.arrivalDate, departureDate: registration.departureDate,
+        dietary: dietary.map(choice => choice.choice),
+        allergyNotes: dietary.find(choice => choice.choice === 'ALLERGIES')?.additionalInfo ?? '',
+        dietComment: dietary.find(choice => choice.choice === 'COMMENT')?.additionalInfo ?? ''};
+}
+
+/** Header storage references stay private; clients receive a route and opaque version only. */
+function eventHeader(event: Event) {
+    return {headerUrl: event.headerImg ? `/api/v1/events/${encodeURIComponent(event.id)}/header` : null,
+        headerVersion: getHeaderImageVersion(event.headerImg)};
+}
+
+/** Convert shared archival presentation into the existing frontend lifecycle contract. */
+async function eventArchive(event: Event, session: SessionLike, manager: EntityManager) {
+    const reference = {type: 'event' as const, id: event.id};
+    const snapshot = await lifecycleService.getArchiveSnapshot([reference], manager);
+    const presentations = await getArchivePresentations([reference], session, snapshot, manager);
+    return presentations.get(archiveKey(reference))!;
+}
+
+/** Event detail deliberately omits other registrations, invoice data and management baselines. */
+export async function readEvent(id: string, session: SessionLike, view: 'detail' | 'admin' = 'detail'): Promise<components['schemas']['EventView']> {
+    requireSessionProfileId(session);
+    return eventService.withEventReadSnapshot(id, async function readDetail(manager, row) {
+        const event = requireEvent(row);
+        const permissions = await eventPermissions(event, session, manager);
+        if (view === 'admin' && !mayPerformEventMethod(permissions, 'admin')) throw new ApiProblem('FORBIDDEN');
+        // Select only own attendance and a cardinality; never load the native invoice/roster aggregate.
+        const registration = await eventService.getRegistrationFor(session.profile!.id, id, manager);
+        const registrationCount = await eventService.getEventRegistrationCount(id, manager);
+        const archive = await eventArchive(event, session, manager);
+        const properties = await getEntityPropertyPresentation('event', event, session, manager);
+        return {id, title: event.title, description: event.description ?? null, ...eventHeader(event),
+            startDate: event.startDate, endDate: event.endDate, location: event.location ?? null,
+            bindingDeadline: event.bindingDeadline ? new Date(event.bindingDeadline).toISOString() : null,
+            timezone: event.timezone || 'UTC', maxParticipants: event.maxParticipants ?? null,
+            requireDietaryInfo: Boolean(event.requireDietaryInfo), allowDietComment: Boolean(event.allowDietComment),
+            allowRegDateUpdatesAfterDeadline: Boolean(event.allowRegDateUpdatesAfterDeadline),
+            allowRegCancelationAfterDeadline: Boolean(event.allowRegCancelationAfterDeadline),
+            allowRegDietUpdateAfterDeadline: Boolean(event.allowRegDietUpdateAfterDeadline),
+            registrationCount, isFull: eventCapacityReached(event.maxParticipants, registrationCount),
+            hasInvoicePools: Boolean(registration && await invoiceService.hasEventPools(id, manager)),
+            registration: projectRegistration(registration), capabilities: {
+                register: mayPerformEventMethod(permissions, 'register'), admin: mayPerformEventMethod(permissions, 'admin'),
+                participants: mayPerformEventMethod(permissions, 'participants'), manageRegistrations: mayPerformEventMethod(permissions, 'manageRegistrations'),
+                manageAssignments: mayPerformEventMethod(permissions, 'manageAssignments'),
+                items: mayPerformEventMethod(permissions, 'items'), settings: properties.canEditProperties || properties.canEditHeader
+                    || properties.canManagePermissions || properties.canDuplicate || properties.canDelete || archive.canManage,
+                exportParticipants: mayPerformEventMethod(permissions, 'exportParticipants'),
+            }, archive: {direct: archive.directArchived, inherited: Boolean(archive.inheritedFromEventId),
+                archivedAt: event.archivedAt?.toISOString() ?? null, autoArchivePaused: archive.autoArchivePaused, eventUrl: null}};
+    });
+}
+
+/** Trim only the existing title field before generated length validation, retaining unknown-field rejection. */
+export function normalizeEventMetadataPatch(body: unknown): unknown {
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return body;
+    const patch = {...body as Record<string, unknown>};
+    if (typeof patch.title === 'string') patch.title = patch.title.trim();
+    return patch;
+}
+
+/** Preserve public DATA_DUPLICATE admission while copying only the native Event form surface. */
+export async function readEventDuplicate(id: string, session: SessionLike): Promise<components['schemas']['EventDuplicate']> {
+    return eventService.withEventReadSnapshot(id, async function readDuplicate(manager, row) {
+        const event = requireEvent(row);
+        if (!mayPerformEventMethod(await eventPermissions(event, session, manager), 'duplicate')) throw new ApiProblem('FORBIDDEN');
+        // Source attendance, invoices, images and archival state never become new-event input.
+        return {values: {title: event.title, description: event.description ?? '',
+            startDate: event.startDate, endDate: event.endDate, location: event.location ?? '',
+            // Native duplication inserts the persisted timestamp directly into datetime-local;
+            // the browser presents an empty control. Do not silently change that copied draft.
+            bindingDeadline: '', deadlineTz: event.timezone || 'UTC',
+            maxParticipants: event.maxParticipants || null, requireDietaryInfo: Boolean(event.requireDietaryInfo),
+            allowDietComment: Boolean(event.allowDietComment),
+            allowRegDateUpdatesAfterDeadline: Boolean(event.allowRegDateUpdatesAfterDeadline),
+            allowRegCancelationAfterDeadline: Boolean(event.allowRegCancelationAfterDeadline),
+            allowRegDietUpdateAfterDeadline: Boolean(event.allowRegDietUpdateAfterDeadline),
+            defaultPermissions: completeDefaults(await adminService.getDefaultPerms('event', id, manager))}, formContext: eventFormContext()};
+    });
+}
+
+/** Obtain only fields admitted by the existing shared entity-property policy. */
+async function eventMetadata(event: Event, session: SessionLike, manager: EntityManager): Promise<components['schemas']['EventMetadata']> {
+    const properties = await getEntityPropertyPresentation('event', event, session, manager, 'method');
+    if (!properties.editableFields.length) throw new ApiProblem('FORBIDDEN');
+    const values = {...properties.values} as components['schemas']['EventMetadataValues'];
+    // MariaDB tinyint columns can arrive as numeric flags. The machine wire
+    // contract uses booleans while field omission still follows the shared policy.
+    for (const field of ['requireDietaryInfo', 'allowDietComment', 'allowRegDateUpdatesAfterDeadline',
+        'allowRegCancelationAfterDeadline', 'allowRegDietUpdateAfterDeadline'] as const) {
+        if (Object.hasOwn(values, field)) values[field] = Boolean(values[field]);
+    }
+    return {id: event.id, values, editableFields: properties.editableFields as components['schemas']['EventMetadata']['editableFields'],
+        editToken: comparisonToken('event-metadata', event.id, session, values)};
+}
+
+/** Native Event property methods are publicly grantable; disclose only their permitted field baseline. */
+export async function readEventMetadata(id: string, session: SessionLike): Promise<components['schemas']['EventMetadata']> {
+    return eventService.withEventReadSnapshot(id, async function readMetadata(manager, row) {
+        return eventMetadata(requireEvent(row), session, manager);
+    });
+}
+
+/** Direct controller callers receive the saved permitted metadata projection. */
+export function patchEventMetadata(id: string, patch: components['schemas']['EventMetadataPatch'], token: string | undefined,
+    session: SessionLike): Promise<components['schemas']['EventMetadata']>;
+/** HTTP adapters prepare their exact generated receipt while the write can still roll back. */
+export function patchEventMetadata<Result>(id: string, patch: components['schemas']['EventMetadataPatch'], token: string | undefined,
+    session: SessionLike, prepareResult: ApiResponsePreparer<'updateEventMetadata', 200, Result>): Promise<Result>;
+/** Recheck current grants and selected-field comparisons under the existing Event lock. */
+export async function patchEventMetadata<Result>(id: string, patch: components['schemas']['EventMetadataPatch'], token: string | undefined,
+    session: SessionLike, prepareResult?: ApiResponsePreparer<'updateEventMetadata', 200, Result>): Promise<components['schemas']['EventMetadata'] | Result> {
+    return eventService.withEventTransaction(async function saveMetadata(manager) {
+        const event = requireEvent(await eventService.lockEvent(manager, id));
+        const permissions = await eventPermissions(event, session, manager);
+        // Authorization precedes comparison, so revoked fields cannot leak their current hash/value.
+        assertEditableEntityFields('event', patch, permissions);
+        const baseline = await eventMetadata(event, session, manager);
+        requireFieldComparison(token, baseline.editToken, Object.keys(patch));
+        await updateEventSettings(event, patch, {entity: permissions}, manager);
+        const saved = await eventMetadata(requireEvent(await eventService.getEventById(id, manager)), session, manager);
+        // A malformed projection/serialization rejects before commit; only the
+        // already prepared receipt leaves the actual HTTP adapter's transaction.
+        return prepareResult ? prepareResult(saved) : saved;
+    });
+}
+
+/** Run only new adapter admission under the existing root lock; business operations retain their owners. */
+async function withEventManagement<T>(id: string, session: SessionLike,
+    operation: (manager: EntityManager, event: Event, permissions: PermView) => Promise<T>): Promise<T> {
+    return eventService.withEventTransaction(async function manageEvent(manager) {
+        const event = requireEvent(await eventService.lockEvent(manager, id));
+        return operation(manager, event, await eventPermissions(event, session, manager));
+    });
+}
+
+/** Settings hashes contain only method-permitted shared fields, never hidden participant data. */
+async function eventSettingsToken(event: Event, session: SessionLike, manager: EntityManager, access: boolean): Promise<string> {
+    const defaults = access ? completeDefaults(await adminService.getDefaultPerms('event', event.id, manager)) : null;
+    return comparisonToken('event-settings', event.id, session, {header: event.headerImg ?? null,
+        ...(defaults ? Object.fromEntries(Object.entries(defaults).map(([key, value]) => [`default:${key}`, value])) : {}),
+        ...(access ? {newAdmin: null} : {})});
+}
+
+/** Keep permission administration separate from ordinary metadata/settings visibility. */
+export async function readEventSettings(id: string, session: SessionLike): Promise<components['schemas']['EventSettings']> {
+    requireSessionProfileId(session);
+    /** Select permitted settings and their tokens from one read snapshot. */
+    return eventService.withEventReadSnapshot(id, async function readSettings(manager, row) {
+        const event = requireEvent(row);
+        const properties = await getEntityPropertyPresentation('event', event, session, manager);
+        const archive = await eventArchive(event, session, manager);
+        if (!(properties.canEditProperties || properties.canEditHeader || properties.canManagePermissions
+            || properties.canDuplicate || properties.canDelete || archive.canManage)) throw new ApiProblem('FORBIDDEN');
+        // Ordinary editors never receive audience/admin values or their guessable comparison hashes.
+        let access: components['schemas']['PackingAccess'] | null = null;
+        if (properties.canManagePermissions) {
+            const administrators = await adminService.listAdmins('event', id, manager);
+            access = {defaults: completeDefaults(await adminService.getDefaultPerms('event', id, manager)), ...permissionDefinitions(),
+                admins: administrators.map(admin => ({profileId: admin.profileId, name: admin.profile.name,
+                    isGuest: Boolean(admin.profile.guestId), mask: admin.perms,
+                    editToken: comparisonToken('event-admin', `${id}:${admin.profileId}`, session, {mask: admin.perms})}))};
+        }
+        return {id, title: event.title, ...eventHeader(event),
+            settingsToken: await eventSettingsToken(event, session, manager, properties.canManagePermissions),
+            editableFields: properties.editableFields as components['schemas']['EventSettings']['editableFields'],
+            capabilities: {editHeader: properties.canEditHeader, managePermissions: properties.canManagePermissions,
+                duplicate: properties.canDuplicate, remove: properties.canDelete, manageArchive: archive.canManage,
+                archive: archive.canArchive, restore: archive.canRestore, manageAutomation: archive.canManageAutomation},
+            archive: {direct: archive.directArchived, inherited: Boolean(archive.inheritedFromEventId),
+                archivedAt: event.archivedAt?.toISOString() ?? null, autoArchivePaused: archive.autoArchivePaused, eventUrl: null}, access};
+    });
+}
+
+/** Native registration retains its capacity/deadline/dietary checks and transactional token consumption. */
+export async function saveEventRegistration(id: string, body: components['schemas']['EventRegistrationInput'], session: SessionLike) {
+    requireSessionProfileId(session);
+    const event = requireEvent(await eventService.getEventById(id));
+    if (!mayPerformEventMethod(await eventPermissions(event, session), 'register')) throw new ApiProblem('FORBIDDEN');
+    // The captured actor is passed explicitly; no mutable Express session is consulted after admission.
+    await registerAttendance(event, body, {session});
+    return {changed: true};
+}
+
+/** Cancellation retains native profile admission, deadline policy and an absent-attendance no-op. */
+export async function cancelEventRegistration(id: string, session: SessionLike) {
+    requireSessionProfileId(session);
+    const event = requireEvent(await eventService.getEventById(id));
+    // The native Event root has no parent eventId, so its participant middleware
+    // adds no attendance requirement. Repeated own-profile cancellation succeeds;
+    // the shared operation still rejects a closed deadline before its scoped delete.
+    await cancelRegistration(event, session);
+    return {changed: true};
+}
+
+/** Authorize a named native Event method without disclosing its protected operation data first. */
+async function requireEventMethod(id: string, session: SessionLike, method: EventMethod): Promise<Event> {
+    const event = requireEvent(await eventService.getEventById(id));
+    if (!mayPerformEventMethod(await eventPermissions(event, session), method)) throw new ApiProblem('FORBIDDEN');
+    return event;
+}
+
+/** Roster/totals reuse the existing export/participant owner and explicitly project each private field. */
+export async function readEventParticipants(id: string, session: SessionLike): Promise<components['schemas']['EventParticipants']> {
+    const event = await requireEventMethod(id, session, 'participants');
+    const data = await getParticipantsExtended(event);
+    return {participants: data.participants.map(participant => ({id: String(participant.id), profileId: participant.profileId,
+        name: participant.name, email: participant.email ?? null, arrivalDate: participant.arrivalDate, departureDate: participant.departureDate,
+        dietary: (participant.dietaryChoices ?? []).map(choice => ({choice: choice.choice, additionalInfo: choice.additionalInfo ?? null}))})),
+        totals: Object.entries(data.totals).map(([key, count]) => ({key, count})),
+        dateTotals: Object.entries(data.dateTotals).map(([date, count]) => ({date, count})),
+        allergies: data.allergies, comments: data.comments, generatedAt: data.generatedAt};
+}
+
+/** Organizer edits retain native date validation and event-scoped persistence. */
+export async function editEventRegistration(id: string, registrationId: string,
+    body: components['schemas']['EventRegistrationDates'], session: SessionLike) {
+    const event = await requireEventMethod(id, session, 'manageRegistrations');
+    await updateRegistrationDates(event, registrationId, body);
+    return {changed: true};
+}
+
+/** Organizer removal remains distinct from self-cancellation and its deadline policy. */
+export async function removeEventRegistration(id: string, registrationId: string, session: SessionLike) {
+    const event = await requireEventMethod(id, session, 'manageRegistrations');
+    const changed = await deleteRegistration(event, registrationId);
+    if (!changed) throw new ApiProblem('NOT_FOUND');
+    return {changed};
+}
+
+/** Only registration managers may read bearer links; status comes from the existing controller rule. */
+export async function readEventRegistrationLinks(id: string, session: SessionLike): Promise<components['schemas']['EventRegistrationLinks']> {
+    const event = await requireEventMethod(id, session, 'manageRegistrations');
+    const links = await listDeadlineBypassLinks(event);
+    return {items: links.map(link => ({...link, createdAt: link.createdAt.toISOString(),
+        expiresAt: link.expiresAt?.toISOString() ?? null, revokedAt: link.revokedAt?.toISOString() ?? null,
+        profileId: link.profileId ?? null, status: link.status as components['schemas']['EventRegistrationLink']['status']}))};
+}
+
+/** Link creation retains the native account-only, single-use command without a postcommit read. */
+export async function addEventRegistrationLink(id: string, body: components['schemas']['EventRegistrationLinkInput'], session: SessionLike) {
+    const event = await requireEventMethod(id, session, 'manageRegistrations');
+    return createDeadlineBypassLink(event, body, session);
+}
+
+/** Revocation uses the existing event-scoped write and never grants roster or registration authority. */
+export async function revokeEventRegistrationLink(id: string, linkId: string, session: SessionLike) {
+    const event = await requireEventMethod(id, session, 'manageRegistrations');
+    await revokeDeadlineBypassLink(event, linkId);
+    return {changed: true};
+}
+
+/** Event cards share native membership and archival decoration, without private Overview placement. */
+export async function readEventThingsToDo(id: string, session: SessionLike, view: 'detail' | 'admin' = 'detail'): Promise<components['schemas']['EventThingsToDo']> {
+    const event = await requireEventMethod(id, session, view === 'admin' ? 'admin' : 'items');
+    const profileId = requireSessionProfileId(session);
+    const registration = await eventService.getRegistrationFor(profileId, id);
+    const manages = mayPerformEventMethod(await eventPermissions(event, session), 'manageAssignments');
+    // The native detail reveals children only after registration or assignment-management admission.
+    if (!mayReadEventChildren(registration, manages)) return {items: []};
+    const [activityPlans, packingLists, driversLists] = await Promise.all([
+        eventService.getActivityPlansForEvent(id), eventService.getPackingListsForEvent(id), eventService.getDriverListsForEvent(id),
+    ]);
+    const related = convertToSingleList({activityPlans, packingLists, driversLists});
+    const decorated = await getArchiveView({type: 'event', id}, related, session);
+    return {items: decorated.relatedEntities.map(card => projectOverviewCard(card, session, view === 'admin', true))};
+}
+
+/** Scoped child lifecycle commands keep relationship admission outside the shared archive policy. */
+export async function setEventChildArchived(id: string, entityType: 'activity' | 'drivers' | 'packing', entityId: string,
+    archived: boolean, session: SessionLike, view: 'detail' | 'admin' = 'detail') {
+    const permitted = await readEventThingsToDo(id, session, view);
+    // A URL cannot supply a foreign child. The shared lifecycle owner independently
+    // rechecks current child ownership/grants and preserves inherited archive rules.
+    if (!permitted.items.some(card => card.type === entityType && card.id === entityId)) throw new ApiProblem('NOT_FOUND');
+    /** Recheck the locked relationship and parent admission before its lifecycle write commits. */
+    async function prepareArchive(manager: EntityManager, outcome: EntityMutationOutcome) {
+        await requireEventChildScope(id, outcome, session, manager, view);
+        return {changed: true};
+    }
+    try {
+        if (archived) return await archiveEntity({type: entityType, id: entityId}, {}, session, undefined, {prepare: prepareArchive});
+        return await restoreEntity({type: entityType, id: entityId}, {}, session, {prepare: prepareArchive});
+    } catch (error) {
+        throw classifyArchiveCommandError(error, archived);
+    }
+}
+
+/** A preflight may become obsolete while waiting for the shared lifecycle lock. */
+async function requireEventChildScope(id: string, outcome: EntityMutationOutcome, session: SessionLike,
+    manager: EntityManager, view: 'detail' | 'admin'): Promise<void> {
+    if (outcome.root.eventId !== id) throw new ApiProblem('ENTITY_CONTEXT_CHANGED');
+    const event = requireEvent(await eventService.getEventById(id, manager));
+    const permissions = await eventPermissions(event, session, manager);
+    if (!mayPerformEventMethod(permissions, view === 'admin' ? 'admin' : 'items')) throw new ApiProblem('FORBIDDEN');
+    // Native child discovery requires own attendance or assignment management,
+    // independently of the child's archive authority already checked by its owner.
+    const registration = await eventService.getRegistrationFor(requireSessionProfileId(session), id, manager);
+    if (!mayReadEventChildren(registration, mayPerformEventMethod(permissions, 'manageAssignments'))) throw new ApiProblem('FORBIDDEN');
+}
+
+/** Scheduling remains the existing lifecycle owner's decision, separate from archive/restore. */
+export async function setEventAutomaticArchival(id: string, body: components['schemas']['EventAutomaticArchivalInput'], session: SessionLike) {
+    // The existing completion hook prepares the fixed acknowledgement before commit.
+    function prepareAutomatic() { return {changed: true}; }
+    return setAutomaticArchival({type: 'event', id}, body, session, {prepare: prepareAutomatic});
+}
+
+/** A scoped child URL never substitutes for shared scheduling ownership or current membership. */
+export async function setEventChildAutomaticArchival(id: string, entityType: 'activity' | 'drivers' | 'packing', entityId: string,
+    body: components['schemas']['EventAutomaticArchivalInput'], session: SessionLike, view: 'detail' | 'admin' = 'detail') {
+    const permitted = await readEventThingsToDo(id, session, view);
+    if (!permitted.items.some(card => card.type === entityType && card.id === entityId)) throw new ApiProblem('NOT_FOUND');
+    /** Reject a relinked child inside the existing lifecycle transaction. */
+    async function prepareAutomatic(manager: EntityManager, outcome: EntityMutationOutcome) {
+        await requireEventChildScope(id, outcome, session, manager, view);
+        return {changed: true};
+    }
+    return setAutomaticArchival({type: entityType, id: entityId}, body, session, {prepare: prepareAutomatic});
+}
+
+/** Publicly granted access management receives only its own current audience baselines. */
+export async function readEventDefaultsBaseline(id: string, session: SessionLike): Promise<components['schemas']['PackingDefaultsBaseline']> {
+    return eventService.withEventReadSnapshot(id, async function readDefaults(manager, row) {
+        const event = requireEvent(row);
+        if (!mayPerformEventMethod(await eventPermissions(event, session, manager), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
+        const defaultPermissions = completeDefaults(await adminService.getDefaultPerms('event', id, manager));
+        return {defaultPermissions, editToken: await eventSettingsToken(event, session, manager, true)};
+    });
+}
+
+/** Shared permission persistence keeps sparse audience updates and current locked authorization. */
+export async function updateEventDefaults(id: string, body: components['schemas']['PermissionDefaultsPatch'], session: SessionLike, token?: string) {
+    /** Recheck method authority and selected audiences before shared mask persistence. */
+    return withEventManagement(id, session, async function saveDefaults(manager, event, permissions) {
+        if (!mayPerformEventMethod(permissions, 'managePermissions')) throw new ApiProblem('FORBIDDEN');
+        // Only submitted audiences participate in comparison and writes; omitted grants survive.
+        const current = completeDefaults(await adminService.getDefaultPerms('event', id, manager));
+        requireFieldComparison(token, await eventSettingsToken(event, session, manager, true), Object.keys(body).map(key => `default:${key}`));
+        await saveDefaultPermsFromBody('event', id, {defaultPerms: body}, {manager, inputFormat: 'masks'});
+        return {changed: Object.keys(body).some(key => body[key as keyof typeof body] !== current[key as keyof typeof current])};
+    });
+}
+
+/** Existing grants and absent grants use independent comparison fields. */
+function eventAdministratorToken(id: string, profileId: string, mask: number | null, session: SessionLike): string {
+    return mask === null ? comparisonToken('event-settings', id, session, {newAdmin: null})
+        : comparisonToken('event-admin', `${id}:${profileId}`, session, {mask});
+}
+
+/** Disclose one administrator mask only after the method grant, independently of page admission. */
+export async function readEventAdminBaseline(id: string, profileId: string, session: SessionLike): Promise<components['schemas']['PackingAdminBaseline']> {
+    return eventService.withEventReadSnapshot(id, async function readAdministrator(manager, row) {
+        const event = requireEvent(row);
+        if (!mayPerformEventMethod(await eventPermissions(event, session, manager), 'managePermissions')) throw new ApiProblem('FORBIDDEN');
+        if (!await userService.getProfileById(profileId, manager)) throw new ApiProblem('NOT_FOUND');
+        const current = await adminService.getAdminGrant('event', id, profileId, manager);
+        const mask = current?.perms ?? null;
+        return {mask, editToken: eventAdministratorToken(id, profileId, mask, session)};
+    });
+}
+
+/** Delegate administrator semantics to the existing shared owner after reviewing its current mask. */
+export async function setEventAdmin(id: string, profileId: string, mask: number | null, session: SessionLike, token?: string) {
+    return withEventManagement(id, session, async function saveAdministrator(manager, event, permissions) {
+        if (!mayPerformEventMethod(permissions, 'managePermissions')) throw new ApiProblem('FORBIDDEN');
+        let previousMask: number | null = null;
+        /** Shared profile admission precedes this callback's comparison and selected command. */
+        async function reviewAdministrator(): Promise<EntityAdministratorCommand> {
+            const current = await adminService.getAdminGrant('event', id, profileId, manager);
+            previousMask = current?.perms ?? null;
+            requireFieldComparison(token, eventAdministratorToken(id, profileId, previousMask, session), [current ? 'mask' : 'newAdmin']);
+            return mask === null ? {kind: 'remove'} : {kind: current ? 'update' : 'add', mask, createdBy: session.profile?.userId};
+        }
+        const outcome = await applyEntityAdministrator('event', id, profileId,
+            mask === null ? {kind: 'remove'} : {kind: 'add', mask, createdBy: session.profile?.userId}, manager, reviewAdministrator);
+        if (outcome === 'profile-missing') throw new ApiProblem('NOT_FOUND');
+        if (outcome === 'mask-required') throw new ApiProblem('VALIDATION_FAILED');
+        return {changed: previousMask !== mask};
+    });
+}
+
+/** Reuse native secure account-profile search; no guest credentials or raw addresses enter options. */
+export async function searchEventProfiles(id: string, query: string, session: SessionLike): Promise<components['schemas']['PackingProfileOptions']> {
+    await requireEventMethod(id, session, 'managePermissions');
+    return (await userService.searchUsersSecure(query)).map(profile => ({profileId: profile.id, name: profile.name,
+        username: profile.username, isGuest: false}));
+}
+
+/** Method-only image writers receive a reference hash without protected image bytes. */
+export async function readEventHeaderBaseline(id: string, session: SessionLike): Promise<components['schemas']['PackingHeaderBaseline']> {
+    const event = await requireEventMethod(id, session, 'editHeader');
+    return {editToken: comparisonToken('event-settings', id, session, {header: event.headerImg ?? null})};
+}
+
+/** Shared image replacement owns validation and cleanup; the adapter owns grants/comparison under its lock. */
+export async function setEventHeader(id: string, file: Express.Multer.File | undefined, session: SessionLike, token?: string) {
+    /** Persist the selected reference before the shared owner retires the confirmed previous file. */
+    async function persistHeader(eventId: string, path?: string | null) {
+        return withEventManagement(eventId, session, async function saveHeader(manager, event, permissions) {
+            if (!mayPerformEventMethod(permissions, 'editHeader')) throw new ApiProblem('FORBIDDEN');
+            requireFieldComparison(token, comparisonToken('event-settings', id, session, {header: event.headerImg ?? null}), ['header']);
+            await eventService.updateHeaderImage(id, path, manager);
+            return {previousImage: event.headerImg, changed: Boolean(file || event.headerImg)};
+        });
+    }
+    const receipt = await performImageSwap({id}, persistHeader, file);
+    return {changed: receipt.changed};
+}
+
+/** Native Event image reads precede page admission; storage paths remain internal to the binary adapter. */
+export async function readEventHeaderPath(id: string, _session: SessionLike): Promise<string> {
+    const event = requireEvent(await eventService.getEventById(id));
+    if (!event.headerImg) throw new ApiProblem('NOT_FOUND');
+    return event.headerImg;
+}
+
+/** Archival reuses its authoritative shared operation and preserves children and financial records. */
+export async function setEventArchived(id: string, archived: boolean, session: SessionLike) {
+    requireSessionProfileId(session);
+    // Prepare an invariant result through the existing transaction completion hook.
+    function prepareArchive() { return {changed: true}; }
+    try {
+        if (archived) return await archiveEntity({type: 'event', id}, {}, session, undefined, {prepare: prepareArchive});
+        return await restoreEntity({type: 'event', id}, {}, session, {prepare: prepareArchive});
+    } catch (error) {
+        throw classifyArchiveCommandError(error, archived);
+    }
+}
+
+/** Permanent deletion preserves native owner admission and existing record/file operation ordering. */
+export async function removeEvent(id: string, session: SessionLike) {
+    const profileId = requireSessionProfileId(session);
+    const event = requireEvent(await eventService.getEventById(id));
+    if (event.ownerId !== profileId) throw new ApiProblem('FORBIDDEN');
+    await eventService.deleteEvent(id);
+    if (event.headerImg) removeImage(event.headerImg);
+    return {changed: true};
 }
 
 export default {

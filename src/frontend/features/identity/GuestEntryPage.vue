@@ -5,10 +5,9 @@ import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {useQuery} from '@tanstack/vue-query';
 import {useActionState, usePilot} from '../../app/context';
-import {usePackingApi} from '../packing/api';
+import type {FrontendGuestEntryProps} from '../../../types/FrontendGuestEntryTypes';
 import {useCommand} from '../../composables/command';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
-import {packingKeys} from '../../app/queryKeys';
 import {useQueryAdmission} from '../../app/queryCache';
 import {usePageTitle} from '../../composables/pageTitle';
 import {completeIdentityEntry, completePageEntry, useConfirmedNavigation} from '../../composables/pageEntry';
@@ -20,27 +19,25 @@ import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {isReadDenial} from '../../app/transport';
 
-const props = defineProps<{entry?: components['schemas']['GuestEntry']}>();
+const props = defineProps<FrontendGuestEntryProps>();
 const context = usePilot();
-const api = usePackingApi(context);
 const {messages} = context;
 const route = useRoute();
 const router = useRouter();
 const completion = useConfirmedNavigation();
-const listId = computed(() => String(route.params.listId).toLowerCase());
-const next = computed(() => '/frontend-pilot/packing/' + listId.value);
-const nativeInitial = context.initialDocumentFor(route.fullPath);
+const resourceId = computed(() => props.resourceId);
+const next = computed(() => props.destination);
 const fields = reactive({name: '', email: ''});
 const choiceOpen = ref(false);
 const checkingEmail = ref(false);
-const entryKey = computed(() => packingKeys.guest(context.session.value?.context, listId.value));
+const entryKey = computed(() => props.queryKey);
 const readAdmission = useQueryAdmission(context, entryKey,
     computed(() => context.hydrated.value && !props.entry));
 const entry = useQuery({
     queryKey: entryKey,
     ...readAdmission,
-    queryFn: ({signal}) => api.guestEntry(listId.value, context.capture(), signal),
-    initialData: () => props.entry ?? (nativeInitial?.guestEntry?.id === listId.value ? nativeInitial.guestEntry : undefined),
+    queryFn: ({signal}) => props.readEntry(context.capture(), signal),
+    initialData: initialGuestEntry,
 });
 const guestEntry = computed(() => props.entry ?? (isReadDenial(entry.error.value) ? undefined : entry.data.value));
 const titleRetryAvailable = useReadRetry(() => entry.error.value);
@@ -54,6 +51,13 @@ const command = useCommand(context.refreshSession, true, {
 });
 const reconciling = command.recovering;
 
+/** Evaluate seed eligibility at use time; a warm visit cannot replay an old
+ * document's title after its actor or resource admission has retired. */
+function initialGuestEntry(): components['schemas']['GuestEntry'] | undefined {
+    const initial = context.initialDocumentFor(route.fullPath)?.guestEntry;
+    return props.entry ?? (initial?.id === resourceId.value ? initial : undefined);
+}
+
 /** Name-only and email-only drafts receive the same protection as every other identity form. */
 function isDirty(): boolean {
     return !!fields.name || !!fields.email;
@@ -63,14 +67,14 @@ function isDirty(): boolean {
 function isCheckingEmail(): boolean {
     return checkingEmail.value;
 }
-watch(listId, () => {
+watch(() => [resourceId.value, next.value], () => {
     // Guards have accepted leaving the previous entity. Preserve its unknown outcome until
     // that commitment, then start a clean guest form for the newly selected entity.
     command.acknowledge();
     Object.assign(fields, {name: '', email: ''});
     choiceOpen.value = false;
 });
-usePageTitle(() => guestEntry.value?.title || messages.value.t('app.packing'));
+usePageTitle(() => guestEntry.value?.title || messages.value.t(props.titleKey));
 const blocked = computed(() => checkingEmail.value || command.action.disabled.value
     || completion.pending.value || completion.target.value !== null);
 const titleRetryAction = useActionState({eligible: mayRetryTitle, pending: () => entry.isFetching.value});
@@ -118,7 +122,7 @@ async function register(): Promise<void> {
 /** Native guest names are saved exactly as submitted. Email normalization remains the
  * existing identity rule; command attribution and the list are captured before the request. */
 function registerIdentity(scope: PilotRequestScope): Promise<components['schemas']['IdentityResult']> {
-    return api.registerGuest(listId.value, {username: fields.name,
+    return props.registerGuest({username: fields.name,
         email: fields.email.trim().toLowerCase() || null}, scope);
 }
 
@@ -169,7 +173,7 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
     <section class="card bg-dark text-white mb-3">
         <h1 class="card-header text-center py-3 mb-0">
             <i class="bi bi-door-open-fill me-2" aria-hidden="true"></i
-            >{{ messages.t('auth.join', {title: guestEntry?.title ?? messages.t('app.packing')}) }}
+            >{{ messages.t('auth.join', {title: guestEntry?.title ?? messages.t(props.titleKey)}) }}
         </h1>
         <div class="card-body">
             <!-- The entry title loads independently of the generic identity choices and

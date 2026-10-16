@@ -58,8 +58,19 @@ export async function deleteEvent(eventId: string) {
     await AppDataSource.getRepository(Event).delete(eventId);
 }
 
-export async function getEventById(eventId: string) {
-    return await AppDataSource.getRepository(Event).findOneBy({id: eventId});
+export async function getEventById(eventId: string, manager: EntityManager = AppDataSource.manager) {
+    return await manager.getRepository(Event).findOneBy({id: eventId});
+}
+
+/** Read one bounded Event representation with all DBAL callers sharing its snapshot.
+ * The controller interprets absence and owns disclosure; this operation acquires
+ * no write lock and never consumes a registration token during page prefetch. */
+export async function withEventReadSnapshot<T>(eventId: string,
+    action: (manager: EntityManager, event: Event | null) => Promise<T>): Promise<T> {
+    return AppDataSource.transaction('REPEATABLE READ', async function readEventSnapshot(manager) {
+        // Keep the root and its separately selected children/counts on this manager.
+        return action(manager, await getEventById(eventId, manager));
+    });
 }
 
 export async function getEventsByOwnerId(ownerId: string) {
@@ -228,8 +239,8 @@ export async function register(
     return manager ? persistRegistration(manager) : withEventTransaction(persistRegistration);
 }
 
-export async function getRegistrationFor(profileId: string, eventId: string) {
-    return await AppDataSource.getRepository(EventRegistration).findOne({
+export async function getRegistrationFor(profileId: string, eventId: string, manager: EntityManager = AppDataSource.manager) {
+    return await manager.getRepository(EventRegistration).findOne({
         where: {event: {id: eventId}, profile: {id: profileId}},
         relations: {
             dietaryChoices: true
@@ -353,8 +364,8 @@ export async function updateRegistrationDates(eventId: string, regId: number, ar
 }
 
 /** Raw cardinality; capacity decisions belong to the event controller. */
-export async function getEventRegistrationCount(eventId: string): Promise<number> {
-    return AppDataSource.getRepository(EventRegistration).countBy({event: {id: eventId}});
+export async function getEventRegistrationCount(eventId: string, manager: EntityManager = AppDataSource.manager): Promise<number> {
+    return manager.getRepository(EventRegistration).countBy({event: {id: eventId}});
 }
 
 export async function isRegisteredForEvent(profileId: string, eventId: string, manager: EntityManager = AppDataSource.manager) {
@@ -448,6 +459,6 @@ export async function consumeDeadlineBypassToken(
         .execute();
 }
 
-export async function updateHeaderImage(eventId: string, headerImg?: string | null) {
-    await AppDataSource.getRepository(Event).update(eventId, {headerImg});
+export async function updateHeaderImage(eventId: string, headerImg?: string | null, manager: EntityManager = AppDataSource.manager) {
+    await manager.getRepository(Event).update(eventId, {headerImg});
 }
