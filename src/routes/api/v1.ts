@@ -7,6 +7,7 @@ import {sendValidatedJson, validateOperationRequest} from '../../modules/api/tra
 import {localeManifest} from '../../modules/localization/translator';
 import {fetchHelpDoc, fetchHelpIndex, fetchHelpSearch} from '../../controller/helpController';
 import packingRouter from './v1/packing';
+import driversRouter from './v1/drivers';
 import authRouter from './v1/auth';
 import overviewRouter from './v1/overview';
 import eventRouter from './v1/events';
@@ -43,6 +44,7 @@ router.get('/help', asyncHandler(async function getHelpPage(req, res) {
 router.use(authRouter);
 router.use('/overview', overviewRouter);
 router.use('/packing-lists', packingRouter);
+router.use('/drivers-lists', driversRouter);
 router.use('/events', eventRouter);
 router.use(function missingOperation(_req, _res, next) {next(new ApiProblem('NOT_FOUND'));});
 router.use(handleApiProblem);

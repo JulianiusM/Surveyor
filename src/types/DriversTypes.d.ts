@@ -26,3 +26,13 @@ export type DriversItemAssignee = {
     profileId: string,
     name: string,
 }
+/** Native routes and versioned commands share the Drivers controller's method
+ * policy. Page admission remains independent of each command's authority. */
+export type DriversMethod = 'selfAssignment' | 'addItem' | 'reorderItems' | 'editDescription'
+    | 'editHeader' | 'changeEvent' | 'managePermissions' | 'duplicate'
+    | 'editItemTitle' | 'editItemDescription' | 'editItemCapacity'
+    | 'editItemAttr' | 'deleteItem' | 'deleteAssignment';
+
+/** The versioned adapter prepares its immutable receipt before the shared write
+ * commits; direct domain callers can continue to consume the returned value. */
+export type DriversCommandPreparation<Result> = (result: Result) => void;

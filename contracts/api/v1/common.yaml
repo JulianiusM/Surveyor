@@ -478,6 +478,26 @@ schemas:
           - params
       - properties:
           code:
+            const: DRIVERS_ITEM_FULL
+          messageKey:
+            const: api:errors.DRIVERS_ITEM_FULL
+          status:
+            const: 409
+          params:
+            type: object
+            additionalProperties: false
+            required:
+              - itemId
+            properties:
+              itemId:
+                $ref: "#/schemas/Uuid"
+        required:
+          - code
+          - messageKey
+          - status
+          - params
+      - properties:
+          code:
             const: ENTITY_CONTEXT_CHANGED
           messageKey:
             const: api:errors.ENTITY_CONTEXT_CHANGED

@@ -86,6 +86,10 @@ export interface FrontendPilotBootstrap {
     /** An initial event query is resolved by the shared native selection owner before drafting. */
     packingSelectedEvent?: components['schemas']['EventPickerOption'] | null;
     packingDuplicate?: components['schemas']['PackingDuplicate'];
+    /** Drivers shares guest admission and form definitions; copied lists contain no rides. */
+    driversCreateContext?: components['schemas']['DriversCreateContext'];
+    driversSelectedEvent?: components['schemas']['EventPickerOption'] | null;
+    driversDuplicate?: components['schemas']['DriversDuplicate'];
     /** Event document admission never carries the complete native invoice aggregate. */
     eventEntry?: components['schemas']['EventResourceEntry'];
     eventCreateContext?: components['schemas']['EventCreateContext'];

@@ -23,8 +23,11 @@ import {AppDataSource} from '../dataSource';
 import {DriversAssignment} from '../entities/drivers/DriversAssignment';
 import {DriversItem} from '../entities/drivers/DriversItem';
 import {DriversList} from '../entities/drivers/DriversList';
+import {Event} from '../entities/event/Event';
 import * as entityAdminService from "./EntityAdminService";
 
+/** Persist a controller-approved root through the supplied manager. Native
+ * creation retains its existing standalone write; v1 supplies its transaction. */
 export async function createDriversList(
     ownerId: string,
     title: string,
@@ -32,8 +35,9 @@ export async function createDriversList(
     eventId?: string,
     headerImg?: string | null,
     listId: string = generateUniqueId(),
+    manager: EntityManager = AppDataSource.manager,
 ): Promise<string> {
-    const repo = AppDataSource.getRepository(DriversList);
+    const repo = manager.getRepository(DriversList);
     const creator: DeepPartial<DriversList> = {
         id: listId,
         owner: {id: ownerId},
@@ -51,8 +55,9 @@ export async function updateDriversListTitle(listId: string, title: string): Pro
     await AppDataSource.getRepository(DriversList).update({id: listId}, {title});
 }
 
-export async function deleteDriversList(listId: string): Promise<void> {
-    await AppDataSource.getRepository(DriversList).delete({id: listId});
+/** Delete the root directly; existing foreign-key cascades retain their role. */
+export async function deleteDriversList(listId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    await manager.getRepository(DriversList).delete({id: listId});
 }
 
 export async function getDriversListById(listId: string): Promise<DriversList | null> {
@@ -71,8 +76,9 @@ export async function updateDriversListDescription(listId: string, description: 
     await AppDataSource.getRepository(DriversList).update({id: listId}, {description});
 }
 
-export async function updateHeaderImage(listId: string, headerImg?: string | null) {
-    await AppDataSource.getRepository(DriversList).update(listId, {headerImg});
+/** Persist the approved header reference; file lifecycle remains outside DBAL. */
+export async function updateHeaderImage(listId: string, headerImg?: string | null, manager: EntityManager = AppDataSource.manager) {
+    await manager.getRepository(DriversList).update(listId, {headerImg});
 }
 
 export async function getManagedListsForProfile(profileId: string) {
@@ -105,20 +111,25 @@ export function getDriversParticipationQuery(profileId: string, manager: EntityM
 
 // Drivers Items
 
-export async function createDriversItem(listId: string, profileId: string, item: Partial<DriversItem>) {
-    const repo = AppDataSource.getRepository(DriversItem);
-    const list = await AppDataSource.getRepository(DriversList).findOneByOrFail({id: listId});
+/** Persist an offered ride with its admitted driver profile. Both adapters use
+ * this existing relationship write and preserve the controller's stored position. */
+export async function createDriversItem(listId: string, profileId: string, item: Partial<DriversItem>, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(DriversItem);
+    const list = await manager.getRepository(DriversList).findOneByOrFail({id: listId});
     const entity = repo.create({...item, entity: list, profile: {id: profileId}});
     await repo.save(entity);
 }
 
 export async function updateDriversItem(
     itemId: string,
-    fields: Partial<Pick<DriversItem, 'title' | 'description' | 'maxAssignees' | 'pos'>>
+    fields: Partial<Pick<DriversItem, 'title' | 'description' | 'maxAssignees' | 'pos'>>,
+    manager: EntityManager = AppDataSource.manager,
 ): Promise<boolean> {
+    // Preserve the original sparse field write and affected-row evidence. This
+    // update never removes passengers when a new maximum is below occupancy.
     if (!Object.keys(fields).length) return false;
 
-    const result = await AppDataSource.getRepository(DriversItem).update(
+    const result = await manager.getRepository(DriversItem).update(
         {id: itemId},
         fields
     );
@@ -126,12 +137,15 @@ export async function updateDriversItem(
     return result.affected === 1;
 }
 
-export async function deleteDriversItem(itemId: string): Promise<void> {
-    await AppDataSource.getRepository(DriversItem).delete({id: itemId});
+/** Remove the selected ride; database cascades remove its passenger assignments. */
+export async function deleteDriversItem(itemId: string, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    await manager.getRepository(DriversItem).delete({id: itemId});
 }
 
-export async function reorderDriversItems(listId: string, orders: Array<{ itemId: string; position: number }>) {
-    const repo = AppDataSource.getRepository(DriversItem);
+/** Preserve the native scoped per-row order writes. A versioned caller supplies
+ * its transaction after reviewing the complete current order in the controller. */
+export async function reorderDriversItems(listId: string, orders: Array<{ itemId: string; position: number }>, manager: EntityManager = AppDataSource.manager) {
+    const repo = manager.getRepository(DriversItem);
     await Promise.all(
         orders.map((o) => repo.update({id: o.itemId, entity: {id: listId}}, {pos: o.position}))
     );
@@ -163,9 +177,13 @@ export async function getDriversItems(listId: string): Promise<EnrichedDriversIt
     });
 }
 
+/** Preserve the native enriched lookup and ORM missing-row diagnostic. Versioned
+ * method baselines use the separate nullable snapshot evidence below. */
 export async function getDriversItemById(itemId: string): Promise<EnrichedDriversItem> {
     const repo = AppDataSource.getRepository(DriversItem);
 
+    // Driver identity comes from the profile relation; passenger occupancy comes
+    // from persisted assignments, independently of the hidden historical title.
     const {entities, raw} = await repo
         .createQueryBuilder("pi")
         .leftJoinAndSelect("pi.profile", "p")
@@ -209,8 +227,9 @@ export async function getDriversAssignmentCounts(
 }
 
 
-export async function getLastDriversItemNumber(listId: string): Promise<number> {
-    return (await AppDataSource.getRepository(DriversItem).maximum("pos", {entity: {id: listId}})) ?? 0;
+/** Return stored order evidence without interpreting admission or driver identity. */
+export async function getLastDriversItemNumber(listId: string, manager: EntityManager = AppDataSource.manager): Promise<number> {
+    return (await manager.getRepository(DriversItem).maximum("pos", {entity: {id: listId}})) ?? 0;
 }
 
 /**
@@ -223,10 +242,9 @@ export async function withDriversAssignmentLock<T>(
     action: (manager: EntityManager, item: DriversItem | null, existing: DriversAssignment | null, count: number) => Promise<T>,
 ): Promise<T> {
     async function readLocked(manager: EntityManager): Promise<T> {
-        const item = await manager.getRepository(DriversItem).findOne({where: {id: itemId}, lock: {mode: 'pessimistic_write'}});
-        const repo = manager.getRepository(DriversAssignment);
-        const existing = await repo.findOneBy({item: {id: itemId}, profile: {id: profileId}});
-        const count = await repo.countBy({item: {id: itemId}});
+        // Both adapters read capacity and personal membership under the same
+        // existing item lock before their shared controller decision runs.
+        const {item, existing, count} = await getLockedDriversAssignment(manager, itemId, profileId);
         return action(manager, item, existing, count);
     }
     return AppDataSource.transaction('READ COMMITTED', readLocked);
@@ -239,15 +257,19 @@ export async function assignDriversItem(itemId: string, profileId: string, manag
     await repo.save(repo.create({item: {id: itemId}, profile: {id: profileId}, entity: {id: item.entityId}}));
 }
 
-export async function unassignDriversItem(itemId: string, profileId: string): Promise<void> {
-    await AppDataSource.getRepository(DriversAssignment).delete({
+/** Delete all historical memberships for this profile/ride. Native callers ignore
+ * affected-row evidence; the versioned receipt uses it inside its locked snapshot. */
+export async function unassignDriversItem(itemId: string, profileId: string, manager: EntityManager = AppDataSource.manager): Promise<number> {
+    const result = await manager.getRepository(DriversAssignment).delete({
         item: {id: itemId},
         profile: {id: profileId}
     });
+    return result.affected ?? 0;
 }
 
-export async function getDriversAssignmentById(assignId: number) {
-    return await AppDataSource.getRepository(DriversAssignment).findOne({
+/** Read one assignment and its actual ride for the controller's root-scope check. */
+export async function getDriversAssignmentById(assignId: number, manager: EntityManager = AppDataSource.manager) {
+    return await manager.getRepository(DriversAssignment).findOne({
         where: {id: assignId},
         relations: {
             item: true
@@ -289,8 +311,9 @@ export async function getDriversItemAssignees(listId: string) {
     }, {} as Record<string, DriversItemAssignee[]>);
 }
 
-export async function deleteDriversAssignment(assignId: number): Promise<void> {
-    await AppDataSource.getRepository(DriversAssignment).delete({id: assignId});
+/** Delete an approved assignment handle through the existing simple operation. */
+export async function deleteDriversAssignment(assignId: number, manager: EntityManager = AppDataSource.manager): Promise<void> {
+    await manager.getRepository(DriversAssignment).delete({id: assignId});
 }
 
 /**
@@ -309,4 +332,72 @@ export async function withDriversListLock<T>(id: string, action: (manager: Entit
 /** Persist only the normalized fields supplied by the controller in its existing transaction. */
 export async function updateDriversListProperties(id: string, patch: BasicEntityPropertyPatch, manager: EntityManager): Promise<void> {
     await manager.getRepository(DriversList).update(id, patch);
+}
+
+/** Read the current root and parent on the caller's snapshot connection. */
+export async function getDriversSnapshotRoot(manager: EntityManager, id: string): Promise<DriversList | null> {
+    return manager.getRepository(DriversList).findOne({where: {id}, relations: {event: true}});
+}
+
+/** Read nullable item evidence for a method-only baseline. The native enriched
+ * lookup keeps its original ORM missing-row diagnostic and driver/count joins. */
+export async function getDriversSnapshotItem(manager: EntityManager, itemId: string): Promise<DriversItem | null> {
+    return manager.getRepository(DriversItem).findOneBy({id: itemId});
+}
+
+/** Keep displayed names, assignments and their permission evidence in one read
+ * snapshot. This DBAL callback supplies evidence without choosing page admission. */
+export async function withDriversReadSnapshot<T>(id: string, read: (manager: EntityManager, list: DriversList | null) => Promise<T>): Promise<T> {
+    async function readSnapshot(manager: EntityManager): Promise<T> {
+        // The root, its parent and all delegated reads share this connection.
+        return read(manager, await getDriversSnapshotRoot(manager, id));
+    }
+    return AppDataSource.transaction('REPEATABLE READ', readSnapshot);
+}
+
+/** Read offered rides in their stored order with visible driver profiles. The
+ * optional row locks retain a reviewed order until the caller's writes commit. */
+export async function getDriversSnapshotItems(manager: EntityManager, listId: string, lockItems = false): Promise<DriversItem[]> {
+    // Preserve the feature's stored position order; the joined profile is the
+    // visible driver identity rather than the ride's historical hidden title.
+    return manager.getRepository(DriversItem).find({
+        where: {entity: {id: listId}}, relations: {profile: true},
+        order: {pos: 'ASC'},
+        ...(lockItems ? {lock: {mode: 'pessimistic_write' as const}} : {}),
+    });
+}
+
+/** Full detail additionally needs passenger names/counts. Method-only baselines
+ * use the bounded root/item reads above without loading this assignment roster. */
+export async function getDriversSnapshotRows(manager: EntityManager, listId: string) {
+    // Minimal baselines omit this roster; only the admitted full view needs names.
+    const items = await getDriversSnapshotItems(manager, listId);
+    const assignments = await manager.getRepository(DriversAssignment).find({
+        where: {entity: {id: listId}}, relations: {profile: true}, order: {id: 'ASC'},
+    });
+    return {items, assignments};
+}
+
+/** Return assignment evidence under the existing exclusive ride-row lock. The
+ * controller applies capacity/identity policy; a public remover has no self row. */
+export async function getLockedDriversAssignment(manager: EntityManager, itemId: string, profileId?: string) {
+    // Lock before reading aggregate/personal evidence so concurrent takes cannot
+    // independently consume the same final passenger place.
+    const item = await manager.getRepository(DriversItem).findOne({where: {id: itemId}, lock: {mode: 'pessimistic_write'}});
+    const repository = manager.getRepository(DriversAssignment);
+    const existing = profileId ? await repository.findOneBy({item: {id: itemId}, profile: {id: profileId}}) : null;
+    const count = await repository.countBy({item: {id: itemId}});
+    return {item, existing, count};
+}
+
+/** Hold a selected parent while the new adapter's root/default writes and receipt
+ * are prepared. Native creation retains its existing standalone call order. */
+export async function withDriversCreationTransaction<T>(eventId: string | null, action: (manager: EntityManager, event: Event | null) => Promise<T>): Promise<T> {
+    async function createLocked(manager: EntityManager): Promise<T> {
+        // Parent-before-root ordering matches the shared relationship operation;
+        // nullable evidence leaves absence/admission decisions in the controller.
+        const event = eventId ? await manager.getRepository(Event).findOne({where: {id: eventId}, lock: {mode: 'pessimistic_write'}}) : null;
+        return action(manager, event);
+    }
+    return AppDataSource.transaction('READ COMMITTED', createLocked);
 }

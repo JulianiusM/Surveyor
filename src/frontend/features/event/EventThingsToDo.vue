@@ -11,6 +11,7 @@ import {useConfirmedNavigation} from '../../composables/pageEntry';
 import {useEventApi} from './api';
 import {useEventSection} from './useEventSection';
 import {usePackingApi} from '../packing/api';
+import {useDriversApi} from '../drivers/api';
 import {createEntityLifecycle, useEntityRemoval} from '../../composables/entityLifecycle';
 import OverviewCard from '../overview/OverviewCard.vue';
 import ActionButton from '../../components/ActionButton.vue';
@@ -26,6 +27,7 @@ const context = usePilot();
 const {messages} = context;
 const api = useEventApi(context);
 const packingApi = usePackingApi(context);
+const driversApi = useDriversApi(context);
 const id = useId();
 const expanded = ref(true);
 const adminOpen = ref<ChildType | null>(null);
@@ -84,15 +86,16 @@ function groupRows(type: ChildType): Card[] {
     return groupItems(type).filter(card => card.title.toLowerCase().includes(adminSearch[type].trim().toLowerCase()));
 }
 function createHref(type: ChildType): string {
-    return `${type === 'packing' ? '/frontend-pilot' : ''}/${type}/create?eventId=${encodeURIComponent(props.eventId)}`;
+    return `${type === 'packing' || type === 'drivers' ? '/frontend-pilot' : ''}/${type}/create?eventId=${encodeURIComponent(props.eventId)}`;
 }
 function toggleGroup(type: ChildType): void {
     adminOpen.value = adminOpen.value === type ? null : type;
 }
 
-/** Shared cards retain their existing presentation owner. Only Packing gets SPA
- * navigation/protected image transport; other child links remain real documents. */
+/** Shared cards retain their presentation owner. Migrated children receive SPA
+ * navigation and their own authorized image operation through explicit inputs. */
 function interaction(card: Card): PilotOverviewCardInteraction {
+    if (card.type === 'drivers') return {migrated: true, lifecycle: true, readHeader: driversApi.header.bind(driversApi)};
     return {migrated: card.type === 'packing', lifecycle: true,
         ...(card.type === 'packing' ? {readHeader: packingApi.header.bind(packingApi)} : {})};
 }
@@ -236,7 +239,7 @@ async function refresh(): Promise<void> {
                                             :disabled="available.disabled.value"
                                         />
                                         <component
-                                            :is="group.type === 'packing' ? RouterLink : 'a'"
+                                            :is="group.type === 'packing' || group.type === 'drivers' ? RouterLink : 'a'"
                                             class="btn btn-primary"
                                             :to="createHref(group.type)"
                                             :href="createHref(group.type)"
@@ -256,7 +259,7 @@ async function refresh(): Promise<void> {
                                         class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
                                     >
                                         <component
-                                            :is="card.type === 'packing' ? RouterLink : 'a'"
+                                            :is="card.type === 'packing' || card.type === 'drivers' ? RouterLink : 'a'"
                                             class="text-decoration-none flex-grow-1"
                                             :to="card.url"
                                             :href="card.url"
@@ -268,7 +271,7 @@ async function refresh(): Promise<void> {
                                             class="d-inline btn-group ms-2"
                                         >
                                             <component
-                                                :is="card.type === 'packing' ? RouterLink : 'a'"
+                                                :is="card.type === 'packing' || card.type === 'drivers' ? RouterLink : 'a'"
                                                 v-if="card.capabilities.duplicate"
                                                 class="btn btn-sm btn-outline-info"
                                                 :to="card.url + '/duplicate'"

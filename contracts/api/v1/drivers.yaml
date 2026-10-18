@@ -1,0 +1,1452 @@
+schemas:
+  DriversCreateEntry:
+    $ref: ./packing.yaml#/schemas/PackingCreateEntry
+  DriversResourceEntry:
+    $ref: ./packing.yaml#/schemas/PackingResourceEntry
+  DriversAssignee:
+    $ref: ./packing.yaml#/schemas/PackingAssignee
+  DriversItemView:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - description
+      - position
+      - maxAssignees
+      - assignedCount
+      - selfAssigned
+      - assignees
+      - capabilities
+      - editToken
+      - driverName
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      description:
+        type:
+          - string
+          - "null"
+      position:
+        type: integer
+      maxAssignees:
+        type:
+          - integer
+          - "null"
+      assignedCount:
+        type: integer
+        minimum: 0
+      selfAssigned:
+        type: boolean
+      assignees:
+        type: array
+        items:
+          $ref: "#/schemas/DriversAssignee"
+      capabilities:
+        type: object
+        additionalProperties: false
+        required:
+          - showCapacityEdit
+          - editTitle
+          - editDescription
+          - editCapacity
+          - removeItem
+          - removeAssignments
+        properties:
+          showCapacityEdit:
+            type: boolean
+            description: Original native capacity-control visibility; command authorization is independently editCapacity.
+          editTitle:
+            type: boolean
+          editDescription:
+            type: boolean
+          editCapacity:
+            type: boolean
+          removeItem:
+            type: boolean
+          removeAssignments:
+            type: boolean
+      editToken:
+        $ref: ./common.yaml#/schemas/FieldComparisonToken
+      driverName:
+        type: string
+        description: Visible name of the profile that offered this ride; stored title does not substitute for the driver identity.
+  DriversListView:
+    type: object
+    additionalProperties: false
+    required:
+      - entityType
+      - id
+      - title
+      - description
+      - headerUrl
+      - currentEventId
+      - currentEventUrl
+      - archived
+      - inheritedArchived
+      - capabilities
+      - counters
+      - items
+      - orderToken
+      - headerVersion
+    properties:
+      entityType:
+        type: string
+        const: drivers
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      title:
+        type: string
+      description:
+        type:
+          - string
+          - "null"
+      headerUrl:
+        type:
+          - string
+          - "null"
+      currentEventId:
+        $ref: ./common.yaml#/schemas/NullableUuid
+      currentEventUrl:
+        type:
+          - string
+          - "null"
+      archived:
+        type: boolean
+      inheritedArchived:
+        type: boolean
+      capabilities:
+        type: object
+        additionalProperties: false
+        required:
+          - editTitle
+          - editDescription
+          - selfAssign
+          - addItem
+          - reorder
+          - manageSettings
+        properties:
+          editTitle:
+            type: boolean
+          editDescription:
+            type: boolean
+          selfAssign:
+            type: boolean
+          addItem:
+            type: boolean
+          reorder:
+            type: boolean
+          manageSettings:
+            type: boolean
+      counters:
+        type: object
+        additionalProperties: false
+        required:
+          - participants
+          - open
+          - empty
+        properties:
+          participants:
+            type: integer
+            minimum: 0
+          open:
+            type: integer
+            minimum: 0
+          empty:
+            type: integer
+            minimum: 0
+      items:
+        type: array
+        items:
+          $ref: "#/schemas/DriversItemView"
+      orderToken:
+        type: string
+      headerVersion:
+        type:
+          - string
+          - "null"
+        description: Opaque image version; changes when the image is replaced without exposing its storage path.
+  DriversMetadata:
+    type: object
+    additionalProperties: false
+    required:
+      - entityType
+      - id
+      - values
+      - editableFields
+      - currentEventId
+      - archived
+      - inheritedArchived
+    properties:
+      entityType:
+        type: string
+        const: drivers
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      values:
+        type: object
+        additionalProperties: false
+        properties:
+          title:
+            type: string
+          description:
+            type:
+              - string
+              - "null"
+      editableFields:
+        type: array
+        uniqueItems: true
+        items:
+          type: string
+          enum:
+            - title
+            - description
+      currentEventId:
+        $ref: ./common.yaml#/schemas/NullableUuid
+      archived:
+        type: boolean
+      inheritedArchived:
+        type: boolean
+  DriversDescriptionValue:
+    $ref: ./packing.yaml#/schemas/PackingDescriptionValue
+  DriversMetadataPatch:
+    $ref: ./packing.yaml#/schemas/PackingMetadataPatch
+  DriversDescriptionPatch:
+    $ref: ./packing.yaml#/schemas/PackingDescriptionPatch
+  DriversDescriptionBaseline:
+    $ref: ./packing.yaml#/schemas/PackingDescriptionBaseline
+  DriversDefaultsBaseline:
+    $ref: ./packing.yaml#/schemas/PackingDefaultsBaseline
+  DriversAdminBaseline:
+    $ref: ./packing.yaml#/schemas/PackingAdminBaseline
+  DriversHeaderBaseline:
+    $ref: ./packing.yaml#/schemas/PackingHeaderBaseline
+  DriversAssignmentResult:
+    $ref: ./packing.yaml#/schemas/PackingAssignmentResult
+  PermissionDefaults:
+    $ref: ./packing.yaml#/schemas/PermissionDefaults
+  PermissionDefaultsPatch:
+    $ref: ./packing.yaml#/schemas/PermissionDefaultsPatch
+  PermissionDefinition:
+    $ref: ./packing.yaml#/schemas/PermissionDefinition
+  PermissionPreset:
+    $ref: ./packing.yaml#/schemas/PermissionPreset
+  DriversCreateContext:
+    $ref: ./packing.yaml#/schemas/PackingCreateContext
+  DriversNewItem:
+    type: object
+    additionalProperties: false
+    required:
+      - title
+      - description
+      - maxAssignees
+    properties:
+      title:
+        type: string
+        minLength: 1
+        maxLength: 255
+      description:
+        type:
+          - string
+          - "null"
+        maxLength: 65535
+      maxAssignees:
+        type: integer
+        minimum: 1
+        maximum: 2147483647
+  DriversCreateInput:
+    type: object
+    additionalProperties: false
+    required:
+      - title
+      - description
+      - eventId
+      - defaultPermissions
+    properties:
+      title:
+        type: string
+        minLength: 1
+        maxLength: 255
+      description:
+        type:
+          - string
+          - "null"
+        maxLength: 65535
+      eventId:
+        $ref: ./common.yaml#/schemas/NullableUuid
+      defaultPermissions:
+        $ref: "#/schemas/PermissionDefaults"
+  DriversCreated:
+    $ref: ./packing.yaml#/schemas/PackingCreated
+  MutationResult:
+    $ref: ./packing.yaml#/schemas/MutationResult
+  DriversItemPatch:
+    type: object
+    additionalProperties: false
+    required: []
+    properties:
+      title:
+        type: string
+        maxLength: 255
+      description:
+        type:
+          - string
+          - "null"
+        maxLength: 65535
+      maxAssignees:
+        description: Existing native inline edits carry a numeric value, the number control's raw string draft, or null. The existing signed
+          nullable integer column retains native rounding and rejects invalid/overflow values. New-item creation has its separate positive
+          integer policy.
+        anyOf:
+          - type: number
+          - type: string
+          - type: "null"
+    minProperties: 1
+  DriversItemEditBaseline:
+    description: Method-authorized edit baseline independent of detail-page admission. Values and hashes include only fields currently permitted
+      by the item's existing method policy.
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - values
+      - editableFields
+      - editToken
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      values:
+        type: object
+        additionalProperties: false
+        minProperties: 1
+        properties:
+          title:
+            type: string
+          description:
+            $ref: "#/schemas/DriversItemView/properties/description"
+          maxAssignees:
+            $ref: "#/schemas/DriversItemView/properties/maxAssignees"
+      editableFields:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          enum:
+            - title
+            - description
+            - maxAssignees
+      editToken:
+        $ref: "#/schemas/DriversItemView/properties/editToken"
+  DriversOrderEditBaseline:
+    $ref: ./packing.yaml#/schemas/PackingOrderEditBaseline
+  DriversItemOrder:
+    $ref: ./packing.yaml#/schemas/PackingItemOrder
+  DriversEventChange:
+    $ref: ./packing.yaml#/schemas/PackingEventChange
+  DriversEventChanged:
+    $ref: ./packing.yaml#/schemas/PackingEventChanged
+  DriversProfileOption:
+    $ref: ./packing.yaml#/schemas/PackingProfileOption
+  DriversProfileOptions:
+    $ref: ./packing.yaml#/schemas/PackingProfileOptions
+  DriversAdmin:
+    $ref: ./packing.yaml#/schemas/PackingAdmin
+  DriversAdminInput:
+    $ref: ./packing.yaml#/schemas/PackingAdminInput
+  DriversAdminPatch:
+    $ref: ./packing.yaml#/schemas/PackingAdminPatch
+  DriversCurrentEvent:
+    $ref: ./packing.yaml#/schemas/PackingCurrentEvent
+  DriversArchive:
+    $ref: ./packing.yaml#/schemas/PackingArchive
+  DriversAccess:
+    $ref: ./packing.yaml#/schemas/PackingAccess
+  DriversSettings:
+    $ref: ./packing.yaml#/schemas/PackingSettings
+  DriversHeaderUpload:
+    $ref: ./packing.yaml#/schemas/PackingHeaderUpload
+  DriversHeaderBinary:
+    $ref: ./packing.yaml#/schemas/PackingHeaderBinary
+  DriversCreateForm:
+    type: object
+    additionalProperties: false
+    required:
+      - data
+    properties:
+      data:
+        $ref: "#/schemas/DriversCreateInput"
+      image:
+        type: string
+        format: binary
+  DriversDuplicate:
+    type: object
+    additionalProperties: false
+    required:
+      - title
+      - description
+      - eventId
+      - defaultPermissions
+      - formContext
+    properties:
+      title:
+        type: string
+        maxLength: 255
+      description:
+        type:
+          - string
+          - "null"
+        maxLength: 65535
+      eventId:
+        $ref: ./common.yaml#/schemas/NullableUuid
+      defaultPermissions:
+        $ref: "#/schemas/PermissionDefaults"
+      formContext:
+        $ref: "#/schemas/DriversCreateContext"
+      selectedEvent:
+        description: Present only when eventId context was requested. Authorized initial URL selection, independently of the duplicated source's
+          parent event.
+        anyOf:
+          - $ref: ./common.yaml#/schemas/EventPickerOption
+          - type: "null"
+    description: Native Drivers duplication copies root metadata and audience defaults, without offered rides, assignments, image,
+      administrators, archive state or source event membership.
+  DriversEventOption:
+    $ref: ./common.yaml#/schemas/EventPickerOption
+  DriversEventOptions:
+    $ref: ./common.yaml#/schemas/EventPickerOptions
+paths:
+  /drivers-lists/create-entry:
+    get:
+      operationId: getDriversCreateEntry
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read the native account-only creation admission and public form context
+      security: []
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: returnTo
+          in: query
+          schema:
+            type: string
+            maxLength: 2048
+        - name: eventId
+          in: query
+          description: Optional contextual selection; the native selection owner omits rejected targets.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Server-owned page admission
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversCreateEntry
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/entry:
+    get:
+      operationId: getDriversResourceEntry
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read native detail or guest-entry admission without disclosing protected list data
+      security: []
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - name: view
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - detail
+              - guest
+      responses:
+        "200":
+          description: Server-owned page admission
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversResourceEntry
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/guest:
+    get:
+      operationId: getDriversGuestEntry
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: get Drivers Guest Entry
+      security: []
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+      responses:
+        "200":
+          description: Confirmed operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/GuestEntry
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+    post:
+      operationId: registerDriversGuest
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: register Drivers Guest
+      security: []
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/GuestRegistrationInput
+      responses:
+        "200":
+          description: Confirmed operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/IdentityResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}:
+    get:
+      operationId: getDriversList
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read an authorized drivers list
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+      responses:
+        "200":
+          description: Current authorized representation
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+            Content-Language:
+              schema:
+                type: string
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversListView
+        "304":
+          description: Authorized representation unchanged; no response body
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+    delete:
+      operationId: deleteDriversList
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: delete Drivers List
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/metadata:
+    get:
+      operationId: getDriversMetadata
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read only editable drivers metadata
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+      responses:
+        "200":
+          description: Current authorized representation
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+            Content-Language:
+              schema:
+                type: string
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversMetadata
+        "304":
+          description: Authorized representation unchanged; no response body
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+    patch:
+      operationId: updateDriversMetadata
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: metadata
+      summary: Update selected drivers metadata with an exact edit precondition
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/DriversMetadataPatch
+      responses:
+        "200":
+          description: Current authorized representation
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+            Content-Language:
+              schema:
+                type: string
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversMetadata
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/description:
+    get:
+      operationId: getDriversDescription
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read only the independently granted native description field
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+      responses:
+        "200":
+          description: Current independently authorized field baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversDescriptionBaseline
+        "304":
+          description: Authorized baseline unchanged; no response body
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+    patch:
+      operationId: updateDriversDescription
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: metadata
+      summary: Update only the independently granted native description field
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+      responses:
+        "200":
+          description: Updated description field baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversDescriptionBaseline
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/DriversDescriptionPatch
+  /drivers-lists/{listId}/items/{itemId}/self-assignment:
+    put:
+      operationId: assignDriversItem
+      x-surveyor-command:
+        retryPolicy: natural-idempotent
+        precondition: none
+      summary: Idempotently take a drivers item as the active profile
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/ItemId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Current authorized representation
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+            Content-Language:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversAssignmentResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+    delete:
+      operationId: unassignDriversItem
+      x-surveyor-command:
+        retryPolicy: natural-idempotent
+        precondition: none
+      summary: Remove the active profile's drivers commitment
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/ItemId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Current authorized representation
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+            Content-Language:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversAssignmentResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/create-context:
+    get:
+      operationId: getDriversCreateContext
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: get Drivers Create Context
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversCreateContext
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists:
+    post:
+      operationId: createDriversList
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: create Drivers List
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "201":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversCreated
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/DriversCreateForm
+            encoding:
+              data:
+                contentType: application/json
+  /drivers-lists/events:
+    get:
+      operationId: searchDriversEvents
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: search Drivers Events
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: q
+          in: query
+          required: false
+          schema:
+            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/q
+        - name: from
+          in: query
+          required: false
+          schema:
+            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/from
+        - name: to
+          in: query
+          required: false
+          schema:
+            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/to
+        - name: period
+          in: query
+          required: false
+          schema:
+            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/period
+        - name: archive
+          in: query
+          required: false
+          schema:
+            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/archive
+        - name: deadline
+          in: query
+          required: false
+          schema:
+            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/deadline
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/cursor
+        - name: selectedId
+          in: query
+          required: false
+          schema:
+            $ref: ./openapi.yaml#/components/schemas/EventPickerQuery/properties/selectedId
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/EventPickerOptions
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/duplicate:
+    get:
+      operationId: getDriversDuplicate
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: get Drivers Duplicate
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - name: eventId
+          in: query
+          description: Optional destination selection, independently authorized rather than copied from the source.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversDuplicate
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/settings:
+    get:
+      operationId: getDriversSettings
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: get Drivers Settings
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversSettings
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/items:
+    post:
+      operationId: createDriversItem
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: create Drivers Item
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "201":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversCreated
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/DriversNewItem
+  /drivers-lists/{listId}/items/{itemId}/edit-baseline:
+    get:
+      operationId: getDriversItemEditBaseline
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read permitted item edit values independently of detail-page admission
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/ItemId
+        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+      responses:
+        "200":
+          description: Current method-authorized item edit baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversItemEditBaseline
+        "304":
+          description: Authorized edit baseline unchanged; no response body
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/items/{itemId}:
+    patch:
+      operationId: updateDriversItem
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: item
+      summary: update Drivers Item
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/ItemId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/DriversItemPatch
+    delete:
+      operationId: deleteDriversItem
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: delete Drivers Item
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/ItemId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/item-order:
+    get:
+      operationId: getDriversItemOrderBaseline
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read permitted order values independently of detail-page admission
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+      responses:
+        "200":
+          description: Current method-authorized item order baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversOrderEditBaseline
+        "304":
+          description: Authorized order baseline unchanged; no response body
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+    put:
+      operationId: reorderDriversItems
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: order
+      summary: reorder Drivers Items
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/DriversItemOrder
+  /drivers-lists/{listId}/assignments/{assignmentId}:
+    delete:
+      operationId: deleteDriversAssignment
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: delete Drivers Assignment
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/AssignmentId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/event:
+    put:
+      operationId: changeDriversEvent
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: settings
+      summary: change Drivers Event
+      description: Current authorization is always required. An already selected event returns unchanged without writing, even with an absent or
+        stale comparison; an actual relationship change requires the reviewed If-Match and expectedEventId.
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/EventIfMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversEventChanged
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/DriversEventChange
+  /drivers-lists/{listId}/default-permissions:
+    get:
+      operationId: getDriversDefaultsBaseline
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read only granted audience masks for a reviewed defaults update
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+      responses:
+        "200":
+          description: Current independently authorized field baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversDefaultsBaseline
+        "304":
+          description: Authorized baseline unchanged; no response body
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+    put:
+      operationId: updateDriversDefaults
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: settings
+      summary: update Drivers Defaults
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/PermissionDefaultsPatch
+  /drivers-lists/{listId}/admins:
+    post:
+      operationId: addDriversAdmin
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: settings
+      summary: add Drivers Admin
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/DriversAdminInput
+  /drivers-lists/{listId}/admins/{profileId}/edit-baseline:
+    get:
+      operationId: getDriversAdminBaseline
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read only one granted administrator mask or new-grant marker
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/ProfileId
+        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+      responses:
+        "200":
+          description: Current independently authorized field baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversAdminBaseline
+        "304":
+          description: Authorized baseline unchanged; no response body
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/admins/{profileId}:
+    patch:
+      operationId: updateDriversAdmin
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: settings
+      summary: update Drivers Admin
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/ProfileId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/DriversAdminPatch
+    delete:
+      operationId: deleteDriversAdmin
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: settings
+      summary: delete Drivers Admin
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/ProfileId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/profiles:
+    get:
+      operationId: searchDriversProfiles
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: search Drivers Profiles
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/SearchQuery
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversProfileOptions
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/header/edit-baseline:
+    get:
+      operationId: getDriversHeaderBaseline
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read only the granted header comparison hash
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+      responses:
+        "200":
+          description: Current independently authorized field baseline
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversHeaderBaseline
+        "304":
+          description: Authorized baseline unchanged; no response body
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/header:
+    put:
+      operationId: uploadDriversHeader
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: settings
+      summary: upload Drivers Header
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/DriversHeaderUpload
+    delete:
+      operationId: deleteDriversHeader
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: settings
+      summary: delete Drivers Header
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+        - $ref: ./openapi.yaml#/components/parameters/IfMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+    get:
+      operationId: getDriversHeader
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read the authorized drivers header image
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+      responses:
+        "200":
+          description: Stored JPEG, PNG or GIF bytes; media policy is enforced by the file endpoint
+          content:
+            application/octet-stream:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/DriversHeaderBinary
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/archive:
+    post:
+      operationId: archiveDriversList
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: archive Drivers List
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /drivers-lists/{listId}/restore:
+    post:
+      operationId: restoreDriversList
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: restore Drivers List
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/ListId
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem

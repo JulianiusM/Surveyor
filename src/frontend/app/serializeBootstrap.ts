@@ -25,8 +25,11 @@ const bootstrapValidators = {
     guestEntry: validateGuest,
     packingError: validatePackingError,
     packingCreateContext: validatePackingCreate,
-    packingSelectedEvent: validatePackingSelectedEvent,
+    packingSelectedEvent: validateSelectedEvent,
     packingDuplicate: validatePackingDuplicate,
+    driversCreateContext: validateDriversCreate,
+    driversSelectedEvent: validateSelectedEvent,
+    driversDuplicate: validateDriversDuplicate,
     eventEntry: validateEventEntry,
     eventCreateContext: validateEventCreateContext,
     eventDuplicate: validateEventDuplicate,
@@ -141,7 +144,7 @@ async function validatePackingCreate(value: unknown): Promise<boolean> {
 
 /** Initial selection uses the same generated option contract as API discovery.
  * Null is a confirmed absence, including a rejected contextual URL selection. */
-async function validatePackingSelectedEvent(value: unknown): Promise<boolean> {
+async function validateSelectedEvent(value: unknown): Promise<boolean> {
     if (value === null) return true;
     const {validateEventPickerOption} = await import('../../../.generated/api/v1/browser/validateEventPickerOption.mjs');
     return validateEventPickerOption(value);
@@ -149,6 +152,16 @@ async function validatePackingSelectedEvent(value: unknown): Promise<boolean> {
 
 async function validatePackingDuplicate(value: unknown): Promise<boolean> {
     const {validatePackingDuplicate: validatePayload} = await import('../../../.generated/api/v1/browser/validatePackingDuplicate.mjs');
+    return validatePayload(value);
+}
+
+async function validateDriversCreate(value: unknown): Promise<boolean> {
+    const {validateDriversCreateContext} = await import('../../../.generated/api/v1/browser/validateDriversCreateContext.mjs');
+    return validateDriversCreateContext(value);
+}
+
+async function validateDriversDuplicate(value: unknown): Promise<boolean> {
+    const {validateDriversDuplicate: validatePayload} = await import('../../../.generated/api/v1/browser/validateDriversDuplicate.mjs');
     return validatePayload(value);
 }
 

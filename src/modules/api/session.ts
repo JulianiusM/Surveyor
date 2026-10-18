@@ -223,7 +223,7 @@ export function prepareIdentityReply(req: Request, staged: Request['session'],
  * postcommit SMTP work selects a finished immutable string without projecting again.
  */
 export function prepareGuestIdentityReplies(req: Request, staged: Request['session'], personalLink: string,
-    operation: 'registerPackingGuest' | 'registerEventGuest' = 'registerPackingGuest'):
+    operation: 'registerPackingGuest' | 'registerEventGuest' | 'registerDriversGuest' = 'registerPackingGuest'):
     Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {
     // Only the new guest/profile supplied by this transaction contributes data.
     // Neither the original actor nor a later session-store generation is a source.

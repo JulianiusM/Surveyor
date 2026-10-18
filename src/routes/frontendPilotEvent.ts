@@ -1,6 +1,6 @@
 import {Router} from 'express';
 import type {Request, Response} from 'express';
-import type {FrontendEventDocumentHooks} from '../types/FrontendEventDocumentTypes';
+import type {FrontendEntityDocumentHooks} from '../types/FrontendEntityDocumentTypes';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import {captureApiActor} from '../modules/api/session';
 import {renderFrontendPilot} from '../modules/frontendPilotRenderer';
@@ -11,7 +11,7 @@ import {readEventCreateEntry, readEventDuplicate, readEventResourceEntry} from '
  * commands use the generated JSON/multipart API; there is no second ordinary
  * browser POST creation path beside that captured command owner.
  */
-export function createEventPilotRouter(hooks: FrontendEventDocumentHooks): Router {
+export function createEventPilotRouter(hooks: FrontendEntityDocumentHooks): Router {
     const router = Router();
     router.get('/create', asyncHandler(renderCreation));
     router.get('/:eventId/duplicate', asyncHandler(renderDuplicate));

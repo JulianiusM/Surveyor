@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-16
+last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: R1 typed cleanup facts and reactive catalog completion source-reconciled in existing owners; P0-P2 creation/removal/navigation/draft guidance and native/backend boundaries retained; actual execution belongs to paired review; no publication
+verification-scope: P3 Drivers and Packing actual shared creation/read/reorder/metadata/passenger adoption source-reconciled; existing command/navigation/draft and native/backend boundaries retained; actual execution belongs to paired review; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -266,6 +266,18 @@ Event keeps schedule/capacity rules, registration and actual date drafts in thei
 commands and its browser-local checklist. Shared presentation neither constructs endpoints nor grants authority;
 matching current consumers adopt the shared owner together while feature differences remain explicit.
 
+#### Worked composition: Packing and Drivers
+
+`EntityListCreation` owns their matching admitted root form, file lifetime and creation command. Packing supplies
+its row controls and collector; Drivers supplies no initial rides. `BasicEntityMetadataFields` shares their basic
+title/description editor while the existing Packing field adapter retains its public feature contract.
+`useListDetail` shares scoped polling, stale-projection closure and fresh recovery; features select the denied-query
+families to retire. `useListReorder` captures one
+gesture's membership and comparison evidence. `EntityAssignees` and `EntityAssignmentActions` share names/removal
+and feature-supplied assignment/full wording. Each feature supplies its own operations, query families, grants and feedback.
+Drivers displays the offering profile as driver and counts only passenger assignments; Packing alone has Everyone
+and browser-local Packed? state. Shared controls never infer those feature rules.
+
 #### Backend and method-policy contracts
 
 The [controller/DBAL rules](#controllers-and-services) apply to every transport. Central method permission definitions
@@ -395,7 +407,7 @@ journey uses its full error presentation rather than an empty form. Confirmed re
 canonical destination; inline success on the old form is not equivalent. Pending/unknown states retain input and
 explicit review.
 
-Packing and Event use the same `features/identity/GuestEntryPage.vue` for the name/email draft, advisory existing-email
+Packing, Event and Drivers use the same `features/identity/GuestEntryPage.vue` for the name/email draft, advisory existing-email
 choice, confirmed identity completion and uncertain-delivery recovery. Each entry supplies its bounded title read,
 guest-registration operation, query key and exact destination. Event retains `regToken` through identity navigation;
 only a deliberate registration command spends that capability. `EntityEntryPage.vue` shares resource admission
@@ -405,9 +417,10 @@ Event creation and duplication follow the same ordinary SPA command/navigation c
 reads supply bounded creation/duplicate context without creating an Event; the deliberate generated multipart
 command uses existing native preprocessing, image assignment, creation and default-permission initialization in
 their existing order. Preserve raw optional capacity, audience masks, shared permission initialization and duplicate
-exclusions rather than inferring new rules from the transport. `useCreationCommand` in `src/frontend/composables/creation.ts` is adopted
-by both `PackingCreatePage.vue` and `EventCreatePage.vue`; it composes the existing command, feedback and
-confirmed-navigation owners while each feature owns its fields, native collection and File. Rejection or uncertainty
+exclusions rather than inferring new rules from the transport. `useCreationCommand` in `src/frontend/composables/creation.ts`
+is adopted by Event creation and the shared `EntityListCreation` used by Packing and Drivers. It composes the existing
+command, feedback and confirmed-navigation owners. Event owns its fields/File; the shared list form owns each
+mounted feature's root fields/File, and Packing retains its collection draft and collector. Rejection or uncertainty
 retains submitted values and the chosen File. Confirmation marks creation submitted, disables replay and retains the canonical destination through failed
 navigation. Feature fields and the chosen File release on accepted route/actor retirement or unmount, rather than
 being cleared while that confirmed form still awaits destination delivery. Existing multi-step creation can
@@ -698,7 +711,7 @@ validation and financial semantics outside generic form/inline/action components
 Bootstrap-compatible geometry and suitable Reka dialog/tab primitives remain the shared presentation strategy.
 
 Extract a settings composite only when repeated interaction shares its data, events and injected operations.
-`EntitySettingsDialog` owns Packing and Event's matching settings reads, independent panel/file drafts, close locks,
+`EntitySettingsDialog` owns Packing, Event and Drivers' matching settings reads, independent panel/file drafts, close locks,
 refresh and command composition. `EntityMetadataEditor` owns their shared original/local/current reconciliation and
 metadata command recovery; `EntityAccessEditor` owns audience/administrator drafts, discovery and reviewed commands.
 Features inject generated operations, query dependencies, normalization, field controls, authorization inputs and
@@ -709,13 +722,13 @@ normalization is shared by explicit field opt-in; it does not apply Event capaci
 Preserve independent drafts and layout; file size alone is not a module boundary or justification for a universal CRUD
 engine, forwarding controller or backend service. `EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions`
 remain explicit lower controls. Their settings, dialog, metadata and access contracts live in the corresponding
-`src/types/FrontendEntity*.d.ts` declarations. Packing alone supplies its optional event-association operations.
+`src/types/FrontendEntity*.d.ts` declarations. Packing and Drivers supply their optional event-association operations.
 
 `TimezonePicker` and `TimezoneOptions` share Event creation/property timezone selection, search, common zones, browser
 detection, aliases and offsets. Feature metadata normalization coordinates a changed zone with its displayed local
 deadline; an unrelated sparse save omits both fields and preserves the stored instant.
 
-`EntityHeader` is the displayed header used by Event detail and Packing; `EntityHeaderEditor` handles the separate
+`EntityHeader` is the displayed header used by Event, Packing and Drivers detail; `EntityHeaderEditor` handles the separate
 upload draft. Pass the admitted title/icon, parent URL, image read/version/exact query key and settings state to the
 displayed owner. It preserves the native 250px cover image, empty desktop parent track and mobile parent placement.
 Event's dashboard heading remains distinct. Its successful-read subscription includes equal-version responses;
@@ -763,7 +776,7 @@ established native key policy.
 Authorized images use the shared injected read/lifetime owner with cancellation, generation checks and object-URL
 cleanup. A missing optional image does not fail the resource. Equal successful reads can restore a failed image;
 access denial cannot be repaired by a retained URL or foreign-scope result.
-`app/transport.ts` shares bounded binary response validation through `headerImage`; Packing and Event APIs retain their
+`app/transport.ts` shares bounded binary response validation through `headerImage`; Packing, Event and Drivers APIs retain their
 generated operation selection. Its `requireComparison` also shares strong comparison-header checks without choosing
 feature field policy.
 

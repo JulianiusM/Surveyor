@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-16
+last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved catalog-completion R1 recorded separately from native-isolation R1; P0-P2, S1, T1, C1, E1 and D1 boundaries retained; original choices and superseded prose exception preserved; actual execution belongs to paired review; no later-phase or cutover authority
+verification-scope: explicit P3 Drivers trigger recorded after implemented-slice reviews; original P0-P2 decisions, S1 trigger requirement and native/backend exclusions retained; actual execution belongs to paired review; no P4-P11 or cutover authority
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -697,6 +697,14 @@ completion shape and translated presentation only. Persistence, mail, session or
 failures and uncertain outcomes retain their existing behavior; excluded backend remedies remain excluded.
 The existing [coverage map](TEST_COVERAGE.md) owns assertion selection and the [review](PILOT_PARITY_REVIEW.md) owns
 actual current execution and its limits. Approval itself supplies no passing result or later-phase/cutover authority.
+
+### Explicit P3 implementation trigger (2026-10-18)
+
+After the repeated implemented-slice reviews recorded in the paired review, the maintainer directly requests
+full P3 implementation and reiterates approval, visual/behavioral parity and modularization/DRY requirements.
+This supplies S1's future trigger for Drivers only. Its existing phase contract, native frontend isolation,
+shared backend owners and excluded backend remedies remain in force. It grants no P4–P11 implementation,
+default-route cutover, guide publication or native removal. The paired review owns actual implementation evidence.
 
 ## Cutover retirement inventory
 

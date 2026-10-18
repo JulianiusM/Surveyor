@@ -44,10 +44,10 @@ export async function readOverview(query: operations['getOverview']['parameters'
 export function projectOverviewCard(card: Entity, session: SessionLike, ownerCollection = false,
     sharedLifecycle = false): components['schemas']['OverviewCard'] {
     // Native child destinations remain ordinary links until their own migrations.
-    const migrated = card.type === 'packing' || card.type === 'event';
+    const migrated = card.type === 'packing' || card.type === 'event' || card.type === 'drivers';
     const ownerActions = (migrated || sharedLifecycle) && ownerCollection && isOwner(session, card.ownerId);
     const resource = encodeURIComponent(card.id);
-    const headerFamily = card.type === 'event' ? 'events' : 'packing-lists';
+    const headerFamily = card.type === 'event' ? 'events' : card.type === 'drivers' ? 'drivers-lists' : 'packing-lists';
     const eventContext = card.eventContext ? {...card.eventContext,
         url: card.eventContext.url.replace(/^\/event\//u, '/frontend-pilot/event/')} : null;
     return {id: card.id, type: card.type, title: card.title, description: card.description ?? null,

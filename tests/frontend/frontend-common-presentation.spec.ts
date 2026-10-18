@@ -127,12 +127,12 @@ describe('common frontend presentation', () => {
         const random = vi.spyOn(Math, 'random').mockReturnValue(0.99);
         const {wrapper, context} = await mounted(LandingPage, {}, {session: accountSession('guest'), initialUrl: '/frontend-pilot/help'});
         const link = wrapper.get('a.btn-outline-light');
-        expect(link.attributes('href')).toBe('/drivers/create');
+        expect(link.attributes('href')).toBe('/frontend-pilot/drivers/create');
         random.mockReturnValue(0);
         context.locale.value = 'de';
         await flushPromises();
         expect(wrapper.get('a.btn-outline-light').element).toBe(link.element);
-        expect(link.attributes('href')).toBe('/drivers/create');
+        expect(link.attributes('href')).toBe('/frontend-pilot/drivers/create');
         expect(link.text()).toBe('Neue Fahrgemeinschaftsliste starten');
         expect(context.pageTitle.value).toBe('Surveyor – Gruppenaktivitäten organisieren und koordinieren');
     });
@@ -162,7 +162,7 @@ describe('common frontend presentation', () => {
         const landing = await render('/frontend-pilot/home', {session: accountSession('account'), landing: {quickCreate: 'drivers'}});
         expect(landing.title).toBe('Surveyor – Organize and coordinate group activities');
         expect(landing.javascriptRequired).toBe(false);
-        expect(landing.html).toContain('href="/drivers/create"');
+        expect(landing.html).toContain('href="/frontend-pilot/drivers/create"');
         expect((await decodeBootstrap(JSON.parse(landing.state))).landing).toEqual({quickCreate: 'drivers'});
         await expect(decodeBootstrap({...JSON.parse(landing.state), landing: {quickCreate: ['packing']}}))
             .rejects.toThrow('Invalid pilot bootstrap field: landing');

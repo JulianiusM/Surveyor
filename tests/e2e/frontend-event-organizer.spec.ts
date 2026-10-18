@@ -488,15 +488,16 @@ for (const width of [1280, 390]) {
             if (pilot) await create.getByRole('button', {name: 'Close', exact: true}).click();
             else await closeModalForE2E(nativeCreate);
 
-            // Administration keeps owner row actions and real native destinations
-            // for the two child feature families awaiting their migration phases.
+            // Administration retains native destinations for its comparator and
+            // uses the accepted Drivers route in the migrated document.
             const drivers = page.getByRole('button', {name: /Event drivers lists/u});
             await drivers.click();
             const driver = children.find(child => child.path.startsWith('/drivers/'))!;
-            const driverLink = page.locator(`a[href="${driver.path}"]`);
+            const driverPath = `${pilot ? '/frontend-pilot' : ''}${driver.path}`;
+            const driverLink = page.locator(`a[href="${driverPath}"]`);
             await expect(driverLink).toBeVisible();
             await expect(driverLink).toContainText(driver.title);
-            await expect(page.locator(`a[href="${driver.path}/duplicate"]`)).toBeVisible();
+            await expect(page.locator(`a[href="${driverPath}/duplicate"]`)).toBeVisible();
 
             await page.goto(`${pilot ? '/frontend-pilot' : ''}/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
             if (pilot) await waitForPilotHydration(page);

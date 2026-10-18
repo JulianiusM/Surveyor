@@ -1,6 +1,7 @@
 import {Router, type Request, type Response} from 'express';
 import * as userController from '../../../controller/userController';
 import {readPackingGuestEntry} from '../../../controller/packingController';
+import {readDriversGuestEntry} from '../../../controller/driversController';
 import {readEventGuestEntry} from '../../../controller/eventController';
 import {ApiProblem} from '../../../modules/api/problem';
 import {committedSessionView, prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, requireApiContext} from '../../../modules/api/session';
@@ -279,6 +280,18 @@ router.post('/packing-lists/:listId/guest', asyncHandler(async function register
 
 }));
 
+router.get('/drivers-lists/:listId/guest', asyncHandler(async function getDriversGuestEntry(req, res) {
+    await admit(req, res, 'getDriversGuestEntry');
+    sendValidatedJson(req, res, 'getDriversGuestEntry', 200, await readDriversGuestEntry(String(req.params.listId)));
+}));
+
+router.post('/drivers-lists/:listId/guest', asyncHandler(async function registerDriversGuest(req, res) {
+    await admit(req, res, 'registerDriversGuest');
+    const list = await readDriversGuestEntry(String(req.params.listId));
+    await registerGuestForEntry(req, res, `/frontend-pilot/drivers/${list.id}`, 'registerDriversGuest');
+
+}));
+
 router.get('/events/:eventId/guest', asyncHandler(async function getEventGuestEntry(req, res) {
     await admit(req, res, 'getEventGuestEntry');
     sendValidatedJson(req, res, 'getEventGuestEntry', 200, await readEventGuestEntry(String(req.params.eventId)));
@@ -299,7 +312,7 @@ router.post('/events/:eventId/guest', asyncHandler(async function registerEventG
  * this owner prepares delivery outcomes and adopts only the committed Session.
  */
 async function registerGuestForEntry(req: Request, res: Response, next: string,
-    operation: 'registerPackingGuest' | 'registerEventGuest'): Promise<void> {
+    operation: 'registerPackingGuest' | 'registerEventGuest' | 'registerDriversGuest'): Promise<void> {
     const body = req.body as components['schemas']['GuestRegistrationInput'];
     /** Prepare both SMTP outcomes before identity/session persistence commits. */
     function prepareGuestReply(staged: Request['session'], personalLink: string): Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {

@@ -56,6 +56,32 @@ export const packingKeys = {
         [...packingKeys.eventFilters(context, locale, filters), parameters] as const,
 };
 
+/** Drivers keeps ride data and editor authority scoped to its actual actor/list.
+ * Like Packing, user-authored values do not acquire a second cache on locale changes. */
+export const driversKeys = {
+    all: (context: string | null | undefined) => ['v1', context, 'drivers'] as const,
+    resource: (context: string | null | undefined, id: string) => [...driversKeys.all(context), id] as const,
+    detailFamily: (context: string | null | undefined, id: string) => [...driversKeys.resource(context, id), 'detail'] as const,
+    detail: (context: string | null | undefined, id: string) => driversKeys.detailFamily(context, id),
+    entry: (context: string | null | undefined, id: string, intent: 'guest' | 'detail') =>
+        [...driversKeys.resource(context, id), 'entry', intent] as const,
+    editors: (context: string | null | undefined, id: string) => [...driversKeys.resource(context, id), 'editors'] as const,
+    metadata: (context: string | null | undefined, id: string) => [...driversKeys.editors(context, id), 'metadata'] as const,
+    settings: (context: string | null | undefined, id: string) => [...driversKeys.editors(context, id), 'settings'] as const,
+    profilesFamily: (context: string | null | undefined, id: string) => [...driversKeys.editors(context, id), 'profiles'] as const,
+    profiles: (context: string | null | undefined, id: string, search: string) => [...driversKeys.profilesFamily(context, id), {search}] as const,
+    creation: (context: string | null | undefined, eventId?: string) =>
+        [...driversKeys.all(context), 'create-context', ...(eventId ? [{eventId}] : [])] as const,
+    duplicate: (context: string | null | undefined, id: string | null, eventId?: string) =>
+        [...driversKeys.all(context), id, 'duplicate', ...(eventId ? [{eventId}] : [])] as const,
+    guest: (context: string | null | undefined, id: string) => [...driversKeys.resource(context, id), 'guest'] as const,
+    events: (context: string | null | undefined) => [...driversKeys.all(context), 'events'] as const,
+    eventFilters: (context: string | null | undefined, _locale: string, filters: string) =>
+        [...driversKeys.events(context), {filters}] as const,
+    eventPage: (context: string | null | undefined, locale: string, filters: string, parameters: unknown) =>
+        [...driversKeys.eventFilters(context, locale, filters), parameters] as const,
+};
+
 /** Overview owns the mixed-feature projection, rather than placing five entity types in packing. */
 export const overviewKeys = {
     all: (context: string | null | undefined) => ['v1', context, 'overview'] as const,

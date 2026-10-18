@@ -48,13 +48,14 @@ onBeforeUnmount(() => {
 // enhanced delivery. The pilot URL adapter moves article paths into a doc query.
 const nativeHelpTarget = computed(() => resolveContextualHelpUrl(route.path));
 const helpRoute = computed(() => pilotHelpUrl(nativeHelpTarget.value, locale.value));
-// Native navigation highlights its first route-matching nav-link. On Packing pages
-// that match is contextual Help. Article paths can contain the same route fragment,
-// but activation also requires a matching Help target. Normalize only the pilot prefix
-// and retain native Survey-before-Packing order without changing other nav entries.
-const packingHelpActive = computed(function nativePackingHelpActivation() {
+// Native navigation highlights the first route-matching nav-link, contextual Help
+// on Packing and Drivers pages. Preserve its family precedence when a Help article
+// path also contains a feature name; Event has no corresponding native branch.
+const contextualHelpActive = computed(function nativeHelpActivation() {
     const nativePath = route.path.replace(/^\/frontend-pilot(?=\/|$)/u, '');
-    return !nativePath.includes('/survey') && nativePath.includes('/packing') && nativeHelpTarget.value.includes('/packing');
+    if (nativePath.includes('/survey')) return false;
+    if (nativePath.includes('/packing')) return nativeHelpTarget.value.includes('/packing');
+    return !nativePath.includes('/activity') && nativePath.includes('/drivers') && nativeHelpTarget.value.includes('/drivers');
 });
 // Native header links prefer an explicit return destination, otherwise their current page.
 // Apply the existing pilot return boundary before using either value in forms or navigation.
@@ -212,9 +213,9 @@ async function retryCompletion(): Promise<void> {
                                 >
                             </li>
                             <li>
-                                <a class="dropdown-item" href="/drivers/create"
+                                <RouterLink class="dropdown-item" to="/frontend-pilot/drivers/create"
                                     ><i class="bi bi-car-front me-2" aria-hidden="true"></i
-                                    >{{ messages.t('app.drivers') }}</a
+                                    >{{ messages.t('app.drivers') }}</RouterLink
                                 >
                             </li>
                         </AppNavigationDropdown>
@@ -229,7 +230,7 @@ async function retryCompletion(): Promise<void> {
                         <li class="nav-item">
                             <RouterLink
                                 class="nav-link"
-                                :class="{active: packingHelpActive}"
+                                :class="{active: contextualHelpActive}"
                                 :to="helpRoute"
                                 :aria-label="messages.t('app.helpForPage')"
                                 :title="messages.t('app.openHelpForPage')"

@@ -4,9 +4,9 @@ documentation-metadata
 audience: frontend migration implementers; reviewers; test maintainers
 owner: project maintainers
 status: migration-pending
-last-verified: 2026-10-16
+last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: concrete P0-P2 actor/state/assertion matrix and approved differences/exclusions added to existing source map; R1 typed-notice and complete profile/body/Overview assertions tracked; actual current execution and failures remain in paired review
+verification-scope: P3 Drivers behavior and shared-consumer source-to-assertion matrix extends retained P0-P2 evidence; native differences and backend exclusions preserved; actual current execution and failures remain in paired review
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -85,6 +85,24 @@ exclusion or certifies states beyond its declared assertions.
 The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments) retains original choices
 and dated approvals; [DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md) owns durable technology and future-target
 decisions. Newly discovered current-slice gaps remain current work unless the maintainer explicitly changes scope.
+
+## P3 Drivers source-to-implementation assertions (2026-10-18)
+
+The [explicit P3 trigger](FRONTEND_FOUNDATION_DESIGN.md#explicit-p3-implementation-trigger-2026-10-18) authorizes
+Drivers only. These source mappings extend the earlier P0–P2 matrix without changing its historical receipts.
+Actual current execution and remaining environment limits belong to the paired review.
+
+| Contract | Implementation and assertions |
+|---|---|
+| DRV-01, ENT-07/10: create/duplicate/offer | Existing `driversController` and generated Drivers multipart contracts; `DriversCreatePage` and Packing adopt `EntityListCreation`. [Built workflows](../../tests/e2e/frontend-pilot-drivers.spec.ts) assert same-document multipart creation, shared settings and empty duplicate rides; [ORM tests](../../tests/integration/drivers-v1-api.spec.ts) preserve metadata/default copies and exclude rides, assignments, image, event and lifecycle. |
+| DRV-02/04: passengers and counters | Existing membership/capacity owner, `EntityAssignees` and `EntityAssignmentActions`. ORM assertions distinguish offering profile from passenger places, allow several offers/memberships, deduplicate participant counts, preserve idempotency and race the final passenger place. Built workflows assert visible and persisted assignment/removal. |
+| DRV-03, ENT-06: inline edits/order/removals | Drivers method policy is adopted by native/v1 callers; `InlineCell` and `useListReorder` retain captured comparisons. ORM assertions reject stale fields/order, foreign roots and revoked methods; capacity reduction preserves existing passengers. Built commands exercise editing, drag, ride deletion and organizer passenger removal. |
+| ENT-01–03/05/07–10: settings/context/lifecycle | Existing shared header/settings/metadata/access/image/event/lifecycle owners and controller/DBAL operations. ORM assertions separate page and method admission, private parent links, sparse properties/defaults, selected administrator add/zero/remove, header-write privacy/current comparisons, event changes, archive/restore and owner deletion. Existing [archival integration](../../tests/integration/entity-archival.spec.ts) retains Drivers personal-visibility coverage. Built HTTP assertions exercise image replacement/stale rejection/deletion. No timezone, automatic schedule, Packed? or Everyone capability is added to Drivers. |
+| GST-01–03, EC-UI-01–05/08/10: entry and draft/command lifetime | `DriversEntry` adopts `EntityEntryPage` and `identity/GuestEntryPage`; matching lists adopt `useListDetail`. The built anonymous guest handoff exercises the Drivers operation; existing shared identity tests protect recovery/existing-email behavior. [Mounted tests](../../tests/frontend/frontend-drivers.spec.ts) protect default-empty and entered Quick Add uncertainty, pending no-replay, confirmed-save/failed-read release, exact File retention and canceled/accepted warm navigation. |
+| Visual/behavioral comparator | Built tests compare native and Vue complete creation forms, five-column ride table, passenger controls, counters, Quick Add and focused states at 1280px and 390px. They assert text, values, constraints, styles, geometry and browser errors, rather than treating captures as acceptance. |
+
+Native Drivers source remains the development comparator. IMP-026–028 are inherited/excluded backend defects;
+no production native/Vue coordination repair or stronger legacy capacity/participation guarantee follows from P3.
 
 ## Pilot baseline-to-implementation assertions
 

@@ -35,7 +35,7 @@ export interface EntitySettingsDialogProps {
     resourceTitle?: string;
     metadataAvailable?: boolean;
     metadataComponent: Component;
-    metadataProps: Record<string, string | undefined>;
+    metadataProps: Record<string, unknown>;
     operations: EntitySettingsOperations;
     settingsKey: readonly unknown[];
     profileKey: (query: string) => readonly unknown[];

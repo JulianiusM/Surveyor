@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-16
+last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented P2 Event dynamic reload scope reconciled with the existing subsequent-route provision; retained refresh/draft boundaries and anonymous context distinction; no new concurrency guarantee
+verification-scope: implemented P3 Drivers dynamic detail and shared list read/reorder ownership reconciled with existing subsequent-route provision; retained refresh/draft boundaries and anonymous context distinction; no new concurrency guarantee
 source-anchors: src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/event/; src/frontend/features/overview/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
 next-review: next-refresh-migration-or-authorized-cutover
 -->
@@ -206,7 +206,9 @@ fragments and pending drafts. Optional images inject feature operations and own 
 
 D5 ordinary session refresh detects binary-folder replacement. The explicit 2026-10-15 amendment limits automatic
 full-document reload to eligible dynamic route/content. Its initial Overview and Packing detail scope now also
-includes P2 Event detail/administration under the approved subsequent-dynamic-route provision (2026-10-16).
+includes P2 Event detail/administration (2026-10-16) and P3 Drivers detail (2026-10-18) under the approved
+subsequent-dynamic-route provision. Packing and Drivers share `useListDetail` for scoped reads/recovery and
+`useListReorder` for the captured gesture; their feature operations and private drafts remain independent.
 Creation, duplication, user-management, Help and static admitted error/completion content are excluded even when
 untouched. Compatible
 loaded edits may finish; eligible reloads still require clean state, no pending/unknown command and working loop

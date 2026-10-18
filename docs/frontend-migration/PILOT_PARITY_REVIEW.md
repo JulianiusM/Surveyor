@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved P0-P2 readiness and R1 plus two runtime parity corrections verified through supported build/compiler/client/ORM/unit, two complete built selections and applicable alternate mode; actual current visual/source/guide reviews retained with failed-attempt limits; no later-phase/cutover authority
+verification-scope: explicit P3 Drivers implementation, actual shared-consumer/source/approval review and scoped build/compiler/database-free/ORM/browser evidence recorded; prior P0-P2 receipts and failed-attempt limits retained; no P4-P11 or cutover authority
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -18,6 +18,73 @@ and dated amendments. This record owns current findings, latest relevant evidenc
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
 
+## P3 Drivers implementation and scoped verification (2026-10-18)
+
+The maintainer's direct request to fully implement P3 supplies the
+[recorded future trigger](FRONTEND_FOUNDATION_DESIGN.md#explicit-p3-implementation-trigger-2026-10-18).
+Drivers now has authored/generated contracts, initial and warm admission, create/duplicate, guest entry, detail,
+settings, ride offer/edit/order/delete, passenger assignment/removal and organizer removal. Overview, shell creation
+and Event children adopt its migrated routes and authorized image owner. The [P3 matrix](TEST_COVERAGE.md#p3-drivers-source-to-implementation-assertions-2026-10-18)
+maps DRV-01–04 and applicable ENT/GST/edge contracts to actual source and assertions.
+
+Drivers retains profile-derived driver names, separate passenger places and multiple offers/memberships per profile.
+Creation/duplication contains no rides; participant counters count assigned profiles, not all offering drivers.
+It adds no Packed? or Everyone behavior. Existing controller/native callers share method policy, sparse writes,
+membership/capacity and counters; DBAL remains persistence. Versioned baselines filter values and field hashes by
+actual method authority, and new command responses are validated/serialized before their transaction commits.
+IMP-026–028 remain inherited/excluded defects. Native frontend sources and frozen production guides are unchanged;
+development comparison is not a production coexistence guarantee or cutover approval.
+
+Matching Packing/Drivers consumers now adopt `EntityListCreation`, `BasicEntityMetadataFields`, `useListDetail`,
+`useListReorder`, `EntityAssignees` and `EntityAssignmentActions`. Drivers also adopts the established entry/guest,
+header, settings, metadata/access, event-picker, lifecycle, command and navigation owners. The command owner exposes
+its existing manual-review state without a second state store; a default-empty uncertain offer remains reviewable.
+The integration declaration for initial entity documents is shared by Event and Drivers.
+
+Root source review and independent `/root/drivers_ui` and `/root/drivers_backend` reviews checked actual adoption,
+original approval provenance, private projections, native ordering/errors/grants, lifecycle/read/draft boundaries,
+DRY and readability. They found and corrected hidden-title comparison hashes, receipt-preparation timing, a copied
+image-label space, feature destination construction, an added drag-target guard that changed Packing's stale-order
+feedback, and mobile capacity-heading wrapping. No new policy/design exception or backend-remedy authorization
+was inferred. A delegated test-file ownership overlap was reported immediately and reconciled by its assigned test
+owner, preserving the independent uncertainty/File cases and shared-consumer assertions.
+
+Current executed evidence:
+
+- `npm run build` passes, including server, native browser, Vue/client and SSR scopes. The final schema/catalog
+  generation passes; `npm run typecheck:tests --ignore-scripts` passes after current generated inputs.
+- `npm run test:quick` passes 74 files / 1,622 tests. The focused mounted Drivers selection passes nine tests,
+  including manual review for a default-empty offer, no replay, confirmed-save/failed-read input release,
+  retained File bytes and canceled/accepted warm route changes.
+- The focused Drivers ORM selection passes 14 cases on task-isolated MariaDB 10.11.14 with strict SQL mode and
+  literal-schema grants only for its disposable integration/E2E schemas. It includes final-place contention,
+  independent method/private-token projection, preparation-failure rollback, sparse defaults, selected administrator
+  add/zero/removal and header-write/read separation. No database schema or migration changed.
+  The final native/v1 regression passes 41 tests across Drivers v1, existing Drivers workflows and controller smoke
+  integration suites, with real ORM metadata and normal disposable-schema preparation.
+- The strict 1280px and 390px native/Vue comparisons pass for complete creation forms, tables, passenger controls,
+  counters, Quick Add and focused states. Actual multipart creation/copy, header replacement/stale rejection/deletion,
+  ride commands, guest identity completion and Event/Overview SPA journeys pass in their focused built runs.
+  The final combined built selection passes all 45 tests across `frontend-pilot-drivers`, `frontend-pilot`,
+  `frontend-event-organizer` and `frontend-entity-header`, using the normal prepared E2E initializer and two workers.
+  Two additional parity cases pass after correcting the supplemental focused screenshot to capture the fixed
+  scrolling viewport; table measurements/focus/style assertions remain unchanged. Root inspected the native/Vue
+  desktop/mobile originals. The creation, ordinary table and counter pairs have identical PNG bytes at both sizes;
+  screenshots supplement the explicit assertions rather than create a blanket pixel-equality requirement.
+- `npm run check:development` reports zero findings across the complete task worktree; `git diff --check` passes.
+  The documentation boundary reports zero frozen-guide/amendment findings. Live and assembled advisory reports
+  find no broken links, missing paths/scripts, metadata or classification errors; the existing source-fingerprint
+  mismatch remains visible without rebaselining or creating a delivery gate.
+
+The first generation attempt exposed a missing authored guest-operation reference; it was corrected and generation
+rerun. Early new tests exposed malformed comparison-token fixtures and incorrect guest/context expectations; their
+exact fixtures/journeys were corrected. The first mobile run exposed a real 48.67px table-width difference caused
+by wrapping the native nonbreaking capacity heading; Vue now preserves one line, with unchanged strict comparisons.
+Those failed attempts are not passing receipts. Ignored `artifacts/p3/` holds current run logs and database evidence.
+Node is the available local 24.13.0, below the repository's 24.15.0 baseline. English Chromium desktop/mobile and
+the exercised actor/state matrix do not certify every locale, browser or accessibility combination. This receipt
+does not start P4–P11, publish guides, deploy or remove the native frontend.
+
 ## Current acceptance and correction boundary (2026-10-16)
 
 P0–P2 provide the opt-in Help/Packing, identity/profile, Overview/common presentation and Event implementation.
@@ -25,8 +92,9 @@ The whole-application vision remains the [existing phase contracts](FRONTEND_FUL
 native finance/unmigrated child destinations and separate default-route, publication and retirement decisions.
 No task-owned P2 feature may be reclassified as future work to avoid its acceptance criteria.
 The maintainer's direct [S1 resolution](FRONTEND_FOUNDATION_DESIGN.md#authorized-implemented-pilot-scope-2026-10-16)
-limits this delivery through implemented P2. Later phases begin only after stable repeated reviews of that slice and
-an explicit future maintainer trigger; their scope is no longer an unanswered question or implicit continuation.
+limited that delivery through implemented P2. Later phases required stable repeated reviews of that slice and
+an explicit future maintainer trigger; the [October 18 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p3-implementation-trigger-2026-10-18)
+subsequently starts P3 only. Their scope was not an unanswered question or implicit continuation.
 
 The preceding review completed the ordinary SPA correction with its scoped P0–P2 evidence and the limits below.
 The current readiness review additionally found English/nonreactive identity completion notices and incomplete

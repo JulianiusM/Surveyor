@@ -17,6 +17,8 @@
 import express, {Request, Response} from 'express';
 
 import controller from "../../controller/driversController";
+import {driversMethodPermission} from '../../controller/driversController';
+import type {DriversMethod} from '../../types/DriversTypes';
 import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPropertyApiRouter} from "../../middleware/adminApiFactory";
 import {attachAssignRoutes} from '../../middleware/assignFlowFactory';
 import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
@@ -53,6 +55,20 @@ const permFctItems = getPermFctItems(resFct, resFctItems, entityName, entityItem
 const permFctAssign = getPermFctAssign(resFct, resFctAssign, entityName, entityItemName);
 const itemPermFct: ItemGetter = getItemFromEntityPermFct(driverService.getDriversItems, resFct, entityItemName);
 
+/** Translate the existing controller method rule into native route admission. */
+function requireDriversPermission(method: DriversMethod) {
+    return requirePermissionApi(permFct, PERM[driversMethodPermission(method).permission]);
+}
+
+/** Item and assignment routes retain their current parent fallbacks through
+ * the same declaration used by versioned commands and visible capabilities. */
+function requireDriversItemPermission(method: DriversMethod, assignment = false) {
+    const rule = driversMethodPermission(method);
+    const parent = Array.isArray(rule.parent) ? rule.parent.map(key => PERM[key])
+        : rule.parent ? PERM[rule.parent] : undefined;
+    return requireItemPermissionApi(assignment ? permFctAssign : permFctItems, PERM[rule.permission], parent);
+}
+
 apiParamHandler('id', app, driverService.getDriversListById, entityName);
 apiParamHandler('itemId', app, driverService.getDriversItemById, entityItemName);
 apiParamHandler('assignId', app, driverService.getDriversAssignmentById, assignName);
@@ -64,7 +80,7 @@ createEntityAdminApiRouter(app, entityName, permFct)
 createEntityArchiveApiRouter(app, entityName, resFct);
 createEntityPropertyApiRouter(app, entityName, resFct, controller.updateProperties);
 
-app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), async (req: Request, res: Response) => {
+app.post('/:id/description', requireDriversPermission('editDescription'), async (req: Request, res: Response) => {
     const msg = await controller.updateDescription(resFct(req).id, req.body, resFct(req).eventId ?? null);
     renderer.respondWithSuccessJson(res, msg);
 })
@@ -73,7 +89,7 @@ app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), asyn
 /* ───────────────── ASSIGN / UNASSIGN (JSON) ───────────────── */
 
 attachAssignRoutes(app, controller.getAssignmentAccessMapping(), {
-    middleware: [requirePermissionApi(permFct, PERM.ACCESS_VIEW)],
+    middleware: [requireDriversPermission('selfAssignment')],
     resolveItemEntityId: async (itemId) => (await driverService.getDriversItemById(itemId))?.entityId,
 });
 createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg, controller.deleteHeaderImg);
@@ -81,41 +97,41 @@ createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg,
 /* ───────────────── REORDER (Owner) ────────────────────────── */
 
 /* ----------- REORDER (nur Owner, JSON-Antwort) ---------------- */
-app.post('/:id/reorder', requirePermissionApi(permFct, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/reorder', requireDriversPermission('reorderItems'), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.reorderItems(resFct(req).id, req.body.orders);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ───────────────── QUICK-ADD ──────────────────────────────── */
 
-app.post('/:id/items', requirePermissionApi(permFct, PERM.ITEM_ADD), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/items', requireDriversPermission('addItem'), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.quickAddItem(resFct(req), req.body, req.session);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/item/:itemId/description', requireItemPermissionApi(permFctItems, PERM.EDIT_DESC, [PERM.ITEM_EDIT, PERM.ITEM_EDIT_DESC]), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/item/:itemId/description', requireDriversItemPermission('editItemDescription'), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateItemDescription(req.params.itemId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* ---------- PATCH einzelnes Attribut -------------------------------- */
-app.post('/:id/item/:itemId/attr', requireItemPermissionApi(permFctItems, PERM.EDIT_META, PERM.ITEM_EDIT), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/item/:itemId/attr', requireDriversItemPermission('editItemAttr'), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateItemAttr(req.params.itemId as string, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/assignment/:assignId/delete', requireItemPermissionApi(permFctAssign, PERM.MANAGE_ASSIGNMENTS), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/assignment/:assignId/delete', requireDriversItemPermission('deleteAssignment', true), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.deleteAssignment(Number(req.params.assignId));
     renderer.respondWithSuccessJson(res, msg);
 }));
 
 /* Owner-Settings ändern (AJAX) -------------------------------------- */
-app.post('/:id/settings', requirePermissionApi(permFct, PERM.MANAGE_PERMISSIONS), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/settings', requireDriversPermission('managePermissions'), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.updateSettings(resFct(req).id, req.body);
     renderer.respondWithSuccessJson(res, msg);
 }));
 
-app.post('/:id/item/:itemId/delete', requireItemPermissionApi(permFctItems, PERM.ITEM_DELETE, PERM.ITEM_DELETE), asyncHandler(async (req: Request, res: Response) => {
+app.post('/:id/item/:itemId/delete', requireDriversItemPermission('deleteItem'), asyncHandler(async (req: Request, res: Response) => {
     const msg = await controller.deleteItem(req.params.itemId as string);
     renderer.respondWithSuccessJson(res, msg);
 }));

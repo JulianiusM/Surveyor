@@ -22,6 +22,7 @@ import type {PackingList} from '../modules/database/entities/packing/PackingList
 import {readPackingCreateEntry, readPackingDuplicate, readPackingResourceEntry} from '../controller/packingController';
 import {resolvePilotHelpQuery} from '../modules/lib/helpNavigation';
 import {createEventPilotRouter} from './frontendPilotEvent';
+import {createDriversPilotRouter} from './frontendPilotDrivers';
 
 const router = Router();
 
@@ -186,6 +187,7 @@ router.get('/message', asyncHandler(async function renderMessagePilot(req, res) 
 // Event documents reuse this router's Session, shell and one-time notice owners.
 // Their controller projections and initial GET compatibility stay feature-owned.
 router.use('/event', createEventPilotRouter({bootstrap, applyPageEntry}));
+router.use('/drivers', createDriversPilotRouter({bootstrap, applyPageEntry}));
 
 /** Preserve native account/guest admission before sending administration's progressive shell. */
 router.get(['/users/profile', '/users/profile/manage', '/users/profile/create'],

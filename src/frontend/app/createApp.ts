@@ -23,6 +23,8 @@ const ProfileWorkflowPage = () => import('../features/identity/ProfileWorkflowPa
 const LandingPage = () => import('../features/common/LandingPage.vue');
 const EventEntry = () => import('../features/event/EventEntry.vue');
 const EventCreatePage = () => import('../features/event/EventCreatePage.vue');
+const DriversEntry = () => import('../features/drivers/DriversEntry.vue');
+const DriversCreatePage = () => import('../features/drivers/DriversCreatePage.vue');
 
 // One route declaration drives the initial skeleton for every interactive page.
 // Readable admitted errors/completions are classified by the shared context owner.
@@ -74,6 +76,10 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             {path: '/frontend-pilot/event/:eventId/guest', component: EventEntry, meta: javascriptPage},
             {path: '/frontend-pilot/event/:eventId/admin', component: EventEntry, meta: {...javascriptPage, dynamicContent: true}},
             {path: '/frontend-pilot/event/:eventId', component: EventEntry, meta: {...javascriptPage, dynamicContent: true}},
+            {path: '/frontend-pilot/drivers/create', component: DriversCreatePage, meta: javascriptPage},
+            {path: '/frontend-pilot/drivers/:listId/duplicate', component: DriversCreatePage, meta: javascriptPage},
+            {path: '/frontend-pilot/drivers/:listId/guest', component: DriversEntry, meta: javascriptPage},
+            {path: '/frontend-pilot/drivers/:listId', component: DriversEntry, meta: {...javascriptPage, dynamicContent: true}},
             {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'login'}},
             {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...javascriptPage, identityMode: 'register'}},
             {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'oidc'}},

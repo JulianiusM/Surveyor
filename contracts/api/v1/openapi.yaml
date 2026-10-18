@@ -4,7 +4,7 @@ jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Surveyor API
   version: 1.0.0
-  description: Versioned frontend API for Help, Packing, Events, overview and identity. Existing feature routes remain available.
+  description: Versioned frontend API for Help, Packing, Drivers, Events, overview and identity. Existing feature routes remain available.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -13,6 +13,60 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /drivers-lists/create-entry:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1create-entry
+  /drivers-lists/{listId}/entry:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1entry
+  /drivers-lists/{listId}/guest:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1guest
+  /drivers-lists/{listId}:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}
+  /drivers-lists/{listId}/metadata:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1metadata
+  /drivers-lists/{listId}/description:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1description
+  /drivers-lists/{listId}/items/{itemId}/self-assignment:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1items~1{itemId}~1self-assignment
+  /drivers-lists/create-context:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1create-context
+  /drivers-lists:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists
+  /drivers-lists/events:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1events
+  /drivers-lists/{listId}/duplicate:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1duplicate
+  /drivers-lists/{listId}/settings:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1settings
+  /drivers-lists/{listId}/items:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1items
+  /drivers-lists/{listId}/items/{itemId}/edit-baseline:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1items~1{itemId}~1edit-baseline
+  /drivers-lists/{listId}/items/{itemId}:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1items~1{itemId}
+  /drivers-lists/{listId}/item-order:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1item-order
+  /drivers-lists/{listId}/assignments/{assignmentId}:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1assignments~1{assignmentId}
+  /drivers-lists/{listId}/event:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1event
+  /drivers-lists/{listId}/default-permissions:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1default-permissions
+  /drivers-lists/{listId}/admins:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1admins
+  /drivers-lists/{listId}/admins/{profileId}/edit-baseline:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1admins~1{profileId}~1edit-baseline
+  /drivers-lists/{listId}/admins/{profileId}:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1admins~1{profileId}
+  /drivers-lists/{listId}/profiles:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1profiles
+  /drivers-lists/{listId}/header/edit-baseline:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1header~1edit-baseline
+  /drivers-lists/{listId}/header:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1header
+  /drivers-lists/{listId}/archive:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1archive
+  /drivers-lists/{listId}/restore:
+    $ref: ./drivers.yaml#/paths/~1drivers-lists~1{listId}~1restore
   /events:
     $ref: ./events.yaml#/paths/~1events
   /events/{eventId}/things-to-do/{entityType}/{entityId}:
@@ -1265,6 +1319,84 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    DriversEventOption:
+      $ref: ./drivers.yaml#/schemas/DriversEventOption
+    DriversEventOptions:
+      $ref: ./drivers.yaml#/schemas/DriversEventOptions
+    DriversCreateEntry:
+      $ref: ./drivers.yaml#/schemas/DriversCreateEntry
+    DriversResourceEntry:
+      $ref: ./drivers.yaml#/schemas/DriversResourceEntry
+    DriversAssignee:
+      $ref: ./drivers.yaml#/schemas/DriversAssignee
+    DriversItemView:
+      $ref: ./drivers.yaml#/schemas/DriversItemView
+    DriversListView:
+      $ref: ./drivers.yaml#/schemas/DriversListView
+    DriversMetadata:
+      $ref: ./drivers.yaml#/schemas/DriversMetadata
+    DriversDescriptionValue:
+      $ref: ./drivers.yaml#/schemas/DriversDescriptionValue
+    DriversMetadataPatch:
+      $ref: ./drivers.yaml#/schemas/DriversMetadataPatch
+    DriversDescriptionPatch:
+      $ref: ./drivers.yaml#/schemas/DriversDescriptionPatch
+    DriversDescriptionBaseline:
+      $ref: ./drivers.yaml#/schemas/DriversDescriptionBaseline
+    DriversDefaultsBaseline:
+      $ref: ./drivers.yaml#/schemas/DriversDefaultsBaseline
+    DriversAdminBaseline:
+      $ref: ./drivers.yaml#/schemas/DriversAdminBaseline
+    DriversHeaderBaseline:
+      $ref: ./drivers.yaml#/schemas/DriversHeaderBaseline
+    DriversAssignmentResult:
+      $ref: ./drivers.yaml#/schemas/DriversAssignmentResult
+    DriversCreateContext:
+      $ref: ./drivers.yaml#/schemas/DriversCreateContext
+    DriversNewItem:
+      $ref: ./drivers.yaml#/schemas/DriversNewItem
+    DriversCreateInput:
+      $ref: ./drivers.yaml#/schemas/DriversCreateInput
+    DriversCreated:
+      $ref: ./drivers.yaml#/schemas/DriversCreated
+    DriversItemPatch:
+      $ref: ./drivers.yaml#/schemas/DriversItemPatch
+    DriversItemEditBaseline:
+      $ref: ./drivers.yaml#/schemas/DriversItemEditBaseline
+    DriversOrderEditBaseline:
+      $ref: ./drivers.yaml#/schemas/DriversOrderEditBaseline
+    DriversItemOrder:
+      $ref: ./drivers.yaml#/schemas/DriversItemOrder
+    DriversEventChange:
+      $ref: ./drivers.yaml#/schemas/DriversEventChange
+    DriversEventChanged:
+      $ref: ./drivers.yaml#/schemas/DriversEventChanged
+    DriversProfileOption:
+      $ref: ./drivers.yaml#/schemas/DriversProfileOption
+    DriversProfileOptions:
+      $ref: ./drivers.yaml#/schemas/DriversProfileOptions
+    DriversAdmin:
+      $ref: ./drivers.yaml#/schemas/DriversAdmin
+    DriversAdminInput:
+      $ref: ./drivers.yaml#/schemas/DriversAdminInput
+    DriversAdminPatch:
+      $ref: ./drivers.yaml#/schemas/DriversAdminPatch
+    DriversCurrentEvent:
+      $ref: ./drivers.yaml#/schemas/DriversCurrentEvent
+    DriversArchive:
+      $ref: ./drivers.yaml#/schemas/DriversArchive
+    DriversAccess:
+      $ref: ./drivers.yaml#/schemas/DriversAccess
+    DriversSettings:
+      $ref: ./drivers.yaml#/schemas/DriversSettings
+    DriversHeaderUpload:
+      $ref: ./drivers.yaml#/schemas/DriversHeaderUpload
+    DriversHeaderBinary:
+      $ref: ./drivers.yaml#/schemas/DriversHeaderBinary
+    DriversCreateForm:
+      $ref: ./drivers.yaml#/schemas/DriversCreateForm
+    DriversDuplicate:
+      $ref: ./drivers.yaml#/schemas/DriversDuplicate
     EventCreationSubmission:
       $ref: ./events.yaml#/schemas/EventCreationSubmission
     EventCreationFields:

@@ -1,19 +1,17 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch} from 'vue';
+import {computed, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
-import {useQuery} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
-import type {PilotRead} from '../../../types/FrontendPilotUiTypes';
-import type {QueryFunctionContext} from '@tanstack/vue-query';
 import {usePackingApi} from './api';
-import {useActionState, usePilot, refreshInterval} from '../../app/context';
-import {isReadDenial, ObsoleteRequestError} from '../../app/transport';
-import {evictQueryFamilies, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
-import {belongsToQueryFamily, overviewKeys, packingKeys} from '../../app/queryKeys';
+import {useActionState, usePilot} from '../../app/context';
+import {evictQueryFamilies, retireQueryFamily} from '../../app/queryCache';
+import {overviewKeys, packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
 import {readPacked, writePacked} from './packed';
 import {useCommand} from '../../composables/command';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
+import {useListDetail} from '../../composables/listDetail';
+import {useListReorder} from '../../composables/listReorder';
 import ActionButton from '../../components/ActionButton.vue';
 import InlineCell from '../../components/InlineCell.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -21,9 +19,10 @@ import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PackingSettings from './PackingSettings.vue';
 import EntityHeader from '../../components/EntityHeader.vue';
+import EntityAssignees from '../../components/EntityAssignees.vue';
+import EntityAssignmentActions from '../../components/EntityAssignmentActions.vue';
 
 type Item = components['schemas']['PackingItemView'];
-type ListRead = PilotRead<components['schemas']['PackingListView']>;
 const route = useRoute();
 const context = usePilot();
 // Personal failure fallback still belongs to this mounted actor, even though its
@@ -33,7 +32,6 @@ const api = usePackingApi(context);
 const {messages} = context;
 const listId = computed(() => String(route.params.listId).toLowerCase());
 const key = computed(() => packingKeys.detail(context.session.value?.context, listId.value));
-const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const editorOpen = ref(false);
 let active = true;
 onBeforeUnmount(retirePage);
@@ -51,72 +49,19 @@ const pendingPackedWrites = reactive(new Set<string>());
 const packedReadFailed = ref(false);
 const packedStorageUnavailable = computed(() => packedReadFailed.value || pendingPackedWrites.size > 0);
 const editing = ref(0);
-const accessRevoked = ref(false);
 const freshItem = reactive({title: '', description: '', maxAssignees: 1});
 const quickAddDirty = computed(
     () => !!freshItem.title || !!freshItem.description || freshItem.maxAssignees !== 1,
 );
-const dragged = ref<{id: string; token: string; ids: string[]} | null>(null);
-// A language refresh shares the same machine-state cache and must not unmount focused drafts.
-// Keep a previous read only within this actor/resource family, including a failed refresh.
-const previousList = shallowRef<{
-    query: Parameters<typeof belongsToQueryFamily>[0];
-    result: ListRead;
-} | null>(null);
-const readAdmission = useQueryAdmission(context, key,
-    computed(() => context.hydrated.value && context.visible.value && !accessRevoked.value));
-const list = useQuery({
-    queryKey: key,
-    ...readAdmission,
-    queryFn: readList,
-    refetchInterval: (query) =>
-        context.mayRead() && context.visible.value
-            ? refreshInterval(query.state.error, query.state.fetchFailureCount, jitter)
-            : false,
-    refetchIntervalInBackground: false,
-    placeholderData(previous, previousQuery) {
-        if (!previous || !previousQuery || !belongsToQueryFamily(previousQuery,
-            packingKeys.resource(context.session.value?.context, listId.value))) {
-            previousList.value = null;
-            return undefined;
-        }
-        // TanStack drops a placeholder after a terminal read failure. Retain the
-        // same scoped response for the stale view; the failed read remains visible.
-        previousList.value = {query: previousQuery, result: previous};
-        return previous;
-    },
+// Packing and Drivers share request lifetime and recovery. Personal packed state
+// and the feature's denied-query policy remain owned by this mounted page.
+const {list, data, denied, refresh: refreshCurrentList} = useListDetail({
+    resourceId: listId, queryKey: key,
+    resourceFamily: () => packingKeys.resource(context.session.value?.context, listId.value),
+    read: api.packing.bind(api), denied: revokeAccess,
 });
-
-/** A denial suspends ordinary polling, but explicit recovery still performs a real
- * current read. Only that admitted response can restore the protected projection;
- * neither an old cache hit nor a no-op command reconciliation grants authority. */
-async function readList({signal, queryKey}: QueryFunctionContext<readonly unknown[]>): Promise<ListRead> {
-    const scope = context.capture();
-    const resource = listId.value;
-    const result = await api.packing(resource, scope, signal,
-        context.queryClient.getQueryData<ListRead>(queryKey));
-    if (!active || signal.aborted || !context.isCurrent(scope) || resource !== listId.value)
-        throw new ObsoleteRequestError();
-    accessRevoked.value = false;
-    return result;
-}
 const retryAvailable = useReadRetry(() => list.error.value);
 const retryAt = useReadRetryAt(() => list.error.value, retryAvailable);
-const denied = computed(
-    () =>
-        accessRevoked.value ||
-        isReadDenial(list.error.value),
-);
-// A temporary read failure may retain only this actor/resource's last confirmed
-// list. A validated denial closes that fallback immediately; a warm cache entry
-// from another resource family never supplies display or command authority.
-const data = computed(() => {
-    if (denied.value) return null;
-    if (list.data.value) return list.data.value.data;
-    const previous = previousList.value;
-    return previous && belongsToQueryFamily(previous.query,
-        packingKeys.resource(context.session.value?.context, listId.value)) ? previous.result.data : undefined;
-});
 // Native Pug escapes each line and inserts explicit breaks. Keep normal text
 // whitespace; pre-wrap would preserve extra spaces/tabs and change native wrapping.
 const descriptionLines = computed(() => data.value?.description?.split('\n') ?? []);
@@ -136,24 +81,6 @@ async function refreshAfterCommand(): Promise<void> {
     // authority. Do not start an automatic private follow-up in that circumstance.
     if (!active || denied.value) return;
     await refreshCurrentList();
-}
-
-/** Explicit Refresh is a fresh authority read even while ordinary polling is
- * suspended by denial. The shared command owner retains any unknown status until
- * this actual GET succeeds; its normal post-write callback remains narrower. */
-async function refreshCurrentList(): Promise<void> {
-    if (!active || !context.mayRead()) throw new ObsoleteRequestError();
-    const scope = context.capture();
-    const resource = listId.value;
-    await refetchFreshQuery<ListRead>(context.queryClient, key.value, refetchList, mayRead);
-
-    function mayRead(): boolean {
-        return active && resource === listId.value && context.mayRead(scope);
-    }
-}
-
-function refetchList(): Promise<unknown> {
-    return list.refetch({throwOnError: true});
 }
 
 /** Native Packing HTTP permission failures use the same "Not allowed" wording.
@@ -270,15 +197,11 @@ watch(listId, () => {
     // its previous list and must not block a fresh quick-add or assignment on the new list.
     command.acknowledge();
     editorOpen.value = false;
-    accessRevoked.value = false;
-    previousList.value = null;
-    dragged.value = null;
+    reorder.reset();
     Object.assign(freshItem, {title: '', description: '', maxAssignees: 1});
     loadPacked();
 });
 function revokeAccess(failure: Error): void {
-    accessRevoked.value = true;
-    previousList.value = null;
     editorOpen.value = false;
     // A denied resource retires temporary personal choices immediately, before
     // a later admitted recovery can restore only its actual persisted native keys.
@@ -308,9 +231,6 @@ async function settingsAccessLost(): Promise<void> {
     if (!context.mayRead() || resource !== listId.value || actor !== context.session.value?.context) return;
     await refresh();
 }
-watch(list.error, (failure) => {
-    if (isReadDenial(failure)) revokeAccess(failure);
-}, {flush: 'sync'});
 onMounted(loadPacked);
 /** Apply the personal checkbox immediately, retaining failed persistence as visible pending work. */
 function togglePacked(itemId: string, event: Event): void {
@@ -446,46 +366,12 @@ async function reviewUnknownItem(): Promise<void> {
     }
 }
 
-/** Begin one gesture only when current page state admits reordering. Capture
- * the row membership and order token together so a later poll cannot replace
- * the reviewed baseline consumed by drop. Server authorization remains separate. */
-function beginDrag(item: Item, event: DragEvent): void {
-    if (!data.value?.capabilities.reorder || blocked.value || editing.value) {
-        event.preventDefault();
-        return;
-    }
-
-    // Freeze the gesture's original row set and comparison evidence before the
-    // browser starts moving it; the transfer payload identifies only this item.
-    dragged.value = {
-        id: item.id,
-        token: data.value.orderToken,
-        ids: items.value.map((current) => current.id),
-    };
-    event.dataTransfer?.setData('text/plain', item.id);
-    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-}
-/** Submit the drag-start membership and token, even when polling updates the
- * displayed rows during the gesture. The server compares that reviewed order;
- * this one drop consumes the gesture and cannot silently adopt a newer baseline. */
-async function drop(item: Item, event: DragEvent): Promise<void> {
-    event.preventDefault();
-    const original = dragged.value;
-    dragged.value = null;
-    if (
-        !original ||
-        original.id === item.id ||
-        !data.value?.capabilities.reorder ||
-        blocked.value ||
-        editing.value
-    )
-        return;
-
-    const ids = original.ids.filter((id) => id !== original.id);
-    ids.splice(ids.indexOf(item.id), 0, original.id);
-    await command.run((scope) => api.reorder(listId.value, ids, original.token, scope), true, false,
-        {presentation: 'inline', success: 'common.orderSaved'});
-}
+const reorder = useListReorder({
+    available: () => !!data.value?.capabilities.reorder && !blocked.value && !editing.value,
+    ids: () => items.value.map(item => item.id), token: () => data.value?.orderToken,
+    submit: (ids, token) => command.run(scope => api.reorder(listId.value, ids, token, scope), true, false,
+        {presentation: 'inline', success: 'common.orderSaved'}),
+});
 </script>
 
 <template>
@@ -508,7 +394,7 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                  shared page alert host; durable reconciliation stays beside the list. -->
             <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value">
                 <template #notice>
-                    <template v-if="command.uncertain.value && quickAddDirty">
+                    <template v-if="command.uncertain.value && command.reviewRequired.value">
                         <p class="mb-2">{{ messages.t('packing.reviewUnknownItem') }}</p>
                         <ActionButton variant="outline-warning" :state="readAction" @click="reviewUnknownItem">
                             {{ messages.t('draft.review') }}
@@ -623,10 +509,10 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                                 :class="
                                     packed[item.id] ? 'table-success' : item.requiredByAll ? 'table-info' : ''
                                 "
-                                @dragstart="beginDrag(item, $event)"
-                                @dragend="dragged = null"
+                                @dragstart="reorder.begin(item.id, $event)"
+                                @dragend="reorder.reset"
                                 @dragover.prevent
-                                @drop="drop(item, $event)"
+                                @drop="reorder.drop(item.id, $event)"
                             >
                                 <td class="text-center">
                                     <input
@@ -643,28 +529,9 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                                         ><i class="bi bi-people-fill me-1" aria-hidden="true"></i
                                         >{{ messages.t('packing.everyone') }}</span
                                     >
-                                    <ul v-else class="list-unstyled mb-0">
-                                        <li
-                                            v-for="(assignee, index) in item.assignees"
-                                            :key="assignee.assignmentId ?? index"
-                                            class="d-flex align-items-center gap-1"
-                                        >
-                                            <i class="bi bi-person-fill" aria-hidden="true"></i
-                                            ><span class="flex-grow-1">{{ assignee.name }}</span>
-                                            <ActionButton
-                                                v-if="
-                                                    item.capabilities.removeAssignments &&
-                                                    assignee.assignmentId !== null
-                                                "
-                                                class="btn-sm"
-                                                variant="outline-danger"
-                                                :disabled="blocked"
-                                                :aria-label="messages.t('packing.removeAssignment')"
-                                                @click="removeAssignment(assignee.assignmentId)"
-                                                >&times;</ActionButton
-                                            >
-                                        </li>
-                                    </ul>
+                                    <EntityAssignees v-else :assignees="item.assignees"
+                                        :removable="item.capabilities.removeAssignments" :disabled="blocked"
+                                        :remove-label="messages.t('packing.removeAssignment')" @remove="removeAssignment" />
                                 </td>
                                 <!-- Native item editors have no HTML length caps. Their
                                      generated command shape remains independent of the
@@ -724,32 +591,10 @@ async function drop(item: Item, event: DragEvent): Promise<void> {
                                          even when the independent write grant is absent.
                                          Preserve that presentation; the server rechecks
                                          ACCESS_VIEW before every assignment command. -->
-                                    <template v-if="item.selfAssigned">
-                                        <ActionButton
-                                            class="btn-sm"
-                                            variant="outline-danger"
-                                            :disabled="blocked"
-                                            @click="assign(item)"
-                                            >{{ messages.t('packing.unassign') }}</ActionButton
-                                        >
-                                        <span v-if="isFull(item)" class="badge bg-secondary ms-1">{{
-                                            messages.t('packing.full')
-                                        }}</span>
-                                    </template>
-                                    <span v-else-if="item.requiredByAll" class="badge bg-info ms-1">{{
-                                        messages.t('packing.everyone')
-                                    }}</span>
-                                    <ActionButton
-                                        v-else-if="!isFull(item)"
-                                        class="btn-sm"
-                                        variant="outline-success"
-                                        :disabled="blocked"
-                                        @click="assign(item)"
-                                        >{{ messages.t('packing.assign') }}</ActionButton
-                                    >
-                                    <span v-else class="badge bg-secondary">{{
-                                        messages.t('packing.full')
-                                    }}</span>
+                                    <EntityAssignmentActions :assigned="item.selfAssigned" :full="isFull(item)" :disabled="blocked"
+                                        :everyone="item.requiredByAll ? messages.t('packing.everyone') : undefined"
+                                        :assign-label="messages.t('packing.assign')" :remove-label="messages.t('packing.unassign')"
+                                        :full-label="messages.t('packing.full')" @toggle="assign(item)" />
                                     <ActionButton
                                         v-if="item.capabilities.removeItem"
                                         class="btn-sm ms-1"

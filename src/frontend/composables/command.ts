@@ -267,6 +267,9 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     const feedbackTarget = shallowRef<HTMLElement | null>(null);
     const outcome = shallowRef<PilotCommandOutcome | null>(null);
     const needsUnknownReview = ref(requireUnknownReview);
+    // Consumers may explain the current command's manual review without
+    // confusing unrelated dirty fields with an unconfirmed creation outcome.
+    const reviewRequired = computed(() => needsUnknownReview.value);
     const unknownMessage = draft?.unknownMessage ?? 'draft.leaveUnknown';
     const externalBusy = draft?.busy;
     let commandScope: PilotRequestScope | undefined;
@@ -554,7 +557,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     const feedback: PilotCommandPresentation = {error, transientError, errorRenewal, errorPresentation, feedbackKind, feedbackTarget,
         notice, noticeKind, transientNotice, noticeInline, noticeRenewal, uncertain, dismissError, dismissNotice};
 
-    return {action, recoveryAction, pending, recovering, uncertain, feedback, error, transientError, errorRenewal, errorPresentation, feedbackKind, feedbackTarget,
+    return {action, recoveryAction, pending, recovering, uncertain, reviewRequired, feedback, error, transientError, errorRenewal, errorPresentation, feedbackKind, feedbackTarget,
         notice, noticeKind, transientNotice, noticeInline, noticeRenewal, outcome, setError, setInformation, setNotice,
         clearRecoveredError, captureFeedback, run, reconcile, recover, acknowledge,
         mayLeave: protection.mayLeave, prepareDeparture: protection.prepareDeparture};

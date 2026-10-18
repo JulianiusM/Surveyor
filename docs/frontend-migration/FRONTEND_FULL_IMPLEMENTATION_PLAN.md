@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: completed SPA execution sequence consolidated into existing playbook/coverage owners; approved R1 presentation follow-up distinguished from previous receipts; P0-P2 scope, later-phase contracts, E1 exclusion and separate cutover retained
+verification-scope: explicit P3 trigger and full Drivers implementation source/acceptance receipt linked; prior P0-P2 corrections and original phase contracts retained; P4-P11, E1 exclusion and separate cutover boundaries preserved
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -43,11 +43,14 @@ adopt the shared displayed header, entry, guest, settings, metadata, access and 
 retain their working native destinations. Native frontend inputs remain unchanged.
 
 The maintainer's [October 16 S1 decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-implemented-pilot-scope-2026-10-16)
-limits this delivery to the implemented P0–P2 slice. P3–P11 remain later phase contracts, triggered only after stable
+limited that delivery to the implemented P0–P2 slice. P3–P11 were later phase contracts, triggered only after stable
 repeated reviews of the implemented slice and an explicit future maintainer instruction. P11 additionally retains
 separate cutover, publication and retirement authorization. This plan records sequence and acceptance, not automatic
 continuation. Existing phase contracts and backend-remedy exclusions remain in force alongside the
 [approved decision history](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
+
+The maintainer's [October 18 explicit P3 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p3-implementation-trigger-2026-10-18)
+starts Drivers under the phase contract below. It does not start P4–P11 or change the separate cutover decisions.
 
 The [October 16 full-pilot review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16)
 qualifies earlier readiness statements with its scalar-display, visual-assertion and verification-environment
@@ -171,7 +174,8 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
    overlooked duplication and weak browser assertions, records actual shared header/metadata/lifecycle/entry adoption,
    and verifies all P2 packages together through the final built selection. No task-owned P2 functionality is deferred.
 
-4. **P3 — Migrate Drivers as the first substantial reuse exercise**  
+4. **P3 — Migrate Drivers as the first substantial reuse exercise; implemented against the phase contract.**
+
    **Complexity:** Medium–High. **Prerequisites:** P0 and a shared guest-entry interface. Can overlap P2.
 
     - Generalize the existing guest-entry owner when the first additional feature adopts it. Inject operations, query
@@ -191,6 +195,10 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
    **Completion:** DRV-01–04 and applicable ENT behaviors have source-to-implementation mappings, coexistence evidence,
    and desktop/mobile comparison. Extract shared Packing/Drivers interactions only where both consumers actually adopt
    them.
+
+   The [October 18 completion receipt](PILOT_PARITY_REVIEW.md#p3-drivers-implementation-and-scoped-verification-2026-10-18)
+   records actual shared adoption, scoped passing checks, visual comparison and inherited-defect/environment limits.
+   P4–P11 still require their own explicit triggers; no task-owned P3 workflow is assigned to a later phase.
 
 5. **P4 — Migrate Surveys independently**  
    **Complexity:** Medium. **Prerequisites:** P0 and shared guest-entry contracts. Can run alongside Drivers or Events.

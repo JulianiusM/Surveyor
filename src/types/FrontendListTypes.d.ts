@@ -1,0 +1,57 @@
+import type {ComputedRef} from 'vue';
+import type {PilotRead, PilotRequestScope} from './FrontendPilotUiTypes';
+import type {PilotEventPickerSource, PilotPlainMessageKey} from './FrontendPilotUiTypes';
+import type {components} from './api/v1';
+
+/** Features select their own operation and actor/resource query families. Shared
+ * list reads own request retirement and stale presentation, never business grants. */
+export interface FrontendListSource<T> {
+    resourceId: ComputedRef<string>;
+    queryKey: ComputedRef<readonly unknown[]>;
+    resourceFamily(): readonly unknown[];
+    read(id: string, scope: PilotRequestScope, signal: AbortSignal, previous?: PilotRead<T>): Promise<PilotRead<T>>;
+    denied(failure: Error): void;
+}
+
+/** A drag gesture captures a reviewed order once. Feature commands still own the
+ * server operation, comparison token validation and confirmed refresh. */
+export interface FrontendListReorderSource {
+    available(): boolean;
+    ids(): string[];
+    token(): string | undefined;
+    submit(ids: string[], token: string): Promise<unknown>;
+}
+
+/** Matching list creation forms share root fields; feature collections remain
+ * in their own draft owner and are read only at the explicit submit boundary. */
+export interface FrontendListCreationValues {
+    title: string;
+    description: string | null;
+    eventId: string | null;
+    defaultPermissions: components['schemas']['PermissionDefaults'];
+}
+
+/** The root copy protocol deliberately excludes rides, assignments and authors.
+ * Packing extends this projection with its own copyable collection rows. */
+export type FrontendListCreationCopy = Pick<components['schemas']['PackingDuplicate'],
+    'title' | 'description' | 'defaultPermissions' | 'formContext' | 'selectedEvent'>;
+
+/** One feature supplies generated operations, scoped keys and its native item
+ * collector. The shared form has no endpoint construction or business checks. */
+export interface FrontendListCreationSource<TCopy extends FrontendListCreationCopy> {
+    creationKey(context: string | null | undefined, eventId?: string): readonly unknown[];
+    duplicateKey(context: string | null | undefined, id: string | null, eventId?: string): readonly unknown[];
+    eventPicker: PilotEventPickerSource;
+    initialContext?: components['schemas']['PackingCreateContext'];
+    initialSelectedEvent?: components['schemas']['EventPickerOption'] | null;
+    initialDuplicate?: TCopy;
+    initialError?: PilotPlainMessageKey;
+    createEntry(scope: PilotRequestScope, signal?: AbortSignal, returnTo?: string, eventId?: string): Promise<components['schemas']['PackingCreateEntry']>;
+    duplicate(id: string, scope: PilotRequestScope, signal?: AbortSignal, eventId?: string): Promise<TCopy>;
+    initialize?(copy?: TCopy): void;
+    reset?(): void;
+    draft?(): unknown;
+    destination(result: components['schemas']['PackingCreated']): string;
+    prepare(values: FrontendListCreationValues, image: File | null):
+        {error: PilotPlainMessageKey} | {operation(scope: PilotRequestScope): Promise<components['schemas']['PackingCreated']>};
+}
