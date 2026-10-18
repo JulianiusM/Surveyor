@@ -205,6 +205,66 @@ describe('Survey production frontend consumers', () => {
         expect(router.currentRoute.value.path).toBe(`/frontend-pilot/survey/${copyId}`);
     });
 
+    it('keeps identical recurrence rows independent when one row is removed', async () => {
+        let submitted: unknown;
+        const {wrapper} = await mounted(SurveyCreatePage, async request => {
+            if (request.method === 'GET') return json({entry: {kind: 'render'}, context: {}});
+            submitted = JSON.parse(String((await request.formData()).get('data')));
+            return json({id: copyId}, 201);
+        }, '/frontend-pilot/survey/create');
+        await wrapper.get('#title').setValue('Independent recurring rows');
+        await wrapper.get('#addCombinationBtn').trigger('click');
+        const rows = wrapper.findAll('#combinationTable tr');
+        expect(rows).toHaveLength(2);
+        for (const row of rows) {
+            expect(row.findAll('select').map(select => (select.element as HTMLSelectElement).value)).toEqual(['MON', '1']);
+        }
+        const retained = rows[1]!.element;
+
+        // A recurrence value is not a DOM identity: removing its identical peer
+        // must retain the other actual controls and their later independent edit.
+        await rows[0]!.get('.remove-combination-btn').trigger('click');
+        expect(wrapper.findAll('#combinationTable tr')).toHaveLength(1);
+        expect(wrapper.get('#combinationTable tr').element).toBe(retained);
+        await wrapper.get('#combinationTable tr').findAll('select')[0]!.setValue('THU');
+        await wrapper.get('#combinationTable tr').findAll('select')[1]!.setValue('4');
+        await wrapper.get('#surveyForm').trigger('submit');
+        await flushPromises();
+        expect(submitted).toEqual({title: 'Independent recurring rows', description: '',
+            combinations: [{weekday: 'THU', nthWeek: '4'}]});
+    });
+
+    it('rejects creation after removing the last recurrence without dispatch or losing the draft', async () => {
+        let submitted: unknown;
+        const {wrapper, request, context, router} = await mounted(SurveyCreatePage, async request => {
+            if (request.method === 'GET') return json({entry: {kind: 'render'}, context: {}});
+            submitted = JSON.parse(String((await request.formData()).get('data')));
+            return json({id: copyId}, 201);
+        }, '/frontend-pilot/survey/create');
+        await wrapper.get('#title').setValue('Keep my survey');
+        await wrapper.get('#description').setValue('Keep my entered instructions');
+        await wrapper.get('.remove-combination-btn').trigger('click');
+        await wrapper.get('#surveyForm').trigger('submit');
+        await flushPromises();
+
+        // The actual generated request validator rejects the empty array before
+        // multipart delivery. This is a definite rejection, so editing can recover.
+        expect(request.mock.calls.filter(([value]) => (value as Request).method === 'POST')).toHaveLength(0);
+        expect(wrapper.text()).toContain(context.messages.value.t('api:errors.VALIDATION_FAILED'));
+        expect(wrapper.get<HTMLInputElement>('#title').element.value).toBe('Keep my survey');
+        expect(wrapper.get<HTMLTextAreaElement>('#description').element.value).toBe('Keep my entered instructions');
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/survey/create');
+        expect(wrapper.findAll('#combinationTable tr')).toHaveLength(0);
+
+        await wrapper.get('#addCombinationBtn').trigger('click');
+        await wrapper.get('#surveyForm').trigger('submit');
+        await flushPromises();
+        expect(request.mock.calls.filter(([value]) => (value as Request).method === 'POST')).toHaveLength(1);
+        expect(submitted).toEqual({title: 'Keep my survey', description: 'Keep my entered instructions',
+            combinations: [{weekday: 'MON', nthWeek: '1'}]});
+        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/survey/${copyId}`);
+    });
+
     it('keeps an uncertain creation and its selected File without automatic multipart replay', async () => {
         const {wrapper, request, context} = await mounted(SurveyCreatePage, async request => {
             if (request.method === 'GET') return json({entry: {kind: 'render'}, context: {}});
@@ -247,8 +307,10 @@ describe('Survey production frontend consumers', () => {
         const description = wrapper.get<HTMLTextAreaElement>('#description');
         expect(description.element.value).toBe(copied.description);
         const rows = wrapper.findAll('#combinationTable tr');
+        expect(rows).toHaveLength(2);
         expect(rows[0]!.findAll('select').map(select => (select.element as HTMLSelectElement).value)).toEqual(['TUE', '3']);
         expect(rows[1]!.findAll('select').map(select => (select.element as HTMLSelectElement).value)).toEqual(['SAT', 'LAST']);
+        expect(new Set(rows.map(row => row.attributes('id'))).size).toBe(2);
         expect(wrapper.get<HTMLInputElement>('#headerImg').element.files).toHaveLength(0);
 
         // Refreshing copy admission must retain edited instructions and the same

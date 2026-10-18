@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved frontend-only Survey corrections and pilot parity/shared-presentation correction scope recorded; original P0-P4 decisions, native isolation and backend exclusions retained; legacy defects close only after cutover; execution belongs to paired review
+verification-scope: complete pilot-readiness/shared-frontend correction authorization recorded after renewed P4 review; original Survey exceptions, P0-P4 decisions, native isolation and backend exclusions retained; execution belongs to paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -19,8 +19,8 @@ queries, transactions, locks and persistence.
 The [baseline](FRONTEND_MIGRATION_BASELINE.md) and its 121 edge-case IDs describe the native contract.
 The original step-two design was based on `0a3662ae0a6e99e0df0a38f603831d3ac9ff4b61`; the native comparison reference
 is `2dfa2573c64178f54684cc4877b5a945f66e24c8`. The reference does not identify a deployed site's version.
-Help/Packing were the original pilot obligation. P1 identity/common presentation, P2 Events and P3 Drivers extend that scope;
-the [full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the remaining phase contracts. The
+Help/Packing were the original pilot obligation. P1 identity/common presentation, P2 Events, P3 Drivers and P4
+standalone Surveys extend that scope; the [full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the remaining phase contracts. The
 [paired review](PILOT_PARITY_REVIEW.md) records current implementation evidence and its limits. Other feature
 migration and default-route cutover remain future work.
 
@@ -770,6 +770,19 @@ answer presentation, readability, development-runtime verification and staged-gu
 Native frontend sources, shared backend behavior, excluded remedies, later phase triggers and separate cutover,
 publication and deployment decisions retain their existing boundaries. Execution and remaining limits belong to
 the paired review, rather than this amendment.
+
+### Authorized complete pilot-readiness correction (2026-10-18)
+
+After the renewed pilot/P4 review, the maintainer directly authorizes the complete correction scope and expressly
+includes deduplication of every meaningfully shared frontend responsibility. Matching current Vue consumers must
+adopt the same actual presentation and interaction owner; source delivery, parity assertions, human readability and
+existing staged guidance belong to that correction. This preserves the earlier requirement rather than accepting
+unadopted helpers or reclassifying current pilot gaps as later-phase work.
+
+The native-isolation decision and its approved exceptions remain unchanged. Both frontends retain their existing
+shared backend/controller/DBAL/domain/catalog owners; temporary native/Vue presentation copies remain permitted.
+No new behavior, technology substitution, excluded backend remedy, later feature phase, cutover, publication or
+deployment is authorized by this correction. The paired review owns actual implementation and executed evidence.
 
 ## Cutover retirement inventory
 

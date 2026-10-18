@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P4 standalone Survey routes, shared presentation and approved frontend description/prefill corrections source-reconciled; native/backend boundaries and cutover-only defect closure retained; scoped execution belongs to paired review; no P5-P11 or cutover authorization
+verification-scope: current shared field/header/settings/description and list read/feedback/toolbar/counter/Quick Add owners source-reconciled with standalone Survey scope and approved exceptions; execution belongs to paired review
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -139,6 +139,29 @@ profiles rather than ride authors. Method-only grants remain independent of deta
 foreign-resource checks stay server-owned. Existing IMP-026–028 remain inherited/excluded backend defects.
 Overview and Event Things to do use the migrated Drivers destinations and authorized image operation.
 
+Packing/Drivers Quick Add adopts `EntityQuickAdd` for the matching card and description/capacity/submit presentation.
+Feature slots retain Packing's editable title and Drivers' readonly actor name; values, collectors and command/reset
+decisions remain feature-owned. The shared capacity control retains installed Vue's numeric coercion and DOM updates,
+including leading-zero normalization on change/rerender. `EntityDescription` supplies escaped lines for both lists,
+Surveys and Event, with explicit paragraph/divider inputs preserving their different surrounding layout.
+`EntityListCounters` presents admitted Packing/Drivers counts. Packing, Drivers and Survey share `EntityListToolbar`,
+`EntityDetailReadState` and the existing `CommandFeedback` creation-review presentation, retaining list scrolling,
+Survey's Refresh placement, feature wording/timestamps and the existing read/command owners. Local inline denial
+uses `useListCommands` without dispatch; generic presentation supplies no feature authority.
+
+## Surveys behavior
+
+Standalone Surveys compose the existing entry/guest, detail-read/command, header, settings, metadata and lifecycle
+owners under [SRV-01–05](BEHAVIOR_INVENTORY.md#surveys). Personal ballot drafts retain dirty answers during fresh reads
+while newly observed recurring choices enter as No. Named results and collaborative combinations retain their
+separate presentation and admission; archival does not disable participant voting or combination creation.
+
+Owner settings add no event association, Access or administrator controls. Representation ETags support read/draft
+reconciliation without conditional writes or atomic ballot replacement. Approved frontend exceptions display escaped
+saved instructions and prefill every copyable description/weekday/occurrence; copies still exclude answers and image.
+Native defect records stay open until cutover. The [P4 assertion map](TEST_COVERAGE.md#p4-surveys-source-to-implementation-assertions-2026-10-18)
+owns exact source coverage, and the paired review owns executed results rather than this behavior summary.
+
 ## Logical owners
 
 This table describes the implemented logical owners. The paired review records scoped acceptance and evidence
@@ -161,13 +184,14 @@ Reuse these owners rather than adding wrappers, forwarding modules, validators, 
 Shared type-only contracts are `.d.ts`. Comments explain nontrivial intent and boundary decisions; templates document
 required data and browser hooks. Feature state travels through renderer `data` and explicit template arguments.
 
-Event, Packing and Drivers detail use the same displayed `EntityHeader`, retaining the native 250px cover image and responsive
+Event, Packing, Drivers and Survey detail use the same displayed `EntityHeader`, retaining the native 250px cover image and responsive
 parent links. Features supply admitted data, exact image/query operations and current settings state; the separate
 Event dashboard heading remains intact. Actual successful query receipts recover missing images after current props
 render, with resource/key checks and the existing authorized-image owner. Image upload remains a settings draft.
 
-All three features use `EntityEntryPage` for denial-family dispatch, the existing settings/metadata/access composites
-and `useMetadataEditorHandle` for one mounted metadata workflow. Field opt-in uses the shared nullable-text normalizer;
+All four features use `EntityEntryPage` for denial-family dispatch and the existing settings/metadata composites.
+Packing, Event and Drivers additionally supply Access operations; standalone Surveys supply none.
+`useMetadataEditorHandle` exposes one mounted metadata workflow. Field opt-in uses the shared nullable-text normalizer;
 Event schedule/capacity and Packing item/checklist semantics remain distinct. The existing stateless lifecycle owner
 shares archive/restore and Settings/Event-child pause/resume, retaining current caller capabilities, native warnings,
 command feedback and read-only recovery. These are adopted implementations, not unused helpers for later consumers.

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P4 description/duplicate/title and shared-control assertions source-reconciled alongside retained feedback/loading, fixture isolation and readiness boundaries; actual execution and failures belong to paired review; no publication
+verification-scope: expanded P4 card/scroll/settings/focus/archived assertions, deterministic fixtures, Windows/Linux Vitest pools and bounded Windows system execution source-reconciled; execution and failures belong to paired review; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -60,6 +60,12 @@ Playwright starts and stops its managed built server through `playwright.config.
 preparation. `reuseExistingServer: false` applies locally and in CI. Stop any existing process on the selected port
 before E2E so the runner owns the compiled application and prepared database.
 
+Windows defaults to one system worker after native worker exits were observed in parallel runs. Other platforms
+retain Playwright's default selection; Linux CI explicitly selects two workers, and CLI overrides remain available.
+This bounded local mode takes longer while retaining real concurrent actors within individual tests. It changes no
+assertion deadline, retry or validation. A successful serial run does not establish the native exit's cause or
+guarantee that it cannot recur.
+
 <!-- /delta:amendment-04 -->
 
 ## 3. Install Chromium and run — amendment-05
@@ -99,6 +105,12 @@ Package pre-hooks prepare generated API/localization/database inputs. Direct run
 generate after checkout or authored contract/catalog changes. Generated compile fixtures exercise actual request,
 response and problem declaration relationships, including negative cases. Do not add parallel handwritten contracts.
 
+When an isolated SSR assertion measures a fresh rendered tree rather than cold compiler startup, prepare only its
+actual lazy route modules in a named `beforeAll` under the existing hook budget. Keep app creation, request data and
+rendering inside each unchanged assertion deadline. This follows the existing route-fixture pattern without
+pre-rendering output, priming private state or replacing real components. Cold-compilation attribution still needs
+evidence; a timeout alone does not establish an application rendering defect.
+
 Source HMR, serialized contract/catalog regeneration, coherent production SSR dependencies and release/chunk recovery
 cross different boundaries. Exercise the relevant owner when changed; a build or hydration marker alone does not
 prove usable controls, request-local identity/locale or release replacement behavior.
@@ -126,13 +138,14 @@ Use actual Query/cache/transport consumers where they uniquely detect:
 - Locale changes canceling translated families only, leaving machine authority reads and drafts intact.
 - Explicit value lifetimes across warm/cold routes, actor changes and completion for text, select, checkbox and file inputs.
 
-Current focused source selections protect the shared P2 owners at their actual layer:
+Current focused source selections protect shared frontend owners at their actual layer:
 
 | Boundary | Authored coverage and limit |
 |---|---|
 | Displayed header and root/child schedule actions | `tests/frontend/frontend-entity-presentation.spec.ts` mounts actual Event/Packing and Settings/child consumers, checking settings admission, image lifetime/removal and shared pause/resume behavior. Existing Event-page and Packing-editor cases retain equal-image-read and pending/draft coverage. HTTP substitution makes these client checks. |
 | Denial-producing admission and inactive visits | `tests/frontend/frontend-entry-retirement.spec.ts` uses real Query observers to retain a paused producing denial while removing older token visits and preserving another actor. Event foundation and existing Packing entry cases cover mounted feature adoption and restored admission. |
 | Metadata public workflow and read-only notes | Existing Event foundation/Packing management cases exercise the actual metadata adapters and shared editor handle. Event organizer cases update selected participant/summary notes through fresh roster reads, independently of search, and retire missing/empty sources while retaining separate date-draft coverage. |
+| Shared fields, Quick Add and recovery | `frontend-pilot-shell` cases exercise native composition/caret/control identity and lexical number emissions; Packing editor and Drivers cases protect Quick Add numeric coercion/native rerender normalization, unnamed fields and confirmed/uncertain resets. Event foundation preserves raw creation fields and selected multipart bytes; Survey cases retain ballot-specific fresh-read reconciliation and unknown-creation review. These are mounted client assertions, not integrated HTTP/backend evidence. |
 | Built visual/behavioral delivery | `tests/e2e/frontend-entity-header.spec.ts` compares native/Vue headers at desktop/mobile sizes with images, long titles and parent navigation. `frontend-event-workflows.spec.ts` exercises actual controls, sessions and persistence for attendance, links, notes, permissions, images/lifecycle, deadline/capacity outcomes, uncertain delivery and anonymous grants. Other Event E2E files retain their existing boundaries. |
 
 This is an assertion map, not a claim that a selection ran or passed. Executed inputs, results and limits belong to
@@ -231,12 +244,26 @@ search starts can capture loading content instead of the requested comparison su
 Native modal fixtures use `openModalForE2E` and `closeModalForE2E` for completed lifecycle transitions. A visible,
 populated dialog can still be opening, when Bootstrap ignores a close command. Preserve deliberate tests of
 interaction during a transition as separate scenarios rather than treating visibility as completed opening.
+For a deliberate intermediate-animation assertion, hold the observed native animation through asynchronous data
+loading and keyboard work, then finish that same animation before asserting its completed layout and hit targets.
+A fixed prolonged duration cannot prove that the transition is still running after network/focus waits. Preserve
+the ordinary test deadline, real animation lifecycle and final shown-state/placement/deletion assertions.
 Include native-equivalent document titles after initial and warm navigation as well as locale changes. For saved
 text, cover empty, single-line and multiline content with literal markup to verify escaping. Capture the surrounding
 card and assert placement separately from cropped form/table controls. A full-card image is inspection evidence,
 not an assertion of every dimension. Explicitly approved frontend exceptions retain their own expected results;
 do not hide them by normalizing away native differences. Survey duplicate checks include every saved description,
 weekday and occurrence, plus independent exclusion of answers and the source image.
+Survey comparisons additionally measure the full voting-card and inter-section geometry, accounting only for the
+actual approved Refresh row. Empty results retain their own notice and layout. Wide ballot/result tables exercise
+real horizontal overflow, sticky participant headings/cells and the reachable final column at desktop/mobile sizes.
+Compare each frontend's delivered page overflow too; a responsive table class alone does not establish its actual
+document width or viewport movement.
+Owner settings include the complete expanded image and Actions surfaces, keyboard tab selection and Escape focus
+return. Archived guest voting and collaborative additions remain available while owner management stays distinct;
+archival changes do not imply read-only participation. Temporary same-valued recurrence drafts retain independent
+DOM identity; persisted create/copy fixtures retain distinct choices under the existing combination uniqueness
+constraint. Removing the final creation row exercises generated rejection and retained-draft recovery before dispatch.
 After a command response, wait for its required follow-up read/render to show the saved value and release pending
 controls before the next action. A completed HTTP response alone does not establish that the next field/action is enabled.
 
@@ -245,6 +272,11 @@ unconfirmed, static navigation/search remains usable and edited-control recovery
 initial contract separate from later feature-error handling. Hold/reject route loading, edit genuine static early
 input and verify failure/canceled recovery preserves its original control. Automatic reload needs clean state and
 working loop protection; deliberate recovery respects pending/unknown work without persisting secrets/files.
+
+When a shared field replaces an existing framework-owned input, characterize the original installed control's
+model, DOM spelling, node identity and focus across input, change and unrelated rerenders. A number model does not
+promise that its initial spelling survives the next native directive update. Preserve the observed contract rather
+than change production behavior to satisfy a newly invented test expectation.
 
 File tests distinguish confirmation from rejection, unknown delivery and background reads. Confirmed upload releases
 the feature File and clears the same chooser even when refresh fails; other outcomes retain both. Verify reselection
@@ -386,7 +418,10 @@ instance they create.
 
 <!-- delta:amendment-17 -->
 The configuration uses the Node environment and loads `tests/support/env.ts`. The `database-free` project runs
-isolated unit/client files and scoped server-component integration with bounded thread workers.
+isolated unit/client files and scoped server-component integration with bounded workers. Windows uses separate
+processes after observed native threaded-worker exits without a test result; Linux CI retains threads. The same
+concurrency bound, fresh file isolation and UTC environment apply to both pools; the native exit's precise cause
+has not been established.
 The database-backed `integration` project serializes its files because each rebuilds the same disposable schema.
 A full local Vitest run orders those projects so database resets do not overlap independent files. Keep database-backed
 fixture resets serialized; their requirement does not prohibit isolated database-free parallelism. Exact discovery,
@@ -407,3 +442,14 @@ GRANT ALL PRIVILEGES ON `surveyor\_test`.* TO 'surveyor_test'@'127.0.0.1';
 GRANT ALL PRIVILEGES ON `surveyor\_e2e`.* TO 'surveyor_e2e'@'127.0.0.1';
 
 <!-- /delta:amendment-19 -->
+
+## E2E environment defaults — amendment-20
+
+<!-- delta:amendment-20 -->
+Playwright's managed server and the example environment default `AUTO_ARCHIVE_ENABLED` to `false` so historical
+fixtures remain stable. In E2E mode the settings loader still prefers an explicitly supplied
+`E2E_AUTO_ARCHIVE_ENABLED` value over that plain setting. Use this override only for an intentional
+automatic-archival workflow and verify the effective value before running it. Manual archive/restore and
+personal-visibility E2E tests run normally with the automatic job disabled.
+
+<!-- /delta:amendment-20 -->

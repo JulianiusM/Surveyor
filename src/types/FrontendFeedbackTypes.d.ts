@@ -29,6 +29,16 @@ export interface PilotCommandPresentation {
     dismissNotice(): void;
 }
 
+/** Features retain whether an uncertain creation needs review, its wording and
+ * the read action. Feedback shares only the repeated paragraph/button rendering;
+ * an emitted review request never acknowledges or retries a command itself. */
+export interface PilotCreationReviewPresentation {
+    required: boolean;
+    message: PilotPlainMessageKey;
+    state: PilotActionState;
+    paragraphClass?: string;
+}
+
 /** The same receipt can occupy separate native locations without changing its owner or lifetime. */
 export interface CommandFeedbackProps {
     feedback: PilotCommandPresentation;
@@ -44,4 +54,5 @@ export interface CommandFeedbackProps {
     noticeReadError?: Error | null;
     unknownMessage?: PilotPlainMessageKey;
     action?: PilotNoticeAction;
+    creationReview?: PilotCreationReviewPresentation;
 }

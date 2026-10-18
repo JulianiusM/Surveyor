@@ -22,6 +22,24 @@ export interface FrontendListReorderSource {
     submit(ids: string[], token: string): Promise<unknown>;
 }
 
+/** Quick Add retains the native number input's number-or-lexical value. Empty
+ * or invalid input remains text until the feature's existing submit collector
+ * applies its own default; presentation must not replace that draft with zero. */
+export interface FrontendListQuickAddValues {
+    description: string;
+    maxAssignees: number | string;
+}
+
+/** Matching detail workflows supply their actual read and lifetime. The shared
+ * command composition owns recovery/status only, never rows, drafts or grants. */
+export interface FrontendListCommandSource {
+    active(): boolean;
+    denied(): boolean;
+    reading(): boolean;
+    error(): Error | null;
+    refresh(): Promise<void>;
+}
+
 /** Matching list creation forms share root fields; feature collections remain
  * in their own draft owner and are read only at the explicit submit boundary. */
 export interface FrontendListCreationValues {

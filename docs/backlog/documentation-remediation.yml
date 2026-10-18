@@ -1848,6 +1848,31 @@ implementation_defects:
     documentation_contract: A deliberate native save should submit its changed value once and present one confirmation.
     disposition: Recorded once for separate native maintenance. The sticky-placement comparison uses the existing
       single Tab/blur save path while retaining the real command receipt, single confirmation, viewport and sticky-geometry assertions.
+  - id: IMP-075
+    status: open
+    discovered_on: 2026-10-18
+    severity: medium
+    owner: native frontend maintainers
+    package: native-survey-layout
+    out_of_scope_for_documentation_migration: true
+    title: Wide Survey tables also permit horizontal scrolling of the document
+    evidence:
+      - The real built-app wide Survey comparison creates 29 valid recurring choices and measures the unchanged
+        native page and Vue page at 1280px and 390px in tests/e2e/frontend-pilot-surveys.spec.ts.
+      - Retained survey-page-overflow JSON in artifacts/pilot-readiness-final-20261018/system-report records the
+        same document scrollWidth of 2391px in both frontends. At clientWidth 1280px, actual window.scrollX reaches
+        1111px; at clientWidth 390px, it reaches 2001px. HTML and body overflowX are visible, while body/main boxes
+        start at x=0 and retain their viewport widths. These are actual document movements, not scrollWidth alone.
+      - Internal ballot/results scrolling, stationary sticky headings and participant cells, and reachability of the
+        last answer column all pass in the same real browser workflows. The exact root-overflow cause is not established.
+    impact: A visitor can pan the whole wide Survey document horizontally in addition to using its local table scrollbars.
+    authorization: The existing native-isolation and parity-only decisions retain the unchanged native comparator.
+      This record authorizes no native or Vue layout remedy and supplies no pending approval request.
+    documentation_contract: SRV-03 preserves internal results-table scrolling and access to every choice. The original
+      two-choice visual baseline did not exercise this wide state or establish a document-width guarantee for it.
+    disposition: Recorded once as inherited native layout evidence; the Vue comparison retains the measured native
+      behavior. No runtime repair is made and no task-owned P4 workflow is deferred by this finding. Any remedy remains
+      outside the current correction and requires its own explicit scope.
 findings:
   - id: DESIGN-EVENT-CREATION-TRANSPORT
     status: closed

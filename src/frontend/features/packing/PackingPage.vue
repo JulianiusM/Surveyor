@@ -2,26 +2,29 @@
 import {computed, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
+import type {FrontendListQuickAddValues} from '../../../types/FrontendListTypes';
 import {usePackingApi} from './api';
-import {useActionState, usePilot} from '../../app/context';
+import {usePilot} from '../../app/context';
 import {evictQueryFamilies, retireQueryFamily} from '../../app/queryCache';
 import {overviewKeys, packingKeys} from '../../app/queryKeys';
 import {usePageTitle} from '../../composables/pageTitle';
 import {readPacked, writePacked} from './packed';
-import {useCommand} from '../../composables/command';
-import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
-import {useListDetail} from '../../composables/listDetail';
+import {listProblemKey, useListCommands, useListDetail} from '../../composables/listDetail';
 import {useListReorder} from '../../composables/listReorder';
 import ActionButton from '../../components/ActionButton.vue';
 import InlineCell from '../../components/InlineCell.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
-import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
+import EntityDetailReadState from '../../components/EntityDetailReadState.vue';
 import PackingSettings from './PackingSettings.vue';
 import EntityHeader from '../../components/EntityHeader.vue';
 import EntityDescription from '../../components/EntityDescription.vue';
 import EntityAssignees from '../../components/EntityAssignees.vue';
 import EntityAssignmentActions from '../../components/EntityAssignmentActions.vue';
+import EntityQuickAdd from '../../components/EntityQuickAdd.vue';
+import EntityListCounters from '../../components/EntityListCounters.vue';
+import EntityListToolbar from '../../components/EntityListToolbar.vue';
+import FormField from '../../components/FormField.vue';
 
 type Item = components['schemas']['PackingItemView'];
 const route = useRoute();
@@ -34,15 +37,6 @@ const {messages} = context;
 const listId = computed(() => String(route.params.listId).toLowerCase());
 const key = computed(() => packingKeys.detail(context.session.value?.context, listId.value));
 const editorOpen = ref(false);
-let active = true;
-onBeforeUnmount(retirePage);
-
-/** Commands keep their admitted root status after this view retires. Its private
- * query observer must not start a fresh read after denial or component retirement. */
-function retirePage(): void {
-    active = false;
-    resetPacked();
-}
 const packed = ref<Record<string, boolean>>({});
 // Values stay in the existing personal checklist. This set records only which
 // explicit changes could not be persisted; it is not another copy of those values.
@@ -50,20 +44,20 @@ const pendingPackedWrites = reactive(new Set<string>());
 const packedReadFailed = ref(false);
 const packedStorageUnavailable = computed(() => packedReadFailed.value || pendingPackedWrites.size > 0);
 const editing = ref(0);
-const freshItem = reactive({title: '', description: '', maxAssignees: 1});
+const freshItem = reactive<FrontendListQuickAddValues & {title: string}>({title: '', description: '', maxAssignees: 1});
 const quickAddDirty = computed(
     () => !!freshItem.title || !!freshItem.description || freshItem.maxAssignees !== 1,
 );
 // Packing and Drivers share request lifetime and recovery. Personal packed state
 // and the feature's denied-query policy remain owned by this mounted page.
-const {list, data, denied, refresh: refreshCurrentList} = useListDetail({
+const {list, data, denied, refresh: refreshCurrentList, isActive} = useListDetail({
     resourceId: listId, queryKey: key,
     resourceFamily: () => packingKeys.resource(context.session.value?.context, listId.value),
     read: api.packing.bind(api), denied: revokeAccess,
 });
-const retryAvailable = useReadRetry(() => list.error.value);
-const retryAt = useReadRetryAt(() => list.error.value, retryAvailable);
-const initialLoading = computed(() => !denied.value && !data.value && list.isPending.value);
+// Shared detail retirement closes admission first; Packing separately releases
+// its temporary browser-preference fallback without introducing another lifetime.
+onBeforeUnmount(resetPacked);
 usePageTitle(() => data.value?.title || messages.value.t('packing.items'));
 const items = computed(() =>
     [...(data.value?.items ?? [])].sort(
@@ -74,32 +68,16 @@ const items = computed(() =>
 // supplies its admitted version, exact detail key and generated image operation.
 const readHeader = api.header.bind(api);
 
-async function refreshAfterCommand(): Promise<void> {
-    // A completed write can settle after a concurrent read retires this view's
-    // authority. Do not start an automatic private follow-up in that circumstance.
-    if (!active || denied.value) return;
-    await refreshCurrentList();
-}
-
-/** Native Packing HTTP permission failures use the same "Not allowed" wording.
- * Project only its validated known code; contextual errors and future safe server
- * details keep their own presentation, rejection and uncertainty semantics. */
-function packingProblemKey(problem: components['schemas']['Problem']) {
-    if (problem.code === 'FORBIDDEN') return 'common.notAllowed';
-}
-
-const command = useCommand(refreshAfterCommand, false, {
+const {command, blocked, readAction, retryAt, refresh, reviewUnknownCreation, denyInlineEdit} = useListCommands({
+    active: isActive, denied: () => denied.value, reading: () => list.isFetching.value,
+    error: () => list.error.value, refresh: refreshCurrentList,
+}, {
     // Descendant Settings and inline editors delegate their global guards here.
     // The command owner combines all mounted input into one departure decision.
     dirty: () => quickAddDirty.value,
     unknownMessage: 'draft.leaveUnknown',
-    problemKey: packingProblemKey,
+    problemKey: listProblemKey,
 });
-const blocked = computed(() => command.action.disabled.value);
-const readAction = useActionState({eligible: mayRefreshList, pending: () => list.isFetching.value,
-    blocked: () => command.recoveryAction.disabled.value});
-
-function mayRefreshList(): boolean { return active && context.mayRead() && retryAvailable.value; }
 
 /** Packed state is optional browser-local presentation using the native keys.
  * SSR never probes browser storage. A rejected getter becomes an unavailable
@@ -154,7 +132,7 @@ function resetPacked(): void {
 function mayChangePacked(itemId?: string): boolean {
     // Retained same-resource content stays usable during ordinary server-read
     // failure. Actual actor retirement or denied/foreign data closes local mutation.
-    if (!context.browser || !active || !context.isCurrent(packedScope) || data.value?.id !== listId.value) return false;
+    if (!context.browser || !isActive() || !context.isCurrent(packedScope) || data.value?.id !== listId.value) return false;
     return itemId === undefined || items.value.some(item => item.id === itemId);
 }
 
@@ -246,18 +224,6 @@ function togglePacked(itemId: string, event: Event): void {
 function isFull(item: Item): boolean {
     return item.assignedCount >= (item.maxAssignees ?? 0);
 }
-/** Recover through an actually dispatched list read, honoring its deadline.
- * Command reconciliation owns confirmed/unknown status; failed recovery keeps
- * the existing stale presentation and never repeats the original write. */
-async function refresh(): Promise<boolean> {
-    if (!readAction.isAvailable()) return false;
-    try {
-        return await command.reconcile(refreshCurrentList);
-    } catch {
-        command.notice.value = 'state.stale';
-        return false;
-    }
-}
 /** Adapt one reviewed inline field without replacing unrelated item values.
  * The editor supplies its captured token; raw native capacity input is deliberately
  * left to the shared server/SQL boundary instead of coerced by this component. */
@@ -283,13 +249,6 @@ async function patch(
     ));
 }
 
-/** Keep the original browser's local permission feedback without pretending its
- * visible title/capacity affordance grants the actual metadata write. No HTTP
- * operation is admitted; the server remains authoritative for every real save. */
-function denyInlineEdit(source?: Event): void {
-    command.captureFeedback(source);
-    command.setError('packing.inlineMetadataDenied', 'transient', 'inline');
-}
 /** Submit the desired opposite membership of the admitted row, not a body actor.
  * The server owns idempotency and capacity; unknown delivery is reviewed through
  * the shared command owner instead of automatically toggled or retried. */
@@ -352,18 +311,6 @@ async function addItem(): Promise<void> {
     if (result) Object.assign(freshItem, {title: '', description: '', maxAssignees: 1});
 }
 
-/** Read the current list and obtain deliberate acknowledgement of an unknown
- * Quick Add outcome. This releases its retained status without issuing another
- * creation or treating absence from the refreshed list as proof of failure. */
-async function reviewUnknownItem(): Promise<void> {
-    // A read reveals current rows, but cannot prove which one a lost creation response added.
-    // Keep the captured input blocked until the user reviews that list and acknowledges it.
-    const reconciled = await refresh();
-    if (reconciled && !list.error.value && window.confirm(messages.value.t('packing.confirmUnknownReviewed'))) {
-        command.acknowledge();
-    }
-}
-
 const reorder = useListReorder({
     available: () => !!data.value?.capabilities.reorder && !blocked.value && !editing.value,
     ids: () => items.value.map(item => item.id), token: () => data.value?.orderToken,
@@ -390,27 +337,11 @@ const reorder = useListReorder({
         <div class="card-body">
             <!-- Native item/assignment commands present transient feedback in the
                  shared page alert host; durable reconciliation stays beside the list. -->
-            <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value">
-                <template #notice>
-                    <template v-if="command.uncertain.value && command.reviewRequired.value">
-                        <p class="mb-2">{{ messages.t('packing.reviewUnknownItem') }}</p>
-                        <ActionButton variant="outline-warning" :state="readAction" @click="reviewUnknownItem">
-                            {{ messages.t('draft.review') }}
-                        </ActionButton>
-                    </template>
-                </template>
-            </CommandFeedback>
-            <StatusNotice v-if="denied" kind="danger" :retry-at="retryAt" :read-error="list.error.value">
-                {{ messages.t('state.forbidden') }}
-            </StatusNotice>
-            <StatusNotice v-else-if="list.error.value" kind="warning"
-                :last-updated-at="list.data.value ? list.dataUpdatedAt.value : undefined"
-                :retry-at="retryAt" :read-error="list.error.value">{{
-                messages.t(data ? 'state.stale' : 'state.loadFailed')
-            }}</StatusNotice>
-            <!-- Shape the missing detail region without inventing items or capabilities.
-                 Loaded rows and drafts remain mounted throughout background reads. -->
-            <LoadingSkeleton v-if="initialLoading" v-bind="route.meta.loadingSkeleton" />
+            <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value"
+                :creation-review="{required: command.reviewRequired.value, message: 'packing.reviewUnknownItem', state: readAction, paragraphClass: 'mb-2'}"
+                @review-creation="reviewUnknownCreation('packing.confirmUnknownReviewed')" />
+            <EntityDetailReadState :denied="denied" :error="list.error.value" :has-data="!!data" :pending="list.isPending.value"
+                :last-updated-at="list.data.value ? list.dataUpdatedAt.value : undefined" :retry-at="retryAt" :skeleton="route.meta.loadingSkeleton" />
             <template v-if="data">
                 <!-- Storage failures are durable and cannot expire into silent loss.
                      Retry touches only personal checks, keeping server commands independent. -->
@@ -425,48 +356,16 @@ const reorder = useListReorder({
                     messages.t('packing.archived')
                 }}</StatusNotice>
                 <EntityDescription :description="data.description" separator />
-                <!-- Badge margins own the native counter gaps. Keep labels and
-                     adjacent badges together so template whitespace adds no gap. -->
-                <div
-                    class="d-flex justify-content-between align-items-center mb-3"
-                >
-                    <span class="fs-6 fw-semibold"
-                        ><i class="bi bi-people-fill me-1" aria-hidden="true"></i
-                        >{{ messages.t('packing.participants') }}:<span class="badge bg-light text-dark ms-1">{{
-                            data.counters.participants
-                        }}</span></span
-                    >
-                    <span class="fs-6 fw-semibold"
-                        ><i class="bi bi-card-checklist me-1" aria-hidden="true"></i
-                        >{{ messages.t('packing.items') }}:<span class="badge bg-light text-dark ms-1">{{ data.items.length }}</span
-                        ><span class="badge bg-secondary-subtle text-secondary-emphasis ms-1"
-                            ><i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i
-                            >{{ data.counters.open }} {{ messages.t('packing.open') }}</span
-                        ><span class="badge bg-danger-subtle text-danger-emphasis ms-1"
-                            ><i class="bi bi-slash-circle me-1" aria-hidden="true"></i
-                            >{{ data.counters.empty }} {{ messages.t('packing.unassigned') }}</span
-                        ></span
-                    >
-                </div>
+                <EntityListCounters :participants="data.counters.participants" :items="data.items.length"
+                    :open="data.counters.open" :empty="data.counters.empty" :participants-label="messages.t('packing.participants')"
+                    :items-label="messages.t('packing.items')" :open-label="messages.t('packing.open')" :empty-label="messages.t('packing.unassigned')" />
             </template>
             <!-- The native scrolling container owns its editing hint as well as the
                  table. Keep the approved read control in that row, including before
                  data arrives; horizontal scrolling must not create a fixed hint. -->
             <div class="table-responsive">
-                <div class="d-flex justify-content-between align-items-center mb-1">
-                    <small class="text-info fst-italic fw-light">{{
-                        messages.t('packing.inlineHint')
-                    }}</small>
-                    <ActionButton
-                        class="btn-sm ms-auto"
-                        variant="outline-secondary"
-                        :state="readAction"
-                        :aria-label="messages.t('common.refresh')"
-                        :title="messages.t('common.refresh')"
-                        @click="refresh"
-                        ><i class="bi bi-arrow-clockwise" aria-hidden="true"></i
-                    ></ActionButton>
-                </div>
+                <EntityListToolbar :hint="messages.t('packing.inlineHint')" :refresh-label="messages.t('common.refresh')"
+                    :state="readAction" @refresh="refresh" />
                 <template v-if="data">
                     <table
                         class="table table-dark table-bordered table-hover align-middle pilot-packed-table"
@@ -604,60 +503,12 @@ const reorder = useListReorder({
             <template v-if="data">
                 <template v-if="data.capabilities.addItem">
                     <hr />
-                    <div class="card bg-dark text-light border-secondary mb-3">
-                        <div class="card-header p-2 d-flex align-items-center">
-                            <i class="bi bi-plus-circle me-2" aria-hidden="true"></i>
-                            <span class="flex-grow-1">{{ messages.t('packing.addNewItem') }}</span>
-                            <small class="text-info fst-italic ms-2">{{
-                                messages.t('packing.fillAllFields')
-                            }}</small>
-                        </div>
-                        <form class="card-body row gy-2 gx-2 align-items-end" @submit.prevent="addItem">
-                            <div class="col-md-4">
-                                <label class="form-label mb-1" for="quick-title"
-                                    >{{ messages.t('packing.title') }} *</label
-                                ><input
-                                    id="quick-title"
-                                    v-model="freshItem.title"
-                                    class="form-control text-bg-dark"
-                                    :placeholder="messages.t('packing.itemExample')"
-                                    required
-                                    :disabled="blocked"
-                                />
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label mb-1" for="quick-description">{{
-                                    messages.t('packing.description')
-                                }}</label
-                                ><input
-                                    id="quick-description"
-                                    v-model="freshItem.description"
-                                    class="form-control text-bg-dark"
-                                    :placeholder="messages.t('packing.optional')"
-                                    :disabled="blocked"
-                                />
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label mb-1" for="quick-max">{{
-                                    messages.t('packing.maxNumber')
-                                }}</label
-                                ><input
-                                    id="quick-max"
-                                    v-model.number="freshItem.maxAssignees"
-                                    type="number"
-                                    min="1"
-                                    class="form-control text-bg-dark"
-                                    :disabled="blocked"
-                                />
-                            </div>
-                            <div class="col-md-2 d-grid">
-                                <ActionButton type="submit" variant="success" :disabled="blocked"
-                                    ><i class="bi bi-check-lg me-1" aria-hidden="true"></i
-                                    >{{ messages.t('packing.add') }}</ActionButton
-                                >
-                            </div>
-                        </form>
-                    </div>
+                    <EntityQuickAdd v-model:description="freshItem.description" v-model:capacity="freshItem.maxAssignees"
+                        :disabled="blocked" @submit="addItem">
+                        <FormField id="quick-title" v-model="freshItem.title" class="col-md-4" :name="null"
+                            :label="messages.t('packing.title')" :placeholder="messages.t('packing.itemExample')"
+                            required :disabled="blocked" />
+                    </EntityQuickAdd>
                 </template>
             </template>
         </div>

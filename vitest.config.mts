@@ -26,11 +26,12 @@ export default defineConfig({
         // Bound concurrency for ordinary two-core CI runners instead of serializing
         // those files behind a restriction required only by the shared test schema.
         isolate: true,
-        // Keep a fresh JavaScript isolate per file in bounded threads. Paired
-        // coverage runs spent much less time preparing controller/entity imports
-        // than forks, including serialized real persistence checks. The separate
-        // integration project still owns only one schema-resetting worker.
-        pool: 'threads',
+        // Full threaded runs on Windows have exited inside the native runtime
+        // without a test result (0xC0000409). Separate processes contain each
+        // worker's native state there; Linux CI retains its measured thread
+        // performance. Both pools keep fresh file isolation and the same bounded
+        // concurrency; database-backed files still own one resetter at a time.
+        pool: process.platform === 'win32' ? 'forks' : 'threads',
         maxWorkers: 2,
         hookTimeout: 30_000,
         setupFiles: ['tests/support/env.ts'],

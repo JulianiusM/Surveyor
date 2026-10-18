@@ -65,38 +65,31 @@ const propertyInputs = [
             :max-length="255" @update:model-value="values.title = $event" />
 
         <div class="row mb-3">
-            <div class="col-md-6">
-                <label class="form-label" :for="prefix + '-start'"><i class="bi bi-calendar-event me-1" aria-hidden="true"></i>{{ messages.t('event.startDate') }}</label>
-                <input :id="prefix + '-start'" v-model="values.startDate" class="form-control text-bg-dark"
-                    type="date" name="startDate" required />
-            </div>
-            <div class="col-md-6">
-                <label class="form-label" :for="prefix + '-end'"><i class="bi bi-calendar2-event me-1" aria-hidden="true"></i>{{ messages.t('event.endDate') }}</label>
-                <input :id="prefix + '-end'" v-model="values.endDate" class="form-control text-bg-dark" type="date"
-                    name="endDate" required />
-            </div>
+            <FormField :id="prefix + '-start'" class="col-md-6" name="startDate" type="date"
+                :model-value="String(values.startDate ?? '')" :label="messages.t('event.startDate')"
+                label-icon="bi-calendar-event" label-class="" required :required-marker="false"
+                @update:model-value="values.startDate = $event" />
+            <FormField :id="prefix + '-end'" class="col-md-6" name="endDate" type="date"
+                :model-value="String(values.endDate ?? '')" :label="messages.t('event.endDate')"
+                label-icon="bi-calendar2-event" label-class="" required :required-marker="false"
+                @update:model-value="values.endDate = $event" />
         </div>
         <div class="row mb-3">
-            <div class="col-md-8">
-                <label class="form-label" :for="prefix + '-location'"><i class="bi bi-geo-alt me-1" aria-hidden="true"></i>{{ messages.t('event.location') }}</label>
-                <input :id="prefix + '-location'" v-model="values.location" class="form-control text-bg-dark"
-                    name="location" maxlength="255" :placeholder="messages.t('event.locationPlaceholder')" />
-            </div>
-            <div class="col-md-4">
-                <label class="form-label" :for="prefix + '-capacity'"><i class="bi bi-people me-1" aria-hidden="true"></i>{{ messages.t('event.maxParticipants') }}</label>
-                <!-- Keep the raw DOM number spelling: the shared native owner decides
-                     coercion and optional/unlimited capacity, including zero. -->
-                <input :id="prefix + '-capacity'" :value="String(values.maxParticipants ?? '')"
-                    class="form-control text-bg-dark" type="number" name="maxParticipants"
-                    @input="values.maxParticipants = ($event.target as HTMLInputElement).value" />
-            </div>
+            <FormField :id="prefix + '-location'" class="col-md-8" name="location"
+                :model-value="String(values.location ?? '')" :label="messages.t('event.location')" label-icon="bi-geo-alt" label-class=""
+                :max-length="255" :placeholder="messages.t('event.locationPlaceholder')" @update:model-value="values.location = $event" />
+            <!-- Keep raw capacity spelling, zero and the absence of constraints.
+                 FormField emits lexical input; only the existing server coerces it. -->
+            <FormField :id="prefix + '-capacity'" class="col-md-4" name="maxParticipants" type="number"
+                :model-value="String(values.maxParticipants ?? '')" :label="messages.t('event.maxParticipants')"
+                label-icon="bi-people" label-class="" @update:model-value="values.maxParticipants = $event" />
         </div>
         <div class="row mb-3">
-            <div class="col-md-8">
-                <label class="form-label" :for="prefix + '-deadline'"><i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>{{ messages.t('event.bindingDeadline') }}<small class="ms-1">{{ messages.t('event.deadlineHint') }}</small></label>
-                <input :id="prefix + '-deadline'" v-model="values.bindingDeadline" class="form-control text-bg-dark"
-                    type="datetime-local" name="bindingDeadline" step="1" />
-            </div>
+            <FormField :id="prefix + '-deadline'" class="col-md-8" name="bindingDeadline" type="datetime-local" :step="1"
+                :model-value="String(values.bindingDeadline ?? '')" :label="messages.t('event.bindingDeadline')"
+                label-icon="bi-hourglass-split" label-class="" @update:model-value="values.bindingDeadline = $event">
+                <template #label>{{ messages.t('event.bindingDeadline') }}<small class="ms-1">{{ messages.t('event.deadlineHint') }}</small></template>
+            </FormField>
             <div class="col-md-4">
                 <label class="form-label" :for="prefix + '-timezone-btn'">{{ messages.t('event.timezone') }}</label>
                 <TimezonePicker :id="prefix + '-timezone'" :model-value="String(values.deadlineTz || 'UTC')"

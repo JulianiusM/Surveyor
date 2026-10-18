@@ -28,6 +28,11 @@ export default defineConfig({
     timeout: 30_000,
     expect: {timeout: 5_000},
     fullyParallel: true,
+    // Parallel system runs on Windows have exited in the native worker runtime
+    // without an assertion result. Default to the measured one-worker mode there;
+    // the precise native cause remains unknown. Explicit CLI overrides still work,
+    // and Linux CI retains its existing two-worker selection and in-test races.
+    workers: process.platform === 'win32' ? 1 : undefined,
     reporter: reporters,
     use: {
         baseURL: BASE_URL,

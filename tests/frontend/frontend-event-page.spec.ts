@@ -3,6 +3,7 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises} from '@vue/test-utils';
 import {QueryClient, QueryObserver} from '@tanstack/vue-query';
 import EventPage from '../../src/frontend/features/event/EventPage.vue';
+import EventSummary from '../../src/frontend/features/event/EventSummary.vue';
 import {eventKeys, overviewKeys} from '../../src/frontend/app/queryKeys';
 import {refetchFreshQueries} from '../../src/frontend/app/queryCache';
 import {UnconfirmedResponseError} from '../../src/frontend/app/transport';
@@ -46,6 +47,31 @@ async function submitRegistration(mounted: Awaited<ReturnType<typeof registratio
 }
 
 describe('Event page read dependencies', () => {
+    it.each([null, '', 'First line\nBring <strong>your own</strong> lunch.'])('retains the native description column for %j', async description => {
+        const view = createFrontendEventView({description});
+        const mounted = await mountFrontendEvent(EventSummary, async () => json(view), {event: view});
+        cleanups.push(mounted.dispose);
+        const label = mounted.context.messages.value.t('event.descriptionLabel');
+        const descriptionLabels = mounted.wrapper.findAll('label').filter(item => item.text() === label);
+
+        // Native omits both label and paragraph for null/empty descriptions.
+        // Nonempty Event text keeps its own column, ordinary p margins and no
+        // list-specific ID, while sharing the escaped newline implementation.
+        expect(descriptionLabels).toHaveLength(description ? 1 : 0);
+        expect(mounted.wrapper.find('#planDesc').exists()).toBe(false);
+        if (description) {
+            const paragraph = mounted.wrapper.get('p');
+            expect(paragraph.element.previousElementSibling).toBe(descriptionLabels[0]!.element);
+            expect(paragraph.element.parentElement?.classList.contains('col-md-6')).toBe(true);
+            expect(paragraph.attributes('id')).toBeUndefined();
+            expect(paragraph.classes()).not.toContain('mb-0');
+            expect(paragraph.classes()).not.toContain('mt-2');
+            expect(paragraph.element.textContent).toBe(description.replace('\n', ''));
+            expect(paragraph.findAll('br')).toHaveLength(1);
+            expect(paragraph.find('strong').exists()).toBe(false);
+        }
+    });
+
     it('confirms attendance after its own fresh detail when no sibling observer exists', async () => {
         const mounted = await registrationVisit();
         await submitRegistration(mounted);

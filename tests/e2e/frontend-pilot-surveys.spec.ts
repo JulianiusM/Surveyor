@@ -2,12 +2,12 @@ import {expect, test} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
-import {closeModalForE2E, expectVisiblePresentation, loginForE2E, openModalForE2E,
+import {expectVisiblePresentation, loginForE2E, openModalForE2E,
     readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
-import {captureSurveyPresentation, createFrontendSurveyFixture, observeSurveyCommand,
-    readSurveyForE2E} from '../keywords/frontendSurveyE2EKeywords';
+import {captureSurveyPresentation, createFrontendSurveyFixture, expectSurveyActionsPresentation, expectSurveyCardLayout, observeSurveyCommand,
+    readSurveyCardLayout, readSurveyForE2E, readSurveyPageOverflow, scrollSurveyTable} from '../keywords/frontendSurveyE2EKeywords';
 
 for (const width of [1280, 390]) {
     test(`compares native Survey creation, ballots, named results and collaborative choices at ${width}px`, async ({page}, info) => {
@@ -17,6 +17,7 @@ for (const width of [1280, 390]) {
         const survey = await createFrontendSurveyFixture(page.request);
         const initial = await readSurveyForE2E(page.request, survey.id);
         const native: Record<string, Awaited<ReturnType<typeof readVisiblePresentation>>> = {};
+        let nativeLayout: Awaited<ReturnType<typeof readSurveyCardLayout>>;
 
         // A partial persisted ballot exercises both the named Yes and the
         // native missing-answer No presentation in the second result column.
@@ -35,10 +36,25 @@ for (const width of [1280, 390]) {
                 ['label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button']);
             if (pilot) expectVisiblePresentation(native.creation!, creation);
             else native.creation = creation;
+            const creationCard = await captureSurveyPresentation(page, info, `${label}-survey-create-card`,
+                page.locator('main .card').first(), ['h1', 'label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button']);
+            if (pilot) expectVisiblePresentation(native.creationCard!, creationCard);
+            else native.creationCard = creationCard;
 
             await page.goto(`${prefix}${survey.path}?locale=en`, {waitUntil: 'domcontentloaded'});
             if (pilot) await waitForPilotHydration(page);
             await expect(page).toHaveTitle(`Vote on ${survey.title} | Surveyor`);
+            const card = page.locator('main .card').first();
+            const header = await captureSurveyPresentation(page, info, `${label}-survey-header`, card.locator(':scope > .card-header'),
+                ['h1', 'button']);
+            const layout = await readSurveyCardLayout(card, pilot);
+            if (pilot) {
+                expectVisiblePresentation(native.header!, header);
+                expectSurveyCardLayout(nativeLayout!, layout);
+            } else {
+                native.header = header;
+                nativeLayout = layout;
+            }
             const ballot = page.locator(pilot ? '#survey-ballot' : 'main form[action$="/submit"]');
             const results = page.locator('main table').nth(1);
             const addition = page.locator(pilot ? '#survey-add-combination' : 'main form[action$="/add-combination"]');
@@ -74,10 +90,127 @@ for (const width of [1280, 390]) {
                 ['h2', 'h5', 'p', 'summary', 'label', 'input:not([type="hidden"])', 'textarea', 'button']);
             if (pilot) expectVisiblePresentation(native.general!, general);
             else native.general = general;
-            if (pilot) await dialog.locator('.modal-header .btn-close').click();
-            else await closeModalForE2E(nativeModal);
+
+            // The same admitted image disclosure must open from the keyboard.
+            // Its complete dialog snapshot includes the chooser, hint and Upload,
+            // retaining their actual label/control geometry at both viewports.
+            const image = dialog.locator('[data-entity-section="image"]');
+            await image.locator('summary').press('Enter');
+            await expect(image.locator('details')).toHaveJSProperty('open', true);
+            const expanded = await captureSurveyPresentation(page, info, `${label}-survey-settings-image`, dialog,
+                ['h2', 'h5', 'p', 'summary', 'label', 'input:not([type="hidden"])', 'textarea', 'button']);
+            if (pilot) expectVisiblePresentation(native.expanded!, expanded);
+            else native.expanded = expanded;
+
+            // Both native Bootstrap and the Vue focus owner expose the same
+            // General→Actions keyboard journey and restore the actual invoker.
+            await dialog.getByRole('tab', {name: 'General', exact: true}).focus();
+            await page.keyboard.press('ArrowRight');
+            const actions = dialog.getByRole('tab', {name: 'Actions', exact: true});
+            await expect(actions).toBeFocused();
+            await expect(actions).toHaveAttribute('aria-selected', 'true');
+            const actionPanel = await captureSurveyPresentation(page, info, `${label}-survey-settings-actions`, dialog,
+                ['h2', 'h3', 'h5', 'p', 'a', 'button']);
+            if (pilot) expectSurveyActionsPresentation(native.actions!, actionPanel);
+            else native.actions = actionPanel;
+            await expect(dialog.getByRole('link', {name: 'Duplicate', exact: true})).toHaveAttribute('href', `${prefix}${survey.path}/duplicate`);
+            const remove = dialog.getByRole('button', {name: 'Delete permanently', exact: true});
+            await expect(remove).toBeEnabled();
+            // Verify the precise existing wrapper behind computed blockification;
+            // the scoped comparison never normalizes unrelated display changes.
+            expect(await remove.evaluate(element => element.parentElement!.tagName)).toBe(pilot ? 'DIV' : 'FORM');
+            await actions.focus();
+            await page.keyboard.press('Escape');
+            await expect(dialog).not.toBeVisible();
+            await expect(opener).toBeFocused();
         }
         expect(errors).toEqual([]);
+    });
+
+    test(`compares the empty Survey results and complete voting card at ${width}px`, async ({page}, info) => {
+        await page.setViewportSize({width, height: 900});
+        const survey = await createFrontendSurveyFixture(page.request);
+        await page.request.get('/users/profile');
+        let nativeNotice: Awaited<ReturnType<typeof readVisiblePresentation>>;
+        let nativeLayout: Awaited<ReturnType<typeof readSurveyCardLayout>>;
+
+        for (const pilot of [false, true]) {
+            const label = pilot ? 'vue' : 'native';
+            await page.goto(`${pilot ? '/frontend-pilot' : ''}${survey.path}?locale=en`, {waitUntil: 'domcontentloaded'});
+            if (pilot) await waitForPilotHydration(page);
+            const card = page.locator('main .card').first();
+            const body = card.locator(':scope > .card-body');
+            await expect(body.locator('h2:visible')).toHaveText(['Your response', 'All answers', 'Add new combination']);
+            await expect(body.locator('table:visible')).toHaveCount(1);
+            const notice = body.locator('.status-notice').filter({hasText: 'No answers yet…'});
+            await expect(notice).toBeVisible();
+            const presentation = await captureSurveyPresentation(page, info, `${label}-survey-empty-results`, notice, []);
+            const layout = await readSurveyCardLayout(card, pilot);
+            if (pilot) {
+                expectVisiblePresentation(nativeNotice!, presentation);
+                expectSurveyCardLayout(nativeLayout!, layout);
+            } else {
+                nativeNotice = presentation;
+                nativeLayout = layout;
+            }
+            // Keep the whole surrounding card available for human inspection;
+            // the normalized layout above asserts every inter-section gap.
+            await captureSurveyPresentation(page, info, `${label}-survey-empty-card`, card,
+                ['h1', 'h2', 'th', 'td', 'input', 'label', 'select', 'button']);
+        }
+    });
+
+    test(`scrolls native and Vue Survey ballots and results with sticky participants at ${width}px`, async ({page}, info) => {
+        await page.setViewportSize({width, height: 900});
+        const survey = await createFrontendSurveyFixture(page.request, '', {wide: true});
+        const initial = await readSurveyForE2E(page.request, survey.id);
+        // A partial real ballot keeps both the named answer and omitted No
+        // cells in the wide results. No client document or HTTP response is mocked.
+        expect((await page.request.post(`${survey.path}/submit`, {
+            form: {[initial.combinations[0]!.id]: 'yes'}, maxRedirects: 0,
+        })).status()).toBe(302);
+        await page.request.get('/users/profile');
+        const native: Record<string, Awaited<ReturnType<typeof readVisiblePresentation>>> = {};
+        const nativeScroll: Record<string, Awaited<ReturnType<typeof scrollSurveyTable>>> = {};
+        let nativeOverflow: Awaited<ReturnType<typeof readSurveyPageOverflow>>;
+
+        for (const pilot of [false, true]) {
+            const label = pilot ? 'vue' : 'native';
+            await page.goto(`${pilot ? '/frontend-pilot' : ''}${survey.path}?locale=en`, {waitUntil: 'domcontentloaded'});
+            if (pilot) await waitForPilotHydration(page);
+            for (const [index, kind] of ['ballot', 'results'].entries()) {
+                const table = page.locator('main table').nth(index);
+                await expect(table.locator('thead th')).toHaveCount(initial.combinations.length + 1);
+                const movement = await scrollSurveyTable(table);
+                const presentation = await captureSurveyPresentation(page, info, `${label}-survey-scrolled-${kind}`, table.locator('..'),
+                    ['th', 'td', 'input', 'label']);
+                if (pilot) {
+                    expectVisiblePresentation(native[kind]!, presentation);
+                    for (const dimension of ['width', 'overflow', 'scroll'] as const) {
+                        expect(Math.abs(movement[dimension] - nativeScroll[kind]![dimension])).toBeLessThanOrEqual(1);
+                    }
+                } else {
+                    native[kind] = presentation;
+                    nativeScroll[kind] = movement;
+                }
+            }
+            // The original wide page itself reports larger document scroll
+            // bounds. Preserve and compare that actual horizontal behavior
+            // boundary instead of inventing a native no-overflow guarantee.
+            const overflow = await readSurveyPageOverflow(page);
+            await info.attach(`${label}-survey-page-overflow`, {body: JSON.stringify(overflow, null, 2), contentType: 'application/json'});
+            if (pilot) {
+                expect(overflow.htmlOverflowX).toBe(nativeOverflow!.htmlOverflowX);
+                expect(overflow.bodyOverflowX).toBe(nativeOverflow!.bodyOverflowX);
+                for (const dimension of ['clientWidth', 'scrollWidth', 'reachableScrollX'] as const) {
+                    expect(Math.abs(overflow[dimension] - nativeOverflow![dimension])).toBeLessThanOrEqual(1);
+                }
+                for (const surface of ['body', 'main'] as const) {
+                    expect(Math.abs(overflow[surface].x - nativeOverflow![surface].x)).toBeLessThanOrEqual(1);
+                    expect(Math.abs(overflow[surface].width - nativeOverflow![surface].width)).toBeLessThanOrEqual(1);
+                }
+            } else nativeOverflow = overflow;
+        }
     });
 
     test(`renders saved Survey instructions as escaped single and multiline text at ${width}px`, async ({page}, info) => {
@@ -148,6 +281,16 @@ test('creates and duplicates a standalone Survey with image and monthly choices 
     await page.locator('#addCombinationBtn').click();
     await page.locator('#combinationTable tr').nth(1).locator('select').nth(0).selectOption('WED');
     await page.locator('#combinationTable tr').nth(1).locator('select').nth(1).selectOption('3');
+    // Draft rows retain independent DOM identity even while their selections
+    // match. The persisted schema forbids identical recurring choices, so remove
+    // this temporary peer before submitting the valid two-choice creation.
+    await page.locator('#addCombinationBtn').click();
+    await page.locator('#combinationTable tr').nth(2).locator('select').nth(0).selectOption('FRI');
+    await page.locator('#combinationTable tr').nth(2).locator('select').nth(1).selectOption('LAST');
+    await page.locator('#combinationTable tr').nth(2).getByRole('button', {name: 'Remove', exact: true}).click();
+    await expect(page.locator('#combinationTable tr')).toHaveCount(2);
+    await expect(page.locator('#combinationTable tr').first().locator('select').nth(0)).toHaveValue('FRI');
+    await expect(page.locator('#combinationTable tr').first().locator('select').nth(1)).toHaveValue('LAST');
     await expect(page.getByText('Group Permissions', {exact: true})).toHaveCount(0);
     const created = page.waitForResponse(response => response.request().method() === 'POST'
         && new URL(response.url()).pathname === '/api/v1/surveys');
@@ -163,6 +306,7 @@ test('creates and duplicates a standalone Survey with image and monthly choices 
     expect(original.combinations).toEqual(expect.arrayContaining([
         expect.objectContaining({weekday: 'FRI', nthWeek: 'LAST'}), expect.objectContaining({weekday: 'WED', nthWeek: '3'}),
     ]));
+    expect(original.combinations).toHaveLength(2);
     expect(await (await page.request.get(original.headerUrl!, {headers: await frontendEventHeaders(page.request)})).body())
         .toEqual(readFileSync('src/public/img/logo.png'));
 
@@ -205,10 +349,20 @@ test('creates and duplicates a standalone Survey with image and monthly choices 
     expect(navigations).toEqual([]);
 });
 
-test('keeps guest ballots isolated, preserves dirty choices during refresh and admits collaborative combinations', async ({page, browser, baseURL}) => {
+test('keeps archived guest ballots isolated, preserves dirty choices during refresh and admits collaborative combinations', async ({page, browser, baseURL}, info) => {
     const survey = await createFrontendSurveyFixture(page.request);
+    expect((await page.request.post(`/api/v1/surveys/${survey.id}/archive`, {
+        headers: await frontendEventHeaders(page.request),
+    })).status()).toBe(200);
+    await page.request.get('/users/profile');
+    await page.goto(`${survey.path}?locale=en`, {waitUntil: 'domcontentloaded'});
+    const nativeNotice = await captureSurveyPresentation(page, info, 'native-survey-archived-notice',
+        page.getByRole('status').filter({hasText: /^This entity is archived\.$/u}), []);
     await page.goto(`/frontend-pilot${survey.path}?locale=en`, {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);
+    const archivedNotice = page.getByRole('status').filter({hasText: /^This entity is archived\.$/u});
+    await expect(archivedNotice).toBeVisible();
+    expectVisiblePresentation(nativeNotice, await captureSurveyPresentation(page, info, 'vue-survey-archived-notice', archivedNotice, []));
     await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'survey-ballot';});
     const navigations: string[] = [];
     page.on('request', request => {
@@ -225,11 +379,18 @@ test('keeps guest ballots isolated, preserves dirty choices during refresh and a
         await waitForPilotHydration(guestPage);
         await expect(guestPage).toHaveURL(`/frontend-pilot${survey.path}/guest?locale=en`);
         await expect(guestPage).toHaveTitle(`Join «${survey.title}»`);
+        await guestPage.evaluate(() => {document.documentElement.dataset.pilotDocument = 'survey-guest';});
+        const guestNavigations: string[] = [];
+        guestPage.on('request', request => {
+            if (request.isNavigationRequest() && request.frame() === guestPage.mainFrame()) guestNavigations.push(request.url());
+        });
         await guestPage.locator('#guest-name').fill(`P4 guest ${randomUUID().slice(0, 8)}`);
         await observeSurveyCommand(guestPage, survey.id, '/guest', 'POST',
             () => guestPage.getByRole('button', {name: 'Continue as guest', exact: true}).click());
         await expect(guestPage.locator('#survey-ballot')).toBeVisible();
         await expect(guestPage).toHaveTitle(`Vote on ${survey.title} | Surveyor`);
+        await expect(guestPage.getByRole('status').filter({hasText: /^This entity is archived\.$/u})).toBeVisible();
+        await expect(guestPage.getByRole('button', {name: 'Entity settings', exact: true})).toHaveCount(0);
         await guestPage.locator('#survey-add-weekday').selectOption('SUN');
         await guestPage.locator('#survey-add-nth').selectOption('4');
         await observeSurveyCommand(guestPage, survey.id, '/combinations', 'POST',
@@ -251,10 +412,13 @@ test('keeps guest ballots isolated, preserves dirty choices during refresh and a
         const submitted = await readSurveyForE2E(page.request, survey.id);
         expect(submitted.ownAnswers).toMatchObject({[first.id]: 'yes', [added.id]: 'no'});
         expect(submitted.responses).toHaveLength(2);
+        expect(submitted.archived).toBe(true);
         expect((await readSurveyForE2E(guest.request, survey.id)).ownAnswers[first.id]).toBe('maybe');
         await expect(page.locator('main table').nth(1).locator('tbody tr')).toHaveCount(2);
         expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('survey-ballot');
         expect(navigations).toEqual([]);
+        expect(await guestPage.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('survey-guest');
+        expect(guestNavigations).toEqual([]);
     } finally {
         await guest.close();
     }
@@ -295,9 +459,18 @@ test('saves Survey owner properties, image and archive controls before permanent
     await observeSurveyCommand(page, survey.id, '/archive', 'POST',
         () => settings.getByRole('button', {name: 'Archive for everyone', exact: true}).click());
     expect((await readSurveyForE2E(page.request, survey.id)).archived).toBe(true);
+    await settings.locator('.modal-header .btn-close').click();
+    const archivedNotice = page.getByRole('status').filter({hasText: /^This entity is archived\.$/u});
+    await expect(archivedNotice).toBeVisible();
+    await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
+    await settings.getByRole('tab', {name: 'Actions', exact: true}).click();
     await observeSurveyCommand(page, survey.id, '/restore', 'POST',
         () => settings.getByRole('button', {name: 'Restore for everyone', exact: true}).click());
     expect((await readSurveyForE2E(page.request, survey.id)).archived).toBe(false);
+    await settings.locator('.modal-header .btn-close').click();
+    await expect(archivedNotice).toHaveCount(0);
+    await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
+    await settings.getByRole('tab', {name: 'Actions', exact: true}).click();
     await observeSurveyCommand(page, survey.id, '', 'DELETE',
         () => settings.getByRole('button', {name: 'Delete permanently', exact: true}).click());
     await expect(page).toHaveURL('/frontend-pilot');

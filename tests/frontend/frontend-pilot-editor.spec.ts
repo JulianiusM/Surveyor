@@ -46,8 +46,8 @@ const settings: components['schemas']['PackingSettings'] = {id: listId, title: l
     capabilities: {editHeader: false, linkEvent: false, managePermissions: false, duplicate: false,
         remove: false, archive: false, restore: false, manageArchive: false}};
 
-function json(value: unknown): Response {
-    return new Response(JSON.stringify(value), {headers: {'Content-Type': 'application/json',
+function json(value: unknown, status = 200): Response {
+    return new Response(JSON.stringify(value), {status, headers: {'Content-Type': 'application/json',
         'X-Surveyor-Context': session.context, ETag: '"original"'}});
 }
 
@@ -246,6 +246,46 @@ async function mountPackingView(view: components['schemas']['PackingListView'],
 }
 
 describe('mounted Packing Quick Add confirmation', () => {
+    it('retains native number coercion and unnamed inputs through unrelated draft edits and read refresh', async () => {
+        const editableList = {...list, capabilities: {...list.capabilities, addItem: true}};
+        const writes: unknown[] = [];
+        const mounted = await mountPackingView(editableList, async request => {
+            if (request.method === 'POST') {
+                writes.push(await request.json());
+                return json({id: '33333333-3333-4333-8333-333333333333'}, 201);
+            }
+            return json(editableList);
+        });
+        try {
+            const capacity = mounted.wrapper.get<HTMLInputElement>('#quick-max');
+            const original = capacity.element;
+            original.focus();
+            await capacity.setValue('01');
+            await mounted.wrapper.get('#quick-title').setValue('Native tent');
+            await mounted.wrapper.get('#quick-description').setValue('  keep padding  ');
+            await mounted.context.queryClient.refetchQueries({queryKey: packingKeys.detail(session.context, listId), exact: true});
+            await flushPromises();
+            expect(mounted.wrapper.get('#quick-max').element).toBe(original);
+            // Baseline Vue number inputs normalize a leading zero on change
+            // or rerender while retaining their numeric model and focused node.
+            expect(original.value).toBe('1');
+            expect(document.activeElement).toBe(original);
+            expect(capacity.attributes('min')).toBe('1');
+            for (const id of ['quick-title', 'quick-description', 'quick-max']) {
+                expect(mounted.wrapper.get('#' + id).attributes('name')).toBeUndefined();
+            }
+
+            // Only the existing feature collector defaults an empty capacity.
+            // Confirmation releases the same controls through their draft values.
+            await capacity.setValue('');
+            await mounted.wrapper.get('form').trigger('submit');
+            await flushPromises();
+            expect(writes).toEqual([{title: 'Native tent', description: '  keep padding  ', maxAssignees: 1, requiredByAll: false}]);
+            expect(original.value).toBe('1');
+            expect(mounted.wrapper.get('#quick-max').element).toBe(original);
+        } finally { await mounted.dispose(); }
+    });
+
     it.each(['pending', 'failed'] as const)('releases confirmed input once while session verification is %s',
         async function preservesConfirmedQuickAdd(bootstrapState) {
             let finishBootstrap!: (response: Response) => void;

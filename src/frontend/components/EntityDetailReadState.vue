@@ -1,0 +1,33 @@
+<script setup lang="ts">
+import type {PilotLoadingSkeleton} from '../../types/FrontendPilotUiTypes';
+import {usePilot} from '../app/context';
+import LoadingSkeleton from './LoadingSkeleton.vue';
+import StatusNotice from './StatusNotice.vue';
+
+// Detail owners supply their admitted/read state and successful timestamp. This
+// composition presents the same denial, stale/cold warning and missing-data shape
+// without another query, receipt, retry timer, data store or authority decision.
+defineProps<{
+    denied: boolean;
+    error: Error | null;
+    hasData: boolean;
+    pending: boolean;
+    lastUpdatedAt?: number;
+    retryAt?: number;
+    skeleton?: PilotLoadingSkeleton;
+}>();
+const {messages} = usePilot();
+</script>
+
+<template>
+    <StatusNotice v-if="denied" kind="danger" :retry-at="retryAt" :read-error="error">
+        {{ messages.t('state.forbidden') }}
+    </StatusNotice>
+    <StatusNotice v-else-if="error" kind="warning" :last-updated-at="lastUpdatedAt"
+        :retry-at="retryAt" :read-error="error">{{ messages.t(hasData ? 'state.stale' : 'state.loadFailed') }}</StatusNotice>
+    <!-- Survey keeps its existing Refresh row between warnings and loading.
+         Lists supply no intervening content. The fragment adds no layout wrapper
+         and never replaces admitted data or mounted drafts during background reads. -->
+    <slot />
+    <LoadingSkeleton v-if="!hasData && !denied && pending" v-bind="skeleton" />
+</template>

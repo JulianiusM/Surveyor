@@ -4,6 +4,7 @@ import {RouterLink} from 'vue-router';
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
 import {formatEventCivilDate} from './presentation';
+import EntityDescription from '../../components/EntityDescription.vue';
 
 // Detail and organizer pages share the same bounded Event presentation. This
 // countdown changes display only; registration deadlines remain server-owned.
@@ -13,7 +14,6 @@ const now = ref(Date.now());
 let timer: ReturnType<typeof setInterval> | undefined;
 onMounted(() => { timer = setInterval(tick, 60000); });
 onBeforeUnmount(() => clearInterval(timer));
-const description = computed(() => props.event.description?.split('\n') ?? []);
 const countdown = computed(deadlineCountdown);
 
 function tick(): void { now.value = Date.now(); }
@@ -65,11 +65,11 @@ function deadlineCountdown(): string {
                     </dl>
                 </div>
 
-                <div class="col-md-6" v-if="description.length">
+                <div class="col-md-6" v-if="event.description">
                     <label class="form-label">{{ messages.t('event.descriptionLabel') }}</label>
-                    <p>
-                        <template v-for="(line, index) in description" :key="index">{{ line }}<br v-if="index < description.length - 1" /></template>
-                    </p>
+                    <!-- Event keeps its labeled column and ordinary paragraph
+                         margins; only escaped line rendering is shared with lists. -->
+                    <EntityDescription :description="event.description" :paragraph-id="null" paragraph-class="" />
                 </div>
             </div>
 

@@ -6,7 +6,7 @@ import {validateEventRegistrationInput} from '../../../../.generated/api/v1/brow
 import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
-import {InvalidInputError} from '../../app/transport';
+import {createMultipartForm, InvalidInputError} from '../../app/transport';
 import {validateEventCreateEntry} from '../../../../.generated/api/v1/browser/validateEventCreateEntry.mjs';
 import {validateEventCreateInput} from '../../../../.generated/api/v1/browser/validateEventCreateInput.mjs';
 import {validateEventCreated} from '../../../../.generated/api/v1/browser/validateEventCreated.mjs';
@@ -94,9 +94,7 @@ export class EventApi {
     async createEvent(input: components['schemas']['EventCreateInput'], image: File | null,
                       scope: PilotRequestScope): Promise<components['schemas']['EventCreated']> {
         if (!validateEventCreateInput(input)) throw new InvalidInputError('Invalid Event creation.');
-        const form = new FormData();
-        form.append('data', JSON.stringify(input));
-        if (image) form.append('image', image);
+        const form = createMultipartForm(input, image);
 
         // Captured actor/CSRF proof covers both file delivery and response
         // classification; losing that response never authorizes a second POST.
@@ -195,8 +193,7 @@ export class EventApi {
     async uploadHeader(eventId: string, image: File, token: string, scope: PilotRequestScope) {
         // Keep the chosen bytes separate from their generated filename placeholder.
         // The serializer supplies the actual multipart body without copying upload policy.
-        const form = new FormData();
-        form.append('image', image);
+        const form = createMultipartForm(null, image);
 
         // Send the token captured when this file was chosen, never a newer settings token
         // obtained while the draft was waiting. The shared command owner handles recovery.

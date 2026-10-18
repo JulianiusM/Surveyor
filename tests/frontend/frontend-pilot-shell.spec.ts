@@ -821,6 +821,80 @@ describe('native shell and help presentation contract', () => {
         }
     });
 
+    it.each([false, true])('retains native composition, caret and control identity for multiline=%s', async multiline => {
+        const value = ref('Entered text');
+        const placeholder = ref('Original hint');
+        const wrapper = mount(defineComponent({
+            setup() {
+                return function renderField() {
+                    return h(FormField, {id: 'composed-draft', label: 'Draft', modelValue: value.value,
+                        multiline, placeholder: placeholder.value, 'onUpdate:modelValue': receiveValue});
+                };
+            },
+        }), {attachTo: document.body});
+        function receiveValue(next: string): void { value.value = next; }
+
+        try {
+            const input = wrapper.get<HTMLInputElement | HTMLTextAreaElement>(multiline ? 'textarea' : 'input');
+            const original = input.element;
+            original.focus();
+            await input.trigger('compositionstart');
+            original.value = 'Entered text あ';
+            await input.trigger('input');
+            expect(value.value).toBe('Entered text');
+
+            // An unrelated feature rerender cannot erase an active IME draft.
+            // Only native composition completion publishes its final text.
+            placeholder.value = 'Updated hint';
+            await flushPromises();
+            expect(original.value).toBe('Entered text あ');
+            await input.trigger('compositionend');
+            await flushPromises();
+            expect(value.value).toBe('Entered text あ');
+            original.setSelectionRange(3, 3);
+            placeholder.value = 'Another hint';
+            await flushPromises();
+            expect(wrapper.get(multiline ? 'textarea' : 'input').element).toBe(original);
+            expect(document.activeElement).toBe(original);
+            expect(original.selectionStart).toBe(3);
+            expect(original.selectionEnd).toBe(3);
+        } finally { wrapper.unmount(); }
+    });
+
+    it('keeps number fields lexical while native input lifecycle retains the focused control', async () => {
+        const value = ref('');
+        const placeholder = ref('Optional');
+        const wrapper = mount(defineComponent({
+            setup() {
+                return function renderField() {
+                    return h(FormField, {id: 'raw-number', label: 'Capacity', type: 'number', modelValue: value.value,
+                        placeholder: placeholder.value, 'onUpdate:modelValue': receiveValue});
+                };
+            },
+        }), {attachTo: document.body});
+        function receiveValue(next: string): void { value.value = next; }
+
+        try {
+            const input = wrapper.get<HTMLInputElement>('input');
+            const original = input.element;
+            original.focus();
+            await input.setValue('001.50');
+            placeholder.value = 'Changed hint';
+            await flushPromises();
+            expect(value.value).toBe('001.50');
+            expect(input.element.value).toBe('001.50');
+            expect(wrapper.get('input').element).toBe(original);
+            expect(document.activeElement).toBe(original);
+
+            // Browsers expose an invalid number spelling as an empty DOM value.
+            // The lexical field keeps that empty value instead of inventing zero.
+            await input.setValue('invalid number');
+            expect(value.value).toBe('');
+            await input.setValue('0');
+            expect(value.value).toBe('0');
+        } finally { wrapper.unmount(); }
+    });
+
     it('preserves the native footer text, icon-owned gap and nonbreaking bullet separators', async () => {
         const native = nativeGuestPage().querySelector('footer small')!;
         const result = await render('/frontend-pilot/help', {session, help});

@@ -1004,7 +1004,9 @@ describe('pilot mixed overview projection', () => {
         expect(contractValidator('OverviewRegion')(surveyOnly)).toBe(true);
         expect(surveyOnly).toMatchObject({type: 'all', availableTypes: ['survey'], totalEntities: 1,
             matchingEntities: 1, totalCards: 1});
-        expect(surveyOnly.items).toMatchObject([{id: surveyId, type: 'survey', url: `/survey/${surveyId}`}]);
+        // P4 Surveys are migrated destinations even inside the mixed Overview.
+        // Unmigrated Activity children below keep their original native URL.
+        expect(surveyOnly.items).toMatchObject([{id: surveyId, type: 'survey', url: `/frontend-pilot/survey/${surveyId}`}]);
 
         const eventId = await createIntegrationEvent(isolatedOwner.id, 'Mixed trip');
         const activityId = await createEventActivityPlan(isolatedOwner.id, eventId);

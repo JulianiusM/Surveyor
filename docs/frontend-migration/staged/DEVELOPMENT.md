@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P4 shared field/description/answer presentation, complete document titles and approved Survey frontend fixes reconciled alongside current multipart/reload inventories and retained ownership/parity boundaries; execution belongs to paired review; no publication
+verification-scope: actual shared field/description/multipart and list read/feedback/toolbar/counter/Quick Add owners source-reconciled with contribution examples, lexical input, native isolation and Survey exceptions; execution separate; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -37,6 +37,7 @@ endpoints or permission policy. The following contracts describe how those owner
 | DTO to browser operation | `features/<feature>/api.ts`, `app/transport.ts`, generated operation and feature validators. |
 | Entry/read to authorized view | `composables/pageEntry.ts`, `app/queryKeys.ts`, `app/queryCache.ts`; the feature supplies policy/dependencies. |
 | Snapshot to draft/command/recovery | `metadataDraft.ts`, `command.ts`, shared feedback, confirmed-navigation and fresh-read owners. |
+| Matching detail read/command state to presentation | `useListDetail`/`useListCommands` retain lifetimes; `EntityDetailReadState`, `EntityListToolbar` and `CommandFeedback` render injected state/events without another query, draft or authority owner. |
 | Matching entity interaction to its consumers | `EntityEntryPage`, `EntityHeader`, `EntitySettingsDialog`, `EntityMetadataEditor`, `EntityAccessEditor` and `identity/GuestEntryPage`; feature operations, query families and field normalization remain injected. |
 | Route to SSR/hydration | Existing Express route/renderer, `app/serializeBootstrap.ts`, `createApp.ts` and `mountPreservingDrafts.ts`. |
 | Initial content to usable controls | `app/context.ts` initialization helpers, route metadata and existing shell/shared controls. |
@@ -101,6 +102,10 @@ or a copied database-limit policy. Native metadata diagnostics remain owned by t
 The current HTTP adapter decodes single scalar path/query/header values, JSON and Event/Packing/Drivers/Survey multipart, and
 delivers JSON or scoped binary image responses. Creation decodes the `data` JSON part once against its authored nested schema
 and handles `image` separately. Repeated query parameters, absent/empty values and malformed input stay distinct.
+The browser's `createMultipartForm` in the existing transport owner supplies the matching creation/header envelope
+for Packing, Drivers, Event and Survey. Features validate their own generated input and select the operation; the
+serializer only encodes an optional `data` part and appends the original optional image bytes. Header operations
+pass no metadata. It neither chooses an endpoint nor changes headers, comparison evidence or file lifetime.
 The maintainer's [2026-10-15 correction](decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15)
 clarifies that removal of unused implementation did not authorize definition restrictions. Parameter schemas may
 use arrays, objects and unions; response definitions may declare media such as `text/plain`. Generating their
@@ -132,8 +137,14 @@ icon, constraints, rows and required-marker policy explicitly. An omitted native
 from the default name derived from its ID. `FileField` composes the same label/control owner and the existing file
 release composable; the feature retains its selected File and command/draft decisions. Rejected or unknown commands
 keep that exact input mounted. Do not copy a chooser merely because its caller creates rather than edits an entity.
-Read-only Packing/Drivers/Survey descriptions use `EntityDescription` for escaped lines, with an explicit optional
-divider. Survey ballot and result labels share the answer appearance mapping while retaining their different wording.
+Read-only Packing/Drivers/Survey/Event descriptions use `EntityDescription` for escaped lines. Lists retain their
+paragraph hook, spacing and optional divider; Event supplies an unnamed ordinary paragraph inside its own labeled
+column. The shared owner does not add wrappers or copy a feature's draft. Survey ballot and result labels share the
+answer appearance mapping while retaining their different wording.
+`FormField` uses Vue's native input directive for composition/caret behavior while emitting the control's DOM string.
+This preserves lexical Event capacity rather than silently adopting the directive's numeric conversion. Explicit
+readonly/class inputs and the label slot preserve existing control presentation and Event's inline deadline hint;
+field constraints and normalization remain with the feature.
 
 1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;
@@ -275,7 +286,7 @@ Adding an editable field follows one coherent path:
 A read-only view stops before editor/command work but still owns admission, privacy, cancellation, retry,
 localization and visual behavior. No universal CRUD engine or wrapper per HTML element is needed.
 
-#### Worked composition: Event, Packing and Drivers
+#### Worked composition: Event, Packing, Drivers and Surveys
 
 The implemented consumers illustrate the migration handoff without another controller or state store:
 
@@ -283,26 +294,57 @@ The implemented consumers illustrate the migration handoff without another contr
 |---|---|
 | Exact entry operation and actor/resource-dependent denial families | `EntityEntryPage` presents admission and dispatches scoped retirement through `app/queryCache.ts`. |
 | Title/icon, permitted parent URL, image operation/version/detail key and current settings state | `EntityHeader` renders the native layout and composes the existing authorized-image lifetime. |
-| Generated settings/metadata/access operations, query keys, field grants and controls | `EntitySettingsDialog`, `EntityMetadataEditor` and `EntityAccessEditor` retain their existing independent drafts and command boundaries. |
+| Generated settings/metadata operations, query keys, field grants and controls; complete access operations where applicable | `EntitySettingsDialog` and `EntityMetadataEditor` retain independent drafts and command boundaries; Packing/Event/Drivers additionally adopt `EntityAccessEditor`, while standalone Surveys supply no Access operations. |
 | Current mounted metadata editor and field normalization | `useMetadataEditorHandle` exposes the same public workflow; nullable text uses `normalizeNullableMetadataText` in `metadataDraft.ts`. |
 | Root or captured Event-child operation, current capability, native wording and refresh dependencies | `createEntityLifecycle` shares archive/restore and pause/resume behavior through the caller's existing command. |
 
 Event keeps schedule/capacity rules, registration and actual date drafts in their feature owners. Packing keeps item
-commands and its browser-local checklist. Drivers keeps ride/passenger semantics. Packing and Drivers inject their
-event-association operations; Event has no parent association editor. Shared presentation neither constructs endpoints
+commands and its browser-local checklist. Drivers keeps ride/passenger semantics. Surveys keep personal ballots,
+collaborative recurring choices and representation-only comparison tokens; their owner settings add neither Access
+nor event association. Packing and Drivers inject their event-association operations; Event has no parent association editor.
+Shared presentation neither constructs endpoints
 nor grants authority; matching current consumers adopt the shared owner together while feature differences remain explicit.
 
 #### Worked composition: Packing and Drivers
 
 `EntityListCreation` owns their matching admitted root form, file lifetime and creation command. Packing supplies
 its row controls and collector; Drivers supplies no initial rides. `BasicEntityMetadataFields` shares their basic
-title/description editor while the existing Packing field adapter retains its public feature contract.
+title/description editor, also adopted by standalone Survey settings, while the existing Packing field adapter
+retains its public feature contract.
 `useListDetail` shares scoped polling, stale-projection closure and fresh recovery; features select the denied-query
 families to retire. `useListReorder` captures one
-gesture's membership and comparison evidence. `EntityAssignees` and `EntityAssignmentActions` share names/removal
+gesture's membership and comparison evidence. `EntityQuickAdd` shares the matching card, description, capacity and
+submit presentation through `FormField` and `ActionButton`. Packing supplies its editable required title; Drivers
+supplies its readonly actor name. Features retain the values, collectors, commands and reset/uncertainty decisions.
+The capacity control keeps installed Vue's native number directive, its coercion and DOM update lifecycle, including
+leading-zero normalization on change or rerender. The draft retains a number or remaining input text; substituting
+a string round trip would change that behavior. Description and capacity
+retain their native omitted names. Explicit hint styling preserves each feature's existing appearance.
+
+`EntityListCounters` presents the admitted Packing/Drivers counts and feature labels without calculating membership
+or capacity. `EntityListToolbar` presents their hint/Refresh row inside the original `table-responsive` parent,
+including before data arrives. Survey adopts its no-hint, end-aligned variant through its existing read-state slot.
+Neither control adds a wrapper, chooses a read or changes scroll ownership.
+
+`EntityAssignees` and `EntityAssignmentActions` share names/removal
 and feature-supplied assignment/full wording. Each feature supplies its own operations, query families, grants and feedback.
 Drivers displays the offering profile as driver and counts only passenger assignments; Packing alone has Everyone
 and browser-local Packed? state. Shared controls never infer those feature rules.
+
+`useListCommands` in the existing `listDetail.ts` owner supplies matching Packing/Drivers/Survey command/read recovery.
+Each feature injects its active/denied/read state, actual fresh read and dirty policy. The shared composition owns
+cooldown/action state, guarded post-command reads, explicit reconciliation/stale feedback and acknowledged review of
+an uncertain creation; no recovery repeats a mutation. Survey supplies its existing ballot merge after a fresh read. Packing and
+Drivers additionally select `listProblemKey` for their common permission wording; Survey retains its own Problem
+presentation. Its `denyInlineEdit` supplies Packing/Drivers' existing local transient inline feedback without creating
+an operation, status lease or HTTP request. These are shared lifetimes, not another query/draft store or feature policy.
+
+`EntityDetailReadState` shares the denied, stale/cold warning and missing-pending-data skeleton fragment across
+Packing, Drivers and Survey. Features pass the actual denied/error/data/pending state, timestamps, cooldown and route
+shape. Lists retain their `list.data`-based successful timestamp; Survey retains its displayed-data timestamp.
+Its slot preserves Survey's Refresh row between warnings and loading. The component never infers admission, replaces
+a retained draft or owns a query, receipt or retry timer. Common presentation does not authorize normalizing distinct
+existing timestamps or relocating a toolbar outside its scrolling/interstitial parent.
 
 #### Backend and method-policy contracts
 
@@ -751,7 +793,7 @@ reviewed commands. Standalone Surveys supply no Access operations, and their met
 comparison evidence without adding write preconditions.
 Features inject generated operations, query dependencies, normalization, field controls, authorization inputs and
 native wording. These owners compose the existing query/draft/command helpers rather than keep a second server store.
-`useMetadataEditorHandle` exposes the current mounted editor's public workflow from both field adapters, including
+`useMetadataEditorHandle` exposes the current mounted editor's public workflow through its field adapters, including
 its absent-editor defaults and propagated recovery failures. It derives flags rather than copying them. Nullable text
 normalization is shared by explicit field opt-in; it does not apply Event capacity or deadline policy to other fields.
 Preserve independent drafts and layout; file size alone is not a module boundary or justification for a universal CRUD
@@ -801,6 +843,12 @@ is omitted, its `ActionButton` still applies shared initialization and the calle
 The notice does not choose read eligibility or perform recovery. Their contracts live in
 `src/types/FrontendFeedbackTypes.d.ts`. Share repeated receipt/action presentation through these owners rather than
 copy their expiry, disabled state or dismissal wiring.
+
+Packing, Drivers and Survey pass the optional `creationReview` descriptor to `CommandFeedback` for their matching
+unknown-creation paragraph/button. Features retain the required flag, catalog wording, read action and paragraph
+margin (`mb-2` for the lists). `reviewCreation` emits to the existing `reviewUnknownCreation` owner; feedback itself
+does not read, acknowledge or replay a command. Custom notice slots and callers omitting that descriptor retain
+their existing behavior. The descriptor remains a read-only declaration in the same feedback contract owner.
 Pass existing dismissal locks and margin choices explicitly; the shared presentation must not infer them from pending
 status. Omitted inline/target overrides defer to the receipt; an explicit null target retains a caller's local host.
 Use `StatusNotice`'s `no-margin` input for a zero-margin consumer; adding `mb-0` beside its default `mb-3`

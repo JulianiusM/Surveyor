@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved Vue-only Survey fixes, shared presentation/title correction and development watcher remedy source-reviewed; executed client/system/visual evidence and prior failures retain their exact scopes; native defects stay open until cutover; no publication or later-phase authority
+verification-scope: complete authorized shared Vue correction source-reviewed; normal Vitest, production builds, compilers, built client and complete managed system execution recorded with finite visual evidence and failed-run history; staged guidance reconciled; native defects and separate cutover boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -18,7 +18,93 @@ and dated amendments. This record owns current findings, latest relevant evidenc
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
 
+## Complete pilot-readiness correction and scoped verification (2026-10-18)
+
+The maintainer directly authorizes the [complete correction](FRONTEND_FOUNDATION_DESIGN.md#authorized-complete-pilot-readiness-correction-2026-10-18),
+including every meaningfully shared current Vue responsibility. This receipt owns the renewed results for that
+correction. Earlier dated receipts retain their original inputs, failures and limits; their older counts and
+readiness statements do not describe this corrected source.
+
+Packing and Drivers now adopt the same Quick Add card, counter panel and inline-denial feedback. Packing, Drivers
+and Survey adopt one Refresh toolbar, read-state fragment, command/read recovery composition and unknown-creation
+Review presentation. Explicit props, operations, slots and dirty policies preserve their distinct timestamps,
+scrolling parents, Survey ballot merge and wording. The existing command owner never replays a mutation to recover.
+All four entity consumers adopt shared escaped descriptions and standard fields where their contracts match;
+Event retains lexical numeric drafts, while Quick Add retains installed Vue's native number coercion and DOM updates.
+Creation/header uploads use the existing transport's multipart serializer in all eight matching API consumers.
+Features still own admission, payload policy, selected files and drafts; backend business decisions and DBAL remain
+with their existing shared owners. No native frontend or backend implementation changes belong to this correction.
+
+| Executed boundary | Result and exact scope |
+|---|---|
+| Production build and source delivery | Normal `npm run build` passes, including generated inputs and client/SSR checks. An isolated source candidate from HEAD plus the task index also builds with every new runtime owner included. It reuses the locked installed dependencies through a junction; no fresh `npm ci` is claimed. |
+| Test compiler and normal Vitest | The test compiler passes. Normal `npm test` passes all 102 files / 2,156 tests, including real database-backed integration and the Express/Vite development-runtime case. |
+| Isolated built client | All 49 browser cases pass on the final production build. These controlled client fixtures remain separate from real application persistence. |
+| Complete managed application | The same frozen production source runs all 192 configured system cases with one worker: 191 pass and the disabled-authentication configuration case appropriately skips. The ordinary managed initializer/server and real persistence are used; no retry, assertion or deadline is changed. |
+| Alternate configuration | The disabled-authentication case separately passes 1/1 using the new Windows one-worker default without a CLI worker override. This is another execution, not a replacement for the complete run's skip. |
+| P4 contract | All 11 built Survey workflows and all 11 mounted Survey cases pass within those complete selections. Creation/copy, independent owner admission, personal ballots/results, collaborative choices, archived participation, owner settings/image/lifecycle and same-document navigation are exercised; no task-owned P4 workflow is postponed. |
+| Engineering | The existing development checker reviews the complete 115-file frontend scope alongside 388 authored sources, 11 DBAL sources and 316 operations, with zero findings. Task whitespace checks pass. |
+
+Independent reviewers inspect all 270 original frontend PNGs from the first complete run on that same frozen
+production build: 125 native/Vue comparison pairs and 20 supplemental sticky/owner/guest/German reflow captures.
+The 62 Survey originals include whole creation/empty/description cards, ballot/results/add controls, General,
+expanded-image and Actions settings, archived notices and genuinely scrolled wide tables at 1280px/390px.
+The remaining frontend originals cover Drivers, Event, shared headers, Packing, identity/profile workflows and
+Overview. No unexplained painted difference is found within these surfaces. Sticky captures deliberately compare
+different native/Vue commands and are supplemental behavior evidence. Root additionally inspects the mobile Drivers
+counter, Packing Quick Add and Survey empty-card pairs. Twenty native finance originals are outside this frontend
+correction; they do not expand its visual acceptance.
+
+P4 assertions now measure complete card structure, account only for the measured approved Refresh row, reach the
+final wide-table column while keeping first cells stationary, and exercise keyboard image disclosure, tab selection,
+Escape dismissal and actual opener focus return. The native form versus Vue flex-parent Delete display is narrowly
+characterized while its painted geometry, controls and focus remain asserted. Retained raw JSON establishes the
+inherited wide-page root scrolling as well as local table behavior; `IMP-075` owns that finding's exact measurements
+and unknown cause. Preserving this native comparator creates no delayed P4 work or layout-remedy authorization.
+Approved Refresh, locale controls, saved descriptions and native flash boundaries remain explicit.
+
+The first complete two-worker system run remains failed: 190 pass, one configuration skip and one Windows native
+worker exit (3221226505) without an assertion result in the existing independent item/order baseline case. A narrow
+Application log query finds no matching Node fault event and establishes no cause. The subsequent complete serial
+run supplies the positive execution above. Windows now defaults to that measured one-worker mode; Linux's default
+selection, CI's explicit two-worker selection and CLI overrides remain available. This costs local execution time
+and does not prove the cause or guarantee recurrence prevention. Vitest separately uses Windows forks while Linux
+retains threads, with unchanged isolation, concurrency bounds and serialized database resets.
+
+Earlier correction attempts also remain distinct. Two new Quick Add expectations incorrectly required `01` to
+survive rerender; compiling the original installed-Vue consumer demonstrated its normalization to `1`, with node,
+focus and numeric model retained. The expectations/comments were corrected without a runtime change. Initial P4
+fixtures selected hidden native modal fields, sent an archive body where none is allowed, attempted persisted
+duplicate recurrence pairs forbidden by the actual schema, and assumed a wide native document could not scroll.
+They now exercise valid public behavior with the same meaningful assertions. The first normal Vitest run passed
+2,153/2,156: two cases had stale native-link expectations for already approved SPA destinations, and one cold lazy
+SSR fixture exceeded its unchanged assertion deadline. Exact destination expectations and the existing named
+module-import preparation pattern correct those fixtures; cold compilation remains an inference. A later test run
+and build were deliberately interrupted for the final shared-owner review and have no completion result.
+
+The native archival fixture now holds its observed animation through real AJAX and keyboard interaction, then
+finishes that same animation before its existing final placement, hit-testing and deletion checks. The native source
+and test deadlines remain unchanged. Source, independent and root review verify actual shared adoption, readable contracts,
+comments, private/draft lifetimes and preservation of existing behavior and approved exceptions.
+
+The existing contribution playbook and staged architecture/testing inventories describe these actual owners and
+their current consumers. Redundant completed-run prose is consolidated; unique baseline, behavior/visual/edge
+contracts, design decisions, live later-phase plan and profile/staging controls remain until their authorized
+retirement. Exact eight-guide output identities and nonauthor/root semantic acceptance belong to the ignored
+preparation/review receipt after this maintained source is frozen; source reconciliation alone does not certify
+those assembled bytes or authorize publication.
+
+Logs, captures, raw JSON and guarded receipts remain ignored under `artifacts/pilot-readiness-final-20261018/`.
+The verified task-owned strict MariaDB 10.11.14 container, anonymous volume and disposable environment files are
+removed; cleanup verifies their absence and leaves other containers untouched. This evidence covers the implemented
+P0–P4 correction and its finite browser/actor/viewport matrix. It does not certify every locale/browser/accessibility
+combination, live provider/mail delivery, hosted CI, later phases, deployment, default-route cutover, native removal
+or guide publication. Existing backend limitations and native defect dispositions retain their separate owners.
+
 ## Approved pilot correction and scoped verification (2026-10-18)
+
+This historical receipt belongs to the preceding correction and its original source/fixture scopes. It does not
+describe the latest worktree; its failed executions remain failed regardless of subsequent verification.
 
 The maintainer directly authorizes the reviewed correction plan and individually approves the
 [R1/R2 frontend exceptions](FRONTEND_FOUNDATION_DESIGN.md#approved-pilot-correction-and-survey-frontend-exceptions-2026-10-18).
@@ -45,8 +131,8 @@ No renderer, development owner, fixture assertion or deadline change remains fro
 | Complete database-free selection | 75 files / 1,662 tests pass, including actual Express/Vite integration and new shared-field/description/title/duplicate assertions. |
 | Built client | All 49 isolated browser cases pass on the same build. These fixtures do not establish integrated backend behavior. |
 | Complete integrated frontend selection | Standard managed initializer/server and real persistence: all 144 configured frontend cases run together with one worker; 143 pass and the local-login-disabled case skips appropriately. That configuration case passes separately on another owned schema/port. These are distinct executions. |
-| Complete application selection | The latest managed 188-case run passes 186, skips the configuration case and fails the unchanged native archival animation fixture described below. It loaded the invoice fixture before its final correction; that corrected body passes its separate managed run. Repository-wide E2E acceptance is not uniformly green. |
-| P4 workflows | All seven current Survey built workflows pass in the complete frontend selection and latest complete application run, including same-document creation/copy, collaboration, owner operations and single/multiline escaped descriptions at both widths. |
+| Complete application selection | That correction's managed 188-case run passes 186, skips the configuration case and fails the unchanged native archival animation fixture described below. It loaded the invoice fixture before its final correction; that corrected body passes its separate managed run. That run did not establish repository-wide E2E acceptance. |
+| P4 workflows | All seven then-configured Survey built workflows pass in that complete frontend selection and application run, including same-document creation/copy, collaboration, owner operations and single/multiline escaped descriptions at both widths. |
 | Original visual evidence | Independent reviewers inspect 84 originals from the first complete built run: 28 Survey, 36 Event/Packing and 20 Drivers images at 1280px/390px. Root additionally inspects the mobile described-Survey pair and Packing creation pair. No unexplained difference is found within those surfaces; approved R1 text, existing Refresh/locale controls and transient native flash remain explicit. |
 | Engineering and documentation | Global development inventory: 384 sources, 25 touched readability files / five nontrivial operations, zero findings. Whitespace and production-freeze/amendment checks pass. All eight assembled guides receive independent and root semantic review, including inherited procedures. Live and prepared documentation reports have only the existing advisory unregistered source fingerprint. |
 
@@ -70,7 +156,7 @@ Overview failure remains unreproduced: its unchanged focused run and 12 passive 
 click-time position; subsequent complete frontend delivery also passes. Temporary measurements are removed. No exact
 worker-crash cause or original one-pixel event sequence is established, and neither justifies a runtime change.
 
-The latest complete application's remaining failure belongs to the unchanged native archival fixture. It requires
+That historical complete application's remaining failure belongs to the unchanged native archival fixture. It requires
 the section to remain in an artificially prolonged two-second animation after keyboard menu opening. Trace review
 shows the reopened cards' request consumes about 1.47 seconds and focus waits about 1.90 seconds; the menu opens,
 but the later intermediate-state assertion sees the correctly completed section. No native application defect is
@@ -83,7 +169,7 @@ dimension or whole-screenshot equality. Peer and root reviews check actual share
 readability, approved exceptions and native/backend preservation. Earlier receipts below retain their original scope.
 No exhaustive browser/locale/accessibility matrix, live provider/mail delivery, later phase, deployment, default-route
 cutover, native removal or guide publication is certified. The owned MariaDB 10.11.14 container, anonymous volume
-and disposable credentials are removed after verification; other databases remain untouched. Current logs, captures
+and disposable credentials are removed after verification; other databases remain untouched. Its logs, captures
 and guarded preparation/cleanup receipts remain ignored under `artifacts/pilot-implementation-20261018/`.
 
 ## P4 Surveys implementation and scoped verification (2026-10-18)
@@ -132,201 +218,94 @@ delivery, deployment, P5–P11, default routing, native removal or guide publica
 
 ## Feedback and module-shaped loading correction (2026-10-18)
 
-The maintainer directly requests passive sticky page confirmations and module-shaped loading placeholders with
-maximum shared definition and behavior. The [dated amendment](FRONTEND_FOUNDATION_DESIGN.md#direct-feedback-and-loading-shape-correction-2026-10-18)
-preserves the original presentation choice and records this correction; native frontend code, shared backend
-operations and the existing deeper-backend exclusions retain their boundaries.
+This completed correction implements the maintainer's [feedback/loading instruction](FRONTEND_FOUNDATION_DESIGN.md#direct-feedback-and-loading-shape-correction-2026-10-18).
+The existing feedback owner preserves page viewport context in a sticky host while local receipts retain their
+scoped reveal. Route metadata and `LoadingSkeleton` share module-specific decorative geometry without feature
+records, authority or competing controls. Current ownership belongs to the existing pilot/development guides.
 
-`feedback.ts` now leaves page confirmations in the shared live-alert host without programmatically focusing or
-scrolling it. Local dialog/section receipts retain their deliberate reveal. The layout-transparent page-notice wrapper gives the sticky
-host the full main-content boundary. Renewal, dismissal, expiry and durable uncertainty retain the same owners.
+The historical built-client selection passed 49 cases, including the 43-case startup selection and its 28
+1280px/390px module-shape scenes. Independent reviewer `/root/architecture_audit` inspected those 28 originals and
+12 sticky before/confirmation/user-scroll originals. Real sticky journeys preserved the reviewed row's viewport
+position despite the document offset changing through browser anchoring; further scrolling left the notice sticky.
+The configured 137 frontend cases were covered by separate selections of 72 passes and 64 passes/one expected skip;
+the disabled-authentication case passed separately. These were distinct runs, not one complete execution.
 
-Static route records in `createApp.ts` declare loading geometry through `FrontendPilotUiTypes.d.ts`; each application
-still creates its own router/context. `LoadingSkeleton` composes the shared primitives for initial/admission and
-cold scoped reads, adding a page frame only before the real header/card exists. Overview retains its outer card
-and two collection sections; Packing/Drivers retain six/five table columns and a shared Quick Add row. Packing alone
-adds its creation-time items table. Login adds recovery, guest fields use their existing wider layout, and the Event
-roster alone preserves its deliberate compact email-column breakpoint. Each region owns one localized status and
-animation. No feature data, authority, interactive controls or record-count claim enters those shapes, and retained
-loaded content, focused drafts, independent reads and static Help keep their existing lifetimes.
+Two original failures retain unique lessons. A native Enter edit issued two successful POSTs and duplicate Updated
+alerts; source/timing supports an Enter/blur interaction without proving its exact event order. `IMP-074` owns that
+excluded native issue. The comparison uses the existing single Tab/blur path with unchanged real-command/viewport
+assertions. The first new skeleton fixture disabled JavaScript, which correctly hides skeletons; holding the actual
+entry module pending exercises the intended initialization boundary instead. Neither failure established a Vue
+runtime regression.
 
-Executed evidence so far is bounded: the build, test compiler, three affected frontend files/282 tests and shared
-shell selection/61 tests pass. Engineering review reports 369 global sources, 18 task-owned readability inputs, two
-nontrivial touched operations and zero findings; whitespace checks pass. Independent source review checked actual
-route/scoped adoption, static-record SSR isolation, responsive exceptions and shared feedback lifetimes.
+The database-free selection originally failed the actual Express/Vite case at its unchanged 30-second deadline on
+Node.js 24.13.0, below the supported 24.15.0 baseline. Instrumentation reached Help SSR after about 19.5 seconds and
+spent another 8.9 seconds on Sass without establishing a deadlock or cause. The later
+[approved pilot correction receipt](#approved-pilot-correction-and-scoped-verification-2026-10-18) records supported-runtime
+diagnosis and scoped passes; this historical failure is not relabeled successful. `IMP-072`/`IMP-073` closed on their
+implemented presentation and finite evidence, while `IMP-074` remains excluded native maintenance.
 
-The corrected built-client startup selection passes all 43 cases in 25.7 seconds, including 28 module-shape scenes
-at 1280px/390px. Independent reviewer `/root/architecture_audit` inspected all 28 originals without unexplained layout differences. The corrected
-five real built workflows pass in 50.8 seconds, including both desktop/mobile sticky-confirmation journeys and three
-existing regressions. Client geometry uses controlled document/API delivery and does not establish backend admission.
-The ordinary managed `frontend-pilot` selection passes all 72 built cases in 2.9 minutes. The complementary selection
-passes 64 and appropriately skips one authentication-configuration case in 2.6 minutes. These separate runs cover the
-configured 137 cases; they are not one 137-case execution. The actual disabled-authentication case passes separately
-in 25.8 seconds. The full built-client selection passes all 49 cases in 35.7 seconds, including the startup scenes
-above, and the final test compiler passes. The current documentation-checker tooling file passes all 69 tests in
-20.53 seconds; the earlier review's 26-case tooling receipt retains its distinct scope.
-In both compared frontends, the numeric document offset changes when the notice enters flow, consistent with browser
-anchoring, while the reviewed row stays at exactly the same viewport position. A subsequent user scroll moves that
-row while the alert remains at the top. This verifies retained visible context, not an invariant document-scroll offset.
-The same reviewer inspected all 12 sticky before/confirmation/user-scroll originals and their raw geometry. These
-finite English Chromium scenes do not certify every browser, locale, content length or accessibility state.
-
-The first five selected built workflows passed three and failed the two new native sticky comparisons after one
-Enter edit produced two successful POSTs and duplicate Updated alerts. Native source and request timing support an
-Enter/blur interaction; its precise browser event order was not traced. `IMP-074` records that inherited issue once
-and excludes native repair. The comparison uses the existing single Tab/blur path while preserving its real command
-receipt, single-confirmation, viewport and geometry assertions. Separately, the first startup selection passed 15
-existing cases and failed all 28 new shape cases: that fixture disabled JavaScript, where the approved no-script
-behavior hides skeletons. The corrected fixture holds the actual entry module pending. Neither fixture failure
-establishes a Vue runtime regression.
-
-The complete database-free selection passed 73 files/1,646 tests and failed the real Express/Vite development
-runtime test at its retained 30-second deadline; selecting that integration case alone also fails. Ignored diagnostic
-instrumentation reaches Help SSR after about 19.5 seconds and spends another 8.9 seconds on Sass before the Packing
-read approaches the deadline. No deadlock or root cause is established. No application source, assertion or deadline
-was changed to obtain a pass. Available Node.js is 24.13.0, below the repository's 24.15.0 baseline; this remains a
-failed verification boundary. It must not be described as a complete quick-suite pass. The available strict
-MariaDB 10.11.14 served separate disposable schemas for built verification; root verified and removed only the task's
-labeled container and its anonymous volume afterward.
-
-`IMP-072`/`IMP-073` close on their implemented presentation and finite source/client/browser evidence; `IMP-074`
-remains explicitly excluded native maintenance. No current production defect was identified in the reviewed
-feedback/loading source or 40 inspected originals. The failed development-integration boundary remains a material
-verification limit, not postponed implementation or a claimed repair.
-
-All eight assembled guides received actual independent `/root/architecture_audit` and root semantic/byte review,
-including surrounding frontend guidance and inherited database, backup/restore, operator, release and rollback
-procedures. Their reviewed output digest is `979508759a0d912ceee2aab63ab58ec272f28343020c7204db701bfcce85ab71`;
-five outputs are byte-identical to the preceding reviewed preparation. Exact preparation/input/report identities
-belong to ignored receipts. Current artifacts stay under `artifacts/frontend-feedback-skeleton/`; the P3 receipts
-below retain their original input and execution scopes. No guide publication, cutover, deployment, external-provider
-delivery or exhaustive browser/locale/accessibility acceptance is authorized or certified.
+All eight assembled guides received actual independent and root semantic/byte review, including inherited
+operator/database procedures. Preparation identities and superseded run details remain in ignored
+`artifacts/frontend-feedback-skeleton/` and Git history. No guide publication, deployment or broader matrix was
+established; later source changes require renewed review.
 
 ## Full-pilot review follow-up (2026-10-18)
 
-The maintainer directly authorizes the reviewed frontend corrections and
-[resolves native isolation and backend scope](FRONTEND_FOUNDATION_DESIGN.md#direct-frontend-only-implementation-and-native-isolation-clarification-2026-10-18).
-Staged architecture, development and operations now describe actual Drivers shared consumers, multipart transport
-and dynamic reload eligibility. `IMP-070` records the excluded deeper backend administration repetition once;
-native sources, production guides, original decisions and cutover-retirement records retain their boundaries.
+The maintainer authorized the [frontend corrections and native/backend boundary](FRONTEND_FOUNDATION_DESIGN.md#direct-frontend-only-implementation-and-native-isolation-clarification-2026-10-18).
+The existing staged owners were reconciled with Drivers adoption and `IMP-070` retained excluded deeper backend
+administration debt. This completed correction did not start subsequent feature phases.
 
-The current Drivers built suite adds its six settings surfaces, actual injected settings commands, restricted
-actions/description-only settings and inherited archival. The [coverage map](TEST_COVERAGE.md#p3-drivers-source-to-implementation-assertions-2026-10-18)
-owns the source-to-assertion mapping. The original five Drivers tests remain; the expanded suite contains 22 cases.
-Its first actual run passed 20 and failed the two inherited-archival comparisons: Vue inserted a literal space before
-the parent link in addition to the native margin, changing text and horizontal placement by about 4.4px. The existing
-`EntityLifecycleActions` now keeps that text/link adjacent for all matching Packing/Drivers consumers, with an intent
-comment. Native source, backend behavior and the strict comparator remain unchanged. This is current correction
-work, not a later-phase deferral.
+Expanded Drivers comparisons found a real additional space before an inherited-archival parent link, changing text
+and placement by about 4.4px. `EntityLifecycleActions` corrected the shared Packing/Drivers presentation without
+changing native code, backend behavior or the strict comparator; `IMP-071` records that correction.
+Other failed fixtures exposed a first-page Overview assumption, shared-account profile accumulation and action
+readiness. Ordinary search, an isolated exact profile and an observable saved-capacity/enabled-control boundary
+corrected those assumptions. Source/timing suggested a pending-control race, but no exact click-time trace proved it.
+No longer deadline, repeated click, weakened assertion or backend change supplied those passes.
 
-Current executed evidence retains its actual input boundaries:
+The final historical Drivers selection passed all 22 cases, including six settings surfaces, injected commands,
+restricted settings and inherited archival. The managed built selection passed 134 of 135 cases with one expected
+configuration skip; that alternate configuration passed separately. Real-ORM regression passed 41 cases. The
+complete database-free selection passed before the final Vue whitespace correction, followed by 97 affected client
+tests afterward; those scopes remain distinct. Independent reviewer `/root/documentation_audit` inspected all 36
+final settings/restricted/inherited originals, and root inspected the corrected inherited pairs. Initial Access
+viewports and native mobile clipping did not establish offscreen appearance.
 
-- The full build passed after the final Vue correction. The test compiler passed after the subsequent test-only
-  corrections. Before the Vue whitespace delta, the complete database-free selection passed 74 files/1,622 tests;
-  afterward, four affected client files passed 97 tests. The three selected real-ORM files passed 41 tests; no backend
-  behavior changed after that run. `IMP-071` records the shared presentation correction and its verification.
-- The final Drivers selection passed all 22 cases. The final ordinary managed built selection then passed 134 of
-  135 cases in 4.9 minutes, with one appropriate configuration-specific alternate-login skip. The disabled-authentication
-  case passed separately in 25.9 seconds against the ordinary prepared database. These counts are separate runs.
-- Final engineering checks report 369 global sources, 11 DBAL owners and zero findings; whitespace checks pass.
-  The existing documentation tooling selection passed 26 cases. Native frontend and frozen production-guide sources
-  remain unchanged; the task-owned disposable database was removed after verification.
-
-Earlier failed selections remain explicit evidence. The initial review's 118-case selection passed 116, skipped one
-and failed the Drivers Overview-card test's first-page fixture assumption; ordinary feature search now selects that
-unique card. After the shared Vue correction, the first 135-case run passed 132, skipped one and failed the Drivers
-ride/passenger and settings-command journeys. The shared account actually exposed nine profiles. Source/request
-timing supported a pending-control race after assignment removal; no exact click-time trace establishes that cause.
-The test corrections use an isolated profile with exact identifier/mask assertions, and observe saved capacity plus
-an enabled Take control before the next single editor click. Both journeys pass in the final accumulated broad run;
-no application/backend change, weakened assertion, longer deadline or repeated click was used for those corrections.
-
-Independent reviewer `/root/documentation_audit` inspected all 36 final-run settings/restricted/inherited originals
-(18 native/Vue pairs at 1280px/390px), finding no unexplained difference inside those compared surfaces. Root also
-inspected both corrected inherited desktop/mobile pairs after the final test corrections. Access captures show the initial scroll viewport; mobile tables
-retain native horizontal clipping. These images do not establish below-fold/offscreen appearance or every locale,
-browser or accessibility state.
-
-All eight assembled guide outputs received actual independent `/root/architecture_audit` and root source/byte review,
-including inherited database/operator procedures and the final isolation/readiness wording. Their reviewed output
-digest is `d73ef31f737ceafe5a15f108d1b5283da4bd51aba729feb0c3d1b62caecedde8`. Live and assembled advisory reports find no
-broken links, missing paths/scripts, metadata or classification errors; frozen-guide/amendment checks report zero
-findings. The historical source-fingerprint mismatch remains visible without rebaselining. Exact preparation/review
-receipts stay in ignored output; no guide publication or cutover is authorized.
-
-Execution used strict MariaDB 10.11.14 with separate disposable integration/E2E schemas and the available Node.js
-24.13.0, below the repository's 24.15.0 baseline. Finite English Chromium desktop/mobile checks do not certify every
-locale/browser/accessibility combination, live provider/mail delivery, rendered PDF output or deployment. The earlier
-P3 receipt below retains its original scope. Current logs stay under ignored `artifacts/pilot-corrections-20261018/`.
-The reviewed frontend corrections are complete; no P3 workflow is assigned to a later phase. The explicitly excluded
-backend debt remains open in its central owner, and P4–P11/cutover retain their separate authorization boundaries.
+All eight assembled guides received independent/root source and byte review, including inherited operating
+procedures. Boundary/advisory checks had no link, metadata, path or classification findings; the changed-source
+fingerprint remained visible without rebaselining. Node.js was 24.13.0, below the supported baseline, against separate
+strict MariaDB 10.11.14 schemas. Exact preparation inputs and superseded counts remain in Git and ignored
+`artifacts/pilot-corrections-20261018/`; current evidence belongs to the latest receipt rather than this historical
+checkpoint. No current P3 workflow was assigned to a later phase.
 
 ## P3 Drivers implementation and scoped verification (2026-10-18)
 
-The maintainer's direct request to fully implement P3 supplies the
-[recorded future trigger](FRONTEND_FOUNDATION_DESIGN.md#explicit-p3-implementation-trigger-2026-10-18).
-Drivers now has authored/generated contracts, initial and warm admission, create/duplicate, guest entry, detail,
-settings, ride offer/edit/order/delete, passenger assignment/removal and organizer removal. Overview, shell creation
-and Event children adopt its migrated routes and authorized image owner. The [P3 matrix](TEST_COVERAGE.md#p3-drivers-source-to-implementation-assertions-2026-10-18)
-maps DRV-01–04 and applicable ENT/GST/edge contracts to actual source and assertions.
+The [explicit P3 trigger](FRONTEND_FOUNDATION_DESIGN.md#explicit-p3-implementation-trigger-2026-10-18) authorized Drivers.
+The [P3 matrix](TEST_COVERAGE.md#p3-drivers-source-to-implementation-assertions-2026-10-18) retains DRV-01–04/ENT/GST
+source and assertion mappings; the existing pilot guide owns current shared/feature boundaries. Creation/copy omits
+rides and assignments; driver identity, passenger capacity and distinct-profile counters retain native semantics.
+IMP-026–028 remain inherited/excluded backend defects.
 
-Drivers retains profile-derived driver names, separate passenger places and multiple offers/memberships per profile.
-Creation/duplication contains no rides; participant counters count assigned profiles, not all offering drivers.
-It adds no Packed? or Everyone behavior. Existing controller/native callers share method policy, sparse writes,
-membership/capacity and counters; DBAL remains persistence. Versioned baselines filter values and field hashes by
-actual method authority, and new command responses are validated/serialized before their transaction commits.
-IMP-026–028 remain inherited/excluded defects. Native frontend sources and frozen production guides are unchanged;
-development comparison is not a production coexistence guarantee or cutover approval.
+Independent frontend/backend agents and root reviewed actual shared adoption, privacy, native method policy,
+transaction response preparation and draft/identity lifetimes. Corrections included hidden-title comparison hashes,
+receipt timing, an image-label space, destination construction, a drag-target guard which changed Packing feedback,
+and nonbreaking mobile capacity headings. A delegated test-file ownership overlap was reported and reconciled,
+preserving independent uncertainty/File cases. None supplied a new policy or backend-remedy authorization.
 
-Matching Packing/Drivers consumers now adopt `EntityListCreation`, `BasicEntityMetadataFields`, `useListDetail`,
-`useListReorder`, `EntityAssignees` and `EntityAssignmentActions`. Drivers also adopts the established entry/guest,
-header, settings, metadata/access, event-picker, lifecycle, command and navigation owners. The command owner exposes
-its existing manual-review state without a second state store; a default-empty uncertain offer remains reviewable.
-The integration declaration for initial entity documents is shared by Event and Drivers.
+The historical build/generation and test compiler passed. The database-free selection passed 74 files/1,622 tests;
+Drivers mounted tests covered default-empty uncertainty, confirmed-save/failed-read release, retained bytes and warm
+navigation. Real MariaDB 10.11.14 verification passed 14 focused cases and 41 native/v1 regressions, including final-place
+contention, independent method/private-token projection and preparation-failure rollback. The final combined built
+selection passed 45 cases across Drivers, pilot, Event organizer and header suites; two additional focused parity
+cases passed after correcting their scrolling-viewport capture. Root inspected native/Vue desktop/mobile originals.
+Identical PNG bytes on selected creation/table/counter pairs never established blanket pixel equality.
 
-Root source review and independent `/root/drivers_ui` and `/root/drivers_backend` reviews checked actual adoption,
-original approval provenance, private projections, native ordering/errors/grants, lifecycle/read/draft boundaries,
-DRY and readability. They found and corrected hidden-title comparison hashes, receipt-preparation timing, a copied
-image-label space, feature destination construction, an added drag-target guard that changed Packing's stale-order
-feedback, and mobile capacity-heading wrapping. No new policy/design exception or backend-remedy authorization
-was inferred. A delegated test-file ownership overlap was reported immediately and reconciled by its assigned test
-owner, preserving the independent uncertainty/File cases and shared-consumer assertions.
-
-Current executed evidence:
-
-- `npm run build` passes, including server, native browser, Vue/client and SSR scopes. The final schema/catalog
-  generation passes; `npm run typecheck:tests --ignore-scripts` passes after current generated inputs.
-- `npm run test:quick` passes 74 files / 1,622 tests. The focused mounted Drivers selection passes nine tests,
-  including manual review for a default-empty offer, no replay, confirmed-save/failed-read input release,
-  retained File bytes and canceled/accepted warm route changes.
-- The focused Drivers ORM selection passes 14 cases on task-isolated MariaDB 10.11.14 with strict SQL mode and
-  literal-schema grants only for its disposable integration/E2E schemas. It includes final-place contention,
-  independent method/private-token projection, preparation-failure rollback, sparse defaults, selected administrator
-  add/zero/removal and header-write/read separation. No database schema or migration changed.
-  The final native/v1 regression passes 41 tests across Drivers v1, existing Drivers workflows and controller smoke
-  integration suites, with real ORM metadata and normal disposable-schema preparation.
-- The strict 1280px and 390px native/Vue comparisons pass for complete creation forms, tables, passenger controls,
-  counters, Quick Add and focused states. Actual multipart creation/copy, header replacement/stale rejection/deletion,
-  ride commands, guest identity completion and Event/Overview SPA journeys pass in their focused built runs.
-  The final combined built selection passes all 45 tests across `frontend-pilot-drivers`, `frontend-pilot`,
-  `frontend-event-organizer` and `frontend-entity-header`, using the normal prepared E2E initializer and two workers.
-  Two additional parity cases pass after correcting the supplemental focused screenshot to capture the fixed
-  scrolling viewport; table measurements/focus/style assertions remain unchanged. Root inspected the native/Vue
-  desktop/mobile originals. The creation, ordinary table and counter pairs have identical PNG bytes at both sizes;
-  screenshots supplement the explicit assertions rather than create a blanket pixel-equality requirement.
-- `npm run check:development` reports zero findings across the complete task worktree; `git diff --check` passes.
-  The documentation boundary reports zero frozen-guide/amendment findings. Live and assembled advisory reports
-  find no broken links, missing paths/scripts, metadata or classification errors; the existing source-fingerprint
-  mismatch remains visible without rebaselining or creating a delivery gate.
-
-The first generation attempt exposed a missing authored guest-operation reference; it was corrected and generation
-rerun. Early new tests exposed malformed comparison-token fixtures and incorrect guest/context expectations; their
-exact fixtures/journeys were corrected. The first mobile run exposed a real 48.67px table-width difference caused
-by wrapping the native nonbreaking capacity heading; Vue now preserves one line, with unchanged strict comparisons.
-Those failed attempts are not passing receipts. Ignored `artifacts/p3/` holds current run logs and database evidence.
-Node is the available local 24.13.0, below the repository's 24.15.0 baseline. English Chromium desktop/mobile and
-the exercised actor/state matrix do not certify every locale, browser or accessibility combination. This receipt
-does not start P4–P11, publish guides, deploy or remove the native frontend.
+Earlier generation/fixture failures and a real 48.67px mobile table-width deviation remain historical failures. The
+latter was corrected by preserving the native nonbreaking capacity heading, with strict comparisons unchanged.
+Execution used Node.js 24.13.0, below the supported 24.15.0 baseline. Engineering/boundary checks had zero findings;
+advisory reports retained the unregistered changed-source fingerprint. Exact logs and disposable target evidence
+remain in ignored `artifacts/p3/`; superseded execution detail remains in Git. This finite English Chromium receipt
+did not authorize later phases, cutover, publication, deployment or native removal.
 
 ## Current acceptance and correction boundary (2026-10-16)
 

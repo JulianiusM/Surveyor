@@ -2,7 +2,7 @@ import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotEventPickerQuery, PilotEventPickerSource, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
 import {driversKeys} from '../../app/queryKeys';
-import {InvalidInputError} from '../../app/transport';
+import {createMultipartForm, InvalidInputError} from '../../app/transport';
 import {validateDriversListView} from '../../../../.generated/api/v1/browser/validateDriversListView.mjs';
 import {validateDriversMetadata} from '../../../../.generated/api/v1/browser/validateDriversMetadata.mjs';
 import {validateDriversMetadataPatch} from '../../../../.generated/api/v1/browser/validateDriversMetadataPatch.mjs';
@@ -160,9 +160,7 @@ export class DriversApi {
         // The image is a separate part rather than a second handwritten creation schema.
         if (!validateDriversCreateInput(input)) throw new InvalidInputError('Invalid drivers creation.');
 
-        const form = new FormData();
-        form.append('data', JSON.stringify(input));
-        if (image) form.append('image', image);
+        const form = createMultipartForm(input, image);
 
         // Preserve captured actor/CSRF context through upload and response classification.
         // A lost response cannot be treated as proof that no list was created.
@@ -287,8 +285,7 @@ export class DriversApi {
     async uploadHeader(listId: string, image: File, token: string, scope: PilotRequestScope) {
         // Keep the chosen bytes separate from their generated filename placeholder.
         // The serializer supplies the actual multipart body without copying upload policy.
-        const form = new FormData();
-        form.append('image', image);
+        const form = createMultipartForm(null, image);
 
         // Send the token captured when this file was chosen, never a newer settings token
         // obtained while the draft was waiting. The shared command owner handles recovery.

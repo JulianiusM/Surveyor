@@ -41,6 +41,21 @@ async function expectDropdownReachable(menu: Locator): Promise<void> {
     }
 }
 
+/** Hold this fixture's actual opening transition until network-loaded cards and
+ * keyboard interaction have reached their milestones. Finishing the animation
+ * later emits its native transitionend; no application event is manufactured. */
+function pauseOpeningHeightTransition(element: Element): Animation {
+    // getAnimations flushes the current style, exposing the transition created
+    // by Bootstrap's real opening operation rather than a replacement animation.
+    for (const animation of element.getAnimations()) {
+        if (animation instanceof CSSTransition && animation.transitionProperty === 'height') {
+            animation.pause();
+            return animation;
+        }
+    }
+    throw new Error('The opening collapse did not create its height transition.');
+}
+
 test('keeps overview dropdowns usable at narrow viewport edges and leaves Delete as permanent deletion', async ({page}) => {
     test.setTimeout(60000);
     await page.setViewportSize({width: 360, height: 640});
@@ -74,8 +89,9 @@ test('keeps overview dropdowns usable at narrow viewport edges and leaves Delete
     await expectDropdownReachable(menu);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 
-    // Keyboard focus can reach a card before the containing collapse animation has finished.
-    // Slow only this animation so the test reliably exercises that timing with real key input.
+    // Keyboard focus can reach a card before its containing collapse finishes.
+    // Hold the real transition so HTTP delivery and focus cannot consume an
+    // arbitrary two-second interval before that intermediate state is asserted.
     await toggle.press('Escape');
     await owner.getByRole('button', {name: /^Archived and hidden/}).click();
     await expect(archived).not.toBeVisible();
@@ -83,14 +99,26 @@ test('keeps overview dropdowns usable at narrow viewport edges and leaves Delete
     // reopening until that transition completes; the next collapsing state must be opening.
     await expect(archivedContainer).toHaveClass(/(?:^|\s)collapse(?:\s|$)/);
     await expect(archivedContainer).not.toHaveClass(/(?:^|\s)show(?:\s|$)/);
-    await page.addStyleTag({content: '.entity-overview .collapsing { transition-duration: 2s !important; }'});
+    // Bootstrap also schedules an emulated transitionend from the computed
+    // duration. Keep that fallback beyond this unchanged test deadline, then
+    // finish the actual browser animation explicitly after the keyboard check.
+    await page.addStyleTag({content: '#sec-own-parts-archived-container.collapsing { transition-duration: 120s !important; }'});
     await owner.getByRole('button', {name: /^Archived and hidden/}).click();
     await expect(archivedContainer).toHaveClass(/\bcollapsing\b/);
-    await toggle.focus();
-    await page.keyboard.press('ArrowDown');
-    await expect(menu).toBeVisible();
-    await expect(archivedContainer).toHaveClass(/\bcollapsing\b/);
+    const openingTransition = await archivedContainer.evaluateHandle(pauseOpeningHeightTransition);
+    try {
+        await toggle.focus();
+        await page.keyboard.press('ArrowDown');
+        await expect(menu).toBeVisible();
+        await expect(archivedContainer).toHaveClass(/\bcollapsing\b/);
+    } finally {
+        await openingTransition.evaluate(function finishOpening(animation) { animation.finish(); });
+        await openingTransition.dispose();
+    }
+    // The native completion listener updates dropdown placement for its final
+    // layout. Retain all reachability checks after that real lifecycle boundary.
     await expect(archivedContainer).toHaveClass(/\bshow\b/);
+    await expect(archivedContainer).not.toHaveClass(/\bcollapsing\b/);
     await expectDropdownReachable(menu);
 
     // The last card's permanent delete form remains separate from all archival/visibility controls.

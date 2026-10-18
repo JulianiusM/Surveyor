@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
 import {defineComponent} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
@@ -107,6 +107,24 @@ function mountedSkeleton(props: PilotLoadingSkeleton & {page?: boolean}) {
 }
 
 describe('help and overview progressive content', () => {
+    // These assertions measure each fresh SSR tree, not Vitest's cold Vue
+    // compilation. Prepare only their actual lazy route modules under the
+    // unchanged hook budget; rendering still owns the ordinary five seconds.
+    // No app, query data or request state is prepared ahead of an assertion.
+    beforeAll(async function prepareSsrRouteModules(): Promise<void> {
+        await Promise.all([
+            import('../../src/frontend/features/packing/PackingEntry.vue'),
+            import('../../src/frontend/features/packing/PackingCreatePage.vue'),
+            import('../../src/frontend/features/drivers/DriversEntry.vue'),
+            import('../../src/frontend/features/drivers/DriversCreatePage.vue'),
+            import('../../src/frontend/features/event/EventEntry.vue'),
+            import('../../src/frontend/features/event/EventCreatePage.vue'),
+            import('../../src/frontend/features/identity/IdentityPage.vue'),
+            import('../../src/frontend/features/identity/ProfileAdministrationPage.vue'),
+            import('../../src/frontend/features/identity/ProfileWorkflowPage.vue'),
+        ]);
+    });
+
     it.each([429, 503])('shows Help read timing and recovers the retained article without navigation or draft loss (%s)', async status => {
         vi.useFakeTimers();
         vi.setSystemTime(Date.UTC(2026, 9, 11, 6, 0, 0));

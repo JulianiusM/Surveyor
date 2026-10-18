@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P4 shared field/description/title ownership and Survey dynamic reload reconciled alongside existing feedback/loading and SPA/backend/document boundaries; actual execution separate; no publication
+verification-scope: shared field/description/multipart and list read/feedback/toolbar/counter/Quick Add ownership source-reconciled with standalone Survey settings and retained SPA/native/backend boundaries; execution separate; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -121,8 +121,16 @@ authority remain unchanged. Image upload editing remains the distinct `EntityHea
 
 `FormField` owns matching text/textarea labels and native controls. `FileField` composes its label/control slot for
 creation and header-editing choosers, while the feature retains selected bytes, admission and command lifetime.
-`EntityDescription` renders escaped read-only lines for Packing, Drivers and Surveys; the optional native divider
-is explicit. No shared presentation control stores a second feature draft or grants authority.
+`EntityDescription` renders escaped read-only lines for Packing, Drivers, Surveys and Event. Explicit paragraph
+hooks/classes and the optional native divider preserve list geometry; Event keeps its own labeled column and ordinary
+paragraph margins. `EntityQuickAdd` shares Packing/Drivers card, description/capacity controls and submit layout while
+features supply their distinct title controls, values and commands. The installed native number directive retains
+coercion and DOM updates, including leading-zero normalization on change/rerender; feature drafts still hold a number
+or remaining input text. No shared control stores another draft or grants authority.
+`FormField` preserves native composition/caret handling while emitting lexical DOM strings. Feature-owned parsing,
+constraints, readonly state and explicit label content retain their existing meaning. The transport's
+`createMultipartForm` shares creation/header serialization across all four features without selecting operations,
+validating a second schema or copying their image lifetime.
 The existing `usePageTitle` owner accepts catalog-owned complete journey titles when native prefixes or branding
 differ from visible headings. SSR, initial hydration, warm navigation and locale changes consume that same owner.
 
@@ -147,7 +155,18 @@ adopt `useEntityRemoval`. Packing/Drivers also share `BasicEntityMetadataFields`
 `EntityAssignees` and `EntityAssignmentActions`, retaining Packing's checklist/Everyone behavior and Drivers' distinct
 driver/passenger meanings in their feature owners. These shared Vue owners compose existing
 command/consent/confirmed-navigation lifetimes, while features retain their fields and
-generated operations. Versioned reads and guest identity completion cannot create an Event; the adapter does not strengthen inherited multi-step creation
+generated operations. Packing/Drivers/Survey compose `useListCommands` from the existing detail-read owner for
+cooldowns, explicit stale recovery, guarded post-command refresh and deliberate unknown-creation review. Features
+inject their actual fresh read and dirty policy, including Survey's ballot merge; only Packing/Drivers opt into their
+common permission wording and local inline-denial feedback. The composition keeps no second snapshot/draft and never repeats a mutation.
+`EntityListCounters` shares Packing/Drivers' admitted counter panel; `EntityListToolbar` shares all three details'
+Refresh control with an optional list hint and Survey's original end alignment. The original scroll/interstitial
+parents remain unchanged. `EntityDetailReadState` shares their denied/stale/cold fragment and skeleton through explicit
+state/timestamp props and a Survey Refresh slot; it owns no query or authority. `CommandFeedback`'s optional creation
+review descriptor shares the unknown-creation paragraph/button while features retain eligibility, wording, margins
+and the existing review operation.
+
+Versioned reads and guest identity completion cannot create an Event; the adapter does not strengthen inherited multi-step creation
 finality. Ordinary profile workflow and Event child-deletion commands follow the same SPA transport boundary,
 without importing their excluded backend repairs. Router owns ordinary migrated links; true provider/capability
 arrivals, outputs and unmigrated destinations retain explicit document ownership. Token issuance is deliberate
@@ -314,11 +333,12 @@ and successful writes obtain fresh permissions/context. General, Linked event, A
 ## Entity settings — amendment-16
 
 <!-- delta:amendment-16 -->
-Feature composites remain separate where domain semantics differ. The `EntitySettingsDialog` used by Packing,
-Event and Drivers owns matching settings drafts and captured tokens, composing `EntityMetadataEditor`, `EntityAccessEditor`,
-`EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions`. Features inject operations, query families,
-field policy and native wording; Packing and Drivers supply their event-association operations. Reka supplies
-dialog/tab focus behavior.
+Feature composites remain separate where domain semantics differ. Packing, Event, Drivers and Survey use
+`EntitySettingsDialog` for matching settings reads, independent drafts and captured tokens. It composes
+`EntityMetadataEditor`, `EntityHeaderEditor` and `EntityLifecycleActions`; Packing, Event and Drivers additionally
+supply `EntityAccessEditor` operations. Standalone Surveys supply neither Access nor event-association operations.
+Features inject operations, query families, field policy and native wording; Packing and Drivers supply their
+`EntityEventEditor` operations. Reka supplies dialog/tab focus behavior.
 Mixed navigation uses the shared disclosure owner without competing Bootstrap DOM ownership. Shared timezone
 controls retain feature-owned deadline meaning, including omission of unchanged instants.
 

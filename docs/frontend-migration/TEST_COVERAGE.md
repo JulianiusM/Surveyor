@@ -6,7 +6,7 @@ owner: project maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved P4 description/duplicate/title assertions and adopted common fields/description/answer presentation mapped alongside retained P0-P3 evidence; native defects remain open until cutover; execution and limits belong to paired review
+verification-scope: expanded P4 full-card/empty/scrolling/settings/focus/archived and recurrence assertions source-mapped alongside retained description/duplicate/title and P0-P3 evidence; execution belongs to paired review; native defects remain open until cutover
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -443,6 +443,19 @@ standalone Surveys. Execution and limits belong to the [paired receipt](PILOT_PA
 | SRV-03/04: results and collaborative choices | Named result rows, missing-answer No and independent no-answers state; shared recurring fields/column headers. ORM/built cases admit accounts and guests to combination creation while denying owner settings. Desktop/mobile assertions compare original native/Vue ballot/results/add controls, geometry, colors and labels. |
 | SRV-05 and navigation | Shared entry/guest/header/metadata/settings/lifecycle owners, generated Survey operations and Overview projections. Built owner workflow asserts properties, header bytes/removal, archive/restore and deletion without document replacement. Shell tests protect migrated creation links. Surveys gain no parent, Access panel or administrator controls. |
 | Shared presentation | Creation read/submission warnings use `CreationAdmissionNotices` in Survey, Event and list creation. The full frontend selection protects matching consumers; loading-shell SSR cases assert Survey-specific noninteractive form/table geometry and one announcement. |
+
+The current assertion expansion adds whole creation/header/unarchived voting-card geometry, with only the measured approved
+Refresh row excluded from the corresponding native box. Separate empty-results scenes and genuinely overflowing
+ballot/result tables protect section spacing, sticky participant columns and final-column reachability at both widths.
+The owner settings comparison opens image details from the keyboard, compares the full expanded image/Actions
+surfaces and checks tab selection plus Escape focus return. The guest collaboration workflow now exercises an
+archived Survey, preserving personal ballots, new combinations, the archive notice and ordinary same-document
+delivery; the owner workflow checks notice appearance/removal after archive/restore. Actions characterizes only the
+Delete button's native form/flex versus direct Vue flex-item display, retaining its painted styles and geometry.
+Wide scenes compare delivered page overflow as well as real table movement. Mounted cases preserve temporary
+same-valued draft rows' independent DOM lifetime; persisted create/copy fixtures retain distinct combinations under
+the existing unique constraint. Empty creation collections reject before dispatch while retaining the draft.
+These are source mappings; current execution belongs to the paired review.
 
 The [approved frontend corrections](FRONTEND_FOUNDATION_DESIGN.md#approved-pilot-correction-and-survey-frontend-exceptions-2026-10-18)
 extend these assertions. Shared text/file fields retain labels, native name omission, constraints, lexical drafts and

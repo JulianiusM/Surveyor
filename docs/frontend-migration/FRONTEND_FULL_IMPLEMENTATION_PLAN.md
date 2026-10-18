@@ -57,14 +57,16 @@ the existing backlog owns that debt. It grants no later-phase continuation.
 
 The subsequent [explicit P4 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p4-implementation-trigger-2026-10-18)
 starts standalone Surveys under the existing phase contract. Its
-[receipt](PILOT_PARITY_REVIEW.md#p4-surveys-implementation-and-scoped-verification-2026-10-18) records current evidence
+[receipt](PILOT_PARITY_REVIEW.md#p4-surveys-implementation-and-scoped-verification-2026-10-18) records its original evidence
 and its original Vue-only defect questions. The later approved frontend exceptions resolve those questions without
 granting P5–P11 or cutover authority; the native defect records remain open until cutover.
 
 The [October 16 full-pilot review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16)
 qualifies earlier readiness statements with its scalar-display, visual-assertion and verification-environment
-findings. The maintainer authorizes their correction and existing-guidance reconciliation. That review owns current
-results and remaining limits; finite phase checks do not certify full pilot visual/behavioral parity.
+findings. The maintainer authorizes their correction and existing-guidance reconciliation. The subsequent
+[complete pilot-readiness receipt](PILOT_PARITY_REVIEW.md#complete-pilot-readiness-correction-and-scoped-verification-2026-10-18)
+owns renewed shared-implementation, P4 parity and complete execution results with their finite limits. Earlier
+phase receipts retain their original scopes; no later phase or cutover authority follows from passing checks.
 
 ## Current SPA correction plan (2026-10-16)
 
@@ -79,11 +81,11 @@ children use `useEntityRemoval`; private profile workflows use generated command
 existing minimal identity-completion owner. Ordinary migrated parent, context, shell and workflow links use Router.
 Displaced document-only Vue command adapters/helpers are retired. Build, test compiler, complete client, selected
 ORM and configured built workflows have scoped results in the review. The preceding SPA correction's failed broad
-run, focused corrections and unchanged-drag repetitions retain their original scopes. The subsequent readiness
-follow-up has two complete passing built selections recorded in that same review; neither certifies the full application.
+run, focused corrections and unchanged-drag repetitions retain their original scopes. That correction's readiness
+follow-up records two complete passing built selections; those earlier selections do not certify the full application.
 
 `DESIGN-EVENT-CREATION-TRANSPORT` retains its reviewed closure in the central backlog. The
-[current review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16) owns actual inputs,
+[current review](PILOT_PARITY_REVIEW.md#complete-pilot-readiness-correction-and-scoped-verification-2026-10-18) owns actual inputs,
 execution and remaining limits. The subsequent approved R1 identity-notice adaptation changes presentation, not
 the shared command transport or inherited operation guarantees. General backend completion remedies remain excluded.
 
@@ -207,7 +209,8 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
 
    The [October 18 completion receipt](PILOT_PARITY_REVIEW.md#p3-drivers-implementation-and-scoped-verification-2026-10-18)
    records actual shared adoption, scoped passing checks, visual comparison and inherited-defect/environment limits.
-   P4–P11 still require their own explicit triggers; no task-owned P3 workflow is assigned to a later phase.
+   That receipt supplies no P4–P11 trigger; no task-owned P3 workflow is assigned to a later phase. The subsequent
+   P4 trigger and implementation retain their own contract below.
 
 5. **P4 — Migrate Surveys independently; implemented against the phase contract.**
    **Complexity:** Medium. **Prerequisites:** P0 and shared guest-entry contracts. Can run alongside Drivers or Events.

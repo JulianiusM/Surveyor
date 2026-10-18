@@ -169,8 +169,21 @@ describe('Drivers production frontend consumers', () => {
         expect(wrapper.get<HTMLInputElement>('#quick-title').element.readOnly).toBe(true);
         expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false);
         expect(wrapper.text()).not.toContain('Everyone');
+        const capacity = wrapper.get<HTMLInputElement>('#quick-max');
+        const original = capacity.element;
+        original.focus();
+        await capacity.setValue('01');
         await wrapper.get('#quick-description').setValue('  pickup stays padded  ');
-        await wrapper.get('#quick-max').setValue('');
+        expect(wrapper.get('#quick-max').element).toBe(original);
+        // The original native Vue number input normalizes 01 to 1 on change
+        // and on an unrelated rerender; the shared chooser keeps that lifecycle.
+        expect(original.value).toBe('1');
+        expect(document.activeElement).toBe(original);
+        expect(capacity.attributes('name')).toBeUndefined();
+        expect(capacity.attributes('min')).toBe('1');
+        expect(wrapper.get('#quick-title').attributes('name')).toBeUndefined();
+        expect(wrapper.get('#quick-description').attributes('name')).toBeUndefined();
+        await capacity.setValue('');
         await wrapper.get('form').trigger('submit'); await flushPromises();
         expect(submitted).toEqual([{title: session.activeProfile!.name, description: '  pickup stays padded  ', maxAssignees: 1}]);
         expect(wrapper.get<HTMLInputElement>('#quick-description').element.value).toBe('');

@@ -1,7 +1,7 @@
 import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
-import {InvalidInputError} from '../../app/transport';
+import {createMultipartForm, InvalidInputError} from '../../app/transport';
 import {validateSurveyView} from '../../../../.generated/api/v1/browser/validateSurveyView.mjs';
 import {validateSurveyCreateEntry} from '../../../../.generated/api/v1/browser/validateSurveyCreateEntry.mjs';
 import {validateSurveyResourceEntry} from '../../../../.generated/api/v1/browser/validateSurveyResourceEntry.mjs';
@@ -90,9 +90,7 @@ export class SurveysApi {
         // Admission and business validation remain with the server controller.
         if (!validateSurveyCreateInput(input)) throw new InvalidInputError('Invalid survey creation.');
 
-        const form = new FormData();
-        form.append('data', JSON.stringify(input));
-        if (image) form.append('image', image);
+        const form = createMultipartForm(input, image);
 
         // Send the captured draft once. Shared decoding distinguishes a confirmed
         // creation from rejected or uncertain delivery without replaying it.
@@ -197,8 +195,7 @@ export class SurveysApi {
     async uploadHeader(surveyId: string, image: File, _token: string, scope: PilotRequestScope) {
         // Capture the selected bytes without placing them in a query cache or
         // sending the local comparison token as new write authority.
-        const form = new FormData();
-        form.append('image', image);
+        const form = createMultipartForm(null, image);
 
         return this.transport.read('uploadSurveyHeader', await this.transport.client.PUT('/surveys/{surveyId}/header', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, body: {image: image.name}, bodySerializer: () => form, cache: 'no-store',

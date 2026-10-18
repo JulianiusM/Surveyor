@@ -1,5 +1,7 @@
 <script setup lang="ts">
-withDefaults(
+import {computed, ref} from 'vue';
+
+const props = withDefaults(
     defineProps<{
         id: string;
         name?: string | null;
@@ -18,6 +20,8 @@ withDefaults(
         step?: string | number;
         autocomplete?: string;
         disabled?: boolean;
+        readOnly?: boolean;
+        controlClass?: string;
         placeholder?: string;
         labelIcon?: string;
         inputIcon?: string;
@@ -29,11 +33,19 @@ withDefaults(
     {type: 'text', labelClass: 'mb-1', requiredMarker: true, modelValue: ''},
 );
 const emit = defineEmits<{'update:modelValue': [value: string]; focus: []; blur: []}>();
+const control = ref<HTMLInputElement | HTMLTextAreaElement | null>(null);
+const controlValue = computed({get: readValue, set: updateValue});
+
+function readValue(): string { return props.modelValue; }
 
 /** Text inputs and textareas expose lexical drafts. Feature owners retain
- * normalization, admission and the decision to include that value in a command. */
-function updateValue(event: Event): void {
-    emit('update:modelValue', (event.target as HTMLInputElement | HTMLTextAreaElement).value);
+ * normalization, admission and the decision to include that value in a command.
+ * Vue's native directive owns composition/caret handling; read the DOM string
+ * here so its implicit number conversion cannot change a feature's raw input. */
+function updateValue(): void {
+    // A supplied control slot owns its own input and never calls this setter.
+    // No local value mirror competes with the feature's draft or restored model.
+    if (control.value) emit('update:modelValue', control.value.value);
 }
 </script>
 
@@ -43,41 +55,43 @@ function updateValue(event: Event): void {
              Native labels put text immediately after the icon: me-1 owns that gap.
              Extra template whitespace would widen it and change narrow-screen wrapping. -->
         <label class="form-label" :class="labelClass" :for="id">
-            <i v-if="labelIcon" class="bi me-1" :class="labelIcon" aria-hidden="true"></i>{{ label }}<template v-if="required && requiredMarker"> *</template>
+            <i v-if="labelIcon" class="bi me-1" :class="labelIcon" aria-hidden="true"></i><slot name="label">{{ label }}</slot><template v-if="required && requiredMarker"> *</template>
         </label>
         <div :class="{'input-group': inputIcon || largeGroup, 'input-group-lg': largeGroup}">
             <span v-if="inputIcon" class="input-group-text">
                 <i class="bi" :class="inputIcon" aria-hidden="true"></i>
             </span>
-            <!-- File controls replace only the control through this slot. Their
-                 selected bytes stay with the feature, while label geometry and
-                 surrounding feedback still have this single presentation owner. -->
+            <!-- File and native-number adapters replace only this control. Their
+                 values stay with the feature, while label geometry and surrounding
+                 feedback still have this single presentation owner. -->
             <slot name="control">
                 <textarea v-if="multiline"
+                    ref="control"
+                    v-model="controlValue"
                     :id="id"
                     :name="name === null ? undefined : name ?? id"
-                    :value="modelValue"
                     class="form-control text-bg-dark"
-                    :class="{'is-valid': state === 'valid', 'is-invalid': state === 'invalid'}"
+                    :class="[controlClass, {'is-valid': state === 'valid', 'is-invalid': state === 'invalid'}]"
                     :rows="rows"
                     :required="required"
                     :maxlength="maxLength"
                     :minlength="minLength"
                     :disabled="disabled"
+                    :readonly="readOnly"
                     :placeholder="placeholder"
                     :aria-invalid="state === 'invalid' || undefined"
                     :aria-describedby="describedBy"
                     @focus="emit('focus')"
                     @blur="emit('blur')"
-                    @input="updateValue"
                 ></textarea>
                 <input v-else
+                    ref="control"
+                    v-model="controlValue"
                     :id="id"
                     :name="name === null ? undefined : name ?? id"
                     :type="type"
-                    :value="modelValue"
                     class="form-control text-bg-dark"
-                    :class="{'is-valid': state === 'valid', 'is-invalid': state === 'invalid'}"
+                    :class="[controlClass, {'is-valid': state === 'valid', 'is-invalid': state === 'invalid'}]"
                     :required="required"
                     :maxlength="maxLength"
                     :minlength="minLength"
@@ -86,13 +100,13 @@ function updateValue(event: Event): void {
                     :step="step"
                     :autocomplete="autocomplete"
                     :disabled="disabled"
+                    :readonly="readOnly"
                     :placeholder="placeholder"
                     :inputmode="inputMode"
                     :aria-invalid="state === 'invalid' || undefined"
                     :aria-describedby="describedBy"
                     @focus="emit('focus')"
                     @blur="emit('blur')"
-                    @input="updateValue"
                 />
             </slot>
         </div>

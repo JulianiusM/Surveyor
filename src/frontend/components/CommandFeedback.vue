@@ -3,6 +3,7 @@ import {computed} from 'vue';
 import type {CommandFeedbackProps} from '../../types/FrontendFeedbackTypes';
 import {usePilot} from '../app/context';
 import StatusNotice from './StatusNotice.vue';
+import ActionButton from './ActionButton.vue';
 
 // Features choose native placement and supply any operation-specific review text.
 // The command owner retains every receipt, outcome, draft and recovery operation.
@@ -11,7 +12,7 @@ import StatusNotice from './StatusNotice.vue';
 const props = withDefaults(defineProps<CommandFeedbackProps>(), {
     part: 'all', unknownMessage: 'state.unknownOutcome', inline: undefined, disabled: false,
 });
-const emit = defineEmits<{action: [source: MouseEvent]}>();
+const emit = defineEmits<{action: [source: MouseEvent]; reviewCreation: [source: MouseEvent]}>();
 const {messages} = usePilot();
 // Metadata's inline alerts belong to their local Properties host. An explicit
 // null preserves that boundary while other callers use their captured invoker.
@@ -31,7 +32,17 @@ const target = computed(() => props.target === undefined ? props.feedback.feedba
         :kind="feedback.noticeKind.value" :transient="feedback.transientNotice.value" :no-margin="noMargin"
         :notice="feedback.notice.value" :renewal="feedback.noticeRenewal.value"
         :last-updated-at="noticeLastUpdatedAt" :retry-at="noticeRetryAt" :read-error="noticeReadError"
-        @dismiss="feedback.dismissNotice">{{ messages.t(feedback.notice.value) }}<slot name="notice" /></StatusNotice>
+        @dismiss="feedback.dismissNotice">{{ messages.t(feedback.notice.value) }}<slot name="notice" />
+        <!-- Matching list/Survey creation uncertainty remains inside the same
+             durable notice. Feature flags/action state own eligibility; paragraph
+             spacing and wording stay explicit, and custom notice slots still work. -->
+        <template v-if="feedback.uncertain.value && creationReview?.required">
+            <p :class="creationReview.paragraphClass">{{ messages.t(creationReview.message) }}</p>
+            <ActionButton variant="outline-warning" :state="creationReview.state" @click="emit('reviewCreation', $event)">
+                {{ messages.t('draft.review') }}
+            </ActionButton>
+        </template>
+    </StatusNotice>
     <!-- Some native forms present uncertainty independently of ordinary notices.
          This condition is retained command status, not a second error/receipt. -->
     <StatusNotice v-if="part === 'uncertain' && feedback.uncertain.value" kind="warning" :no-margin="noMargin"

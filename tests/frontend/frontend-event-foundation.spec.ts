@@ -143,7 +143,7 @@ describe('Event foundation production consumers', () => {
         expect(wrapper.find('[data-test="event-admitted"]').exists()).toBe(true);
     });
 
-    it('submits one admitted multipart creation with raw capacity, boolean flags, audience masks and its selected file', async () => {
+    it.each(['0', '001.50', ''])('submits one admitted multipart creation with raw capacity %j, flags, masks and its selected file', async capacity => {
         const writes: components['schemas']['EventCreateInput'][] = [];
         let deliveredImage: FormDataEntryValue | null = null;
         let finishCreation: (() => void) | undefined;
@@ -160,7 +160,7 @@ describe('Event foundation production consumers', () => {
         await wrapper.get('[name="title"]').setValue('Summer camp');
         await wrapper.get('[name="startDate"]').setValue('2027-06-01');
         await wrapper.get('[name="endDate"]').setValue('2027-06-03');
-        await wrapper.get('[name="maxParticipants"]').setValue('0');
+        await wrapper.get('[name="maxParticipants"]').setValue(capacity);
         await wrapper.get('[name="allowRegDietUpdateAfterDeadline"]').setValue(true);
         selectImage(wrapper.get<HTMLInputElement>('#event-header-image').element);
         const form = wrapper.get<HTMLFormElement>('#eventForm');
@@ -168,7 +168,7 @@ describe('Event foundation production consumers', () => {
         expect(form.attributes('method')).toBeUndefined();
         await form.trigger('submit');
         await flushPromises();
-        expect(writes).toEqual([expect.objectContaining({title: 'Summer camp', maxParticipants: '0', deadlineTz: 'UTC',
+        expect(writes).toEqual([expect.objectContaining({title: 'Summer camp', maxParticipants: capacity, deadlineTz: 'UTC',
             allowRegDietUpdateAfterDeadline: true, requireDietaryInfo: false, defaultPermissions: defaults})]);
         expect(deliveredImage).toBeInstanceOf(File);
         expect((deliveredImage as File | null)?.name).toBe('selected.png');

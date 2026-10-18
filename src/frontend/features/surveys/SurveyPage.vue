@@ -7,17 +7,16 @@ import type {PilotRead} from '../../../types/FrontendPilotUiTypes';
 import {useActionState, usePilot} from '../../app/context';
 import {evictQueryFamilies, observeQueryReads, retireQueryFamily} from '../../app/queryCache';
 import {overviewKeys, surveyKeys} from '../../app/queryKeys';
-import {useListDetail} from '../../composables/listDetail';
-import {useCommand} from '../../composables/command';
+import {useListCommands, useListDetail} from '../../composables/listDetail';
 import {usePageTitle} from '../../composables/pageTitle';
-import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {useSurveysApi} from './api';
 import EntityHeader from '../../components/EntityHeader.vue';
 import EntityDescription from '../../components/EntityDescription.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
-import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
+import EntityDetailReadState from '../../components/EntityDetailReadState.vue';
+import EntityListToolbar from '../../components/EntityListToolbar.vue';
 import SurveyBallot from './SurveyBallot.vue';
 import SurveyResults from './SurveyResults.vue';
 import CombinationFields from './CombinationFields.vue';
@@ -30,23 +29,19 @@ const api = useSurveysApi(context);
 const surveyId = computed(() => String(route.params.surveyId).toLowerCase());
 const key = computed(() => surveyKeys.detail(context.session.value?.context, surveyId.value));
 const editorOpen = ref(false);
-let active = true;
-onBeforeUnmount(() => { active = false; });
 const answers = reactive<Record<string, Exclude<SurveyAnswer, null>>>({});
 const baseline = ref<Record<string, Exclude<SurveyAnswer, null>>>({});
 const combination = reactive<{weekday: WeekDay; nthWeek: WeekInMonth}>({weekday: 'MON', nthWeek: '1'});
 const ballotDirty = computed(() => Object.keys(answers).some(id => answers[id] !== baseline.value[id]));
 const combinationDirty = computed(() => combination.weekday !== 'MON' || combination.nthWeek !== '1');
-const {list, data, denied, refresh: readFresh} = useListDetail({
+const {list, data, denied, refresh: readFresh, isActive} = useListDetail({
     resourceId: surveyId, queryKey: key, resourceFamily: () => surveyKeys.resource(context.session.value?.context, surveyId.value),
     read: api.survey.bind(api), denied: revokeAccess,
 });
-const command = useCommand(refreshAfterCommand, false, {dirty: () => ballotDirty.value || combinationDirty.value, unknownMessage: 'draft.leaveUnknown'});
-const blocked = computed(() => command.action.disabled.value);
-const retryAvailable = useReadRetry(() => list.error.value);
-const retryAt = useReadRetryAt(() => list.error.value, retryAvailable);
-const readAction = useActionState({eligible: () => active && context.mayRead() && retryAvailable.value,
-    pending: () => list.isFetching.value, blocked: () => command.recoveryAction.disabled.value});
+const {command, blocked, readAction, retryAt, refresh, reviewUnknownCreation} = useListCommands({
+    active: isActive, denied: () => denied.value, reading: () => list.isFetching.value,
+    error: () => list.error.value, refresh: refreshBallot,
+}, {dirty: () => ballotDirty.value || combinationDirty.value, unknownMessage: 'draft.leaveUnknown'});
 const ballotAction = useActionState({eligible: () => !!data.value?.capabilities.submitBallot,
     pending: () => command.pending.value, blocked: () => blocked.value});
 const combinationAction = useActionState({eligible: () => !!data.value?.capabilities.addCombination,
@@ -59,7 +54,7 @@ const stopReads = observeQueryReads<PilotRead<components['schemas']['SurveyView'
     // Equal successful responses can refresh untouched personal values too.
     // Reads concurrent with a command cannot replace its confirmed baseline;
     // the command's causal follow-up below adopts only its own fresh response.
-    if (active && !command.pending.value && !command.recovering.value) receiveBallot(result.data);
+    if (isActive() && !command.pending.value && !command.recovering.value) receiveBallot(result.data);
 });
 onBeforeUnmount(stopReads);
 watch([surveyId, context.epoch], resetDrafts, {flush: 'sync'});
@@ -113,21 +108,7 @@ async function settingsAccessLost(): Promise<void> {
     const id = surveyId.value;
     // Cancel editor reads before detail recovery can admit another projection.
     await evictQueryFamilies(context.queryClient, [surveyKeys.editors(actor, id)]);
-    if (active && id === surveyId.value && actor === context.session.value?.context) await refresh();
-}
-
-/** Confirmed/unknown status belongs to the shared command owner; recovery only
- * reads the current resource and never resubmits a ballot or creates a column. */
-async function refresh(): Promise<void> {
-    if (!readAction.isAvailable()) return;
-    // Reconciliation can clear desired-state uncertainty only after dispatching
-    // a fresh resource read; it never infers success from an idle cached value.
-    try { await command.reconcile(refreshBallot); }
-    catch { command.notice.value = 'state.stale'; }
-}
-async function refreshAfterCommand(): Promise<void> {
-    if (!active || denied.value) return;
-    await refreshBallot();
+    if (isActive() && id === surveyId.value && actor === context.session.value?.context) await refresh();
 }
 
 /** Explicit recovery can read after denial. Only a successful new GET restores
@@ -136,7 +117,7 @@ async function refreshBallot(): Promise<void> {
     // readFresh enforces the current visit and actual network receipt before
     // this explicit path adopts radio values while command recovery is pending.
     await readFresh();
-    if (active && !denied.value) receiveBallot(data.value);
+    if (isActive() && !denied.value) receiveBallot(data.value);
 }
 
 /** Submit exactly the radio values shown for the currently admitted columns.
@@ -149,7 +130,7 @@ async function submitBallot(): Promise<void> {
         const result = await api.submitBallot(surveyId.value, {answers: submitted}, scope);
         // Mutation confirmation is sufficient to release local edits, but only
         // the fresh GET below supplies the next shared result/authority snapshot.
-        if (active && context.isCurrent(scope)) baseline.value = {...submitted};
+        if (isActive() && context.isCurrent(scope)) baseline.value = {...submitted};
         return result;
     }, true, false, {success: 'survey.ballotSaved'});
 }
@@ -165,36 +146,21 @@ async function addCombination(): Promise<void> {
         {success: 'survey.combinationAdded'});
     if (result) Object.assign(combination, {weekday: 'MON', nthWeek: '1'});
 }
-/** An unknown added row cannot be identified from a later read. Show current
- * results first, then require deliberate acknowledgement before another add. */
-async function reviewUnknownCombination(): Promise<void> {
-    if (!readAction.isAvailable()) return;
-    // The explicit confirmation releases uncertainty, without dispatching the
-    // original creation or guessing which recurring row belongs to it.
-    try {
-        if (await command.reconcile(refreshBallot) && window.confirm(messages.value.t('survey.confirmUnknownReviewed'))) command.acknowledge();
-    } catch { command.notice.value = 'state.stale'; }
-}
 </script>
 
 <template>
-    <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value">
-        <template #notice><template v-if="command.uncertain.value && command.reviewRequired.value">
-            <p>{{ messages.t('survey.reviewUnknownCombination') }}</p>
-            <ActionButton variant="outline-warning" :state="readAction" @click="reviewUnknownCombination">{{ messages.t('draft.review') }}</ActionButton>
-        </template></template>
-    </CommandFeedback>
+    <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value"
+        :creation-review="{required: command.reviewRequired.value, message: 'survey.reviewUnknownCombination', state: readAction}"
+        @review-creation="reviewUnknownCreation('survey.confirmUnknownReviewed')" />
     <section class="card bg-dark text-white mb-3">
         <EntityHeader :resource-id="surveyId" :title="data?.title ?? messages.t('app.survey')" icon="bi-clipboard-check"
             :image-version="data?.headerVersion" :image-enabled="!!data && !denied" :image-query-key="key" :read-image="api.header.bind(api)"
             :settings-available="!!data?.capabilities.manageSettings" :settings-disabled="blocked" @settings="editorOpen = true" />
         <div class="card-body">
-            <StatusNotice v-if="denied" kind="danger" :retry-at="retryAt" :read-error="list.error.value">{{ messages.t('state.forbidden') }}</StatusNotice>
-            <StatusNotice v-else-if="list.error.value" kind="warning" :last-updated-at="data ? list.dataUpdatedAt.value : undefined"
-                :retry-at="retryAt" :read-error="list.error.value">{{ messages.t(data ? 'state.stale' : 'state.loadFailed') }}</StatusNotice>
-            <div class="d-flex justify-content-end mb-1"><ActionButton variant="outline-secondary" class="btn-sm" :state="readAction"
-                :aria-label="messages.t('common.refresh')" :title="messages.t('common.refresh')" @click="refresh"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i></ActionButton></div>
-            <LoadingSkeleton v-if="!data && !denied && list.isPending.value" v-bind="route.meta.loadingSkeleton" />
+            <EntityDetailReadState :denied="denied" :error="list.error.value" :has-data="!!data" :pending="list.isPending.value"
+                :last-updated-at="data ? list.dataUpdatedAt.value : undefined" :retry-at="retryAt" :skeleton="route.meta.loadingSkeleton">
+                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="readAction" @refresh="refresh" />
+            </EntityDetailReadState>
             <template v-if="data">
                 <StatusNotice v-if="data.archived" kind="info">{{ messages.t('packing.archived') }}</StatusNotice>
                 <!-- Approved Survey correction reveals the saved instructions

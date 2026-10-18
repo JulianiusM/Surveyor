@@ -1,11 +1,14 @@
 import {computed, onBeforeUnmount, shallowRef, watch} from 'vue';
 import {useQuery, type QueryFunctionContext} from '@tanstack/vue-query';
-import type {FrontendListSource} from '../../types/FrontendListTypes';
-import type {PilotRead} from '../../types/FrontendPilotUiTypes';
-import {refreshInterval, usePilot} from '../app/context';
+import type {FrontendListCommandSource, FrontendListSource} from '../../types/FrontendListTypes';
+import type {PilotCommandDraft, PilotPlainMessageKey, PilotRead} from '../../types/FrontendPilotUiTypes';
+import type {components} from '../../types/api/v1';
+import {refreshInterval, useActionState, usePilot} from '../app/context';
 import {belongsToQueryFamily} from '../app/queryKeys';
 import {refetchFreshQuery, useQueryAdmission} from '../app/queryCache';
 import {isReadDenial, ObsoleteRequestError} from '../app/transport';
+import {useCommand} from './command';
+import {useReadRetry, useReadRetryAt} from './feedback';
 
 /** Matching list detail consumers share cancellation, polling and stale-read
  * recovery. Each feature supplies actual transport, query scope and denied-data
@@ -79,4 +82,70 @@ export function useListDetail<T>(source: FrontendListSource<T>) {
     }, {flush: 'sync'});
 
     return {list, data, denied, refresh, isActive: () => active};
+}
+
+/** Detail pages compose the same read/command recovery without retaining another
+ * server snapshot or draft. Features inject their actual fresh read (including
+ * Survey's ballot merge), lifetime and dirty policy; generated mutations stay
+ * with their feature. Recovery never repeats those mutations. */
+export function useListCommands(source: FrontendListCommandSource, draft: PilotCommandDraft) {
+    const context = usePilot();
+    const retryAvailable = useReadRetry(source.error);
+    const retryAt = useReadRetryAt(source.error, retryAvailable);
+    const command = useCommand(refreshAfterCommand, false, draft);
+    const blocked = computed(() => command.action.disabled.value);
+    const readAction = useActionState({eligible: mayRefresh, pending: source.reading,
+        blocked: () => command.recoveryAction.disabled.value});
+
+    function mayRefresh(): boolean { return source.active() && context.mayRead() && retryAvailable.value; }
+
+    /** A confirmed write can settle after a concurrent denial/unmount. Preserve
+     * its outcome without starting a private follow-up for that retired view. */
+    async function refreshAfterCommand(): Promise<void> {
+        // Explicit recovery below can regain access. Automatic post-command
+        // reads must first retain the current mounted resource's admission.
+        if (!source.active() || source.denied()) return;
+        await source.refresh();
+    }
+
+    /** Reconcile through an actually dispatched read, honoring its cooldown.
+     * Failure retains the command's status and exposes ordinary stale recovery. */
+    async function refresh(): Promise<boolean> {
+        if (!readAction.isAvailable()) return false;
+        try {
+            return await command.reconcile(source.refresh);
+        } catch {
+            // A failed GET supplies no evidence about a previously sent write.
+            command.notice.value = 'state.stale';
+            return false;
+        }
+    }
+
+    /** Unknown creation cannot be identified by a later collection read. Require
+     * explicit review of that current collection before releasing uncertainty. */
+    async function reviewUnknownCreation(confirmation: PilotPlainMessageKey): Promise<void> {
+        const reconciled = await refresh();
+        // Keep input/status protected unless a fresh read succeeded and the user
+        // deliberately acknowledges it. No creation is inferred or replayed.
+        if (reconciled && !source.error() && window.confirm(context.messages.value.t(confirmation))) command.acknowledge();
+    }
+
+    /** Preserve the native list editor's local denial without admitting a write.
+     * A visible title/capacity affordance is distinct from current write authority;
+     * the shared command feedback owner retains the initiating section and expiry. */
+    function denyInlineEdit(initiator?: Event): void {
+        // No operation, status lease or HTTP request is created for this local
+        // guard. Server authorization still protects every actual field save.
+        command.captureFeedback(initiator);
+        command.setError('packing.inlineMetadataDenied', 'transient', 'inline');
+    }
+
+    return {command, blocked, readAction, retryAt, refresh, reviewUnknownCreation, denyInlineEdit};
+}
+
+/** Packing and Drivers retain the native list permission wording. Other detail
+ * families opt into their own presentation; safe future Problems keep the
+ * existing shared decoder fallback rather than becoming guessed catalog keys. */
+export function listProblemKey(problem: components['schemas']['Problem']): PilotPlainMessageKey | undefined {
+    if (problem.code === 'FORBIDDEN') return 'common.notAllowed';
 }
