@@ -169,6 +169,7 @@ jobs:
           echo "version=${PACKAGE_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: SonarQube Scan
+        if: ${{ github.event_name == 'workflow_call' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/ts-migration' }}
         uses: SonarSource/sonarqube-scan-action@master
         with:
           args: >
