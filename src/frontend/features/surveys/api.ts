@@ -30,6 +30,8 @@ export class SurveysApi {
                  previous?: PilotRead<Survey>): Promise<PilotRead<Survey>> {
         const transport = this.transport;
         async function readSurvey() {
+            // Carry the previous representation's validator through the same
+            // captured actor and cancellation scope as this network read.
             const result = await transport.client.GET('/surveys/{surveyId}', {
                 params: {path: {surveyId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
@@ -84,27 +86,45 @@ export class SurveysApi {
     /** Capture generated machine data and optional bytes in the native multipart
      * boundary. A validated receipt confirms creation; no failure replays it. */
     async createSurvey(input: components['schemas']['SurveyCreateInput'], image: File | null, scope: PilotRequestScope) {
+        // Reject malformed local values before allocating or dispatching bytes.
+        // Admission and business validation remain with the server controller.
         if (!validateSurveyCreateInput(input)) throw new InvalidInputError('Invalid survey creation.');
+
         const form = new FormData();
         form.append('data', JSON.stringify(input));
         if (image) form.append('image', image);
-        return this.transport.read('createSurvey', await this.transport.client.POST('/surveys', {
+
+        // Send the captured draft once. Shared decoding distinguishes a confirmed
+        // creation from rejected or uncertain delivery without replaying it.
+        const result = await this.transport.client.POST('/surveys', {
             params: {header: this.transport.headers(scope)}, body: {data: input}, bodySerializer: () => form, cache: 'no-store',
-        }), validateSurveyCreated, scope).data;
+        });
+        return this.transport.read('createSurvey', result, validateSurveyCreated, scope).data;
     }
 
+    /** Replace only the captured profile's displayed ballot. The shared command
+     * owner decides when a confirmed result releases its local personal draft. */
     async submitBallot(surveyId: string, input: components['schemas']['SurveyBallotInput'], scope: PilotRequestScope) {
+        // Structural validation precedes dispatch; the server checks that every
+        // answer belongs to this Survey before its unchanged replacement write.
         if (!validateSurveyBallotInput(input)) throw new InvalidInputError('Invalid survey ballot.');
-        return this.transport.read('submitSurveyBallot', await this.transport.client.PUT('/surveys/{surveyId}/ballot', {
+
+        const result = await this.transport.client.PUT('/surveys/{surveyId}/ballot', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
-        }), validateMutationResult, scope).data;
+        });
+        return this.transport.read('submitSurveyBallot', result, validateMutationResult, scope).data;
     }
 
+    /** Submit one collaborative recurring choice. A missing reply does not
+     * identify a created row and cannot authorize automatic creation replay. */
     async addCombination(surveyId: string, input: components['schemas']['SurveyCombinationInput'], scope: PilotRequestScope) {
+        // Generated validation owns the finite weekday/occurrence wire values.
         if (!validateSurveyCombinationInput(input)) throw new InvalidInputError('Invalid survey combination.');
-        return this.transport.read('addSurveyCombination', await this.transport.client.POST('/surveys/{surveyId}/combinations', {
+
+        const result = await this.transport.client.POST('/surveys/{surveyId}/combinations', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
-        }), validateMutationResult, scope).data;
+        });
+        return this.transport.read('addSurveyCombination', result, validateMutationResult, scope).data;
     }
 
     /** ETags identify admitted representations for shared draft reconciliation.
@@ -113,12 +133,17 @@ export class SurveysApi {
                    previous?: PilotRead<Metadata>): Promise<PilotRead<Metadata>> {
         const transport: PilotApi = this.transport;
         async function readMetadata() {
+            // The returned identity belongs to this admitted metadata baseline,
+            // independently of public results and another profile's ballot.
             const result = await transport.client.GET('/surveys/{surveyId}/metadata', {
                 params: {path: {surveyId}, header: transport.headers(scope, previous?.etag)}, signal, cache: 'no-store',
             });
             return transport.read('getSurveyMetadata', {...result, signal}, validateSurveyMetadata, scope, previous);
         }
         const result = await transport.allowedRead(`survey/${surveyId}/metadata`, scope, readMetadata, signal);
+
+        // The shared editor requires a representation identity to reconcile
+        // refreshes; this is not an optimistic server write precondition.
         transport.requireComparison(result.etag);
         return result;
     }
@@ -127,7 +152,9 @@ export class SurveysApi {
      * stays local comparison evidence and is deliberately not sent as If-Match. */
     async saveMetadata(surveyId: string, patch: components['schemas']['SurveyMetadataPatch'], _token: string,
                        scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
+        // Keep the generated sparse patch distinct from its local baseline token.
         if (!validateSurveyMetadataPatch(patch)) throw new InvalidInputError('Invalid survey metadata.');
+
         const result = this.transport.read('updateSurveyMetadata', await this.transport.client.PATCH('/surveys/{surveyId}/metadata', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, body: patch, cache: 'no-store',
         }), validateSurveyMetadata, scope);
@@ -168,27 +195,42 @@ export class SurveysApi {
     /** Selected bytes retain their file draft but keep native unversioned image
      * semantics. Settings tokens identify client baselines, never new DB locks. */
     async uploadHeader(surveyId: string, image: File, _token: string, scope: PilotRequestScope) {
+        // Capture the selected bytes without placing them in a query cache or
+        // sending the local comparison token as new write authority.
         const form = new FormData();
         form.append('image', image);
+
         return this.transport.read('uploadSurveyHeader', await this.transport.client.PUT('/surveys/{surveyId}/header', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, body: {image: image.name}, bodySerializer: () => form, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
+    /** Remove the current image through the existing owner-only operation.
+     * Local settings comparison evidence does not strengthen its write contract. */
     async removeHeader(surveyId: string, _token: string, scope: PilotRequestScope) {
+        // Decode the invariant acknowledgement before the caller releases image
+        // state; uncertain delivery stays with its existing shared command owner.
         return this.transport.read('deleteSurveyHeader', await this.transport.client.DELETE('/surveys/{surveyId}/header', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
+    /** Select the desired archive state without inferring eligibility or dates.
+     * The shared lifecycle/controller owners retain authorization and idempotence. */
     async archive(surveyId: string, restore: boolean, scope: PilotRequestScope) {
         const options = {params: {path: {surveyId}, header: this.transport.headers(scope)}, cache: 'no-store' as const};
+
+        // Both generated operations share transport/result handling while keeping
+        // their explicit archive-versus-restore command identity.
         const result = restore ? await this.transport.client.POST('/surveys/{surveyId}/restore', options)
             : await this.transport.client.POST('/surveys/{surveyId}/archive', options);
         return this.transport.read(restore ? 'restoreSurvey' : 'archiveSurvey', result, validateMutationResult, scope).data;
     }
 
+    /** Permanently remove an owned Survey independently of archival. Confirmed
+     * destination delivery is handled by the existing shared removal command. */
     async deleteSurvey(surveyId: string, scope: PilotRequestScope) {
+        // Send no browser-selected profile, lifecycle timestamp or deletion state.
         return this.transport.read('deleteSurvey', await this.transport.client.DELETE('/surveys/{surveyId}', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -208,7 +250,11 @@ export class SurveysApi {
         return transport.allowedRead(`survey/${surveyId}/guest`, scope, readGuest, signal);
     }
 
+    /** Register the explicitly submitted guest through the existing identity
+     * completion boundary; a title/admission read can never issue this command. */
     async registerGuest(surveyId: string, input: components['schemas']['GuestRegistrationInput'], scope: PilotRequestScope) {
+        // Shared identity decoding installs only the validated captured completion.
+        // Its command owner retains input and uncertainty after failed delivery.
         return this.transport.identity('registerSurveyGuest', await this.transport.client.POST('/surveys/{surveyId}/guest', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), scope);

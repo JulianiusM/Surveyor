@@ -228,6 +228,40 @@ describe('Survey production frontend consumers', () => {
         expect(wrapper.get<HTMLInputElement>('#title').element.value).toBe('Unconfirmed survey');
         expect(chooser.files?.[0]).toBe(file);
     });
+
+    it('seeds a duplicate with saved instructions and canonical occurrences while keeping the copy independent', async () => {
+        const copied = {title: 'Saved recurring survey', description: 'Saved instructions\nChoose a recurring day',
+            combinations: [{weekday: 'TUE', nthWeek: '3'}, {weekday: 'SAT', nthWeek: 'LAST'}]};
+        let submitted: unknown;
+        const {wrapper, context} = await mounted(SurveyCreatePage, async request => {
+            if (request.method === 'GET') {
+                return new URL(request.url).pathname.endsWith('/duplicate') ? json(copied)
+                    : json({entry: {kind: 'render'}, context: {}});
+            }
+            submitted = JSON.parse(String((await request.formData()).get('data')));
+            return json({id: copyId}, 201);
+        }, `/frontend-pilot/survey/${surveyId}/duplicate`);
+
+        // Every displayed field starts from the admitted copy. Ballots and the
+        // original image never enter this new creation draft or chooser.
+        const description = wrapper.get<HTMLTextAreaElement>('#description');
+        expect(description.element.value).toBe(copied.description);
+        const rows = wrapper.findAll('#combinationTable tr');
+        expect(rows[0]!.findAll('select').map(select => (select.element as HTMLSelectElement).value)).toEqual(['TUE', '3']);
+        expect(rows[1]!.findAll('select').map(select => (select.element as HTMLSelectElement).value)).toEqual(['SAT', 'LAST']);
+        expect(wrapper.get<HTMLInputElement>('#headerImg').element.files).toHaveLength(0);
+
+        // Refreshing copy admission must retain edited instructions and the same
+        // textarea node instead of reinitializing from a remote source again.
+        await description.setValue('Local copy instructions');
+        await context.queryClient.invalidateQueries({queryKey: surveyKeys.duplicate(session.context, surveyId)});
+        await flushPromises();
+        expect(wrapper.get('#description').element).toBe(description.element);
+        expect(description.element.value).toBe('Local copy instructions');
+        await wrapper.get('#surveyForm').trigger('submit');
+        await flushPromises();
+        expect(submitted).toEqual({...copied, description: 'Local copy instructions'});
+    });
 });
 
 /** A known read rejection keeps saved state readable and has no retry timer. */

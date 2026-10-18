@@ -10,7 +10,6 @@ import {useCreationCommand} from '../../composables/creation';
 import {usePageEntry} from '../../composables/pageEntry';
 import {usePageTitle} from '../../composables/pageTitle';
 import {useReadRetryAt} from '../../composables/feedback';
-import {useFileSelectionRelease} from '../../composables/fileSelection';
 import {useSurveysApi} from './api';
 import CombinationFields from './CombinationFields.vue';
 import ActionButton from '../../components/ActionButton.vue';
@@ -19,6 +18,8 @@ import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import CreationAdmissionNotices from '../../components/CreationAdmissionNotices.vue';
+import FormField from '../../components/FormField.vue';
+import FileField from '../../components/FileField.vue';
 
 // Survey creation is standalone: its feature draft contains recurring choices,
 // title, description and bytes. The shared owner handles command admission,
@@ -34,7 +35,6 @@ const rows = ref<{key: number; weekday: WeekDay; nthWeek: WeekInMonth}[]>([]);
 let rowKey = 0;
 const baseline = ref<string | null>(null);
 const image = ref<File | null>(null);
-const imageInput = useFileSelectionRelease(() => image.value);
 const entry = usePageEntry<Creation>({
     key: computed(() => sourceId.value ? surveyKeys.duplicate(context.session.value?.context, sourceId.value)
         : surveyKeys.creation(context.session.value?.context)),
@@ -53,7 +53,7 @@ const {command, destination, blocked, createAction, submissionAdmissionError, su
     submissionRetryAt, submissionRetryAction, retrySubmissionAdmission} = submission;
 watch([sourceId, context.epoch], resetCreation, {flush: 'sync'});
 watch([entry.data, sourceId], receiveCreation, {immediate: true});
-usePageTitle(() => messages.value.t('survey.create'));
+usePageTitle(() => messages.value.t('survey.createDocumentTitle'), true);
 
 /** Evaluate the seed only for its original admitted document. A later warm
  * source cannot reuse old values, identity, guest admission or creation context. */
@@ -81,10 +81,10 @@ function receiveCreation(): void {
     if (baseline.value !== null || !admitted.value || (entry.data.value?.sourceId ?? null) !== sourceId.value) return;
     const copy = entry.data.value?.values;
     fields.title = copy?.title ?? '';
-    // Native duplicate textarea uses a value attribute, leaving the rendered
-    // description empty. Preserve that existing browser behavior here.
-    fields.description = '';
-    rows.value = copy ? copy.combinations.map(item => ({key: rowKey++, weekday: item.weekday, nthWeek: '1'}))
+    // The approved Vue-only duplicate correction seeds the actual saved values.
+    // Later refreshes never replace these admitted, independently editable rows.
+    fields.description = copy?.description ?? '';
+    rows.value = copy ? copy.combinations.map(item => ({key: rowKey++, weekday: item.weekday, nthWeek: item.nthWeek}))
         : [{key: rowKey++, weekday: 'MON', nthWeek: '1'}];
     baseline.value = snapshot();
 }
@@ -107,7 +107,6 @@ function resetCreation(): void {
     fields.description = '';
     rows.value = [];
 }
-function chooseImage(event: Event): void { image.value = (event.target as HTMLInputElement).files?.[0] ?? null; }
 function addRow(): void { if (!blocked.value) rows.value.push({key: rowKey++, weekday: 'MON', nthWeek: '1'}); }
 /** Remove only this local creation row. The native form permits removing all
  * rows; generated/server validation then rejects a submission without choices. */
@@ -151,19 +150,12 @@ function collectCreation() {
             <!-- Native uses the row gutters directly on its form. Each stable
                  row keeps its selections while add/remove changes neighboring rows. -->
             <form v-if="baseline !== null" id="surveyForm" class="row gy-4 justify-content-center" @submit.prevent="create">
-                <div class="col-md-12">
-                    <label class="form-label mb-1" for="title"><i class="bi bi-tag me-1" aria-hidden="true"></i>{{ messages.t('survey.title') }} *</label>
-                    <input id="title" v-model="fields.title" class="form-control text-bg-dark" name="title" required :disabled="blocked || !admitted" />
-                </div>
-                <div class="col-md-12">
-                    <label class="form-label" for="description"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>{{ messages.t('survey.description') }}</label>
-                    <textarea id="description" v-model="fields.description" class="form-control text-bg-dark" name="description" :disabled="blocked || !admitted"></textarea>
-                </div>
-                <div class="col-12">
-                    <label class="form-label" for="headerImg"><i class="bi bi-card-image me-1" aria-hidden="true"></i>{{ messages.t('survey.headerOptional') }}</label>
-                    <input ref="imageInput" id="headerImg" class="form-control text-bg-dark" type="file" name="headerImg" data-hydration-draft
-                        accept="image/jpeg,image/png,image/gif" :disabled="blocked || !admitted" @change="chooseImage" />
-                </div>
+                <FormField id="title" v-model="fields.title" name="title" class="col-md-12" :label="messages.t('survey.title')"
+                    label-icon="bi-tag" required :disabled="blocked || !admitted" />
+                <FormField id="description" v-model="fields.description" name="description" class="col-md-12"
+                    :label="messages.t('survey.description')" label-icon="bi-pencil-square" label-class="" multiline :disabled="blocked || !admitted" />
+                <FileField id="headerImg" name="headerImg" class="col-12" :label="messages.t('survey.headerOptional')"
+                    label-icon="bi-card-image" :selected-file="image" :disabled="blocked || !admitted" hydration-draft @choose="image = $event" />
                 <div class="col-12">
                     <label class="form-label mb-2"><i class="bi bi-calendar4-week me-1" aria-hidden="true"></i>{{ messages.t('survey.selectCombinations') }}</label>
                     <div class="table-responsive">

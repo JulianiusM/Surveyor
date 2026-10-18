@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {WeekDay, WeekInMonth} from '../../../types/SurveyTypes';
 import {usePilot} from '../../app/context';
-import {weekdayMessages} from './recurrence';
+import {weekdayMessages} from './presentation';
 
 // Creation rows and the collaborative add form share the same recurring choices.
 // Their parent owns the draft and removal lifecycle; this control never chooses

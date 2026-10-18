@@ -74,7 +74,9 @@ watch(() => [resourceId.value, next.value], () => {
     Object.assign(fields, {name: '', email: ''});
     choiceOpen.value = false;
 });
-usePageTitle(() => guestEntry.value?.title || messages.value.t(props.titleKey));
+// The native guest document uses its Join wording without an application suffix.
+// Its admitted title remains text even when the resource name contains markup.
+usePageTitle(() => messages.value.t('auth.join', {title: guestEntry.value?.title ?? messages.value.t(props.titleKey)}), true);
 const blocked = computed(() => checkingEmail.value || command.action.disabled.value
     || completion.pending.value || completion.target.value !== null);
 const titleRetryAction = useActionState({eligible: mayRetryTitle, pending: () => entry.isFetching.value});

@@ -31,12 +31,14 @@ const editorOpen = ref(false);
 // Event supplies its admitted image/query operation to the same displayed
 // header as Packing. Dashboard headings deliberately retain their native shape.
 const readHeader = api.header.bind(api);
-usePageTitle(pageTitle);
+usePageTitle(pageTitle, true);
 watch(section.denied, closeDeniedSettings);
 
 function pageTitle(): string {
-    if (!event.value) return messages.value.t('event.create');
-    return admin.value ? messages.value.t('event.dashboard', {title: event.value.title}) : event.value.title;
+    // Document branding differs from the visible dashboard heading. Keep both
+    // native page intents explicit while the shared owner follows locale changes.
+    if (!event.value) return messages.value.t('event.createDocumentTitle');
+    return messages.value.t(admin.value ? 'event.adminDocumentTitle' : 'event.documentTitle', {title: event.value.title});
 }
 function readEvent(scope: Parameters<typeof api.event>[1], signal: AbortSignal) {
     return api.event(eventId.value, scope, signal, admin.value);

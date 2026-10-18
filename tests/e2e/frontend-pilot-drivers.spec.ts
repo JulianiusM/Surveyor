@@ -257,6 +257,7 @@ test('offers, edits, reorders and removes rides and passenger places in the same
         await guestPage.goto(`/frontend-pilot${resource.path}?locale=en`, {waitUntil: 'domcontentloaded'});
         await waitForPilotHydration(guestPage);
         await expect(guestPage).toHaveURL(`/frontend-pilot${resource.path}/guest?locale=en`);
+        await expect(guestPage).toHaveTitle(`Join «${resource.title}»`);
         await expect(guestPage.getByRole('heading', {name: `Join «${resource.title}»`, exact: true})).toBeVisible();
         await guestPage.evaluate(() => {document.documentElement.dataset.pilotDocument = 'drivers-guest';});
         const guestNavigation: string[] = [];
@@ -299,6 +300,7 @@ test('opens and creates Drivers from Event children and returns through Overview
     const resource = await createResourceViaForm(page.request, input);
     await page.goto(`/frontend-pilot/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);
+    await expect(page).toHaveTitle(`Dashboard — ${event.title}`);
     await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'drivers-context';});
     const navigation: string[] = [];
     page.on('request', request => {
@@ -312,8 +314,10 @@ test('opens and creates Drivers from Event children and returns through Overview
     await expect(page.getByRole('heading', {name: resource.title, exact: true})).toBeVisible();
     await page.locator(`main a[href="/frontend-pilot/event/${event.id}"]`).first().click();
     await expect(page).toHaveURL(`/frontend-pilot/event/${event.id}`);
+    await expect(page).toHaveTitle(`${event.title} | Event`);
     await page.locator(`main a[href="/frontend-pilot/event/${event.id}/admin"]`).click();
     await expect(page).toHaveURL(`/frontend-pilot/event/${event.id}/admin`);
+    await expect(page).toHaveTitle(`Dashboard — ${event.title}`);
     await page.getByRole('button', {name: /Event drivers lists/u}).click();
     await page.getByRole('link', {name: 'Create new drivers list', exact: true}).click();
     await expect(page).toHaveURL(`/frontend-pilot/drivers/create?eventId=${event.id}`);
@@ -328,6 +332,7 @@ test('opens and creates Drivers from Event children and returns through Overview
     expect((await readDrivers(page.request, id)).currentEventId).toBe(event.id);
     await page.getByRole('button', {name: 'Overview', exact: true}).click();
     await page.getByRole('link', {name: 'Your overview', exact: true}).click();
+    await expect(page).toHaveTitle('My Dashboard | Surveyor');
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
     // The shared account can own more than one bounded page of fixtures. Search
     // the exact new child before opening its parent instead of assuming that a

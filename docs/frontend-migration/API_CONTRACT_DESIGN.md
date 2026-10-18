@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P3 Drivers shared method-policy and generated transport ownership source-reconciled; original transport provenance, session/comparison choices and native backend boundaries retained; execution belongs to paired review
+verification-scope: P4 Survey generated transport, standalone settings and representation-only comparison scope reconciled alongside retained method-policy/transport provenance and native backend boundaries; execution belongs to paired review
 source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: next-contract-migration-or-authorized-cutover
 -->
@@ -17,7 +17,7 @@ transactions/persistence. A DTO deliberately differs from an entity; one wire sh
 
 The [baseline](FRONTEND_MIGRATION_BASELINE.md) owns behavior/route exceptions.
 [Foundation](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments) owns original choices and dated
-amendments. Invoice/activity examples below remain future v1 scope; current Help/Packing/Event/Drivers/overview/identity contracts
+amendments. Invoice/activity examples below remain future v1 scope; current Help/Packing/Event/Drivers/Survey/overview/identity contracts
 are authoritative in their YAML rather than a second maintained endpoint matrix.
 
 ## Implemented foundation boundary
@@ -28,6 +28,11 @@ Native middleware, v1 authorization and capability projections consume that poli
 image operations retain their own owners. Adapters decode/present native and generated v1 protocols; conditional
 comparison remains v1-specific. Source ownership consolidation and the approved coexistence remedy are implemented;
 final execution and its limits are tracked separately in the review.
+
+Standalone Surveys reuse their existing controller operations through generated JSON/multipart contracts. Admission
+and owner-only settings remain independent of the general permission matrix; Surveys expose no Access or event
+association operations. Their metadata ETags identify representations for frontend draft reconciliation only and
+do not add write preconditions, atomic ballot replacement or stronger image/persistence guarantees.
 
 Help has one canonical release-owned tree: native English at `docs/user-guide/`, with pilot language corpora in its
 catalog-selected directories such as `en/` and `de/`. Staged maintainer documents are never runtime sources.

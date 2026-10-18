@@ -11,6 +11,9 @@ import * as pug from 'pug';
 import LandingPage from '../../src/frontend/features/common/LandingPage.vue';
 import CommonPage from '../../src/frontend/features/common/CommonPage.vue';
 import PageMessage from '../../src/frontend/components/PageMessage.vue';
+import EntityDescription from '../../src/frontend/components/EntityDescription.vue';
+import FormField from '../../src/frontend/components/FormField.vue';
+import FileField from '../../src/frontend/components/FileField.vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {render} from '../../src/frontend/app/entry-server';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
@@ -89,6 +92,68 @@ function accountSession(kind: 'account' | 'guest'): components['schemas']['Sessi
 }
 
 describe('common frontend presentation', () => {
+    it('preserves escaped description lines and releases its separator with absent content', async () => {
+        const {wrapper, request} = await mounted(EntityDescription, {
+            description: 'First <img src=x onerror=alert(1)>\n\nLast & final line', separator: true,
+        });
+        expect(wrapper.get('#planDesc').text()).toBe('First <img src=x onerror=alert(1)>Last & final line');
+        expect(wrapper.find('img').exists()).toBe(false);
+        expect(wrapper.findAll('#planDesc br')).toHaveLength(2);
+        expect(wrapper.get('#planDesc').classes()).toEqual(['mb-0', 'mt-2']);
+        expect(wrapper.get('hr').classes()).toEqual(['mb-1', 'mt-0']);
+
+        await wrapper.setProps({description: 'Single line', separator: false});
+        expect(wrapper.get('#planDesc').text()).toBe('Single line');
+        expect(wrapper.find('br').exists()).toBe(false);
+        expect(wrapper.find('hr').exists()).toBe(false);
+        await wrapper.setProps({description: null});
+        expect(wrapper.find('#planDesc').exists()).toBe(false);
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it('keeps text and multiline field values lexical with explicit native naming and constraints', async () => {
+        const title = await mounted(FormField, {id: 'shared-title', name: null, modelValue: 'Original title',
+            label: 'Title', labelIcon: 'bi-tag', labelClass: '', required: true, requiredMarker: false, maxLength: 255});
+        expect(title.wrapper.get('label').attributes('for')).toBe('shared-title');
+        expect(title.wrapper.get('label').text()).toBe('Title');
+        expect(title.wrapper.get('input').attributes('name')).toBeUndefined();
+        expect(title.wrapper.get('input').attributes('maxlength')).toBe('255');
+        await title.wrapper.get('input').setValue('  New title  ');
+        expect(title.wrapper.emitted('update:modelValue')).toEqual([['  New title  ']]);
+
+        const description = await mounted(FormField, {id: 'shared-description', name: 'description', multiline: true,
+            modelValue: 'First line\nSecond line', label: 'Description', labelClass: '', rows: 4, maxLength: 16000});
+        const control = description.wrapper.get<HTMLTextAreaElement>('textarea');
+        expect(control.element.value).toBe('First line\nSecond line');
+        expect(control.attributes()).toMatchObject({name: 'description', rows: '4', maxlength: '16000'});
+        await control.setValue('  Retained draft\nWith spacing  ');
+        expect(description.wrapper.emitted('update:modelValue')).toEqual([['  Retained draft\nWith spacing  ']]);
+    });
+
+    it('keeps a shared image chooser mounted until its feature explicitly releases selected bytes', async () => {
+        const {wrapper} = await mounted(FileField, {id: 'shared-header', selectedFile: null, label: 'Header image',
+            hydrationDraft: true, dark: false});
+        const chooser = wrapper.get<HTMLInputElement>('input').element;
+        const transfer = new DataTransfer();
+        const file = new File(['header'], 'selected.png', {type: 'image/png'});
+        transfer.items.add(file);
+        chooser.files = transfer.files;
+        chooser.dispatchEvent(new Event('change', {bubbles: true}));
+        expect(wrapper.emitted('choose')).toEqual([[file]]);
+        expect(chooser.hasAttribute('name')).toBe(false);
+        expect(chooser.hasAttribute('data-hydration-draft')).toBe(true);
+        expect(chooser.classList.contains('text-bg-dark')).toBe(false);
+
+        // Background presentation and pending/unknown delivery may disable the
+        // control, but cannot discard bytes retained by the owning feature.
+        await wrapper.setProps({selectedFile: file, disabled: true});
+        expect(wrapper.get('input').element).toBe(chooser);
+        expect(chooser.files?.[0]).toBe(file);
+        await wrapper.setProps({selectedFile: null});
+        expect(wrapper.get('input').element).toBe(chooser);
+        expect(chooser.files).toHaveLength(0);
+    });
+
     it('retains anonymous landing copy, card order and responsive groups from the native template', async () => {
         const native = nativePage(renderNativeLanding).querySelector('main > .card')!;
         const {wrapper, context, request} = await mounted(LandingPage);

@@ -57,7 +57,18 @@ export async function selectDriversSettingsSurface(dialog: Locator, page: Page, 
         await expect(dialog.locator('input[type="file"]')).toBeVisible();
     }
     if (surface === 'Linked event') {
+        // The selected event can already appear in the unfiltered page. Wait
+        // for this exact debounced search before checking its rendered result;
+        // an old idle page is not readiness for the query just typed.
+        const searchReply = page.waitForResponse(function matchEventSearch(response) {
+            const url = new URL(response.url());
+            return response.request().method() === 'GET' && url.searchParams.get('q') === event.title
+                && ['/api/event/link-options', '/api/v1/drivers-lists/events'].includes(url.pathname);
+        });
         await dialog.getByLabel('Search events', {exact: true}).fill(event.title);
+        const searched = await searchReply;
+        expect(searched.status()).toBe(200);
+        await searched.finished();
         await expect(dialog.locator(`button[data-event-id="${event.id}"]`)).toHaveCount(1);
         // A result from the preceding page is not completed search evidence.
         await expect(dialog.getByRole('list', {name: 'Available events', exact: true})).toHaveAttribute('aria-busy', 'false');

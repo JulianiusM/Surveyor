@@ -231,8 +231,8 @@ const presentations = {
     login: signInPresentation,
     'guest-login': signInPresentation,
     register: {title: 'app.register', icon: 'bi-person-plus-fill', submit: 'app.register', submitIcon: 'bi-check-lg'},
-    forgot: {title: 'auth.forgotTitle', icon: 'bi-lock-fill', submit: 'auth.sendReset', submitIcon: 'bi-send-check'},
-    reset: {title: 'auth.resetTitle', icon: 'bi-shield-lock-fill', submit: 'auth.changePassword', submitIcon: 'bi-check-lg'},
+    forgot: {title: 'auth.forgotTitle', documentTitle: 'auth.forgotDocumentTitle', icon: 'bi-lock-fill', submit: 'auth.sendReset', submitIcon: 'bi-send-check'},
+    reset: {title: 'auth.resetTitle', documentTitle: 'auth.resetDocumentTitle', icon: 'bi-shield-lock-fill', submit: 'auth.changePassword', submitIcon: 'bi-check-lg'},
     activate: {title: 'auth.activationTitle', icon: 'bi-box-arrow-in-right',
         submit: 'auth.activationTitle', submitIcon: 'bi-box-arrow-in-right'},
     error: {title: 'common.errorTitle', icon: 'bi-box-arrow-in-right',
@@ -245,12 +245,17 @@ const presentation = computed(() => presentations[mode.value]);
 
 // Confirmed completion owns the success page; a current validated denial owns
 // Error. Ordinary form labels are the fallback only while neither result applies.
-const title = computed(() => {
+const resultTitle = computed(() => {
     if (identityDenial.value || mode.value === 'reset' && resetDenial.value) return messages.value.t('common.errorTitle');
     if (pageCompleted.value) return messages.value.t('common.successTitle');
     if (finished.value) return messages.value.t(mode.value === 'register' ? 'common.infoTitle' : 'common.successTitle');
-    return messages.value.t(presentation.value.title);
+    return undefined;
 });
+const title = computed(() => resultTitle.value ?? messages.value.t(presentation.value.title));
+// Native recovery documents have their own titles; their visible form headings
+// remain conversational. Confirmed/denied outcomes still share one result title.
+const documentTitle = computed(() => resultTitle.value ?? messages.value.t(
+    'documentTitle' in presentation.value ? presentation.value.documentTitle : presentation.value.title));
 // Semantic denial identity renews a full message; translation alone changes its
 // presentation. Initial page entries, configured denial and reset checks retain
 // their existing owners instead of comparing translated text or inventing receipts.
@@ -263,7 +268,7 @@ const denialReceipt = computed(() => {
     const reset = resetAdmission.value;
     return reset && 'code' in reset ? reset.code : mode.value;
 });
-usePageTitle(title);
+usePageTitle(documentTitle);
 const titleIcon = computed(() => presentation.value.icon);
 const submitLabel = computed(() => messages.value.t(presentation.value.submit));
 const submitIcon = computed(() => presentation.value.submitIcon);

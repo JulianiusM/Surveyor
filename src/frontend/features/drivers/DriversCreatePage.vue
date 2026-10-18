@@ -22,7 +22,7 @@ const source: FrontendListCreationSource<components['schemas']['DriversDuplicate
 </script>
 
 <template>
-    <EntityListCreation icon="bi-car-front" heading="drivers.create" header-label="drivers.headerOptional" not-found="drivers.notFound"
+    <EntityListCreation icon="bi-car-front" heading="drivers.create" document-title="drivers.createDocumentTitle" header-label="drivers.headerOptional" not-found="drivers.notFound"
         created="drivers.created" leave-unknown="drivers.leaveUnknown" creation-unknown="drivers.creationUnknown" :source="source">
         <!-- The native form renders its empty table without ride-creation controls. -->
         <div class="mb-3"><table class="table table-dark"><tbody></tbody></table></div>

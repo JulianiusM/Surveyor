@@ -126,6 +126,11 @@ test('transfers only after preview, then deactivates through JSON while retainin
         await page.getByRole('button', {name: session.activeProfile.name, exact: true}).click();
         await page.getByRole('link', {name: 'Profile settings', exact: true}).click();
         await page.getByRole('link', {name: 'Delete profile', exact: true}).click();
+        // Both the previous editor and this confirmation use #name. Lazy SPA
+        // delivery can retain the old editor, so its visible input cannot prove
+        // that the destructive destination owns the field we are about to fill.
+        await expect(page).toHaveURL(/\/frontend-pilot\/users\/profile\/delete(?:\?[^#]*)?$/u);
+        await expect(page.getByRole('heading', {name: 'Deactivate your profile?', exact: true})).toBeVisible();
         await expect(page.locator('#name')).toBeVisible();
         await page.locator('#name').fill('Incorrect confirmation');
         const rejected = page.waitForResponse(result => result.request().method() === 'POST'

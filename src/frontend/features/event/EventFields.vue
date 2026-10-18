@@ -2,6 +2,7 @@
 import {usePilot} from '../../app/context';
 import type {EntityMetadataValues} from '../../../types/FrontendEntityMetadataTypes';
 import TimezonePicker from '../../components/TimezonePicker.vue';
+import FormField from '../../components/FormField.vue';
 
 // The same field owner serves creation and permission-filtered properties. The
 // caller retains values; absent fields never render a hidden writable mirror.
@@ -29,22 +30,16 @@ const propertyInputs = [
          labels and a stricter capacity constraint than the creation form below. -->
 
     <div v-if="fields" class="row g-3 pt-3">
-        <div v-for="input in propertyInputs.filter(input => fields?.includes(input.field))" :key="input.field"
-            class="col-md-6">
-            <label class="form-label" :for="prefix + '-' + input.field">{{ messages.t(input.label) }}</label>
-            <input :id="prefix + '-' + input.field" :value="String(values[input.field] ?? '')"
-                class="form-control text-bg-dark" :type="input.type" :name="input.field"
-                :maxlength="'max' in input ? input.max : undefined" :required="input.required"
-                :min="input.type === 'number' ? 1 : undefined" :step="input.type === 'datetime-local' ? 1 : undefined"
-                @input="values[input.field] = ($event.target as HTMLInputElement).value" />
-        </div>
+        <FormField v-for="input in propertyInputs.filter(input => fields?.includes(input.field))" :key="input.field"
+            :id="prefix + '-' + input.field" class="col-md-6" :name="input.field" :type="input.type"
+            :model-value="String(values[input.field] ?? '')" :label="messages.t(input.label)" label-class=""
+            :max-length="'max' in input ? input.max : undefined" :required="input.required" :required-marker="false"
+            :min="input.type === 'number' ? 1 : undefined" :step="input.type === 'datetime-local' ? 1 : undefined"
+            @update:model-value="values[input.field] = $event" />
 
-        <div v-if="fields.includes('description')" class="col-12">
-            <label class="form-label" :for="prefix + '-description'">{{ messages.t('packing.description') }}</label>
-            <textarea :id="prefix + '-description'" :value="String(values.description ?? '')"
-                class="form-control text-bg-dark" name="description" rows="4" maxlength="16000"
-                @input="values.description = ($event.target as HTMLTextAreaElement).value"></textarea>
-        </div>
+        <FormField v-if="fields.includes('description')" :id="prefix + '-description'" class="col-12" name="description"
+            :model-value="String(values.description ?? '')" :label="messages.t('packing.description')" label-class=""
+            multiline :rows="4" :max-length="16000" @update:model-value="values.description = $event" />
 
         <div v-if="fields.includes('deadlineTz')" class="col-12">
             <label class="form-label" :for="prefix + '-timezone-btn'">{{ messages.t('event.timezone') }}</label>
@@ -65,11 +60,9 @@ const propertyInputs = [
     <template v-else>
         <!-- Native field order, column widths, constraints and unchecked omission are
              retained. These flags configure distinct server-enforced deadline rules. -->
-        <div class="mb-3">
-            <label class="form-label" :for="prefix + '-title'"><i class="bi bi-tag me-1" aria-hidden="true"></i>{{ messages.t('event.title') }}</label>
-            <input :id="prefix + '-title'" v-model="values.title" class="form-control text-bg-dark" name="title"
-                required maxlength="255" />
-        </div>
+        <FormField :id="prefix + '-title'" class="mb-3" name="title" :model-value="String(values.title ?? '')"
+            :label="messages.t('event.title')" label-icon="bi-tag" label-class="" required :required-marker="false"
+            :max-length="255" @update:model-value="values.title = $event" />
 
         <div class="row mb-3">
             <div class="col-md-6">
@@ -120,11 +113,8 @@ const propertyInputs = [
                 </div>
             </div>
         </div>
-        <div class="mb-3">
-            <label class="form-label" :for="prefix + '-description'"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>{{ messages.t('event.description') }}</label>
-            <textarea :id="prefix + '-description'" :value="String(values.description ?? '')"
-                class="form-control text-bg-dark" name="description" rows="4" maxlength="16000"
-                @input="values.description = ($event.target as HTMLTextAreaElement).value"></textarea>
-        </div>
+        <FormField :id="prefix + '-description'" class="mb-3" name="description" :model-value="String(values.description ?? '')"
+            :label="messages.t('event.description')" label-icon="bi-pencil-square" label-class=""
+            multiline :rows="4" :max-length="16000" @update:model-value="values.description = $event" />
     </template>
 </template>

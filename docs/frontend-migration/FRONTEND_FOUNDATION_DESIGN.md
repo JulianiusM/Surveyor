@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit P4 trigger and pending Vue-only Survey defect exceptions recorded alongside retained P0-P3 decisions, native isolation, shared presentation and backend exclusions; separate later-phase/cutover authority retained; execution belongs to paired review
+verification-scope: approved frontend-only Survey corrections and pilot parity/shared-presentation correction scope recorded; original P0-P4 decisions, native isolation and backend exclusions retained; legacy defects close only after cutover; execution belongs to paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -751,6 +751,25 @@ and duplicate-prefill requests R1/R2 have no maintainer answer at this record's 
 The Vue comparator therefore retains the hidden voting description and the duplicate form's empty description and
 first-occurrence selections. Native code and the original backlog dispositions remain unchanged. Actual execution,
 independent review and remaining limits belong to the paired review rather than this authorization record.
+
+### Approved pilot correction and Survey frontend exceptions (2026-10-18)
+
+After the full pilot review, the maintainer directly authorizes its correction plan and individually approves R1
+(saved Survey descriptions) and R2 (duplicate description and recurrence prefill). These two exceptions correct only
+the Vue frontend, with minor backend transport adaptation permitted if necessary. Existing controller projections
+already provide the required values; this approval does not authorize a backend business or persistence remedy.
+
+Vue voting displays escaped saved instructions with their line breaks. Its duplicate draft retains the saved
+description and canonical occurrence values while continuing to exclude ballots and the header image. These are
+deliberate exceptions to the earlier native-defect comparator above, whose original disposition is preserved.
+IMP-019 and IMP-020 remain open until native-to-Vue cutover has happened; frontend implementation and passing checks
+alone do not close either record.
+
+The same instruction authorizes the reviewed document-title parity, actually adopted shared Vue field/description/
+answer presentation, readability, development-runtime verification and staged-guide reconciliation corrections.
+Native frontend sources, shared backend behavior, excluded remedies, later phase triggers and separate cutover,
+publication and deployment decisions retain their existing boundaries. Execution and remaining limits belong to
+the paired review, rather than this amendment.
 
 ## Cutover retirement inventory
 

@@ -853,7 +853,10 @@ test('keeps a 28-participant takeover dialog usable and changes pool rounding th
     await page.screenshot({path: testInfo.outputPath('takeovers-long-coverage-mobile.png'), animations: 'disabled'});
     await coverageRow.locator('[data-takeover-expand]').click();
     await expect(visibleCoveredNames).toHaveCount(6);
-    await coverageRow.getByRole('button', {name: `Edit takeovers for ${organizer.name}`, exact: true}).click();
+    // Visibility begins during opening; wait for the shared native lifecycle
+    // owner before this short inspection can reach its subsequent close command.
+    await openModalForE2E(takeovers,
+        coverageRow.getByRole('button', {name: `Edit takeovers for ${organizer.name}`, exact: true}));
     await expect(takeovers).toBeVisible();
     await expect(takeovers.getByLabel('Payer', {exact: true})).toHaveValue(String(organizer.id));
     await expect(takeovers.locator('.takeover-beneficiaries input:checked')).toHaveCount(27);

@@ -451,11 +451,17 @@ implementation_defects:
       - src/views/surveyor/survey-vote.pug creates a lines array but interpolates line and i without iterating over that
         array
       - the survey creation flow persists the description and the view controller returns the survey entity
-      - existing E2E detail assertions do not check the description text
+      - original native E2E detail assertions did not require the saved description text to be visible
     impact: Participant instructions, date context, and an organizer-supplied response deadline can be absent from the
       voting page even though they were saved.
     documentation_contract: D09 describes the coherent working contract in which the saved description appears below the
       survey title and does not expose the template defect.
+    migration_disposition:
+      decision: Maintainer approved Vue-only description rendering as R1 on 2026-10-18; minor backend adapter changes
+        are permitted if needed, without altering native frontend or shared business behavior.
+      frontend_status: Vue rendering is implemented; the native defect remains until cutover.
+      closure_boundary: Keep this record open until native-to-Vue cutover has happened and the corrected frontend
+        rendering has been verified. Vue implementation alone does not resolve the retained native defect.
     closes_when:
       - the voting template renders every saved description line in order
       - rendered-view or E2E coverage checks both single-line and multiline descriptions
@@ -475,6 +481,12 @@ implementation_defects:
       publishing an unintended copy.
     documentation_contract: D09 states that Duplicate opens a prefilled title, description, and combination form while
       responses and the header image are not copied.
+    migration_disposition:
+      decision: Maintainer approved Vue-only duplicate prefill as R2 on 2026-10-18 under the same frontend-only/minor
+        adapter scope as R1; native frontend and shared persistence remain unchanged.
+      frontend_status: Vue prefill is implemented; the native defect remains until cutover.
+      closure_boundary: Keep this record open until native-to-Vue cutover has happened and complete prefill has been
+        verified. Vue implementation alone does not resolve the retained native defect.
     closes_when:
       - duplicate and validation rerenders populate the textarea through its text content
       - duplicate combination rows read the canonical nthWeek property

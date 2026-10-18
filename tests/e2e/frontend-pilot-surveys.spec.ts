@@ -29,6 +29,7 @@ for (const width of [1280, 390]) {
             const label = pilot ? 'vue' : 'native';
             await page.goto(`${prefix}/survey/create?locale=en`, {waitUntil: 'domcontentloaded'});
             if (pilot) await waitForPilotHydration(page);
+            await expect(page).toHaveTitle('Create Survey | Surveyor');
             await expect(page.locator('#combinationTable tr')).toHaveCount(1);
             const creation = await captureSurveyPresentation(page, info, `${label}-survey-create`, page.locator('#surveyForm'),
                 ['label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button']);
@@ -37,6 +38,7 @@ for (const width of [1280, 390]) {
 
             await page.goto(`${prefix}${survey.path}?locale=en`, {waitUntil: 'domcontentloaded'});
             if (pilot) await waitForPilotHydration(page);
+            await expect(page).toHaveTitle(`Vote on ${survey.title} | Surveyor`);
             const ballot = page.locator(pilot ? '#survey-ballot' : 'main form[action$="/submit"]');
             const results = page.locator('main table').nth(1);
             const addition = page.locator(pilot ? '#survey-add-combination' : 'main form[action$="/add-combination"]');
@@ -77,6 +79,51 @@ for (const width of [1280, 390]) {
         }
         expect(errors).toEqual([]);
     });
+
+    test(`renders saved Survey instructions as escaped single and multiline text at ${width}px`, async ({page}, info) => {
+        await page.setViewportSize({width, height: 900});
+        const errors: string[] = [];
+        page.on('pageerror', error => errors.push(error.message));
+        const descriptions = ['Bring your own lunch.', 'Choose our monthly meeting\nBring <strong>your own</strong> lunch.'];
+
+        for (const [index, description] of descriptions.entries()) {
+            const survey = await createFrontendSurveyFixture(page.request, description);
+            await page.request.get('/users/profile');
+
+            // Keep the unchanged native failure visible in the evidence. R1
+            // approves rendering saved instructions only in the Vue frontend;
+            // its text/height difference is therefore deliberate, not normalized.
+            for (const pilot of [false, true]) {
+                await page.goto(`${pilot ? '/frontend-pilot' : ''}${survey.path}?locale=en`, {waitUntil: 'domcontentloaded'});
+                if (pilot) await waitForPilotHydration(page);
+                await expect(page).toHaveTitle(`Vote on ${survey.title} | Surveyor`);
+                const paragraph = page.locator('#planDesc');
+                if (pilot) {
+                    await expect(paragraph).toBeVisible();
+                    expect(await paragraph.innerText()).toBe(description);
+                    await expect(paragraph.locator('br')).toHaveCount(description.split('\n').length - 1);
+                    await expect(paragraph.locator('strong')).toHaveCount(0);
+                    await expect(paragraph).toHaveCSS('margin-top', '8px');
+                    await expect(paragraph).toHaveCSS('margin-bottom', '0px');
+
+                    // Inspect the surrounding content too: the description must
+                    // precede the ballot heading without overlap. Cropping only
+                    // the ballot form missed the original description spacing.
+                    const descriptionBox = await paragraph.boundingBox();
+                    const headingBox = await page.getByRole('heading', {name: 'Your response', exact: true}).boundingBox();
+                    expect(descriptionBox).not.toBeNull();
+                    expect(headingBox).not.toBeNull();
+                    expect(Math.abs(headingBox!.y - descriptionBox!.y - descriptionBox!.height)).toBeLessThanOrEqual(1);
+                } else {
+                    expect(await paragraph.textContent()).toBe('');
+                }
+                await captureSurveyPresentation(page, info, `${pilot ? 'vue' : 'native'}-survey-description-${index}`,
+                    page.locator('main .card').first(), ['h1', 'h2', 'p', 'th', 'td', 'input', 'label', 'select', 'button']);
+                expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+            }
+        }
+        expect(errors).toEqual([]);
+    });
 }
 
 test('creates and duplicates a standalone Survey with image and monthly choices in one document', async ({page}) => {
@@ -92,6 +139,7 @@ test('creates and duplicates a standalone Survey with image and monthly choices 
     await page.getByRole('button', {name: 'New', exact: true}).click();
     await page.getByRole('link', {name: 'Survey', exact: true}).click();
     await expect(page).toHaveURL('/frontend-pilot/survey/create');
+    await expect(page).toHaveTitle('Create Survey | Surveyor');
     await page.locator('#title').fill(title);
     await page.locator('#description').fill('Choose our monthly meeting\nBring your own lunch.');
     await page.locator('#headerImg').setInputFiles('src/public/img/logo.png');
@@ -106,6 +154,8 @@ test('creates and duplicates a standalone Survey with image and monthly choices 
     await page.getByRole('button', {name: 'Create Survey', exact: true}).click();
     expect((await created).status()).toBe(201);
     await expect(page).toHaveURL(/\/frontend-pilot\/survey\/[a-f0-9-]+$/u);
+    await expect(page).toHaveTitle(`Vote on ${title} | Surveyor`);
+    expect(await page.locator('#planDesc').innerText()).toBe('Choose our monthly meeting\nBring your own lunch.');
     const id = new URL(page.url()).pathname.split('/').pop()!;
     const original = await readSurveyForE2E(page.request, id);
     expect(original).toMatchObject({title, description: 'Choose our monthly meeting\nBring your own lunch.', responses: [],
@@ -128,7 +178,15 @@ test('creates and duplicates a standalone Survey with image and monthly choices 
     await settings.getByRole('tab', {name: 'Actions', exact: true}).click();
     await settings.getByRole('link', {name: 'Duplicate', exact: true}).click();
     await expect(page).toHaveURL(`/frontend-pilot/survey/${id}/duplicate`);
+    await expect(page).toHaveTitle('Create Survey | Surveyor');
     await expect(page.locator('#title')).toHaveValue(title);
+    await expect(page.locator('#description')).toHaveValue(original.description!);
+    await expect(page.locator('#combinationTable tr')).toHaveCount(original.combinations.length);
+    for (const [index, combination] of original.combinations.entries()) {
+        const row = page.locator('#combinationTable tr').nth(index);
+        await expect(row.locator('select').nth(0)).toHaveValue(combination.weekday);
+        await expect(row.locator('select').nth(1)).toHaveValue(combination.nthWeek);
+    }
     await expect(page.locator('#headerImg')).toHaveValue('');
     await page.locator('#title').fill(`${title} copy`);
     const duplicated = page.waitForResponse(response => response.request().method() === 'POST'
@@ -138,7 +196,11 @@ test('creates and duplicates a standalone Survey with image and monthly choices 
     await expect(page).toHaveURL(/\/frontend-pilot\/survey\/[a-f0-9-]+$/u);
     const copyId = new URL(page.url()).pathname.split('/').pop()!;
     expect(copyId).not.toBe(id);
-    expect(await readSurveyForE2E(page.request, copyId)).toMatchObject({title: `${title} copy`, headerUrl: null, responses: [], archived: false});
+    const copy = await readSurveyForE2E(page.request, copyId);
+    expect(copy).toMatchObject({title: `${title} copy`, description: original.description, headerUrl: null, responses: [], archived: false});
+    expect(copy.combinations.map(({weekday, nthWeek}) => ({weekday, nthWeek})))
+        .toEqual(original.combinations.map(({weekday, nthWeek}) => ({weekday, nthWeek})));
+    await expect(page).toHaveTitle(`Vote on ${title} copy | Surveyor`);
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('survey-create');
     expect(navigations).toEqual([]);
 });
@@ -162,10 +224,12 @@ test('keeps guest ballots isolated, preserves dirty choices during refresh and a
         await guestPage.goto(`/frontend-pilot${survey.path}?locale=en`, {waitUntil: 'domcontentloaded'});
         await waitForPilotHydration(guestPage);
         await expect(guestPage).toHaveURL(`/frontend-pilot${survey.path}/guest?locale=en`);
+        await expect(guestPage).toHaveTitle(`Join «${survey.title}»`);
         await guestPage.locator('#guest-name').fill(`P4 guest ${randomUUID().slice(0, 8)}`);
         await observeSurveyCommand(guestPage, survey.id, '/guest', 'POST',
             () => guestPage.getByRole('button', {name: 'Continue as guest', exact: true}).click());
         await expect(guestPage.locator('#survey-ballot')).toBeVisible();
+        await expect(guestPage).toHaveTitle(`Vote on ${survey.title} | Surveyor`);
         await guestPage.locator('#survey-add-weekday').selectOption('SUN');
         await guestPage.locator('#survey-add-nth').selectOption('4');
         await observeSurveyCommand(guestPage, survey.id, '/combinations', 'POST',

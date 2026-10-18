@@ -13,6 +13,7 @@ import {usePageTitle} from '../../composables/pageTitle';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {useSurveysApi} from './api';
 import EntityHeader from '../../components/EntityHeader.vue';
+import EntityDescription from '../../components/EntityDescription.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -50,7 +51,7 @@ const ballotAction = useActionState({eligible: () => !!data.value?.capabilities.
     pending: () => command.pending.value, blocked: () => blocked.value});
 const combinationAction = useActionState({eligible: () => !!data.value?.capabilities.addCombination,
     pending: () => command.pending.value, blocked: () => blocked.value});
-usePageTitle(() => data.value?.title || messages.value.t('app.survey'));
+usePageTitle(() => messages.value.t('survey.documentTitle', {title: data.value?.title ?? messages.value.t('app.survey')}), true);
 watch(data, value => {
     if (!command.pending.value && !command.recovering.value) receiveBallot(value);
 }, {immediate: true});
@@ -196,6 +197,9 @@ async function reviewUnknownCombination(): Promise<void> {
             <LoadingSkeleton v-if="!data && !denied && list.isPending.value" v-bind="route.meta.loadingSkeleton" />
             <template v-if="data">
                 <StatusNotice v-if="data.archived" kind="info">{{ messages.t('packing.archived') }}</StatusNotice>
+                <!-- Approved Survey correction reveals the saved instructions
+                     through the same escaped multiline owner as matching lists. -->
+                <EntityDescription :description="data.description" />
                 <SurveyBallot :combinations="data.combinations" :answers="answers" :profile-name="data.profileName" :disabled="blocked" :action="ballotAction"
                     @answer="(id, answer) => answers[id] = answer" @submit="submitBallot" />
                 <SurveyResults :combinations="data.combinations" :responses="data.responses" />

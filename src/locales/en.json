@@ -7,6 +7,9 @@
     "ui": {
         "event": {
         "create": "Create event",
+        "createDocumentTitle": "Create Event | Surveyor",
+        "documentTitle": "{{title}} | Event",
+        "adminDocumentTitle": "Dashboard — {{title}}",
         "title": "Title *",
         "startDate": "Start date *",
         "endDate": "End date *",
@@ -199,6 +202,7 @@
         "truncated": "Showing {{shown}} of {{count}} zones. Refine your search to see the rest."
       },
       "overview": {
+        "documentTitle": "My Dashboard | Surveyor",
         "title": "Welcome, {{name}}!",
         "participation": "Your participation",
         "participationHint": "Here are all entities that you participate in. Open the respective section to see and access them.",
@@ -303,9 +307,11 @@
         "passwordPlaceholder": "min. 8 characters",
         "repeatPlaceholder": "repeat password",
         "forgotTitle": "Forgot your password?",
+        "forgotDocumentTitle": "Password Reset",
         "forgotIntro": "Enter your username to receive a reset link.",
         "sendReset": "Send reset link",
         "resetTitle": "Reset your password",
+        "resetDocumentTitle": "Reset password",
         "newPassword": "New password",
         "confirmPassword": "Confirm password",
         "changePassword": "Change password",
@@ -396,6 +402,7 @@
         "infoTitle": "Info",
         "successTitle": "Success",
         "errorTitle": "Error",
+        "errorDocumentTitle": "Error | Surveyor",
         "notAllowed": "Not allowed",
         "loading": "Loading…",
         "retry": "Try again",
@@ -454,6 +461,7 @@
         "dateTo": "To"
       },
       "packing": {
+        "createDocumentTitle": "Create Packing List | PackMaster",
         "notFound": "packing not found",
         "eventRegistrationRequired": "You must be registered for the event to access this resource",
         "inlineHint": "Double click to edit, drag to reorder",
@@ -559,6 +567,8 @@
         "placeCount_other": "{{count}} places"
       },
       "survey": {
+        "documentTitle": "Vote on {{title}} | Surveyor",
+        "createDocumentTitle": "Create Survey | Surveyor",
         "create": "Create Survey",
         "title": "Survey Title",
         "description": "Description",
@@ -610,6 +620,7 @@
         "notFound": "survey not found"
       },
       "drivers": {
+        "createDocumentTitle": "Create Drivers List | Surveyor",
         "notFound": "drivers not found",
         "eventRegistrationRequired": "You must be registered for the event to access this resource",
         "create": "Create drivers list",
@@ -720,6 +731,8 @@
         "inSection": "In “{{title}}”"
       },
       "profile": {
+        "documentTitle": "Profile '{{name}}'",
+        "manageDocumentTitle": "Manage profiles",
         "profileTitle": "Your profile '{{name}}'",
         "profileIntro": "You can change your profile settings here.",
         "profileName": "Profile name",
@@ -984,6 +997,10 @@
     "profile.tokenIntro": {"parameters": {"name": "string"}},
     "survey.nthDayInMonth": {"parameters": {"nth": "string"}},
     "survey.nthCombination": {"parameters": {"nth": "string", "weekday": "string"}},
-    "survey.lastCombination": {"parameters": {"weekday": "string"}}
+    "survey.lastCombination": {"parameters": {"weekday": "string"}},
+    "survey.documentTitle": {"parameters": {"title": "string"}},
+    "event.documentTitle": {"parameters": {"title": "string"}},
+    "event.adminDocumentTitle": {"parameters": {"title": "string"}},
+    "profile.documentTitle": {"parameters": {"name": "string"}}
   }
 }

@@ -85,7 +85,11 @@ const title = computed(() => mode.value === 'edit'
     : messages.value.t(mode.value === 'manage' ? 'profile.manageTitle' : 'profile.createTitle'));
 const remoteChanged = computed(() => !!baseline.value && !!profile.value
     && (baseline.value.name !== profile.value.name || baseline.value.isDefault !== profile.value.isDefault));
-usePageTitle(title);
+// Native browser titles differ from these visible form headings. The existing
+// title owner still follows the admitted profile and reactive interface locale.
+usePageTitle(() => mode.value === 'edit'
+    ? messages.value.t('profile.documentTitle', {name: profile.value?.name ?? context.session.value?.activeProfile?.name ?? ''})
+    : messages.value.t(mode.value === 'manage' ? 'profile.manageDocumentTitle' : 'profile.createTitle'));
 watch(profile, receiveProfile, {immediate: true});
 watch([mode, context.epoch], resetVisit, {flush: 'sync'});
 watch(() => projection.error.value, retireDeniedProfile, {flush: 'sync'});

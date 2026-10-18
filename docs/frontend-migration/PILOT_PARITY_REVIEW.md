@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P4 Survey source/client/ORM/built/browser evidence and shared-consumer review recorded; pending native defect exceptions and earlier receipts retain their scopes; no later phase, publication or cutover authority
+verification-scope: approved Vue-only Survey fixes, shared presentation/title correction and development watcher remedy source-reviewed; executed client/system/visual evidence and prior failures retain their exact scopes; native defects stay open until cutover; no publication or later-phase authority
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,74 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Approved pilot correction and scoped verification (2026-10-18)
+
+The maintainer directly authorizes the reviewed correction plan and individually approves the
+[R1/R2 frontend exceptions](FRONTEND_FOUNDATION_DESIGN.md#approved-pilot-correction-and-survey-frontend-exceptions-2026-10-18).
+Survey descriptions now display escaped saved lines; duplicate drafts seed the saved description and every canonical
+weekday/occurrence while continuing to exclude ballots and images. Existing projections already provide these values;
+no adapter, controller, DBAL or native frontend change was needed. IMP-019/IMP-020 remain open until cutover.
+
+Matching creation/property fields adopt `FormField`, including explicit native name omission and textarea settings.
+All four current Vue image chooser consumers adopt `FileField`, which composes that label/control owner and the existing
+file-release behavior. Features retain admission, lexical drafts, selected bytes and command lifetime. Packing, Drivers
+and Survey share escaped `EntityDescription` presentation; Survey answer appearance has one actual owner. Existing
+page-title/catalog owners preserve native document wording separately from visible headings, including warm and locale
+changes. The existing contribution playbook and staged guide inventories are reconciled; no new guide owner was added.
+
+The development-runtime timeout reproduces on supported Node.js 24.15.0. Diagnostics identify 6,191 ignored artifact
+files in Vite's watched tree; excluding `artifacts/` through the existing watch configuration preserves application
+source HMR. The unchanged 30-second integration case passes twice in isolation and in the complete database-free run.
+Direct production-owner diagnostics reduce first Help SSR from 24.3s to 4.13s while retaining frontend source watches.
+No renderer, development owner, fixture assertion or deadline change remains from that investigation.
+
+| Executed boundary | Result and scope |
+|---|---|
+| Build and compilers | Supported Node.js 24.15.0 build passes, including frontend/SSR checks and generated inputs. The test compiler also passes after all final fixture corrections. |
+| Complete database-free selection | 75 files / 1,662 tests pass, including actual Express/Vite integration and new shared-field/description/title/duplicate assertions. |
+| Built client | All 49 isolated browser cases pass on the same build. These fixtures do not establish integrated backend behavior. |
+| Complete integrated frontend selection | Standard managed initializer/server and real persistence: all 144 configured frontend cases run together with one worker; 143 pass and the local-login-disabled case skips appropriately. That configuration case passes separately on another owned schema/port. These are distinct executions. |
+| Complete application selection | The latest managed 188-case run passes 186, skips the configuration case and fails the unchanged native archival animation fixture described below. It loaded the invoice fixture before its final correction; that corrected body passes its separate managed run. Repository-wide E2E acceptance is not uniformly green. |
+| P4 workflows | All seven current Survey built workflows pass in the complete frontend selection and latest complete application run, including same-document creation/copy, collaboration, owner operations and single/multiline escaped descriptions at both widths. |
+| Original visual evidence | Independent reviewers inspect 84 originals from the first complete built run: 28 Survey, 36 Event/Packing and 20 Drivers images at 1280px/390px. Root additionally inspects the mobile described-Survey pair and Packing creation pair. No unexplained difference is found within those surfaces; approved R1 text, existing Refresh/locale controls and transient native flash remain explicit. |
+| Engineering and documentation | Global development inventory: 384 sources, 25 touched readability files / five nontrivial operations, zero findings. Whitespace and production-freeze/amendment checks pass. All eight assembled guides receive independent and root semantic review, including inherited procedures. Live and prepared documentation reports have only the existing advisory unregistered source fingerprint. |
+
+The first complete system run's profile test fills a reused `#name` selector without waiting for its lazy destination.
+Its failure captures show an empty required confirmation and no deactivation POST. Previous and target forms both own
+that ID; filling the previous editor during delivery is the source-supported explanation, not a traced event schedule.
+The test now waits for the target URL and deactivation heading before filling, retaining all validation, persistence,
+locale and same-document assertions. The focused managed run and subsequent complete selections pass that workflow.
+
+A later traced Drivers comparison captures the native event picker during its debounced search. Its old-page
+readiness checks finish before the matching request starts. The fixture now waits for that exact response/body,
+then retains all existing result, idle-state and presentation checks. Both widths pass three repeated managed
+comparisons and the complete frontend selection. A native invoice fixture similarly reopens a dialog without waiting
+for completed opening, then stalls awaiting dismissal. That reopen now adopts existing `openModalForE2E`; all original
+checks and deadlines remain. The corrected focused workflow passes, and independent trace review confirms the
+shared completed-opening lifecycle precedes its unchanged inspection and close operation.
+
+Earlier attempts also record an unexpected worker exit (3221226505) before the UTF-16 reset case starts and a separate
+643px-to-642px Overview restoration assertion. The reset passes unchanged focused and later complete runs. The
+Overview failure remains unreproduced: its unchanged focused run and 12 passive measured repeats restore the exact
+click-time position; subsequent complete frontend delivery also passes. Temporary measurements are removed. No exact
+worker-crash cause or original one-pixel event sequence is established, and neither justifies a runtime change.
+
+The latest complete application's remaining failure belongs to the unchanged native archival fixture. It requires
+the section to remain in an artificially prolonged two-second animation after keyboard menu opening. Trace review
+shows the reopened cards' request consumes about 1.47 seconds and focus waits about 1.90 seconds; the menu opens,
+but the later intermediate-state assertion sees the correctly completed section. No native application defect is
+established or repaired. That execution remains failed; its outcome is not replaced by the successful frontend
+selection or the four preceding runs in which this native case passed.
+
+The visual evidence uses unchanged production code across these executions. Full-card Survey captures accompany
+description text/placement assertions and existing cropped control comparisons; they do not assert every surrounding
+dimension or whole-screenshot equality. Peer and root reviews check actual shared adoption, private/draft lifetimes,
+readability, approved exceptions and native/backend preservation. Earlier receipts below retain their original scope.
+No exhaustive browser/locale/accessibility matrix, live provider/mail delivery, later phase, deployment, default-route
+cutover, native removal or guide publication is certified. The owned MariaDB 10.11.14 container, anonymous volume
+and disposable credentials are removed after verification; other databases remain untouched. Current logs, captures
+and guarded preparation/cleanup receipts remain ignored under `artifacts/pilot-implementation-20261018/`.
 
 ## P4 Surveys implementation and scoped verification (2026-10-18)
 
@@ -52,8 +120,10 @@ Independent backend/test agents reviewed controller reuse, actual shared Vue ado
 draft/confirmed/unknown lifetimes, native isolation and readability; root reviewed source and execution. The review
 corrected initial-document duplicate admission to match native independent owner GET versus account-only creation.
 The six-field R1/R2 questions received independent and root review plus structural preflight before presentation;
-neither has a maintainer answer. Voting descriptions therefore remain hidden and duplicate descriptions/occurrences
-retain the native empty/first-occurrence behavior. IMP-019/IMP-020 stay open; no stronger backend remedy is claimed.
+neither had a maintainer answer at that receipt. Voting descriptions therefore remained hidden and duplicate
+descriptions/occurrences retained the native empty/first-occurrence behavior. The later
+[approved frontend exceptions](FRONTEND_FOUNDATION_DESIGN.md#approved-pilot-correction-and-survey-frontend-exceptions-2026-10-18)
+supersede those pending dispositions. IMP-019/IMP-020 stay open until cutover; no stronger backend remedy is claimed.
 
 Production guides and native Help remain frozen. Existing working-contract guidance and its tracked defects retain
 their owners; shared contribution guidance is reconciled only in the existing staged amendment. This receipt covers

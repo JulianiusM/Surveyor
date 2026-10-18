@@ -1,22 +1,15 @@
 <script setup lang="ts">
 import type {EntityHeaderEditorProps} from '../../types/FrontendEntitySettingsTypes';
 import {usePilot} from '../app/context';
-import {useFileSelectionRelease} from '../composables/fileSelection';
+import FileField from './FileField.vue';
 import ActionButton from './ActionButton.vue';
 import StatusNotice from './StatusNotice.vue';
 
 // The feature supplies admitted presentation and retains the selected file/token.
 // This shared panel owns native layout, DOM hooks and interaction events only.
-const props = defineProps<EntityHeaderEditorProps>();
+defineProps<EntityHeaderEditorProps>();
 const emit = defineEmits<{choose: [file: File | null]; review: []; upload: [source: Event]; remove: [source: Event]}>();
 const {messages} = usePilot();
-const input = useFileSelectionRelease(() => props.selectedFile);
-
-/** Decode the browser's file selection without storing a second draft or edit token. */
-function chooseFile(event: Event): void {
-    emit('choose', (event.target as HTMLInputElement).files?.[0] ?? null);
-}
-
 </script>
 
 <template>
@@ -26,9 +19,8 @@ function chooseFile(event: Event): void {
             <summary class="fw-semibold">{{ labels.title }}</summary>
             <div class="pt-3">
                 <div data-command-feedback aria-live="polite"></div>
-                <label class="form-label" :for="inputId">{{ labels.choose }}</label
-                ><input ref="input" :id="inputId" type="file" class="form-control"
-                    accept="image/jpeg,image/png,image/gif" :disabled="disabled" @change="chooseFile" />
+                <FileField :id="inputId" :label="labels.choose" :selected-file="selectedFile" :disabled="disabled"
+                    :dark="false" @choose="emit('choose', $event)" />
                 <p class="form-text">{{ labels.hint }}</p>
                 <!-- Review belongs to the feature's captured file baseline; it never writes. -->
                 <StatusNotice v-if="conflict" kind="warning"

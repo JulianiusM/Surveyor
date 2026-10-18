@@ -58,7 +58,8 @@ the existing backlog owns that debt. It grants no later-phase continuation.
 The subsequent [explicit P4 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p4-implementation-trigger-2026-10-18)
 starts standalone Surveys under the existing phase contract. Its
 [receipt](PILOT_PARITY_REVIEW.md#p4-surveys-implementation-and-scoped-verification-2026-10-18) records current evidence
-and pending Vue-only defect exceptions; it grants no P5–P11 or cutover authority.
+and its original Vue-only defect questions. The later approved frontend exceptions resolve those questions without
+granting P5–P11 or cutover authority; the native defect records remain open until cutover.
 
 The [October 16 full-pilot review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16)
 qualifies earlier readiness statements with its scalar-display, visual-assertion and verification-environment
@@ -228,9 +229,10 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
    separately reviewed scope.
 
    The [October 18 receipt](PILOT_PARITY_REVIEW.md#p4-surveys-implementation-and-scoped-verification-2026-10-18)
-   maps source adoption, tests and inspected desktop/mobile comparisons. Existing native description and duplicate
-   prefill defects remain the comparator while separately presented Vue-only R1/R2 requests are unanswered; neither
-   legacy defect is closed. No task-owned P4 workflow is deferred to P5.
+   maps source adoption, tests and inspected desktop/mobile comparisons. The later
+   [approved frontend exceptions](FRONTEND_FOUNDATION_DESIGN.md#approved-pilot-correction-and-survey-frontend-exceptions-2026-10-18)
+   permit visible Vue descriptions and complete duplicate prefill. The native defects remain open until cutover;
+   neither frontend correction closes its legacy record. No task-owned P4 workflow is deferred to P5.
 
 6. **P5 — Migrate basic Activity planning and participation**  
    **Complexity:** High. **Prerequisites:** stable Event admission/attendance contracts from P2; completed Event UI is

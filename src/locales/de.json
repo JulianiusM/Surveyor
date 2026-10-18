@@ -7,6 +7,9 @@
     "ui": {
         "event": {
         "create": "Veranstaltung erstellen",
+        "createDocumentTitle": "Veranstaltung erstellen | Surveyor",
+        "documentTitle": "{{title}} | Veranstaltung",
+        "adminDocumentTitle": "Verwaltung — {{title}}",
         "title": "Titel *",
         "startDate": "Startdatum *",
         "endDate": "Enddatum *",
@@ -199,6 +202,7 @@
         "truncated": "{{shown}} von {{count}} Zeitzonen angezeigt. Verfeinern Sie die Suche, um weitere zu sehen."
       },
       "overview": {
+        "documentTitle": "Meine Übersicht | Surveyor",
         "title": "Willkommen, {{name}}!",
         "participation": "Deine Teilnahmen",
         "participationHint": "Hier findest du alle Einträge, an denen du teilnimmst. Öffne den jeweiligen Abschnitt, um sie anzusehen und aufzurufen.",
@@ -303,9 +307,11 @@
         "passwordPlaceholder": "mind. 8 Zeichen",
         "repeatPlaceholder": "Passwort wiederholen",
         "forgotTitle": "Hast du dein Passwort vergessen?",
+        "forgotDocumentTitle": "Passwort zurücksetzen",
         "forgotIntro": "Gib deinen Benutzernamen ein, um einen Link zum Zurücksetzen zu erhalten.",
         "sendReset": "Link zum Zurücksetzen senden",
         "resetTitle": "Setze dein Passwort zurück",
+        "resetDocumentTitle": "Passwort zurücksetzen",
         "newPassword": "Neues Passwort",
         "confirmPassword": "Passwort bestätigen",
         "changePassword": "Passwort ändern",
@@ -396,6 +402,7 @@
         "infoTitle": "Information",
         "successTitle": "Erfolg",
         "errorTitle": "Fehler",
+        "errorDocumentTitle": "Fehler | Surveyor",
         "notAllowed": "Nicht erlaubt",
         "loading": "Wird geladen…",
         "retry": "Erneut versuchen",
@@ -454,6 +461,7 @@
         "dateTo": "Bis"
       },
       "packing": {
+        "createDocumentTitle": "Packliste erstellen | PackMaster",
         "notFound": "Packliste nicht gefunden.",
         "eventRegistrationRequired": "Du musst für die Veranstaltung angemeldet sein, um auf diesen Eintrag zuzugreifen.",
         "inlineHint": "Zum Bearbeiten doppelklicken, zum Sortieren ziehen",
@@ -559,6 +567,8 @@
         "placeCount_other": "{{count}} Plätze"
       },
       "survey": {
+        "documentTitle": "Über {{title}} abstimmen | Surveyor",
+        "createDocumentTitle": "Umfrage erstellen | Surveyor",
         "create": "Umfrage erstellen",
         "title": "Titel der Umfrage",
         "description": "Beschreibung",
@@ -610,6 +620,7 @@
         "notFound": "Umfrage nicht gefunden"
       },
       "drivers": {
+        "createDocumentTitle": "Fahrerliste erstellen | Surveyor",
         "notFound": "Fahrerliste nicht gefunden",
         "eventRegistrationRequired": "Du musst für die Veranstaltung angemeldet sein, um auf diese Ressource zuzugreifen",
         "create": "Fahrerliste erstellen",
@@ -720,6 +731,8 @@
         "inSection": "In „{{title}}“"
       },
       "profile": {
+        "documentTitle": "Profil '{{name}}'",
+        "manageDocumentTitle": "Profile verwalten",
         "profileTitle": "Dein Profil '{{name}}'",
         "profileIntro": "Hier kannst du deine Profileinstellungen ändern.",
         "profileName": "Profilname",

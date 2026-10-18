@@ -97,6 +97,7 @@ describe('profile administration consumers', () => {
             return json(new URL(input.url).pathname === '/api/v1/session' ? currentSession : current);
         });
         expect(wrapper.get<HTMLInputElement>('#name').element.value).toBe(profile.name);
+        expect(context.pageTitle.value).toBe("Profile 'Original profile' | Surveyor");
         expect(wrapper.get('#name').attributes('maxlength')).toBeUndefined();
         await wrapper.get('#name').setValue('Renamed profile');
         await wrapper.get('#isDefault').setValue(false);
@@ -105,6 +106,7 @@ describe('profile administration consumers', () => {
         expect(body).toEqual({name: 'Renamed profile', isDefault: false});
         expect(writes).toBe(1);
         expect(context.session.value?.activeProfile?.name).toBe('Renamed profile');
+        expect(context.pageTitle.value).toBe("Profile 'Renamed profile' | Surveyor");
         expect(context.pageNotice.value?.messageKey).toBe('profile.profileUpdated');
         expect(wrapper.get<HTMLInputElement>('#name').element.value).toBe('Renamed profile');
         expect(wrapper.get<HTMLInputElement>('#isDefault').element.checked).toBe(false);
@@ -125,6 +127,7 @@ describe('profile administration consumers', () => {
         input.setSelectionRange(3, 8);
         await context.changeLocale('de');
         await flushPromises();
+        expect(context.pageTitle.value).toBe("Profil 'Original profile' | Surveyor");
         expect(wrapper.get('#name').element).toBe(input);
         expect(input.value).toBe('Unfinished local name');
         current = {...profile, name: 'Changed in another tab'};

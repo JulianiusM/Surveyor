@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
-import {weekdayMessages} from './recurrence';
+import {weekdayMessages} from './presentation';
 
 // Personal and shared result tables use one recurring-column presentation.
 // A month position describes a pattern rather than a calculated calendar date.

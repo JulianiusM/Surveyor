@@ -10,7 +10,6 @@ import {useActionState, usePilot} from '../app/context';
 import {isReadDenial} from '../app/transport';
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import {useCreationCommand} from '../composables/creation';
-import {useFileSelectionRelease} from '../composables/fileSelection';
 import {useReadRetry, useReadRetryAt} from '../composables/feedback';
 import {usePageEntry} from '../composables/pageEntry';
 import {useQueryAdmission} from '../app/queryCache';
@@ -23,10 +22,12 @@ import LoadingSkeleton from './LoadingSkeleton.vue';
 import EventPicker from './EventPicker.vue';
 import AudiencePermissions from './permissions/AudiencePermissions.vue';
 import CreationAdmissionNotices from './CreationAdmissionNotices.vue';
+import FormField from './FormField.vue';
+import FileField from './FileField.vue';
 
 // One matching root form owns admission, root drafts and confirmed destination.
 // Feature collections are supplied through explicit slots and collector callbacks.
-const props = defineProps<{icon: string; heading: PilotPlainMessageKey; headerLabel: PilotPlainMessageKey; notFound: PilotPlainMessageKey;
+const props = defineProps<{icon: string; heading: PilotPlainMessageKey; documentTitle?: PilotPlainMessageKey; headerLabel: PilotPlainMessageKey; notFound: PilotPlainMessageKey;
     created: PilotPlainMessageKey; leaveUnknown: PilotPlainMessageKey; creationUnknown: PilotPlainMessageKey;
     source: FrontendListCreationSource<TCopy>}>();
 const context = usePilot();
@@ -59,10 +60,10 @@ const description = ref('');
 // can retire a label while retaining an actual user choice for explicit recovery.
 const eventId = ref<string | null>(null);
 const selectedEvent = ref<components['schemas']['EventPickerOption'] | null>(null);
-const image = ref<File | null>(null);
 // Warm creation/duplicate routes can retain the same form node. Its chooser must
-// release old bytes when the committed route releases this feature-owned draft.
-const imageInput = useFileSelectionRelease(() => image.value);
+// release old bytes when the committed route releases this feature-owned draft;
+// the shared FileField observes this value without keeping another File copy.
+const image = ref<File | null>(null);
 const defaults = ref<components['schemas']['PermissionDefaults'] | null>(null);
 const baseline = ref<string | null>(null);
 const retainedContext = ref<components['schemas']['PackingCreateContext'] | null>(null);
@@ -141,7 +142,7 @@ const admissionError = computed(() => {
     const key = admissionMessage.value;
     return key ? messages.value.t(isPlainMessageKey(key) ? key : 'common.error') : undefined;
 });
-usePageTitle(() => messages.value.t(admissionError.value ? 'common.errorTitle' : props.heading));
+usePageTitle(() => messages.value.t(admissionError.value ? 'common.errorDocumentTitle' : props.documentTitle ?? props.heading), true);
 const formContext = computed(() => sourceId.value ? duplicate.data.value?.formContext
     : isReadDenial(creation.error.value) ? undefined : creation.data.value?.context ?? retainedContext.value);
 const loadError = computed(() => sourceId.value ? duplicate.error.value : creation.error.value);
@@ -216,10 +217,6 @@ const submission = useCreationCommand<components['schemas']['PackingCreated']>({
 const {command, destination, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
     submissionRetryAt, submissionRetryAction, retrySubmissionAdmission} = submission;
 
-function chooseImage(event: Event): void {
-    image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
-}
-
 /** A duplicate grant admits its form independently of creation. The server projects the
  * account-login journey and exact duplicate return; the browser does not duplicate that policy. */
 async function readSubmissionEntry(scope: PilotRequestScope, returnTo: string): Promise<components['schemas']['PageEntryOutcome']> {
@@ -283,44 +280,15 @@ function collectCreation() {
                 <!-- Additional native draft controls opt in to the shared mount boundary.
                      Hydration restores their models without submitting or replaying actions. -->
                 <fieldset :disabled="blocked || !formContext">
-                    <div class="mb-3">
-                        <label class="form-label" for="create-title"
-                            ><i class="bi bi-tag me-1" aria-hidden="true"></i
-                            >{{ messages.t('packing.title') }} *</label
-                        ><input
-                            id="create-title"
-                            v-model="title"
-                            class="form-control text-bg-dark"
-                            required
-                        />
+                    <FormField id="create-title" v-model="title" class="mb-3" :name="null"
+                        :label="messages.t('packing.title')" label-icon="bi-tag" label-class="" required />
+                    <div class="row mb-3">
+                        <FormField id="create-description" v-model="description" class="col-md-12" :name="null"
+                            :label="messages.t('packing.descriptionOptional')" label-icon="bi-pencil-square" label-class="" multiline />
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-12">
-                            <label class="form-label" for="create-description"
-                                ><i class="bi bi-pencil-square me-1" aria-hidden="true"></i
-                                >{{ messages.t('packing.descriptionOptional') }}</label
-                            ><textarea
-                                id="create-description"
-                                v-model="description"
-                                class="form-control text-bg-dark"
-                            ></textarea>
-                        </div>
-                    </div>
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <label class="form-label" for="create-header"
-                                ><i class="bi bi-card-image me-1" aria-hidden="true"></i
-                                >{{ messages.t(headerLabel) }}</label
-                            ><input
-                                ref="imageInput"
-                                id="create-header"
-                                class="form-control text-bg-dark"
-                                type="file"
-                                data-hydration-draft
-                                accept="image/jpeg,image/png,image/gif"
-                                @change="chooseImage"
-                            />
-                        </div>
+                        <FileField id="create-header" class="col-12" :label="messages.t(headerLabel)"
+                            label-icon="bi-card-image" :selected-file="image" hydration-draft @choose="image = $event" />
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-12">

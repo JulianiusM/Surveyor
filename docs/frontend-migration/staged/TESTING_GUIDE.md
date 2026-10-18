@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: feedback scroll/stickiness and module-shaped loading assertions source-reconciled alongside P3 settings/restricted/inherited coverage, exact fixture isolation and observable readiness; actual execution and failures belong to paired review; no publication
+verification-scope: P4 description/duplicate/title and shared-control assertions source-reconciled alongside retained feedback/loading, fixture isolation and readiness boundaries; actual execution and failures belong to paired review; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -222,6 +222,21 @@ Hydration confirms that client owners mounted; it does not admit a feature's ind
 layout assertions, wait for the current admitted fields and enabled top-level controls of the actual feature or
 dialog. Assert readiness through their observable values/states, then exercise the unchanged focus sequence and
 measure the complete surface. Fixed sleeps or measurements of a loading skeleton cannot establish that boundary.
+For lazy warm navigation, await the destination URL and its own heading before filling an input ID reused by the
+previous page. The previous editor can remain visible while delivery finishes; its matching field is not evidence
+that the destination owns the control yet.
+For debounced discovery, await the response matching the newly typed query and then its settled result controls.
+The selected item can already appear in an idle previous page; checking that item or `aria-busy` before the new
+search starts can capture loading content instead of the requested comparison surface.
+Native modal fixtures use `openModalForE2E` and `closeModalForE2E` for completed lifecycle transitions. A visible,
+populated dialog can still be opening, when Bootstrap ignores a close command. Preserve deliberate tests of
+interaction during a transition as separate scenarios rather than treating visibility as completed opening.
+Include native-equivalent document titles after initial and warm navigation as well as locale changes. For saved
+text, cover empty, single-line and multiline content with literal markup to verify escaping. Capture the surrounding
+card and assert placement separately from cropped form/table controls. A full-card image is inspection evidence,
+not an assertion of every dimension. Explicitly approved frontend exceptions retain their own expected results;
+do not hide them by normalizing away native differences. Survey duplicate checks include every saved description,
+weekday and occurrence, plus independent exclusion of answers and the source image.
 After a command response, wait for its required follow-up read/render to show the saved value and release pending
 controls before the next action. A completed HTTP response alone does not establish that the next field/action is enabled.
 

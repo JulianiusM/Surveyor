@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P4 shared creation warnings, optional settings access and Survey module loading contribution rules source-reconciled alongside retained P0-P3 guidance, transport/reload and parity boundaries; execution belongs to paired review; no publication
+verification-scope: P4 shared field/description/answer presentation, complete document titles and approved Survey frontend fixes reconciled alongside current multipart/reload inventories and retained ownership/parity boundaries; execution belongs to paired review; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -98,7 +98,7 @@ primitive union and passes the raw scalar to the existing signed nullable SQL co
 remain authoritative; creation/new-item validation stays separate. Do not generalize either extension into coercion
 or a copied database-limit policy. Native metadata diagnostics remain owned by their native adapter.
 
-The current HTTP adapter decodes single scalar path/query/header values, JSON and Event/Packing/Drivers multipart, and
+The current HTTP adapter decodes single scalar path/query/header values, JSON and Event/Packing/Drivers/Survey multipart, and
 delivers JSON or scoped binary image responses. Creation decodes the `data` JSON part once against its authored nested schema
 and handles `image` separately. Repeated query parameters, absent/empty values and malformed input stay distinct.
 The maintainer's [2026-10-15 correction](decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15)
@@ -126,6 +126,14 @@ Inspect all current consumers of a repeated new-frontend interaction. Share mean
 and adopt that owner in every matching current consumer in the same change; a future migration is no reason to defer
 existing duplication. Distinct feature behavior stays explicit, and an imagined future caller does not justify an
 unused abstraction or a general CRUD engine. Shared backend/domain/catalog ownership remains separate and unchanged.
+
+Matching creation/property text fields compose `FormField`, including its textarea variant; pass each existing label,
+icon, constraints, rows and required-marker policy explicitly. An omitted native field name uses `name=null`, distinct
+from the default name derived from its ID. `FileField` composes the same label/control owner and the existing file
+release composable; the feature retains its selected File and command/draft decisions. Rejected or unknown commands
+keep that exact input mounted. Do not copy a chooser merely because its caller creates rather than edits an entity.
+Read-only Packing/Drivers/Survey descriptions use `EntityDescription` for escaped lines, with an explicit optional
+divider. Survey ballot and result labels share the answer appearance mapping while retaining their different wording.
 
 1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;
@@ -155,6 +163,8 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
    Back, eviction or actor change cannot replay retired SSR data. Use `requiresClientInitialization` and existing
    route metadata for initial content; shared controls use `useClientInitialization`. Cover shell controls as well
    as the feature body so JavaScript failure cannot leave a normal-looking action which cannot work.
+   Preserve the native document title separately from a visible heading. Use catalog-owned complete journey titles
+   with the existing `usePageTitle` owner where prefixes or branding differ, and verify initial/warm/locale updates.
    `EntityEntryPage` owns cancellation/removal for a feature's explicit `deniedQueries` selection. Features return
    affected families and any inactive-only copies; they do not repeat eviction dispatch. Preserve the producing
    admission family when removing inactive visits: a paused observer can be inactive to Query while still owning
@@ -423,7 +433,7 @@ journey uses its full error presentation rather than an empty form. Confirmed re
 canonical destination; inline success on the old form is not equivalent. Pending/unknown states retain input and
 explicit review.
 
-Packing, Event and Drivers use the same `features/identity/GuestEntryPage.vue` for the name/email draft, advisory existing-email
+Packing, Event, Drivers and Survey use the same `features/identity/GuestEntryPage.vue` for the name/email draft, advisory existing-email
 choice, confirmed identity completion and uncertain-delivery recovery. Each entry supplies its bounded title read,
 guest-registration operation, query key and exact destination. Event retains `regToken` through identity navigation;
 only a deliberate registration command spends that capability. `EntityEntryPage.vue` shares resource admission
@@ -434,8 +444,9 @@ reads supply bounded creation/duplicate context without creating an Event; the d
 command uses existing native preprocessing, image assignment, creation and default-permission initialization in
 their existing order. Preserve raw optional capacity, audience masks, shared permission initialization and duplicate
 exclusions rather than inferring new rules from the transport. `useCreationCommand` in `src/frontend/composables/creation.ts`
-is adopted by Event creation and the shared `EntityListCreation` used by Packing and Drivers. It composes the existing
-command, feedback and confirmed-navigation owners. Event owns its fields/File; the shared list form owns each
+is adopted by Event creation and the shared `EntityListCreation` used by Packing and Drivers. Survey creation also
+composes that owner with its standalone recurring-choice draft and no event/audience inputs. It composes the existing
+command, feedback and confirmed-navigation owners. Event and Survey own their fields/File; the shared list form owns each
 mounted feature's root fields/File, and Packing retains its collection draft and collector. Rejection or uncertainty
 retains submitted values and the chosen File. Confirmation marks creation submitted, disables replay and retains the canonical destination through failed
 navigation. Feature fields and the chosen File release on accepted route/actor retirement or unmount, rather than
@@ -679,7 +690,7 @@ pending/unknown command protection. Reuse startup, mount and update owners; neve
 commands to recover startup.
 
 Automatic full-document reload additionally requires an explicitly eligible dynamic route and dynamic admitted
-content. Overview, Packing/Drivers detail and Event detail/admin opt in. Creation, duplication, user-management and
+content. Overview, Packing/Drivers/Survey detail and Event detail/admin opt in. Creation, duplication, user-management and
 Help remain excluded even when pristine. Static admitted errors/completions on a dynamic URL remain excluded through the existing shared
 content classifier, rather than a copied list of bootstrap fields. `usePageEntry` registers its live static predicate
 and document visit with the context; registration captures the actor/epoch and retires on unmount, identity change or
@@ -733,9 +744,11 @@ validation and financial semantics outside generic form/inline/action components
 Bootstrap-compatible geometry and suitable Reka dialog/tab primitives remain the shared presentation strategy.
 
 Extract a settings composite only when repeated interaction shares its data, events and injected operations.
-`EntitySettingsDialog` owns Packing, Event and Drivers' matching settings reads, independent panel/file drafts, close locks,
+`EntitySettingsDialog` owns Packing, Event, Drivers and Survey's matching settings reads, independent panel/file drafts, close locks,
 refresh and command composition. `EntityMetadataEditor` owns their shared original/local/current reconciliation and
-metadata command recovery; `EntityAccessEditor` owns audience/administrator drafts, discovery and reviewed commands.
+metadata command recovery; `EntityAccessEditor` owns Packing/Event/Drivers audience/administrator drafts, discovery and
+reviewed commands. Standalone Surveys supply no Access operations, and their metadata tokens remain representation
+comparison evidence without adding write preconditions.
 Features inject generated operations, query dependencies, normalization, field controls, authorization inputs and
 native wording. These owners compose the existing query/draft/command helpers rather than keep a second server store.
 `useMetadataEditorHandle` exposes the current mounted editor's public workflow from both field adapters, including
@@ -750,7 +763,7 @@ remain explicit lower controls. Their settings, dialog, metadata and access cont
 detection, aliases and offsets. Feature metadata normalization coordinates a changed zone with its displayed local
 deadline; an unrelated sparse save omits both fields and preserves the stored instant.
 
-`EntityHeader` is the displayed header used by Event, Packing and Drivers detail; `EntityHeaderEditor` handles the separate
+`EntityHeader` is the displayed header used by Event, Packing, Drivers and Survey detail; `EntityHeaderEditor` handles the separate
 upload draft. Pass the admitted title/icon, parent URL, image read/version/exact query key and settings state to the
 displayed owner. It preserves the native 250px cover image, empty desktop parent track and mobile parent placement.
 Event's dashboard heading remains distinct. Its successful-read subscription includes equal-version responses;
@@ -782,7 +795,7 @@ Confirmed destinations/receipts survive failed delivery; warnings clear only thr
 Dispose timers/listeners and preserve page-cache restoration behavior.
 
 `CommandFeedback` presents the existing command owner's read-only error, notice and uncertainty refs across identity,
-Packing, Event and Overview consumers. Features retain native placement, custom wording, commands, drafts and recovery.
+Packing, Event, Drivers, Survey and Overview consumers. Features retain native placement, custom wording, commands, drafts and recovery.
 `StatusNotice` receives an action label and optional existing action state, then emits the user's action. When state
 is omitted, its `ActionButton` still applies shared initialization and the caller's handler retains its own guards.
 The notice does not choose read eligibility or perform recovery. Their contracts live in
@@ -804,7 +817,7 @@ established native key policy.
 Authorized images use the shared injected read/lifetime owner with cancellation, generation checks and object-URL
 cleanup. A missing optional image does not fail the resource. Equal successful reads can restore a failed image;
 access denial cannot be repaired by a retained URL or foreign-scope result.
-`app/transport.ts` shares bounded binary response validation through `headerImage`; Packing, Event and Drivers APIs retain their
+`app/transport.ts` shares bounded binary response validation through `headerImage`; Packing, Event, Drivers and Survey APIs retain their
 generated operation selection. Its `requireComparison` also shares strong comparison-header checks without choosing
 feature field policy.
 
@@ -858,7 +871,9 @@ Authored inputs are `contracts/api/v1/`, `src/locales/` and the exact permission
 visible, generates API before locales and publishes `.generated/frontend-ready.json` only after the current successful
 batch. Failed or superseded batches keep watching without restarting Express with partial inputs. Other library
 saves retain ordinary server restart behavior. Source serving explicitly uses `vite.config.mts` and the repository
-root. Production runs matching built artifacts without a Vite server.
+root. Vite excludes ignored runtime evidence under `artifacts/`, alongside the existing generated/build/test-output
+exclusions, so review captures and reports neither burden cold source transforms nor replace a live document.
+Application source still uses normal HMR. Production runs matching built artifacts without a Vite server.
 
 <!-- /delta:amendment-02 -->
 

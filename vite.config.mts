@@ -20,7 +20,7 @@ export default defineConfig(({isSsrBuild}) => ({
             // runtime evidence rather than application inputs. Watching them would
             // replace a live document and discard drafts while a browser test runs.
             ignored: ['**/.generated/**', '**/src/modules/localization/generated/**', '**/src/types/**',
-                '**/.temp/**', '**/test-results/**', '**/playwright-report/**', '**/coverage/**', '**/dist/**'],
+                '**/.temp/**', '**/artifacts/**', '**/test-results/**', '**/playwright-report/**', '**/coverage/**', '**/dist/**'],
         },
     },
     build: {

@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
+import {answerVariants} from './presentation';
 import SurveyCombinationHeaders from './SurveyCombinationHeaders.vue';
 
 // Named results are an admitted shared projection. Missing answers retain the
 // native lowercase No presentation and never become another person's draft.
 defineProps<{combinations: components['schemas']['SurveyCombination'][]; responses: components['schemas']['SurveyView']['responses']}>();
 const {messages} = usePilot();
-const variants: Record<string, string> = {yes: 'success', maybe: 'warning', no: 'danger'};
 const labels = {yes: 'survey.answer.yes', maybe: 'survey.answer.maybe', no: 'survey.answer.no'} as const;
 </script>
 
@@ -22,7 +22,7 @@ const labels = {yes: 'survey.answer.yes', maybe: 'survey.answer.maybe', no: 'sur
                 <td class="sticky-col">{{ response.name }}</td>
                 <td v-for="combination in combinations" :key="combination.id" class="text-center">
                     <input :id="'res-' + response.profileId + '-' + combination.id" class="btn-check" type="radio" checked disabled />
-                    <label class="btn" :class="'btn-outline-' + variants[response.answers[combination.id] ?? 'no']"
+                    <label class="btn" :class="'btn-outline-' + answerVariants[response.answers[combination.id] ?? 'no']"
                         :for="'res-' + response.profileId + '-' + combination.id">{{ messages.t(labels[response.answers[combination.id] ?? 'no']) }}</label>
                 </td>
             </tr></tbody>

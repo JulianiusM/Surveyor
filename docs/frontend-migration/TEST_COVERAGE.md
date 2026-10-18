@@ -6,7 +6,7 @@ owner: project maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P4 Survey behavior, shared creation notices and module-shaped loading assertion mapping extends retained P0-P3 evidence; native defects and backend exclusions preserved; execution and limits belong to paired review
+verification-scope: approved P4 description/duplicate/title assertions and adopted common fields/description/answer presentation mapped alongside retained P0-P3 evidence; native defects remain open until cutover; execution and limits belong to paired review
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -438,11 +438,21 @@ standalone Surveys. Execution and limits belong to the [paired receipt](PILOT_PA
 
 | Contract | Production adoption and assertions |
 |---|---|
-| SRV-01/05: create and duplicate | `SurveyCreatePage`, generated multipart contracts and existing `surveyController` creator; [built workflows](../../tests/e2e/frontend-pilot-surveys.spec.ts) assert same-document creation with recurrence/image and copying without ballots/image. [ORM cases](../../tests/integration/surveys-v1-api.spec.ts) protect stored recurrence, guest-owner duplicate reading and account-only creation. Native prefill defects remain pending R2. |
+| SRV-01/05: create and duplicate | `SurveyCreatePage`, generated multipart contracts and existing `surveyController` creator; [built workflows](../../tests/e2e/frontend-pilot-surveys.spec.ts) assert same-document creation with recurrence/image, every saved duplicate description/weekday/occurrence value and copying without ballots/image. [ORM cases](../../tests/integration/surveys-v1-api.spec.ts) protect stored recurrence, guest-owner duplicate reading and account-only creation. R2 approves the Vue prefill correction; IMP-020 remains open until cutover. |
 | SRV-02: personal ballots | Existing foreign-choice validation and delete/save operation; ORM cases protect rejection before deletion, profile isolation, omissions and empty ballots. [Mounted cases](../../tests/frontend/frontend-surveys.spec.ts) protect unknown results, dirty drafts, new columns and confirmed commands whose follow-up read fails. Built account/guest workflows assert stored answers and same-document delivery. No atomic concurrent replacement is claimed. |
 | SRV-03/04: results and collaborative choices | Named result rows, missing-answer No and independent no-answers state; shared recurring fields/column headers. ORM/built cases admit accounts and guests to combination creation while denying owner settings. Desktop/mobile assertions compare original native/Vue ballot/results/add controls, geometry, colors and labels. |
 | SRV-05 and navigation | Shared entry/guest/header/metadata/settings/lifecycle owners, generated Survey operations and Overview projections. Built owner workflow asserts properties, header bytes/removal, archive/restore and deletion without document replacement. Shell tests protect migrated creation links. Surveys gain no parent, Access panel or administrator controls. |
 | Shared presentation | Creation read/submission warnings use `CreationAdmissionNotices` in Survey, Event and list creation. The full frontend selection protects matching consumers; loading-shell SSR cases assert Survey-specific noninteractive form/table geometry and one announcement. |
+
+The [approved frontend corrections](FRONTEND_FOUNDATION_DESIGN.md#approved-pilot-correction-and-survey-frontend-exceptions-2026-10-18)
+extend these assertions. Shared text/file fields retain labels, native name omission, constraints, lexical drafts and
+chooser release through mounted tests. Packing/Drivers/Survey share escaped read-only descriptions, and Survey answer
+appearance has one mapping. Built Survey scenes assert single/multiline escaped instructions, description placement
+and native-equivalent document titles at both widths, with full-card captures alongside existing control geometry
+comparisons; R1's intentionally visible description is kept
+distinct from the unchanged native defect. The existing creation workflow asserts R2's draft and persisted copy values.
+Overview, Event and guest workflows assert initial and warm document titles through the actual shared owners.
+Execution and inspected original captures remain in the paired review; these source assertions alone certify no run.
 
 ## Verification selection for subsequent migration slices
 

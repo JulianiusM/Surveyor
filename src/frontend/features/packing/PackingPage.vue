@@ -19,6 +19,7 @@ import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PackingSettings from './PackingSettings.vue';
 import EntityHeader from '../../components/EntityHeader.vue';
+import EntityDescription from '../../components/EntityDescription.vue';
 import EntityAssignees from '../../components/EntityAssignees.vue';
 import EntityAssignmentActions from '../../components/EntityAssignmentActions.vue';
 
@@ -62,9 +63,6 @@ const {list, data, denied, refresh: refreshCurrentList} = useListDetail({
 });
 const retryAvailable = useReadRetry(() => list.error.value);
 const retryAt = useReadRetryAt(() => list.error.value, retryAvailable);
-// Native Pug escapes each line and inserts explicit breaks. Keep normal text
-// whitespace; pre-wrap would preserve extra spaces/tabs and change native wrapping.
-const descriptionLines = computed(() => data.value?.description?.split('\n') ?? []);
 const initialLoading = computed(() => !denied.value && !data.value && list.isPending.value);
 usePageTitle(() => data.value?.title || messages.value.t('packing.items'));
 const items = computed(() =>
@@ -426,14 +424,7 @@ const reorder = useListReorder({
                 <StatusNotice v-if="data.archived || data.inheritedArchived" kind="info">{{
                     messages.t('packing.archived')
                 }}</StatusNotice>
-                <template v-if="data.description"
-                    ><p id="planDesc" class="mb-0 mt-2"
-                        ><template v-for="(line, index) in descriptionLines" :key="index"
-                            >{{ line }}<br v-if="index < descriptionLines.length - 1"
-                        /></template></p
-                    >
-                    <hr class="mb-1 mt-0"
-                /></template>
+                <EntityDescription :description="data.description" separator />
                 <!-- Badge margins own the native counter gaps. Keep labels and
                      adjacent badges together so template whitespace adds no gap. -->
                 <div

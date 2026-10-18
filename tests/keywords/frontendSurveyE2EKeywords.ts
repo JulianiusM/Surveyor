@@ -7,11 +7,11 @@ import {frontendEventHeaders} from './frontendEventE2EKeywords';
 
 /** Seed the unchanged native controller through HTTP. Both renderers later
  * inspect these same records and the same actor, without intercepted delivery. */
-export async function createFrontendSurveyFixture(request: APIRequestContext) {
+export async function createFrontendSurveyFixture(request: APIRequestContext, description = '') {
     await loginForE2E(request, createE2ELogin());
     const input = createE2ESurvey();
     input.title = input.form.title = `P4 monthly survey ${randomUUID().slice(0, 8)}`;
-    input.form.description = '';
+    input.form.description = description;
     const resource = await createResourceViaForm(request, input);
     expect((await request.post(`/survey/${resource.id}/add-combination`, {
         form: {weekday: 'FRI', nthWeek: 'LAST'}, maxRedirects: 0,

@@ -168,6 +168,7 @@ test('creates and duplicates an Event through multipart SPA commands with native
     expect((await posted).status()).toBe(201);
     await expect(page).toHaveURL(/\/frontend-pilot\/event\/[a-f0-9-]+$/u);
     await expect(page.getByRole('heading', {name: title, exact: true})).toBeVisible();
+    await expect(page).toHaveTitle(`${title} | Event`);
     const id = new URL(page.url()).pathname.split('/').pop()!;
     const detail = await (await page.request.get(`/api/v1/events/${id}`, {headers: await frontendEventHeaders(page.request)})).json() as components['schemas']['EventView'];
     expect(detail).toMatchObject({title, startDate: '2030-06-01', endDate: '2030-06-04', maxParticipants: 12,
@@ -201,6 +202,7 @@ test('creates and duplicates an Event through multipart SPA commands with native
     await expect(page).toHaveURL(/\/frontend-pilot\/event\/[a-f0-9-]+$/u);
     const copyId = new URL(page.url()).pathname.split('/').pop()!;
     expect(copyId).not.toBe(id);
+    await expect(page).toHaveTitle(`${title} copy | Event`);
     const copy = await (await page.request.get(`/api/v1/events/${copyId}`, {headers: await frontendEventHeaders(page.request)})).json() as components['schemas']['EventView'];
     expect(copy).toMatchObject({title: `${title} copy`, startDate: detail.startDate, endDate: detail.endDate,
         location: detail.location, maxParticipants: 12, registration: null, registrationCount: 0, headerUrl: null, bindingDeadline: null});

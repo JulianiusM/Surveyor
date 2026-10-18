@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P4 standalone Survey routes and shared presentation adoption source-reconciled; P0-P3 contracts, native/backend boundaries and pending defect exceptions retained; scoped execution belongs to paired review; no P5-P11 or cutover authorization
+verification-scope: P4 standalone Survey routes, shared presentation and approved frontend description/prefill corrections source-reconciled; native/backend boundaries and cutover-only defect closure retained; scoped execution belongs to paired review; no P5-P11 or cutover authorization
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -89,9 +89,9 @@ The exact duplicate URL after login is an explicitly approved native exception.
 | `/frontend-pilot/event/create`, `/frontend-pilot/event/<id>`, `/frontend-pilot/event/<id>/duplicate`, `/frontend-pilot/event/<id>/admin` | Native Event admission, creation/copy boundaries through generated multipart and shared creation/navigation, detail, own registration and permission-filtered organizer/settings tools. Event-rendered child deletion uses its shared command owner; PDF and unmigrated child pages retain native destinations. |
 | `/frontend-pilot/event/<id>/guest`, `/frontend-pilot/event/<id>/register` | Guest entry and the register alias preserve `regToken` and return to admitted pilot detail. Native `/event/<id>` and `/event/<id>/register` destinations remain available unchanged. |
 | `/frontend-pilot/drivers/create`, `/frontend-pilot/drivers/<id>/duplicate`, `/frontend-pilot/drivers/<id>` | Account-only creation, independent duplicate admission, metadata/defaults/image/event context, ride offers, passenger assignment/removal, edits, ordering and settings through shared controller owners and generated SPA commands. Creation and duplication contain no rides. |
-| `/frontend-pilot/survey/create`, `/frontend-pilot/survey/<id>/duplicate`, `/frontend-pilot/survey/<id>` | Standalone recurring choices, independent owner duplicate admission and account-only creation, personal ballot replacement, named results and collaborative combination creation. Owner settings expose metadata/image/archive/duplicate/delete only. Representation ETags do not add write preconditions; existing native description/prefill defects remain pending separate approval. |
+| `/frontend-pilot/survey/create`, `/frontend-pilot/survey/<id>/duplicate`, `/frontend-pilot/survey/<id>` | Standalone recurring choices, independent owner duplicate admission and account-only creation, personal ballot replacement, named results and collaborative combination creation. Owner settings expose metadata/image/archive/duplicate/delete only. Representation ETags do not add write preconditions. Approved R1/R2 correct Vue descriptions and duplicate prefill; native defect records remain open until cutover. |
 | `/frontend-pilot/survey/<id>/guest` | Shared guest presentation and existing identity completion; every admitted account/guest profile may vote and add combinations. Overview actions and images use generated Survey operations. |
-| Packing/Event/Drivers guest entry/recovery | Shared presentation with feature-specific native fields, notices, title, canonical detail/success destinations and invalid-token outcomes. Drivers uses `/frontend-pilot/drivers/<id>/guest`. |
+| Packing/Event/Drivers/Survey guest entry/recovery | Shared presentation with feature-specific native fields, notices, title, canonical detail/success destinations and invalid-token outcomes. Drivers uses `/frontend-pilot/drivers/<id>/guest`. |
 | Pilot login/register/recovery/reset | Existing account policy, return context and confirmed destinations; provider/token boundaries remain ordinary navigation. |
 | `/frontend-pilot/help` | Complete localized read-only Help SSR, search, links and SPA hydration. |
 | `/api/v1` | Generated JSON/multipart contract; existing controllers own policy and pure DBAL owns persistence. |
@@ -255,7 +255,7 @@ the write; confirmed navigation retains its destination/receipt through canceled
 Dialog close checks its own draft subtree; route/identity/release departures resolve the whole affected tree.
 
 D5 replacement detection uses ordinary session refresh and the explicit 2026-10-15 route/content classifier. Current
-eligible dynamic views are Overview, Packing and Drivers detail, and Event detail/admin; creation, duplication,
+eligible dynamic views are Overview, Packing/Drivers/Survey detail, and Event detail/admin; creation, duplication,
 user-management, Help and static error/completion presentations are excluded. Eligible pages still require clean
 drafts, no pending/unknown command and working loop protection. Compatible mounted edits may finish; missing lazy
 chunks or incompatible commands preserve drafts and guarded deliberate recovery on every page. Periodic content

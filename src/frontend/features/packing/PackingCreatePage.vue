@@ -59,7 +59,7 @@ const source: FrontendListCreationSource<components['schemas']['PackingDuplicate
 </script>
 
 <template>
-    <EntityListCreation icon="bi-bag-plus" heading="packing.create" header-label="packing.headerOptional" not-found="packing.notFound"
+    <EntityListCreation icon="bi-bag-plus" heading="packing.create" document-title="packing.createDocumentTitle" header-label="packing.headerOptional" not-found="packing.notFound"
         created="packing.created" leave-unknown="packing.leaveUnknown" creation-unknown="packing.creationUnknown" :source="source">
         <template #default>
             <div class="mb-3">

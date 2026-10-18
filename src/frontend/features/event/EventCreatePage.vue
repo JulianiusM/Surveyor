@@ -10,7 +10,6 @@ import {useCreationCommand} from '../../composables/creation';
 import {usePageEntry} from '../../composables/pageEntry';
 import {usePageTitle} from '../../composables/pageTitle';
 import {useReadRetryAt} from '../../composables/feedback';
-import {useFileSelectionRelease} from '../../composables/fileSelection';
 import {useEventApi} from './api';
 import EventFields from './EventFields.vue';
 import AudiencePermissions from '../../components/permissions/AudiencePermissions.vue';
@@ -20,6 +19,7 @@ import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import CreationAdmissionNotices from '../../components/CreationAdmissionNotices.vue';
+import FileField from '../../components/FileField.vue';
 
 const context = usePilot();
 const {messages} = context;
@@ -32,7 +32,6 @@ const fields = reactive<EntityMetadataValues>({});
 const defaults = ref<components['schemas']['PermissionDefaults']>({participant: 0, guest: 0, authenticated: 0, public: 0});
 const baseline = ref<string | null>(null);
 const image = ref<File | null>(null);
-const imageInput = useFileSelectionRelease(() => image.value);
 watch([sourceId, context.epoch], resetCreation, {flush: 'sync'});
 const entry = usePageEntry<Creation>({
     key: computed(() => sourceId.value ? eventKeys.duplicate(context.session.value?.context, sourceId.value)
@@ -50,7 +49,7 @@ const submission = useCreationCommand<components['schemas']['EventCreated']>({
 const {command, destination, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
     submissionRetryAt, submissionRetryAction, retrySubmissionAdmission} = submission;
 watch([entry.data, sourceId], receiveCreation, {immediate: true});
-usePageTitle(() => messages.value.t('event.create'));
+usePageTitle(() => messages.value.t('event.createDocumentTitle'), true);
 
 /** SSR creation/duplicate definitions belong only to their initial admitted URL. */
 function initialCreation(): Creation | undefined {
@@ -104,8 +103,6 @@ function resetCreation(): void {
     for (const field of Object.keys(fields)) delete fields[field];
     defaults.value = {participant: 0, guest: 0, authenticated: 0, public: 0};
 }
-
-function chooseImage(event: Event): void { image.value = (event.target as HTMLInputElement).files?.[0] ?? null; }
 
 /** Duplication admits copying, while creation retains its independent native
  * account journey. The shared owner captures this read's actor and return URL. */
@@ -168,11 +165,8 @@ function collectCreation() {
 
                     <!-- The selected File and chooser share the feature's draft lifetime. -->
                     <div class="row mb-3">
-                        <div class="col-12">
-                            <label class="form-label" for="event-header-image"><i class="bi bi-card-image me-1" aria-hidden="true"></i>{{ messages.t('event.headerImage') }}</label>
-                            <input ref="imageInput" id="event-header-image" class="form-control text-bg-dark" type="file"
-                                name="headerImg" accept="image/jpeg,image/png,image/gif" @change="chooseImage" />
-                        </div>
+                        <FileField id="event-header-image" name="headerImg" class="col-12" :label="messages.t('event.headerImage')"
+                            label-icon="bi-card-image" :selected-file="image" @choose="image = $event" />
                     </div>
 
                     <!-- Visible audience controls retain every audience's draft;

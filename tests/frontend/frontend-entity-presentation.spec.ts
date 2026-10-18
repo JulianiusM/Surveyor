@@ -102,6 +102,7 @@ describe('shared displayed entity header consumers', () => {
             const header = mounted.wrapper.findComponent(EntityHeader);
             expect(header.exists()).toBe(true);
             expect(header.get('h1').text()).toBe(view.title);
+            expect(mounted.context.pageTitle.value).toBe(`${view.title} | ${kind === 'event' ? 'Event' : 'Surveyor'}`);
             const image = header.get<HTMLImageElement>('img');
             expect(image.attributes('src')).toBe('blob:shared-entity-header');
             expect(image.attributes('alt')).toBe(view.title);
@@ -120,6 +121,7 @@ describe('shared displayed entity header consumers', () => {
             await mounted.context.queryClient.refetchQueries({queryKey: key, exact: true});
             await flushPromises();
             expect(header.get('h1').text()).toBe(view.title);
+            expect(mounted.context.pageTitle.value).toBe(`${view.title} | ${kind === 'event' ? 'Event' : 'Surveyor'}`);
             expect(header.get('img').attributes('alt')).toBe(view.title);
             expect(header.find('button').exists()).toBe(false);
             expect(imageReads).toBe(1);
@@ -145,6 +147,7 @@ describe('shared displayed entity header consumers', () => {
         await flushPromises();
         expect(mounted.wrapper.findComponent(EntityHeader).exists()).toBe(false);
         expect(mounted.wrapper.get('h1.card-header').text()).toBe(`Event Dashboard — ${view.title}`);
+        expect(mounted.context.pageTitle.value).toBe(`Dashboard — ${view.title}`);
     });
 
     it('adopts a successful image removal before recovering an earlier missing image', async () => {

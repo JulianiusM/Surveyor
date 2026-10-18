@@ -2,17 +2,20 @@
 withDefaults(
     defineProps<{
         id: string;
-        name?: string;
+        name?: string | null;
         label: string;
         labelClass?: string;
         requiredMarker?: boolean;
-        modelValue: string;
+        modelValue?: string;
+        multiline?: boolean;
+        rows?: number;
         type?: string;
         required?: boolean;
         maxLength?: number;
         minLength?: number;
         min?: string | number;
         max?: string | number;
+        step?: string | number;
         autocomplete?: string;
         disabled?: boolean;
         placeholder?: string;
@@ -23,13 +26,14 @@ withDefaults(
         state?: 'valid' | 'invalid';
         describedBy?: string;
     }>(),
-    {type: 'text', labelClass: 'mb-1', requiredMarker: true},
+    {type: 'text', labelClass: 'mb-1', requiredMarker: true, modelValue: ''},
 );
 const emit = defineEmits<{'update:modelValue': [value: string]; focus: []; blur: []}>();
 
-/** Inputs expose string drafts; feature owners decide when a value becomes a submitted command. */
+/** Text inputs and textareas expose lexical drafts. Feature owners retain
+ * normalization, admission and the decision to include that value in a command. */
 function updateValue(event: Event): void {
-    emit('update:modelValue', (event.target as HTMLInputElement).value);
+    emit('update:modelValue', (event.target as HTMLInputElement | HTMLTextAreaElement).value);
 }
 </script>
 
@@ -45,28 +49,52 @@ function updateValue(event: Event): void {
             <span v-if="inputIcon" class="input-group-text">
                 <i class="bi" :class="inputIcon" aria-hidden="true"></i>
             </span>
-            <input
-                :id="id"
-                :name="name ?? id"
-                :type="type"
-                :value="modelValue"
-                class="form-control text-bg-dark"
-                :class="{'is-valid': state === 'valid', 'is-invalid': state === 'invalid'}"
-                :required="required"
-                :maxlength="maxLength"
-                :minlength="minLength"
-                :min="min"
-                :max="max"
-                :autocomplete="autocomplete"
-                :disabled="disabled"
-                :placeholder="placeholder"
-                :inputmode="inputMode"
-                :aria-invalid="state === 'invalid' || undefined"
-                :aria-describedby="describedBy"
-                @focus="emit('focus')"
-                @blur="emit('blur')"
-                @input="updateValue"
-            />
+            <!-- File controls replace only the control through this slot. Their
+                 selected bytes stay with the feature, while label geometry and
+                 surrounding feedback still have this single presentation owner. -->
+            <slot name="control">
+                <textarea v-if="multiline"
+                    :id="id"
+                    :name="name === null ? undefined : name ?? id"
+                    :value="modelValue"
+                    class="form-control text-bg-dark"
+                    :class="{'is-valid': state === 'valid', 'is-invalid': state === 'invalid'}"
+                    :rows="rows"
+                    :required="required"
+                    :maxlength="maxLength"
+                    :minlength="minLength"
+                    :disabled="disabled"
+                    :placeholder="placeholder"
+                    :aria-invalid="state === 'invalid' || undefined"
+                    :aria-describedby="describedBy"
+                    @focus="emit('focus')"
+                    @blur="emit('blur')"
+                    @input="updateValue"
+                ></textarea>
+                <input v-else
+                    :id="id"
+                    :name="name === null ? undefined : name ?? id"
+                    :type="type"
+                    :value="modelValue"
+                    class="form-control text-bg-dark"
+                    :class="{'is-valid': state === 'valid', 'is-invalid': state === 'invalid'}"
+                    :required="required"
+                    :maxlength="maxLength"
+                    :minlength="minLength"
+                    :min="min"
+                    :max="max"
+                    :step="step"
+                    :autocomplete="autocomplete"
+                    :disabled="disabled"
+                    :placeholder="placeholder"
+                    :inputmode="inputMode"
+                    :aria-invalid="state === 'invalid' || undefined"
+                    :aria-describedby="describedBy"
+                    @focus="emit('focus')"
+                    @blur="emit('blur')"
+                    @input="updateValue"
+                />
+            </slot>
         </div>
         <slot />
     </div>

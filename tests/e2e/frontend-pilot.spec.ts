@@ -411,6 +411,7 @@ for (const width of [1280, 390]) {
                 const response = await page.goto(path + (query.size ? '?' + query.toString() : ''), {waitUntil: 'domcontentloaded'});
                 expect(response?.status()).toBe(200);
                 if (pilot) await waitForPilotHydration(page);
+                await expect(page).toHaveTitle('My Dashboard | Surveyor');
                 const owner = page.locator('[data-collection="owner"][data-region="main"]');
                 const surface = state === 'populated' ? owner.locator(`[data-id="${resource!.id}"]`)
                     : owner.locator('.status-notice').filter({hasText: state === 'empty'

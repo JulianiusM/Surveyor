@@ -1088,7 +1088,8 @@ describe('identity forms and packing overview navigation', () => {
     });
 
     it('retains native forgot/reset instructions, labels, icons and full-width actions', async () => {
-        const {wrapper, router} = await mounted('/frontend-pilot/users/forgot-password', async req => json(req.method === 'GET' ? {valid: true} : {changed: true}));
+        const {wrapper, router, context} = await mounted('/frontend-pilot/users/forgot-password', async req => json(req.method === 'GET' ? {valid: true} : {changed: true}));
+        expect(context.pageTitle.value).toBe('Password Reset | Surveyor');
         expect(wrapper.get('h1').text()).toBe('Forgot your password?');
         expect(wrapper.get('p.lead').text()).toBe('Enter your username to receive a reset link.');
         expect(wrapper.get('#username').attributes('placeholder')).toBe('Your username or email');
@@ -1096,18 +1097,20 @@ describe('identity forms and packing overview navigation', () => {
         await router.push('/frontend-pilot/users/reset-password/fixture-token');
         await flushPromises();
         expect(wrapper.get('h1').text()).toBe('Reset your password');
+        expect(context.pageTitle.value).toBe('Reset password | Surveyor');
         expect(wrapper.get('label[for="password"]').text()).toBe('New password *');
         expect(wrapper.get('label[for="password-repeat"]').text()).toBe('Confirm password *');
         expect(wrapper.get('form .col-12 button[type="submit"]').text()).toBe('Change password');
     });
 
     it('keeps native guest form structure and treats failed existing-email discovery as advisory', async () => {
-        const {wrapper, request} = await mounted(`/frontend-pilot/packing/${eventId}/guest`, async req => {
+        const {wrapper, request, context} = await mounted(`/frontend-pilot/packing/${eventId}/guest`, async req => {
             if (req.method === 'GET') return json({id: eventId, title: 'Guest fixture'});
             if (req.url.endsWith('/guest-email-exists')) throw new TypeError('Lookup unavailable');
             return json({type: 'about:blank', title: 'Unavailable', status: 403, detail: 'Unavailable', requestId: 'fixture',
                 code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}}, 403);
         });
+        expect(context.pageTitle.value).toBe('Join «Guest fixture»');
         expect(wrapper.findAll('.input-group-lg')).toHaveLength(2);
         expect(wrapper.find('label[for="guest-name"] .bi-person-circle').exists()).toBe(true);
         expect(wrapper.get('#guest-name').attributes('placeholder')).toBe('Your name');

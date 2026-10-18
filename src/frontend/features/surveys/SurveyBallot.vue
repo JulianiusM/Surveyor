@@ -2,6 +2,7 @@
 import type {components} from '../../../types/api/v1';
 import type {PilotActionState} from '../../../types/FrontendPilotUiTypes';
 import {usePilot} from '../../app/context';
+import {answerVariants} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
 import SurveyCombinationHeaders from './SurveyCombinationHeaders.vue';
 
@@ -12,7 +13,6 @@ defineProps<{combinations: components['schemas']['SurveyCombination'][]; answers
 const emit = defineEmits<{answer: [id: string, answer: 'yes' | 'maybe' | 'no']; submit: []}>();
 const {messages} = usePilot();
 const choices = ['yes', 'maybe', 'no'] as const;
-const variants = {yes: 'success', maybe: 'warning', no: 'danger'};
 const labels = {yes: 'survey.yes', maybe: 'survey.maybe', no: 'survey.no'} as const;
 </script>
 
@@ -31,7 +31,7 @@ const labels = {yes: 'survey.yes', maybe: 'survey.maybe', no: 'survey.no'} as co
                                 <input :id="choice + '-' + combination.id" class="btn-check" type="radio" :name="combination.id"
                                     :value="choice" :checked="(answers[combination.id] ?? 'no') === choice" :disabled="disabled"
                                     @change="emit('answer', combination.id, choice)" />
-                                <label class="btn" :class="'btn-outline-' + variants[choice]" :for="choice + '-' + combination.id">{{ messages.t(labels[choice]) }}</label>
+                                <label class="btn" :class="'btn-outline-' + answerVariants[choice]" :for="choice + '-' + combination.id">{{ messages.t(labels[choice]) }}</label>
                             </template>
                         </div>
                     </td>
