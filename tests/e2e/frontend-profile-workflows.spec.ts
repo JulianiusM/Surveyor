@@ -1,6 +1,7 @@
 import {test, expect, type Browser, type Page} from '@playwright/test';
 import {writeFile} from 'node:fs/promises';
-import {loginForE2E, readProfileWorkflowFixtureForE2E, withProfileWorkflowFixtureForE2E} from '../keywords/e2eCoreKeywords';
+import {expectVisiblePresentation, loginForE2E, readProfileWorkflowFixtureForE2E,
+    readVisiblePresentation, withProfileWorkflowFixtureForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 
 /** Snapshot real browser geometry while retaining ordinary native/pilot page rendering. */
@@ -26,6 +27,29 @@ function workflowPresentation() {
 }
 
 async function waitForWorkflowFonts(): Promise<void> { await document.fonts.ready; }
+
+/** Translate the same confirmed notice through the real locale command. Reading
+ * another language must neither replace its DOM receipt nor replay the completed
+ * transfer/deactivation/deletion operation. Timer boundaries have mounted coverage. */
+async function expectTranslatedCompletion(page: Page, english: string, german: string, commandPath: string): Promise<void> {
+    const notice = page.locator('.pilot-page-notices > .alert-success').filter({hasText: english});
+    await expect(notice).toHaveText(english);
+    await notice.evaluate(element => { element.dataset.e2eCompletion = 'confirmed'; });
+    const repeatedCommands: string[] = [];
+    page.on('request', recordRepeatedCommand);
+    try {
+        await page.locator('#pilot-locale').selectOption('de');
+        const retained = page.locator('[data-e2e-completion="confirmed"]');
+        await expect(retained).toHaveText(german);
+        await page.locator('#pilot-locale').selectOption('en');
+        await expect(retained).toHaveText(english);
+        expect(repeatedCommands).toEqual([]);
+    } finally { page.off('request', recordRepeatedCommand); }
+
+    function recordRepeatedCommand(request: import('@playwright/test').Request): void {
+        if (request.method() !== 'GET' && new URL(request.url()).pathname === commandPath) repeatedCommands.push(request.url());
+    }
+}
 
 /** Observe real main-frame requests alongside the document lifetime assertion.
  * API requests and lazy assets cannot count as a successful SPA departure. */
@@ -88,6 +112,8 @@ test('transfers only after preview, then deactivates through JSON while retainin
         expect((await response).status()).toBe(200);
         await expect(page).toHaveURL(/\/frontend-pilot\/users\/profile\/manage(?:\?[^#]*)?$/u);
         expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+        await expectTranslatedCompletion(page, 'Migration successful. Previous guest account permanently deleted!',
+            'Profil erfolgreich übertragen. Das vorherige Gastkonto wurde dauerhaft gelöscht!', '/api/v1/profiles/migration/execute');
         const saved = await readProfileWorkflowFixtureForE2E(fixture);
         expect(saved.guestCount).toBe(0);
         expect(saved.profiles.find(profile => profile.id === fixture.guest.profileId))
@@ -116,6 +142,8 @@ test('transfers only after preview, then deactivates through JSON while retainin
         await page.getByRole('button', {name: 'Permanently deactivate profile', exact: true}).click();
         expect((await deactivated).status()).toBe(200);
         await expect(page).toHaveURL(/\/frontend-pilot\/users\/profile\/manage(?:\?[^#]*)?$/u);
+        await expectTranslatedCompletion(page, 'Profile successfully deactivated.', 'Profil erfolgreich deaktiviert.',
+            '/api/v1/profiles/current/deactivate');
         const after = await readProfileWorkflowFixtureForE2E(fixture);
         expect(after.accountCount).toBe(1);
         expect(after.profiles.find(profile => profile.id === fixture.account.profileId)).toMatchObject({userId: null});
@@ -201,6 +229,7 @@ for (const kind of ['account', 'guest'] as const) {
             await page.getByRole('button', {name: 'Permanently delete account', exact: true}).click();
             expect((await completed).status()).toBe(200);
             await expect(page).toHaveURL(/\/frontend-pilot(?:\?|$)/u);
+            await expectTranslatedCompletion(page, 'Account successfully deleted', 'Konto erfolgreich gelöscht', '/api/v1/account');
             expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
             expect(documentNavigations).toEqual([]);
             const session = await (await page.request.get('/api/v1/session')).json();
@@ -277,11 +306,16 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
                 if (token) await previewOnPage(page, false, token);
                 else await page.goto(presentation.path);
                 await page.evaluate(waitForWorkflowFonts);
+                await page.mouse.move(0, 0);
                 // Bootstrap animates a reused button's variant. Capture both
                 // renderers after finite transitions finish, rather than comparing
                 // an arbitrary intermediate color with native's fresh document.
                 await page.screenshot({path: testInfo.outputPath('native-workflow.png'), fullPage: true, animations: 'disabled'});
                 const native = await page.evaluate(workflowPresentation);
+                const nativeCard = await readVisiblePresentation(page.locator('main > .card'),
+                    ['h1', 'h2', 'h3', 'h4', 'p', 'label', 'input', 'button', 'a', 'hr'], presentation.name === 'token');
+                const nativeFooter = await readVisiblePresentation(page.locator('footer'), ['a']);
+                const nativeFooterLinks = await page.locator('footer a').evaluateAll(links => links.map(link => link.getAttribute('href')));
                 const nativeHeading = await page.locator('main h1').innerText();
                 if (token) await previewOnPage(page, true, token);
                 else {
@@ -289,14 +323,22 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
                     await waitForPilotHydration(page);
                 }
                 await page.evaluate(waitForWorkflowFonts);
+                await page.mouse.move(0, 0);
                 await page.screenshot({path: testInfo.outputPath('pilot-workflow.png'), fullPage: true, animations: 'disabled'});
                 const pilot = await page.evaluate(workflowPresentation);
+                const pilotCard = await readVisiblePresentation(page.locator('main > .card'),
+                    ['h1', 'h2', 'h3', 'h4', 'p', 'label', 'input', 'button', 'a', 'hr'], presentation.name === 'token');
+                const pilotFooter = await readVisiblePresentation(page.locator('footer'), ['a']);
+                expectVisiblePresentation(nativeCard, pilotCard);
+                expectVisiblePresentation(nativeFooter, pilotFooter);
+                expect(await page.locator('footer a').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual(nativeFooterLinks);
                 expect(await page.locator('main h1').innerText()).toBe(nativeHeading);
                 expect(browserErrors).toEqual([]);
                 expect(pilot.scrollWidth).toBeLessThanOrEqual(Math.max(viewport.width, native.scrollWidth));
                 expect(pilot.scrollY).toBe(native.scrollY);
                 expect(pilot.submitColors).toEqual(native.submitColors);
                 await expect(page.locator('footer')).toBeVisible();
+                expect(pilot.footer).toEqual(native.footer);
                 for (const control of ['heading', 'field', 'submit', 'token'] as const) {
                     expect(!!pilot[control], control).toBe(!!native[control]);
                     if (pilot[control] && native[control]) {
@@ -307,7 +349,8 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
                     }
                 }
                 const evidence = testInfo.outputPath('presentation.json');
-                await writeFile(evidence, JSON.stringify({scenario: presentation.name, viewport, native, pilot, browserErrors}, null, 2));
+                await writeFile(evidence, JSON.stringify({scenario: presentation.name, viewport, native, pilot,
+                    nativeCard, pilotCard, nativeFooter, pilotFooter, browserErrors}, null, 2));
                 await testInfo.attach('native-pilot-presentation', {path: evidence, contentType: 'application/json'});
             });
         });

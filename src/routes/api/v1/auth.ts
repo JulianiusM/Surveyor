@@ -224,8 +224,8 @@ router.get('/profiles/entry', asyncHandler(async function getProfileAdministrati
 /** Resolve an explicit private capability preview without changing the admitted identity or profile. */
 router.post('/profiles/migration/preview', asyncHandler(async function previewIdentityProfileMigration(req, res) {
     await admit(req, res, 'previewIdentityProfileMigration');
-    // Pure preview uses its generated read projection. Explicit document execution
-    // remains the only transfer command and retains the existing native semantics.
+    // Pure preview uses its generated read projection. The separate explicit JSON
+    // execution command retains the existing shared transfer and cleanup sequence.
     sendValidatedJson(req, res, 'previewIdentityProfileMigration', 200,
         await userController.getProfileMigrationPreview(req.apiActor!, req.body.token));
 }));

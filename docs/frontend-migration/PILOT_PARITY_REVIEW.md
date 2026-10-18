@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-16
+last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current P0-P2 ordinary SPA correction closed with reviewed consumer adoption and scoped build/compiler/client/ORM/built-application/visual evidence; failed broad run and focused reruns distinguished; E1 exclusion retained; no full-application or cutover acceptance
+verification-scope: approved P0-P2 readiness and R1 plus two runtime parity corrections verified through supported build/compiler/client/ORM/unit, two complete built selections and applicable alternate mode; actual current visual/source/guide reviews retained with failed-attempt limits; no later-phase/cutover authority
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -28,8 +28,12 @@ The maintainer's direct [S1 resolution](FRONTEND_FOUNDATION_DESIGN.md#authorized
 limits this delivery through implemented P2. Later phases begin only after stable repeated reviews of that slice and
 an explicit future maintainer trigger; their scope is no longer an unanswered question or implicit continuation.
 
-The latest review completes the authorized ordinary SPA correction with scoped P0–P2 evidence and the limits below.
-It does not certify every application state or authorize another phase. The maintainer's
+The preceding review completed the ordinary SPA correction with its scoped P0–P2 evidence and the limits below.
+The current readiness review additionally found English/nonreactive identity completion notices and incomplete
+visual assertions for profile workflows, Packing body and Overview states. The maintainer directly instructed the
+full readiness plan and explicitly approved [R1 catalog completion](FRONTEND_FOUNDATION_DESIGN.md#approved-catalog-based-identity-completion-notices-2026-10-16).
+Those corrections and their current-source verification remain within P0–P2. Earlier receipts certify their original
+inputs only; no current finding becomes future work by implication. The maintainer's
 [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
 resolves the earlier unanswered decisions:
 
@@ -40,7 +44,7 @@ resolves the earlier unanswered decisions:
 - `DESIGN-EVENT-CREATION-TRANSPORT` closes for the implemented current-phase correction. The maintainer rejects
   retaining Event creation/duplication document POST and requests the original ordinary-JavaScript JSON/multipart
   commands and client navigation across equivalent implemented P0–P2 forms/links. Earlier code, prose and passing
-  tests supply no retrospective exception approval. The existing [six-step plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#current-spa-correction-plan-2026-10-16)
+  tests supply no retrospective exception approval. The [completed correction](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#current-spa-correction-plan-2026-10-16)
   covers generated adapters, shared Vue consumers, lifecycle/privacy, removal of displaced document-only owners
   and renewed same-document built-application checks. Source adoption and configured workflow evidence are now
   reviewed. The failed broad run and focused positive receipts remain distinct below; closure supplies no blanket
@@ -86,11 +90,63 @@ remain shared. Earlier same-name R1 answers for reload policy or session archite
 | Human maintenance and formatting | Named helpers, purposeful method contracts, separate internal step comments, template lifecycle explanations and logical spacing are required. All shared `src/types/` contracts remain `.d.ts`. Whole-frontend structural checks supplement independent semantic review; neither comment counts nor passing syntax certify readability. |
 | Architecture versus implementation | Query owns admitted snapshots, feature/shared-interaction drafts own original/local/current values, Router owns URL state, and Express owns the request Session. Shared admission, command, recovery, feedback, navigation, image and presentation owners implement the architecture. Finance/recommendation semantics remain distinct. |
 | Documentation and rapid extension | Existing staged Development supplies the single migration playbook, owner contracts and Event/Packing worked composition. Coverage links native behavior IDs to actual assertions. The live baseline, inventories, profile, phase plan and staged fragments remain useful during coexistence; the retirement inventory governs their later disposition. |
-| Debt and parity evidence | Inherited/excluded backend defects remain in the central backlog. Scalar-display, measured-assertion and supported-database corrections have the evidence below. E1 excludes production coexistence coordination; the authorized ordinary SPA transport correction remains current P0–P2 work. Finite comparisons do not establish every actor/state/locale/browser or complete accessibility/PDF/race acceptance. |
+| Debt and parity evidence | Inherited/excluded backend defects remain in the central backlog. Scalar-display, measured-assertion and supported-database corrections have the evidence below. E1 excludes production coexistence coordination; the authorized ordinary SPA transport and readiness corrections are complete within the declared P0–P2 matrix. Finite comparisons do not establish every actor/state/locale/browser or complete accessibility/PDF/race acceptance. |
 
 ## Current verification evidence (2026-10-16)
 
+### Current readiness follow-up
+
+The authorized readiness correction is complete against the [implemented P0-P2 matrix](TEST_COVERAGE.md#implemented-p0p2-acceptance-matrix-2026-10-16).
+`IMP-067` resolves through existing controller cleanup facts, generated catalog notices and the same reactive Vue
+receipt. Native completion wording and business sequencing remain. `IMP-068` restores native Everyone-caption
+activation semantics in Packing creation while preserving its accessible name and direct/keyboard operation.
+`IMP-069` adopts the existing notice margin input in all five matching Overview/Event/Header consumers; Event's
+separate top margin and Header's approved recovery presentation remain. No new shared owner, controller, DBAL
+policy, native frontend edit or excluded backend remedy was introduced.
+
+| Current verification | Actual result and boundary |
+|---|---|
+| Supported runtime and source identity | Node.js 24.15.0 and task-owned MariaDB 10.11.14 with strict SQL and independently verified literal disposable-schema grants. Root verified all 620 relevant Git-authored source/test/contract/build inputs byte-identical between the shared workspace and isolated checkout. Unrelated emitted JavaScript in the original workspace was preserved and excluded from the clean validation copy. |
+| Production build and compilers | The complete build including Everyone/Overview corrections passed in 170.900 seconds. After the four final shared-notice consumers changed, the canonical client/SSR build and both frontend typechecks passed in 66.654 seconds. The final complete test/SFC import-graph compiler then passed in 33.110 seconds. Server/API inputs were unchanged by those final Vue-only deltas; no final all-in-one build is inferred. |
+| Complete client selection | All 45 files/1,011 tests passed together after the final SFC corrections, 76.89 seconds in Vitest (78.249 seconds including the wrapper), with the existing single worker and unchanged deadlines. Earlier focused R1 shell/workflow checks passed 89 cases; they are not added to the complete count. |
+| R1 real persistence | The existing profile-workflow ORM file passed all 27 cases through ordinary strict MariaDB setup. It protects shared cleanup branches, exact native completion strings, generated notices, captured context and inherited partial outcomes. Later Vue-only corrections changed none of those backend/contract inputs. This is selected real persistence, not every ORM suite or stronger finality. |
+| Contracts, identity, locale and generation | Four existing unit files passed all 57 cases in 113.34 seconds, including the original two-clean-tree generation/check-without-rewrite and real watcher lifecycle cases with unchanged deadlines. No assertion, timeout or source fingerprint was weakened. Later Vue-only corrections did not change these generator/contract owners. The earlier timeout remains historical with unknown cause. |
+| Engineering and preserved source boundaries | Final checks found zero findings across 355 global sources/11 DBAL owners, the ten current task readability files/nine nontrivial operations, and an explicit independent selection of all 87 frontend TypeScript/Vue files/274 operations. Whitespace passed; native browser/views and database source diffs are empty. Canonical generation in the original workspace passed without an authored-source change, and the 620 relevant inputs still matched validation. Structural checks supplement actual independent/root semantic review. |
+| Complete built selection and stability | Two fresh ordinary managed runs exercised the same explicit nine files/113 cases against the integrated built backend and prepared database. Each passed 112 with one appropriate alternate-login-configuration skip: 5.2/4.8 minutes in Playwright, 314.217/288.542 seconds including wrappers. They used the same final authored-input identity. Reorder passed in 3.6/4.0 seconds with actual HTTP and persisted-order assertions; no assertion or deadline changed after the final visibility correction. |
+| Applicable alternate configuration | The one applicable local-login-disabled case passed separately with effective `LOCAL_LOGIN_ENABLED=0`, fresh managed schema/server and unchanged assertions: 25.4 seconds in Playwright, 26.525 seconds including the wrapper. This covers the skipped mode; it is not an extra normal-mode case or a uniform 113-case pass. |
+| Current visual review | Independent reviewer `/root/frontend_architecture` inspected this task's 20 profile-workflow originals/ten pairs including complete footers from `e2e-focused-results`; root also inspected the desktop deactivation pair. The same reviewer accounted for all 32 Packing/Overview originals/16 pairs through 19 image inspections plus SHA-256 identity proof for duplicate pairs: 13 pairs were byte-identical; both originals of the other three mobile Packing pairs were inspected without unexplained difference. These are current task captures, not renewed claims about older SPA artifacts. |
+| Prepared guidance | All eight assembled guide outputs received actual independent nonauthor and root source/byte review. Their output digest is `fdf90345f2f6e8689e0cdc663d2f9bdf64c26c48ae589929d65d65c9cdc203d8`. Production freeze/amendment checks report zero findings; preview links, metadata, classification and documented paths are clean. The corrected local-path reference count is four; the unregistered historical source fingerprint remains advisory and was not replaced. Final preparation identities and review evidence remain in ignored receipts; no publication/cutover is authorized. |
+
+`TEST-FRONTEND-READINESS-PARITY` closes the complete workflow/body/Overview and drag-verification gaps at this finite
+scope. Current receipts remain under ignored `.temp/frontend-readiness-20261016/`, including both complete runs,
+the alternate configuration, final compiler, source-identity and exact database-cleanup evidence. Root removed only
+the verified task-owned database container after database checks; no other container or production data was touched.
+
+Earlier attempts remain distinct. The first 18-case selection passed 14 and failed four: all ten profile pairs,
+three R1 journeys and drag passed; new Overview fixtures sent an unsupported locale parameter, and Packing exposed
+the real Everyone-label difference despite identical pixels. Subsequent four-case probes exposed the real 16px
+Overview margin, unequal fixture focus and non-painted descendants of closed disclosures counted by rectangle-only
+visibility. Corrections retained complete text/control/style/geometry assertions, semantic control state and deadlines;
+fixtures now align focus, compare focused tables separately and use actual browser visibility. Both Packing cases
+then passed, and the separate corrected Overview selection passed 2/2. None of the earlier failed selections becomes
+a passing run or a product remedy merely because its later scoped check passed.
+
+Three interrupted complete attempts also remain in ignored receipts. The first selected 157 cases because its filter
+matched the checkout directory; root stopped only its verified task-owned child tree after 77.230 seconds. The two
+explicit-file storage attempts stopped after 153.597/71.989 seconds: a dot-prefixed ancestor caused native header 404s,
+then an absolute upload-directory attempt conflicted with the documented relative setting. Validation alone now uses
+a relative path whose join/resolve results match the exact task-owned ignored artifact directory without dot segments.
+Application/native source and image assertions were unchanged. An earlier npm update-notifier interruption likewise
+supplies no application result. These attempts are not completed application-failure results or omitted failures.
+
+No known task-owned application finding remains in the declared matrix. The mobile Packing table retains native
+horizontal clipping of its 535px table within the 390px viewport; hidden columns, complete accessibility and arbitrary
+actor/state/locale/browser combinations are not certified. Approved exceptions, separately owned backend defects,
+later phases, live external services, deployment and publication retain their explicit limits below.
+
 ### Ordinary SPA correction: final scoped verification
+
+This preceding receipt predates the readiness follow-up and retains its exact historical source scope.
 
 Frozen source now uses generated Event creation/duplication and scoped child deletion, private profile token/workflow
 commands with read-only warm admission, shared creation/removal owners and Router links for admitted migrated
@@ -126,80 +182,27 @@ separate scope. Documentation reports remain advisory and grant no application o
 
 ### Earlier comparator and correction receipts
 
-The runs below precede the D1 SPA transport correction. They retain evidence for their recorded source and
-unchanged boundaries; they do not certify the new ordinary-command/navigation implementation.
+These checkpoints precede the D1 SPA transport correction and the later readiness work. They establish only their
+recorded source and unchanged boundaries; they do not certify a later implementation. Detailed superseded execution
+sequences remain in Git and ignored `artifacts/frontend-rectification/`, `artifacts/frontend-rereview-20261016/` and C1
+receipts instead of repeated maintained run tables.
 
-The preceding review reproduced the disabled-setting display defect through the built Event editor. Its matched
-native/versioned blank-capacity probe returned 200 and persisted zero on local MariaDB 10.4.32, contrary to the
-strict-SQL fixture expectation. That prepared-schema review did not reset the database or change its mode and did
-not certify supported MariaDB 10.11 or complete pilot parity. Superseded build/compiler/pass counts remain in Git
-and ignored artifacts; the current correction receipts below own renewed evidence.
-
-The authorized correction uses one private presentation helper in `EntityMetadataEditor` for all three columns.
-Shared catalog Yes/No wording preserves booleans; zero remains `0`; only null/undefined/empty text uses the placeholder.
-Normalization, comparison evidence and submitted values retain their existing owners and raw meanings. The actual
-Event adapter's mounted stale-read and lost-save-response cases passed with the existing foundation selection,
-7/7. They protect English/German same-DOM translation, unchanged HTTP count and deliberate sparse resolution.
-
-| Correction execution | Actual result and boundary |
+| Distinct historical boundary | Retained evidence and limit |
 |---|---|
-| Latest complete re-review execution | A fresh `npm run build` passed. The complete nine-file/105-case `frontend-` selection then ran through ordinary `e2e:init` and the integrated built backend: 104 passed, one appropriate alternate-login-configuration skip, zero failures, in 6.9 minutes. The separate applicable login-disabled case passed in 29.6 seconds. The private task-owned MariaDB 10.11.14 used strict SQL mode and independently verified exact literal disposable-schema grants. No prepared override, server reuse, deadline change or new test was introduced. Logs are in ignored `artifacts/frontend-rereview-20261016/`. |
-| Safe-cleanup verification | After comment correction and unused client-wrapper removal, `npm run build:frontend` passed both client/SSR typechecks and bundles. Five existing built cases passed together in 1.7 minutes: Packing creation/duplication, Event creation/duplication and both common-header viewport comparisons. The broad run immediately above precedes this cleanup; its unchanged application assertions are not described as a second complete post-cleanup run. |
-| Latest inspected visuals | Root inspected all ten current native/Vue profile-workflow pairs (token, entry, preview, deactivation, account deletion at 1280/390) and the four current Event creation originals. Forms, text and captured geometry agree within the approved shell differences; generated tokens differ by issuance. Workflow tests assert heading/first-field/submit/token geometry and footer visibility, but their captured footer geometry is not asserted. Manual inspection is distinct from executable coverage. The complete browser run does not test the `IMP-066` permission-write schedule. |
-| Complete build and compiler | `npm run build` passed, including server, native client and Vue client/SSR. The complete test-project `vue-tsc` check passed again after the final test edits. These do not certify browser or persistence behavior. |
-| Complete frontend selection | All 45 files/996 tests passed together in 106.78 seconds, including both new mounted Event comparison/recovery cases. This is one current-source run rather than combined retries; substituted client HTTP remains distinct from backend/system evidence. |
-| Standard real ORM selection | `packing-management-api`, `packing-coexistence`, `event-api`, `frontend-profile-administration` and `frontend-profile-workflows` passed together, 87/87 in 92.11 seconds, using ordinary serialized production TypeORM schema setup without a prepared-schema override. The task-owned `surveyor_rectification_test` target on port 23316 used MariaDB 10.11.14, `STRICT_TRANS_TABLES` and credentials restricted to exact literal disposable schemas. The raw-capacity strict-mode case passed. The first run's 86/87 exposed a stale P1 Overview-parent URL/capability expectation; the test-only correction followed the accepted P2 source/phase contract and retained privacy assertions. Both logs remain in ignored `artifacts/frontend-rectification/`. |
-| Focused built corrections | All 17 selected built-browser cases passed together through the ordinary managed built application and prepared integrated backend/database. They include the scalar stale-save review, complete profile form/footer assertions and German Event/Packing common-header/settings keyboard/reflow checks. Hydration/data-readiness fixture correction preceded this result; it retained every focus assertion without fixed sleeps or skeleton measurements. |
-| Complete pilot E2E selection before C1 | The complete T1 `frontend-` selection ran all nine files/105 cases together through ordinary `e2e:init`, the root-owned built server and integrated MariaDB 10.11.14 with independently verified exact literal grants: 104 passed, one appropriate alternate-authentication configuration skipped, zero failures, in 5.4 minutes. The separate applicable local-login-disabled configuration then passed its one case in 27.8 seconds through the same ordinary setup. The main and alternate receipts remain in ignored `artifacts/frontend-rectification/e2e-t1-final.log` and `e2e-t1-login-disabled.log`. These are two correctly configured runs, not one uniform 105-case pass; the later C1 fixture-only removal has its own scoped verification below. |
-| Approved T1 correction | The test observes each frontend's ordinary roster response, separately asserts its complete rendered dietary order/totals, and compares corresponding entries/counts/styles/layout by choice while retaining other exact text/control assertions and deadlines. Independent and root source reviews accept actual adoption and preservation of the bounded approval. The final test-project `vue-tsc` check passed; both focused 1280px/390px organizer cases passed together through standard `e2e:init` in 45.1 seconds and then in the complete run above. The focused responses delivered different native/Vue choice and total sequences at both sizes. Root inspected all four native/Vue roster originals. No runtime/query ordering change or assertion relaxation outside the direct T1 approval occurred. |
-| Inspected correction visuals | Root inspected all four current German Event/Packing settings captures at mobile and the 200% desktop-reflow equivalent, plus all four native/Vue profile originals at desktop/mobile. Declared form/footer equality and keyboard/reachability assertions passed. The native one-time-flash offset is an approved surrounding-shell difference; relative compared form geometry remains asserted. These finite scenes do not certify every locale/state or browser-chrome zoom. |
-| Conditional C1 removal | After the fixture-only check/plumbing removal, `frontend-identity-api.spec.ts` and `frontend-profile-workflows.spec.ts` passed together through ordinary `e2e:init`: 30 passed, one appropriate alternate-authentication configuration skipped, zero failures, in 2.0 minutes. The task-owned MariaDB 10.11.14 used strict SQL mode and independently verified literal grants on the exact E2E/test schemas. No prepared override, server reuse, deadline change or new tests were introduced. The test-project `vue-tsc` check passed; `check:development` reported 353 authored sources, 11 DBAL owners and zero findings. The fresh independent reviewer accepts the helper and three-line dead CI-plumbing removal with no remaining in-scope recommendation. These are current consumer checks, not a renewed nine-file full-pilot run. |
+| Scalar presentation and supported SQL setup | The built Event review reproduced disabled settings displayed as absent. Native/versioned blank-capacity probes on non-strict MariaDB 10.4.32 both returned 200 and stored zero. The approved presentation helper retained false/zero/empty distinctions and raw values; the complete client selection then passed 996 cases, and five real ORM files passed 87/87 through ordinary strict MariaDB 10.11.14 setup with restricted literal-schema grants. This did not change native numeric validation or certify every database mode. |
+| Pre-D1 full built selection | The final pre-C1 nine-file/105-case selection passed 104 with one proper alternate-login skip; the applicable alternate case passed separately. A later complete re-review repeated that scoped result. These runs used ordinary managed built application/database preparation, not a prepared-schema override. Neither run certifies the subsequent C1 removal or D1 transport changes. |
+| T1 dietary assertion and finite visual review | Two earlier broad runs each had one failure: an intermittent drag timeout, then a dietary-sequence difference. Native-only reads demonstrably returned different dietary orders without writes. The directly approved T1 test-only correction checks each response's own complete order and compares corresponding choices/counts/styles/layout; focused and subsequent complete runs passed. Root inspected roster, profile form/footer and German settings originals at the declared sizes. One-time-flash/shell offsets remain approved differences; reflow is not browser zoom. Captured profile-workflow footer geometry was not yet asserted. |
+| C1 conditional fixture-check removal | Original pilot matcher ownership was confirmed in `f45dad7`/`7a983c4`; specific historical approval was not established, and G1 was withdrawn. Direct C1 authorized an unbiased usefulness review; reviewer `/root/fixture_guard_review` recommended removal. Root removed the late parser/query/selector and three obsolete CI lines while preserving selected-schema checks, unique fixtures, exact cleanup and teardown. The two affected built files passed 30 cases with one proper alternate-login skip. This was a scoped consumer run, not a renewed full selection. G1's retention condition was false, so inherited CI grant provisioning remained unchanged. |
+| Safe cleanup after the older full selection | Comment corrections and unused client-wrapper removal passed the Vue client/SSR build and five affected built creation/header cases. The preceding complete selection was not described as a complete post-cleanup rerun. |
 
-Two preceding broad runs each finished 103 passed/one configuration skip/one failure. The first, in 6.5 minutes,
-timed out on the existing drag journey; its unchanged traced retry passed in 9.0 seconds and all three unchanged
-two-worker repetitions passed in 43.8 seconds. Drag also passed in the second broad run, whose 1280px organizer
-dietary-sequence comparison failed. Neither earlier receipt is reclassified as a passing uniform run.
+Those local runs used Node.js 24.13.0, below the documented 24.15.0 prerequisite. Passing drag retries/repetitions
+never diagnosed or repaired the earlier timeout, and the failed broad runs remain failures. Arithmetic across retries
+never supplies a uniform final-source run. Current build success does not renew earlier HMR, deployment or visuals.
 
-The current environment uses Node.js 24.13.0, below the documented 24.15.0 prerequisite; no identical hosted-CI
-environment is claimed. Earlier 24 paired read-only GET comparisons
-across three records matched. Subsequent tracing proves native-only reads can change the same registration's
-dietary sequence from `6,5,4` to `4,5,6` without writes; Vue rendered `4,5,6`. Both frontends use the same
-`getParticipantsExtended` → `getEventParticipants` owners, with no nested dietary-row ordering or frontend sort.
-The maintainer then explicitly approved the [T1 test-only correction](FRONTEND_FOUNDATION_DESIGN.md#authorized-dietary-parity-assertion-correction-2026-10-16):
-each frontend must preserve its ordinary response's dietary order and complete values, while matching corresponding
-entries/counts/appearance/layout by choice. Other exact assertions and deadlines remain. Its implementation and new
-focused/full verification now have the independently reviewed results above.
-The approval does not turn the preceding failed runs into passes.
-The first broad drag timeout remains recorded despite its unchanged passing diagnostics/repetitions and passing
-second broad run. Runtime, queries and deadlines remain unchanged; only the later explicitly approved T1 dietary
-test assertion boundary changes, with all other exact assertions retained.
-
-Prepared-guide semantic review found inherited development/test SQL examples granting on raw underscore schema
-patterns despite the existing dedicated-schema requirement. Four exact staged fragment operations now escape those
-underscores for the literal `surveyor_dev`, `surveyor_test` and `surveyor_e2e` databases in README/Development/Testing.
-The staged Operations recovery paragraph also now includes the implemented Event detail/admin routes. Production
-guides, original digests, immutable baseline and application runtime remain unchanged; no publication is claimed.
-
-Git confirms pilot ownership of the old fixture matcher (`f45dad7`, then `7a983c4` and P1 reuse); original specific
-approval was not established. The earlier G1 request did not authorize that responsibility and was withdrawn for a
-separate retention decision. CI's raw grant statements predate the pilot in `cae7d42`.
-
-The direct C1 answer now requires an unbiased usefulness review and implementation of its recommendations, with G1
-conditional on keeping the check. Fresh independent reviewer `/root/fixture_guard_review` recommends removal and
-accepts root's actual adoption: no fixture-only grant parser, grant query or read/fixture selector remains; selected
-schema checks, compiled metadata, unique fixture rows, exact-ID cleanup and datasource teardown are preserved.
-The obsolete three-line E2E CI environment/comment plumbing retires too; integration settings and grant provisioning
-are unchanged. The independent report remains in ignored C1 review evidence. This is current forward authorization,
-not retroactive approval of the check or its earlier proof claims. No new checker or checker tests are introduced.
-
-Because the check is removed, G1's retention condition is false: no literal-matcher repair or CI grant correction is
-implemented under that condition. Dedicated credentials remain a setup requirement, and the staged literal-grant
-examples remain valid. The actual inherited CI grant-pattern concern stays visible in its existing owner; it is
-neither silently repaired nor promoted into a new P2 blocker. Current consumer execution after removal is recorded
-separately above and in ignored `e2e-c1.log`/`e2e-c1-results`; its result is not inferred from the earlier full pilot run.
-
-Earlier same-boundary receipts below retain their original source and environment limits; arithmetic across retries
-is not one coherent final-source run. A current build does not renew old HMR, deployment or visual evidence.
+Prepared-guide review also corrected four staged SQL examples to escape the literal development/test/E2E schema
+underscores and added the implemented Event detail/admin recovery routes. Frozen production guides, original
+fragment digests, immutable baseline and application behavior were preserved. The inherited CI raw-grant concern
+remains separately owned; no grant repair, publication or new checker was authorized by C1 removal.
 
 ## Retained evidence by distinct boundary
 
@@ -368,18 +371,18 @@ No prior completion claim overrides those findings or relabels them future work.
 
 Full parity means the declared implemented pilot journeys and relevant states have meaningful running-app
 assertions and inspected matched visual evidence. It is not established merely by source mappings, an aggregate
-pass count or selected Event/header scenes. The current selection adds complete profile form/footer and German
-shared-settings keyboard/reflow evidence to existing actor, validation and recovery cases. Its finite scope remains
-the mapped assertions and inspected scenes; complete locale/state, restricted-actor, zoom and accessibility matrices
-are not certified. The failing dietary-order comparison and first-run drag timeout remain explicit above,
-without waiving either failure. The approved T1 test correction has its separate implementation/verification scope;
-it does not authorize native/backend ordering changes or further phase migration.
+pass count or selected Event/header scenes. The current complete workflow/footer, Packing body and distinct Overview
+assertions and inspected originals supplement the existing actor, validation, recovery and German keyboard/reflow
+cases. Their finite scope is the declared matrix and captured surfaces; a complete Cartesian actor/state/locale/browser,
+zoom or accessibility matrix is not certified. Earlier dietary-order/drag failures remain historical failures.
+T1 retains its separate response-order assertion boundary; it authorizes no native/backend ordering change or later phase.
 
 The local MariaDB 10.4.32 setup previously exceeded ordinary preparation deadlines; separate guarded preparation
 and temporary built-only/prepared-ORM wrappers were disclosed. They preserved real backend delivery/assertions,
 but did not establish ordinary setup or MariaDB 10.11 acceptance. The current correction's standard ORM and built
-selections renew supported-database/ordinary-setup evidence only for their scopes above. A prior deterministic two-clean-tree generator
-check exceeded its unchanged 60-second limit without an assertion mismatch; its cause remains verification debt.
+selections renew supported-database/ordinary-setup evidence only for their scopes above. Current unchanged generation
+fixtures passed on supported Node.js 24.15.0; the older two-tree check's 60-second timeout remains a historical failure
+with unknown cause rather than an invented diagnosis or timeout change.
 Earlier supported MariaDB 10.11.14 receipts apply only to their older source scopes. Those runs weakened no timeout,
 schema scope or source fingerprint to create a pass. The subsequent fixture-only check removal follows the separate
 explicit C1 review/decision above; it does not change those earlier execution scopes or certify credential authority.

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current P0-P2 scope and direct 2026-10-16 R1, S1, T1, conditional C1, E1 exclusion and D1 SPA correction reconciled; source adoption and scoped verification recorded in review; original choices and withdrawn acceptances retained; no full-application or cutover acceptance
+verification-scope: approved catalog-completion R1 recorded separately from native-isolation R1; P0-P2, S1, T1, C1, E1 and D1 boundaries retained; original choices and superseded prose exception preserved; actual execution belongs to paired review; no later-phase or cutover authority
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -677,6 +677,26 @@ The [current plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#current-spa-correction-p
 implementation sequence. `DESIGN-EVENT-CREATION-TRANSPORT` now closes for reviewed current-consumer adoption and
 fresh scoped same-document evidence, with failed broad runs and focused receipts distinguished in the review.
 This correction does not start P3–P11 or authorize cutover.
+
+### Approved catalog-based identity completion notices (2026-10-16)
+
+The preceding SPA adaptation retained transfer/deactivation controller prose and copied the native account-deletion
+notice into its new adapter. The staged playbook treated inherited prose as an exception to catalog ownership.
+That text recorded the implementation; no specific maintainer approval for a localization exception was established.
+It left German completion notices in English and prevented existing notices from reacting to a language change.
+
+The maintainer now explicitly approves **R1 in the full pilot readiness review** and instructs implementation of
+that review's bounded plan. This R1 concerns catalog-based identity completion notices, separately from earlier
+same-name answers about native isolation, reloads or session ownership. Transfer, deactivation and account/guest
+deletion completion use typed facts from the existing controller branches and shared catalog notices through the
+generated API and existing Vue notice owner. Preserve every conditional former-user/guest cleanup detail without
+parsing English strings or repeating the business decision. Native callers retain their current wording.
+
+This supersedes the staged inherited-prose exception for these implemented Vue notices. It changes the unreleased
+completion shape and translated presentation only. Persistence, mail, session order, provider destinations, partial
+failures and uncertain outcomes retain their existing behavior; excluded backend remedies remain excluded.
+The existing [coverage map](TEST_COVERAGE.md) owns assertion selection and the [review](PILOT_PARITY_REVIEW.md) owns
+actual current execution and its limits. Approval itself supplies no passing result or later-phase/cutover authority.
 
 ## Cutover retirement inventory
 

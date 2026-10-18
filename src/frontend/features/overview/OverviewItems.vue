@@ -68,7 +68,9 @@ function followPage(event: MouseEvent, page: number, available: boolean): void {
             />
         </div>
     </div>
-    <StatusNotice v-else kind="info" class="mb-0">{{
+    <!-- Empty and filtered regions retain native zero bottom spacing. Use the
+         shared notice's spacing input so its default utility cannot override it. -->
+    <StatusNotice v-else kind="info" no-margin>{{
         messages.t(emptyMessage)
     }}</StatusNotice>
     <div

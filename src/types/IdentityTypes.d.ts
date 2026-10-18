@@ -13,6 +13,11 @@ export interface IdentityLoginSettings {
     oidcEnabled: boolean;
 }
 
+/** The existing transfer/deactivation flow reports only completed former-owner
+ * cleanup. Native prose and localized API notices project the same facts; this
+ * result does not promise atomicity or change the workflow's operation order. */
+export type ProfileOwnerCleanup = 'none' | 'account-deleted' | 'guest-deleted';
+
 /** Select the application-owned email/link destination without accepting arbitrary route prefixes. */
 export interface IdentityLinkOptions {
     frontend?: boolean;

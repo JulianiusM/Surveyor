@@ -81,11 +81,16 @@ export function useCreationCommand<Result>(options: PilotCreationOptions<Result>
     /** Collect after admission, send once, then transfer only the confirmed
      * destination. Failed lazy delivery cannot make Create available again. */
     async function submit(collect: PilotCreationCollector<Result>): Promise<Result | undefined> {
+        // Admission may redirect or wait for another actor. Collect the mounted
+        // draft only after that check, using the current feature eligibility.
         if (!createAction.isAvailable() || !(await admitSubmission('submission')) || !options.eligible()) return;
         const operation = collect();
         if (!operation) return;
         const scope = context.capture();
         const origin = route.fullPath;
+
+        // Dispatch once for the captured actor. Confirmation remains final even
+        // when loading its destination fails; Retry must navigate without replay.
         const result = await command.run(operation, false);
         if (result) {
             submitted.value = true;

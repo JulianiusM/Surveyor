@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current P0-P2 ordinary SPA creation/removal/profile/navigation source adoption reconciled; existing shared backend sequence and true document boundaries retained; scoped execution recorded separately in review; no cutover
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json
+verification-scope: R1 shared controller-fact/catalog-notice ownership source-reconciled; P0-P2 SPA creation/removal/profile/navigation, native wording, backend sequence and true document boundaries retained; execution separate; no publication
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -134,6 +134,10 @@ finality. Ordinary profile workflow and Event child-deletion commands follow the
 without importing their excluded backend repairs. Router owns ordinary migrated links; true provider/capability
 arrivals, outputs and unmigrated destinations retain explicit document ownership. Token issuance is deliberate
 command work, never Query, prefetch or history restoration; private output stays in its admitted mounted lifetime.
+Transfer/deactivation branches expose the same typed former-owner cleanup facts to native wording and generated
+catalog notices. Account/guest deletion uses that notice path too. Vue retains message keys through the
+existing completion/navigation/notice owners, so a visible confirmation reacts to language changes. No adapter
+parses prose or repeats a cleanup decision; native wording and operation sequencing remain unchanged.
 The controller's capacity predicate serves native/v1 display and registration admission; its child-eligibility
 predicate serves native/v1 related projections and scoped lifecycle rechecks. DBAL supplies counts, rows, locks and
 persistence rather than deciding either rule. Optional-session method declarations describe the existing public

@@ -199,9 +199,10 @@ async function submitWorkflow(event: Event): Promise<void> {
             window.location.assign(result.redirect);
             return;
         }
-        const notice = result.message ? {kind: 'success' as const, messageKey: 'state.saved', message: result.message} : result.notice;
+        // Keep the semantic notice receipt so the shared shell can translate its
+        // exact completion detail without renewing feedback or replaying work.
         await completeIdentityEntry(context, router, {session: {context: result.resultingContext}, personalLink: null},
-            {kind: 'redirect', url: result.destination, notice}, origin, completion);
+            {kind: 'redirect', url: result.destination, notice: result.notice}, origin, completion);
     } finally {
         // Shared confirmed navigation retains its own receipt after failure or
         // actor remount. This originating consent is idempotent and is never replay.

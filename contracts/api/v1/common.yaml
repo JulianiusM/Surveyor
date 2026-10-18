@@ -94,9 +94,6 @@ schemas:
     additionalProperties: false
     required: [kind, messageKey]
     properties:
-      message:
-        description: Optional escaped text supplied by an existing server business outcome, never HTML.
-        type: string
       kind:
         type: string
         enum: [info, error, success]

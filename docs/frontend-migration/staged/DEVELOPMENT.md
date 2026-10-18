@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current P0-P2 SPA source adoption reconciled with shared creation/removal/navigation/draft owners and form/link prevention guidance; native isolation/backend exclusions retained; scoped execution recorded separately in review; no cutover
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json
+verification-scope: R1 typed cleanup facts and reactive catalog completion source-reconciled in existing owners; P0-P2 creation/removal/navigation/draft guidance and native/backend boundaries retained; actual execution belongs to paired review; no publication
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -216,6 +216,8 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
    differences from the compared component instead of weakening assertions until they pass. Record the actual
    database version and SQL mode before interpreting persistence-dependent outcomes; preserve the shared native
    behavior and diagnose environment differences without introducing validation solely to satisfy a local fixture.
+   Exercise actual click and keyboard targets too: wrapping descriptive checkbox text in a label changes activation
+   even when the resulting screenshots are identical. Keep fixture focus equal, then compare focused states explicitly.
 
 Readable source is part of every step. Keep template controls and render branches in logical groups with purposeful
 blank lines, explain inputs and non-obvious lifecycle steps, and prefer named operations to nested anonymous flows.
@@ -477,9 +479,13 @@ Transfer, profile deactivation and account/guest deletion reuse existing native 
 through the SPA adapter. Shared command and destructive-navigation owners retain confirmation, pending/unknown
 guards and appropriate submitted input. Preserve native wrong-confirmation validation and `ExpectedError` meanings,
 including inherited partial failures; a server error after a possible write is not proof of rollback. Confirmed
-internal completion uses Router; a true external provider logout destination remains an explicit handoff. Existing
-controller completion words remain escaped source-owned output when no message key is supplied; do not parse them
-to reconstruct cleanup decisions. Newly authored interface and validation text uses the shared catalog. Retire
+internal completion uses Router; a true external provider logout destination remains an explicit handoff. The existing
+controller branches expose typed completion facts, including conditional former-user/guest cleanup. The existing
+`migrateProfile`/`deactivateProfile` facts overloads share those branches and `ProfileOwnerCleanup`; default native
+callers retain their current wording. `profileWorkflowCompletion` projects the generated notice, and
+`ProfileWorkflowPage` carries the shared catalog message key through the existing
+notice owner, so language changes translate an already visible notice. Never parse English prose or repeat a cleanup
+decision in the adapter/component. Newly authored interface and validation text uses the shared catalog. Retire
 unused document-only Vue adapters after actual consumers move, while retaining explicit compatibility entries.
 
 Guest registration, API account signup and activation use the existing user controller's `commitIdentityCompletion`
@@ -745,6 +751,8 @@ The notice does not choose read eligibility or perform recovery. Their contracts
 copy their expiry, disabled state or dismissal wiring.
 Pass existing dismissal locks and margin choices explicitly; the shared presentation must not infer them from pending
 status. Omitted inline/target overrides defer to the receipt; an explicit null target retains a caller's local host.
+Use `StatusNotice`'s `no-margin` input for a zero-margin consumer; adding `mb-0` beside its default `mb-3`
+leaves conflicting owners and can retain the default spacing.
 Check feedback inside real local/global alert hosts so extraction cannot silently move an inline result elsewhere.
 
 Dialogs share one focus trap/dismissal owner, pending close lock and actual invoker return. Features can supply the

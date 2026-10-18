@@ -14,6 +14,92 @@ export interface CreatedResource {
     id: string;
 }
 
+/** Read corresponding visible controls rather than framework-specific wrappers.
+ * Callers select the surface and semantic elements whose presentation they own;
+ * generated bearer text may differ, but its box, typography and wrapping may not. */
+export async function readVisiblePresentation(surface: Locator, selectors: string[], generatedToken = false) {
+    return surface.evaluate(function inspectVisibleSurface(element, selection) {
+        const root = element as HTMLElement;
+        const origin = root.getBoundingClientRect();
+        const token = selection.generatedToken ? root.querySelector('h3')?.textContent?.trim() : undefined;
+        const content = [];
+        const geometry = [];
+
+        // Compare all visible wording and the selected controls independently of
+        // native/Vue DOM nesting. Hidden bearer inputs never become test output.
+        const elements = selection.selectors.length ? root.querySelectorAll<HTMLElement>(selection.selectors.join(',')) : [];
+        for (const element of elements) {
+            // Closed native details can retain descendant layout boxes and a
+            // computed visible style while suppressing their paint. The browser
+            // visibility algorithm includes that boundary and still admits all
+            // the same menu controls when the actual disclosure is opened.
+            if (!element.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true})) continue;
+            content.push({text: visibleText(element), style: appearance(element), field: field(element)});
+            geometry.push(bounds(element));
+        }
+        return {content: {text: visibleText(root), style: appearance(root), elements: content},
+            geometry: [{x: origin.x, y: 0, width: origin.width, height: origin.height}, ...geometry]};
+
+        /** Preserve rendered block separation, replacing only the independently
+         * issued token's exact text. No other wording is omitted or sorted. */
+        function visibleText(element: HTMLElement): string {
+            const text = element.innerText.replace(/\s+/gu, ' ').trim();
+            return token ? text.replace(token, '[generated migration token]') : text;
+        }
+
+        /** Local coordinates retain wrapping/spacing while allowing the already
+         * approved surrounding shell or one-time native flash to shift the card. */
+        function bounds(element: HTMLElement) {
+            const rectangle = element.getBoundingClientRect();
+            return {x: rectangle.x - origin.x, y: rectangle.y - origin.y,
+                width: rectangle.width, height: rectangle.height};
+        }
+
+        function appearance(element: HTMLElement) {
+            const style = getComputedStyle(element);
+            return {font: style.fontFamily, size: style.fontSize, weight: style.fontWeight,
+                lineHeight: style.lineHeight, color: style.color, background: style.backgroundColor,
+                border: style.border, radius: style.borderRadius, padding: style.padding,
+                margin: style.margin, display: style.display, opacity: style.opacity,
+                shadow: style.boxShadow, textAlign: style.textAlign, verticalAlign: style.verticalAlign};
+        }
+
+        function field(element: HTMLElement) {
+            if (element instanceof HTMLInputElement) {
+                return {type: element.type, value: element.type === 'checkbox' ? null : element.value,
+                    checked: element.checked, required: element.required, disabled: element.disabled,
+                    readOnly: element.readOnly, min: element.min, max: element.max,
+                    maxLength: element.maxLength, placeholder: element.placeholder};
+            }
+            if (element instanceof HTMLButtonElement) return {disabled: element.disabled};
+            // The approved shared disclosure uses a button-role summary. Compare
+            // that visible action with its native button rather than omitting it
+            // because the frameworks use different semantic DOM tags.
+            if (element.getAttribute('role') === 'button') return {disabled: element.getAttribute('aria-disabled') === 'true'};
+            if (element instanceof HTMLTextAreaElement) return {value: element.value, required: element.required,
+                disabled: element.disabled, readOnly: element.readOnly, maxLength: element.maxLength,
+                placeholder: element.placeholder, rows: element.rows};
+            if (element instanceof HTMLSelectElement) return {value: element.value, required: element.required,
+                disabled: element.disabled, options: Array.from(element.options, option => ({text: option.text, value: option.value}))};
+            return null;
+        }
+    }, {selectors, generatedToken});
+}
+
+/** Assert the entire selected presentation, allowing only one CSS pixel of
+ * browser rounding in corresponding boxes. Screenshots remain inspection evidence. */
+export function expectVisiblePresentation(native: Awaited<ReturnType<typeof readVisiblePresentation>>,
+    pilot: Awaited<ReturnType<typeof readVisiblePresentation>>): void {
+    expect(pilot.content).toEqual(native.content);
+    expect(pilot.geometry).toHaveLength(native.geometry.length);
+    for (const [index, original] of native.geometry.entries()) {
+        for (const dimension of ['x', 'y', 'width', 'height'] as const) {
+            expect(Math.abs(pilot.geometry[index]![dimension] - original[dimension]),
+                `surface element ${index} ${dimension}`).toBeLessThanOrEqual(1);
+        }
+    }
+}
+
 /** Complete the native opening transition before assertions can lead to another modal command. */
 export async function openModalForE2E(modal: Locator, opener: Locator): Promise<void> {
     // Visibility begins before Bootstrap accepts a hide command. Its public lifecycle event,

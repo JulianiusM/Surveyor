@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers; AI agents
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-16
+last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented P0-P2 SPA consumer adoption reconciled with direct E1 exclusion and D1 correction plan; scoped build/compiler/client/ORM/built/visual results and failed-run limits recorded in review; later phases and cutover separate
+verification-scope: completed SPA execution sequence consolidated into existing playbook/coverage owners; approved R1 presentation follow-up distinguished from previous receipts; P0-P2 scope, later-phase contracts, E1 exclusion and separate cutover retained
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -57,52 +57,23 @@ results and remaining limits; finite phase checks do not certify full pilot visu
 ## Current SPA correction plan (2026-10-16)
 
 The maintainer's [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
-excludes production coexistence coordination and rejects retaining ordinary Event document submissions. The
-following correction is current P0–P2 work, not a future phase. Earlier completion and test receipts do not certify
-the changed transport. Source adoption is now complete and independently reviewed at its recorded scope;
-`DESIGN-EVENT-CREATION-TRANSPORT` closes for the current correction after reviewed source adoption and fresh scoped
-built-application evidence. The review retains failed broad runs and focused positive receipts separately.
-
-1. **Classify the implemented surface and preserve decisions.** Inspect every current Vue form/link and its actual
-   consumers. Separate ordinary migrated commands/navigation from true provider/capability arrivals, outputs,
-   initial hard loads and unmigrated destinations. Record E1 as exclusion without native repair; retain R1, S1,
-   T1, C1 and existing backend-remedy exclusions.
-2. **Adapt the existing backend owners.** Author the smallest generated JSON/multipart contracts for Event
-   creation/duplication, profile token/workflow commands and Event-rendered child deletion. Reuse existing
-   controller/DBAL operations in their existing order, with private admission and honest partial/unknown outcomes.
-   Do not add a transaction guarantee, automatic replay or general identity/token repair.
-3. **Adopt shared Vue owners in every matching consumer.** Use the existing command, confirmed navigation,
-   feedback, draft/file and destructive-action owners. Use Router for ordinary migrated links. Preserve rejected
-   input and chosen files, release completed work deliberately and retire private state with its actor/visit.
-4. **Retire displaced document-only implementation.** Remove unused Vue document adapters/helpers after all
-   current consumers move. Preserve explicit native/capability/provider/output compatibility boundaries; no
-   blanket interception of anchors or forms is appropriate.
-5. **Protect the actual application behavior.** Extend existing client, real-ORM and built-application suites at
-   their actual boundaries. Assert a retained document marker and absence of unexpected main-frame navigation,
-   generated requests, persisted effects, validation/input retention, pending/unknown no-replay and failed
-   follow-up recovery. Include warm entry, Back/Forward and private-state retirement.
-6. **Reconcile and independently review evidence.** Update this existing plan, playbook, coverage, review and
-   backlog against actual source and results. Regenerate the existing staged preview only after source freeze;
-   independently review actual consumers and complete output. No new checker, framework or CI gate is introduced.
-
-| Current surface | Intended visible consequence | Existing verification owner |
-|---|---|---|
-| Event create/duplicate, including chosen image | Save and reach the canonical Event in the same document; rejection/uncertainty retains appropriate draft/file state | Event foundation client, Event API persistence and Event organizer/workflow E2E suites |
-| Profile token issuance, preview/transfer, deactivation and account/guest deletion | Warm entry works; deliberate commands retain confirmation/privacy and use client completion where internal; true external logout handoff remains explicit | Identity client, profile-workflow persistence and profile-workflow/identity E2E suites |
-| Event-rendered child deletion and migrated parent/context links | Shared confirmation/command recovery and Router history without incidental document replacement | Shared entity presentation client, Event persistence and Event/header/pilot E2E suites |
-| Common command/draft/file/navigation behavior | Matching current consumers share one owner; no duplicate dispatch, stale private completion or lost confirmed result after failed refresh | Existing command/draft/navigation client suites plus the affected built workflows |
+excludes production coexistence coordination and rejects ordinary Event document submissions. The completed
+correction's execution sequence remains in Git history. Its lasting contribution rules belong to the existing
+[playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature-view); its behavior-to-assertion mappings belong to the
+[coverage map](TEST_COVERAGE.md#ordinary-spa-correction-coverage-plan-2026-10-16).
 
 The implementation now follows this sequence: Event/Packing use `useCreationCommand`; Settings, Overview and Event
 children use `useEntityRemoval`; private profile workflows use generated commands, read-only warm admission and the
 existing minimal identity-completion owner. Ordinary migrated parent, context, shell and workflow links use Router.
 Displaced document-only Vue command adapters/helpers are retired. Build, test compiler, complete client, selected
-ORM and configured built workflows now have scoped results in the review. The failed broad run, focused corrections
-and unchanged-drag repetitions remain separate evidence; this is no uniform full-run pass or full-application certification.
+ORM and configured built workflows have scoped results in the review. The preceding SPA correction's failed broad
+run, focused corrections and unchanged-drag repetitions retain their original scopes. The subsequent readiness
+follow-up has two complete passing built selections recorded in that same review; neither certifies the full application.
 
-This table retains the authorized implementation/coverage plan, not a claim of complete application acceptance. The
-[current review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16) owns actual execution
-and remaining limits. General backend completion defects remain excluded; document transport never supplies an
-atomicity guarantee in their place.
+`DESIGN-EVENT-CREATION-TRANSPORT` retains its reviewed closure in the central backlog. The
+[current review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16) owns actual inputs,
+execution and remaining limits. The subsequent approved R1 identity-notice adaptation changes presentation, not
+the shared command transport or inherited operation guarantees. General backend completion remedies remain excluded.
 
 ## Phase contracts
 

@@ -974,6 +974,45 @@ describe('native shell and help presentation contract', () => {
         } finally { wrapper.unmount(); context.queryClient.clear(); }
     });
 
+    it.each([
+        'profile.migrationCompleted', 'profile.migrationCompletedAccountDeleted', 'profile.migrationCompletedGuestDeleted',
+        'profile.deactivationCompleted', 'profile.deactivationCompletedAccountDeleted', 'profile.deactivationCompletedGuestDeleted',
+        'profile.accountDeleted',
+    ] as const)('translates the retained %s completion without renewing its notice or replaying a command', async function translatesWorkflowCompletion(key) {
+        vi.useFakeTimers();
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
+        const request = vi.fn(function readTranslatedHelp(input: RequestInfo | URL): Promise<Response> {
+            if (!(input instanceof Request) || input.method !== 'GET') throw new Error('Completion translation must not dispatch a command.');
+            return Promise.resolve(helpResponse(input));
+        });
+        const notice = {kind: 'success' as const, messageKey: key};
+        const {wrapper, context} = await renderHelp(help, '/frontend-pilot/help?doc=fixture', request, {pageNotice: notice});
+        try {
+            const alert = wrapper.get('main .alert-success');
+            const english = context.messages.value.t(key);
+            expect(alert.text()).toBe(english.trim());
+            const receipt = context.pageNotice.value;
+            await vi.advanceTimersByTimeAsync(6000);
+
+            // Locale changes translate the same rendered notice. They cannot
+            // replace its receipt, restart its ten-second timer or issue a write.
+            context.locale.value = 'de';
+            await flushPromises();
+            expect(wrapper.get('main .alert-success').element).toBe(alert.element);
+            expect(alert.text()).toBe(context.messages.value.t(key));
+            expect(alert.text()).not.toBe(english.trim());
+            expect(context.pageNotice.value).toBe(receipt);
+            expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+
+            await vi.advanceTimersByTimeAsync(4000);
+            await flushPromises();
+            expect(context.pageNotice.value).toBeNull();
+            context.locale.value = 'en';
+            await flushPromises();
+            expect(wrapper.find('main .alert-success').exists()).toBe(false);
+        } finally { wrapper.unmount(); context.queryClient.clear(); }
+    });
+
     it('expires a native flash, renews the same outcome, and preserves durable warnings', async () => {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);

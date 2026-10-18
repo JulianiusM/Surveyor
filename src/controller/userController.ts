@@ -30,7 +30,8 @@ import {APIError, ExpectedError, ValidationError} from "../modules/lib/errors";
 import {createSessionStore, persistSession, readStoredSession, requireSessionProfileId, stageIdentitySession, writeStoredSession} from "../modules/lib/session";
 import {readFrontendSessionMetadata, rotateFrontendSessionContext, sameFrontendSessionIdentity} from '../modules/lib/frontendSession';
 import {safeFrontendReturn} from '../modules/lib/frontendIdentity';
-import type {AccountRegistrationTransactionOptions, RegistrationEmailDelivery, RegistrationReceipt, GuestRegistrationTransactionOptions, IdentityCompletionOptions, IdentityCompletionReceipt, IdentityLinkOptions, IdentityTransitionOptions} from '../types/IdentityTypes';
+import type {AccountRegistrationTransactionOptions, RegistrationEmailDelivery, RegistrationReceipt, GuestRegistrationTransactionOptions, IdentityCompletionOptions, IdentityCompletionReceipt, IdentityLinkOptions, IdentityTransitionOptions, ProfileOwnerCleanup} from '../types/IdentityTypes';
+import type {MessageKey} from '../types/LocalizationTypes';
 import {ApiProblem} from '../modules/api/problem';
 import {buildGuestLink, ENTITIES} from "../modules/lib/util";
 import * as oidc from "../modules/oidc";
@@ -993,30 +994,51 @@ export async function getProfileToMigrate(token: string) {
     return profile;
 }
 
-export async function migrateProfile(userId: number, token: string) {
+export function migrateProfile(userId: number, token: string): Promise<string>;
+export function migrateProfile(userId: number, token: string, presentation: 'facts'): Promise<ProfileOwnerCleanup>;
+/** Transfer and notify through the existing shared workflow. Native callers keep
+ * their exact prose; the API requests cleanup facts without parsing that prose or
+ * repeating a read, persistence operation or mail side effect. */
+export async function migrateProfile(userId: number, token: string, presentation?: 'facts'): Promise<string | ProfileOwnerCleanup> {
+    // Keep capability validation, transfer and notification in their native order.
     const profile = await getProfileToMigrate(token);
     const previousOwner = await userService.moveProfileToUserTx(profile.id, userId);
     if (previousOwner?.email) {
         await mailer.sendMigrationEmail({name: resolveEmailRecipientName(previousOwner instanceof User ? previousOwner.name : undefined, previousOwner.username), address: previousOwner.email}, profile, (await userService.getUserById(userId))!)
     }
-    return `Migration successful. ${await handlePreviousProfileOwner(previousOwner)}`;
+
+    // Only completed cleanup supplies presentation facts. An exception still
+    // stops this inherited sequence and remains unknown at the versioned adapter.
+    const cleanup = await handlePreviousProfileOwner(previousOwner);
+    return presentation === 'facts' ? cleanup : `Migration successful. ${profileOwnerCleanupMessage(cleanup)}`;
 }
 
-async function handlePreviousProfileOwner(previousOwner?: User | Guest) {
+/** Preserve former-owner cleanup and delivery order while reporting its completed
+ * branch. Presentation must never infer deletion from an earlier owner snapshot. */
+async function handlePreviousProfileOwner(previousOwner?: User | Guest): Promise<ProfileOwnerCleanup> {
+    // Account deletion remains conditional on the existing remaining-profile read.
     if (previousOwner instanceof User) {
         const otherProfiles = await userService.getProfilesForUser(previousOwner.id);
         if (otherProfiles.length === 0) {
             await userService.deleteUser(previousOwner.id);
             await mailer.sendDeletionEmail({name: resolveEmailRecipientName(previousOwner.name, previousOwner.username), address: previousOwner.email}, previousOwner);
-            return "Previous user account permanently deleted!"
+            return 'account-deleted';
         }
     } else if (previousOwner instanceof Guest) {
         await userService.deleteGuest(previousOwner.id);
         if (previousOwner.email) {
             await mailer.sendDeletionEmail({name: resolveEmailRecipientName(previousOwner.username, previousOwner.profile?.name), address: previousOwner.email}, previousOwner);
         }
-        return "Previous guest account permanently deleted!"
+        return 'guest-deleted';
     }
+    return 'none';
+}
+
+/** Native callers retain the original English suffix, including its empty value.
+ * Only the existing controller's semantic result selects this presentation. */
+function profileOwnerCleanupMessage(cleanup: ProfileOwnerCleanup): string {
+    if (cleanup === 'account-deleted') return 'Previous user account permanently deleted!';
+    if (cleanup === 'guest-deleted') return 'Previous guest account permanently deleted!';
     return '';
 }
 
@@ -1060,7 +1082,13 @@ export async function deleteGuest(session: Request['session']) {
     return await logoutUserOidc(session);
 }
 
-export async function deactivateProfile(body: any, session: Request['session']) {
+export function deactivateProfile(body: any, session: Request['session']): Promise<string>;
+export function deactivateProfile(body: any, session: Request['session'], presentation: 'facts'): Promise<ProfileOwnerCleanup>;
+/** Preserve native confirmation, ownership removal and former-owner cleanup.
+ * The optional API projection reports facts after the same completed sequence;
+ * default callers retain their exact original string and trailing empty suffix. */
+export async function deactivateProfile(body: any, session: Request['session'], presentation?: 'facts'): Promise<string | ProfileOwnerCleanup> {
+    // Confirmation is the existing first check, before any ownership write.
     const {name} = body;
     if (!name || name !== session.profile?.name) {
         throw new ValidationError("users/profile/delete", "Invalid profile deactivation verification", {name});
@@ -1070,9 +1098,10 @@ export async function deactivateProfile(body: any, session: Request['session']) 
         throw new ExpectedError("No active profile!", "error", 401);
     }
 
+    // Cleanup still follows removal and can fail after that work has completed.
     const previousOwner = await userService.removeProfileFromOwner(session.profile.id);
-    const handleAnswer = await handlePreviousProfileOwner(previousOwner);
-    return `Profile successfully deactivated. ${handleAnswer}`;
+    const cleanup = await handlePreviousProfileOwner(previousOwner);
+    return presentation === 'facts' ? cleanup : `Profile successfully deactivated. ${profileOwnerCleanupMessage(cleanup)}`;
 }
 
 /**
@@ -1278,7 +1307,7 @@ export async function requestProfileMigrationToken(session: SessionLike): Promis
  * A later authoritative GET owns identity/roster display; no postcommit store
  * reload, flash save or full ORM projection can reject this completed workflow.
  */
-function profileWorkflowCompletion(req: Request, destination: string, message?: string, redirect: string | null = null):
+function profileWorkflowCompletion(req: Request, destination: string, messageKey: MessageKey, redirect: string | null = null):
     components['schemas']['ProfileWorkflowCompletion'] {
     // Explicit selection/logout rotates a complete metadata pair. A transfer
     // preserves the admitted actor, including read-only legacy fallback when a
@@ -1286,8 +1315,17 @@ function profileWorkflowCompletion(req: Request, destination: string, message?: 
     const completeContext = req.session.frontendContext && req.session.frontendCsrfToken
         ? req.session.frontendContext : req.apiActor?.context ?? null;
     return {resultingContext: completeContext,
-        destination, notice: null, redirect, ...(message ? {message} : {})};
+        destination, notice: {kind: 'success', messageKey}, redirect};
 }
+
+// Complete catalog messages preserve each confirmed cleanup detail without
+// concatenating translated fragments or inspecting legacy English response text.
+const profileWorkflowNoticeKeys = {
+    migration: {none: 'profile.migrationCompleted', 'account-deleted': 'profile.migrationCompletedAccountDeleted',
+        'guest-deleted': 'profile.migrationCompletedGuestDeleted'},
+    deactivation: {none: 'profile.deactivationCompleted', 'account-deleted': 'profile.deactivationCompletedAccountDeleted',
+        'guest-deleted': 'profile.deactivationCompletedGuestDeleted'},
+} as const satisfies Record<'migration' | 'deactivation', Record<ProfileOwnerCleanup, MessageKey>>;
 
 /** Reuse transfer and former-owner cleanup exactly; only the transport result changes. */
 export async function executeIdentityProfileMigration(req: Request, token: string): Promise<components['schemas']['ProfileWorkflowCompletion']> {
@@ -1295,8 +1333,8 @@ export async function executeIdentityProfileMigration(req: Request, token: strin
     try {
         // The native owner validates the capability before moving the profile,
         // then performs its established mail and previous-owner cleanup sequence.
-        const message = await migrateProfile(req.apiActor!.auth!.user!.id, token);
-        return profileWorkflowCompletion(req, '/frontend-pilot/users/profile/manage', message);
+        const cleanup = await migrateProfile(req.apiActor!.auth!.user!.id, token, 'facts');
+        return profileWorkflowCompletion(req, '/frontend-pilot/users/profile/manage', profileWorkflowNoticeKeys.migration[cleanup]);
     } catch (error) {
         // Only the shared owner's explicitly annotated initial token rejection
         // proves no transfer occurred. Every later failure may be partial work.
@@ -1312,9 +1350,9 @@ export async function deactivateIdentityProfile(req: Request, body: components['
     try {
         // Confirmation validation is the native operation's first step. Its
         // existing separate deactivation and selection commits remain unchanged.
-        const message = await deactivateProfile(body, req.session);
+        const cleanup = await deactivateProfile(body, req.session, 'facts');
         await changeActiveProfile(req.session);
-        return profileWorkflowCompletion(req, '/frontend-pilot/users/profile/manage', message);
+        return profileWorkflowCompletion(req, '/frontend-pilot/users/profile/manage', profileWorkflowNoticeKeys.deactivation[cleanup]);
     } catch (error) {
         if (error instanceof ValidationError) throw error;
         // In particular, the inherited last-profile 400 occurs after mutation;
@@ -1331,7 +1369,7 @@ export async function deleteIdentityAccount(req: Request, body: components['sche
         // The existing owner supplies the real provider/root destination. Do not
         // preflight or replace that workflow with a new session transaction.
         const redirect = await deleteAccount(body, req.session);
-        return profileWorkflowCompletion(req, '/frontend-pilot', 'Account successfully deleted',
+        return profileWorkflowCompletion(req, '/frontend-pilot', 'profile.accountDeleted',
             redirect === settings.value.rootUrl ? null : redirect);
     } catch (error) {
         if (error instanceof ValidationError) throw error;

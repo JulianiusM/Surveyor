@@ -341,8 +341,9 @@ async function retryCompletion(): Promise<void> {
                 @action="refreshLogoutState" />
         </nav>
         <!-- Confirmed commands keep their own feedback. This shared recovery surface appears
-             only for header-owned navigation or after its originating form has unmounted. -->
-        <StatusNotice v-if="!completion.pending.value && (completion.target.value || completion.fallbackTarget.value)" kind="warning" class="mb-0"
+             only for header-owned navigation or after its originating form has unmounted.
+             Its spacing input avoids conflicting with the notice's default bottom margin. -->
+        <StatusNotice v-if="!completion.pending.value && (completion.target.value || completion.fallbackTarget.value)" kind="warning" no-margin
             :action="{state: completion.target.value ? completion.retryAction : completion.fallbackRetryAction,
                 label: messages.t('common.retry'), class: 'ms-2'}" @action="retryCompletion">
             {{ messages.t('state.loadFailed') }}

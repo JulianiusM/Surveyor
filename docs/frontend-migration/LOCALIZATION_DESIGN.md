@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; documentation contributors
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: original future locale/output targets transferred to active DEC-006 with intended status; current grammar/preference guidance routed to staged Development; approved Help/fallback and query-locale boundaries retained
+verification-scope: approved R1 typed catalog completion reconciled with current grammar/preference guidance; superseded inherited-prose exception retained in decision history; future locale/output targets remain in active DEC-006; Help/fallback and query-locale boundaries retained
 source-anchors: src/locales/; scripts/generate-locales.mjs; src/modules/localization/; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/controller/helpController.ts; docs/user-guide/en/; docs/user-guide/de/; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: frontend-production-cutover
 -->
@@ -119,6 +119,11 @@ localized detail is presentation only. Locale generation checks key/parameter co
 Unknown future errors can display validated safe detail without acting as known authority/expiry/retry outcomes.
 
 Store keys/params and receipt identity for reactive translation, rather than rendered English strings.
+The approved identity-completion adaptation applies this rule to transfer, deactivation and account/guest deletion:
+existing controller branches supply typed outcome facts, including conditional former-owner cleanup; generated
+completion notices use the shared catalogs and existing Vue notice lifetime. Native wording and business sequencing
+remain unchanged. The [dated amendment](FRONTEND_FOUNDATION_DESIGN.md#approved-catalog-based-identity-completion-notices-2026-10-16)
+retains the superseded inherited-prose exception and its approval provenance.
 Locale changes neither replay commands nor renew/restore expired feedback. Raw input/validator/SQL/stack/file data
 must not become catalog parameters or error details accidentally.
 

@@ -34,8 +34,6 @@ const initialLoading = computed(() => !context.hydrated.value && !context.initia
 // admitted outcome without mounting private editors; retirement follows the same
 // initial-document/actor boundary as every other bootstrap projection.
 const commonPage = computed(() => context.initialDocumentFor(route.fullPath)?.commonPage);
-// Legacy workflow completion words come from the shared native controller. The
-// initial-document owner retires this escaped notice with its actor and visit.
 // Header commands and routed editors share one whole-page departure decision.
 // Their fields stay with their own component; this shell contributes no draft.
 useDraftProtection({dirty: noShellDraft, unknownMessage: 'draft.leaveUnknown'});
@@ -44,12 +42,9 @@ useDraftProtection({dirty: noShellDraft, unknownMessage: 'draft.leaveUnknown'});
 const navigation = observePageNavigation(router, {scope: 'path', finished: finishNavigation});
 const pendingNavigation = navigation.destination;
 const pageNoticeText = computed(() => {
-    const notice = context.pageNotice.value;
-    // Legacy business owners can supply completion wording without a catalog key.
-    // Render that validated scalar through the ordinary escaped notice/lifetime;
-    // it never selects navigation, cleanup or another business operation.
-    if (notice?.message !== undefined) return notice.message;
-    const key = notice?.messageKey;
+    // Retain the receipt while translating its key reactively. Locale changes
+    // update wording without renewing expiry or changing workflow authority.
+    const key = context.pageNotice.value?.messageKey;
     return key ? messages.value.t(isPlainMessageKey(key) ? key : 'common.error') : null;
 });
 const personalLinkText = computed(() => context.personalLink.value

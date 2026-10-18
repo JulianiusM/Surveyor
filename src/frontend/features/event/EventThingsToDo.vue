@@ -290,7 +290,8 @@ async function refresh(): Promise<void> {
                                         </div>
                                     </div>
                                 </div>
-                                <StatusNotice v-else kind="info" class="mb-0">{{ messages.t(group.empty) }}</StatusNotice>
+                                <!-- The shared spacing input preserves native empty-card spacing. -->
+                                <StatusNotice v-else kind="info" no-margin>{{ messages.t(group.empty) }}</StatusNotice>
                             </div>
                         </div>
                     </div>
@@ -373,10 +374,10 @@ async function refresh(): Promise<void> {
                                     />
                                 </div>
                             </div>
-                            <StatusNotice v-if="items.length && !filtered.length" kind="info" class="mb-0 mt-3">
+                            <StatusNotice v-if="items.length && !filtered.length" kind="info" no-margin class="mt-3">
                                 {{ messages.t('overview.noMatches') }}
                             </StatusNotice>
-                            <StatusNotice v-if="!items.length" kind="info" class="mb-0">
+                            <StatusNotice v-if="!items.length" kind="info" no-margin>
                                 {{ messages.t('event.organizer.nothingToDo') }}
                             </StatusNotice>
                         </div>

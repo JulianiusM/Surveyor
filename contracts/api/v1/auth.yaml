@@ -29,7 +29,6 @@ schemas:
           - {$ref: './common.yaml#/schemas/EntryNotice'}
           - {type: 'null'}
       redirect: {type: [string, 'null']}
-      message: {type: string}
   ProfileDeactivationInput:
     type: object
     additionalProperties: false

@@ -2,7 +2,7 @@ import {expect, test, type APIRequestContext, type Dialog, type Locator, type Pa
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, expectVisiblePresentation, loginForE2E, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createBrowserReadGate as readGate, waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
@@ -110,6 +110,153 @@ async function packing(page: Page, publicView = false) {
     await page.goto(`/frontend-pilot/packing/${list.id}`, {waitUntil: 'domcontentloaded'});
     await expect(page.getByRole('heading', {name: list.title, exact: true})).toBeVisible();
     return list;
+}
+
+/** Capture the genuine corresponding surface after fonts and hover state settle.
+ * The shared assertion compares visible content/controls/styles and local boxes;
+ * screenshots and raw measurements remain separately inspectable run evidence. */
+async function captureMatchedPresentation(page: Page, info: TestInfo, name: string, surface: Locator, selectors: string[], focus?: Locator) {
+    await page.evaluate(() => document.fonts.ready);
+    // A no-op uncheck leaves native unfocused, while clearing the shared Packed
+    // key in Vue performs a real click. Establish the same deliberate focus state
+    // in both documents; keep focus-ring styles in the complete comparison.
+    await page.evaluate(function releasePreviousFocus() {
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    });
+    if (focus) await focus.focus();
+    await page.mouse.move(0, 0);
+    const path = info.outputPath(name + '.png');
+    await surface.screenshot({path, animations: 'disabled'});
+    const presentation = await readVisiblePresentation(surface, selectors);
+    await info.attach(name, {path, contentType: 'image/png'});
+    await info.attach(name + '-presentation', {body: JSON.stringify(presentation, null, 2), contentType: 'application/json'});
+    return presentation;
+}
+
+for (const width of [1280, 390]) {
+    test(`compares complete native Packing creation, table and quick-add surfaces at ${width}px`, async function comparesPackingSurfaces({page}, info) {
+        await page.setViewportSize({width, height: 900});
+        const browserErrors: string[] = [];
+        page.on('pageerror', error => browserErrors.push(error.message));
+        const list = await packingFixture(page.request);
+        // Consume setup's one-time flash. The same actor, entity, storage and
+        // viewport then supply both renderers without manufacturing application HTML.
+        await page.request.get('/users/profile');
+        const native: Record<string, Awaited<ReturnType<typeof readVisiblePresentation>>> = {};
+        for (const pilot of [false, true]) {
+            const prefix = pilot ? '/frontend-pilot' : '';
+            const label = pilot ? 'pilot' : 'native';
+            await page.goto(prefix + '/packing/create?locale=en', {waitUntil: 'domcontentloaded'});
+            if (pilot) await waitForPilotHydration(page);
+            await expect(page.locator('main tbody tr')).toHaveCount(1);
+            const creation = await captureMatchedPresentation(page, info, label + '-packing-create', page.locator('main form').first(),
+                ['label', 'input', 'textarea', 'select', 'th', 'td', 'button']);
+            if (pilot) expectVisiblePresentation(native.creation!, creation);
+            else native.creation = creation;
+
+            // Native uses a div/span around this switch; its text is not an
+            // implicit label. Retain every form label/field comparison above and
+            // test its actual click boundary here, so changing a tag cannot silently
+            // introduce a different user action behind a passing picture.
+            const everyone = page.locator('main tbody tr').first().locator('.form-switch');
+            const everyoneCheckbox = everyone.locator('input[type="checkbox"]');
+            await everyone.locator('span').click();
+            await expect(everyoneCheckbox).not.toBeChecked();
+            await everyoneCheckbox.check();
+            await expect(everyoneCheckbox).toBeChecked();
+            await everyoneCheckbox.focus();
+            await everyoneCheckbox.press('Space');
+            await expect(everyoneCheckbox).not.toBeChecked();
+            await everyoneCheckbox.press('Space');
+            await expect(everyoneCheckbox).toBeChecked();
+            await everyoneCheckbox.uncheck();
+
+            await page.goto(prefix + list.path + '?locale=en', {waitUntil: 'domcontentloaded'});
+            if (pilot) await waitForPilotHydration(page);
+            const table = page.locator('main table');
+            await expect(table.locator('tbody tr')).toHaveCount(1);
+            // Native and Vue intentionally share the existing personal Packed
+            // key. Restore its unchecked baseline before comparing each renderer.
+            const packed = table.locator('tbody tr').first().getByRole('checkbox');
+            await packed.uncheck();
+            const detail = await captureMatchedPresentation(page, info, label + '-packing-table', table,
+                ['th', 'td', 'input', 'button']);
+            const quickAdd = await captureMatchedPresentation(page, info, label + '-packing-quick-add',
+                page.locator(pilot ? 'form:has(#quick-title)' : '#quickAddForm'),
+                ['label', 'input', 'button']);
+            const focused = await captureMatchedPresentation(page, info, label + '-packing-table-focused', table,
+                ['th', 'td', 'input', 'button'], packed);
+            if (pilot) {
+                expectVisiblePresentation(native.table!, detail);
+                expectVisiblePresentation(native.quickAdd!, quickAdd);
+                expectVisiblePresentation(native.focused!, focused);
+            } else {
+                native.table = detail;
+                native.quickAdd = quickAdd;
+                native.focused = focused;
+            }
+            await packed.check();
+            await page.reload({waitUntil: 'domcontentloaded'});
+            if (pilot) await waitForPilotHydration(page);
+            await expect(packed).toBeChecked();
+            const checked = await captureMatchedPresentation(page, info, label + '-packing-checked', table,
+                ['th', 'td', 'input', 'button']);
+            if (pilot) expectVisiblePresentation(native.checked!, checked);
+            else native.checked = checked;
+        }
+        expect(browserErrors).toEqual([]);
+    });
+
+    test(`compares native Overview empty, populated and no-match states at ${width}px`, async function comparesOverviewStates({page}, info) {
+        await page.setViewportSize({width, height: 900});
+        const browserErrors: string[] = [];
+        page.on('pageerror', error => browserErrors.push(error.message));
+        await loginForE2E(page.request, createE2ELogin());
+        const marker = 'Matched overview ' + randomUUID().slice(0, 8);
+        expect((await page.request.post('/users/profile/create', {form: {name: marker}, maxRedirects: 0})).status()).toBe(302);
+        const actor = (await bootstrap(page.request)).profiles.find(profile => profile.name === marker)!;
+        expect((await page.request.get('/users/profile/change/' + actor.id, {maxRedirects: 0})).status()).toBe(302);
+        await page.request.get('/users/profile');
+
+        // A new profile establishes genuine empty membership without clearing a
+        // shared account's resources. Creation below then changes only its own rows.
+        let resource: Awaited<ReturnType<typeof createResourceViaForm>> | undefined;
+        for (const state of ['empty', 'populated', 'no-match'] as const) {
+            if (state === 'populated') {
+                const input = createE2EPackingList();
+                input.title = input.form.title = marker + ' list';
+                resource = await createResourceViaForm(page.request, input);
+                await page.request.get('/users/profile');
+            }
+            let original: Awaited<ReturnType<typeof readVisiblePresentation>> | undefined;
+            for (const pilot of [false, true]) {
+                const path = pilot ? '/frontend-pilot' : '/users/dashboard';
+                // Native Overview owns a closed navigation query and rejects
+                // pilot-only locale fields. Compare its real admitted URL, with
+                // the same feature filter and the pilot's explicit English UI.
+                const query = new URLSearchParams();
+                if (pilot) query.set('locale', 'en');
+                if (state === 'no-match') query.set('owner_main_q', 'NoMatchingOverviewFixture');
+                const response = await page.goto(path + (query.size ? '?' + query.toString() : ''), {waitUntil: 'domcontentloaded'});
+                expect(response?.status()).toBe(200);
+                if (pilot) await waitForPilotHydration(page);
+                const owner = page.locator('[data-collection="owner"][data-region="main"]');
+                const surface = state === 'populated' ? owner.locator(`[data-id="${resource!.id}"]`)
+                    : owner.locator('.status-notice').filter({hasText: state === 'empty'
+                        ? "You don't have any administrable entities yet" : 'No entities match your search and filter.'});
+                await expect(surface).toBeVisible();
+                if (pilot) await expect(owner).toHaveAttribute('aria-busy', 'false');
+                const current = await captureMatchedPresentation(page, info, `${pilot ? 'pilot' : 'native'}-overview-${state}`,
+                    surface, state === 'populated' ? ['h4', 'p', '.badge', 'button', 'summary[role="button"]', 'a'] : []);
+                if (pilot) expectVisiblePresentation(original!, current);
+                else original = current;
+                // The approved Vue Refresh control is outside the compared card
+                // and empty-state surfaces; native links remain the independent oracle.
+                expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+            }
+        }
+        expect(browserErrors).toEqual([]);
+    });
 }
 
 for (const intent of ['create', 'duplicate'] as const) {
@@ -1167,9 +1314,17 @@ test('pilot edits items with conflict review, quick-adds, reorders and removes a
     await expect(addedRow).toContainText('Bring gas');
     await expect(addedRow).toHaveAttribute('draggable', 'true');
     await expect(row).toHaveAttribute('draggable', 'true');
-    // Target autoscroll can put two row centers only a few screen pixels apart,
-    // below the browser's drag threshold. Blank first-cell padding keeps the
-    // real mouse gesture clear of controls and guarantees horizontal movement.
+    // The retained failure trace showed the document scrolling between mouse
+    // down/up (69 -> 76 -> 0), leaving the targets only two screen pixels apart
+    // and sending no command. Finish fixture scrolling before the real gesture;
+    // both rows must remain fully visible without dragTo scrolling either one.
+    await addedRow.locator('xpath=ancestor::table').evaluate(function positionDragTable(table) {
+        table.scrollIntoView({block: 'center', behavior: 'instant'});
+    });
+    await expect(addedRow).toBeInViewport({ratio: 1});
+    await expect(row).toBeInViewport({ratio: 1});
+    // Blank first-cell padding avoids controls and retains a meaningful native
+    // pointer movement. The existing HTTP/UI/persisted-order assertions follow.
     await packingCommand(page, resource.id, '/item-order', 'PUT', () => addedRow.dragTo(row, {
         sourcePosition: {x: 5, y: 5}, targetPosition: {x: 25, y: 5},
     }));

@@ -1610,6 +1610,102 @@ implementation_defects:
       introducing production coexistence would require its own scope and decision review.
     evidence_limit: Source-confirmed unsafe interleaving, independently and root reviewed. No controlled database
       reproduction has run. Passing full browser and sequential ORM cases do not exercise this schedule.
+  - id: IMP-067
+    status: closed
+    closed_on: 2026-10-16
+    discovered_on: 2026-10-16
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    out_of_scope_for_documentation_migration: true
+    title: Identity completion notices bypass shared catalog localization
+    evidence:
+      - Before the approved R1 adaptation, transfer and deactivation returned native English completion prose.
+        The new account-deletion adapter copied its English success wording from the native document route.
+      - ProfileWorkflowPage passed that prose into the shared App notice, overriding its catalog key. German
+        completion remained English, including after a mounted interface-language change.
+      - Staged Development described inherited controller prose as an exception. No specific maintainer approval
+        for that localization exception was established; copied adapter wording also exceeded that exception.
+    authorization: The maintainer explicitly approved R1 catalog-based identity completion notices and directed
+      implementation of the full preceding P0-P2 readiness plan on 2026-10-16. This is forward authorization for
+      presentation adaptation, not retrospective approval or an excluded backend remedy.
+    documentation_contract: Existing controller branches expose typed completion facts without parsing prose or
+      repeating cleanup decisions. Generated Vue completion notices use the shared catalogs and notice lifetime;
+      native callers retain current wording and every conditional former-user or guest cleanup detail is preserved.
+    closes_when:
+      - Transfer, deactivation and account/guest deletion use the shared typed notice path in every current Vue caller.
+      - Confirmed former-owner cleanup details and reactive English/German presentation have meaningful assertions.
+      - Persistence, mail, session order, provider redirects and partial or uncertain outcomes retain their behavior.
+    disposition: Existing controller cleanup facts now project generated catalog notices through the same reactive
+      receipt without parsing prose or duplicating cleanup decisions. All 27 real ORM workflow cases and 89 focused
+      client cases passed; the final complete client selection passed 1011 tests. Both complete built runs passed
+      transfer, deactivation and account/guest deletion journeys with English/German notice switching and no replay.
+      Independent/root source review confirms unchanged native wording, conditional cleanup detail, ordering and
+      inherited partial outcomes. General backend remedies and live services remain explicitly excluded.
+  - id: IMP-068
+    status: closed
+    closed_on: 2026-10-16
+    discovered_on: 2026-10-16
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    out_of_scope_for_documentation_migration: true
+    title: Packing creation Everyone caption changes native checkbox activation behavior
+    evidence:
+      - Native packing-create.ts createEveryoneSwitch builds a div containing the switch and descriptive span.
+        The Vue PackingCreatePage instead wrapped both in a label, so clicking the caption toggled only Vue.
+      - New complete-creation comparison exposed the extra label despite byte-identical captured pixels.
+        Source inspection confirmed the semantic click difference rather than a visual or backend difference.
+    impact: Clicking descriptive Everyone text can silently change a Vue creation row's requiredByAll value when
+      the same native action leaves it unchanged. Direct switch and keyboard interaction are separate behavior.
+    authorization: The maintainer's direct full-readiness implementation instruction requires native visual and
+      behavioral parity. The bounded correction restores that established caption behavior in Vue, retaining its
+      explicit accessible name, bindings and direct switch/keyboard behavior; no native or backend edit is authorized.
+    documentation_contract: Creation-row Everyone remains the existing shared requirement, separate from the
+      browser-local Packed checkbox. Descriptive caption text does not create a second activation target.
+    closes_when:
+      - Vue uses the native descriptive wrapper semantics with the same explicit accessible checkbox name.
+      - Built native/Vue assertions protect caption-click no-op, direct and Space toggles, submitted values and restoration.
+      - Fresh source build, applicable client checks and complete built selection verify the bounded correction.
+    disposition: Vue adopts the native descriptive div and retains the same explicit accessible switch name.
+      Desktop/mobile assertions passed caption-click no-op, direct and Space toggles, values and restoration, then
+      passed in both complete current-source selections. Supported build/client/compiler checks and independent
+      source/capture review passed. Native/backend sources remain unchanged; the mobile table retains native clipping.
+      Earlier focused failures remain separate historical evidence in the pilot review.
+  - id: IMP-069
+    status: closed
+    closed_on: 2026-10-16
+    discovered_on: 2026-10-16
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    out_of_scope_for_documentation_migration: true
+    title: Overview empty and no-match notices retain an unintended bottom margin
+    evidence:
+      - OverviewItems supplied an mb-0 class while the shared StatusNotice also supplied its default mb-3 class.
+        The complete native/Vue state comparison observed a real 16px empty/no-match spacing difference.
+      - StatusNotice already owns an explicit no-margin input. Passing that input removes the conflicting default
+        through its existing presentation owner without another component or a feature-specific style override.
+      - The same conflicting override occurred in EventThingsToDo's three group-empty/no-match/nothing-to-do
+        consumers and AppHeader's confirmed-navigation recovery notice. Those matching callers require the same
+        explicit shared input; the Header recovery notice has no native equivalent.
+    impact: Vue empty and no-match regions have more bottom space than the native comparator despite matching text.
+    authorization: The maintainer's direct full-readiness implementation instruction requires native visual parity.
+      This bounded Vue correction adopts the existing shared presentation input in every current matching caller;
+      native, backend, wording and populated-region behavior retain their owners and behavior. Header recovery
+      retains its intended zero-spacing presentation rather than establishing a new native-comparison claim.
+    documentation_contract: Matching Overview states use the existing shared notice's explicit margin contract.
+      Callers must not try to override its default with a second conflicting utility class.
+    closes_when:
+      - Overview, all three Event children notices and Header recovery adopt StatusNotice no-margin; Event retains
+        its independently intended top margin and each notice retains its wording and existing lifecycle.
+      - Current built desktop/mobile comparisons assert equivalent empty, no-match and populated region geometry.
+      - Fresh source build and applicable client/complete built verification pass after the bounded correction.
+    disposition: All five matching callers adopt the existing no-margin input. Event retains its separate top
+      margin and Header retains its recovery lifecycle and intended spacing. Desktop/mobile Overview empty/populated/
+      no-match comparisons passed; all six captured pairs were byte-identical. Both complete built selections and
+      final client/compiler checks passed. Independent/root review confirms actual shared adoption without another
+      owner or native/backend changes. Header has no native-equivalence claim; preceding failures remain historical.
 findings:
   - id: DESIGN-EVENT-CREATION-TRANSPORT
     status: closed
@@ -1733,6 +1829,43 @@ findings:
       MariaDB 10.11.14 with STRICT_TRANS_TABLES. Both built capacity cases passed after normal E2E initialization
       against the separate exact-grant disposable schema. No prepared-schema override, widened deadline, shared
       database setting or runtime numeric validation was introduced.
+  - id: TEST-FRONTEND-READINESS-PARITY
+    status: closed
+    closed_on: 2026-10-16
+    discovered_on: 2026-10-16
+    severity: medium
+    category: verification
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    title: Current pilot acceptance lacks complete workflow and body assertions with a stable full run
+    evidence:
+      - Existing profile workflow comparisons measured selected controls while collecting broader card/footer
+        evidence. Packing body and distinct Overview empty, populated and no-match states lacked matched assertions.
+      - The preceding broad built run failed an item drag despite later unchanged passes. Trace evidence showed
+        table scrolling during its pointer gesture and no order request, requiring fixture diagnosis rather than
+        a claimed application remedy or a wider deadline.
+    authorization: The maintainer directly instructed implementation of the full preceding P0-P2 readiness plan on
+      2026-10-16. This covers the existing suites and actual missing comparison/fixture boundaries, not another
+      test framework, infrastructure checker, later feature phase or backend remedy.
+    closes_when:
+      - Complete profile workflow scenes, Packing creation/body/Quick Add/Packed restoration and distinct Overview
+        states have meaningful native/Vue assertions at the declared desktop/mobile sizes and inspected originals.
+      - The ordinary drag fixture reaches both rows before its unchanged gesture and retains actual order-request,
+        persisted-order and deadline assertions; current complete built selection and stability repetitions run.
+      - The existing coverage matrix distinguishes actual current results, approved differences and exclusions.
+    disposition: Existing suites assert complete workflow cards/footers, Packing creation/table/Quick Add,
+      focused/restored Packed controls and Overview empty/populated/no-match states at both declared sizes. Two
+      complete ordinary built runs each passed 112 of 113 selected cases with the appropriate alternate-mode skip;
+      the applicable login-disabled case passed separately. Reorder passed in 3.6/4.0 seconds with unchanged actual
+      HTTP/persisted-order assertions and deadlines after fixture reachability stabilization. Independent review
+      inspected 20 current workflow originals and accounted for all 32 Packing/Overview originals through direct
+      image inspection and byte identity. The coverage matrix owns finite assertions, approved differences and
+      explicit exclusions; no task-owned gap is deferred by implication.
+    focused_evidence: Earlier focused failures exposed IMP-068/IMP-069, unequal fixture focus and closed-disclosure
+      visibility selection. Corrected fixtures retain full presentation/control assertions. The pilot review separately
+      records those failures and interrupted selection/storage attempts; final passes certify the final selection only.
+    evidence_limit: Closure does not certify every actor/state/locale/browser combination, full accessibility,
+      live services, PDF layout or explicitly excluded backend remedies, later phases and cutover.
   - id: DOC-FRONTEND-REVIEW-HISTORY
     status: closed
     closed_on: 2026-10-16

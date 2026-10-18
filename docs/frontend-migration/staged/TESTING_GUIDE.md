@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P2 ordinary SPA assertions and permitted document boundaries source-mapped in existing suites; scoped client/ORM/built execution and failed-run limits recorded separately in review; scalar/parity and environment guidance retained; no cutover
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json
+verification-scope: P0-P2 complete workflow/body/Overview and reactive R1 notice assertions source-mapped in existing suites; scoped execution and failures belong to paired review; scalar/parity/environment and document-boundary guidance retained; no publication
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -159,11 +159,25 @@ needed. Use built-application E2E when actual routes, sessions, rendering and pe
 development/HMR with real server/persistence belongs to browser integration. Configuration skips are unrun modes.
 
 For ordinary migrated forms and links, assert that the built workflow retains a marker on the current document
-and emits no unexpected main-frame navigation request. Observe the actual generated JSON/multipart operation,
+and emits no unexpected main-frame navigation request. Select scoped suites by explicit file paths when a filter
+also appears in the checkout directory; verify the runner's actual selected cases before treating it as that scope.
+Observe the actual generated JSON/multipart operation,
 visible completion and persisted effect through the integrated backend. The existing pilot navigation test uses
 `document.documentElement.dataset.pilotDocument`; extend that technique in the affected existing suites rather
 than introducing another runner, scanner or test framework. A matching final URL, API status or screenshot alone
 cannot distinguish Router navigation from a document replacement.
+
+Compare each visible card/form/table/action/footer in the declared scene, including values, constraints, styles,
+relative geometry, destination and collected browser errors. The current profile-workflow matrix covers all five
+token/entry/preview/deactivation/account-deletion scenes at 1280px/390px; only independently generated token content
+is masked. Packing compares creation, persisted table, Quick Add and Packed restoration. Overview distinguishes a
+fresh empty region, populated owner cards and a search with no matches at those same sizes. Matched screenshots
+still require individual inspection; one field's geometry cannot establish its surrounding workflow's parity.
+
+Identity completion assertions retain the same confirmed notice while switching English/German and back, checking
+the complete conditional former-user/guest deletion wording without command replay or receipt renewal. Existing
+native and versioned operation assertions protect the same branch outcomes, original native prose and inherited
+partial failures. Catalog completeness alone cannot prove that the actual mounted completion adopts its keys.
 
 Cover Event creation/duplication and selected files, profile token issuance/preview/transfer/deactivation and
 account/guest deletion, Event-rendered child deletion and ordinary shell/parent/context links. Include warm entry,

@@ -440,16 +440,20 @@ function collectCreation() {
                                             />
                                         </td>
                                         <td class="text-center">
-                                            <label
+                                            <!-- Native Everyone text is descriptive rather than a
+                                                 second click target. Keep switch/keyboard behavior
+                                                 and its accessible name without implicit label activation. -->
+                                            <div
                                                 class="form-check form-switch d-inline-flex align-items-center me-3"
                                                 ><input
                                                     v-model="row.requiredByAll"
                                                     type="checkbox"
+                                                    :aria-label="messages.t('packing.everyone')"
                                                     data-hydration-draft
                                                     class="form-check-input"
                                                 /><span class="ms-1 small">{{
                                                     messages.t('packing.everyone')
-                                                }}</span></label
+                                                }}</span></div
                                             ><ActionButton
                                                 class="btn-sm"
                                                 variant="outline-danger"

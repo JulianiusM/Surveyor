@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-16
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: current P2 Event contract and shared method-policy scope reconciled; original transport provenance and approved session/comparison choices retained; execution belongs to paired review
+verification-scope: R1 generated catalog completion and shared controller facts source-reconciled; current P2 Event/method-policy scope, original transport provenance and approved session/comparison choices retained; execution belongs to paired review
 source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: next-contract-migration-or-authorized-cutover
 -->
@@ -139,6 +139,11 @@ Never return raw validators, SQL/stack/payload/cookie/path details.
 
 Keep known code/status/message/parameter variants correlated. Unknown future errors can show validated safe detail
 but cannot trigger known machine actions. Translated text is never machine state.
+Successful profile workflow completion also uses a generated catalog notice rather than a copied or inherited
+English string. The existing controller branches project their completed former-owner cleanup facts once; Vue
+retains the notice key for reactive translation without parsing prose or repeating the business decision.
+Native caller wording and existing partial/uncertain outcomes retain their behavior under the
+[approved R1 adaptation](FRONTEND_FOUNDATION_DESIGN.md#approved-catalog-based-identity-completion-notices-2026-10-16).
 401 credentials differs from expiry, 403 field/action denial from parent read loss, and 404 foreign child from global
 resource disappearance. Follow each operation's authored disclosure policy.
 
