@@ -5,6 +5,10 @@
 .pilot-app a.btn[aria-disabled="true"]:not(.disabled) { opacity: var(--bs-btn-disabled-opacity, .65); }
 /* Full message pages move native alerts into their card. Ordinary pages retain
    the separate mt-1 live-alert host after any initial, non-sticky flash messages. */
+/* This unsemantic wrapper groups notices for rendering/empty-host rules only.
+   Without its own layout box, the sticky live-alert host uses the full main
+   content boundary instead of being trapped inside a message-height parent. */
+.pilot-page-notices { display: contents; }
 #pilot-main:has(> .pilot-page-message) > .pilot-page-notices:has(> #liveAlerts:only-child:empty) { display: none; }
 /* A mounted form's rejected POST owns its ordinary flash above the card. The
    empty inline host precedes that component in Vue, so it contributes no extra
@@ -75,27 +79,63 @@
 /* Loading geometry follows the existing field, table, card and article proportions.
    It carries no content/actions and never covers a feature's already loaded projection. */
 .pilot-skeleton { display: block; min-width: 0; }
-.pilot-skeleton-shapes { display: grid; gap: .75rem; animation: pilot-skeleton-pulse 1.6s ease-in-out infinite; }
+.pilot-skeleton-shapes, .pilot-skeleton-content { display: grid; gap: .75rem; min-width: 0; }
+/* Only the loading region pulses. Nested decorative primitives share that
+   animation instead of multiplying opacity changes or announcing another status. */
+.pilot-skeleton-animated { animation: pilot-skeleton-pulse 1.6s ease-in-out infinite; }
+.pilot-skeleton-shapes.card { gap: 0; }
+.pilot-skeleton-page-header .pilot-skeleton-heading { width: 60%; height: clamp(1.75rem, 4vw, 2.5rem); margin: 0 auto; }
+.pilot-skeleton-content.card-body { gap: 1.5rem; }
 .pilot-skeleton-bar { display: block; min-width: 0; height: 1rem; border-radius: var(--bs-border-radius-sm);
     background: currentColor; opacity: .18; }
-.pilot-skeleton-lines > .pilot-skeleton-bar:last-child { width: 70%; }
+.pilot-skeleton-lines > .pilot-skeleton-content > .pilot-skeleton-bar:last-child { width: 70%; }
 .pilot-skeleton-label { width: 30%; min-width: 4rem; margin-bottom: .5rem; }
 .pilot-skeleton-control { height: 2.375rem; border-radius: var(--bs-border-radius); }
 .pilot-skeleton-heading { width: 60%; height: 1.75rem; margin-bottom: .5rem; }
 .pilot-skeleton-short { width: 70%; }
 .pilot-skeleton-table { gap: 0; }
-.pilot-skeleton-table-heading, .pilot-skeleton-table-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+.pilot-skeleton-table-viewport { display: block; min-width: 0; overflow-x: auto; }
+.pilot-skeleton-table-grid { display: grid; min-width: 40rem; }
+.pilot-skeleton-table-heading, .pilot-skeleton-table-row { display: grid;
+    grid-template-columns: var(--pilot-skeleton-tracks, repeat(var(--pilot-skeleton-columns), minmax(0, 1fr)));
     gap: 1rem; padding: 1rem .5rem; border-bottom: 1px solid var(--bs-border-color-translucent); }
 .pilot-skeleton-table-heading { padding-top: .5rem; }
 .pilot-skeleton-table-row { min-height: 3.5rem; }
+/* Approximate the actual list columns, including Packing's narrow personal
+   checkbox. Other table consumers retain their independently declared geometry. */
+.pilot-skeleton-list-detail [data-skeleton-columns="6"] { --pilot-skeleton-tracks: 5fr 25fr 25fr 20fr 10fr 15fr; }
+.pilot-skeleton-list-detail [data-skeleton-columns="5"] { --pilot-skeleton-tracks: 20fr 20fr 25fr 10fr 25fr; }
 .pilot-skeleton-cards .card, .pilot-skeleton-paragraph { display: grid; gap: .75rem; }
-.pilot-skeleton-article { gap: 1.5rem; }
+.pilot-skeleton-article > .pilot-skeleton-content, .pilot-skeleton-overview > .pilot-skeleton-content { gap: 1.5rem; }
+.pilot-skeleton-collection { display: grid; gap: 1rem; min-width: 0; }
+.pilot-skeleton-toolbar, .pilot-skeleton-counters, .pilot-skeleton-summary { display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; min-width: 0; }
+.pilot-skeleton-roster-row { display: grid; grid-template-columns: minmax(0, 1fr) 8rem;
+    align-items: center; gap: 1rem; padding: .75rem; border: 1px solid var(--bs-border-color-translucent); }
+.pilot-skeleton-textarea { height: 6rem; }
+.pilot-skeleton-introduction { width: 75%; margin-inline: auto; }
+.pilot-skeleton-form-footer { width: 12rem; margin-left: auto; }
+.pilot-skeleton-form-footer-half { width: 50%; margin-inline: auto; }
+.pilot-skeleton-form-footer-full { width: 100%; }
+.pilot-skeleton-form-footer-two-thirds { width: 66.666667%; margin-inline: auto; }
+.pilot-skeleton-recovery { display: grid; gap: 1rem; padding-top: 1rem;
+    border-top: 1px solid var(--bs-border-color-translucent); }
 @keyframes pilot-skeleton-pulse { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
+@media (max-width: 767.98px) {
+    .pilot-skeleton-summary { grid-template-columns: minmax(0, 1fr); }
+    .pilot-skeleton-form-footer-half, .pilot-skeleton-form-footer-two-thirds { width: 100%; }
+    /* The participant roster alone folds email into the name column below md.
+       Other tables retain all columns and their horizontal clipping behavior. */
+    .pilot-skeleton-table-grid[data-skeleton-hide-column] { min-width: 0; }
+    .pilot-skeleton-table-grid[data-skeleton-hide-column] .pilot-skeleton-table-heading,
+    .pilot-skeleton-table-grid[data-skeleton-hide-column] .pilot-skeleton-table-row {
+        grid-template-columns: repeat(var(--pilot-skeleton-mobile-columns), minmax(0, 1fr));
+    }
+}
 @media (max-width: 575.98px) {
-    .pilot-skeleton-table-heading, .pilot-skeleton-table-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .pilot-skeleton-table-heading > :nth-child(n + 4), .pilot-skeleton-table-row > :nth-child(n + 4) { display: none; }
+    .pilot-skeleton-toolbar { grid-template-columns: minmax(0, 1fr); }
 }
 /* Respect the same motion preference across every future migrated feature. */
 @media (prefers-reduced-motion: reduce) {
-    .pilot-skeleton-shapes, .pilot-app .spinner-border { animation: none; }
+    .pilot-skeleton-animated, .pilot-app .spinner-border { animation: none; }
 }

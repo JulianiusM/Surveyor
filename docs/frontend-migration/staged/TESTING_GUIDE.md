@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P3 settings/restricted/inherited assertions, characterized deletion display, unique-profile isolation and rendered-control readiness source-reconciled alongside retained coverage; actual execution and failures belong to paired review; no publication
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts
+verification-scope: feedback scroll/stickiness and module-shaped loading assertions source-reconciled alongside P3 settings/restricted/inherited coverage, exact fixture isolation and observable readiness; actual execution and failures belong to paired review; no publication
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -209,6 +209,14 @@ Verify request-local SSR identity/locale, escaped validated bootstrap and same-t
 content uses shared skeletons; successful initialization reveals controls. Readable Help retains functional GET
 search, links and anchors. JavaScript-only shell selectors/actions/Retry/dismiss are unavailable before initialization.
 The localized startup notice must work independently of the missing/blocked entry module.
+
+Exercise initial and cold scoped placeholders for each page family using the actual route metadata. The built
+client browser selection verifies the real SSR/CSS silhouette, one accessible loading status, one animation,
+responsive layout and absent dead controls; it does not certify backend admission. Include major structural
+differences such as Packing/Drivers columns, Packing's initial-items table, Overview collections and login recovery.
+System workflows still use the built application and prepared database. Page-confirmation checks use a real long
+page and command, assert retained viewport context and sticky geometry after further user scrolling, and preserve
+local dialog reveal and receipt-lifetime checks at their existing client boundary.
 
 Hydration confirms that client owners mounted; it does not admit a feature's independent reads. Before keyboard or
 layout assertions, wait for the current admitted fields and enabled top-level controls of the actual feature or

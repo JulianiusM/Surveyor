@@ -136,9 +136,10 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
         presentInlineNotice(target);
     }
 
-    /** Native inline feedback focuses the alert and scrolls its initiating host.
-     * A disclosure can make the same receipt visible later; unrelated DOM mutations,
-     * locale changes and page-cache restoration must not repeatedly steal focus. */
+    /** Page confirmations stay visible in their sticky host without moving the
+     * user's focus or scroll position. Local section/dialog feedback retains its
+     * deliberate once-per-receipt reveal; disclosure can present it later, while
+     * translation, relocation and page-cache restoration never repeat that reveal. */
     function presentInlineNotice(target: HTMLElement): void {
         if (!mounted || paused || !transient() || !inline?.() || !isElementVisible(target)) return;
         const receipt = renewal();
@@ -146,7 +147,13 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
             ?? target.parentElement ?? target;
         if (presented?.element === target && Object.is(presented.renewal, receipt)) return;
         presented = {element: target, renewal: receipt};
-        target.focus();
+        // The shared page host brings feedback into view through layout. Focusing
+        // or scrolling it would jump away from the action or an active form draft.
+        if (host.id === 'liveAlerts') return;
+
+        // Keep the initiating local host's reveal authoritative. Browser-default
+        // focus scrolling must not add a second, unrelated document movement.
+        target.focus({preventScroll: true});
         host.scrollIntoView(true);
     }
 

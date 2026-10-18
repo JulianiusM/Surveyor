@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P3 Drivers shared entry/header/guest/metadata/settings and list composition reconciled with actual consumers; dynamic reload eligibility updated; prior SPA, backend and document boundaries retained; execution separate; no publication
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts
+verification-scope: shared passive page feedback and route-declared loading composition reconciled alongside P3 consumers and dynamic reload eligibility; original SPA/backend/document boundaries retained; actual execution separate; no publication
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -28,9 +28,11 @@ router, QueryClient, locale instance and bootstrap. Private state never lives in
 
 `serializeBootstrap.ts` escapes inert script-element JSON; `decodeBootstrap` validates every declared field before
 reactive state is created. Feature validators load with their view. Shared type-only contracts remain `.d.ts` files.
-Interactive initial content shows the shared skeleton until client initialization succeeds. Readable results and
-Help retain genuinely functional static HTML, GET search, links and anchors. JavaScript-dependent shell controls wait
-for initialization; an independent localized notice covers disabled, missing or failed JavaScript. Initial Vue error
+Interactive initial content shows a shared page-family skeleton until client initialization succeeds. Route metadata
+selects its decorative composition; scoped missing-data regions reuse the same field/card/table primitives inside
+their existing layout. Presentation never reads private data, admits a command or invents actual record counts.
+Readable results and Help retain genuinely functional static HTML, GET search, links and anchors. JavaScript-dependent
+shell controls wait for initialization; an independent localized notice covers disabled, missing or failed JavaScript. Initial Vue error
 capture covers setup, mount and the first readiness render; later feature failures retain their existing owners.
 
 `mountPreservingDrafts` retains early edits on original admitted controls, with explicit opt-in for non-text/file
@@ -99,6 +101,11 @@ Controls and feature drafts share an explicit value lifetime, including file rel
 `StatusNotice` presents actions with optional injected state and emits actions. Omitting state retains shared
 `ActionButton` initialization and caller-handler guards. Features retain placement, wording and recovery operations.
 These controls introduce no second receipt, query or draft owner.
+
+Page command confirmations preserve viewport context in the shared sticky live-alert host without programmatically
+changing focus or scrolling the document; normal browser scroll anchoring remains available.
+Its grouping wrapper is layout-transparent, leaving the full main content as the sticky boundary. Local section
+and dialog messages retain their own reveal behavior and the same receipt/dismissal/expiry owners.
 `composables/entityLifecycle.ts` supplies `createEntityLifecycle` to Settings, Overview and Event Things to do through
 their existing API, command and current translator. It shares archive/restore confirmation, desired-state dispatch and
 inline success policy. Settings and Event child cards also share its pause/resume operation: only resume asks for the

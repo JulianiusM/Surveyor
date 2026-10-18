@@ -7,6 +7,25 @@ import type {LocalizationContext, Locale, MessageKey, MessageParameters} from '.
 import type {FrontendPageCompletion, FrontendPilotBootstrap} from './FrontendPilotTypes';
 import type {PilotApi} from '../frontend/app/api';
 
+/** Loading geometry is public route presentation, never a projection of admission,
+ * records or capabilities. Matching page and scoped reads consume this same shape. */
+export interface PilotLoadingSkeleton {
+    variant?: 'lines' | 'form' | 'table' | 'cards' | 'article' | 'overview' | 'list-detail'
+        | 'list-create' | 'packing-create' | 'event' | 'event-admin' | 'event-create' | 'identity'
+        | 'login' | 'profile' | 'roster' | 'workflow' | 'guest';
+    rows?: number;
+    columns?: number;
+    hideColumnOnMobile?: number;
+    footer?: 'compact' | 'half' | 'two-thirds' | 'full';
+}
+
+declare module 'vue-router' {
+    interface RouteMeta {
+        /** The declared page family owns both SSR and cold client placeholders. */
+        loadingSkeleton?: PilotLoadingSkeleton;
+    }
+}
+
 /** Browser-only collaborators must never enter the backend bootstrap declaration's import graph. */
 export type PilotRequestScope = Pick<components['schemas']['SessionView'], 'context' | 'csrfToken'> & {
     epoch: number;

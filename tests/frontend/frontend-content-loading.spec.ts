@@ -7,10 +7,12 @@ import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {render} from '../../src/frontend/app/entry-server';
+import LoadingSkeleton from '../../src/frontend/components/LoadingSkeleton.vue';
 import HelpPage from '../../src/frontend/features/help/HelpPage.vue';
 import OverviewPage from '../../src/frontend/features/overview/OverviewPage.vue';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
+import type {PilotLoadingSkeleton} from '../../src/types/FrontendPilotUiTypes';
 
 type Help = components['schemas']['HelpPageData'];
 type Region = components['schemas']['OverviewRegion'];
@@ -93,6 +95,17 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
     return {wrapper, context, request};
 }
 
+/** Geometry stays decorative without mounting feature reads or synthetic controls. */
+function mountedSkeleton(props: PilotLoadingSkeleton & {page?: boolean}) {
+    const context = createPilotContext({session}, false);
+    const wrapper = mount(LoadingSkeleton, {props, global: {
+        plugins: [[I18NextVue, {i18next: context.i18next}]],
+        provide: {[pilotContextKey as symbol]: context},
+    }});
+    cleanups.push(async () => { wrapper.unmount(); context.start()(); });
+    return wrapper;
+}
+
 describe('help and overview progressive content', () => {
     it.each([429, 503])('shows Help read timing and recovers the retained article without navigation or draft loss (%s)', async status => {
         vi.useFakeTimers();
@@ -158,12 +171,102 @@ describe('help and overview progressive content', () => {
 
         const overview = await render('/frontend-pilot', {session});
         expect(overview.html.match(/data-pilot-initial-loading/gu)).toHaveLength(1);
-        expect(overview.html).toContain('data-loading-skeleton="form"');
+        expect(overview.html).toContain('data-loading-skeleton="overview"');
         expect(overview.html).not.toContain('data-collection=');
         expect(overview.html).not.toContain('Owner authority ready');
         expect(overview.html).not.toContain('badge bg-secondary ms-2">0');
         expect(overview.javascriptRequired).toBe(true);
         expect(request).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['/frontend-pilot/packing/' + cardId, 'list-detail', 6],
+        ['/frontend-pilot/drivers/' + cardId, 'list-detail', 5],
+        ['/frontend-pilot/packing/create', 'packing-create', 4],
+        ['/frontend-pilot/drivers/' + cardId + '/duplicate', 'list-create', 0],
+        ['/frontend-pilot/event/' + cardId, 'event', 4],
+        ['/frontend-pilot/event/' + cardId + '/admin', 'event-admin', 4],
+        ['/frontend-pilot/event/create', 'event-create', 0],
+        ['/frontend-pilot/packing/' + cardId + '/guest', 'guest', 0],
+        ['/frontend-pilot/users/login', 'login', 0],
+        ['/frontend-pilot/users/register', 'identity', 0],
+        ['/frontend-pilot/users/forgot-password', 'identity', 0],
+        ['/frontend-pilot/users/reset-password/loading-token', 'identity', 0],
+        ['/frontend-pilot/users/profile', 'profile', 0],
+        ['/frontend-pilot/users/profile/manage', 'roster', 0],
+        ['/frontend-pilot/users/profile/create', 'profile', 0],
+        ['/frontend-pilot/users/profile/migrate/show', 'workflow', 0],
+        ['/frontend-pilot/users/profile/delete', 'workflow', 0],
+    ])('renders the declared %s module shape before client admission', async (path, variant, columns) => {
+        const request = vi.fn(() => { throw new Error('An SSR shape must not read private feature data'); });
+        vi.stubGlobal('fetch', request);
+        const result = await render(String(path), {session});
+        const host = document.createElement('div');
+        host.innerHTML = result.html;
+        const skeleton = host.querySelector('[data-pilot-initial-loading]')!;
+        expect(skeleton.getAttribute('data-loading-skeleton')).toBe(variant);
+        expect(skeleton.getAttribute('data-skeleton-page')).toBe('true');
+        expect(skeleton.querySelectorAll('[role="status"]')).toHaveLength(1);
+        expect(skeleton.querySelectorAll('.pilot-skeleton-page-header')).toHaveLength(1);
+        expect(skeleton.querySelector('input,button,a,form,table,[role="button"],.badge')).toBeNull();
+        expect(skeleton.querySelectorAll('.pilot-skeleton-animated')).toHaveLength(1);
+        if (columns) expect(skeleton.querySelector('.pilot-skeleton-table-heading')!.children).toHaveLength(Number(columns));
+        expect(skeleton.textContent).not.toContain(card.title);
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it.each([5, 6])('retains every declared list column with one status and no duplicate scoped header (%s)', columns => {
+        const shape: PilotLoadingSkeleton = {variant: 'list-detail', rows: 4, columns};
+        const wrapper = mountedSkeleton(shape);
+        expect(wrapper.findAll('[role="status"]')).toHaveLength(1);
+        expect(wrapper.findAll('.pilot-skeleton-page-header')).toHaveLength(0);
+        expect(wrapper.get('.pilot-skeleton-table-heading').element.children).toHaveLength(columns);
+        expect(wrapper.findAll('.pilot-skeleton-table-row')).toHaveLength(4);
+        for (const row of wrapper.findAll('.pilot-skeleton-table-row')) expect(row.element.children).toHaveLength(columns);
+        expect(wrapper.get('.pilot-skeleton-table-grid').attributes('style')).toContain('--pilot-skeleton-columns: ' + columns);
+        expect(wrapper.findAll('.pilot-skeleton-animated')).toHaveLength(1);
+        expect(wrapper.find('input,button,a,form,table').exists()).toBe(false);
+    });
+
+    it('keeps the Event participant email breakpoint opt-in while other tables retain their columns', () => {
+        const roster = mountedSkeleton({variant: 'table', rows: 3, columns: 5, hideColumnOnMobile: 2});
+        expect(roster.get('.pilot-skeleton-table-grid').attributes('style')).toContain('--pilot-skeleton-mobile-columns: 4');
+        for (const row of roster.findAll('.pilot-skeleton-table-heading,.pilot-skeleton-table-row')) {
+            expect(row.element.children).toHaveLength(5);
+            expect(row.findAll('.d-none.d-md-block')).toHaveLength(1);
+            expect(row.element.children[1].classList.contains('d-none')).toBe(true);
+        }
+        const ordinary = mountedSkeleton({variant: 'table', columns: 5});
+        expect(ordinary.find('.d-none').exists()).toBe(false);
+        expect(ordinary.get('.pilot-skeleton-table-grid').attributes('style')).toContain('--pilot-skeleton-mobile-columns: 5');
+    });
+
+    it('shares creation fields while reserving the initial-items table for Packing', () => {
+        const packing = mountedSkeleton({variant: 'packing-create'});
+        const drivers = mountedSkeleton({variant: 'list-create'});
+        expect(packing.findAll('.pilot-skeleton-field')).toHaveLength(4);
+        expect(drivers.findAll('.pilot-skeleton-field')).toHaveLength(4);
+        expect(packing.get('.pilot-skeleton-table-heading').element.children).toHaveLength(4);
+        expect(drivers.find('.pilot-skeleton-table-grid').exists()).toBe(false);
+        expect(packing.findAll('[role="status"]')).toHaveLength(1);
+    });
+
+    it('includes the independent recovery row only in the login composition', () => {
+        const login = mountedSkeleton({variant: 'login', rows: 2});
+        const register = mountedSkeleton({variant: 'identity', rows: 5});
+        expect(login.get('.pilot-skeleton-recovery').findAll('.col-md-6')).toHaveLength(2);
+        expect(register.find('.pilot-skeleton-recovery').exists()).toBe(false);
+        expect(register.findAll('.pilot-skeleton-field')).toHaveLength(5);
+        expect(login.findAll('[role="status"]')).toHaveLength(1);
+    });
+
+    it('matches the guest form width and profile submit width without implying controls', () => {
+        const guest = mountedSkeleton({variant: 'guest', rows: 2});
+        const profile = mountedSkeleton({variant: 'profile', rows: 1});
+        expect(guest.findAll('.pilot-skeleton-field.col-md-8')).toHaveLength(2);
+        expect(guest.find('.pilot-skeleton-form-footer-two-thirds').exists()).toBe(true);
+        expect(profile.find('.pilot-skeleton-form-footer-full').exists()).toBe(true);
+        expect(guest.find('input,button,a,form').exists()).toBe(false);
     });
 
     it('replaces a cold help placeholder without replacing the focused search draft', async () => {

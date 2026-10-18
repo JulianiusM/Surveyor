@@ -259,7 +259,7 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
         <ActionButton v-if="pageAdmission.error.value" variant="outline-light" :state="pageAdmission.retryAction"
             @click="pageAdmission.retry">{{ messages.t('common.retry') }}</ActionButton>
     </PageMessage>
-    <LoadingSkeleton v-else-if="pageAdmission.outcome.value?.kind !== 'render'" variant="form" />
+    <LoadingSkeleton v-else-if="pageAdmission.outcome.value?.kind !== 'render'" v-bind="route.meta.loadingSkeleton" page />
     <PageMessage v-else-if="denied" kind="error" :message="messages.t('common.notAllowed')"
         :read-error="projection.error.value" :retry-at="retryAt" :transient="false">
         <CommandFeedback :feedback="command.feedback" part="uncertain">
@@ -291,7 +291,7 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
                 :action="{state: completion.retryAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="completion.retry">
                 {{ messages.t('state.saved') }}
             </StatusNotice>
-            <LoadingSkeleton v-if="!data && !projection.error.value" variant="form" />
+            <LoadingSkeleton v-if="!data && !projection.error.value" v-bind="route.meta.loadingSkeleton" />
             <template v-if="data">
                 <!-- The account roster is projected explicitly; each action adopts the existing switch command. -->
                 <ul v-if="mode === 'manage'" class="list-group">

@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P3 shared creation/read/reorder/metadata/passenger and settings ownership source-reconciled; Drivers multipart and dynamic reload eligibility corrected; meaningful parity comparison guidance retained; execution belongs to paired review; no publication
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts
+verification-scope: shared feedback placement, static route presentation and module-shaped loading contribution rules source-reconciled alongside P3 adoption, transport/reload and meaningful parity guidance; execution belongs to paired review; no publication
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -702,8 +702,14 @@ admission and independently pending feature projections. Once initialized, Overv
 unopened hidden regions wait. Readable Help retains complete SSR and functional GET search/links. Resource data
 arrives through its owning scoped query without renderer self-HTTP.
 
-Use `LoadingSkeleton` for client initialization and missing pending data. Shapes are decorative, with one localized
-status; they invent no records, membership count or command. Respect reduced motion and existing responsive geometry.
+Use `LoadingSkeleton` for client initialization and missing pending data. Declare the page-family shape once in
+`createApp.ts` route metadata, using the shared `.d.ts` presentation contract; scoped callers reuse that declaration.
+The renderer composes common fields, tables, cards and lists. Initial/admission placeholders include their page
+frame; a scoped body must not duplicate an already rendered header or card. Distinct major regions such as Packing's
+initial-items table and login's recovery section compose the same primitives rather than copying whole templates.
+Shapes are decorative, with one localized status and one animation per loading region; they invent no records,
+membership count or command. Respect reduced motion and actual responsive geometry. Packing/Drivers keep all table
+columns with horizontal clipping; the participant roster alone follows its existing compact email-column behavior.
 Never replace readable same-resource content/drafts on ordinary background reads or show a false empty state.
 Independent siblings render when ready. Initial failure has clear error/Retry; unknown membership has no zero count.
 Identity/resource transitions cannot retain another scope's content. Same-resource locale refresh retains user
@@ -757,8 +763,12 @@ header URL, token or translated filename, recreate the input or emit another sel
 `feedback.ts` binds notices to semantic receipts and owns their ten-second scheduling/cancellation lifetime.
 Repeated outcomes renew; locale/render changes neither renew expiry nor revive dismissed notices. Persistent
 conditions use status semantics and remain visible. Capture
-initiating elements before awaits. Inline notices own Close, focus/scroll placement and a live modal/page fallback
-when their initiator detaches/hides, without restoring revoked controls. Full flashes retain their presentation.
+initiating elements before awaits. Inline notices own Close and a live modal/page fallback when their initiator
+detaches/hides, without restoring revoked controls. Page-level confirmations use the shared sticky live-alert host
+without programmatic focus or document scrolling; normal browser anchoring may preserve viewport context as the
+notice appears. Its unsemantic grouping wrapper has no layout box, so stickiness follows
+the full main content boundary. Local dialog/section notices retain their once-per-receipt reveal behavior; focus
+prevents implicit scrolling before the existing scoped reveal. Full flashes retain their presentation.
 Confirmed destinations/receipts survive failed delivery; warnings clear only through their own successful recovery.
 Dispose timers/listeners and preserve page-cache restoration behavior.
 
@@ -774,6 +784,8 @@ status. Omitted inline/target overrides defer to the receipt; an explicit null t
 Use `StatusNotice`'s `no-margin` input for a zero-margin consumer; adding `mb-0` beside its default `mb-3`
 leaves conflicting owners and can retain the default spacing.
 Check feedback inside real local/global alert hosts so extraction cannot silently move an inline result elsewhere.
+Use a real long page to verify sticky placement and retained viewport context after an actual command; DOM-only
+focus/scroll spies cannot establish CSS containing-block behavior.
 
 Dialogs share one focus trap/dismissal owner, pending close lock and actual invoker return. Features can supply the
 body-field initial target. Tabs retain independent drafts and freeze while necessary work is pending. Avoid

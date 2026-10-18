@@ -690,7 +690,7 @@ function page(next: number): void {
                 >{{ messages.t('common.refresh') }}</ActionButton
             >
         </form>
-        <LoadingSkeleton v-if="initialLoading" variant="cards" />
+        <LoadingSkeleton v-if="initialLoading" variant="cards" :rows="4" />
         <template v-if="displayed">
             <template v-if="displayed.parent">
                 <a

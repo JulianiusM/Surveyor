@@ -192,7 +192,7 @@ async function refresh(): Promise<void> {
             :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">
             {{ messages.t('state.saved') }}
         </StatusNotice>
-        <LoadingSkeleton v-if="section.loading.value" />
+        <LoadingSkeleton v-if="section.loading.value" :variant="admin ? 'roster' : 'cards'" :rows="4" />
         <StatusNotice
             v-if="section.query.error.value"
             kind="warning"

@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved frontend-only pilot corrections and expanded P3 settings/restricted/inherited coverage verified; final 135-case built selection, scoped source/client/ORM evidence and prepared-guide review recorded with failures/limits preserved; no P4-P11 or cutover authority
-source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts
+verification-scope: feedback and module-shaped loading source/client/built/browser evidence and guide review recorded; failed cold development-runtime deadline and first fixture failures retained; prior P3 receipts keep their scope; no publication or cutover authority
+source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
 
@@ -17,6 +17,78 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Feedback and module-shaped loading correction (2026-10-18)
+
+The maintainer directly requests passive sticky page confirmations and module-shaped loading placeholders with
+maximum shared definition and behavior. The [dated amendment](FRONTEND_FOUNDATION_DESIGN.md#direct-feedback-and-loading-shape-correction-2026-10-18)
+preserves the original presentation choice and records this correction; native frontend code, shared backend
+operations and the existing deeper-backend exclusions retain their boundaries.
+
+`feedback.ts` now leaves page confirmations in the shared live-alert host without programmatically focusing or
+scrolling it. Local dialog/section receipts retain their deliberate reveal. The layout-transparent page-notice wrapper gives the sticky
+host the full main-content boundary. Renewal, dismissal, expiry and durable uncertainty retain the same owners.
+
+Static route records in `createApp.ts` declare loading geometry through `FrontendPilotUiTypes.d.ts`; each application
+still creates its own router/context. `LoadingSkeleton` composes the shared primitives for initial/admission and
+cold scoped reads, adding a page frame only before the real header/card exists. Overview retains its outer card
+and two collection sections; Packing/Drivers retain six/five table columns and a shared Quick Add row. Packing alone
+adds its creation-time items table. Login adds recovery, guest fields use their existing wider layout, and the Event
+roster alone preserves its deliberate compact email-column breakpoint. Each region owns one localized status and
+animation. No feature data, authority, interactive controls or record-count claim enters those shapes, and retained
+loaded content, focused drafts, independent reads and static Help keep their existing lifetimes.
+
+Executed evidence so far is bounded: the build, test compiler, three affected frontend files/282 tests and shared
+shell selection/61 tests pass. Engineering review reports 369 global sources, 18 task-owned readability inputs, two
+nontrivial touched operations and zero findings; whitespace checks pass. Independent source review checked actual
+route/scoped adoption, static-record SSR isolation, responsive exceptions and shared feedback lifetimes.
+
+The corrected built-client startup selection passes all 43 cases in 25.7 seconds, including 28 module-shape scenes
+at 1280px/390px. Independent reviewer `/root/architecture_audit` inspected all 28 originals without unexplained layout differences. The corrected
+five real built workflows pass in 50.8 seconds, including both desktop/mobile sticky-confirmation journeys and three
+existing regressions. Client geometry uses controlled document/API delivery and does not establish backend admission.
+The ordinary managed `frontend-pilot` selection passes all 72 built cases in 2.9 minutes. The complementary selection
+passes 64 and appropriately skips one authentication-configuration case in 2.6 minutes. These separate runs cover the
+configured 137 cases; they are not one 137-case execution. The actual disabled-authentication case passes separately
+in 25.8 seconds. The full built-client selection passes all 49 cases in 35.7 seconds, including the startup scenes
+above, and the final test compiler passes. The current documentation-checker tooling file passes all 69 tests in
+20.53 seconds; the earlier review's 26-case tooling receipt retains its distinct scope.
+In both compared frontends, the numeric document offset changes when the notice enters flow, consistent with browser
+anchoring, while the reviewed row stays at exactly the same viewport position. A subsequent user scroll moves that
+row while the alert remains at the top. This verifies retained visible context, not an invariant document-scroll offset.
+The same reviewer inspected all 12 sticky before/confirmation/user-scroll originals and their raw geometry. These
+finite English Chromium scenes do not certify every browser, locale, content length or accessibility state.
+
+The first five selected built workflows passed three and failed the two new native sticky comparisons after one
+Enter edit produced two successful POSTs and duplicate Updated alerts. Native source and request timing support an
+Enter/blur interaction; its precise browser event order was not traced. `IMP-074` records that inherited issue once
+and excludes native repair. The comparison uses the existing single Tab/blur path while preserving its real command
+receipt, single-confirmation, viewport and geometry assertions. Separately, the first startup selection passed 15
+existing cases and failed all 28 new shape cases: that fixture disabled JavaScript, where the approved no-script
+behavior hides skeletons. The corrected fixture holds the actual entry module pending. Neither fixture failure
+establishes a Vue runtime regression.
+
+The complete database-free selection passed 73 files/1,646 tests and failed the real Express/Vite development
+runtime test at its retained 30-second deadline; selecting that integration case alone also fails. Ignored diagnostic
+instrumentation reaches Help SSR after about 19.5 seconds and spends another 8.9 seconds on Sass before the Packing
+read approaches the deadline. No deadlock or root cause is established. No application source, assertion or deadline
+was changed to obtain a pass. Available Node.js is 24.13.0, below the repository's 24.15.0 baseline; this remains a
+failed verification boundary. It must not be described as a complete quick-suite pass. The available strict
+MariaDB 10.11.14 served separate disposable schemas for built verification; root verified and removed only the task's
+labeled container and its anonymous volume afterward.
+
+`IMP-072`/`IMP-073` close on their implemented presentation and finite source/client/browser evidence; `IMP-074`
+remains explicitly excluded native maintenance. No current production defect was identified in the reviewed
+feedback/loading source or 40 inspected originals. The failed development-integration boundary remains a material
+verification limit, not postponed implementation or a claimed repair.
+
+All eight assembled guides received actual independent `/root/architecture_audit` and root semantic/byte review,
+including surrounding frontend guidance and inherited database, backup/restore, operator, release and rollback
+procedures. Their reviewed output digest is `979508759a0d912ceee2aab63ab58ec272f28343020c7204db701bfcce85ab71`;
+five outputs are byte-identical to the preceding reviewed preparation. Exact preparation/input/report identities
+belong to ignored receipts. Current artifacts stay under `artifacts/frontend-feedback-skeleton/`; the P3 receipts
+below retain their original input and execution scopes. No guide publication, cutover, deployment, external-provider
+delivery or exhaustive browser/locale/accessibility acceptance is authorized or certified.
 
 ## Full-pilot review follow-up (2026-10-18)
 

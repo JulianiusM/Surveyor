@@ -1,8 +1,9 @@
 import {createSSRApp, nextTick} from 'vue';
-import {createMemoryHistory, createRouter, createWebHistory} from 'vue-router';
+import {createMemoryHistory, createRouter, createWebHistory, type RouteRecordRaw} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
+import type {PilotLoadingSkeleton} from '../../types/FrontendPilotUiTypes';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from './context';
 import App from './App.vue';
@@ -28,7 +29,76 @@ const DriversCreatePage = () => import('../features/drivers/DriversCreatePage.vu
 
 // One route declaration drives the initial skeleton for every interactive page.
 // Readable admitted errors/completions are classified by the shared context owner.
-const javascriptPage = {javascriptRequired: true};
+function javascriptPage(loadingSkeleton: PilotLoadingSkeleton) {
+    return {javascriptRequired: true, loadingSkeleton};
+}
+
+// Presentation declarations contain only static geometry. Matching cold reads
+// consume this same metadata after initialization; they cannot grant admission.
+const overviewPage = javascriptPage({variant: 'overview'});
+const packingPage = javascriptPage({variant: 'list-detail', rows: 4, columns: 6});
+const driversPage = javascriptPage({variant: 'list-detail', rows: 4, columns: 5});
+const listCreatePage = javascriptPage({variant: 'list-create'});
+const packingCreatePage = javascriptPage({variant: 'packing-create'});
+const eventPage = javascriptPage({variant: 'event'});
+const eventAdminPage = javascriptPage({variant: 'event-admin'});
+const eventCreatePage = javascriptPage({variant: 'event-create'});
+const guestPage = javascriptPage({variant: 'guest', rows: 2});
+const profilePage = javascriptPage({variant: 'profile', rows: 1});
+const profileRosterPage = javascriptPage({variant: 'roster', rows: 3});
+const workflowPage = javascriptPage({variant: 'workflow'});
+const loginPage = javascriptPage({variant: 'login', rows: 2});
+const registerPage = javascriptPage({variant: 'identity', rows: 5});
+const identityMessagePage = javascriptPage({variant: 'workflow'});
+const forgotPage = javascriptPage({variant: 'identity', rows: 1, footer: 'full'});
+const resetPage = javascriptPage({variant: 'identity', rows: 2, footer: 'full'});
+
+/** Static page declarations are shared by application initialization and
+ * component fixtures; reading layout metadata never constructs an application. */
+export const pilotRoutes: readonly RouteRecordRaw[] = [
+    // Only shared content which another actor can change opts into
+    // automatic document replacement. New routes default to explicit recovery.
+    {path: '/frontend-pilot', component: OverviewPage, meta: {...overviewPage, dynamicContent: true}},
+    {path: '/frontend-pilot/home', component: LandingPage},
+    {path: '/frontend-pilot/message', component: CommonPage},
+    {path: '/frontend-pilot/users/profile', component: ProfileAdministrationPage, meta: {...profilePage, profileMode: 'edit'}},
+    {path: '/frontend-pilot/users/profile/manage', component: ProfileAdministrationPage, meta: {...profileRosterPage, profileMode: 'manage'}},
+    {path: '/frontend-pilot/users/profile/create', component: ProfileAdministrationPage, meta: {...profilePage, profileMode: 'create'}},
+    // Warm workflow visits share read-only admission and command lifecycles.
+    // Explicit issuance/confirmation never belongs to Query or route refresh.
+    {path: '/frontend-pilot/users/profile/migrate/request', component: ProfileWorkflowPage, meta: {...workflowPage, profileWorkflow: 'token'}},
+    {path: '/frontend-pilot/users/profile/migrate/show', component: ProfileWorkflowPage,
+        meta: {...workflowPage, profileWorkflow: 'entry', profilePreviewHash: '#migration-preview'}},
+    {path: '/frontend-pilot/users/profile/delete', component: ProfileWorkflowPage, meta: {...workflowPage, profileWorkflow: 'deactivate'}},
+    {path: '/frontend-pilot/users/account/delete', component: ProfileWorkflowPage, meta: {...workflowPage, profileWorkflow: 'delete-account'}},
+    {path: '/frontend-pilot/packing/create', component: PackingCreatePage, meta: packingCreatePage},
+    {path: '/frontend-pilot/packing/:listId/duplicate', component: PackingCreatePage, meta: packingCreatePage},
+    {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry, meta: guestPage},
+    {path: '/frontend-pilot/packing/:listId', component: PackingEntry, meta: {...packingPage, dynamicContent: true}},
+    {path: '/frontend-pilot/event/create', component: EventCreatePage, meta: eventCreatePage},
+    {path: '/frontend-pilot/event/:eventId/duplicate', component: EventCreatePage, meta: eventCreatePage},
+    {path: '/frontend-pilot/event/:eventId/guest', component: EventEntry, meta: guestPage},
+    {path: '/frontend-pilot/event/:eventId/admin', component: EventEntry, meta: {...eventAdminPage, dynamicContent: true}},
+    {path: '/frontend-pilot/event/:eventId', component: EventEntry, meta: {...eventPage, dynamicContent: true}},
+    {path: '/frontend-pilot/drivers/create', component: DriversCreatePage, meta: listCreatePage},
+    {path: '/frontend-pilot/drivers/:listId/duplicate', component: DriversCreatePage, meta: listCreatePage},
+    {path: '/frontend-pilot/drivers/:listId/guest', component: DriversEntry, meta: guestPage},
+    {path: '/frontend-pilot/drivers/:listId', component: DriversEntry, meta: {...driversPage, dynamicContent: true}},
+    {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {...loginPage, identityMode: 'login'}},
+    {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...registerPage, identityMode: 'register'}},
+    {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {...identityMessagePage, identityMode: 'oidc'}},
+    {path: '/frontend-pilot/users/forgot-password', component: IdentityPage, meta: {...forgotPage, identityMode: 'forgot'}},
+    {path: '/frontend-pilot/users/reset-password/:token', component: IdentityPage, meta: {...resetPage, identityMode: 'reset'}},
+    {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {...identityMessagePage, identityMode: 'activate'}},
+    {path: '/frontend-pilot/guest/:guestId/login/:token', component: IdentityPage, meta: {...identityMessagePage, identityMode: 'guest-login'}},
+    {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {...guestPage, identityMode: 'recovery'}},
+    {path: '/frontend-pilot/help', component: HelpPage},
+    {path: '/frontend-pilot/help/:doc', component: HelpPage},
+    // Unknown opt-in destinations retain a readable 404 presentation;
+    // Express owns the corresponding HTTP status on document requests.
+    {path: '/frontend-pilot/:pathMatch(.*)*', component: CommonPage},
+
+];
 
 /** Browsers report retired module URLs differently. Recognize their load failures
  * specifically, so an ordinary component bug does not suggest a release reload. */
@@ -51,49 +121,7 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
     // routing remains a separately authorized cutover after the remaining migrations.
     const router = createRouter({
         history: browser ? createWebHistory() : createMemoryHistory(),
-        routes: [
-            // Only shared content which another actor can change opts into
-            // automatic document replacement. New routes default to explicit recovery.
-            {path: '/frontend-pilot', component: OverviewPage, meta: {...javascriptPage, dynamicContent: true}},
-            {path: '/frontend-pilot/home', component: LandingPage},
-            {path: '/frontend-pilot/message', component: CommonPage},
-            {path: '/frontend-pilot/users/profile', component: ProfileAdministrationPage, meta: {...javascriptPage, profileMode: 'edit'}},
-            {path: '/frontend-pilot/users/profile/manage', component: ProfileAdministrationPage, meta: {...javascriptPage, profileMode: 'manage'}},
-            {path: '/frontend-pilot/users/profile/create', component: ProfileAdministrationPage, meta: {...javascriptPage, profileMode: 'create'}},
-            // Warm workflow visits share read-only admission and command lifecycles.
-            // Explicit issuance/confirmation never belongs to Query or route refresh.
-            {path: '/frontend-pilot/users/profile/migrate/request', component: ProfileWorkflowPage, meta: {...javascriptPage, profileWorkflow: 'token'}},
-            {path: '/frontend-pilot/users/profile/migrate/show', component: ProfileWorkflowPage,
-                meta: {...javascriptPage, profileWorkflow: 'entry', profilePreviewHash: '#migration-preview'}},
-            {path: '/frontend-pilot/users/profile/delete', component: ProfileWorkflowPage, meta: {...javascriptPage, profileWorkflow: 'deactivate'}},
-            {path: '/frontend-pilot/users/account/delete', component: ProfileWorkflowPage, meta: {...javascriptPage, profileWorkflow: 'delete-account'}},
-            {path: '/frontend-pilot/packing/create', component: PackingCreatePage, meta: {javascriptRequired: true}},
-            {path: '/frontend-pilot/packing/:listId/duplicate', component: PackingCreatePage, meta: {javascriptRequired: true}},
-            {path: '/frontend-pilot/packing/:listId/guest', component: PackingEntry, meta: {...javascriptPage}},
-            {path: '/frontend-pilot/packing/:listId', component: PackingEntry, meta: {...javascriptPage, dynamicContent: true}},
-            {path: '/frontend-pilot/event/create', component: EventCreatePage, meta: javascriptPage},
-            {path: '/frontend-pilot/event/:eventId/duplicate', component: EventCreatePage, meta: javascriptPage},
-            {path: '/frontend-pilot/event/:eventId/guest', component: EventEntry, meta: javascriptPage},
-            {path: '/frontend-pilot/event/:eventId/admin', component: EventEntry, meta: {...javascriptPage, dynamicContent: true}},
-            {path: '/frontend-pilot/event/:eventId', component: EventEntry, meta: {...javascriptPage, dynamicContent: true}},
-            {path: '/frontend-pilot/drivers/create', component: DriversCreatePage, meta: javascriptPage},
-            {path: '/frontend-pilot/drivers/:listId/duplicate', component: DriversCreatePage, meta: javascriptPage},
-            {path: '/frontend-pilot/drivers/:listId/guest', component: DriversEntry, meta: javascriptPage},
-            {path: '/frontend-pilot/drivers/:listId', component: DriversEntry, meta: {...javascriptPage, dynamicContent: true}},
-            {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'login'}},
-            {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...javascriptPage, identityMode: 'register'}},
-            {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {...javascriptPage, identityMode: 'oidc'}},
-            {path: '/frontend-pilot/users/forgot-password', component: IdentityPage, meta: {...javascriptPage, identityMode: 'forgot'}},
-            {path: '/frontend-pilot/users/reset-password/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'reset'}},
-            {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'activate'}},
-            {path: '/frontend-pilot/guest/:guestId/login/:token', component: IdentityPage, meta: {...javascriptPage, identityMode: 'guest-login'}},
-            {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {...javascriptPage, identityMode: 'recovery'}},
-            {path: '/frontend-pilot/help', component: HelpPage},
-            {path: '/frontend-pilot/help/:doc', component: HelpPage},
-            // Unknown opt-in destinations retain a readable 404 presentation;
-            // Express owns the corresponding HTTP status on document requests.
-            {path: '/frontend-pilot/:pathMatch(.*)*', component: CommonPage},
-        ],
+        routes: pilotRoutes,
         /** Browser history owns saved positions; independently loaded Overview
          * regions own query-transition focus/scroll. Ordinary fragments and new
          * documents retain Router's explicit target/top behavior. */

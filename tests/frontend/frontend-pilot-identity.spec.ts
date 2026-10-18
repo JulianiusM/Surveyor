@@ -6,6 +6,7 @@ import {createMemoryHistory, createRouter, useRoute} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import {pilotRoutes} from '../../src/frontend/app/createApp';
 import IdentityPage from '../../src/frontend/features/identity/IdentityPage.vue';
 import GuestEntryPage from '../../src/frontend/features/identity/GuestEntryPage.vue';
 import {usePackingApi} from '../../src/frontend/features/packing/api';
@@ -78,6 +79,10 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
         {path: '/frontend-pilot/packing/create', component: defineComponent({template: '<p>Create</p>'})},
         {path: '/frontend-pilot/help', component: defineComponent({template: '<p>Help</p>'})},
     ]});
+    // Substitute fixture views without copying production loading declarations.
+    for (const route of router.getRoutes()) {
+        route.meta.loadingSkeleton = pilotRoutes.find(candidate => candidate.path === route.path)?.meta?.loadingSkeleton;
+    }
     const stopInitialDocument = observeInitialDocument(context, router);
     await router.push(path);
     await router.isReady();
@@ -1320,7 +1325,7 @@ describe('identity forms and packing overview navigation', () => {
                 messageKey: 'api:errors.TOKEN_INVALID', params: {}}, 401);
         });
         expect(wrapper.find('#password').exists()).toBe(false);
-        expect(wrapper.find('[data-loading-skeleton="form"]').exists()).toBe(true);
+        expect(wrapper.find('[data-loading-skeleton="identity"]').exists()).toBe(true);
         await router.push('/frontend-pilot/users/reset-password/second-token');
         await flushPromises();
         expect(wrapper.get('h1').text()).toBe('Error');

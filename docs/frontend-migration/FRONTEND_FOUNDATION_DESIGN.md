@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: direct frontend-only implementation and native-isolation clarification recorded alongside P3 trigger; existing decisions, backend exclusions and separate later-phase/cutover authority retained; actual execution belongs to paired review
-source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
+verification-scope: direct feedback placement and module-shaped loading correction recorded alongside frontend-only native isolation and P3 trigger; original choices, backend exclusions and separate later-phase/cutover authority retained; execution belongs to paired review
+source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
 
@@ -718,6 +718,24 @@ permission/administrator orchestration remains recorded once as `IMP-070` in the
 refactored or made a parity-migration prerequisite. This is an explicit scope exclusion, not an unanswered approval
 request. Bounded readability corrections preserve existing behavior and do not authorize that extraction. Existing
 backend-remedy exclusions, P4–P11 triggers, production-guide freeze and separate cutover/publication decisions remain.
+
+### Direct feedback and loading-shape correction (2026-10-18)
+
+The maintainer directly requests that ordinary actions preserve the current page position, that page confirmations
+remain sticky at the screen top as in the native reference, and that loading placeholders approximate each module's
+actual layout through shared definitions and behavior. This refines presentation within the implemented frontend;
+it does not change operation outcomes, authority, drafts, native code or the existing backend-scope exclusions.
+
+Page-level command confirmations preserve viewport context in the shared live-alert host without programmatically
+focusing it or scrolling the document. Normal browser scroll anchoring may compensate for inserted feedback.
+Local dialog/section feedback retains its scoped reveal behavior, and receipt renewal, dismissal, expiry and durable
+uncertainty retain their existing owners. The host's containing block must span the actual page content.
+
+Route metadata selects reusable page-family skeleton compositions for initial rendering; scoped missing-data
+regions use the same decorative primitives without duplicating an existing header or card. Shared presentation owns
+responsive geometry, accessibility and reduced motion. Placeholder shape never grants authority, invents record
+counts or replaces readable content/drafts during a background read. The original initialization/static-Help and
+independent-region requirements remain unchanged. Actual verification belongs to the paired review.
 
 ## Cutover retirement inventory
 

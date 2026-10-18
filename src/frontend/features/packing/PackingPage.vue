@@ -412,7 +412,7 @@ const reorder = useListReorder({
             }}</StatusNotice>
             <!-- Shape the missing detail region without inventing items or capabilities.
                  Loaded rows and drafts remain mounted throughout background reads. -->
-            <LoadingSkeleton v-if="initialLoading" variant="table" :rows="4" />
+            <LoadingSkeleton v-if="initialLoading" v-bind="route.meta.loadingSkeleton" />
             <template v-if="data">
                 <!-- Storage failures are durable and cannot expire into silent loss.
                      Retry touches only personal checks, keeping server commands independent. -->

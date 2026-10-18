@@ -6,8 +6,8 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit P3 Drivers scope, shared list consumers and ordinary SPA source adoption reconciled; direct E1 exclusion and native/backend boundaries retained; scoped execution belongs to paired review; no P4-P11 or cutover authorization
-source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/
+verification-scope: shared feedback placement, route-declared module loading and P3 consumers source-reconciled; direct E1 exclusion and native/backend boundaries retained; scoped execution belongs to paired review; no P4-P11 or cutover authorization
+source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
 
@@ -206,9 +206,12 @@ continues after that boundary. Overview waits for session bootstrap, then each a
 parallel. Hidden regions start on opening. Unknown membership never renders zero/count/empty assertions; a ready region need not wait for a
 slow sibling. Help retains complete server content.
 
-`LoadingSkeleton` supplies shared field/table/card/article/line shapes, a localized status, responsive geometry and
-reduced-motion behavior. Use it for client initialization or missing pending data. Background reads retain scoped
-confirmed content and drafts; validated denial clears protected content. Lazy navigation can show shared progress without discarding work.
+`LoadingSkeleton` composes page-family layouts from shared field/table/card/list/article/line shapes. Static route
+metadata supplies the same presentation to initial rendering and scoped cold reads, with a page frame only where
+the real header/card has not already rendered. One localized status and one animation belong to each loading region;
+responsive columns and reduced motion remain shared. Use it for client initialization or missing pending data.
+Background reads retain scoped confirmed content and drafts; validated denial clears protected content. Lazy
+navigation can show shared progress without discarding work.
 
 ## Identity, refresh and edits
 

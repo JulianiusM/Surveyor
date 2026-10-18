@@ -269,7 +269,7 @@ function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, 
     <PageMessage v-if="admission.outcome.value?.kind === 'denied'" kind="error" :message="messages.t('common.notAllowed')" :renewal="admission.outcome.value" />
     <StatusNotice v-else-if="admission.error.value" kind="warning" :read-error="admission.error.value" :retry-at="admissionRetryAt"
         :action="{state: admission.retryAction, label: messages.t('common.retry')}" @action="admission.retry">{{ messages.t('state.loadFailed') }}</StatusNotice>
-    <LoadingSkeleton v-else-if="!workflow" variant="form" :rows="3" />
+    <LoadingSkeleton v-else-if="!workflow" v-bind="route.meta.loadingSkeleton" page />
     <CommonPage v-else-if="denialPage" :page="denialPage" />
     <template v-else-if="workflow">
         <StatusNotice v-if="readError" kind="danger" :read-error="readError" :retry-at="readRetryAt"

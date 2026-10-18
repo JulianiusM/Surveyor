@@ -160,7 +160,8 @@ function collectCreation() {
                 :action="{state: submissionRetryAction, label: messages.t('common.retry')}" @action="retrySubmissionAdmission">
                 {{ messages.t(submissionAdmittedAt ? 'state.stale' : 'state.loadFailed') }}
             </StatusNotice>
-            <LoadingSkeleton v-if="!definitions && baseline === null && entry.outcome.value?.kind !== 'denied'" variant="form" :rows="5" />
+            <LoadingSkeleton v-if="!definitions && baseline === null && entry.outcome.value?.kind !== 'denied'"
+                v-bind="route.meta.loadingSkeleton" />
 
             <!-- A denied read disables submission without replacing the mounted
                  fields or chooser. Retry admits authority; it never creates. -->

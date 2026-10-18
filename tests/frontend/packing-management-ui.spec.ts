@@ -6,6 +6,7 @@ import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
+import {pilotRoutes} from '../../src/frontend/app/createApp';
 import App from '../../src/frontend/app/App.vue';
 import InlineCell from '../../src/frontend/components/InlineCell.vue';
 import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
@@ -85,6 +86,11 @@ async function mounted(component: Component, props: Record<string, unknown> | ((
         {path: '/frontend-pilot/help', component: defineComponent({template: '<p>Help destination</p>'})},
         {path: '/away', component: defineComponent({template: '<p>Away</p>'})},
     ]});
+    // Keep the real presentation declarations while substituting the component
+    // under test. Loading counts/columns must not acquire a second test inventory.
+    for (const route of router.getRoutes()) {
+        route.meta.loadingSkeleton = pilotRoutes.find(candidate => candidate.path === route.path)?.meta?.loadingSkeleton;
+    }
     await router.push(path);
     const stopInitialDocument = observeInitialDocument(context, router);
     const root = mount(withShell ? App : defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
@@ -652,7 +658,7 @@ describe('progressive packing loading', () => {
         const delayed = deferredResponse();
         const path = duplicate ? `/frontend-pilot/packing/${id}/duplicate` : '/frontend-pilot/packing/create';
         const {wrapper} = await mounted(PackingCreatePage, {}, async () => delayed.response, path);
-        const initialForm = 'section.card > .card-body > [data-loading-skeleton="form"]';
+        const initialForm = 'section.card > .card-body > [data-loading-skeleton="packing-create"]';
         expect(wrapper.find(initialForm).exists()).toBe(true);
         expect(wrapper.find('form').exists()).toBe(false);
         delayed.resolve(json(duplicate ? {title: 'Empty source', description: null, eventId: null,

@@ -168,6 +168,90 @@ async function settleStartup(page: Page): Promise<void> {
     });
 }
 
+test.describe('page-shaped initial loading', function pageShapedInitialLoading() {
+    // Hold the real entry module pending while the independent startup monitor
+    // keeps SSR visible. Disabled JavaScript intentionally hides interactive
+    // content, so it cannot provide the approved loading presentation boundary.
+    // These public fixtures own browser layout, not backend admission.
+    const resourceId = '22222222-2222-4222-8222-222222222222';
+    const pages = [
+        {name: 'Overview', path: '', variant: 'overview'},
+        {name: 'Packing detail', path: '/packing/' + resourceId, variant: 'list-detail', columns: 6},
+        {name: 'Drivers detail', path: '/drivers/' + resourceId, variant: 'list-detail', columns: 5},
+        {name: 'Packing creation', path: '/packing/create', variant: 'packing-create', columns: 4},
+        {name: 'Drivers creation', path: '/drivers/create', variant: 'list-create'},
+        {name: 'Event detail', path: '/event/' + resourceId, variant: 'event'},
+        {name: 'Event administration', path: '/event/' + resourceId + '/admin', variant: 'event-admin'},
+        {name: 'Event creation', path: '/event/create', variant: 'event-create'},
+        {name: 'Login', path: '/users/login', variant: 'login'},
+        {name: 'Registration', path: '/users/register', variant: 'identity'},
+        {name: 'Profile', path: '/users/profile', variant: 'profile'},
+        {name: 'Profile roster', path: '/users/profile/manage', variant: 'roster'},
+        {name: 'Profile workflow', path: '/users/profile/migrate/show', variant: 'workflow'},
+        {name: 'Guest entry', path: '/packing/' + resourceId + '/guest', variant: 'guest'},
+    ];
+
+    for (const width of [1280, 390]) {
+        for (const sample of pages) {
+            test(`${sample.name} skeleton follows its page layout at ${width}px`, async function inspectInitialPageShape({page}, info) {
+                await page.setViewportSize({width, height: 900});
+                const delivery = await startupDocument(page, '/frontend-pilot' + sample.path, {session: startupSession()});
+                const entry = await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u);
+                try {
+                    await page.goto(delivery.url, {waitUntil: 'commit'});
+                    await entry.started;
+                    const loading = page.locator('[data-pilot-initial-loading]');
+                    await expect(loading).toHaveAttribute('data-loading-skeleton', sample.variant);
+                    await expect(loading).toBeVisible();
+                    await expect(loading.locator('[role="status"]')).toHaveCount(1);
+                    await expect(loading.locator('.pilot-skeleton-animated')).toHaveCount(1);
+                    await expect(loading.locator('.pilot-skeleton-page-header')).toHaveCount(1);
+                    await expect(page.locator('main input, main select, main textarea, main form')).toHaveCount(0);
+
+                    // Column geometry must follow the actual module. Packing and
+                    // Drivers retain every column on phones rather than hiding data.
+                    if (sample.columns) {
+                        const table = loading.locator('.pilot-skeleton-table-grid').first();
+                        await expect(table).toHaveAttribute('data-skeleton-columns', String(sample.columns));
+                        const cells = table.locator('.pilot-skeleton-table-heading > .pilot-skeleton-bar');
+                        await expect(cells).toHaveCount(sample.columns);
+                        for (const cell of await cells.all()) {
+                            expect(await cell.evaluate(element => getComputedStyle(element).display)).not.toBe('none');
+                        }
+                        if (width === 390) {
+                            expect(await table.locator('..').evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+                        }
+                    }
+
+                    const geometry = await loading.evaluate(function inspectSkeletonGeometry(element) {
+                        const bounds = element.getBoundingClientRect();
+                        return {width: bounds.width, height: bounds.height, viewport: window.innerWidth,
+                            document: document.documentElement.scrollWidth,
+                            columns: Array.from(element.querySelectorAll('[data-skeleton-columns]'), function columnGeometry(grid) {
+                                return {columns: grid.getAttribute('data-skeleton-columns'), width: grid.getBoundingClientRect().width};
+                            })};
+                    });
+                    expect(geometry.width).toBeGreaterThan(width * .9);
+                    expect(geometry.height).toBeGreaterThan(150);
+                    expect(geometry.document).toBeLessThanOrEqual(geometry.viewport + 1);
+                    if (sample.variant === 'overview' && width === 1280) {
+                        const animation = loading.locator('.pilot-skeleton-animated');
+                        expect(await animation.evaluate(element => getComputedStyle(element).animationName)).toBe('pilot-skeleton-pulse');
+                        await page.emulateMedia({reducedMotion: 'reduce'});
+                        expect(await animation.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+                        await page.emulateMedia({reducedMotion: 'no-preference'});
+                    }
+                    await info.attach('initial-shape-geometry', {body: JSON.stringify(geometry, null, 2), contentType: 'application/json'});
+                    const screenshot = info.outputPath('initial-page-shape.png');
+                    await page.screenshot({path: screenshot, fullPage: true, animations: 'disabled'});
+                    await info.attach('initial-page-shape', {path: screenshot, contentType: 'image/png'});
+                    expect(delivery.observed.commands).toBe(0);
+                } finally { entry.restore(); }
+            });
+        }
+    }
+});
+
 test('initial startup retains editable static Help search and recovers only after one accepted discard confirmation', async ({page}) => {
     const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synthetic Help',
         content: '<h2 id="task">Synthetic task</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};

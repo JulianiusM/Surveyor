@@ -404,7 +404,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
     <PageMessage v-else-if="finished" :kind="mode === 'register' ? 'info' : 'success'" :message="messages.t(finishedMessage)" />
     <PageMessage v-else-if="pageCompleted" kind="success" :renewal="context.pageCompletion.value"
         :message="messages.t(mode === 'reset' ? 'auth.resetDone' : 'auth.recoverySent')" />
-    <LoadingSkeleton v-else-if="mode === 'recovery'" variant="form" />
+    <LoadingSkeleton v-else-if="mode === 'recovery'" v-bind="route.meta.loadingSkeleton" page />
     <template v-else>
         <!-- A delivered command stays confirmed even if its destination cannot load.
              Retry belongs to the shared receipt and never resubmits credentials or mail. -->
@@ -425,7 +425,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                 <!-- After initial JavaScript initialization, only admission-dependent
                      fields wait. Errors retain their existing presentation owner. -->
                 <LoadingSkeleton v-if="needsOidc || mode === 'reset' && !resetAllowed"
-                    :variant="needsOidc ? 'lines' : 'form'" :rows="2" />
+                    v-bind="route.meta.loadingSkeleton" />
                 <CommandFeedback :feedback="command.feedback" part="uncertain"
                     :action="{state: command.recoveryAction, label: messages.t('common.refresh'), class: 'ms-2'}"
                     @action="refreshIdentityState">

@@ -166,7 +166,9 @@ function dismissPersonalLink(): void {
             <!-- Delivery progress supplements the current route. Replacing RouterView here
                  would discard mounted edits and turn navigation latency into input loss. -->
             <LoadingSkeleton v-if="ready && pendingNavigation" class="pilot-navigation-loading mb-3" :rows="1" />
-            <LoadingSkeleton v-if="ready && initialLoading" data-pilot-initial-loading variant="form" />
+            <!-- Route presentation selects the same public layout for SSR and hydration.
+                 The renderer owns shared geometry; no private read or command is implied. -->
+            <LoadingSkeleton v-if="ready && initialLoading" data-pilot-initial-loading v-bind="route.meta.loadingSkeleton" page />
             <CommonPage v-else-if="ready && commonPage" :page="commonPage" />
             <RouterView v-else-if="ready" :key="epoch" />
             <section v-else class="card bg-dark text-white p-4">

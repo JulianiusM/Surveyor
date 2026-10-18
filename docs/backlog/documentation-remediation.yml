@@ -1761,6 +1761,81 @@ implementation_defects:
       four affected client files/97 tests passed; all 22 Drivers built cases then passed, including both previously
       failing inherited scenes. Root and independent reviewers inspected the corrected source and final desktop/mobile
       originals without unexplained dialog differences. The strict comparator and native/backend behavior were unchanged.
+  - id: IMP-072
+    status: closed
+    closed_on: 2026-10-18
+    discovered_on: 2026-10-18
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-feedback-skeleton
+    out_of_scope_for_documentation_migration: true
+    title: Page confirmations jump to the header and lose sticky placement
+    evidence:
+      - The maintainer reports action-induced page jumps and confirmations that do not remain at the screen top.
+      - App.vue nests the sticky live-alert host in a short grouping wrapper; feedback.ts focuses the notice and
+        scrolls its host, including the page fallback. Native places that host within the full main content.
+    impact: An ordinary action can move the visitor away from the controls and confirmed result being reviewed.
+    authorization: The maintainer directly requests the frontend correction while retaining native isolation and
+      shared Vue ownership. Local dialog/section reveal and existing receipt lifetimes remain in scope for preservation.
+    documentation_contract: Page confirmations stay sticky and preserve viewport context without programmatic focus
+      or document scrolling; browser anchoring remains available. Local feedback retains scoped reveal, and renewal,
+      dismissal, expiry and durable uncertainty remain shared.
+    closes_when:
+      - Real built-app desktop/mobile commands retain viewport context and show the live confirmation at the screen top.
+      - Client checks retain local reveal, renewal, dismissal, expiry and durable outcome behavior.
+    disposition: The shared feedback owner skips programmatic focus/scroll for page confirmations, and the
+      layout-transparent wrapper gives their sticky host the full main boundary. The 61-case mounted shell selection
+      and five selected built workflows pass, including both desktop/mobile native/Vue sticky comparisons. Raw geometry
+      and 12 inspected originals retain the row's viewport position and the alert at the top through user scrolling.
+      Browser anchoring may change the numeric document offset; receipt lifetimes, local reveal and native code remain.
+  - id: IMP-073
+    status: closed
+    closed_on: 2026-10-18
+    discovered_on: 2026-10-18
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-feedback-skeleton
+    out_of_scope_for_documentation_migration: true
+    title: Loading placeholders do not follow their module layout
+    evidence:
+      - App.vue selects a generic form for every initial interactive page, including Overview and list detail.
+      - LoadingSkeleton.vue fixes table placeholders at five equal columns; pilot.css hides columns four and later
+        on mobile even though the actual Packing and Drivers tables retain six and five columns with overflow.
+    impact: Initial and cold scoped loading gives the wrong page silhouette and inconsistent responsive structure.
+    authorization: The maintainer directly requests module-shaped placeholders with centralized reusable definition
+      and behavior, preserving existing initialization, independent reads, static Help and background draft retention.
+    documentation_contract: Shared page-family compositions and primitives approximate the actual module structure
+      without data, authority, fake controls or record-count claims.
+    closes_when:
+      - Initial and cold scoped loading use the declared page-family shapes and actual table-column structure.
+      - Desktop/mobile browser evidence and client/SSR checks protect geometry, accessible status, reduced motion,
+        coherent hydration and retained loaded content/drafts.
+    disposition: Static route metadata and the existing shared declaration contract select page-family compositions
+      from one decorative renderer. Initial/admission and scoped callers share geometry without duplicating their real
+      frames or replacing retained data/drafts. The three affected frontend files pass 282 tests; the full built-client
+      selection passes 49, including 28 desktop/mobile shape scenes with inspected originals. Actual columns, scoped
+      status/animation, reduced motion, hydration and the distinct Packing/login/guest/roster regions are asserted.
+      The separate cold development-server integration deadline failure remains disclosed in the paired review.
+  - id: IMP-074
+    status: open
+    discovered_on: 2026-10-18
+    severity: medium
+    owner: native frontend maintainers
+    package: native-inline-edit
+    out_of_scope_for_documentation_migration: true
+    title: Native Enter save can dispatch duplicate description updates and confirmations
+    evidence:
+      - The first built desktop/mobile sticky-feedback checks each observed two successful native description POSTs
+        and two Updated alerts after one Enter save, failing the deliberate single-confirmation assertion.
+      - src/public/js/shared/inline-edit.ts registers the same asynchronous save for Enter and blur without an
+        in-flight guard. Source and request timing support an Enter/blur interaction; exact browser event order
+        was not traced, so the second dispatch's cause remains a supported diagnosis rather than direct observation.
+    impact: One native edit can repeat the update and show duplicate confirmations in the unchanged comparison UI.
+    authorization: Native frontend code remains unchanged under the explicit migration boundary; a native repair
+      is excluded from this frontend correction and is not a migration prerequisite or pending approval request.
+    documentation_contract: A deliberate native save should submit its changed value once and present one confirmation.
+    disposition: Recorded once for separate native maintenance. The sticky-placement comparison uses the existing
+      single Tab/blur save path while retaining the real command receipt, single confirmation, viewport and sticky-geometry assertions.
 findings:
   - id: DESIGN-EVENT-CREATION-TRANSPORT
     status: closed

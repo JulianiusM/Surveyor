@@ -279,7 +279,7 @@ function collectCreation() {
             </StatusNotice>
             <!-- Both create and duplicate use one admitted initial projection. The
                  event picker loads independently; a refresh never replaces this draft. -->
-            <LoadingSkeleton v-if="initialLoading" variant="form" :rows="5" />
+            <LoadingSkeleton v-if="initialLoading" v-bind="route.meta.loadingSkeleton" />
             <!-- An initialized local draft keeps its native controls/FileList on
                  confirmed denial. Retire server-owned definitions below and disable
                  submission until fresh admission; a cold denied visit has no form. -->

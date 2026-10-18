@@ -212,6 +212,7 @@ describe('native shell and help presentation contract', () => {
     it('renews repeated native no-change feedback for a complete interval without inventing a write', async () => {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
+        const focus = vi.spyOn(HTMLElement.prototype, 'focus');
         const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
         const context = createPilotContext({session}, true);
         const host = defineComponent({
@@ -232,6 +233,7 @@ describe('native shell and help presentation contract', () => {
             const alert = wrapper.get<HTMLElement>('.alert-info').element;
             const feedback = wrapper.get<HTMLElement>('[data-command-feedback]').element;
             expect(document.activeElement).toBe(alert);
+            expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
             expect(scroll).toHaveBeenCalledExactlyOnceWith(true);
             expect(scroll.mock.contexts[0]).toBe(feedback);
 
@@ -250,6 +252,7 @@ describe('native shell and help presentation contract', () => {
             expect(wrapper.get('.btn-close').attributes('data-bs-dismiss')).toBeUndefined();
             cancelAlertDismissal(nativeAlert);
             nativeHost.remove();
+            focus.mockClear();
             scroll.mockClear();
 
             await vi.advanceTimersByTimeAsync(9000);
@@ -257,6 +260,7 @@ describe('native shell and help presentation contract', () => {
             await flushPromises();
             expect(scroll).toHaveBeenCalledExactlyOnceWith(true);
             expect(document.activeElement).toBe(alert);
+            expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
             await vi.advanceTimersByTimeAsync(9999);
             expect(wrapper.find('.alert-info').exists()).toBe(true);
             await vi.advanceTimersByTimeAsync(1);
@@ -311,6 +315,115 @@ describe('native shell and help presentation contract', () => {
             expect(message.value).toBe('');
             expect(wrapper.find('.alert').exists()).toBe(false);
         } finally { wrapper.unmount(); ordinary.unmount(); context.start()(); }
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('presents page confirmations without moving focus or scrolling, while preserving renewal and dismissal', async function passivePageConfirmation() {
+        vi.useFakeTimers();
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
+        const page = document.createElement('main');
+        page.innerHTML = '<input aria-label="Retained draft" value="Unsaved input"><div id="liveAlerts"></div>';
+        document.body.appendChild(page);
+        const input = page.querySelector<HTMLInputElement>('input')!;
+        const target = page.querySelector<HTMLElement>('#liveAlerts')!;
+        input.focus();
+        const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+        const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+        const shown = ref(true);
+        const receipt = ref(0);
+        const pending = ref(true);
+        const dismiss = vi.fn(function clearPageConfirmation() { shown.value = false; });
+        const wrapper = mount(defineComponent({components: {StatusNotice},
+            setup: function bindPageConfirmation() { return {shown, receipt, pending, target, dismiss}; },
+            template: '<StatusNotice v-if="shown" inline transient :target="target" :renewal="receipt"'
+                + ' :disabled="pending" kind="success" @dismiss="dismiss">Page action saved</StatusNotice>',
+        }), {attachTo: page});
+        try {
+            await flushPromises();
+            const alert = target.querySelector<HTMLElement>('.alert')!;
+            expect(alert.textContent).toBe('Page action saved');
+            expect(alert.role).toBe('alert');
+            expect(document.activeElement).toBe(input);
+            expect(input.value).toBe('Unsaved input');
+            expect(focus).not.toHaveBeenCalled();
+            expect(scroll).not.toHaveBeenCalled();
+
+            // Repeated outcomes still receive a full independent lifetime. Neither
+            // their arrival nor unrelated render changes can steal the draft's focus.
+            await vi.advanceTimersByTimeAsync(9000);
+            receipt.value++;
+            await flushPromises();
+            await vi.advanceTimersByTimeAsync(9999);
+            expect(dismiss).not.toHaveBeenCalled();
+            expect(target.querySelector('.alert')).toBe(alert);
+            expect(document.activeElement).toBe(input);
+            expect(focus).not.toHaveBeenCalled();
+            expect(scroll).not.toHaveBeenCalled();
+
+            // Pending commands retain the existing Close lock. A deliberate
+            // dismissal clears the reactive owner and cancels only this timer.
+            const close = alert.querySelector<HTMLButtonElement>('.btn-close')!;
+            expect(close.disabled).toBe(true);
+            close.click();
+            expect(dismiss).not.toHaveBeenCalled();
+            pending.value = false;
+            await flushPromises();
+            close.click();
+            await flushPromises();
+            expect(dismiss).toHaveBeenCalledOnce();
+            expect(target.querySelector('.alert')).toBeNull();
+            expect(vi.getTimerCount()).toBe(0);
+
+            // A later result remains passive and expires through the same owner,
+            // rather than leaving a sticky DOM node after its receipt has retired.
+            receipt.value++;
+            shown.value = true;
+            await flushPromises();
+            await vi.advanceTimersByTimeAsync(10_000);
+            await flushPromises();
+            expect(dismiss).toHaveBeenCalledTimes(2);
+            expect(target.querySelector('.alert')).toBeNull();
+            expect(document.activeElement).toBe(input);
+            expect(focus).not.toHaveBeenCalled();
+            expect(scroll).not.toHaveBeenCalled();
+        } finally { wrapper.unmount(); page.remove(); }
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('keeps uncertain outcomes durable and local when passive page confirmation expires', async function preserveUncertainOutcome() {
+        vi.useFakeTimers();
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
+        const page = document.createElement('main');
+        page.innerHTML = '<input aria-label="Review draft"><div id="liveAlerts"></div>';
+        document.body.appendChild(page);
+        const input = page.querySelector<HTMLInputElement>('input')!;
+        const target = page.querySelector<HTMLElement>('#liveAlerts')!;
+        input.focus();
+        const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+        const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+        const confirmed = ref(true);
+        const wrapper = mount(defineComponent({components: {StatusNotice},
+            setup: function bindIndependentOutcomes() { return {confirmed, target}; },
+            template: '<section><StatusNotice v-if="confirmed" inline transient :target="target"'
+                + ' kind="success" @dismiss="confirmed = false">Confirmed action</StatusNotice>'
+                + '<StatusNotice inline notice="state.unknownOutcome" :target="target" kind="warning">'
+                + 'Review the uncertain action before continuing.</StatusNotice></section>',
+        }), {attachTo: page});
+        try {
+            await flushPromises();
+            expect(target.querySelector('.alert')?.textContent).toBe('Confirmed action');
+            const unknown = wrapper.get('.status-notice');
+            expect(unknown.attributes('role')).toBe('status');
+            expect(unknown.find('.btn-close').exists()).toBe(false);
+            expect(target.contains(unknown.element)).toBe(false);
+            await vi.advanceTimersByTimeAsync(20_000);
+            await flushPromises();
+            expect(target.querySelector('.alert')).toBeNull();
+            expect(wrapper.get('.status-notice').element).toBe(unknown.element);
+            expect(document.activeElement).toBe(input);
+            expect(focus).not.toHaveBeenCalled();
+            expect(scroll).not.toHaveBeenCalled();
+        } finally { wrapper.unmount(); page.remove(); }
         expect(vi.getTimerCount()).toBe(0);
     });
 

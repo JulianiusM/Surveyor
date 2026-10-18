@@ -131,7 +131,7 @@ function statusClass(status: Link['status']): string {
                 </h2>
                 <div v-show="expanded" :id="`${id}-links`" class="accordion-collapse">
                     <div class="accordion-body bg-dark">
-                        <LoadingSkeleton v-if="section.loading.value" />
+                        <LoadingSkeleton v-if="section.loading.value" variant="table" :columns="5" :rows="3" />
                         <StatusNotice v-if="section.query.error.value" kind="warning"
                             :action="{state: refreshAction, label: messages.t('common.retry')}"
                             :retry-at="section.retryAt.value" @action="refresh">{{ section.failure.value ?? messages.t('state.stale') }}</StatusNotice>

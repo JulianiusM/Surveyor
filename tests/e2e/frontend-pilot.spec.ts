@@ -1,6 +1,7 @@
 import {expect, test, type APIRequestContext, type Dialog, type Locator, type Page, type Request, type Route, type TestInfo} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
+import {writeFile} from 'node:fs/promises';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
 import {createResourceViaForm, expectVisiblePresentation, loginForE2E, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createBrowserReadGate as readGate, waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
@@ -131,6 +132,176 @@ async function captureMatchedPresentation(page: Page, info: TestInfo, name: stri
     await info.attach(name, {path, contentType: 'image/png'});
     await info.attach(name + '-presentation', {body: JSON.stringify(presentation, null, 2), contentType: 'application/json'});
     return presentation;
+}
+
+/** Record the real viewport context without scrolling or focusing the surface.
+ * The browser supplies sticky geometry and document position; screenshots and
+ * raw measurements remain available when a subsequent assertion fails. */
+async function capturePageFeedbackGeometry(page: Page, info: TestInfo, name: string, row: Locator,
+    control: Locator, focusEvents: number) {
+    const geometry = await row.evaluate(function readPageFeedbackGeometry(element) {
+        const host = document.getElementById('liveAlerts');
+        if (!host) throw new Error('Expected the existing page feedback host.');
+        const alert = host.querySelector<HTMLElement>('.alert');
+        return {scrollY: window.scrollY, viewport: {width: window.innerWidth, height: window.innerHeight},
+            row: bounds(element), host: bounds(host), alert: alert ? bounds(alert) : null,
+            alertText: alert?.textContent?.trim() ?? null,
+            focusedGlobalAlert: document.activeElement instanceof Element && host.contains(document.activeElement),
+            documentMarker: document.documentElement.dataset.pilotDocument};
+
+        /** Keep only observable layout, excluding request/session/private data. */
+        function bounds(target: Element) {
+            const box = target.getBoundingClientRect();
+            return {x: box.x, y: box.y, width: box.width, height: box.height};
+        }
+    });
+    const result = {...geometry, control: await control.boundingBox(), globalFocusEvents: focusEvents};
+    const screenshot = info.outputPath(name + '.png');
+    await page.screenshot({path: screenshot, animations: 'disabled'});
+    await writeFile(info.outputPath(name + '.json'), JSON.stringify(result, null, 2));
+    await info.attach(name, {path: screenshot, contentType: 'image/png'});
+    await info.attach(name + '-geometry', {body: JSON.stringify(result, null, 2), contentType: 'application/json'});
+    return result;
+}
+
+for (const width of [1280, 390]) {
+    test(`keeps native edit and Vue assignment feedback sticky without losing the scrolled row at ${width}px`, async function stickyPageFeedback({page}, info) {
+        test.setTimeout(60_000);
+        await page.setViewportSize({width, height: 900});
+        await loginForE2E(page.request, createE2ELogin());
+        const input = createE2EPackingList();
+        input.title = input.form.title = `Sticky feedback ${randomUUID().slice(0, 8)}`;
+        const items = Array.from({length: 40}, function createScrollableItem(_value, index) {
+            return {title: `Scroll item ${index + 1}`, description: 'Shared equipment', maxAssignees: 1, requiredByAll: false};
+        });
+        // Legitimate initial rows provide the long-page geometry. No document,
+        // app response, stylesheet, timer or navigation is substituted by the test.
+        input.form.items = JSON.stringify(items);
+        const list = await createResourceViaForm(page.request, input);
+        const created = await readPacking(page.request, list.id);
+        expect(created.items).toHaveLength(40);
+        // Establish dense positions through the actual native reorder operation.
+        // Initial native rows share a position; relying on their tie order would
+        // give the two frontends different scroll targets for this same record.
+        const orders: Array<{itemId: string; position: number}> = [];
+        for (const [position, initialItem] of items.entries()) {
+            const persisted = created.items.find(candidate => candidate.title === initialItem.title);
+            expect(persisted).toBeDefined();
+            orders.push({itemId: persisted!.id, position});
+        }
+        const reordered = await page.request.post(`/api/packing/${list.id}/reorder`, {data: {orders}});
+        expect(reordered.status()).toBe(200);
+        expect(await reordered.json()).toMatchObject({status: 'success', message: 'Order saved'});
+        const ordered = await readPacking(page.request, list.id);
+        expect(ordered.items.map(candidate => ({itemId: candidate.id, position: candidate.position}))).toEqual(orders);
+        const item = ordered.items[18]!;
+        const itemTitle = items[18]!.title;
+        expect(item.title).toBe(itemTitle);
+        expect((await page.request.post(`/api/packing/${list.id}/assign`, {data: {itemId: item.id}})).status()).toBe(200);
+        const updatedDescription = 'Edited while retaining this row';
+
+        for (const pilot of [false, true]) {
+            const label = pilot ? 'vue' : 'native';
+            await page.goto(`${pilot ? '/frontend-pilot' : ''}${list.path}?locale=en`, {waitUntil: 'domcontentloaded'});
+            if (pilot) await waitForPilotHydration(page);
+            const row = page.locator('main tbody tr').filter({has: page.getByText(itemTitle, {exact: true})});
+            await expect(page.locator('main tbody tr')).toHaveCount(40);
+            await expect(page.locator('main tbody tr > td:nth-child(3)')).toHaveText(items.map(candidate => candidate.title));
+            await expect(row).toHaveCount(1);
+            await page.evaluate(() => document.fonts.ready);
+            const marker = `${label}-sticky-feedback`;
+            await page.evaluate(value => { document.documentElement.dataset.pilotDocument = value; }, marker);
+            const navigation: string[] = [];
+            function captureNavigation(request: Request): void {
+                if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigation.push(request.url());
+            }
+            page.on('request', captureNavigation);
+            const observedFocus = await page.evaluateHandle(function observeGlobalAlertFocus() {
+                const observation = {count: 0, stop: stopObservation};
+                document.addEventListener('focusin', captureGlobalFocus);
+                return observation;
+
+                function captureGlobalFocus(event: FocusEvent): void {
+                    if (event.target instanceof Element && event.target.closest('#liveAlerts')) observation.count++;
+                }
+                function stopObservation(): void { document.removeEventListener('focusin', captureGlobalFocus); }
+            });
+            try {
+                // Native assignments reload after success. Its stable no-reload
+                // description save exercises the same actual global alert owner;
+                // Vue then removes the seeded assignment on this persisted row.
+                const description = row.locator('td').nth(3);
+                const action = row.locator('td').last().getByRole('button', {name: 'Remove', exact: true});
+                const initiator = pilot ? action : description;
+                await row.evaluate(function centerScrollableRow(element) { element.scrollIntoView({block: 'center', inline: 'nearest'}); });
+                // Horizontal overflow is part of the native mobile table. Reach
+                // the real control without dropping columns or changing styles.
+                await initiator.scrollIntoViewIfNeeded();
+                await expect(initiator).toBeInViewport({ratio: 1});
+                const before = await capturePageFeedbackGeometry(page, info, `${label}-sticky-before`, row, initiator, 0);
+                expect(before.scrollY).toBeGreaterThan(400);
+
+                if (pilot) {
+                    await packingCommand(page, list.id, `/items/${item.id}/self-assignment`, 'DELETE', () => action.click());
+                    await expect(row.locator('td').nth(4)).toHaveText('0 / 1');
+                    await expect(row.locator('td').last().getByRole('button', {name: 'Take', exact: true})).toBeEnabled();
+                } else {
+                    await description.dblclick();
+                    const editor = description.locator('input');
+                    await editor.fill(updatedDescription);
+                    const saved = page.waitForResponse(function matchNativeDescription(response) {
+                        return response.request().method() === 'POST'
+                            && new URL(response.url()).pathname === `/api/packing/${list.id}/item/${item.id}/description`;
+                    });
+                    // Native saves on both Enter and blur. Commit once through
+                    // normal focus departure, preserving its existing handlers.
+                    await editor.press('Tab');
+                    const response = await saved;
+                    expect(response.status()).toBe(200);
+                    expect(await response.json()).toMatchObject({status: 'success', message: 'Description updated'});
+                    await expect(description).toHaveText(updatedDescription);
+                }
+
+                const control = pilot ? row.locator('td').last().getByRole('button', {name: 'Take', exact: true}) : description;
+                const alert = page.locator('#liveAlerts > .alert-success');
+                await expect(alert).toHaveText(pilot ? 'Item unassigned' : 'Updated');
+                const after = await capturePageFeedbackGeometry(page, info, `${label}-sticky-confirmed`, row, control,
+                    await observedFocus.evaluate(observation => observation.count));
+                await expect(alert).toBeInViewport({ratio: 1});
+                await expect(row).toBeInViewport();
+                await expect(control).toBeInViewport({ratio: 1});
+                expect(after.scrollY).toBeGreaterThan(400);
+                expect(Math.abs(after.host.y)).toBeLessThanOrEqual(1);
+                expect(after.documentMarker).toBe(marker);
+                if (pilot) {
+                    expect(after.globalFocusEvents).toBe(0);
+                    expect(after.focusedGlobalAlert).toBe(false);
+                } else expect(after.globalFocusEvents).toBeGreaterThan(0);
+
+                // A real additional user scroll must retain sticky feedback and
+                // the nearby row. Poll only the observed wheel result; never
+                // repeat the action or use a fixed delay to manufacture readiness.
+                await page.mouse.move(width / 2, 600);
+                await page.mouse.wheel(0, 100);
+                await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(after.scrollY + 50);
+                const scrolled = await capturePageFeedbackGeometry(page, info, `${label}-sticky-user-scroll`, row, control,
+                    await observedFocus.evaluate(observation => observation.count));
+                await expect(alert).toBeInViewport({ratio: 1});
+                await expect(row).toBeInViewport();
+                await expect(control).toBeInViewport({ratio: 1});
+                expect(Math.abs(scrolled.host.y)).toBeLessThanOrEqual(1);
+                if (pilot) expect(scrolled.globalFocusEvents).toBe(0);
+                const savedItem = (await readPacking(page.request, list.id)).items.find(candidate => candidate.id === item.id)!;
+                expect(savedItem).toMatchObject({description: updatedDescription, selfAssigned: !pilot, assignedCount: pilot ? 0 : 1});
+                expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe(marker);
+                expect(navigation).toEqual([]);
+            } finally {
+                page.off('request', captureNavigation);
+                await observedFocus.evaluate(observation => observation.stop());
+                await observedFocus.dispose();
+            }
+        }
+    });
 }
 
 for (const width of [1280, 390]) {

@@ -276,7 +276,7 @@ const reorder = useListReorder({
             }}</StatusNotice>
             <!-- Shape the missing detail region without inventing items or capabilities.
                  Loaded rows and drafts remain mounted throughout background reads. -->
-            <LoadingSkeleton v-if="initialLoading" variant="table" :rows="4" />
+            <LoadingSkeleton v-if="initialLoading" v-bind="route.meta.loadingSkeleton" />
             <template v-if="data">
                 <StatusNotice v-if="data.archived || data.inheritedArchived" kind="info">{{
                     messages.t('packing.archived')

@@ -90,6 +90,7 @@ const publicPreviewOwners = new Set([
     'src/types/FrontendEntityDocumentTypes.d.ts',
     'src/types/FrontendFeedbackTypes.d.ts',
     'src/types/FrontendGuestEntryTypes.d.ts',
+    'src/types/FrontendPilotUiTypes.d.ts',
     'src/types/LocalizationTypes.d.ts',
     'src/types/api/',
     'tests/e2e/frontend-entity-header.spec.ts',

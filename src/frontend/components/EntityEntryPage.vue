@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {computed} from 'vue';
+import {useRoute} from 'vue-router';
 import type {EntityEntryPageProps} from '../../types/FrontendEntityEntryTypes';
 import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import {usePilot} from '../app/context';
@@ -17,6 +18,7 @@ import StatusNotice from './StatusNotice.vue';
 // Matching resources share one recovery/feedback lifetime and admitted subtree.
 const props = defineProps<EntityEntryPageProps>();
 const context = usePilot();
+const route = useRoute();
 const admission = usePageEntry({key: computed(() => props.queryKey), initial: props.initial,
     read: props.read, onDenied: retireDeniedProjections});
 const admissionError = computed(admissionErrorText);
@@ -67,5 +69,5 @@ function admissionErrorText(): string | undefined {
              a private detail never appears merely because its cache remains warm. -->
         <slot :guest="admission.data.value?.guest ?? undefined" />
     </template>
-    <LoadingSkeleton v-else variant="form" />
+    <LoadingSkeleton v-else v-bind="route.meta.loadingSkeleton" page />
 </template>

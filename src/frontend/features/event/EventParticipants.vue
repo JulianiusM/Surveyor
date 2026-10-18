@@ -208,7 +208,7 @@ async function refresh(): Promise<void> {
                 </h2>
                 <div v-show="open" :id="`${id}-roster`" class="accordion-collapse">
                     <div class="accordion-body bg-dark">
-                        <LoadingSkeleton v-if="section.loading.value" />
+                        <LoadingSkeleton v-if="section.loading.value" variant="table" :columns="5" :rows="3" :hide-column-on-mobile="2" />
                         <StatusNotice v-if="section.query.error.value" kind="warning"
                             :action="{state: refreshAction, label: messages.t('common.retry')}"
                             :retry-at="section.retryAt.value" @action="refresh">

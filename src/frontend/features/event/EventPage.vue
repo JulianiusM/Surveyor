@@ -93,7 +93,7 @@ async function refresh(): Promise<void> {
             >
                 {{ section.failure.value }}
             </StatusNotice>
-            <LoadingSkeleton v-if="section.loading.value" variant="form" :rows="5" />
+            <LoadingSkeleton v-if="section.loading.value" v-bind="route.meta.loadingSkeleton" />
 
             <template v-if="event">
                 <!-- One bounded projection drives both page intents. Registration,
