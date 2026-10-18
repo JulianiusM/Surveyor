@@ -1,4 +1,4 @@
-import {expect, type APIRequestContext, type APIResponse} from '@playwright/test';
+import {expect, type APIRequestContext, type APIResponse, type Locator, type Page} from '@playwright/test';
 import type {E2ECreateCase, E2ECreateForm} from '../factories/e2eCoreFactory';
 
 export interface CreatedResource {
@@ -7,10 +7,23 @@ export interface CreatedResource {
     id: string;
 }
 
+/** Review a frontend invoice gate before the existing action sends its original API payload. */
+export async function confirmInvoiceCommand(page: Page, opener: Locator): Promise<void> {
+    const review = page.locator('#invoiceCommandConfirmModal');
+    // Wait for browser binding after navigation; visible server markup alone is not an interactive review gate.
+    await expect(review).toHaveAttribute('data-initialized', 'true');
+    await opener.click();
+    await expect(review).toBeVisible();
+    // Send the original command only through its explicit acknowledgement and complete the modal transition.
+    await review.locator('[data-invoice-command-confirm]').click();
+    await expect(review).not.toBeVisible();
+}
+
 export async function loginForE2E(request: APIRequestContext, credentials: {username: string; password: string}): Promise<void> {
     // Keep login at the HTTP boundary: it is faster and less brittle than driving the form UI,
     // but still verifies the real Express login route, session cookie, and seeded E2E account.
-    const response = await request.post('/users/login', {form: credentials, maxRedirects: 0});
+    // Retry only connection resets during session setup; HTTP errors and financial commands remain single attempts.
+    const response = await request.post('/users/login', {form: credentials, maxRedirects: 0, maxRetries: 2});
     expect(response.status()).toBe(302);
     expect(response.headers().location).toContain('/users/dashboard');
 }

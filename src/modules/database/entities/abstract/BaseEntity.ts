@@ -49,6 +49,16 @@ export interface DefaultItemAssignmentRelationEntity extends ParentEntityRelatio
 }
 
 export abstract class BaseEntity extends UuidBase implements EntityBase {
+    /**
+     * The root's own archival timestamp; NULL means no direct archival.
+     * A linked event's archival is derived when read instead of copied here, so
+     * restoring that event does not erase a child's independent archive choice.
+     * This is ordinary metadata, not a TypeORM soft-delete column: archived roots
+     * remain available to the existing queries, permissions and direct-page routes.
+     */
+    @Column("datetime", {name: "archived_at", nullable: true})
+    archivedAt!: Date | null;
+
     @Column("varchar", {name: "title", length: 255})
     title!: string;
 

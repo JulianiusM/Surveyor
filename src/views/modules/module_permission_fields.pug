@@ -1,0 +1,48 @@
+//- Shared presentation of the supplied permission metadata. Prefixes group the existing keys;
+//- they never define a second permission inventory, alter masks, or hide an unfamiliar permission.
+//- Both audience defaults and individual administrators keep the same checkbox hooks and payloads.
+mixin permissionFields(permMeta, mask, idPrefix, fieldName)
+    -
+        const categoryLabels = {ACCESS: 'Access', EDIT: 'Entity details', ITEM: 'Items', MANAGE: 'Management', DATA: 'Data', OTHER: 'Other permissions'};
+        const grouped = new Map();
+        const described = [];
+        for (const category of Object.keys(categoryLabels)) grouped.set(category, []);
+        for (const permission of permMeta) {
+            const prefix = permission.key.split('_')[0];
+            const category = grouped.has(prefix) ? prefix : 'OTHER';
+            grouped.get(category).push(permission);
+            if (permission.desc) described.push(permission);
+        }
+    each category in Object.keys(categoryLabels)
+        - const permissions = grouped.get(category)
+        if permissions.length
+            fieldset.mb-3
+                legend.small.fw-semibold.text-secondary.mb-1= categoryLabels[category]
+                .row.row-cols-1.row-cols-sm-2.g-1
+                    each permission in permissions
+                        - const controlId = `${idPrefix}-${permission.key}`
+                        .col
+                            .form-check
+                                input.form-check-input.perm-box.bg-dark.border-secondary(type='checkbox' name=fieldName value=permission.key id=controlId checked=((mask || 0) & permission.bit) !== 0 data-bit=permission.bit)
+                                label.form-check-label.text-light(for=controlId)= permission.label
+    if described.length
+        details.small.mb-2
+            summary Permission help
+            dl.mt-2.mb-0
+                each permission in described
+                    dt= permission.label
+                    dd.text-secondary= permission.desc
+
+//- Presets and whole-scope controls are identical for group and per-profile editing. Keep preset
+//- details collapsed to avoid a large toolbar, while retaining every preset supplied by the server.
+mixin permissionToolbar(presets, scope, administrator=false)
+    .d-flex.flex-wrap.gap-2.justify-content-between.align-items-start.mb-3
+        if presets && presets.length
+            details
+                summary.small Presets
+                .d-flex.flex-wrap.gap-1.mt-2(role='group' aria-label='Presets')
+                    each preset in presets
+                        button.btn.btn-sm.btn-outline-light(type='button' class=administrator ? 'admin-perm-preset' : 'perm-preset' data-aud=administrator ? undefined : scope data-user-id=administrator ? scope : undefined data-mask=preset.mask title=`Apply preset: ${preset.label}`)= preset.label
+        .btn-group.btn-group-sm(role='group' aria-label='Select permissions')
+            button.btn.btn-outline-light(type='button' class=administrator ? 'admin-perm-select-all' : 'perm-select-all' data-aud=administrator ? undefined : scope data-user-id=administrator ? scope : undefined title='Select all') All
+            button.btn.btn-outline-light(type='button' class=administrator ? 'admin-perm-clear' : 'perm-clear' data-aud=administrator ? undefined : scope data-user-id=administrator ? scope : undefined title='Clear all') None

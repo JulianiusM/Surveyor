@@ -5,10 +5,10 @@ documentation-metadata
 audience: operators; site reliability engineers; incident responders; maintainers
 owner: application operators
 status: current
-last-verified: 2026-09-14
+last-verified: 2026-09-16
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; named SMTP recipients, asynchronous invoice review notification delivery, confirmed progress feedback, and complete saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, signed payment carry-forward, rollback snapshots, settlement email controls, receipt delivery, and upload recovery; D04 accepted from source review and deployment-practice confirmation for release contents, bootstrap, sessions, proxy behavior, health, logs, persistent files, SMTP/OIDC, retention, backup, restore, and service management; D06 invoice-proof privacy, storage, and retention linkage verified; controlled execution tracked separately in D04V
-source-anchors: src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; docs/user-guide/INVOICE_POOLS.md; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts
+verification-scope: archival startup, hourly execution, recovery, logging, and file-retention boundary source review; invoice correction and retraction lifecycles, refreshed submission history, and takeover overview dialogs; organizer-entered shared costs, repeat invoice submissions, visible payment feedback, and share breakdown dialogs; named SMTP recipients, asynchronous invoice review notification delivery, confirmed progress feedback, and complete saved-share PDF export; consistent per-participant rounding, reconciliation totals, and long takeover-list layout; invoice factor and settlement migrations, signed payment carry-forward, rollback snapshots, settlement email controls, receipt delivery, and upload recovery; D04 accepted from source review and deployment-practice confirmation for release contents, bootstrap, sessions, proxy behavior, health, logs, persistent files, SMTP/OIDC, retention, backup, restore, and service management; D06 invoice-proof privacy, storage, and retention linkage verified; controlled execution tracked separately in D04V
+source-anchors: src/modules/entityArchival.ts; src/modules/database/services/EntityLifecycleService.ts; src/migrations/1789862400000-AddEntityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/lib/invoiceSettlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; .github/workflows/release.yml; package.json; docs/user-guide/INVOICE_POOLS.md; src/server.ts; src/app.ts; src/modules/settings.ts; src/modules/database/dataSource.ts; src/modules/invoiceRetention.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/controller/helpController.ts; src/controller/eventPoolController.ts; src/modules/email.ts; src/modules/oidc.ts
 next-review: D04V
 -->
 
@@ -32,7 +32,7 @@ Run the Node process with the release root as its working directory. PDF fonts, 
 upload paths depend on the release layout and working directory.
 
 The runbook assumes one application process for one local upload root. Database-backed sessions allow process restarts,
-but local uploaded files and the hourly invoice-retention job mean that horizontal scaling requires a deliberately
+but local uploaded files and the hourly retention and archival jobs mean that horizontal scaling requires a deliberately
 shared filesystem and coordinated job ownership. Do not add replicas without designing and testing those two concerns.
 
 ## Recommended filesystem layout
@@ -213,7 +213,7 @@ systemctl restart surveyor
 journalctl -u surveyor --since today
 ```
 
-Startup order is settings, database connection, initial invoice-retention cleanup, application loading, and finally the
+Startup order is settings, database connection, initial invoice-retention cleanup, initial entity archival, application loading, and finally the
 HTTP listener. A failure in any pre-listen step exits the process with a non-zero status.
 
 ## Reverse proxy and TLS
@@ -276,7 +276,7 @@ A healthy response is HTTP 200 with body:
 ok
 ```
 
-The listener opens only after the initial database connection and retention cleanup succeed, so a newly started healthy
+The listener opens only after the initial database connection, retention cleanup, and archival initialization succeed, so a newly started healthy
 process has completed those startup stages. The endpoint is nevertheless a basic HTTP health check; it does not send a
 test email or continuously query MariaDB. Monitor dependencies separately and alert on application error logs as well as
 health failures.
@@ -286,11 +286,11 @@ Suggested probes:
 - Every minute: HTTPS `/healthz`, expected status 200 and body `ok`.
 - Every few minutes: public home page status and certificate validity.
 - Continuously: process restart count, CPU, memory, filesystem capacity, MariaDB availability and connections.
-- Daily: recent successful backup, SMTP queue/errors, identity-provider errors, and invoice-retention messages.
+- Daily: recent successful backup, SMTP queue/errors, identity-provider errors, and retention/archival messages.
 
 ### Logging
 
-Surveyor writes startup, request, retention, email, and error output to standard output/error. Under systemd, collect it
+Surveyor writes startup, request, retention, archival, email, and error output to standard output/error. Under systemd, collect it
 from the journal or forward it to the normal centralized logging system.
 
 The request logger includes request paths. Account activation, password reset, invitations, and personal access can use
@@ -304,6 +304,28 @@ journalctl -u surveyor -f
 journalctl -u surveyor -p warning --since '1 hour ago'
 journalctl -u surveyor --since '2026-09-05 12:00:00' --until '2026-09-05 13:00:00'
 ```
+
+## Entity archival operations
+
+The archival job is independent of invoice retention. It validates configuration at startup, performs an initial sweep
+when enabled, and retries on an hourly timer. A local overlap guard prevents simultaneous sweeps in the same process;
+conditional writes make duplicate sweeps harmless. Successful changes log their count under `[entity-archival]`.
+Periodic failures log `[entity-archival] Archival failed` and are retried on the next run; an initial failure prevents
+the HTTP listener from opening.
+
+Use the [canonical archival settings](CONFIGURATION.md#automatic-entity-archival) to change the delay or disable
+automatic transitions, then restart. Disabling automation leaves existing archives, pauses, and personal choices
+unchanged. Owners and authorized organizers can restore entities through the application; restoration pauses events
+and standalone activities until **Resume automatic archival** is selected. A linked child cannot override its archived event.
+
+An entity missing from the main overview may be under **Archived and hidden**. Check the active profile and that
+section before treating it as lost data. **Show for me** changes only the profile's placement. Direct links and existing
+authorized workflows remain available while archived.
+
+Archival neither removes files nor extends their retention. Header images, proofs, registrations, assignments, invoice
+shares, and payments are preserved by archival itself; invoice retention and deliberate deletion still act independently.
+Restore cannot recover anything already removed by those separate operations. Include archival fields and personal
+preferences in the normal database backup; no new archive directory or file-moving procedure exists.
 
 ## Persistent files
 
@@ -441,7 +463,7 @@ Never perform production smoke tests with real participant addresses unless the 
 Complete all checks before ending a maintenance window:
 
 1. `systemctl status surveyor` shows one stable running process without a restart loop.
-2. Logs show database initialization, no startup failure, and no unexpected retention error.
+2. Logs show database initialization, no startup failure, and no unexpected retention or archival error.
 3. HTTPS `/healthz` returns `200` and `ok`.
 4. The public home page loads over HTTPS with the expected service name and legal links.
 5. The in-app help opens and corresponds to the deployed release.
@@ -556,7 +578,8 @@ or live outbound SMTP while validating a backup.
    SMTP sink, and identity-provider client registered for that environment.
 8. Decide whether restored sessions may remain valid. To force sign-out, set a new `SESSION_SECRET` before startup.
 9. Start the service. Remember that invoice retention runs before the listener opens and may remove data that has passed
-   the configured retention cutoff.
+   the configured retention cutoff. The independent archival sweep may also move eligible historical entities into
+   **Archived and hidden**; confirm the configured policy and saved pauses.
 10. Perform every restore-validation check in the [database guide](DATABASE.md#restore-validation), including one stored
     header image and one authorized invoice proof.
 11. Destroy or securely retain the rehearsal environment according to the data-handling policy.
@@ -569,8 +592,8 @@ release pass validation.
 ### Service repeatedly exits
 
 Inspect the earliest error in the journal. Verify configuration-file readability, database connectivity and schema,
-`INVOICE_RETENTION_MONTHS`, release working directory, and Node version. Startup never reaches the listener when database
-initialization or initial retention cleanup fails.
+`INVOICE_RETENTION_MONTHS`, the archival settings, release working directory, and Node version. Startup never reaches the listener when database
+initialization, initial retention cleanup, or archival initialization fails.
 
 ### Reverse proxy returns 502
 

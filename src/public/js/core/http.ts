@@ -36,6 +36,18 @@ export async function http(method: string, url: string, body?: any): Promise<any
 }
 
 /**
+ * A completed request is not itself a completed mutation: fetch follows authentication redirects,
+ * and the resulting login HTML can have status 200. Commands that refresh or discard local drafts
+ * must first receive the API's explicit success envelope. Keep this check separate from http(),
+ * whose existing read callers may legitimately consume text or payloads without that envelope.
+ */
+export function assertSuccessfulResponse(response: unknown): void {
+    if (!response || typeof response !== 'object' || !('status' in response) || response.status !== 'success') {
+        throw new Error('The change could not be confirmed. Please reload and try again.');
+    }
+}
+
+/**
  * Make a POST request
  * @param url Request URL (can include /api prefix or be relative)
  * @param payload Request payload

@@ -8,10 +8,11 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {Worker} from "node:worker_threads";
-import {buildPlanRecommendationContext, AutoAssignmentContext} from "./autoAssignment";
+import type {ActivityRecommendationPersistenceContext} from "../../types/ActivityTypes";
+import type {AutoAssignmentContext} from "./autoAssignment";
 import {generateFairRecommendations} from "./fairAssignment";
-import * as recommendationService from "../database/services/ActivityRecommendationService";
 import type {RecommendationInput} from "../database/services/ActivityRecommendationService";
+import {APIError} from "../lib/errors";
 
 export type RecommendationJobStatus = "QUEUED" | "RUNNING" | "COMPLETE" | "FAILED" | "STALE";
 
@@ -56,6 +57,26 @@ function canonicalize(value: unknown): unknown {
         );
     }
     return value;
+}
+
+/** Normalize sibling commitments with straightforward loops; display labels do not affect allocation. */
+function summarizeLinkedPlans(context: AutoAssignmentContext): unknown {
+    const linked = context.linkedPlans;
+    const commitments: Record<string, unknown[]> = {};
+    for (const key of Object.keys(linked?.commitments ?? {}).sort()) {
+        const normalized: unknown[] = [];
+        for (const assignment of linked!.commitments[key]) {
+            normalized.push({
+                id: assignment.id, planId: assignment.planId, assignmentMode: assignment.assignmentMode,
+                day: assignment.day, startTime: assignment.startTime, endTime: assignment.endTime,
+                recommendationId: assignment.recommendationId, recommendationStatus: assignment.recommendationStatus,
+                operation: assignment.operation, sourceItemId: assignment.sourceItemId,
+            });
+        }
+        normalized.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+        commitments[key] = normalized;
+    }
+    return {plans: [...(linked?.plans ?? [])].sort((a, b) => a.id.localeCompare(b.id)), commitments};
 }
 
 export function fingerprintRecommendationContext(context: AutoAssignmentContext): string {
@@ -109,12 +130,16 @@ export function fingerprintRecommendationContext(context: AutoAssignmentContext)
         // Pending rows are replaceable output, not plan input. Reviewed decisions
         // remain part of the revision and rejection memory.
         existingRecommendations: (context.existingRecommendations ?? [])
-            .filter((recommendation) => recommendation.status !== "PENDING")
+            .filter((recommendation) => recommendation.status !== "PENDING" || recommendation.manual)
             .sort((a, b) =>
                 `${a.operation ?? "ASSIGN"}:${a.sourceItemId ?? ""}:${a.itemId}:${a.profileId}:${a.status}`
                     .localeCompare(
                         `${b.operation ?? "ASSIGN"}:${b.sourceItemId ?? ""}:${b.itemId}:${b.profileId}:${b.status}`,
                     )),
+        // Sibling pending proposals are input here, although this plan's generated pending
+        // rows remain replaceable output above. Include provenance and operation state so
+        // changed priority, a reassignment, or a proposal deletion revokes cached work.
+        linkedPlans: summarizeLinkedPlans(context),
     };
     return crypto
         .createHash("sha256")
@@ -181,9 +206,9 @@ class RecommendationWorkerExecutor {
 }
 
 export interface RecommendationJobCoordinatorOptions {
-    loadContext?: (planId: string) => Promise<AutoAssignmentContext>;
+    loadContext: (planId: string) => Promise<AutoAssignmentContext>;
     execute?: (context: AutoAssignmentContext) => Promise<RecommendationInput[]>;
-    persist?: (planId: string, recommendations: RecommendationInput[]) => Promise<void>;
+    persist: (planId: string, recommendations: RecommendationInput[], expected: ActivityRecommendationPersistenceContext) => Promise<void>;
     maxQueueSize?: number;
     maxCachedJobs?: number;
     cacheTtlMs?: number;
@@ -197,17 +222,17 @@ export class RecommendationJobCoordinator {
     private readonly executor: RecommendationWorkerExecutor;
     private readonly loadContext: (planId: string) => Promise<AutoAssignmentContext>;
     private readonly executeContext: (context: AutoAssignmentContext) => Promise<RecommendationInput[]>;
-    private readonly persistRecommendations: (planId: string, recommendations: RecommendationInput[]) => Promise<void>;
+    private readonly persistRecommendations: (planId: string, recommendations: RecommendationInput[], expected: ActivityRecommendationPersistenceContext) => Promise<void>;
     private readonly maxQueueSize: number;
     private readonly maxCachedJobs: number;
     private readonly cacheTtlMs: number;
     private running = false;
 
-    constructor(options: RecommendationJobCoordinatorOptions = {}) {
+    constructor(options: RecommendationJobCoordinatorOptions) {
         this.executor = new RecommendationWorkerExecutor();
-        this.loadContext = options.loadContext ?? buildPlanRecommendationContext;
+        this.loadContext = options.loadContext;
         this.executeContext = options.execute ?? ((context) => this.executor.execute(context));
-        this.persistRecommendations = options.persist ?? recommendationService.replacePendingRecommendations;
+        this.persistRecommendations = options.persist;
         this.maxQueueSize = options.maxQueueSize ?? MAX_QUEUE_SIZE;
         this.maxCachedJobs = options.maxCachedJobs ?? MAX_CACHED_JOBS;
         this.cacheTtlMs = options.cacheTtlMs ?? CACHE_TTL_MS;
@@ -249,6 +274,19 @@ export class RecommendationJobCoordinator {
         return this.toView(record);
     }
 
+    /**
+     * Called after validation while a relationship/date mutation holds the plan lock. Running
+     * workers may finish calculating, but persistence checks this state under that same lock.
+     * A rolled-back mutation can conservatively cancel work; it cannot change saved assignments.
+     * Keep the old record so a polling browser receives an explicit stale result and can retry.
+     */
+    invalidate(planId: string): void {
+        const activeId = this.activeByPlan.get(planId);
+        const active = activeId ? this.jobs.get(activeId) : undefined;
+        if (active) this.update(active, 'STALE', {error: 'Activity plan context changed; generate recommendations again'});
+        this.activeByPlan.delete(planId);
+    }
+
     private async drain(): Promise<void> {
         if (this.running) return;
         this.running = true;
@@ -256,7 +294,7 @@ export class RecommendationJobCoordinator {
             while (this.queue.length > 0) {
                 const jobId = this.queue.shift()!;
                 const job = this.jobs.get(jobId);
-                if (!job) continue;
+                if (!job || job.status === 'STALE') continue;
                 await this.run(job);
             }
         } finally {
@@ -268,9 +306,6 @@ export class RecommendationJobCoordinator {
         this.update(job, "RUNNING");
         try {
             const context = await this.loadContext(job.planId);
-            if (context.plan.assignmentMode === "FREE") {
-                throw new Error("Automatic recommendations are disabled in free assignment mode");
-            }
             const fingerprint = fingerprintRecommendationContext(context);
             const cached = this.resultCache.get(fingerprint);
             const recommendations = cached && cached.expiresAt > Date.now()
@@ -278,12 +313,23 @@ export class RecommendationJobCoordinator {
                 : await this.executeContext(context);
 
             const freshContext = await this.loadContext(job.planId);
-            if (fingerprintRecommendationContext(freshContext) !== fingerprint) {
+            if (this.isInvalidated(job) || fingerprintRecommendationContext(freshContext) !== fingerprint) {
                 this.update(job, "STALE", {error: "Plan inputs changed while recommendations were being calculated"});
                 return;
             }
 
-            await this.persistRecommendations(job.planId, recommendations);
+            // The controller rechecks these values under the same root lock used by relinking.
+            // Retain the full fingerprint above: that lock does not stabilize every input.
+            await this.persistRecommendations(job.planId, recommendations, {
+                eventId: context.plan.eventId ?? null,
+                startDate: context.plan.startDate,
+                endDate: context.plan.endDate,
+                inputFingerprint: fingerprint,
+                // Recheck after acquiring the database lock, including an A→B→A relink
+                // while this job was already waiting to persist its original context.
+                isCurrent: this.isCurrentJob.bind(this, job),
+            });
+            if (this.isInvalidated(job)) return;
             this.resultCache.delete(fingerprint);
             this.resultCache.set(fingerprint, {
                 recommendations,
@@ -291,11 +337,24 @@ export class RecommendationJobCoordinator {
             });
             this.update(job, "COMPLETE", {recommendationCount: recommendations.length});
         } catch (error) {
-            this.update(job, "FAILED", {error: error instanceof Error ? error.message : String(error)});
+            const contextChanged = error instanceof APIError && error.status === 409
+                && (error.data as {reason?: string}).reason === 'activity-context-changed';
+            this.update(job, this.isInvalidated(job) || contextChanged ? 'STALE' : 'FAILED', {
+                error: error instanceof Error ? error.message : String(error),
+            });
         } finally {
-            this.activeByPlan.delete(job.planId);
+            // Invalidating an executing job can already have queued its replacement.
+            if (this.activeByPlan.get(job.planId) === job.id) this.activeByPlan.delete(job.planId);
             this.prune();
         }
+    }
+
+    private isInvalidated(job: RecommendationJobRecord): boolean {
+        return job.status === 'STALE';
+    }
+
+    private isCurrentJob(job: RecommendationJobRecord): boolean {
+        return !this.isInvalidated(job);
     }
 
     private update(
@@ -343,5 +402,3 @@ export class RecommendationJobCoordinator {
         };
     }
 }
-
-export const recommendationJobCoordinator = new RecommendationJobCoordinator();

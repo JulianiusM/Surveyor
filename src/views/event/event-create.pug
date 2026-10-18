@@ -152,7 +152,7 @@ block content
             label.form-label(for="desc")
                 i.bi.bi-pencil-square.me-1
                 | Description (optional)
-            textarea#desc.form-control.text-bg-dark(name="description" rows="4") #{parsed.description || ''}
+            textarea#desc.form-control.text-bg-dark(name="description" rows="4" maxlength="16000") #{parsed.description || ''}
 
         .row.mb-3
             .col-12

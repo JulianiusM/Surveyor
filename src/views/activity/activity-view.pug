@@ -1,4 +1,6 @@
 extends ../layout
+//- This page explicitly owns archival presentation and script loading; the layout has no optional state.
+include ../modules/module_entity_archive
 
 include ./parts/participant-status
 
@@ -6,10 +8,13 @@ block meta
     title #{data.plan.title} | Activity planner
 
 block title
-    +entityHeader(data.plan, "activity", "bi-calendar-check", permData)
-    +entityImageModal(data.plan, "activity")
+    +entityHeader(data.plan, "activity", "bi-calendar-check", permData, data.entityProperties, data.archive)
+    +entityPropertiesModal(data.plan, data.entityProperties, data.archive, {admins, perms})
 
 block content
+    //- The server combines the plan's own state with its event's state and projects the current user's
+    //- capabilities. An attached plan follows the event's automatic schedule, not its own date range.
+    +entityArchiveNotice(data.plan, 'activity', data.archive)
     //- helper in pug (this won’t be sent to the client)
     -
         function fmtISO(date) {
@@ -35,24 +40,8 @@ block content
             monday.setDate(monday.getDate() + 7);
         }
 
-    // ─── Description (editable) ──────────────────────────────
-    if permData.entity.has('EDIT_DESC')
-        // manager sees pointer
-        small.text-info.fst-italic.fw-light Double click to edit
-        p#planDesc.border.border-secondary.rounded.p-1(
-            style="cursor:pointer"
-            data-edit="planDescription"
-        )
-            if data.plan.description
-                - const lines = data.plan.description.split('\n')
-                each line, i in lines
-                    | #{line}
-                    if i < lines.length - 1
-                        br
-            else
-                em.text-secondary double-click to add description
-        hr.mb-1.mt-0
-    else if data.plan.description
+    //- Root descriptions are read-only here; authorized edits live in Entity settings.
+    if data.plan.description
         p#planDesc.mb-0.mt-2
             - const lines = data.plan.description.split('\n')
             each line, i in lines
@@ -110,13 +99,12 @@ block content
     else
         p.text-secondary.small.mt-2.mb-3 No shared text fields yet.
 
-    // ─── Tabs & panes for schedule, participants, rules, settings ─────────────
+    //- Specialized activity workspaces remain separate from root Entity settings.
     -
         const hasRulesTab =
                 (permData.entity.has('MANAGE_REQUIREMENTS') && data.plan.eventId)
                 || (permData.entity.has('MANAGE_ASSIGNMENTS') && data.plan.eventId);
         const hasParticipantsTab = !!(data.participantList && data.participantList.length > 0);
-        const hasSettingsTab = permData.entity.has('MANAGE_PERMISSIONS');
 
     // Nav tabs (Schedule is always present)
     ul.nav.nav-tabs.mb-3(role="tablist")
@@ -149,16 +137,6 @@ block content
                     aria-selected="false")
                     i.bi.bi-sliders.me-1
                     | Rules & auto-assign
-        if hasSettingsTab
-            li.nav-item
-                button.nav-link(
-                    type="button"
-                    data-bs-toggle="tab"
-                    data-bs-target="#tab-settings"
-                    role="tab"
-                    aria-selected="false")
-                    i.bi.bi-gear.me-1
-                    | Settings
 
     .tab-content
         // ─── Schedule tab ───────────────────────────────────────
@@ -175,10 +153,6 @@ block content
             .tab-pane.fade#tab-rules(role="tabpanel")
                 include ./parts/assignments
 
-        // ─── Settings tab ──────────────────────────────────────
-        if hasSettingsTab
-            .tab-pane.fade#tab-settings(role="tabpanel")
-                include ./parts/settings
 
     // Admin: manage role assignments per slot
     #slotRoleAdminModal.modal.fade(tabindex="-1" aria-labelledby="slotRoleAdminTitle" aria-hidden="true")
@@ -210,7 +184,8 @@ block content
                         i.bi.bi-save.me-1
                         | Save changes
 
-    // Assignment warnings modal
+    //- Shared by participant signups and the recommendation review. The browser supplies
+    //- permission-filtered server warnings and a context-specific confirmation label.
     #assignmentWarningModal.modal.fade(tabindex="-1" aria-labelledby="assignmentWarningTitle" aria-hidden="true")
         .modal-dialog
             .modal-content.text-bg-dark
@@ -220,7 +195,7 @@ block content
                         | Assignment warnings
                     button.btn-close(data-bs-dismiss="modal" aria-label="Close")
                 .modal-body
-                    p.small.text-secondary.mb-2 Potential issues were detected for this slot:
+                    p.small.text-secondary.mb-2 Review these assignment warnings before continuing:
                     strong#assignmentWarningSlot.d-block.mb-2
                     ul#assignmentWarningList.list-group.list-group-flush
                 .modal-footer
@@ -244,7 +219,7 @@ block content
                             input#textFieldTitle.form-control.form-control-sm.text-bg-dark(type="text" name="title" maxlength="255" required)
                         .mb-0
                             label.form-label(for="textFieldText") Text
-                            textarea#textFieldText.form-control.text-bg-dark(name="text" rows="6" maxlength="5000")
+                            textarea#textFieldText.form-control.text-bg-dark(name="text" rows="6" maxlength="16000")
                     .modal-footer
                         button.btn.btn-sm.btn-outline-secondary(type="button" data-bs-dismiss="modal") Cancel
                         button.btn.btn-sm.btn-primary(type="submit")
@@ -321,6 +296,8 @@ block content
 
 
 block scripts
+    //- Bind the notice's data-archive-* buttons once; existing plan behavior keeps its own entry point.
+    +entityArchiveScripts()
     script(type="module" src="/js/activity.gen.js")
     script.
         window.Surveyor.entityId = "#{data.plan.id}";

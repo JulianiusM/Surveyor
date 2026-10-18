@@ -208,7 +208,7 @@ describe('frontend UI behavior suite', () => {
             fixture.search.value = 'invoice 125';
             fixture.search.trigger('input');
             expect(fixture.rows.filter((row) => !row.hidden)).toHaveLength(1);
-            expect(fixture.summary.textContent).toBe('1–1 of 1 invoices');
+            expect(fixture.summary.textContent).toBe('1–1 of 1 invoice');
         });
     });
 });

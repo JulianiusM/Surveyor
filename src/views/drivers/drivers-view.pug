@@ -1,31 +1,20 @@
 extends ../layout
+//- This page explicitly owns archival presentation and script loading; the layout has no optional state.
+include ../modules/module_entity_archive
 
 block meta
     title #{data.list.title} | Surveyor
 
 block title
-    +entityHeader(data.list, "drivers", "bi-car-front", permData)
-    +entityImageModal(data.list, "drivers")
+    +entityHeader(data.list, "drivers", "bi-car-front", permData, data.entityProperties, data.archive)
+    +entityPropertiesModal(data.list, data.entityProperties, data.archive, {admins, perms})
 
 block content
-    // ─── Description (editable) ──────────────────────────────
-    if permData.entity.has('EDIT_DESC')
-        // manager sees pointer
-        small.text-info.fst-italic.fw-light Double click to edit
-        p#planDesc.border.border-secondary.rounded.p-1(
-            style="cursor:pointer"
-            data-edit="planDescription"
-        )
-            if data.list.description
-                - const lines = data.list.description.split('\n')
-                each line, i in lines
-                    | #{line}
-                    if i < lines.length - 1
-                        br
-            else
-                em.text-secondary double-click to add description
-        hr.mb-1.mt-0
-    else if data.list.description
+    //- The list has no automatic date schedule of its own, but the projection can include event archival.
+    //- Rendering this status does not change access to the list or its existing participant actions.
+    +entityArchiveNotice(data.list, 'drivers', data.archive)
+    //- Root descriptions are edited in Entity settings; ride-level editors remain independent.
+    if data.list.description
         p#planDesc.mb-0.mt-2
             - const lines = data.list.description.split('\n')
             each line, i in lines
@@ -34,12 +23,6 @@ block content
                     br
         hr.mb-1.mt-0
 
-    // Owner settings toggles
-    if permData.entity.has('MANAGE_PERMISSIONS')
-        +permissionManagement(admins, perms.permMeta, perms.defaultPerms, perms.presets, {
-            entityType: 'drivers',
-            entityId: data.list.id
-        })
 
     //Erste Zeile: Metainfos / Badge
     .d-flex.justify-content-between.align-items-center.mb-3
@@ -170,6 +153,8 @@ block content
                         | Add
 
 block scripts
+    //- Bind the notice's data-archive-* buttons once; driving-list actions retain their existing module.
+    +entityArchiveScripts()
     script(type="module" src="/js/drivers.gen.js")
     script.
         window.Surveyor.entityId = "#{data.list.id}";

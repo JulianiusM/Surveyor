@@ -284,10 +284,10 @@ export function initRequirementPanel(planId: string): void {
             return;
         }
 
-        if (option?.dataset.invalid === 'true') {
+        if (option?.dataset.retained === 'true') {
             hint.classList.remove('text-secondary');
             hint.classList.add('text-warning');
-            hint.textContent = 'Not registered for this event. Choose a different participant.';
+            hint.textContent = 'Saved override for a profile outside this event. It is preserved unchanged; choose a registered participant to replace it.';
             return;
         }
 
@@ -491,7 +491,10 @@ export function initRequirementPanel(planId: string): void {
             participantSelect.append(opt);
         });
 
-        const overrideValue = override?.profileId ? `profile:${override.profile}` : '';
+        // Profile IDs remain stable when a plan moves to another event. Never substitute
+        // the first selectable participant for a saved target absent from this event.
+        const savedProfileId = override?.profileId ?? override?.profile?.id;
+        const overrideValue = savedProfileId ? `profile:${savedProfileId}` : '';
 
         const matchedTarget = findTargetForOverride(override);
         if (matchedTarget) {
@@ -499,12 +502,10 @@ export function initRequirementPanel(planId: string): void {
         } else if (overrideValue) {
             const missingOpt = document.createElement('option');
             missingOpt.value = overrideValue;
-            missingOpt.dataset.invalid = 'true';
+            missingOpt.dataset.retained = 'true';
             missingOpt.textContent = override?.profile?.name || `Not registered (${overrideValue.replace(':', ' #')})`;
             participantSelect.append(missingOpt);
             participantSelect.value = overrideValue;
-        } else if (participantSelect.querySelector('option:not([disabled])')) {
-            participantSelect.value = participantSelect.querySelector<HTMLOptionElement>('option:not([disabled])')?.value || '';
         }
 
         if (!overrideTargets?.length) {
@@ -552,12 +553,26 @@ export function initRequirementPanel(planId: string): void {
         removeBtn.type = 'button';
         removeBtn.className = 'btn btn-sm btn-outline-danger w-100';
         removeBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
-        removeBtn.addEventListener('click', () => {
+        function removeOverride(): void {
             row.remove();
             setRequirementsDirty(true);
             refreshLivePreview();
-        });
+        }
+        removeBtn.addEventListener('click', removeOverride);
         colRemove.append(removeBtn);
+
+        function updateRetainedOverrideControls(): void {
+            const retained = participantSelect.selectedOptions[0]?.dataset.retained === 'true';
+            roleSelect.disabled = retained;
+            reqInput.disabled = retained;
+            removeBtn.disabled = retained;
+            if (retained && override) {
+                roleSelect.value = override.roleId == null ? '' : String(override.roleId);
+                reqInput.value = String(override.requiredShifts);
+            }
+        }
+        participantSelect.addEventListener('change', updateRetainedOverrideControls);
+        updateRetainedOverrideControls();
 
         row.append(colTarget, colRole, colReq, colRemove);
         overrideList.appendChild(row);
@@ -707,9 +722,7 @@ export function initRequirementPanel(planId: string): void {
 
             const requiredShifts = Number(reqInput?.value ?? 0);
             const selection = participantSelect?.value ?? '';
-            const selectedOption = participantSelect?.selectedOptions[0];
-            if (!selection) return;
-            if (selectedOption?.dataset.invalid === 'true') {
+            if (!selection) {
                 hasInvalid = true;
                 participantSelect?.classList.add('is-invalid');
                 return;

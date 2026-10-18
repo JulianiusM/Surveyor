@@ -16,8 +16,8 @@
 
 import express, {Request, Response} from 'express';
 
-import eventController from '../../controller/eventController';
-import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import eventController, {getEventLinkOptions} from '../../controller/eventController';
+import {createEntityAdminApiRouter, createEntityArchiveApiRouter} from "../../middleware/adminApiFactory";
 import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
 import {apiParamHandler} from "../../middleware/paramHandler";
 import {
@@ -42,9 +42,18 @@ const permFct = getPermFct(resFct, entityName);
 const itemPermFct: ItemGetter = getItemFromEntityPermFct(async () => [], resFct);
 
 apiParamHandler('id', app, eventService.getEventById, entityName);
+// Collection discovery must precede /:id middleware, otherwise link-options is loaded as a UUID.
+app.get('/link-options', asyncHandler(async function linkOptions(req: Request, res: Response) {
+    res.set('Cache-Control', 'no-store');
+    const result = await getEventLinkOptions(req.query, req.session);
+    renderer.respondWithSuccessDataJson(res, 'Events found', result);
+}));
 app.use("/:id", attachPermBundle(permFct, itemPermFct));
 
 createEntityAdminApiRouter(app, entityName, permFct)
+// Event archival governs its attached roots through inherited state. Register commands for
+// this resolved event only; attached records and file retention keep their existing workflows.
+createEntityArchiveApiRouter(app, entityName, resFct);
 createEntityHeaderUpdateRouter(app, permFct, resFct, eventController.updateHeaderImg, eventController.deleteHeaderImg);
 
 // Register current user to event

@@ -1,159 +1,277 @@
 //- Common invoice pool fragments reused by admin and participant pages
 include mixins/helpers.pug
-//- Render calculated shares and their current settlement state.
-mixin invoiceShareTable(pool, participants, admin = false, eventId = null)
+//- Formulas contain already formatted values and catalog-owned labels. Render operators separately so attendance,
+//- factors, credits, and signed results remain readable when a phone wraps the equation into several lines.
+mixin invoiceCalculationFormula(formula)
+    .invoice-calculation-formula.d-flex.flex-wrap.align-items-end.gap-2.p-3.border.border-secondary-subtle.rounded-3.bg-black(role="group" aria-label=formula.result.label)
+        each term in formula.terms
+            if term.operator
+                span.invoice-calculation-operator.align-self-center= term.operator
+            .invoice-calculation-term.d-flex.flex-column
+                strong= term.value.startsWith('-') ? `(${term.value})` : term.value
+                small.text-secondary= term.label
+        span.invoice-calculation-operator.align-self-center= '='
+        .invoice-calculation-term.invoice-calculation-result.d-flex.flex-column
+            strong.text-info= formula.result.value
+            small.text-secondary= formula.result.label
+    if formula.note
+        p.small.text-secondary.mt-2.mb-0= formula.note
+
+//- Structured explanations are pure presenter output. This mixin matches the browser renderer used by previews
+//- and lazy personal breakdowns; it never derives amounts or constructs feature wording.
+mixin invoiceCalculationDisplay(calculation, showTitle = true)
+    .invoice-calculation(data-calculation-display)
+        if showTitle
+            h6.mb-2= calculation.title
+        if calculation.description
+            p.small.text-secondary.mb-3= calculation.description
+        each section in calculation.sections
+            section.invoice-calculation-section.mt-3(data-calculation-section=section.key)
+                h6.mb-2= section.title
+                if section.description
+                    p.small.text-secondary.mb-2= section.description
+                if section.items && section.items.length
+                    //- Coverage rosters preserve presenter order and escape saved beneficiary names before their calculations.
+                    ul.small.text-secondary.ps-3.mb-2
+                        each item in section.items
+                            li= item
+                if section.metrics && section.metrics.length
+                    dl.invoice-share-breakdown.small.mb-2
+                        each metric in section.metrics
+                            dt= metric.label
+                            dd= metric.value
+                if section.formula
+                    +invoiceCalculationFormula(section.formula)
+
+//- Organizer dialogs show saved financial components and the payer's complete concrete calculation.
+//- The snapshot supplies attendance and coverage facts; editable pool inputs never rewrite this explanation.
+mixin invoiceShareBreakdown(pool, share, ui, payerName = null, participants = [])
+    //- The shared presenter owns both feature relevance and labels, rather than repeating financial rules in Pug.
+    - const presentation = ui.share(share);
+    - const snapshot = pool.calculationSnapshot;
+    - const components = ui.components(share, snapshot && snapshot.explanation, snapshot && snapshot.surcharges);
+    - const calculation = ui.payerCalculation(snapshot && snapshot.explanation, payerName ? {...share, payerName} : share, snapshot && snapshot.surcharges);
+    - const settledShareNotice = ui.settledShareNotice(pool, share, participants);
+    if settledShareNotice
+        //- Applied exemption/coverage never hides the original payer's recorded transfer history.
+        p.small.text-warning(data-share-settlement-history)= settledShareNotice.description
+    dl.invoice-share-breakdown.small.mt-3.mb-3
+        each component in components
+            dt= component.label
+            dd= ui.money(component.amount)
+        //- A modal needs its own status beside its calculated balance; the backdrop obscures the original row.
+        dt= ui.text('paymentStatus')
+        dd(data-share-details-status)= presentation.statusLabel
+    details.small.mb-3
+        //- Every own and covered contribution is explained with its saved name, independently of audit notes.
+        summary.text-info= calculation.title
+        .mt-3
+            +invoiceCalculationDisplay(calculation, false)
+    - const notes = (share.note || '').split(' • ').filter(Boolean);
+    if notes.length
+        //- Retain saved attribution and user-authored notes as escaped text independently of the structured calculation.
+        details.small
+            summary.text-info= ui.labels.calculationNotes
+            ul.ps-3.mt-2.mb-0
+                each note in notes
+                    li.text-secondary= note
+
+//- Share ledgers use one set of display controls for organizer payers and a participant's pool rows.
+//- personal changes the searchable item label only; the status, amount sort, and paging DOM hooks stay identical.
+mixin invoiceShareLedgerControls(ui, personal = false)
+    .share-ledger-controls.d-flex.flex-wrap.gap-2.mb-3
+        input.form-control.form-control-sm.text-bg-dark(type="search" placeholder=ui.text(personal ? 'searchPoolsOrCalculationNotes' : 'searchPayersOrCalculationNotes') aria-label=ui.text('searchShares') data-share-search)
+        select.form-select.form-select-sm.text-bg-dark(aria-label=ui.text('filterShareStatus') data-share-filter)
+            option(value="")= ui.text('allStatuses')
+            option(value="due")= ui.labels.due
+            option(value="refund")= ui.labels.refund
+            option(value="settled")= ui.labels.settledFilter
+        select.form-select.form-select-sm.text-bg-dark(aria-label=ui.text(personal ? 'sortPools' : 'sortShares') data-share-sort)
+            option(value="name")= ui.text(personal ? 'poolAZ' : 'payerAZ')
+            option(value="amount-desc")= ui.text('amountHighToLow')
+            option(value="amount-asc")= ui.text('amountLowToHigh')
+        select.form-select.form-select-sm.text-bg-dark(aria-label=ui.text('sharesPerPage') data-share-page-size)
+            option(value="25")= ui.text('pageSizeOption', {count: 25})
+            option(value="50")= ui.text('pageSizeOption', {count: 50})
+            option(value="100")= ui.text('pageSizeOption', {count: 100})
+
+//- Paging preserves all saved rows; the empty state and feedback are shared by both ledger contexts.
+mixin invoiceShareLedgerFooter(ui)
+    p.text-secondary.small.mb-0.py-3.text-center(hidden data-share-empty)= ui.text('noSharesMatchTheseFilters')
+    .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mt-3
+        small.text-secondary(data-share-page-summary role="status" aria-live="polite")
+        button.btn.btn-outline-light.btn-sm(type="button" data-share-refresh)= ui.text('refreshList')
+        .btn-group.btn-group-sm(role="group" aria-label=ui.text('sharePages'))
+            button.btn.btn-outline-light(type="button" data-share-previous)= ui.text('previous2')
+            button.btn.btn-outline-light(type="button" data-share-next)= ui.text('next')
+    .pool-form-status.small(role="status" aria-live="polite" aria-atomic="true" data-share-feedback)
+
+//- One dialog serves the complete ledger. Its content is supplied only for the selected saved payer or pool row.
+mixin invoiceShareBreakdownDialog(pool, ui)
+    +poolEditModal(pool, 'share-breakdown', ui.text('shareBreakdown'), ui)
+        h6(data-share-details-payer)
+        div(data-share-details-content)
+        .d-flex.justify-content-end.mt-3
+            button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('close')
+
+//- Render saved pool.shares with participant names and the explicit ui presentation contract.
+//- admin/eventId enable organizer export/actions; data-share-* hooks drive filtering and confirmed settlement.
+mixin invoiceShareTable(pool, participants, admin = false, eventId = null, ui)
+    //- Compute applied coverage once per ledger; row labels must not use staged edits or repeat snapshot sorting.
+    - const appliedTakeovers = ui.appliedTakeovers(pool);
     if pool.shares && pool.shares.length
         .share-ledger.border.border-secondary-subtle.rounded-3.p-3(data-share-ledger)
             .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mb-3
                 .d-flex.align-items-center.flex-wrap.gap-2
-                    strong Calculated shares
-                    span.badge.bg-secondary #{pool.shares.length} payers
+                    strong= ui.text('calculatedShares')
+                    span.badge.bg-secondary= ui.text('payersCount', {count: pool.shares.length})
                 if admin && eventId
-                    a.btn.btn-outline-light.btn-sm(href=`/event/${eventId}/export/invoice-pools/${pool.id}/shares` download)
-                        i.bi.bi-file-earmark-pdf.me-1(aria-hidden="true")
-                        | Export as PDF
-            .share-ledger-controls.d-flex.flex-wrap.gap-2.mb-3
-                input.form-control.form-control-sm.text-bg-dark(type="search" placeholder="Search payers or calculation notes" aria-label="Search shares" data-share-search)
-                select.form-select.form-select-sm.text-bg-dark(aria-label="Filter share status" data-share-filter)
-                    option(value="") All statuses
-                    option(value="due") Due
-                    option(value="refund") Refund
-                    option(value="settled") Settled
-                select.form-select.form-select-sm.text-bg-dark(aria-label="Sort shares" data-share-sort)
-                    option(value="name") Payer A–Z
-                    option(value="amount-desc") Amount: high to low
-                    option(value="amount-asc") Amount: low to high
-                select.form-select.form-select-sm.text-bg-dark(aria-label="Shares per page" data-share-page-size)
-                    option(value="25") 25 per page
-                    option(value="50") 50 per page
-                    option(value="100") 100 per page
+                    //- Both exports include every saved payer row. The default explains an example; the compact
+                    //- alternative omits that example only. Display filters never change the exported accounting.
+                    - const exportUrl = `/event/${eventId}/export/invoice-pools/${pool.id}/shares`;
+                    .d-flex.flex-wrap.gap-2
+                        a.btn.btn-outline-light.btn-sm(href=exportUrl download aria-label=ui.text('exportNamedSharesPdfWithExample', {poolName: pool.name}))
+                            i.bi.bi-file-earmark-pdf.me-1(aria-hidden="true")
+                            = ui.text('exportPdfWithExample')
+                        a.btn.btn-outline-light.btn-sm(href=`${exportUrl}?example=false` download aria-label=ui.text('exportNamedSharesPdfWithoutExample', {poolName: pool.name}))
+                            i.bi.bi-file-earmark-pdf.me-1(aria-hidden="true")
+                            = ui.text('exportPdfWithoutExample')
+            p.text-secondary.small= ui.text('statusDescribesPayer')
+            +invoiceShareLedgerControls(ui)
             .table-responsive.share-ledger-table
                 table.table.table-dark.table-hover.align-middle.mb-0
-                    caption.visually-hidden Calculated payer shares and settlement status
+                    caption.visually-hidden= ui.text('calculatedPayerSharesAndSettlementStatus')
                     thead
                         tr
-                            th(scope="col") Payer
-                            th(scope="col") Calculated balance
-                            th(scope="col") Status
-                            th(scope="col") Calculation details
-                            th(scope="col") Paid
+                            th(scope="col")= ui.labels.payer
+                            th(scope="col")= ui.labels.original
+                            th(scope="col")= ui.text('status')
+                            th(scope="col")= ui.text('calculationDetails')
+                            th(scope="col")= ui.text('settlement')
                     tbody(data-share-body)
                         each share in pool.shares
                             -
+                                // Saved coverage follows the applied snapshot, even while organizer edits remain pending.
                                 const registrationId = share.registrationId || share.registration?.id;
-                                const payerName = (participants || []).find(pt => pt.id === registrationId)?.name || `Participant #${registrationId}`;
-                                const covered = pool.needsRecalculation ? 'See saved calculation notes' : (pool.takeovers || [])
+                                const payerName = (participants || []).find(pt => pt.id === registrationId)?.name || ui.text('participant', {id: registrationId});
+                                const missingCoverage = !ui.hasAppliedTakeoverEvidence(pool);
+                                const covered = missingCoverage ? ui.text('seeSavedCalculationNotes') : appliedTakeovers
                                     .filter(t => t.payerRegistrationId === registrationId)
-                                    .map(t => (participants || []).find(pt => pt.id === t.beneficiaryRegistrationId)?.name || `Participant #${t.beneficiaryRegistrationId}`)
+                                    .map(t => (participants || []).find(pt => pt.id === t.beneficiaryRegistrationId)?.name || ui.text('participant', {id: t.beneficiaryRegistrationId}))
                                     .join(', ');
-                                const coveredCount = (pool.takeovers || []).filter(t => t.payerRegistrationId === registrationId).length;
-                                const notes = (share.note || '').split(' • ').filter(Boolean);
+                                const coveredCount = appliedTakeovers.filter(t => t.payerRegistrationId === registrationId).length;
+                                // Shared presentation owns signed calculated balance and payment/refund wording.
                                 const isPaid = share.isPaid === true || share.isPaid === 1;
-                                const amount = Number(share.shareAmount);
-                                const shareStatus = isPaid || amount === 0 ? 'settled' : amount < 0 ? 'refund' : 'due';
+                                const presentation = ui.share(share);
+                                const settledShareNotice = ui.settledShareNotice(pool, share, participants);
+                                const amount = presentation.originalBalance;
+                                const shareStatus = presentation.status;
+                                const hasSettlementAction = admin && amount !== 0;
                                 const searchText = `${payerName} ${covered} ${share.note || ''}`.toLowerCase();
-                            tr(data-share-row data-share-name=payerName data-share-search=searchText data-share-amount=amount data-share-status=shareStatus)
-                                td(data-label="Payer")
-                                    strong.d-block #{payerName}
-                                    small.text-secondary #{pool.needsRecalculation ? 'Coverage in saved notes' : coveredCount ? `Covers ${coveredCount} other participant${coveredCount === 1 ? '' : 's'}` : 'Own share'}
-                                td(data-label="Calculated balance")
-                                    strong.fs-5 #{fmtMoney(share.shareAmount)}
-                                    small.d-block.text-secondary(data-share-balance-note) #{isPaid ? 'Already settled' : amount < 0 ? 'Amount to pay out' : amount > 0 ? 'Amount to collect' : 'No payment due'}
-                                td(data-label="Status")
-                                    span.badge(data-share-state class=shareStatus === 'settled' ? 'bg-success' : shareStatus === 'refund' ? 'bg-info text-dark' : 'bg-warning text-dark') #{shareStatus === 'settled' ? 'Settled' : shareStatus === 'refund' ? 'Refund' : 'Due'}
-                                td(data-label="Calculation details")
-                                    button.btn.btn-outline-light.btn-sm.share-details-open(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-share-breakdown` aria-label=`View breakdown for ${payerName}`)
+                                // Existing numeric components allow the owner to refresh recorded-transfer totals after confirmation.
+                                const financialShare = {
+                                    registrationId,
+                                    baseShareAmount: share.baseShareAmount,
+                                    extraAmount: share.extraAmount,
+                                    invoiceCreditAmount: share.invoiceCreditAmount,
+                                    paymentCreditAmount: share.paymentCreditAmount ?? 0,
+                                    shareAmount: share.shareAmount,
+                                    isPaid,
+                                };
+                            tr(data-share-row data-share-name=payerName data-share-search=searchText data-share-amount=amount data-share-status=shareStatus data-share-financial=admin ? JSON.stringify(financialShare) : null)
+                                td(data-label=ui.text('payer'))
+                                    strong.d-block= payerName
+                                    //- Keep the ordinary ownership caption for every saved row, including later exemptions.
+                                    //- An applied responsibility notice belongs to the independent settlement status below.
+                                    small.text-secondary= missingCoverage ? ui.text('coverageInSavedNotes') : coveredCount ? ui.text('otherParticipantsCovered', {count: coveredCount}) : ui.text('ownShare')
+                                td(data-label=ui.labels.original)
+                                    //- The calculated balance stays visible regardless of the settlement marker.
+                                    strong.fs-5(data-share-balance)= ui.money(presentation.originalBalance)
+                                    //- Restore the role-specific description without calculating or displaying another amount.
+                                    small.d-block.text-secondary(data-share-balance-note)= ui.balanceCaption(share, admin ? 'organizer' : 'participant')
+                                td(data-label=ui.text('status'))
+                                    span.badge(data-share-state class=shareStatus === 'settled' ? 'bg-success' : shareStatus === 'refund' ? 'bg-info text-dark' : 'bg-warning text-dark')= presentation.statusLabel
+                                    if settledShareNotice
+                                        //- This retained-history indicator follows frozen calculation inputs, separately from payment status.
+                                        small.text-warning.d-block.mt-1(data-share-settlement-history)= settledShareNotice.label
+                                td(data-label=ui.text('calculationDetails'))
+                                    button.btn.btn-outline-light.btn-sm.share-details-open(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-share-breakdown` aria-label=ui.text('viewBreakdownFor', {payerName: payerName}))
                                         i.bi.bi-calculator.me-1(aria-hidden="true")
-                                        | View breakdown
+                                        = ui.text('viewBreakdown')
                                     template(data-share-details)
-                                        dl.row.g-1.small.mt-2.mb-2
-                                            dt.col-7 Base
-                                            dd.col-5.text-end #{fmtMoney(share.baseShareAmount)}
-                                            dt.col-7 Adjustments
-                                            dd.col-5.text-end #{fmtMoney(share.extraAmount)}
-                                            dt.col-7 Invoice credit
-                                            dd.col-5.text-end #{fmtMoney(share.invoiceCreditAmount)}
-                                            dt.col-7 Previously settled
-                                            dd.col-5.text-end #{fmtMoney(share.paymentCreditAmount)}
-                                            dt.col-7 Calculated balance
-                                            dd.col-5.text-end #{fmtMoney(share.shareAmount)}
-                                        if covered && !pool.needsRecalculation
-                                            details.small.mb-2
-                                                summary.text-info Covered participants (#{coveredCount})
-                                                p.text-secondary.mt-2.mb-0= covered
-                                        if notes.length
-                                            ul.small.ps-3.mb-0
-                                                each note in notes
-                                                    li.text-secondary= note
-                                td(data-label="Paid")
-                                    .form-check.form-switch
-                                        input.form-check-input.share-paid(type="checkbox" data-pool=pool.id data-id=share.id data-amount=share.shareAmount data-paid=isPaid ? 'true' : 'false' checked=isPaid disabled=!admin autocomplete="off" aria-label=`Mark ${payerName} paid`)
-            p.text-secondary.small.mb-0.py-3.text-center(hidden data-share-empty) No shares match these filters.
-            .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mt-3
-                small.text-secondary(data-share-page-summary role="status" aria-live="polite")
-                button.btn.btn-outline-light.btn-sm(type="button" data-share-refresh) Refresh list
-                .btn-group.btn-group-sm(role="group" aria-label="Share pages")
-                    button.btn.btn-outline-light(type="button" data-share-previous) Previous
-                    button.btn.btn-outline-light(type="button" data-share-next) Next
-            .pool-form-status.small(role="status" aria-live="polite" aria-atomic="true" data-share-feedback)
-        +poolEditModal(pool, 'share-breakdown', 'Share breakdown')
-            h6(data-share-details-payer)
-            div(data-share-details-content)
-            .d-flex.justify-content-end.mt-3
-                button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Close
+                                        +invoiceShareBreakdown(pool, share, ui, payerName, participants)
+                                td(data-label=ui.text('settlement') class=hasSettlementAction ? null : 'd-none d-lg-table-cell')
+                                    //- Preserve the desktop column, but omit an empty action slot from tablet/mobile cards.
+                                    //- A zero balance needs no transfer action; the adjacent status already describes it.
+                                    if hasSettlementAction
+                                        //- This compact button opens a frontend review; scrolling or cancellation never sends isPaid.
+                                        button.btn.btn-outline-light.btn-sm.share-settlement(type="button" data-pool=pool.id data-id=share.id data-amount=share.shareAmount data-paid=isPaid ? 'true' : 'false' autocomplete="off" aria-label=ui.text('actionForPayer', {action: presentation.actionLabel, payer: payerName}))
+                                            i.bi.me-1(aria-hidden="true" class=isPaid ? 'bi-arrow-counterclockwise' : 'bi-check2-circle' data-share-settlement-icon)
+                                            span(data-share-settlement-label)= presentation.actionLabel
+            +invoiceShareLedgerFooter(ui)
+        +invoiceShareBreakdownDialog(pool, ui)
 
-//- Takeover summary with consistent layout and manage button
-mixin takeoverOverview(pool, participants, mode, options)
+//- pool/participants provide saved coverage; mode controls editing context, options controls the heading.
+//- registrationId decorates the personal row only. ui is required and no feature state comes from globals.
+mixin takeoverOverview(pool, participants, mode, options, ui, registrationId = null)
     - const showHeading = !(options && options.showHeading === false);
     if showHeading
-        h6.mb-2 Takeovers
-        p.text-secondary.small.mb-2 Assign which participant covers another's share. Covered participants cannot take over other shares.
-    +poolCoverageOverview(pool, participants, mode)
+        h6.mb-2= ui.text('takeovers')
+        p.text-secondary.small.mb-2= ui.text('assignWhichParticipantCoversAnotherSShareCoveredParticipants')
+    +poolCoverageOverview(pool, participants, mode, ui, registrationId)
     button.btn.btn-outline-light.btn-sm.manage-takeovers.align-self-end.mt-2(type="button" data-id=pool.id data-mode=mode disabled=mode === 'participant' && pool.status !== 'OPEN')
         i.bi.bi-person-check.me-1(aria-hidden="true")
-        | Manage takeovers
+        = ui.text('manageTakeovers2')
 
-//- Participant takeover chooser reused on the registration page
-mixin participantTakeoverList(pools, participants)
+//- Reuse assigned pools and the explicitly passed participant registration; keep chooser drafts separate from saved coverage.
+mixin participantTakeoverList(pools, participants, ui, registrationId = null)
     - const participantList = participants || [];
     if pools && pools.length
-        h6.mt-4 Takeovers
-        p.text-secondary.small.mb-2 Choose whose share you will cover in each pool. Covered participants cannot take over other shares.
+        h6.mt-4= ui.text('takeovers')
+        p.text-secondary.small.mb-2= ui.text('chooseWhoseShareYouWillCoverInEachPool')
         each pool in pools
             - const assignments = pool.assignments || []
             - const assignedIds = pool.assignAll ? participantList.map(p => p.id) : (pool.assignments || []).map(a => a.registration?.id)
-            - const takeoverData = (pool.takeovers || []).map(t => ({payerRegistrationId: t.payerRegistrationId, beneficiaryRegistrationId: t.beneficiaryRegistrationId}))
+            //- Participant readers see applied coverage; pending organizer choices are not yet their responsibilities.
+            - const takeoverData = ui.appliedTakeovers(pool)
+            - const appliedPool = {...pool, takeovers: takeoverData, needsRecalculation: false}
             .border.border-secondary-subtle.rounded-3.p-3.mb-2(data-pool=pool.id data-pool-name=pool.name data-pool-status=pool.status data-assigned=JSON.stringify(assignedIds) data-takeovers=JSON.stringify(takeoverData))
                 .d-flex.justify-content-between.align-items-center.flex-wrap.gap-2
                     .d-flex.flex-column
-                        strong #{pool.name}
-                        small.text-secondary Covers #{pool.assignAll ? 'all participants' : assignments.length}
-                    +takeoverOverview(pool, participantList, 'participant', {showHeading: false})
+                        strong= pool.name
+                        small.text-secondary= pool.assignAll ? ui.text('allParticipantsCovered') : ui.text('participantsCovered', {count: assignments.length})
+                    if !ui.hasAppliedTakeoverEvidence(pool)
+                        p.text-secondary.small.mb-0= ui.text('appliedTakeoversUnavailable')
+                    else
+                        +takeoverOverview(appliedPool, participantList, 'participant', {showHeading: false}, ui, registrationId)
 
 //- Render a single proof link, keeping the markup consistent across admin/participant views
-mixin invoiceProofLink(inv, eventId, poolId)
+mixin invoiceProofLink(inv, eventId, poolId, ui)
     if inv.proofPath
-        a.text-info(href=`/api/event/${eventId}/invoice-pools/${poolId}/invoices/${inv.id}/proof` target="_blank" rel="noopener noreferrer" title=inv.proofOriginalName || 'Invoice proof')
+        a.text-info(href=`/api/event/${eventId}/invoice-pools/${poolId}/invoices/${inv.id}/proof` target="_blank" rel="noopener noreferrer" title=inv.proofOriginalName || ui.text('invoiceProof'))
             i.bi.bi-file-earmark-text.me-1(aria-hidden="true")
-            | View proof
+            = ui.text('viewProof')
     else
-        span.text-secondary #{inv.registrationId == null && !inv.proofOriginalName ? 'No proof attached' : 'Proof expired'}
+        //- Organizer entry keeps optional proof even when a participant paid. Existing original-name evidence still
+        //- distinguishes an expired upload from a receipt that was never attached; participant submissions require proof.
+        - const optionalProof = ui.isOrganizerInvoice(inv);
+        span.text-secondary= optionalProof && !inv.proofOriginalName ? ui.text('noProofAttached') : ui.text('proofExpired')
 
 //- Human-readable status badge shared by administration and participant history.
-mixin invoiceStatusBadge(status)
+mixin invoiceStatusBadge(status, ui)
     if status === 'NEW'
-        span.badge.bg-warning.text-dark Awaiting review
+        span.badge.bg-warning.text-dark= ui.labels.awaitingReview
     else if status === 'APPROVED'
-        span.badge.bg-success Accepted
+        span.badge.bg-success= ui.labels.accepted
     else if status === 'REJECTED'
-        span.badge.bg-danger Rejected
+        span.badge.bg-danger= ui.labels.rejected
     else if status === 'RETRACTED'
-        span.badge.bg-secondary Retracted
+        span.badge.bg-secondary= ui.labels.retracted
     else
-        span.badge.bg-secondary Closed
+        span.badge.bg-secondary= ui.labels.closed
 
 //- Search, status filter, and paging controls shared by ledgers with hundreds of rows.
-mixin invoiceLedgerToolbar(title, invoices)
+mixin invoiceLedgerToolbar(title, invoices, ui)
     - const newCount = invoices.filter(invoice => invoice.status === 'NEW').length
     - const acceptedCount = invoices.filter(invoice => invoice.status === 'APPROVED').length
     - const rejectedCount = invoices.filter(invoice => invoice.status === 'REJECTED').length
@@ -162,202 +280,213 @@ mixin invoiceLedgerToolbar(title, invoices)
     .invoice-ledger-toolbar.d-flex.flex-wrap.align-items-center.justify-content-between.gap-2.mb-2
         .d-flex.flex-wrap.align-items-center.gap-2
             h6.mb-0= title
-            span.badge.bg-secondary #{invoices.length} total
+            span.badge.bg-secondary= ui.text('total', {length: invoices.length})
             if newCount
-                span.badge.bg-warning.text-dark #{newCount} new
+                span.badge.bg-warning.text-dark= ui.text('countedLabel', {count: newCount, label: ui.labels.awaitingReview})
             if acceptedCount
-                span.badge.bg-success #{acceptedCount} accepted
+                span.badge.bg-success= ui.text('countedLabel', {count: acceptedCount, label: ui.labels.accepted})
             if rejectedCount
-                span.badge.bg-danger #{rejectedCount} rejected
+                span.badge.bg-danger= ui.text('countedLabel', {count: rejectedCount, label: ui.labels.rejected})
             if closedCount
-                span.badge.bg-secondary #{closedCount} closed
+                span.badge.bg-secondary= ui.text('countedLabel', {count: closedCount, label: ui.labels.closed})
             if retractedCount
-                span.badge.bg-secondary #{retractedCount} retracted
+                span.badge.bg-secondary= ui.text('countedLabel', {count: retractedCount, label: ui.labels.retracted})
         .invoice-ledger-controls.d-flex.flex-wrap.gap-2
-            input.form-control.form-control-sm.text-bg-dark.invoice-ledger-search(type="search" data-invoice-search-input placeholder="Search invoices" aria-label="Search invoices")
-            select.form-select.form-select-sm.text-bg-dark(data-invoice-status-filter aria-label="Filter invoice status")
-                option(value="") All statuses
-                option(value="NEW") Awaiting review
-                option(value="APPROVED") Accepted
-                option(value="REJECTED") Rejected
-                option(value="CLOSED") Closed
-                option(value="RETRACTED") Retracted
-            select.form-select.form-select-sm.text-bg-dark(data-invoice-page-size aria-label="Invoices per page")
-                option(value="25") 25 per page
-                option(value="50") 50 per page
-                option(value="100") 100 per page
+            input.form-control.form-control-sm.text-bg-dark.invoice-ledger-search(type="search" data-invoice-search-input placeholder=ui.text('searchInvoices') aria-label=ui.text('searchInvoices'))
+            select.form-select.form-select-sm.text-bg-dark(data-invoice-status-filter aria-label=ui.text('filterInvoiceStatus'))
+                option(value="")= ui.text('allStatuses')
+                option(value="NEW")= ui.labels.awaitingReview
+                option(value="APPROVED")= ui.labels.accepted
+                option(value="REJECTED")= ui.labels.rejected
+                option(value="CLOSED")= ui.labels.closed
+                option(value="RETRACTED")= ui.labels.retracted
+            select.form-select.form-select-sm.text-bg-dark(data-invoice-page-size aria-label=ui.text('invoicesPerPage'))
+                option(value="25")= ui.text('pageSizeOption', {count: 25})
+                option(value="50")= ui.text('pageSizeOption', {count: 50})
+                option(value="100")= ui.text('pageSizeOption', {count: 100})
 
-mixin invoiceLedgerFooter
+mixin invoiceLedgerFooter(ui)
     .invoice-ledger-footer.d-flex.flex-wrap.align-items-center.justify-content-between.gap-2.mt-2
         small.text-secondary(data-invoice-page-summary)
-        .btn-group.btn-group-sm(role="group" aria-label="Invoice pages")
+        .btn-group.btn-group-sm(role="group" aria-label=ui.text('invoicePages'))
             button.btn.btn-outline-light(type="button" data-invoice-page-previous)
                 i.bi.bi-chevron-left.me-1(aria-hidden="true")
-                | Previous
+                = ui.text('previous2')
             button.btn.btn-outline-light(type="button" data-invoice-page-next)
-                | Next
+                = ui.text('next')
                 i.bi.bi-chevron-right.ms-1(aria-hidden="true")
 
-//- Organizer ledger keeps original data, corrections, rejection history, and actions together.
-mixin adminInvoiceOverview(pool, eventId, participants)
+//- pool.invoices is the saved audit trail; eventId/participants provide proof routes and attribution, ui provides all text.
+//- data-invoice-row and stable amount hooks feed display filters and captured frontend reviews, never authorization.
+mixin adminInvoiceOverview(pool, eventId, participants, ui)
     - const invoices = [...(pool.invoices || [])].sort((left, right) => new Date((right.track && right.track.createdAt) || 0).getTime() - new Date((left.track && left.track.createdAt) || 0).getTime())
     if invoices.length
         .invoice-ledger.border.border-secondary-subtle.rounded-3.bg-black.p-3.mt-3(data-invoice-ledger)
-            +invoiceLedgerToolbar('Invoice administration', invoices)
+            +invoiceLedgerToolbar(ui.text('invoiceAdministration'), invoices, ui)
             .table-responsive.invoice-ledger-table
                 table.table.table-dark.table-hover.align-middle.mb-0
                     thead
                         tr
-                            th Invoice
-                            th Participant / source
-                            th Submitted details
-                            th Organizer review
-                            th Status
-                            th Proof
-                            th Actions
+                            th= ui.text('invoice2')
+                            th= ui.text('participantSource')
+                            th= ui.text('submittedDetails')
+                            th= ui.text('organizerReview')
+                            th= ui.text('status')
+                            th= ui.text('proof')
+                            th= ui.text('actions')
                     tbody
                         each inv in invoices
                             - const participant = (participants || []).find(row => row.id === inv.registrationId)
                             - const isPoolExpense = inv.registrationId == null
-                            - const participantName = isPoolExpense ? (inv.recordedByName || inv.recordedByProfile?.name || 'Organizer') : (participant && participant.name) || `Participant #${inv.registrationId}`
+                            //- Registration describes who paid; creator audit remains independent for organizer-entered participant invoices.
+                            - const isOrganizerRecorded = ui.isOrganizerInvoice(inv)
+                            - const recorderName = inv.recordedByName || inv.recordedByProfile?.name || ui.text('organizer')
+                            - const participantName = isPoolExpense ? recorderName : (participant && participant.name) || ui.text('participant', {id: inv.registrationId})
                             - const participantEmail = (participant && participant.email) || ''
-                            - const searchText = `${inv.id} ${isPoolExpense ? 'pool expense' : ''} ${participantName} ${participantEmail} ${inv.amount} ${inv.description || ''} ${inv.correctedAmount || ''} ${inv.correctedDescription || ''} ${inv.rejectionReason || ''}`.toLowerCase()
+                            - const searchText = `${inv.id} ${isPoolExpense ? ui.text('poolExpense') : ''} ${participantName} ${isOrganizerRecorded ? recorderName : ''} ${participantEmail} ${inv.amount} ${inv.description || ''} ${inv.correctedAmount || ''} ${inv.correctedDescription || ''} ${inv.rejectionReason || ''}`.toLowerCase()
                             - const createdAt = inv.track && inv.track.createdAt
                             tr(data-invoice-row data-invoice-status=inv.status data-invoice-search=searchText)
-                                td(data-label="Invoice")
-                                    strong ##{inv.id}
-                                    small.text-secondary.d-block= `${isPoolExpense ? 'Recorded' : 'Submitted'} ${fmtInvoiceDate(createdAt)}`
-                                td(data-label="Participant / source")
-                                    strong.d-block= isPoolExpense ? 'Pool expense' : participantName
-                                    if isPoolExpense
-                                        small.text-secondary Recorded by #{participantName}
-                                    else if participantEmail && participantEmail !== '—'
-                                        small.text-secondary= participantEmail
-                                td.invoice-cell-wide(data-label="Submitted details")
-                                    strong.d-block #{fmtMoney(inv.amount)}
-                                    small.text-secondary.invoice-description= inv.description || 'No description'
-                                td.invoice-cell-wide(data-label="Organizer review")
+                                td(data-label=ui.text('invoice2'))
+                                    strong= ui.text('invoiceReference', {id: inv.id})
+                                    small.text-secondary.d-block= ui.text(isOrganizerRecorded ? 'recordedDate' : 'submittedDate', {date: fmtInvoiceDate(createdAt)})
+                                td(data-label=ui.text('participantSource'))
+                                    strong.d-block= isPoolExpense ? ui.text('poolExpense') : participantName
+                                    if isOrganizerRecorded
+                                        //- Display the immutable recorder name even when this invoice belongs to a participant's history.
+                                        small.text-secondary.d-block= ui.text('recordedBy', {participantName: recorderName})
+                                    if participantEmail && participantEmail !== '—'
+                                        small.text-secondary.d-block= participantEmail
+                                td.invoice-cell-wide(data-label=ui.text('submittedDetails'))
+                                    strong.d-block(data-invoice-submitted-amount)= fmtMoney(inv.amount)
+                                    small.text-secondary.invoice-description= inv.description || ui.text('noDescription')
+                                td.invoice-cell-wide(data-label=ui.text('organizerReview'))
                                     if inv.status === 'NEW'
                                         .invoice-review-fields
-                                            label.form-label.small.mb-1 Corrected amount
-                                            input.form-control.form-control-sm.text-bg-dark.invoice-corrected-amount(type="number" min="0.01" step="0.01" placeholder=`Keep ${fmtMoney(inv.amount)}` aria-label=`Corrected amount for invoice ${inv.id}`)
-                                            label.form-label.small.mt-2.mb-1 Corrected description
-                                            textarea.form-control.form-control-sm.text-bg-dark.invoice-corrected-description(rows="2" maxlength="4000" placeholder="Leave blank to keep submitted description" aria-label=`Corrected description for invoice ${inv.id}`)
-                                            label.form-label.small.mt-2.mb-1 Rejection reason
-                                            textarea.form-control.form-control-sm.text-bg-dark.invoice-rejection-reason(rows="2" maxlength="4000" placeholder="Required when rejecting" aria-label=`Rejection reason for invoice ${inv.id}`)
+                                            label.form-label.small.mb-1= ui.text('correctedAmount2')
+                                            input.form-control.form-control-sm.text-bg-dark.invoice-corrected-amount(type="number" min="0.01" step="0.01" placeholder=ui.text('keep', {fmtMoney: fmtMoney(inv.amount)}) aria-label=ui.text('correctedAmountForInvoice', {id: inv.id}))
+                                            label.form-label.small.mt-2.mb-1= ui.text('correctedDescription2')
+                                            textarea.form-control.form-control-sm.text-bg-dark.invoice-corrected-description(rows="2" maxlength="4000" placeholder=ui.text('leaveBlankToKeepSubmittedDescription') aria-label=ui.text('correctedDescriptionForInvoice', {id: inv.id}))
+                                            label.form-label.small.mt-2.mb-1= ui.text('rejectionReason')
+                                            textarea.form-control.form-control-sm.text-bg-dark.invoice-rejection-reason(rows="2" maxlength="4000" placeholder=ui.text('requiredWhenRejecting') aria-label=ui.text('rejectionReasonForInvoice', {id: inv.id}))
                                     else if inv.correctedAmount || inv.correctedDescription
                                         if inv.correctedAmount
-                                            strong.d-block #{fmtMoney(inv.correctedAmount)}
-                                            small.text-secondary.d-block Original: #{fmtMoney(inv.amount)}
+                                            strong.d-block= fmtMoney(inv.correctedAmount)
+                                            small.text-secondary.d-block= ui.text('original2', {fmtMoney: fmtMoney(inv.amount)})
                                         if inv.correctedDescription
                                             small.d-block.mt-1= inv.correctedDescription
                                     else
-                                        span.text-secondary.small No corrections
-                                td(data-label="Status")
-                                    +invoiceStatusBadge(inv.status)
+                                        span.text-secondary.small= ui.text('noCorrections')
+                                td(data-label=ui.text('status'))
+                                    +invoiceStatusBadge(inv.status, ui)
                                     if inv.rejectionReason
                                         small.text-danger-emphasis.d-block.mt-2= inv.rejectionReason
-                                td(data-label="Proof")
-                                    +invoiceProofLink(inv, eventId, pool.id)
-                                td.invoice-cell-actions(data-label="Actions")
+                                td(data-label=ui.text('proof'))
+                                    +invoiceProofLink(inv, eventId, pool.id, ui)
+                                td.invoice-cell-actions(data-label=ui.text('actions'))
                                     .d-flex.flex-wrap.gap-1
                                         if inv.status === 'NEW'
                                             button.btn.btn-success.btn-sm.invoice-approve(type="button" data-pool=pool.id data-id=inv.id)
                                                 i.bi.bi-check2.me-1(aria-hidden="true")
-                                                | Accept
+                                                = ui.text('accept')
                                             button.btn.btn-outline-danger.btn-sm.invoice-decline(type="button" data-pool=pool.id data-id=inv.id)
                                                 i.bi.bi-x-lg.me-1(aria-hidden="true")
-                                                | Reject
+                                                = ui.text('reject')
                                         else if inv.status === 'APPROVED' || inv.status === 'CLOSED'
                                             button.btn.btn-outline-light.btn-sm.invoice-edit-open(type="button" data-pool=pool.id data-id=inv.id data-revision=pool.calculationRevision data-amount=(inv.correctedAmount != null ? inv.correctedAmount : inv.amount) data-description=(inv.correctedDescription != null ? inv.correctedDescription : (inv.description || '')) data-original-description=inv.description data-pool-status=pool.status)
                                                 i.bi.bi-pencil.me-1(aria-hidden="true")
-                                                | Correct
+                                                = ui.text('correct')
                                             button.btn.btn-outline-danger.btn-sm.invoice-reject-open(type="button" data-pool=pool.id data-id=inv.id data-revision=pool.calculationRevision data-amount=(inv.correctedAmount != null ? inv.correctedAmount : inv.amount) data-description=(inv.correctedDescription != null ? inv.correctedDescription : (inv.description || '')) data-pool-status=pool.status)
                                                 i.bi.bi-x-circle.me-1(aria-hidden="true")
-                                                | Reject from pool
+                                                = ui.text('rejectFromPool')
                                             if inv.status === 'APPROVED'
                                                 button.btn.btn-outline-light.btn-sm.invoice-close(type="button" data-pool=pool.id data-id=inv.id)
                                                     i.bi.bi-check2-circle.me-1(aria-hidden="true")
-                                                    | Close
+                                                    = ui.text('close')
                                         else
-                                            span.text-secondary.small No actions
-            .invoice-ledger-empty.text-secondary.small.py-3.text-center(hidden data-invoice-empty) No invoices match these filters.
-            +invoiceLedgerFooter
+                                            span.text-secondary.small= ui.text('noActions')
+            .invoice-ledger-empty.text-secondary.small.py-3.text-center(hidden data-invoice-empty)= ui.text('noInvoicesMatchTheseFilters')
+            +invoiceLedgerFooter(ui)
     else
-        p.text-secondary.mb-0.mt-3 No invoices yet.
+        p.text-secondary.mb-0.mt-3= ui.text('noInvoicesYet')
 
-//- Participant history exposes the full audit trail, including accepted corrections and rejection reasons.
-mixin participantInvoiceOverview(invoices, pools, eventId)
+//- invoices belongs to the authenticated participant; pools/eventId resolve names and proof links, ui owns presentation.
+//- Keep accepted corrections, rejections, and retractions visible as escaped evidence in the same audit ledger.
+mixin participantInvoiceOverview(invoices, pools, eventId, ui)
     - const orderedInvoices = [...(invoices || [])].sort((left, right) => new Date((right.track && right.track.createdAt) || 0).getTime() - new Date((left.track && left.track.createdAt) || 0).getTime())
     if orderedInvoices.length
         .invoice-ledger.border.border-secondary-subtle.rounded-3.bg-black.p-3.mt-3(data-invoice-ledger)
-            +invoiceLedgerToolbar('Your invoice history', orderedInvoices)
+            +invoiceLedgerToolbar(ui.text('yourInvoiceHistory'), orderedInvoices, ui)
             .table-responsive.invoice-ledger-table
                 table.table.table-dark.table-hover.align-middle.mb-0
                     thead
                         tr
-                            th Invoice
-                            th Pool
-                            th Amount
-                            th Description
-                            th Status
-                            th Proof
-                            th Actions
+                            th= ui.text('invoice2')
+                            th= ui.text('pool')
+                            th= ui.text('amount')
+                            th= ui.text('description')
+                            th= ui.text('status')
+                            th= ui.text('proof')
+                            th= ui.text('actions')
                     tbody
                         each inv in orderedInvoices
                             - const historyPool = pools.find(pool => pool.id === inv.poolId) || inv.pool
-                            - const poolName = historyPool?.name || 'Archived pool'
-                            - const searchText = `${inv.id} ${poolName} ${inv.amount} ${inv.description || ''} ${inv.correctedAmount || ''} ${inv.correctedDescription || ''} ${inv.rejectionReason || ''}`.toLowerCase()
+                            - const poolName = historyPool?.name || ui.text('archivedPool')
+                            - const recorderName = ui.isOrganizerInvoice(inv) ? inv.recordedByName || inv.recordedByProfile?.name || ui.text('organizer') : ''
+                            - const searchText = `${inv.id} ${poolName} ${recorderName} ${inv.amount} ${inv.description || ''} ${inv.correctedAmount || ''} ${inv.correctedDescription || ''} ${inv.rejectionReason || ''}`.toLowerCase()
                             - const createdAt = inv.track && inv.track.createdAt
                             tr(data-invoice-row data-invoice-status=inv.status data-invoice-search=searchText)
-                                td(data-label="Invoice")
-                                    strong ##{inv.id}
+                                td(data-label=ui.text('invoice2'))
+                                    strong= ui.text('invoiceReference', {id: inv.id})
                                     small.text-secondary.d-block= fmtInvoiceDate(createdAt)
-                                td(data-label="Pool")= poolName
-                                td(data-label="Amount")
-                                    strong.d-block #{fmtMoney(inv.correctedAmount || inv.amount)}
+                                    if recorderName
+                                        //- Paid-by attribution grants ordinary own history without misrepresenting its organizer creator.
+                                        small.text-secondary.d-block= ui.text('recordedBy', {participantName: recorderName})
+                                td(data-label=ui.text('pool'))= poolName
+                                td(data-label=ui.text('amount'))
+                                    strong.d-block= fmtMoney(inv.correctedAmount || inv.amount)
                                     if inv.correctedAmount
-                                        small.text-secondary Original: #{fmtMoney(inv.amount)}
-                                td.invoice-cell-wide(data-label="Description")
-                                    span.d-block= inv.correctedDescription || inv.description || 'No description'
+                                        small.text-secondary= ui.text('original2', {fmtMoney: fmtMoney(inv.amount)})
+                                td.invoice-cell-wide(data-label=ui.text('description'))
+                                    span.d-block= inv.correctedDescription || inv.description || ui.text('noDescription')
                                     if inv.correctedDescription && inv.description
-                                        small.text-secondary.d-block Original: #{inv.description}
-                                td(data-label="Status")
-                                    +invoiceStatusBadge(inv.status)
+                                        small.text-secondary.d-block= ui.text('original3', {description: inv.description})
+                                td(data-label=ui.text('status'))
+                                    +invoiceStatusBadge(inv.status, ui)
                                     if inv.rejectionReason
                                         small.text-danger-emphasis.d-block.mt-2
-                                            strong Reason:
-                                            |  #{inv.rejectionReason}
-                                td(data-label="Proof")
-                                    +invoiceProofLink(inv, eventId, inv.poolId)
-                                td.invoice-cell-actions(data-label="Actions")
+                                            strong= ui.text('reason')
+                                            = inv.rejectionReason
+                                td(data-label=ui.text('proof'))
+                                    +invoiceProofLink(inv, eventId, inv.poolId, ui)
+                                td.invoice-cell-actions(data-label=ui.text('actions'))
                                     if inv.status === 'NEW'
                                         button.btn.btn-outline-danger.btn-sm.invoice-retract-open(type="button" data-pool=inv.poolId data-id=inv.id data-revision=(historyPool && historyPool.calculationRevision) data-amount=inv.amount data-description=inv.description)
                                             i.bi.bi-arrow-counterclockwise.me-1(aria-hidden="true")
-                                            | Retract
+                                            = ui.text('retract')
                                     else if inv.status === 'APPROVED'
                                         button.btn.btn-sm.btn-outline-success.invoice-close-self(type="button" data-pool=inv.poolId data-id=inv.id)
                                             i.bi.bi-check2-circle.me-1(aria-hidden="true")
-                                            | Close
+                                            = ui.text('close')
                                     else
-                                        span.text-secondary.small No actions
-            .invoice-ledger-empty.text-secondary.small.py-3.text-center(hidden data-invoice-empty) No invoices match these filters.
-            +invoiceLedgerFooter
+                                        span.text-secondary.small= ui.text('noActions')
+            .invoice-ledger-empty.text-secondary.small.py-3.text-center(hidden data-invoice-empty)= ui.text('noInvoicesMatchTheseFilters')
+            +invoiceLedgerFooter(ui)
     else
-        p.text-secondary.small.mb-0 You have not submitted any invoices yet.
+        p.text-secondary.small.mb-0= ui.text('youHaveNotSubmittedAnyInvoicesYet')
 
 //- Invoice overview that adapts to admin and participant needs
-mixin invoiceOverview(mode, options)
+mixin invoiceOverview(mode, options, ui)
     - const pools = options?.pools || [];
     - const eventId = options?.eventId;
     - const invoices = options?.invoices;
     if mode === 'admin' && options.pool
-        +adminInvoiceOverview(options.pool, eventId, options.participants || [])
+        +adminInvoiceOverview(options.pool, eventId, options.participants || [], ui)
     else if mode === 'participant'
-        +participantInvoiceOverview(invoices || [], pools, eventId)
+        +participantInvoiceOverview(invoices || [], pools, eventId, ui)
 
-//- Collapsible invoice submission area for both admins (on behalf) and participants
-mixin invoiceSubmission(eventId, pools, mode, invoices, allPools = [])
+//- eventId/pools provide the existing submission endpoint and eligible choices; invoices/allPools supply saved history.
+//- mode selects the established rendering branch. The invoice-submission binder owns one upload and its recovery feedback.
+mixin invoiceSubmission(eventId, pools, mode, invoices, allPools = [], ui)
     - const hasPools = pools && pools.length;
     - const overviewPools = [...new Map([...(allPools || []), ...(pools || [])].map(pool => [pool.id, pool])).values()];
     .accordion.accordion-dark.mb-3#invoiceSubmission
@@ -365,186 +494,216 @@ mixin invoiceSubmission(eventId, pools, mode, invoices, allPools = [])
             h2.accordion-header
                 button.accordion-button.collapsed.text-white(type="button" data-bs-toggle="collapse" data-bs-target="#invoicePoolCollapse" aria-expanded="false" aria-controls="invoicePoolCollapse")
                     i.bi.bi-receipt.me-2(aria-hidden="true")
-                    | Submit an invoice & history
+                    = ui.text('submitAnInvoiceHistory')
             #invoicePoolCollapse.accordion-collapse.collapse
                 .accordion-body
                     if hasPools
                         form#invoiceSubmitForm(data-api=`/api/event/${eventId}/invoice-pools/${pools[0].id}/submit` enctype="multipart/form-data")
                             fieldset.border-0.p-0.m-0(data-invoice-fields)
-                                legend.visually-hidden Invoice details and proof
+                                legend.visually-hidden= ui.text('invoiceDetailsAndProof')
                                 .row.g-2
                                     .col-md-4
-                                        label.form-label(for="invoicePool") Choose pool
+                                        label.form-label(for="invoicePool")= ui.text('choosePool')
                                         select#invoicePool.form-select.text-bg-dark(name="poolId" required)
                                             each pool in pools
                                                 option(value=pool.id)= pool.name
                                     .col-md-4
-                                        label.form-label(for="invoiceAmount") Amount
+                                        label.form-label(for="invoiceAmount")= ui.text('amount')
                                         input#invoiceAmount.form-control.text-bg-dark(type="number" name="amount" step="0.01" min="0.01" required)
                                     .col-md-4
-                                        label.form-label(for="invoiceDescription") Description
+                                        label.form-label(for="invoiceDescription")= ui.text('description')
                                         input#invoiceDescription.form-control.text-bg-dark(type="text" name="description")
                                     .col-12
-                                        label.form-label(for="invoiceProof") Proof (image or PDF)
+                                        label.form-label(for="invoiceProof")= ui.text('proofImageOrPDF')
                                         input#invoiceProof.form-control.text-bg-dark(type="file" name="proof" accept="image/jpeg,image/png,image/gif,application/pdf" required)
                             .mt-3(data-invoice-feedback hidden)
                                 #invoiceSubmitStatus.alert.alert-info.mb-2(data-invoice-status role="status" aria-live="polite" aria-atomic="true" tabindex="-1")
-                                .progress.mb-2(data-invoice-progress hidden role="progressbar" aria-label="Invoice upload progress" aria-valuemin="0" aria-valuemax="100")
+                                .progress.mb-2(data-invoice-progress hidden role="progressbar" aria-label=ui.text('invoiceUploadProgress') aria-valuemin="0" aria-valuemax="100")
                                     .progress-bar.progress-bar-striped.progress-bar-animated(data-invoice-progress-bar style="width: 100%")
-                                button.btn.btn-outline-light.btn-sm(type="button" data-invoice-history hidden) View invoice history
+                                button.btn.btn-outline-light.btn-sm(type="button" data-invoice-history hidden)= ui.text('viewInvoiceHistory')
                             .d-flex.justify-content-end.mt-2
                                 button.btn.btn-primary(type="submit" aria-describedby="invoiceSubmitStatus")
                                     i.bi.bi-cloud-upload.me-1(aria-hidden="true")
-                                    | Submit invoice
+                                    = ui.text('submitInvoice')
                     else
                         .alert.alert-info(role="status")
                             i.bi.bi-info-circle.me-2(aria-hidden="true")
-                            | No open pools for submissions right now.
+                            = ui.text('noOpenPoolsForSubmissionsRightNow')
                     #invoiceHistory
-                        +invoiceOverview('participant', {invoices: invoices || [], pools: overviewPools, eventId: eventId})
-    +invoiceRetractionDialog
+                        +invoiceOverview('participant', {invoices: invoices || [], pools: overviewPools, eventId: eventId}, ui)
+    +invoiceRetractionDialog(ui)
 
-//- Participant-friendly snapshot of what they owe in closed pools
-mixin participantShareSummary(registrationId, pools)
+//- One read-only ledger serves every saved pool share belonging to this registration, including long histories.
+//- It reuses organizer filtering, sorting, paging, responsive rows, and the single selected-row breakdown dialog.
+mixin participantShareSummary(registrationId, pools, ui, participants = [])
+    //- Select this registration's saved payer rows only; coverage beneficiary rows do not imply another payment.
     - const rows = [];
+    - const payerName = (participants || []).find(participant => participant.id === registrationId)?.name;
     each pool in pools || []
-        if pool.shares && pool.shares.length
-            each share in pool.shares
-                if share.registrationId === registrationId
-                    - rows.push({pool, share});
+        each share in pool.shares || []
+            if share.registrationId === registrationId
+                - rows.push({pool, share});
     if rows.length
-        h6.mt-3 Your pool shares
-        p.text-secondary.small Previously settled includes payments received (positive) or refunds already paid out (negative) before this calculation. The Paid status shows whether the remaining amount has also been settled.
-        .table-responsive
-            table.table.table-dark.table-sm
-                thead
-                    tr
-                        th Pool
-                        th Base
-                        th Adjustments
-                        th Invoice credit
-                        th Previously settled
-                        th Remaining due / refund
-                        th Notes
-                        th Status
-                tbody
-                    each row in rows
-                        - const notes = (row.share.note || '').split(' • ').filter(Boolean);
+        - const dialogPool = {id: `personal-shares-${registrationId}`, name: ui.text('yourPoolShares')};
+        h6.mt-3= ui.text('yourPoolShares')
+        .share-ledger.border.border-secondary-subtle.rounded-3.p-3(data-share-ledger data-personal-share-ledger)
+            +invoiceShareLedgerControls(ui, true)
+            .table-responsive.share-ledger-table(data-share-personal-table)
+                table.table.table-dark.table-hover.align-middle.mb-0
+                    thead
                         tr
-                            td
-                                span.d-block #{row.pool.name}
-                                if row.pool.needsRecalculation
-                                    span.badge.bg-warning.text-dark Recalculation required
-                                    small.d-block.text-warning These amounts are from the previous calculation. Recorded payments will be credited when the organizer recalculates.
-                            td #{fmtMoney(row.share.baseShareAmount)}
-                            td #{fmtMoney(row.share.extraAmount)}
-                            td #{fmtMoney(row.share.invoiceCreditAmount)}
-                            td #{fmtMoney(row.share.paymentCreditAmount)}
-                            td
-                                strong #{fmtMoney(row.share.shareAmount)}
-                                if Number(row.share.shareAmount) < 0 && !row.share.isPaid
-                                    small.d-block.text-info Refund due
-                            td
-                                if notes.length
-                                    ul.list-unstyled.mb-0
-                                        each note in notes
-                                            li.text-secondary.small= note
-                                else
-                                    span.text-secondary.small No notes
-                            td
-                                if row.share.isPaid || Number(row.share.shareAmount) === 0
-                                    span.badge.bg-success.text-dark Settled
-                                else if Number(row.share.shareAmount) < 0
-                                    span.badge.bg-info.text-dark Refund
-                                else
-                                    span.badge.bg-warning.text-dark Due
+                            th(scope="col")= ui.text('pool')
+                            th(scope="col")= ui.labels.original
+                            th(scope="col")= ui.text('status')
+                            th(scope="col")= ui.text('calculationDetails')
+                    tbody(data-share-body)
+                        each row in rows
+                            -
+                                // Serialize only this payer's presentation, never raw pool shares or contributions.
+                                // Attribute escaping and lazy text-node rendering protect saved names and notes.
+                                const presentation = ui.share(row.share);
+                                const snapshot = row.pool.calculationSnapshot;
+                                const settledShareNotice = ui.settledShareNotice(row.pool, row.share, participants);
+                                const breakdown = {
+                                    components: ui.components(row.share, snapshot && snapshot.explanation, snapshot && snapshot.surcharges),
+                                    calculation: ui.payerCalculation(snapshot && snapshot.explanation, {...row.share, payerName: row.share.payerName || payerName}, snapshot && snapshot.surcharges),
+                                    notes: (row.share.note || '').split(' • ').filter(Boolean),
+                                    statusLabel: presentation.statusLabel,
+                                    needsRecalculation: !!row.pool.needsRecalculation,
+                                    settledShareNotice,
+                                };
+                                const searchText = `${row.pool.name} ${row.pool.description || ''} ${row.share.note || ''}`.toLowerCase();
+                            tr(data-share-row data-share-name=row.pool.name data-share-search=searchText data-share-amount=presentation.originalBalance data-share-status=presentation.status data-share-breakdown=JSON.stringify(breakdown))
+                                td(data-label=ui.text('pool'))
+                                    strong.d-block= row.pool.name
+                                    if row.pool.needsRecalculation
+                                        small.text-warning.d-block= ui.text('recalculationRequired')
+                                td(data-label=ui.labels.original)
+                                    strong.fs-5(data-share-balance)= ui.money(presentation.originalBalance)
+                                    small.d-block.text-secondary(data-share-balance-note)= ui.balanceCaption(row.share, 'participant')
+                                td(data-label=ui.text('status'))
+                                    span.badge(data-share-state class=presentation.status === 'settled' ? 'bg-success' : presentation.status === 'refund' ? 'bg-info text-dark' : 'bg-warning text-dark')= presentation.statusLabel
+                                    if settledShareNotice
+                                        small.text-warning.d-block.mt-1(data-share-settlement-history)= settledShareNotice.label
+                                td(data-label=ui.text('calculationDetails'))
+                                    //- Only the selected pool's structured payload is rendered into the shared dialog.
+                                    button.btn.btn-outline-light.btn-sm.share-details-open(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${dialogPool.id}-share-breakdown` aria-label=ui.text('viewBreakdownForPool', {poolName: row.pool.name}))
+                                        i.bi.bi-calculator.me-1(aria-hidden="true")
+                                        = ui.text('viewBreakdown')
+            +invoiceShareLedgerFooter(ui)
+        +invoiceShareBreakdownDialog(dialogPool, ui)
 
 //- Compact pool summary keeps the next action and calculation state visible.
-mixin poolHeaderSummary(pool)
-    .d-flex.align-items-center.w-100.justify-content-between.flex-wrap.gap-3
+mixin poolHeaderSummary(pool, ui)
+    - const summary = ui.poolSummary(pool);
+    .pool-header-summary.d-flex.align-items-center.w-100.justify-content-between.flex-wrap.gap-3
         .d-flex.flex-column.flex-grow-1
             .d-flex.align-items-center.flex-wrap.gap-2
-                span.fw-semibold #{pool.name}
+                span.fw-semibold= pool.name
                 if pool.isDefault
-                    span.badge.bg-primary.text-dark Default
+                    span.badge.bg-primary.text-dark= ui.text('default')
                 if pool.needsRecalculation
-                    span.badge.bg-warning.text-dark Recalculation required
-            small.text-secondary.mb-0 #{pool.description || 'Shared event costs'}
-        .d-flex.align-items-center.gap-3.me-2
-            span.badge.bg-info.text-dark #{pool.status === 'OPEN' ? 'Open for invoices' : 'Closed'}
-            span.fw-bold #{fmtMoney(pool.totalAmount)}
+                    span.badge.bg-warning.text-dark= ui.text('recalculationRequired')
+                //- Identify the staged feature even while the pool is collapsed; pending inputs are never applied coverage.
+                if ui.hasPendingTakeovers(pool)
+                    span.badge.bg-warning.text-dark(data-pool-takeover-pending)= ui.text('takeoverChangesPendingIndicator')
+            small.text-secondary.mb-0= pool.description || ui.text('sharedEventCosts')
+        .d-flex.align-items-center.justify-content-end.flex-wrap.gap-3.me-2
+            //- Collapsed pools need their most important amounts without opening each expanded summary.
+            //- Distinct header hooks let settlement updates refresh both contexts without duplicating ledger selectors.
+            each metric in summary.primary
+                if metric.key === 'totalAmount' || metric.key === 'outstandingAmount' || metric.key === 'creditAmount'
+                    .text-end
+                        small.text-secondary.d-block= metric.label
+                        strong(data-pool-header-outstanding=metric.key === 'outstandingAmount' ? true : null data-pool-header-refunds=metric.key === 'creditAmount' ? true : null)= ui.money(metric.amount)
+            span.badge.bg-info.text-dark= ui.text(pool.status === 'OPEN' ? 'openForInvoices' : pool.status === 'ORGANIZER_ONLY' ? 'organizerInvoicesOnly' : 'closed')
 
-mixin poolStats(pool)
+//- pool contains persisted aggregate columns. Source costs appear once; transfers apply only to saved closed-pool shares.
+//- ui projects stored refund magnitudes negative. Settings and derived subtotals belong to their existing detail dialogs.
+mixin poolStats(pool, ui)
+    - const summary = ui.poolSummary(pool);
+    - const snapshot = pool.calculationSnapshot;
+    - const hasSavedShares = pool.status === 'CLOSED' && (pool.shares || []).length > 0;
+    - const example = hasSavedShares ? ui.calculation(snapshot && snapshot.explanation, pool.shares, snapshot && snapshot.surcharges) : null;
     .pool-totals.border.border-secondary-subtle.rounded-3.p-3.bg-black
         .row.g-3
-            .col-6.col-lg-3
-                small.text-secondary.d-block Full total
-                strong.fs-4 #{fmtMoney(pool.totalAmount)}
-            .col-6.col-lg-3
-                small.text-secondary.d-block Distributable total
-                strong.fs-4 #{fmtMoney(pool.payableAmount)}
-            .col-6.col-lg-3
-                small.text-secondary.d-block Outstanding payments
-                strong.fs-4(data-pool-outstanding) #{fmtMoney(pool.outstandingAmount)}
-            .col-6.col-lg-3
-                small.text-secondary.d-block Credits owed
-                strong.fs-4(data-pool-refunds) #{fmtMoney(pool.creditAmount)}
-        details.mt-3.small
-            summary.text-info Calculation breakdown
-            dl.row.g-2.mb-0.mt-1
-                dt.col-7.col-sm-8 Total invoices
-                dd.col-5.col-sm-4.text-end #{fmtMoney(pool.invoiceAmount)}
-                dt.col-7.col-sm-8 Open invoices
-                dd.col-5.col-sm-4.text-end #{fmtMoney(pool.openAmount)}
-                dt.col-7.col-sm-8 Additional charges / credits
-                dd.col-5.col-sm-4.text-end #{fmtMoney(pool.additionalAmount)}
-                dt.col-7.col-sm-8 Redistributed surcharges / rebates
-                dd.col-5.col-sm-4.text-end #{fmtMoney(pool.surchargeOffsetAmount)}
-                dt.col-7.col-sm-8 Distribution mode
-                dd.col-5.col-sm-4.text-end #{pool.distributionMethod === 'EQUAL' ? 'Participants' : pool.distributionMethod === 'NIGHTS' ? 'Nights stayed' : 'Days attended'}
-                dt.col-7.col-sm-8 Deduct submitter invoices
-                dd.col-5.col-sm-4.text-end #{pool.subtractPersonalInvoices ? 'Enabled' : 'Disabled'}
-                dt.col-7.col-sm-8 Assigned participants
-                dd.col-5.col-sm-4.text-end #{pool.assignAll ? 'All participants' : (pool.assignments || []).length}
-            p.text-secondary.mb-0 Factors multiply each participant's distribution weight before the shared total is divided. Surcharges and rebates are applied afterwards.
+            each metric in summary.primary
+                .col-6.col-lg-3
+                    small.text-secondary.d-block= metric.label
+                    strong.fs-4(data-pool-outstanding=metric.key === 'outstandingAmount' ? true : null data-pool-refunds=metric.key === 'creditAmount' ? true : null)= ui.money(metric.amount)
+        if summary.details.length || summary.saved.length || hasSavedShares
+            //- Current source amounts and saved settlement totals remain concise factual evidence.
+            //- Keep the anonymous worked example in its own disclosure so these figures are independently accessible.
+            details.mt-3.small(data-pool-calculation-breakdown)
+                summary.text-info= ui.text('calculationBreakdown')
+                if summary.details.length
+                    h6.mt-3.mb-2= ui.text('currentPoolCosts')
+                    dl.invoice-share-breakdown.small.mt-3.mb-0
+                        each metric in summary.details
+                            dt= metric.label
+                            dd= ui.money(metric.amount)
+                if hasSavedShares
+                    //- Costs, attendance totals, exemptions, and total weight belong to the whole saved pool.
+                    //- These frozen inputs stay available independently of the illustrative payer selected below.
+                    h6.mt-3.mb-2= ui.text('savedCalculationInputs')
+                    +invoiceCalculationDisplay(ui.poolBreakdown(snapshot && snapshot.explanation, snapshot && snapshot.surcharges), false)
+                //- This initially empty group can appear after the first confirmed transfer without rebuilding the ledger.
+                //- The frozen rounding metric is retained while live recorded transfers are refreshed by the browser.
+                section.mt-3(hidden=!summary.saved.length data-pool-saved-settlement data-pool-saved-rounding=JSON.stringify(summary.saved.find(metric => metric.key === 'roundingDifference') || null))
+                    h6.mt-3.mb-2= ui.text('savedSettlementTotals')
+                    dl.invoice-share-breakdown.small.mb-0(data-pool-saved-settlement-values)
+                        each metric in summary.saved
+                            dt= metric.label
+                            dd= ui.money(metric.amount)
+        if example && example.sections.length
+            //- Only saved closed shares supply frozen example inputs; open pools explain their proposed values in preview.
+            //- This sibling disclosure starts collapsed and supplies its own title rather than repeating it in the body.
+            details.mt-3.small(data-pool-example-calculation)
+                summary.text-info= ui.text('poolCalculationExample')
+                .mt-3
+                    +invoiceCalculationDisplay(example, false)
         if pool.needsRecalculation
-            p.text-warning.small.mt-2.mb-0 Pool totals reflect saved changes. Outstanding payments and credits still reflect the previous calculation.
+            //- Aggregate source costs may be newer than saved shares; explain the distinction without rebuilding either.
+            p.text-warning.small.mt-2.mb-0= ui.text('poolTotalsReflectSavedChangesPaymentsDueAndRefunds')
 
-mixin poolSaveNotice(pool)
+mixin poolSaveNotice(pool, ui)
     if pool.status === 'CLOSED'
-        p.text-warning.small.mb-3 Save your changes here, then preview Recalculate pool. Existing shares stay visible; recorded payments and refunds are carried forward as settlement credits.
+        p.text-warning.small.mb-3= ui.text('saveYourChangesHereThenPreviewRecalculatePoolExisting')
 
-mixin poolFormFooter(label)
+mixin poolFormFooter(label, ui)
     .pool-form-status.mt-3(role="status" aria-live="polite" tabindex="-1")
     .d-flex.justify-content-end.flex-wrap.gap-2.mt-3
-        button.btn.btn-outline-secondary(type="reset") Discard edits
-        button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Close
+        button.btn.btn-outline-secondary(type="reset")= ui.text('discardEdits')
+        button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('close')
         button.btn.btn-primary(type="submit")
             i.bi.bi-save.me-1(aria-hidden="true")
-            | #{label}
+            = label
 
-mixin poolAssignmentsForm(ev, pool, participants)
+//- ev/pool select the existing assignment endpoint; participants supplies event membership and ui all labels/help.
+//- Browser hooks track local drafts and enable factors/exemptions only for selected registrations; Save applies them.
+mixin poolAssignmentsForm(ev, pool, participants, ui)
     form.pool-assignment(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/assignments` data-pool=pool.id data-pool-status=pool.status)
-        +poolSaveNotice(pool)
+        +poolSaveNotice(pool, ui)
         .form-check
             input.form-check-input.pool-toggle(type="checkbox" name="assignAll" id=`assign-${pool.id}` checked=!!pool.assignAll)
-            label.form-check-label(for=`assign-${pool.id}`) Assign to all participants
+            label.form-check-label(for=`assign-${pool.id}`)= ui.text('assignToAllParticipants')
         .form-check
             input.form-check-input.pool-toggle(type="checkbox" name="isDefault" id=`default-${pool.id}` checked=!!pool.isDefault)
-            label.form-check-label(for=`default-${pool.id}`) Default for new participants
+            label.form-check-label(for=`default-${pool.id}`)= ui.text('defaultForNewParticipants')
         .form-check
             input.form-check-input(type="checkbox" name="subtractPersonalInvoices" id=`subtract-invoices-${pool.id}` checked=!!pool.subtractPersonalInvoices)
-            label.form-check-label(for=`subtract-invoices-${pool.id}`) Deduct submitter invoices from their share
-        p.text-secondary.small.mt-2 Default pools automatically include future participants. Each new participant starts with a share factor of 1.
+            label.form-check-label(for=`subtract-invoices-${pool.id}`)= ui.text('deductSubmitterInvoicesFromTheirShare')
+        p.text-secondary.small.mt-2= ui.text('defaultPoolsAutomaticallyIncludeFutureParticipantsEachNewParticipant')
         .border.border-secondary-subtle.rounded-3.p-3.mb-3
-            strong Share factors
-            p.small.mb-1 1 is the default. 1.5 gives 50% more weight; 0.5 gives half the weight. Final shares are normalized so the shared total stays the same.
-            p.text-secondary.small.mb-0 Factors apply to the participant, days attended, or nights stayed. Exempt removes the automatic base share; surcharges, rebates, invoice credits, and takeovers still apply.
-        label.form-label(for=`assign-search-${pool.id}`) Search participants
-        input.form-control.text-bg-dark.assignment-search.mb-2(id=`assign-search-${pool.id}` type="search" placeholder="Filter by name or email")
+            strong= ui.text('shareFactors')
+            p.small.mb-1= ui.text('isTheDefaultGivesMoreWeightGivesHalfThe')
+            p.text-secondary.small.mb-0= ui.text('factorsApplyToTheParticipantDaysAttendedOrNights')
+        label.form-label(for=`assign-search-${pool.id}`)= ui.text('searchParticipants')
+        input.form-control.text-bg-dark.assignment-search.mb-2(id=`assign-search-${pool.id}` type="search" placeholder=ui.text('filterByNameOrEmail'))
         .assignments-list.pool-participant-list.border.border-secondary-subtle.rounded-3.bg-black.text-white(id=`assign-list-${pool.id}`)
             if participants && participants.length
                 each p in participants
+                    //- Assignment membership, factor, and exemption remain separate saved inputs, even when all are selected.
                     - const assignment = (pool.assignments || []).find(a => (a.registrationId || a.registration?.id) === p.id)
                     - const selected = pool.assignAll || !!assignment
                     - const participantFactor = assignment && assignment.factor != null ? assignment.factor : '1'
@@ -555,527 +714,581 @@ mixin poolAssignmentsForm(ev, pool, participants)
                                 strong.d-block= p.name
                                 small.text-secondary= p.email
                         .pool-factor-field
-                            label.form-label.small.mb-1(for=`pool-${pool.id}-factor-${p.id}`) Share factor
+                            label.form-label.small.mb-1(for=`pool-${pool.id}-factor-${p.id}`)= ui.text('shareFactor')
                             input.form-control.form-control-sm.text-bg-dark(type="number" name=`factor-${p.id}` data-participant-factor=p.id id=`pool-${pool.id}-factor-${p.id}` min="0" max="1000" step="0.0001" value=participantFactor required disabled=!selected aria-describedby=`factor-help-${pool.id}`)
                         .form-check.form-switch.mb-0
                             input.form-check-input(type="checkbox" name="exemptions" value=p.id id=`pool-${pool.id}-exempt-${p.id}` checked=!!(assignment && assignment.isExempt) disabled=!selected)
-                            label.form-check-label(for=`pool-${pool.id}-exempt-${p.id}`) Exempt
+                            label.form-check-label(for=`pool-${pool.id}-exempt-${p.id}`)= ui.text('exempt')
             else
-                p.text-secondary.small.p-3.mb-0 No participants yet.
-        p.text-secondary.small.mt-2.mb-0(id=`factor-help-${pool.id}`) Factors can be 0 to 1000, with up to four decimal places. A factor of 0 gives no automatic base share.
-        +poolFormFooter('Save participants & factors')
+                p.text-secondary.small.p-3.mb-0= ui.text('noParticipantsYet')
+        p.text-secondary.small.mt-2.mb-0(id=`factor-help-${pool.id}`)= ui.text('factorsCanBeToWithUpToFourDecimal')
+        +poolFormFooter(ui.text('saveParticipantsFactors'), ui)
 
-mixin poolSurchargeList(pool, participants)
+//- Show saved signed adjustments and their participant attribution; each removal opens a review through its data hooks.
+mixin poolSurchargeList(pool, participants, ui)
     if pool.surcharges && pool.surcharges.length
         ul.list-group.list-group-flush.bg-dark.mb-3
             each surcharge in pool.surcharges
                 - const participant = (participants || []).find(p => p.id === surcharge.registrationId)
-                - const participantName = participant && participant.name || `Participant #${surcharge.registrationId}`
+                - const participantName = participant && participant.name || ui.text('participant', {id: surcharge.registrationId})
                 - const rebate = Number(surcharge.amount) < 0
                 li.list-group-item.bg-dark.text-white.d-flex.justify-content-between.align-items-start.gap-2.px-0
                     .flex-grow-1
-                        strong.me-2 #{participantName}
-                        span.badge(class=rebate ? 'bg-success' : 'bg-secondary') #{rebate ? 'Rebate' : 'Surcharge'} #{fmtMoney(surcharge.amount)}
-                        small.d-block.text-secondary.mt-1 #{surcharge.subtractFromPool ? 'Redistributed within pool' : 'Additional charge / credit'}
-                        p.mb-0.small #{surcharge.note}
-                    button.btn.btn-outline-danger.btn-sm.surcharge-remove(type="button" data-pool=pool.id data-id=surcharge.id aria-label=`Remove ${rebate ? 'rebate' : 'surcharge'} for ${participantName}`) Remove
+                        strong.me-2= participantName
+                        span.badge(class=rebate ? 'bg-success' : 'bg-secondary')= ui.text('adjustmentSummary', {kind: rebate ? ui.text('rebate') : ui.text('surcharge'), amount: fmtMoney(surcharge.amount)})
+                        small.d-block.text-secondary.mt-1= surcharge.subtractFromPool ? ui.text('redistributedWithinPool') : ui.text('additionalChargeCredit')
+                        p.mb-0.small= surcharge.note
+                    button.btn.btn-outline-danger.btn-sm.surcharge-remove(type="button" data-pool=pool.id data-id=surcharge.id aria-label=ui.text('removeFor', {kind: ui.text(rebate ? 'rebate' : 'surcharge'), name: participantName}))= ui.text('remove')
     else
-        p.text-secondary.small No surcharges or rebates added yet.
+        p.text-secondary.small= ui.text('noSurchargesOrRebatesAddedYet')
 
-mixin poolSurchargeForm(ev, pool, participants)
+//- Build a draft for the existing adjustment API using assigned event participants; nothing is applied on input/change.
+mixin poolSurchargeForm(ev, pool, participants, ui)
     form.surcharge-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/surcharges` data-pool=pool.id data-pool-status=pool.status)
         .row.g-3
             .col-sm-6
-                label.form-label(for=`surcharge-target-${pool.id}`) Participant
+                label.form-label(for=`surcharge-target-${pool.id}`)= ui.text('participant5')
                 select.form-select.text-bg-dark(id=`surcharge-target-${pool.id}` name="registrationId" required)
-                    option(value="") Choose participant
+                    option(value="")= ui.text('chooseParticipant')
                     each p in participants
                         - const assigned = pool.assignAll || (pool.assignments || []).some(a => (a.registrationId || a.registration?.id) === p.id)
                         if assigned
                             option(value=p.id)= p.name
             .col-sm-6
-                label.form-label(for=`surcharge-amount-${pool.id}`) Amount (negative for a rebate)
-                input.form-control.text-bg-dark(id=`surcharge-amount-${pool.id}` type="number" name="amount" step="0.01" required placeholder="e.g. 10.00 or -10.00" aria-describedby=`surcharge-help-${pool.id}`)
+                label.form-label(for=`surcharge-amount-${pool.id}`)= ui.text('amountNegativeForARebate')
+                input.form-control.text-bg-dark(id=`surcharge-amount-${pool.id}` type="number" name="amount" step="0.01" required placeholder=ui.text('adjustmentAmountExample') aria-describedby=`surcharge-help-${pool.id}`)
             .col-12
-                label.form-label(for=`surcharge-note-${pool.id}`) Note
-                input.form-control.text-bg-dark(id=`surcharge-note-${pool.id}` type="text" name="note" required maxlength="4000" placeholder="Explain the surcharge or rebate")
+                label.form-label(for=`surcharge-note-${pool.id}`)= ui.text('note')
+                input.form-control.text-bg-dark(id=`surcharge-note-${pool.id}` type="text" name="note" required maxlength="4000" placeholder=ui.text('explainTheSurchargeOrRebate'))
             .col-12
                 .form-check.form-switch
                     input.form-check-input(id=`surcharge-subtract-${pool.id}` type="checkbox" name="subtractFromPool" checked)
-                    label.form-check-label(for=`surcharge-subtract-${pool.id}`) Redistribute within pool
-                p.text-secondary.small.mt-2.mb-0(id=`surcharge-help-${pool.id}`) Selected: a surcharge reduces the shared total; a rebate increases it, keeping the full pool total unchanged. Cleared: an additional charge or credit changes the full total; other shares stay unchanged. Amount cannot be zero.
-        +poolFormFooter('Add surcharge or rebate')
+                    label.form-check-label(for=`surcharge-subtract-${pool.id}`)= ui.text('redistributeWithinPool')
+                p.text-secondary.small.mt-2.mb-0(id=`surcharge-help-${pool.id}`)= ui.text('selectedASurchargeReducesTheSharedTotalARebate')
+        +poolFormFooter(ui.text('addSurchargeOrRebate'), ui)
 
-mixin poolAdjustmentSection(ev, pool, participants)
-    +poolSaveNotice(pool)
-    p.small Give a participant a fixed surcharge (positive amount) or rebate (negative amount). These are added after their automatic base share, and are not multiplied by their factor.
-    +poolSurchargeList(pool, participants)
-    h6.mt-3 Add an adjustment
-    +poolSurchargeForm(ev, pool, participants)
+mixin poolAdjustmentSection(ev, pool, participants, ui)
+    +poolSaveNotice(pool, ui)
+    p.small= ui.text('giveAParticipantAFixedSurchargePositiveAmountOr')
+    +poolSurchargeList(pool, participants, ui)
+    h6.mt-3= ui.text('addAnAdjustment')
+    +poolSurchargeForm(ev, pool, participants, ui)
 
-mixin poolShareSection(pool, participants, eventId)
+mixin poolShareSection(pool, participants, eventId, ui)
     if pool.shares && pool.shares.length
-        h6.mb-2 Shares & settlement
+        h6.mb-2= ui.text('sharesSettlement')
         if pool.needsRecalculation
-            p.text-warning.small Recalculation required. These are the previous calculated amounts. You can still record their settlement; recalculation credits those payments and refunds against the updated shares.
-        p.text-secondary.small Previously settled records payments received (positive) or refunds already paid out (negative). Calculated balance is the share after this credit: positive means Due, negative means Refund. The Paid switch marks that balance Settled after payment or payout.
-        +invoiceShareTable(pool, participants, true, eventId)
+            p.text-warning.small= ui.text('recalculationRequiredTheseAreThePreviousCalculatedAmountsYou')
+        if ui.columns(pool.shares).some(column => column.key === 'paymentCreditAmount')
+            //- Explain carried transfers only when the saved payer rows contain that feature.
+            p.text-secondary.small= ui.text('previouslySettledRecordsPaymentsReceivedPositiveOrRefundsPaid')
+        +invoiceShareTable(pool, participants, true, eventId, ui)
     else if pool.status === 'CLOSED'
-        p.text-secondary.small No participant shares were generated.
+        p.text-secondary.small= ui.text('noParticipantSharesWereGenerated')
 
-mixin poolEditModal(pool, suffix, title)
+//- pool/suffix create stable unique modal hooks; title is catalog-produced and ui formats the complete dialog heading.
+//- Caller-supplied content owns its data and actions; the shared modal supplies only the established layout and close control.
+mixin poolEditModal(pool, suffix, title, ui)
     .modal.fade.pool-edit-modal(id=`pool-${pool.id}-${suffix}` tabindex="-1" aria-labelledby=`pool-${pool.id}-${suffix}-title` aria-hidden="true" data-pool=pool.id)
         .modal-dialog.modal-lg.modal-dialog-scrollable.modal-fullscreen-sm-down
             .modal-content.bg-dark.text-white
                 .modal-header
-                    h5.modal-title(id=`pool-${pool.id}-${suffix}-title`) #{title} · #{pool.name}
-                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                    h5.modal-title(id=`pool-${pool.id}-${suffix}-title`)= ui.text('poolDialogTitle', {title: title, name: pool.name})
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label=ui.text('close'))
                 .modal-body
                     block
 
-//- Group coverage by payer so the relationship is clear before editing.
-mixin poolCoverageOverview(pool, participants, mode)
+//- Group saved pool.takeovers by payer using participants for names and ui for complete messages.
+//- mode/registrationId mark personal coverage; data-takeover-* hooks page whole groups without changing coverage.
+mixin poolCoverageOverview(pool, participants, mode, ui, registrationId = null)
     -
         const participantNames = new Map((participants || []).map(p => [p.id, p.name]));
+        // Keep each payer’s coverage together; the explicitly passed actor ID only decorates personal rows.
         const coverageByPayer = new Map();
         for (const takeover of pool.takeovers || []) {
             const id = takeover.payerRegistrationId;
-            if (!coverageByPayer.has(id)) coverageByPayer.set(id, {id, name: participantNames.get(id) || `Participant #${id}`, beneficiaries: []});
-            coverageByPayer.get(id).beneficiaries.push({id: takeover.beneficiaryRegistrationId, name: participantNames.get(takeover.beneficiaryRegistrationId) || `Participant #${takeover.beneficiaryRegistrationId}`});
+            if (!coverageByPayer.has(id)) coverageByPayer.set(id, {id, name: participantNames.get(id) || ui.text('participant', {id: id}), beneficiaries: []});
+            coverageByPayer.get(id).beneficiaries.push({id: takeover.beneficiaryRegistrationId, name: participantNames.get(takeover.beneficiaryRegistrationId) || ui.text('participant', {id: takeover.beneficiaryRegistrationId})});
         }
+        // Stable name sorting affects display only; the browser pages complete payer groups.
         const coverageGroups = [...coverageByPayer.values()].sort((a, b) => a.name.localeCompare(b.name));
-        coverageGroups.forEach(group => group.beneficiaries.sort((a, b) => a.name.localeCompare(b.name)));
-        const currentRegistrationId = mode === 'participant' && data && data.registration ? data.registration.id : null;
+        for (const group of coverageGroups) group.beneficiaries.sort((a, b) => a.name.localeCompare(b.name));
+        const currentRegistrationId = mode === 'participant' ? registrationId : null;
     - const coverageId = `pool-${pool.id}-coverage-${mode}`
     .pool-takeover-summary.w-100(data-takeover-overview)
         if coverageGroups.length
             .d-flex.align-items-center.flex-wrap.justify-content-between.gap-2.mb-2
-                small.text-secondary #{coverageGroups.length} covering payer#{coverageGroups.length === 1 ? '' : 's'} · #{(pool.takeovers || []).length} covered participants
+                small.text-secondary= ui.text('coverageCounts', {payers: ui.text('coveringPayersCount', {count: coverageGroups.length}), participants: ui.text('coveredParticipantsCount', {count: (pool.takeovers || []).length})})
             .takeover-overview-controls.d-flex.flex-wrap.gap-2.mb-2
-                input.form-control.form-control-sm.text-bg-dark(id=`${coverageId}-search` type="search" data-takeover-overview-search placeholder="Find a payer or covered participant" aria-label="Search takeovers")
-                select.form-select.form-select-sm.text-bg-dark(data-takeover-page-size aria-label="Takeover payers per page")
-                    option(value="10") 10 per page
-                    option(value="25") 25 per page
-                    option(value="50") 50 per page
+                input.form-control.form-control-sm.text-bg-dark(id=`${coverageId}-search` type="search" data-takeover-overview-search placeholder=ui.text('findAPayerOrCoveredParticipant') aria-label=ui.text('searchTakeovers'))
+                select.form-select.form-select-sm.text-bg-dark(data-takeover-page-size aria-label=ui.text('takeoverPayersPerPage'))
+                    option(value="10")= ui.text('pageSizeOption', {count: 10})
+                    option(value="25")= ui.text('pageSizeOption', {count: 25})
+                    option(value="50")= ui.text('pageSizeOption', {count: 50})
             .table-responsive.pool-takeover-table
                 table.table.table-dark.table-striped.table-bordered.align-middle.mb-0
-                    caption.visually-hidden Payers and the participants whose shares they cover
+                    caption.visually-hidden= ui.text('payersAndTheParticipantsWhoseSharesTheyCover')
                     thead
                         tr
-                            th(scope="col") Payer
-                            th(scope="col") Covered participants
+                            th(scope="col")= ui.text('payer')
+                            th(scope="col")= ui.text('coveredParticipants')
                             if mode === 'admin'
-                                th(scope="col") Actions
+                                th(scope="col")= ui.text('actions')
                     tbody
                         each group in coverageGroups
                             - const beneficiaryListId = `${coverageId}-payer-${group.id}`
                             tr(data-takeover-overview-row data-payer-name=group.name data-search-text=`${group.name} ${group.beneficiaries.map(p => p.name).join(' ')}`.toLowerCase())
-                                th.fw-normal(scope="row" data-label="Payer")
+                                th.fw-normal(scope="row" data-label=ui.text('payer'))
                                     strong= group.name
                                     if currentRegistrationId === group.id
-                                        span.badge.bg-info.text-dark.ms-2 You
-                                    small.text-secondary.d-block.mt-1 Covers #{group.beneficiaries.length} participant#{group.beneficiaries.length === 1 ? '' : 's'}
-                                td(data-label="Covered participants")
-                                    .takeover-beneficiary-chips.d-flex.flex-wrap.align-content-start.gap-1(id=beneficiaryListId data-takeover-beneficiaries tabindex="0" role="group" aria-label=`Participants covered by ${group.name}`)
+                                        span.badge.bg-info.text-dark.ms-2= ui.text('you')
+                                    small.text-secondary.d-block.mt-1= ui.text('participantsCovered', {count: group.beneficiaries.length})
+                                td(data-label=ui.text('coveredParticipants'))
+                                    .takeover-beneficiary-chips.d-flex.flex-wrap.align-content-start.gap-1(id=beneficiaryListId data-takeover-beneficiaries tabindex="0" role="group" aria-label=ui.text('participantsCoveredBy', {name: group.name}))
                                         each beneficiary in group.beneficiaries
                                             span.badge.coverage-name-chip(data-takeover-beneficiary data-beneficiary-name=beneficiary.name class=currentRegistrationId === beneficiary.id ? 'bg-info text-dark' : 'bg-secondary')
-                                                | #{beneficiary.name}
+                                                = beneficiary.name
                                                 if currentRegistrationId === beneficiary.id
-                                                    |  (You)
+                                                    = ui.text('you2')
                                     .d-flex.flex-wrap.align-items-center.gap-2.mt-2(data-takeover-beneficiary-controls hidden)
                                         small.text-secondary(data-takeover-beneficiary-summary role="status" aria-live="polite")
-                                        button.btn.btn-outline-light.btn-sm(type="button" data-takeover-expand aria-expanded="false" aria-controls=beneficiaryListId hidden) Show all #{group.beneficiaries.length}
+                                        button.btn.btn-outline-light.btn-sm(type="button" data-takeover-expand aria-expanded="false" aria-controls=beneficiaryListId hidden)= ui.text('showAllCovered', {count: group.beneficiaries.length})
                                 if mode === 'admin'
-                                    td(data-label="Actions")
-                                        button.btn.btn-outline-light.btn-sm.manage-takeovers(type="button" data-id=pool.id data-payer=group.id data-mode="admin" aria-label=`Edit takeovers for ${group.name}`)
+                                    td(data-label=ui.text('actions'))
+                                        button.btn.btn-outline-light.btn-sm.manage-takeovers(type="button" data-id=pool.id data-payer=group.id data-mode="admin" aria-label=ui.text('editTakeoversFor', {name: group.name}))
                                             i.bi.bi-pencil.me-1(aria-hidden="true")
-                                            | Edit
-            p.text-secondary.small.py-3.mb-0(hidden data-takeover-empty) No takeovers match this search.
+                                            = ui.text('edit')
+            p.text-secondary.small.py-3.mb-0(hidden data-takeover-empty)= ui.text('noTakeoversMatchThisSearch')
             .d-flex.flex-wrap.justify-content-between.align-items-center.gap-2.mt-2
                 small.text-secondary(data-takeover-page-summary role="status" aria-live="polite")
-                .btn-group.btn-group-sm(role="group" aria-label="Takeover pages")
-                    button.btn.btn-outline-light(type="button" data-takeover-previous) Previous
-                    button.btn.btn-outline-light(type="button" data-takeover-next) Next
+                .btn-group.btn-group-sm(role="group" aria-label=ui.text('takeoverPages'))
+                    button.btn.btn-outline-light(type="button" data-takeover-previous)= ui.text('previous2')
+                    button.btn.btn-outline-light(type="button" data-takeover-next)= ui.text('next')
         else
-            p.text-secondary.small.mb-0 Each participant covers their own share. Use Manage takeovers to choose a payer who covers someone else.
+            p.text-secondary.small.mb-0= ui.text('eachParticipantCoversTheirOwnShareUseManageTakeovers')
         if pool.needsRecalculation
-            p.text-warning.small.mt-2.mb-0 These saved takeovers apply after recalculation. Previous share notes retain the previous coverage.
+            p.text-warning.small.mt-2.mb-0= ui.text('theseSavedTakeoversApplyAfterRecalculationPreviousShareNotes')
 
-mixin poolTakeoverSummary(pool, participants)
+mixin poolTakeoverSummary(pool, participants, ui)
+    //- Compare saved versus draft pairs once; legacy missing evidence cannot establish a pending difference.
+    - const hasPendingTakeovers = ui.hasPendingTakeovers(pool);
     .border.border-secondary-subtle.rounded-3.p-3.mt-3
-        h6.mb-2 Takeovers
-        +poolCoverageOverview(pool, participants, 'admin')
+        h6.mb-2= ui.text('takeovers')
+        //- Applied coverage is read-only in calculated pools. The chooser still edits current allocation inputs.
+        if pool.status === 'CLOSED'
+            if !ui.hasAppliedTakeoverEvidence(pool)
+                p.text-secondary.small.mb-0= ui.text('appliedTakeoversUnavailable')
+            else
+                +poolCoverageOverview({...pool, takeovers: ui.appliedTakeovers(pool), needsRecalculation: false}, participants, 'applied', ui)
+            //- Unknown historical coverage cannot establish a pending delta. Still expose editable future inputs
+            //- under their own heading so older pools can be repaired through preview and recalculation.
+            if !ui.hasAppliedTakeoverEvidence(pool) || hasPendingTakeovers
+                h6.mt-3.mb-2= ui.text(ui.hasAppliedTakeoverEvidence(pool) ? 'pendingTakeoverChanges' : 'takeoversForNextCalculation')
+                if hasPendingTakeovers
+                    //- The warning belongs to the editable draft, while the read-only list above remains authoritative.
+                    .status-notice.alert-warning.mb-3(role="status" data-pool-takeover-pending)
+                        strong.d-block= ui.text('takeoverChangesPendingIndicator')
+                        small= ui.text('takeoverChangesPendingDescription')
+                +poolCoverageOverview(pool, participants, 'admin', ui)
+        else
+            +poolCoverageOverview(pool, participants, 'admin', ui)
 
-mixin poolManagementSection(ev, pool, participants)
+//- ev/pool/participants are explicit event-scoped inputs. data-assigned/data-takeovers hydrate the shared chooser.
+//- Management dialogs save independent inputs; the saved share ledger updates only after an explicit calculation.
+mixin poolManagementSection(ev, pool, participants, ui)
     - const assignedIds = pool.assignAll ? participants.map(p => p.id) : (pool.assignments || []).map(a => a.registrationId || a.registration?.id)
     - const takeoverData = (pool.takeovers || []).map(t => ({payerRegistrationId: t.payerRegistrationId, beneficiaryRegistrationId: t.beneficiaryRegistrationId}))
     - const newCount = (pool.invoices || []).filter(inv => inv.status === 'NEW').length
-    .accordion-item.bg-dark.text-white.border-secondary-subtle.invoice-pool(data-pool=pool.id data-pool-name=pool.name data-pool-status=pool.status data-assigned=JSON.stringify(assignedIds) data-takeovers=JSON.stringify(takeoverData))
+    .accordion-item.bg-dark.text-white.border-secondary-subtle.invoice-pool(data-pool=pool.id data-pool-name=pool.name data-pool-status=pool.status data-pool-revision=pool.calculationRevision data-assigned=JSON.stringify(assignedIds) data-takeovers=JSON.stringify(takeoverData))
         h2.accordion-header
             button.accordion-button.collapsed.text-white(type="button" data-bs-toggle="collapse" data-bs-target=`#pool-${pool.id}-body` aria-expanded="false" aria-controls=`pool-${pool.id}-body`)
-                +poolHeaderSummary(pool)
+                +poolHeaderSummary(pool, ui)
         .accordion-collapse.collapse(id=`pool-${pool.id}-body`)
             .accordion-body
                 if pool.needsRecalculation
                     .status-notice.alert-warning(role="status")
-                        strong Recalculation required.
-                        |  Saved changes have not been applied to the shares. Preview the updated amounts before recalculating, or roll back the pool changes. Payments can still be recorded against the previous shares.
-                .d-flex.flex-wrap.gap-2.mb-3(role="group" aria-label=`Manage ${pool.name}`)
+                        strong= ui.text('recalculationRequired2')
+                        = ui.text('savedChangesHaveNotBeenAppliedToTheShares')
+                .d-flex.flex-wrap.gap-2.mb-3(role="group" aria-label=ui.text('manage', {name: pool.name}))
                     button.btn.btn-primary.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-expense`)
                         i.bi.bi-plus-circle.me-1(aria-hidden="true")
-                        | Add invoice / amount
-                    button.btn.btn-outline-light.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-settings`) Pool settings
-                    button.btn.btn-outline-light.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-participants`) Participants & factors
-                    button.btn.btn-outline-light.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-adjustments`) Surcharges & rebates
-                    button.btn.btn-outline-light.btn-sm.manage-takeovers(type="button" data-id=pool.id data-mode="admin") Manage takeovers
-                +poolStats(pool)
-                +poolTakeoverSummary(pool, participants)
-                details.mt-3(open=newCount > 0 || pool.status === 'OPEN')
-                    summary.fw-semibold Invoices (#{(pool.invoices || []).length})#{newCount ? ` · ${newCount} awaiting review` : ''}
-                    +invoiceOverview('admin', {pool: pool, participants: participants, eventId: ev.id})
+                        = ui.text('addInvoiceAmount')
+                    button.btn.btn-outline-light.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-settings`)= ui.text('poolSettings')
+                    button.btn.btn-outline-light.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-participants`)= ui.text('participantsFactors')
+                    button.btn.btn-outline-light.btn-sm(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-adjustments`)= ui.text('surchargesRebates')
+                    button.btn.btn-outline-light.btn-sm.manage-takeovers(type="button" data-id=pool.id data-mode="admin")= ui.text('manageTakeovers2')
+                    if pool.status !== 'CLOSED'
+                        //- These optional state changes require confirmation; neither state is a step required before closure.
+                        button.btn.btn-outline-light.btn-sm.pool-submission-state(type="button" data-id=pool.id data-status=pool.status === 'OPEN' ? 'ORGANIZER_ONLY' : 'OPEN')= ui.text(pool.status === 'OPEN' ? 'closeParticipantInvoices' : 'openParticipantInvoices')
+                if pool.status === 'ORGANIZER_ONLY'
+                    p.small.text-secondary= ui.text('organizerOnlyPoolHelp')
+                +poolStats(pool, ui)
+                +poolTakeoverSummary(pool, participants, ui)
+                details.mt-3(open=newCount > 0 || pool.status !== 'CLOSED')
+                    summary.fw-semibold= ui.text(newCount ? 'invoiceCaptionAwaitingReview' : 'invoiceCaption', {count: (pool.invoices || []).length, awaitingReview: newCount})
+                    +invoiceOverview('admin', {pool: pool, participants: participants, eventId: ev.id}, ui)
                 if pool.status === 'CLOSED'
+                    //- Closed pools expose the previous saved calculation even while updated source inputs are stale.
                     .mt-4
-                        +poolShareSection(pool, participants, ev.id)
+                        +poolShareSection(pool, participants, ev.id, ui)
                 .border-top.border-secondary-subtle.mt-4.pt-3.d-flex.flex-wrap.justify-content-between.align-items-center.gap-3
                     .flex-grow-1
-                        strong #{pool.status === 'OPEN' ? 'Ready to calculate shares?' : 'Update the calculated shares'}
-                        p.text-secondary.small.mb-0 #{pool.status === 'OPEN' ? 'Review invoices, attendance, and saved allocation settings before closing.' : 'Preview the updated shares and carry recorded payments forward. Nothing changes until you confirm.'}
+                        strong= pool.status !== 'CLOSED' ? ui.text('readyToCalculateShares') : ui.text('updateTheCalculatedShares')
+                        p.text-secondary.small.mb-0= pool.status !== 'CLOSED' ? ui.text('reviewInvoicesAttendanceAndSavedAllocationSettingsBeforeClosing') : ui.text('previewTheUpdatedSharesAndCarryRecordedPaymentsForward')
                     .d-flex.flex-wrap.gap-2
                         if pool.status === 'CLOSED'
-                            button.btn.btn-outline-info.pool-open-notify(type="button" data-id=pool.id data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-notify`) Send settlement emails
-                        button.btn.btn-warning.pool-open-calculation(type="button" data-id=pool.id data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-calculation`) #{pool.status === 'OPEN' ? 'Preview calculation' : 'Recalculate pool'}
+                            button.btn.btn-outline-info.pool-open-notify(type="button" data-id=pool.id data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-notify`)= ui.text('sendSettlementEmails')
+                        button.btn.btn-warning.pool-open-calculation(type="button" data-id=pool.id data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-calculation`)= pool.status !== 'CLOSED' ? ui.text('previewCalculation') : ui.text('recalculatePool')
                 if pool.status === 'CLOSED' && pool.needsRecalculation
                     .d-flex.flex-wrap.align-items-center.gap-2.mt-3
-                        button.btn.btn-outline-light(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-rollback` disabled=!pool.calculationSnapshot) Roll back pool changes
+                        button.btn.btn-outline-light(type="button" data-bs-toggle="modal" data-bs-target=`#pool-${pool.id}-rollback` disabled=!pool.calculationSnapshot)= ui.text('rollBackPoolChanges')
                         if !pool.calculationSnapshot
-                            small.text-secondary Rollback becomes available after this pool's next successful calculation.
+                            small.text-secondary= ui.text('rollbackBecomesAvailableAfterThisPoolSNextSuccessful')
 
-mixin poolManagementModals(ev, pool, participants)
-    +poolEditModal(pool, 'expense', 'Add invoice / amount')
+//- Compose pool-specific dialogs from explicit event/pool/participant data and the same ui catalog/presenter.
+//- Preview hooks receive read-only server data and its revision; confirmation applies the existing calculation command.
+mixin poolManagementModals(ev, pool, participants, ui)
+    //- Organizer entry needs no recorder attendance. Optional paid-by attribution uses existing eligible registrations,
+    //- while creator audit and optional proof remain independent; the server repeats membership checks under its lock.
+    +poolEditModal(pool, 'expense', ui.text('addInvoiceAmount'), ui)
         form.pool-expense-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}/invoices/organizer` data-pool=pool.id data-pool-status=pool.status enctype="multipart/form-data")
-            p.small Add a shared pool expense without registering for the event. It is accepted immediately and included in the pool costs. It does not reimburse a participant, even if you attend the event.
+            p.small= ui.text('addASharedPoolExpenseWithoutRegisteringForThe')
             if pool.status === 'CLOSED'
-                p.text-warning.small This adds a saved cost. Existing shares stay unchanged until you recalculate the pool.
+                p.text-warning.small= ui.text('thisAddsASavedCostExistingSharesStayUnchanged')
             .mb-3
-                label.form-label(for=`pool-${pool.id}-expense-amount`) Amount
+                label.form-label(for=`pool-${pool.id}-expense-amount`)= ui.text('amount')
                 input.form-control.text-bg-dark(id=`pool-${pool.id}-expense-amount` type="number" name="amount" min="0.01" max="99999999.99" step="0.01" required inputmode="decimal")
             .mb-3
-                label.form-label(for=`pool-${pool.id}-expense-description`) Description
+                - const eligibleIds = new Set(pool.assignAll ? (participants || []).map(participant => participant.id) : (pool.assignments || []).map(assignment => assignment.registrationId || assignment.registration?.id));
+                label.form-label(for=`pool-${pool.id}-expense-participant`)= ui.text('paidByParticipantOptional')
+                select.form-select.text-bg-dark(id=`pool-${pool.id}-expense-participant` name="registrationId" aria-describedby=`pool-${pool.id}-expense-participant-help`)
+                    //- Empty is the unchanged shared-expense default; selecting a participant does not add pool membership.
+                    option(value="")= ui.text('sharedOrganizerExpense')
+                    each participant in participants || []
+                        if eligibleIds.has(participant.id)
+                            option(value=participant.id)= participant.name
+                small.text-secondary(id=`pool-${pool.id}-expense-participant-help`)= ui.text('organizerInvoiceAttributionHelp')
+            .mb-3
+                label.form-label(for=`pool-${pool.id}-expense-description`)= ui.text('description')
                 textarea.form-control.text-bg-dark(id=`pool-${pool.id}-expense-description` name="description" rows="3" maxlength="4000" required)
             .mb-3
-                label.form-label(for=`pool-${pool.id}-expense-proof`) Proof (optional)
+                label.form-label(for=`pool-${pool.id}-expense-proof`)= ui.text('proofOptional')
                 input.form-control.text-bg-dark(id=`pool-${pool.id}-expense-proof` type="file" name="proof" accept="image/jpeg,image/png,image/gif,application/pdf" aria-describedby=`pool-${pool.id}-expense-proof-help`)
-                small.text-secondary(id=`pool-${pool.id}-expense-proof-help`) Attach an image or PDF receipt, or leave this empty to record an amount only.
+                small.text-secondary(id=`pool-${pool.id}-expense-proof-help`)= ui.text('attachAnImageOrPDFReceiptOrLeaveThis')
             .pool-form-status.mt-3(role="status" aria-live="polite")
             .d-flex.justify-content-end.flex-wrap.gap-2.mt-3
-                button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
-                button.btn.btn-primary(type="submit") Add expense
-    +poolEditModal(pool, 'settings', 'Pool settings')
-        +poolBaseSettingsForm(ev, pool)
-    +poolEditModal(pool, 'participants', 'Participants & factors')
-        +poolAssignmentsForm(ev, pool, participants)
-    +poolEditModal(pool, 'adjustments', 'Surcharges & rebates')
-        +poolAdjustmentSection(ev, pool, participants)
-    +poolEditModal(pool, 'calculation', 'Calculation preview')
-        .pool-unsaved-warning.status-notice.alert-warning(hidden role="status") Save or discard your pending edits in the settings, participant, or adjustment dialog before previewing.
+                button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('cancel')
+                button.btn.btn-primary(type="submit")= ui.text('addExpense')
+    +poolEditModal(pool, 'settings', ui.text('poolSettings'), ui)
+        +poolBaseSettingsForm(ev, pool, ui)
+    +poolEditModal(pool, 'participants', ui.text('participantsFactors'), ui)
+        +poolAssignmentsForm(ev, pool, participants, ui)
+    +poolEditModal(pool, 'adjustments', ui.text('surchargesRebates'), ui)
+        +poolAdjustmentSection(ev, pool, participants, ui)
+    +poolEditModal(pool, 'calculation', ui.text('calculationPreview'), ui)
+        //- The browser fills numeric evidence and payer rows only after verifying the current preview response.
+        .pool-unsaved-warning.status-notice.alert-warning(hidden role="status")= ui.text('saveOrDiscardYourPendingEditsInTheSettings')
         .pool-form-status(role="status" aria-live="polite" tabindex="-1")
-        p.small Review the saved allocation settings and every payer's result below. This preview does not change shares or send emails.
+        p.small= ui.text('reviewTheSavedAllocationSettingsAndEveryPayerS')
         if pool.status === 'CLOSED'
-            p.text-info.small Recorded payments and refunds are carried forward. Someone who has already paid may owe only the difference or be due a refund.
+            p.text-info.small= ui.text('recordedPaymentsAndRefundsAreCarriedForwardSomeoneWho')
         .pool-preview-summary.row.g-3.mb-3(hidden data-pool-preview-summary)
             .col-6
-                small.text-secondary.d-block Remaining to collect
-                strong.fs-4(data-pool-preview-outstanding) 0.00
+                small.text-secondary.d-block= ui.labels.paymentsDue
+                strong.fs-4(data-pool-preview-outstanding)= ui.money(0)
             .col-6
-                small.text-secondary.d-block Refunds to pay
-                strong.fs-4(data-pool-preview-refunds) 0.00
+                small.text-secondary.d-block= ui.labels.refundsDue
+                strong.fs-4(data-pool-preview-refunds)= ui.money(0)
         details.pool-preview-reconciliation.mb-3(hidden data-pool-preview-reconciliation)
-            summary.text-info How the totals add up
+            //- The browser reveals only relevant credits and rounding evidence supplied by the server.
+            //- This disclosure lists numerical inputs and totals only; the worked example is a separate sibling below.
+            summary.text-info= ui.text('calculationBreakdown')
             .table-responsive.mt-2
                 table.table.table-dark.table-sm.mb-0
                     tbody
-                        tr
-                            th(scope="row") Shared invoice costs
-                            td.text-end(data-preview-total="invoiceAmount") 0.00
-                        tr
-                            th(scope="row") Redistributed adjustments
-                            td.text-end(data-preview-total="redistributedAmount") 0.00
-                        tr
-                            th(scope="row") Base to distribute
-                            td.text-end(data-preview-total="distributableAmount") 0.00
-                        tr
-                            th(scope="row") Rounded base total
-                            td.text-end(data-preview-total="allocatedBaseAmount") 0.00
-                        tr
-                            th(scope="row") Rounding difference
-                            td.text-end(data-preview-total="roundingDifference") 0.00
-                        tr
-                            th(scope="row") Participant adjustments
-                            td.text-end(data-preview-total="adjustmentAmount") 0.00
-                        tr
-                            th(scope="row") Allocated costs
-                            td.text-end(data-preview-total="grossAmount") 0.00
-                        tr
-                            th(scope="row") Invoice reimbursements
-                            td.text-end(data-preview-total="invoiceCreditAmount") 0.00
-                        tr
-                            th(scope="row") Expected net before rounding
-                            td.text-end(data-preview-total="expectedNetAmount") 0.00
-                        tr
-                            th(scope="row") Net calculated shares
-                            td.text-end(data-preview-total="calculatedAmount") 0.00
-                        tr
-                            th(scope="row") Previously settled
-                            td.text-end(data-preview-total="paymentCreditAmount") 0.00
-                        tr
-                            th(scope="row") Net remaining balance
-                            td.text-end.fw-bold(data-preview-total="remainingAmount") 0.00
-            p.text-secondary.small.mt-2.mb-1 Shared invoice costs minus redistributed adjustments gives the base to distribute. Rounded base plus participant adjustments gives allocated costs. Invoice reimbursements are accepted personal invoices deducted from those costs; they are not extra charges.
-            p.text-secondary.small.mb-1 Previously settled payments are then deducted from the net calculated shares. A positive net remaining balance is money to collect; a negative balance is money to pay out.
-            p.text-secondary.small.mb-0(data-preview-rounding-note) Each base share is rounded up or down to cents according to Pool settings. This can leave a small surplus or shortfall; equal unrounded base shares receive the same rounded amount.
+                        tr(hidden data-preview-total-row="roundingDifference")
+                            th(scope="row")= ui.text('roundingDifference2')
+                            td.text-end(data-preview-total="roundingDifference")= ui.money(0)
+                        tr(hidden data-preview-total-row="invoiceCreditAmount")
+                            th(scope="row")= ui.labels.invoiceCredit
+                            td.text-end(data-preview-total="invoiceCreditAmount")= ui.money(0)
+                        tr(hidden data-preview-total-row="paymentCreditAmount")
+                            th(scope="row")= ui.labels.previous
+                            td.text-end(data-preview-total="paymentCreditAmount")= ui.money(0)
+            .pool-preview-basis.mt-3(hidden data-pool-preview-basis)
+                //- The shared overview contract supplies only labelled figures, never explanatory formulas or prose.
+                div(data-pool-preview-distribution)
+        //- Example arithmetic is deliberately outside Calculation breakdown, matching the saved pool overview.
+        //- The browser hides this disclosure when no saved numeric evidence can provide a truthful example.
+        details.pool-preview-example.mb-3(hidden data-pool-preview-example)
+            summary.text-info= ui.text('poolCalculationExample')
+            .mt-3(data-pool-preview-basis-lines)
         .pool-preview-frame.mb-3(hidden data-pool-preview-table)
             .table-responsive.pool-preview-table
                 table.table.table-dark.table-sm.align-middle.mb-0
-                    caption.visually-hidden Preview of the next calculation, including previous settlement
+                    caption.visually-hidden= ui.text('previewOfTheNextCalculationIncludingPreviousSettlement')
                     thead
-                        tr
-                            th(scope="col") Payer
-                            th(scope="col") Base
-                            th(scope="col") Adjustments
-                            th(scope="col") Invoice credit
-                            th(scope="col") Previously settled
-                            th(scope="col") Remaining due / refund
+                        //- The browser creates only columns whose saved component amounts are used by this calculation.
+                        tr(data-pool-preview-columns)
+                            th(scope="col")= ui.labels.payer
+                            th(scope="col")= ui.labels.original
                     tbody(data-pool-preview-rows)
-        p.text-secondary.small Positive settlement credits are payments already received; negative credits are refunds already paid out. The remaining amount is what is still owed after those credits.
+        //- Previous-transfer guidance is useful only when the reviewed calculation actually carries a settlement.
+        p.text-secondary.small(hidden data-pool-preview-settlement-hint)= ui.text('positiveSettlementCreditsArePaymentsAlreadyReceivedNegativeCredits')
         .form-check.form-switch.mt-3
             input.form-check-input(type="checkbox" name="sendEmails" id=`pool-${pool.id}-calculation-emails` checked=pool.sendCalculationEmails == null || !!pool.sendCalculationEmails)
-            label.form-check-label(for=`pool-${pool.id}-calculation-emails`) Email participants after this calculation
-        p.text-secondary.small.mt-2 This choice applies to this calculation. Change the default in Pool settings. You can also send settlement emails later.
-        if pool.status === 'OPEN'
-            p.text-secondary.small Confirming closes this pool to new invoice submissions.
+            label.form-check-label(for=`pool-${pool.id}-calculation-emails`)= ui.text('emailParticipantsAfterThisCalculation')
+        p.text-secondary.small.mt-2= ui.text('thisChoiceAppliesToThisCalculationChangeTheDefault')
+        if pool.status !== 'CLOSED'
+            p.text-secondary.small= ui.text('confirmingClosesThisPoolToNewInvoiceSubmissions')
         .d-flex.justify-content-end.flex-wrap.gap-2.mt-3
-            button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
-            button.btn.btn-outline-light.pool-preview-refresh(type="button" data-id=pool.id) Refresh preview
-            button.btn.btn-warning(type="button" class=pool.status === 'OPEN' ? 'pool-close' : 'pool-recalculate' data-id=pool.id disabled) #{pool.status === 'OPEN' ? 'Close pool & calculate' : 'Apply recalculation'}
+            button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('cancel')
+            button.btn.btn-outline-light.pool-preview-refresh(type="button" data-id=pool.id)= ui.text('refreshPreview')
+            button.btn.btn-warning(type="button" class=pool.status !== 'CLOSED' ? 'pool-close' : 'pool-recalculate' data-id=pool.id disabled)= pool.status !== 'CLOSED' ? ui.text('closePoolCalculate') : ui.text('applyRecalculation')
     if pool.status === 'CLOSED'
-        +poolEditModal(pool, 'notify', 'Send settlement emails')
-            p Send each payer their current calculated share, previous settlement credit, remaining amount, and paid status.
+        +poolEditModal(pool, 'notify', ui.text('sendSettlementEmails'), ui)
+            p= ui.text('sendEachPayerTheirSavedCalculatedSharePreviousSettlements')
             if pool.needsRecalculation
-                .status-notice.alert-warning These emails describe the previous calculation. Saved pool changes will only be included after recalculation.
-            p.text-secondary.small Only payers with an email address receive a message. Sending again sends another email; it does not change the calculation or payment records.
+                .status-notice.alert-warning= ui.text('theseEmailsDescribeThePreviousCalculationSavedPoolChanges')
+            p.text-secondary.small= ui.text('onlyPayersWithAnEmailAddressReceiveAMessage')
             .pool-form-status(role="status" aria-live="polite" tabindex="-1")
             .d-flex.justify-content-end.flex-wrap.gap-2.mt-3
-                button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
-                button.btn.btn-info.pool-notify(type="button" data-id=pool.id) Send settlement emails
+                button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('cancel')
+                button.btn.btn-info.pool-notify(type="button" data-id=pool.id)= ui.text('sendSettlementEmails')
         if pool.needsRecalculation
-            +poolEditModal(pool, 'rollback', 'Roll back pool changes')
-                p Restore the pool settings, participant assignments, factors, exemptions, surcharges, rebates, and takeovers saved at the last successful calculation.
-                p.fw-semibold Current share rows and all recorded payments are kept. This does not send emails.
-                p.text-secondary.small Changes to event attendance, registrations, or invoices are not undone. If those inputs have changed, the pool may still require recalculation after rollback.
+            +poolEditModal(pool, 'rollback', ui.text('rollBackPoolChanges'), ui)
+                p= ui.text('restoreThePoolSettingsParticipantAssignmentsFactorsExemptionsSurcharges')
+                p.fw-semibold= ui.text('currentShareRowsAndAllRecordedPaymentsAreKept')
+                p.text-secondary.small= ui.text('changesToEventAttendanceRegistrationsOrInvoicesAreNot')
                 .pool-form-status(role="status" aria-live="polite" tabindex="-1")
                 .d-flex.justify-content-end.flex-wrap.gap-2.mt-3
-                    button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
-                    button.btn.btn-outline-light.pool-return(type="button" data-id=pool.id hidden) Return to pool
-                    button.btn.btn-warning.pool-rollback(type="button" data-id=pool.id disabled=!pool.calculationSnapshot) Restore last calculated settings
+                    button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('cancel')
+                    button.btn.btn-outline-light.pool-return(type="button" data-id=pool.id hidden)= ui.text('returnToPool')
+                    button.btn.btn-warning.pool-rollback(type="button" data-id=pool.id disabled=!pool.calculationSnapshot)= ui.text('restoreLastCalculatedSettings')
 
-mixin invoicePoolManageTab(ev, pools, participants)
+mixin invoicePoolManageTab(ev, pools, participants, ui)
     if pools && pools.length
-        p.text-secondary.small.mb-3 Open a pool to review invoices and settlement. Use its dialogs to save allocation changes, including after closure.
+        p.text-secondary.small.mb-3= ui.text('openAPoolToReviewInvoicesAndSettlementUse')
         .accordion.accordion-dark#invoicePoolAccordion
             each pool in pools
-                +poolManagementSection(ev, pool, participants)
+                +poolManagementSection(ev, pool, participants, ui)
         each pool in pools
-            +poolManagementModals(ev, pool, participants)
+            +poolManagementModals(ev, pool, participants, ui)
     else
-        p.text-secondary.mb-0 No invoice pools created yet.
+        p.text-secondary.mb-0= ui.text('noInvoicePoolsCreatedYet')
 
 //- Shared distribution selector to keep create/edit forms in sync
-mixin poolDistributionSelect(name, selected, id = null)
+mixin poolDistributionSelect(name, selected, id = null, ui)
     select.form-select.text-bg-dark(name=name id=id required)
-        option(value="TIME_BASED" selected=selected === 'TIME_BASED') Distribute among days attended
-        option(value="NIGHTS" selected=selected === 'NIGHTS') Distribute among nights stayed
-        option(value="EQUAL" selected=selected === 'EQUAL') Distribute among participants
+        option(value="TIME_BASED" selected=selected === 'TIME_BASED')= ui.text('distributeAmongDaysAttended')
+        option(value="NIGHTS" selected=selected === 'NIGHTS')= ui.text('distributeAmongNightsStayed')
+        option(value="EQUAL" selected=selected === 'EQUAL')= ui.text('distributeAmongParticipants')
 
 //- Shared base settings fields used for pool creation and later edits
-mixin poolBaseSettingsFields(pool = {})
+mixin poolBaseSettingsFields(pool = {}, ui)
     - const selectedDistribution = pool.distributionMethod || pool.distribution || 'TIME_BASED';
     .row.g-3
         .col-md-6
-            label.form-label(for=pool.id ? `poolDistribution-${pool.id}` : 'poolDistribution') Share distribution mode
-            +poolDistributionSelect('distribution', selectedDistribution, pool.id ? `poolDistribution-${pool.id}` : 'poolDistribution')
+            label.form-label(for=pool.id ? `poolDistribution-${pool.id}` : "poolDistribution")= ui.text('shareDistributionMode')
+            +poolDistributionSelect('distribution', selectedDistribution, pool.id ? `poolDistribution-${pool.id}` : "poolDistribution", ui)
         .col-md-6
-            label.form-label(for=pool.id ? `poolDescription-${pool.id}` : 'poolDescription') Description
+            label.form-label(for=pool.id ? `poolDescription-${pool.id}` : "poolDescription")= ui.text('description')
             input.form-control.text-bg-dark(
                 type="text"
                 name="description"
-                id=pool.id ? `poolDescription-${pool.id}` : 'poolDescription'
+                id=pool.id ? `poolDescription-${pool.id}` : "poolDescription"
                 value=pool.description || ''
             )
         .col-12
             input(type="hidden" name="roundUpSharesConfigured" value="on")
             .form-check.form-switch
-                input.form-check-input(type="checkbox" name="roundUpShares" id=pool.id ? `pool-${pool.id}-rounding` : 'poolRoundingCreate' checked=pool.roundUpShares == null || !!pool.roundUpShares)
-                label.form-check-label(for=pool.id ? `pool-${pool.id}-rounding` : 'poolRoundingCreate') Round base shares up
-            p.text-secondary.small.mt-2.mb-0 Selected: round each base share up to the next cent. Cleared: round down to cents. Equal unrounded base shares receive the same rounded amount. The preview shows any difference from the original total.
+                input.form-check-input(type="checkbox" name="roundUpShares" id=pool.id ? `pool-${pool.id}-rounding` : "poolRoundingCreate" checked=pool.roundUpShares == null || !!pool.roundUpShares)
+                label.form-check-label(for=pool.id ? `pool-${pool.id}-rounding` : "poolRoundingCreate")= ui.text('roundBaseSharesUp')
+            p.text-secondary.small.mt-2.mb-0= ui.text('selectedRoundEachBaseShareUpToTheNext')
 
 //- Compact editable form for the base pool parameters
-mixin poolBaseSettingsForm(ev, pool)
+mixin poolBaseSettingsForm(ev, pool, ui)
     form.pool-base-form(data-api=`/api/event/${ev.id}/invoice-pools/${pool.id}` data-pool=pool.id data-pool-status=pool.status)
-        +poolSaveNotice(pool)
-        +poolBaseSettingsFields(pool)
+        +poolSaveNotice(pool, ui)
+        +poolBaseSettingsFields(pool, ui)
         input(type="hidden" name="sendCalculationEmailsConfigured" value="on")
         .form-check.form-switch.mt-3
             input.form-check-input(type="checkbox" name="sendCalculationEmails" id=`pool-${pool.id}-email-default` checked=pool.sendCalculationEmails == null || !!pool.sendCalculationEmails)
-            label.form-check-label(for=`pool-${pool.id}-email-default`) Send calculation emails automatically
-        p.text-secondary.small.mt-2 Use this as the default when closing or recalculating the pool. You can change it in the calculation preview or send settlement emails later.
-        +poolFormFooter('Save pool settings')
+            label.form-check-label(for=`pool-${pool.id}-email-default`)= ui.text('sendCalculationEmailsAutomatically')
+        p.text-secondary.small.mt-2= ui.text('useThisAsTheDefaultWhenClosingOrRecalculating')
+        +poolFormFooter(ui.text('savePoolSettings'), ui)
 
 //- Pool creation tab content for the admin dashboard
-mixin invoicePoolCreateModal(ev, participants)
+mixin invoicePoolCreateModal(ev, participants, ui)
     .modal.fade#poolCreateModal(tabindex="-1" aria-labelledby="poolCreateLabel" aria-hidden="true")
         .modal-dialog.modal-lg.modal-dialog-scrollable.modal-fullscreen-sm-down
             .modal-content.bg-dark.text-white
                 .modal-header
-                    h5.modal-title#poolCreateLabel Create a new pool
-                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                    h5.modal-title#poolCreateLabel= ui.text('createANewPool')
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label=ui.text('close'))
                 form.pool-modal-form#poolCreateForm(data-api=`/api/event/${ev.id}/invoice-pools`)
                     .modal-body
                         .row.g-3
                             .col-md-12
-                                label.form-label(for="poolName") Pool name
+                                label.form-label(for="poolName")= ui.text('poolName2')
                                 input#poolName.form-control.text-bg-dark(type="text" name="name" required maxlength="255")
+                            .col-md-12
+                                //- Initial status is part of the creation draft, so organizer-only pools are never briefly OPEN.
+                                //- Editing this select saves nothing until Add pool; later changes use the confirmed state action.
+                                label.form-label(for="poolSubmissionStateCreate")= ui.text('poolSubmissionState')
+                                select#poolSubmissionStateCreate.form-select.text-bg-dark(name="status" required)
+                                    option(value="OPEN" selected)= ui.text('openForInvoices')
+                                    option(value="ORGANIZER_ONLY")= ui.text('organizerInvoicesOnly')
+                                p.text-secondary.small.mt-2.mb-0= ui.text('poolSubmissionStateHelp')
                         .row.g-3.mt-0
                             .col-md-8
-                                +poolBaseSettingsFields({})
+                                +poolBaseSettingsFields({}, ui)
                             .col-md-4
-                                label.form-label.text-secondary Allocation
+                                label.form-label.text-secondary= ui.text('allocation')
                                 .form-check
                                     input#assignAllPools.form-check-input.pool-toggle(type="checkbox" name="assignAll" checked)
-                                    label.form-check-label(for="assignAllPools") Assign to all participants
+                                    label.form-check-label(for="assignAllPools")= ui.text('assignToAllParticipants')
                                 .form-check
                                     input#defaultPool.form-check-input.pool-toggle(type="checkbox" name="isDefault")
-                                    label.form-check-label(for="defaultPool") Make this the default pool
-                                small.text-secondary Default pools automatically include future participants without reopening assignments.
+                                    label.form-check-label(for="defaultPool")= ui.text('makeThisTheDefaultPool')
+                                small.text-secondary= ui.text('defaultPoolsAutomaticallyIncludeFutureParticipantsWithoutReopeningAssignments')
                                 .form-check.mt-2
                                     input#subtractPersonalInvoicesCreate.form-check-input(type="checkbox" name="subtractPersonalInvoices" checked)
-                                    label.form-check-label(for="subtractPersonalInvoicesCreate") Deduct submitter invoices from their share
+                                    label.form-check-label(for="subtractPersonalInvoicesCreate")= ui.text('deductSubmitterInvoicesFromTheirShare')
                             .col-12
-                                label.form-label(for="poolRegistrations") Limit to participants (disabled when assigned to all)
+                                label.form-label(for="poolRegistrations")= ui.text('limitToParticipantsDisabledWhenAssignedToAll')
                                 .assignments-list.border.border-secondary-subtle.rounded-3.p-2.bg-black.text-white#poolRegistrations
                                     if participants && participants.length
                                         each p in participants
                                             .form-check
                                                 input.form-check-input(type="checkbox" name="registrations" value=p.id id=`pool-create-reg-${p.id}` disabled checked)
-                                                label.form-check-label(for=`pool-create-reg-${p.id}`)= `${p.name} (${p.email})`
+                                                label.form-check-label(for=`pool-create-reg-${p.id}`)= ui.text('nameAndEmail', {name: p.name, email: p.email})
                                     else
-                                        p.text-secondary.small.mb-0 No participants yet.
+                                        p.text-secondary.small.mb-0= ui.text('noParticipantsYet')
                         .pool-form-status.mt-3(role="status" aria-live="polite")
                     .modal-footer
-                        button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
+                        button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('cancel')
                         button.btn.btn-primary(type="submit")
                             i.bi.bi-plus-circle.me-1(aria-hidden="true")
-                            | Add pool
+                            = ui.text('addPool')
 
 //- Wrapper to tie together the manage and create tabs
 mixin invoiceManagementTabs(ev, data)
+    - const ui = data.invoiceUi;
     .card.mb-3.bg-dark.text-white.border-secondary-subtle
         .card-header.py-2.d-flex.flex-wrap.align-items-center.justify-content-between.gap-2
             .d-flex.align-items-center.gap-2
                 i.bi.bi-receipt(aria-hidden="true")
-                span Invoice pools
+                span= ui.text('invoicePools')
             button.btn.btn-primary.btn-sm(type="button" data-bs-toggle="modal" data-bs-target="#poolCreateModal")
                 i.bi.bi-plus-circle.me-1(aria-hidden="true")
-                | Create pool
+                = ui.text('createPool')
         .card-body
-            +invoicePoolManageTab(ev, data.invoicePools, data.participants || [])
-    +invoicePoolCreateModal(ev, data.participants || [])
-    +invoiceOrganizerActionDialogs
+            +invoicePoolManageTab(ev, data.invoicePools, data.participants || [], data.invoiceUi)
+    +invoicePoolCreateModal(ev, data.participants || [], ui)
+    +invoiceOrganizerActionDialogs(ui)
+    +invoiceCommandConfirmation(ui)
 
-mixin invoiceActionDialog(id, title)
+mixin invoiceActionDialog(id, title, ui)
     .modal.fade.pool-edit-modal(id=id tabindex="-1" aria-labelledby=`${id}-title` aria-hidden="true")
         .modal-dialog.modal-lg.modal-dialog-scrollable.modal-fullscreen-sm-down
             .modal-content.bg-dark.text-white
                 .modal-header
                     h5.modal-title(id=`${id}-title`)= title
-                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label=ui.text('close'))
                 block
 
-mixin invoiceOrganizerActionDialogs
-    +invoiceActionDialog('invoiceEditModal', 'Correct invoice')
+//- Shared organizer correction/rejection dialogs receive captured invoice context from browser hooks.
+//- Their final review preserves the established confirmed/revision API contract; ui supplies every dialog string.
+mixin invoiceOrganizerActionDialogs(ui)
+    +invoiceActionDialog("invoiceEditModal", ui.text('correctInvoice'), ui)
         form.pool-modal-form.invoice-lifecycle-form(data-action="revise")
             .modal-body
                 p.fw-semibold(data-invoice-change-subject)
-                p.small.text-secondary Correct the effective amount or description. The original invoice and proof remain in the history.
+                p.small.text-secondary= ui.text('correctTheEffectiveAmountOrDescriptionTheOriginalInvoice')
                 .mb-3
-                    label.form-label(for="invoiceEditAmount") Amount
+                    label.form-label(for="invoiceEditAmount")= ui.text('amount')
                     input#invoiceEditAmount.form-control.text-bg-dark(type="number" name="correctedAmount" min="0.01" max="99999999.99" step="0.01" required)
                 .mb-3
-                    label.form-label(for="invoiceEditDescription") Description
+                    label.form-label(for="invoiceEditDescription")= ui.text('description')
                     textarea#invoiceEditDescription.form-control.text-bg-dark(name="correctedDescription" rows="3" maxlength="4000")
-                    small.text-secondary Leave this empty to restore the original description.
+                    small.text-secondary= ui.text('leaveThisEmptyToRestoreTheOriginalDescription')
                 .pool-form-status(role="status" aria-live="polite")
             .modal-footer
-                button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
-                button.btn.btn-primary(type="submit") Continue
-    +invoiceActionDialog('invoiceRejectModal', 'Reject invoice from pool')
+                button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('cancel')
+                button.btn.btn-primary(type="submit")= ui.text('continue')
+    +invoiceActionDialog("invoiceRejectModal", ui.text('rejectInvoiceFromPool'), ui)
         form.pool-modal-form.invoice-lifecycle-form(data-action="reject-accepted")
             .modal-body
                 p.fw-semibold(data-invoice-change-subject)
-                p.small.text-secondary Rejecting removes this accepted cost from the pool total. Its original details and proof remain in the history.
-                label.form-label(for="invoiceRejectReason") Rejection reason
+                p.small.text-secondary= ui.text('rejectingRemovesThisAcceptedCostFromThePoolTotal')
+                label.form-label(for="invoiceRejectReason")= ui.text('rejectionReason')
                 textarea#invoiceRejectReason.form-control.text-bg-dark(name="rejectionReason" rows="3" maxlength="4000" required)
                 .pool-form-status.mt-3(role="status" aria-live="polite")
             .modal-footer
-                button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
-                button.btn.btn-danger(type="submit") Continue
-    +invoiceActionDialog('invoiceConfirmModal', 'Confirm invoice change')
+                button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('cancel')
+                button.btn.btn-danger(type="submit")= ui.text('continue')
+    +invoiceActionDialog("invoiceConfirmModal", ui.text('confirmInvoiceChange'), ui)
         .modal-body
             p.fw-semibold(data-invoice-change-subject)
             div(data-invoice-change-review)
-            p.text-warning.small(data-invoice-closed-warning hidden) Existing shares and payments stay unchanged. Recalculate this closed pool to apply the change to shares.
-            p.small.text-secondary The change is saved only after you confirm below. Original details and proof are preserved.
+            p.text-warning.small(data-invoice-closed-warning hidden)= ui.text('existingSharesAndPaymentsStayUnchangedRecalculateThisClosed')
+            p.small.text-secondary= ui.text('theChangeIsSavedOnlyAfterYouConfirmBelow')
             .pool-form-status(role="status" aria-live="polite")
         .modal-footer
-            button.btn.btn-secondary.invoice-confirm-back(type="button") Back to edit
-            button.btn.btn-warning.invoice-confirm-submit(type="button") Confirm change
+            button.btn.btn-secondary.invoice-confirm-back(type="button")= ui.text('backToEdit')
+            button.btn.btn-warning.invoice-confirm-submit(type="button")= ui.text('confirmChange')
 
-mixin invoiceRetractionDialog
-    +invoiceActionDialog('invoiceRetractModal', 'Retract invoice')
+mixin invoiceRetractionDialog(ui)
+    +invoiceActionDialog("invoiceRetractModal", ui.text('retractInvoice'), ui)
         .modal-body
             p.fw-semibold(data-invoice-change-subject)
             p(data-invoice-retract-description)
-            p This invoice will be marked Retracted and will no longer await review. Its details and proof remain in your history.
+            p= ui.text('thisInvoiceWillBeMarkedRetractedAndWillNo')
             .pool-form-status(role="status" aria-live="polite")
         .modal-footer
-            button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Cancel
-            button.btn.btn-danger.invoice-retract-confirm(type="button") Confirm retraction
+            button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('cancel')
+            button.btn.btn-danger.invoice-retract-confirm(type="button")= ui.text('confirmRetraction')
 
 //- Shared takeover modal for admins/participants with a search field
-mixin takeoverModal(id)
+mixin takeoverModal(id, ui)
     .modal.fade.pool-edit-modal(id=id tabindex="-1" aria-labelledby=`${id}-title` aria-hidden="true")
         .modal-dialog.modal-lg.modal-dialog-scrollable.modal-fullscreen-sm-down
             .modal-content.bg-dark.text-white
                 .modal-header
-                    h5.modal-title(id=`${id}-title` data-takeover-title) Manage takeovers
-                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label="Close")
+                    h5.modal-title(id=`${id}-title` data-takeover-title)= ui.text('manageTakeovers2')
+                    button.btn-close.btn-close-white(type="button" data-bs-dismiss="modal" aria-label=ui.text('close'))
                 form.pool-modal-form#takeoverForm
                     .modal-body
-                        p.text-secondary.small Choose a payer, then the participants they will cover. Each beneficiary keeps their own factor, adjustments, and invoice credit when their share is combined into the payer's result.
+                        p.text-secondary.small= ui.text('chooseAPayerThenTheParticipantsTheyWillCover')
                         .status-notice.alert-info.small(data-takeover-status hidden)
                         .pool-takeover-selection.border.border-secondary-subtle.rounded-3.p-3.mb-3
-                            strong.d-block Selected coverage
-                            span.text-secondary.small(data-takeover-summary role="status" aria-live="polite") Choose a payer to manage coverage.
+                            strong.d-block= ui.text('selectedCoverage')
+                            span.text-secondary.small(data-takeover-summary role="status" aria-live="polite")= ui.text('chooseAPayerToManageCoverage')
                         .pool-form-status(role="status" aria-live="polite" tabindex="-1")
                         .mb-3.admin-only
-                            label.form-label(for="takeoverPayer") Payer
+                            label.form-label(for="takeoverPayer")= ui.text('payer')
                             select#takeoverPayer.form-select.text-bg-dark(name="payerId")
                         .mb-3
-                            label.form-label(for="takeoverSearch") Search participants
-                            input#takeoverSearch.form-control.text-bg-dark.takeover-search(type="search" placeholder="Type to filter")
+                            label.form-label(for="takeoverSearch")= ui.text('searchParticipants')
+                            input#takeoverSearch.form-control.text-bg-dark.takeover-search(type="search" placeholder=ui.text('typeToFilter'))
                         .takeover-beneficiaries.list-group.list-group-flush.bg-dark.border.border-secondary-subtle.rounded-3
                             // populated by JS
                     .modal-footer
-                        button.btn.btn-secondary(type="button" data-bs-dismiss="modal") Close
+                        button.btn.btn-secondary(type="button" data-bs-dismiss="modal")= ui.text('close')
                         button.btn.btn-primary(type="submit")
                             i.bi.bi-save.me-1(aria-hidden="true")
-                            | Save changes
+                            = ui.text('saveChanges')
+
+
+//- Frontend-only review gate for otherwise immediate commands. Its handlers capture the existing
+//- request before opening; Cancel, Escape, backdrop dismissal, and touch scrolling never execute it.
+mixin invoiceCommandConfirmation(ui)
+    +invoiceActionDialog("invoiceCommandConfirmModal", ui.text('confirmInvoiceAction'), ui)
+        .modal-body
+            p.fw-semibold(data-invoice-command-subject)
+            p(data-invoice-command-description)
+            .pool-form-status(role="status" aria-live="polite")
+        .modal-footer
+            button.btn.btn-secondary(type="button" data-bs-dismiss="modal" data-invoice-command-cancel)= ui.text('cancel')
+            button.btn.btn-warning(type="button" data-invoice-command-confirm)= ui.text('confirm')

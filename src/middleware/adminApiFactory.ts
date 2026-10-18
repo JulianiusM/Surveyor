@@ -18,15 +18,21 @@ import express, {Request, Response, Router} from 'express';
 import rateLimit from "express-rate-limit";
 import {
     addAdmin,
+    archiveEntity,
+    changeEntityEvent,
+    requireEntityPropertyUpdate,
     removeAdmin,
     requiredAdminManagePerm,
+    restoreEntity,
     searchUsers,
+    setAutomaticArchival,
     updateAdmin
 } from '../controller/entityAdminController';
+import type {EntityBase} from '../types/UserTypes';
 import {asyncHandler} from '../modules/lib/asyncHandler';
 import renderer from "../modules/renderer";
-import type {EntityGetter} from "../types/PermissionTypes";
-import type {CombEntityType} from "../types/UtilTypes";
+import type {EntityGetter, GetResource} from "../types/PermissionTypes";
+import type {CombEntityType, EntityType} from "../types/UtilTypes";
 import {requirePermissionApi} from './permissionMiddleware';
 
 const searchLimiter = rateLimit({
@@ -79,6 +85,63 @@ export function createEntityAdminApiRouter(app: Router, entityType: CombEntityTy
     );
 
     return app;
+}
+
+/**
+ * Register lifecycle commands alongside shared entity administration routes.
+ * Authorization stays in the controller so API commands and rendered capabilities
+ * use the same rules, including the owner-only survey exception.
+ * The feature router must already register its :id parameter loader; getResource reads
+ * that resolved root, rather than trusting a second entity identifier in the request body.
+ * Permanent deletion continues through each feature's existing owner-only delete route.
+ */
+export function createEntityArchiveApiRouter(app: Router, entityType: EntityType, getResource: GetResource) {
+    // Keep the public actions finite and explicit. The command controller validates its own
+    // body contract, so clients cannot write arbitrary timestamps, ownership or related roots.
+    const actions = [
+        {path: 'archive', run: archiveEntity, message: 'Archived for everyone'},
+        {path: 'restore', run: restoreEntity, message: 'Restored for everyone'},
+        {path: 'archive/automation', run: setAutomaticArchival, message: 'Automatic archival updated'},
+    ];
+
+    // A separate block-scoped action belongs to each handler. asyncHandler sends validation,
+    // authentication and transaction conflicts through the existing structured API error path.
+    for (const action of actions) {
+        async function handleLifecycleCommand(req: Request, res: Response) {
+            const reference = {type: entityType, id: getResource(req).id};
+            const archive = await action.run(reference, req.body, req.session);
+            // Return the freshly computed shared state; personal overview preferences are
+            // handled by the user endpoint and must not become part of this entity mutation.
+            renderer.respondWithSuccessDataJson(res, action.message, {archive});
+        }
+
+        app.post(`/:id/${action.path}`, asyncHandler(handleLifecycleCommand));
+    }
+}
+
+/** Share root API authorization while each feature retains normalization and persistence. */
+export function createEntityPropertyApiRouter(
+    app: Router,
+    entityType: EntityType,
+    getResource: GetResource,
+    updateProperties: (entity: any, body: unknown) => Promise<string>,
+    invalidateEventContext?: (id: string) => void,
+) {
+    async function update(req: Request, res: Response) {
+        const entity: EntityBase = getResource(req);
+        await requireEntityPropertyUpdate(entityType, entity, req.body, req.session);
+        const message = await updateProperties(entity, req.body);
+        renderer.respondWithSuccessJson(res, message);
+    }
+    app.post('/:id/update', asyncHandler(update));
+    if (!['activity', 'packing', 'drivers'].includes(entityType)) return;
+
+    async function changeEvent(req: Request, res: Response) {
+        const entity: EntityBase = getResource(req);
+        const {changed, ...result} = await changeEntityEvent(entityType, entity, req.body, req.session, invalidateEventContext);
+        renderer.respondWithSuccessDataJson(res, 'Linked event updated', result);
+    }
+    app.post('/:id/event', asyncHandler(changeEvent));
 }
 
 /** Optional: top-level typeahead */

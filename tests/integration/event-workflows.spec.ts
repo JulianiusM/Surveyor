@@ -15,7 +15,7 @@
  */
 
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import eventController from '../../src/controller/eventController';
+import eventController, {canBypassDeadlineWithToken, isEventFull} from '../../src/controller/eventController';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as driverService from '../../src/modules/database/services/DriverService';
@@ -149,14 +149,14 @@ describe('event user stories', () => {
     it('reports unlimited events as available', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Unlimited event', null);
 
-        expect(await eventService.isEventFull(eventId)).toBe(false);
+        expect(await isEventFull(eventId)).toBe(false);
     });
 
     it('reports an event full when capacity is reached', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 1);
 
         await registerEventAttendance(eventId, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
-        expect(await eventService.isEventFull(eventId)).toBe(true);
+        expect(await isEventFull(eventId)).toBe(true);
     });
 
     it('treats an event owner as registered for access purposes', async () => {
@@ -195,12 +195,19 @@ describe('event user stories', () => {
         const eventId = await createIntegrationEvent(owner.id, 'Workflow event', 20);
 
         const link = await eventService.createDeadlineBypassLink(eventId, owner.user!.id, {maxUses: 1});
-        expect(await eventService.canBypassDeadlineWithToken(eventId, link.token)).toEqual({ok: true, linkId: link.id});
-        expect(await eventService.consumeDeadlineBypassToken(link.id, participant.id)).toBe(true);
-        expect((await eventService.listDeadlineBypassLinks(eventId))[0]).toMatchObject({
+        expect(await canBypassDeadlineWithToken(eventId, link.token)).toEqual({ok: true, linkId: link.id});
+        // Exercise consumption through the controller transaction, including its policy
+        // check under the token lock and its real registration write in the same commit.
+        await eventService.updateEventProperties(eventId, {bindingDeadline: '2000-01-01T00:00:00Z'});
+        await registerEventAttendance(eventId, participant, {
+            arrivalDate: '2027-06-01', departureDate: '2027-06-03', regToken: link.token,
+        });
+        const event = (await eventService.getEventById(eventId))!;
+        expect((await eventController.listDeadlineBypassLinks(event))[0]).toMatchObject({
             id: link.id,
             status: 'consumed'
         });
+        expect(await canBypassDeadlineWithToken(eventId, link.token)).toEqual({ok: false});
     });
 
     it('loads event-linked activity, packing, and drivers modules', async () => {

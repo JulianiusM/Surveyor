@@ -1,4 +1,4 @@
-import type {StructuredEmailContent} from '../../src/modules/email';
+import type {StructuredEmailContent} from '../../src/types/EmailTypes';
 
 export function createStructuredEmailContent(
     overrides: Partial<StructuredEmailContent> = {},

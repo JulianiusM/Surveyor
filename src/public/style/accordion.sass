@@ -82,6 +82,22 @@ $dash-input-addon: #2a2f34
     color: var(--bs-accordion-color)
 
 
+// Entity card menus use Bootstrap/Popper for viewport placement. The card mixin opts the accordion item
+// into overflow-visible; without it, a correctly positioned menu would still be clipped by this theme.
+// Keep this sizing scoped to entity overviews so other themed accordions preserve their existing behavior.
+.entity-overview
+  .dropdown-menu
+    // Leave a viewport gutter on small screens while preserving a readable action width on larger ones.
+    // Bootstrap still decides above/below placement; the browser module refreshes it after collapse ends.
+    min-width: min(18rem, calc(100vw - 2rem))
+    max-width: calc(100vw - 2rem)
+
+  .dropdown-item, .dropdown-item-text
+    // Both buttons and the event-inheritance explanation may exceed one line. Allow even unbroken text
+    // to wrap rather than forcing the menu outside the viewport or clipping an action's readable label.
+    white-space: normal
+    overflow-wrap: anywhere
+
 // Toolbar row at the top of each section
 .dashboard-toolbar
   display: flex

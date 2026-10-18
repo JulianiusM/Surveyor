@@ -3,7 +3,9 @@ import type {AutoAssignmentContext} from '../../src/modules/activity/autoAssignm
 import {
     RecommendationJobCoordinator,
     RecommendationJobView,
+    fingerprintRecommendationContext,
 } from '../../src/modules/activity/recommendationJobs';
+import {APIError} from '../../src/modules/lib/errors';
 import {createAutoAssignmentContext} from '../factories/activityAutoAssignmentFactory';
 
 function createJobContext(): AutoAssignmentContext {
@@ -23,6 +25,13 @@ async function waitForTerminalJob(
 }
 
 describe('activity recommendation job coordination', () => {
+    it('distinguishes event identity even when every scheduling input is otherwise unchanged', () => {
+        const original = createJobContext();
+        original.plan.eventId = 'event-a';
+        const moved = {...original, plan: {...original.plan, eventId: 'event-b'}};
+        expect(fingerprintRecommendationContext(original)).not.toBe(fingerprintRecommendationContext(moved));
+    });
+
     it('coalesces a plan, serializes different plans, and reuses a matching cached result', async () => {
         // Protects limited webspaces from duplicate CPU work during bursts of concurrent requests.
         let activeExecutions = 0;
@@ -83,5 +92,79 @@ describe('activity recommendation job coordination', () => {
 
         expect(result.status).toBe('STALE');
         expect(persisted).toBe(false);
+    });
+
+    it('invalidates running work and lets its replacement complete without clearing the new job', async () => {
+        let releaseCalculation!: () => void;
+        let startedCalculation!: () => void;
+        const started = new Promise<void>(function captureStarted(resolve) { startedCalculation = resolve; });
+        const release = new Promise<void>(function captureRelease(resolve) { releaseCalculation = resolve; });
+        let executions = 0;
+        let writes = 0;
+        const coordinator = new RecommendationJobCoordinator({
+            loadContext: async function loadContext() { return createJobContext(); },
+            execute: async function execute() {
+                executions += 1;
+                if (executions === 1) {
+                    startedCalculation();
+                    await release;
+                }
+                return [];
+            },
+            persist: async function persist() { writes += 1; },
+        });
+        const first = coordinator.enqueue('moved-plan');
+        await started;
+        coordinator.invalidate('moved-plan');
+        const replacement = coordinator.enqueue('moved-plan');
+        expect(replacement.coalesced).toBe(false);
+        expect(coordinator.get(first.job.id)?.status).toBe('STALE');
+        releaseCalculation();
+        expect((await waitForTerminalJob(coordinator, replacement.job.id)).status).toBe('COMPLETE');
+        expect(writes).toBe(1);
+    });
+
+    it('sends the calculation relationship to persistence and reports a locked-context conflict as stale', async () => {
+        const context = createJobContext();
+        context.plan.eventId = 'old-event';
+        const coordinator = new RecommendationJobCoordinator({
+            loadContext: async function loadContext() { return context; },
+            execute: async function execute() { return []; },
+            persist: async function persist(_planId, _recommendations, expected) {
+                expect(expected).toMatchObject({eventId: 'old-event', startDate: context.plan.startDate, endDate: context.plan.endDate});
+                expect(expected.isCurrent?.()).toBe(true);
+                throw new APIError('Activity plan context changed', {reason: 'activity-context-changed'}, 409);
+            },
+        });
+        const queued = coordinator.enqueue('concurrently-moved-plan');
+        expect((await waitForTerminalJob(coordinator, queued.job.id)).status).toBe('STALE');
+    });
+
+    it('revokes the persistence guard when a job is invalidated while waiting for its plan lock', async () => {
+        let reportWaiting!: () => void;
+        let releaseWrite!: () => void;
+        const waiting = new Promise<void>(function captureWaiting(resolve) { reportWaiting = resolve; });
+        const release = new Promise<void>(function captureRelease(resolve) { releaseWrite = resolve; });
+        let checkedGuard = false;
+        const coordinator = new RecommendationJobCoordinator({
+            loadContext: async function loadContext() { return createJobContext(); },
+            execute: async function execute() { return []; },
+            persist: async function persist(_planId, _recommendations, expected) {
+                reportWaiting();
+                await release;
+                expect(expected.isCurrent?.()).toBe(false);
+                checkedGuard = true;
+                throw new APIError('Activity plan context changed', {reason: 'activity-context-changed'}, 409);
+            },
+        });
+        const queued = coordinator.enqueue('waiting-plan');
+        await waiting;
+        coordinator.invalidate('waiting-plan');
+        releaseWrite();
+        // The stored status is already STALE; await the persistence continuation separately.
+        await release;
+        await Promise.resolve();
+        expect(checkedGuard).toBe(true);
+        expect(coordinator.get(queued.job.id)?.status).toBe('STALE');
     });
 });

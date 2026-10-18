@@ -3,104 +3,114 @@
  * Handles permission matrix UI for entities with audience-based permissions
  */
 
-import { post } from '../core/http';
+import {assertSuccessfulResponse, post} from '../core/http';
 import { qsAll } from '../core/dom';
-import { showInlineAlert } from '../shared/alerts';
-import { showSpinner, hideSpinner, reloadAfterDelay } from '../shared/ui-helpers';
+import {beginEntityCommand} from '../shared/ui-helpers';
+
+const initializedDocuments = new WeakSet<Document>();
 
 // Find the matrix root that contains the clicked control
 function matrixRootFor(el: Element): HTMLElement | null {
     return el.closest('.perm-matrix') as HTMLElement | null;
 }
 
-// Find the audience container inside a specific matrix
+// Scope by the stable audience hook rather than layout: grouping and collapsed help are presentation.
 function audContainer(matrixRoot: Element, aud: string): HTMLElement | null {
-    // Prefer accordion body (new layout); fall back to card body (old layout)
-    return (
-        matrixRoot.querySelector(`.accordion-body .row[data-aud="${aud}"]`) ||
-        matrixRoot.querySelector(`.card-body .row[data-aud="${aud}"]`)
-    ) as HTMLElement | null;
+    return matrixRoot.querySelector<HTMLElement>(`[data-permission-audience="${aud}"]`);
 }
 
-function setAudience(matrixRoot: Element, aud: string, value: boolean) {
+function setAudience(matrixRoot: Element, aud: string, value: boolean): void {
     const scope = audContainer(matrixRoot, aud);
     if (!scope) return;
-    qsAll<HTMLInputElement>('input.perm-box', scope).forEach(cb => (cb.checked = value));
+    for (const checkbox of qsAll<HTMLInputElement>('input.perm-box', scope)) checkbox.checked = value;
 }
 
-function applyPreset(matrixRoot: Element, aud: string, mask: number) {
+function applyPreset(matrixRoot: Element, aud: string, mask: number): void {
     const scope = audContainer(matrixRoot, aud);
     if (!scope) return;
-    qsAll<HTMLInputElement>('input.perm-box', scope).forEach(cb => {
-        const bit = Number(cb.dataset.bit ?? 0);
-        cb.checked = (mask & bit) === bit;
-    });
+    for (const checkbox of qsAll<HTMLInputElement>('input.perm-box', scope)) {
+        const bit = Number(checkbox.dataset.bit ?? 0);
+        checkbox.checked = (mask & bit) === bit;
+    }
 }
 
-// ---------- NEW: collect matrix into JSON ----------
-function collectPerms(matrixRoot: HTMLElement) {
+// Every audience participates in a save, including hidden panels and intentionally empty masks.
+function collectPerms(matrixRoot: HTMLElement): Record<string, Record<string, string[]>> {
     const fieldBase = matrixRoot.dataset.fieldBase || 'defaultPerms';
-    const payload: Record<string, any> = {};
     const byAudience: Record<string, string[]> = {};
-    qsAll<HTMLElement>('.row[data-aud]', matrixRoot).forEach(row => {
-        const aud = row.dataset.aud!;
-        const keys = qsAll<HTMLInputElement>('input.perm-box:checked', row).map(cb => cb.value);
-        byAudience[aud] = keys; // empty array => clear perms for that audience
-    });
-    payload[fieldBase] = byAudience;
-    return payload;
+    for (const panel of qsAll<HTMLElement>('[data-permission-audience]', matrixRoot)) {
+        const keys: string[] = [];
+        for (const checkbox of qsAll<HTMLInputElement>('input.perm-box:checked', panel)) keys.push(checkbox.value);
+        byAudience[panel.dataset.permissionAudience!] = keys;
+    }
+    return {[fieldBase]: byAudience};
 }
 
-export function initPermMatrix() {
-// Event delegation: resolve matrix root from the clicked button
-    document.addEventListener('click', async (ev) => {
-        const target = ev.target as Element | null;
-        if (!target) return;
+/** Presentation changes never reset another audience's draft or masquerade as a saved edit. */
+function changeAudience(event: Event): void {
+    const selector = event.target as HTMLSelectElement;
+    if (!selector.matches('.perm-audience')) return;
+    const matrix = matrixRootFor(selector);
+    if (!matrix) return;
+    for (const panel of matrix.querySelectorAll<HTMLElement>('[data-permission-audience]')) {
+        panel.hidden = panel.dataset.permissionAudience !== selector.value;
+    }
+}
 
-        const btnAll = target.closest<HTMLButtonElement>('.perm-select-all');
-        const btnClear = target.closest<HTMLButtonElement>('.perm-clear');
-        const btnPreset = target.closest<HTMLButtonElement>('.perm-preset');
-        const btnUpdate = target.closest<HTMLButtonElement>('.btn-perm-update');
+export function initPermMatrix(): void {
+    if (initializedDocuments.has(document)) return;
+    initializedDocuments.add(document);
+    document.addEventListener('change', changeAudience);
+    // One delegated binding also covers permission editors revealed after the modal opens.
+    document.addEventListener('click', handleClick);
+}
 
-        const btn = btnAll || btnClear || btnPreset || btnUpdate;
-        if (!btn) return;
+async function handleClick(ev: MouseEvent): Promise<void> {
+    const target = ev.target as Element | null;
+    if (!target) return;
 
-        const matrixRoot = matrixRootFor(btn);
-        if (!matrixRoot) return;
+    const btnAll = target.closest<HTMLButtonElement>('.perm-select-all');
+    const btnClear = target.closest<HTMLButtonElement>('.perm-clear');
+    const btnPreset = target.closest<HTMLButtonElement>('.perm-preset');
+    const btnUpdate = target.closest<HTMLButtonElement>('.btn-perm-update');
 
-        if (btnAll || btnClear || btnPreset) {
-            const aud = (btn as HTMLButtonElement).dataset.aud!;
-            if (btnAll) setAudience(matrixRoot, aud, true);
-            if (btnClear) setAudience(matrixRoot, aud, false);
-            if (btnPreset) {
-                const mask = Number((btn as HTMLButtonElement).dataset.mask ?? '0');
-                applyPreset(matrixRoot, aud, mask);
-            }
-            ev.preventDefault();
-            return;
+    const btn = btnAll || btnClear || btnPreset || btnUpdate;
+    if (!btn || btn.disabled) return;
+
+    const matrixRoot = matrixRootFor(btn);
+    if (!matrixRoot) return;
+
+    // Bulk edits affect only the control's audience. The hidden panels retain their drafts so a
+    // later save can send the complete API contract without rebuilding defaults in browser code.
+    if (btnAll || btnClear || btnPreset) {
+        const aud = btn.dataset.aud!;
+        if (btnAll) setAudience(matrixRoot, aud, true);
+        if (btnClear) setAudience(matrixRoot, aud, false);
+        if (btnPreset) {
+            const mask = Number(btn.dataset.mask ?? '0');
+            applyPreset(matrixRoot, aud, mask);
         }
+        ev.preventDefault();
+        return;
+    }
 
-        if (btnUpdate) {
-            ev.preventDefault();
-            const api = (btnUpdate as HTMLButtonElement).dataset.api;
-            if (!api) return;
+    if (!btnUpdate) return;
+    ev.preventDefault();
+    const api = btnUpdate.dataset.api;
+    if (!api) return;
 
-            // UI state: disable + spinner
-            showSpinner(btnUpdate);
+    // The enclosing settings dialog owns locking, draft-discard confirmation and local feedback.
+    // Read all masks even while that host has disabled the controls for this request.
+    const command = beginEntityCommand(btnUpdate);
+    if (!command) return;
 
-            try {
-                const payload = collectPerms(matrixRoot);
-                await post(api, payload);
+    try {
+        const payload = collectPerms(matrixRoot);
+        const response = await post(api, payload);
+        assertSuccessfulResponse(response);
 
-                showInlineAlert('success', 'Permissions updated');
-                reloadAfterDelay(1000);
-            } catch (err) {
-                const error = err as Error;
-                showInlineAlert('error', error.message);
-            } finally {
-                hideSpinner(btnUpdate);
-            }
-            return;
-        }
-    });
+        command.success('Permissions updated');
+    } catch (err) {
+        command.error(err);
+    }
 }

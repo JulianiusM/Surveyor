@@ -76,7 +76,7 @@ export function startInlineEditArea(
         payloadKey: options?.payloadKey ?? 'description',
         successMessage: options?.successMessage ?? 'Description updated',
         placeholder: options?.placeholder ?? 'double-click to add description',
-        maxLength: options?.maxLength ?? 1999,
+        maxLength: options?.maxLength ?? 16000,
         onSave: options?.onSave,
     };
 

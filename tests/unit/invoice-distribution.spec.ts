@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {distributeInvoiceAmount, validateInvoiceFactor} from '../../src/modules/lib/invoiceDistribution';
+import {distributeInvoiceAmount, validateInvoiceFactor} from '../../src/modules/invoice/distribution';
 
 describe('invoice distribution', () => {
     it('multiplies the distribution weight by each participant factor before normalizing', () => {

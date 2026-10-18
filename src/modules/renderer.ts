@@ -44,6 +44,7 @@ export default {
     renderWithMessage,
     renderWithMessageData,
     renderWithData,
+    renderWithDataToString,
 
     //Default response
     respond,
@@ -145,6 +146,20 @@ function render(res: Response, page: string) {
 
 function renderWithData(res: Response, page: string, data?: any) {
     renderWithMessageData(res, page, undefined, undefined, data);
+}
+
+/**
+ * Render a layout-free view through Express so fragments share ordinary Pug escaping,
+ * common request locals, and the explicit data channel. The caller owns the response
+ * envelope; callback rendering does not send a second HTTP response.
+ */
+function renderWithDataToString(res: Response, page: string, data?: unknown): Promise<string> {
+    return new Promise(function renderFragment(resolve, reject) {
+        res.render(page, {status: undefined, message: undefined, data}, function completeFragment(error: Error | null, html: string) {
+            if (error) reject(error);
+            else resolve(html);
+        });
+    });
 }
 
 function renderWithMessage(res: Response, page: string, status: Status, message?: string) {

@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; advanced activity-plan contributors
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: D08 requirement precedence, stay-duration generation, live coverage, baseline calculation, recommendation eligibility, fairness, bounded repair, overfill, background jobs, review persistence, and application behavior verified
-source-anchors: src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; src/controller/activityController.ts; src/routes/api/activity.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts
+verification-scope: event-wide commitment projection, priority fallback, snapshot/fingerprint guards, atomic confirmable overlap application, and persistent review warnings; D08 requirement precedence, stay-duration generation, live coverage, baseline calculation, recommendation eligibility, fairness, bounded repair, overfill, background jobs, review persistence, and application behavior verified
+source-anchors: src/types/ActivityTypes.d.ts; src/modules/database/services/ActivityService.ts; src/public/js/modules/activity/activity-assignments.ts; tests/unit/activity-linked-recommendations.spec.ts; tests/frontend/activity-recommendation-warnings.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/activity-plan-interlinking.spec.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; src/controller/activityController.ts; src/routes/api/activity.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts
 next-review: implementation-change,D14
 -->
 
@@ -178,10 +178,21 @@ Generation uses a deterministic snapshot containing:
 - Existing assignees and their named-role status.
 - Saved stay-duration, role, and participant requirements.
 - Existing reviewed recommendation history.
+- Sibling plan modes and saved commitments in the same event, including active Pending/Approved target proposals.
 
 Participants already assigned to the plan and participants named in overrides are merged into the context. Existing role assignments supply the role IDs used by requirement precedence.
 
-Approved assignment recommendations are treated as locked input while replaceable pending work is recalculated. Pending rows are output and therefore excluded from the job fingerprint. Reviewed decisions, including rejections, are input and remain in the fingerprint.
+Approved assignment recommendations are treated as locked input while replaceable pending work is recalculated. Generated Pending rows in this plan are replaceable output and excluded from its job fingerprint. Retained manual drafts and reviewed decisions, including rejections, remain input. Sibling Pending proposals are input for this plan and remain in its fingerprint, including their status and operation provenance.
+
+## Interlinked activity plans
+
+The saved event relationship is the single source of truth for collision scope. Every activity plan attached to that event contributes commitments, including archived plans and plans omitted from a viewer's personal overview. Standalone plans and plans belonging to a different event stay outside that scope. No extra relationship table or schema migration is required.
+
+The controller assembles sibling assignments and active Pending/Approved recommendation targets from batched DBAL queries. Rejected rows and Applied audit history do not reserve proposal targets; the actual assignments created by application continue to count as commitments. An Unassign proposal never releases its actual assignment until it commits. A foreign Reassign proposal reserves its target while its source remains assigned.
+
+Foreign commitments affect availability only. They never change the current plan's participant target, role requirement, assigned-shift count, capacity usage, temporal anchors, or repair source choices. Retained local manual targets and reviewed moves also reserve their targets while their actual sources remain committed.
+
+Collision detection reuses the shared same-day timebox rule: complete parseable start/end times must overlap, and touching endpoints are allowed. Preview, participant signup, allocation and recommendation application use this one calculation. The controller classifies exceptions and filters disclosure through the existing permission engine: foreign details require both Access View and Access Participants on that plan. A generic overlap warning remains when those details cannot be disclosed.
 
 ## Automatic allocation
 
@@ -232,6 +243,12 @@ When **Allow assignments beyond slot capacity** is enabled, overfill runs only a
 
 Overfill does not relax attendance, boundary, overlap, duplicate-assignment, named-role, or rejection constraints. It also does not guarantee that every participant reaches the target when no eligible slot remains.
 
+### Required-over-Free fallback
+
+Only after normal placement, bounded repair and allowed overlap-free overfill finish does the allocator attempt to fill remaining Required deficits over Free sibling commitments. A target is eligible for this exception only when every foreign collision belongs to a Free plan. Local collisions, Required or unknown foreign modes, attendance/time policies, duplicate targets, capacity policy and rejection memory remain strict.
+
+This phase creates local Pending Assign proposals and never deletes or moves a sibling's assignment. It prefers fewer conflicting commitments, then less overfill, temporal spacing, boundary penalties and stable order. Required-over-Free proposals carry a persistent, confirmable overlap warning at review time. The organizer must discuss the conflict with the participant before deliberately accepting it.
+
 ## Background job lifecycle
 
 Automatic generation is asynchronous.
@@ -252,7 +269,8 @@ Important behavior:
 - Up to 256 terminal job records and 256 calculated context results are retained.
 - Cached results and terminal job records expire after 10 minutes.
 - Production builds execute the calculation in a Node.js worker thread. Source-mode development and unit tests use the same function after yielding to the event loop when the compiled worker is absent.
-- Before persistence, the coordinator reloads the complete input context and compares its SHA-256 fingerprint with the original snapshot.
+- The controller assembles each calculation context from one read snapshot. Before persistence, the coordinator reloads the complete context and compares its SHA-256 fingerprint with the original snapshot.
+- Persistence acquires the event before sibling plan roots and commitment rows, then checks the fingerprint again under those locks. Reassociation uses the same parent-before-child order. Sibling membership, mode, timebox, assignment or active proposal changes invalidate the calculated result.
 - If plan inputs changed during calculation, the result becomes `STALE` and is not written. The organizer must generate again from the new state.
 - A matching recent context can reuse a cached deterministic result.
 
@@ -295,7 +313,7 @@ Reassignment and swap source assignments must be roleless. The review UI filters
 
 ## Saving and applying
 
-**Save changes** performs two actions in one request:
+**Save changes** obtains a read-only server preview of the complete draft, keeps warnings visible beside their rows, and asks for explicit confirmation of applicable manual or Required-over-Free overlaps. It then performs two actions under the same event/plan transaction:
 
 1. Persist the submitted review states while retaining hidden applied history and automatic rejection memory that is absent from the visible payload.
 2. Apply every submitted Approved operation that remains valid.
@@ -311,7 +329,11 @@ Before mutation, the server validates that:
 - A reassignment or unassignment source still exists.
 - A reassignment source has no named role.
 
-It then recomputes attendance, boundary, overlap, and capacity warnings against the complete staged batch. Operations with a blocking warning are skipped. Reciprocal swap legs are treated together: if one leg is blocked, neither leg is applied.
+It projects the whole selected batch before checking targets, so source releases and target overlap warnings are independent of payload order. Unselected Pending/Approved proposals reserve their targets without releasing sources. Attendance, boundary, overlap and capacity checks are recomputed. Operations with a blocking warning are skipped; after removing a blocked operation, projection repeats so no remaining operation can rely on its source release. Reciprocal swap legs are treated together: if one leg is blocked, neither leg is applied.
+
+Manual overlaps remain confirmable regardless of plan mode. Generated overlaps remain blocking except when the current plan is Required and every conflict belongs to a Free sibling. For applicable confirmable overlaps, the server hashes the operation, local timebox and complete observed conflict state into an opaque acknowledgement. The apply transaction recomputes that value before any review, assignment or history write. A missing or stale acknowledgement returns a conflict; the browser preserves the draft, refreshes persistent warnings and requires another deliberate confirmation. Other ownership, eligibility, source, role and capacity checks still run.
+
+The UI reports the actual applied and skipped counts across its reload. Cancelling overlap confirmation writes nothing and leaves the warnings visible for participant discussion.
 
 Applied rows become hidden `APPLIED` history. After the binding deadline, a successful application immediately recalculates replaceable pending work against the new committed schedule. Before the deadline, no automatic post-apply regeneration occurs.
 

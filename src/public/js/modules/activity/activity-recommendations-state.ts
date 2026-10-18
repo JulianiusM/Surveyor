@@ -4,6 +4,7 @@
  */
 
 import type {
+    AssignmentWarning,
     BootstrapModal,
     ExistingActivityAssignment,
     RecommendationParticipantOption,
@@ -38,6 +39,16 @@ export class ActivityRecommendationsState {
 
     getWarnings(): RecommendationWarning[] {
         return [...this.warnings];
+    }
+
+    /** Match the entire operation, rather than attaching a move's warnings to an unrelated row. */
+    getWarningsForRecommendation(recommendation: RecommendationRow): AssignmentWarning[] {
+        if (recommendation.status === 'REJECTED') return [];
+        const result = this.warnings.find((warning) => warning.recommendation.itemId === recommendation.item.id
+            && warning.recommendation.profileId === recommendation.profile?.id
+            && (warning.recommendation.operation ?? 'ASSIGN') === (recommendation.operation ?? 'ASSIGN')
+            && (warning.recommendation.sourceItemId ?? null) === (recommendation.sourceItem?.id ?? null));
+        return result?.warnings ?? [];
     }
 
     getParticipantOptions(): RecommendationParticipantOption[] {

@@ -3,6 +3,58 @@
  * Provides reusable UI component builders and utilities
  */
 
+import type {EntityCommand, EntityCommandHost} from '../../../types/EntityPropertyTypes';
+import {showInlineAlert} from './alerts';
+
+// A component may host existing commands without changing their API or duplicating their handlers.
+// Weak keys keep ownership with the rendered component; ordinary page controls retain their defaults.
+const entityCommandHosts = new WeakMap<Element, EntityCommandHost>();
+
+export function registerEntityCommandHost(root: HTMLElement, host: EntityCommandHost): void {
+    entityCommandHosts.set(root, host);
+}
+
+/** Find a hosting dialog by walking ancestors, without depending on its markup in feature modules. */
+export function getEntityCommandHost(control: Element): EntityCommandHost | undefined {
+    let parent: Element | null = control;
+    while (parent) {
+        const host = entityCommandHosts.get(parent);
+        if (host) return host;
+        parent = parent.parentElement;
+    }
+    return undefined;
+}
+
+/** Local validation must report in its host without starting a write or discarding other drafts. */
+export function reportEntityCommandError(control: Element, error: unknown): void {
+    const host = getEntityCommandHost(control);
+    if (host) host.reportError(control, error);
+    else showInlineAlert('error', error instanceof Error ? error.message : 'Could not save the change.');
+}
+
+/**
+ * Existing image/permission commands use the same request behavior on pages and inside settings.
+ * The host owns dirty drafts, local feedback and the dialog lock. The fallback preserves page alerts
+ * and reloads for consumers such as overview cards that do not have a settings dialog.
+ */
+export function beginEntityCommand(control: HTMLButtonElement): EntityCommand | null {
+    const host = getEntityCommandHost(control);
+    if (host) return host.begin(control);
+    if (control.disabled) return null;
+    showSpinner(control);
+    return {
+        success(message: string, redirectUrl?: string): void {
+            showInlineAlert('success', message);
+            if (redirectUrl) window.location.assign(redirectUrl);
+            else reloadAfterDelay(500);
+        },
+        error(error: unknown): void {
+            showInlineAlert('error', error instanceof Error ? error.message : 'Could not save the change.');
+            hideSpinner(control);
+        },
+    };
+}
+
 /**
  * Create a colored badge element for status display
  * @param status Status text

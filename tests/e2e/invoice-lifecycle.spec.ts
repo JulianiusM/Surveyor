@@ -1,6 +1,6 @@
 import {expect, request as playwrightRequest, test, type Locator, type Page} from '@playwright/test';
 import {createE2EEvent, createE2ELogin} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
+import {confirmInvoiceCommand, createResourceViaForm, loginForE2E} from '../keywords/e2eCoreKeywords';
 
 async function closeModal(modal: Locator) {
     await Promise.all([
@@ -93,8 +93,8 @@ test('confirms retroactive invoice changes and retains participant retractions w
         await page.reload();
         await openInvoices(pool);
         const payer = pool.locator('[data-share-row]').filter({has: page.getByText('Invoice owner', {exact: true})});
-        const paid = payer.locator('.share-paid');
-        await expect(payer.locator('[data-label="Calculated balance"] strong')).toHaveText('40.00');
+        const paid = payer.locator('.share-settlement');
+        await expect(payer.locator('[data-share-balance]')).toHaveText('40.00');
         expect((await page.request.post(`${endpoint}/shares/${await paid.getAttribute('data-id')}/pay`, {data: {isPaid: true}})).ok()).toBe(true);
         await page.reload();
         await openInvoices(pool);
@@ -126,8 +126,8 @@ test('confirms retroactive invoice changes and retains participant retractions w
         await openInvoices(pool);
         await expect(venue).toContainText('Original: 100.00');
         await expect(pool).toContainText('Recalculation required');
-        await expect(paid).toBeChecked();
-        await expect(payer.locator('[data-label="Calculated balance"] strong')).toHaveText('40.00');
+        await expect(paid).toHaveAttribute('data-paid', 'true');
+        await expect(payer.locator('[data-share-balance]')).toHaveText('40.00');
         const correctedPreview = (await (await page.request.get(`${endpoint}/preview`)).json()).data;
         expect(correctedPreview.shares.map((share: {shareAmount: number}) => Number(share.shareAmount)).sort((a: number, b: number) => a - b)).toEqual([20, 80]);
 
@@ -143,18 +143,22 @@ test('confirms retroactive invoice changes and retains participant retractions w
         await openInvoices(pool);
         await expect(personalRow).toContainText('Rejected');
         await expect(personalRow).toContainText('Travel was reimbursed separately');
-        await expect(paid).toBeChecked();
+        await expect(paid).toHaveAttribute('data-paid', 'true');
         const rejectedPreview = (await (await page.request.get(`${endpoint}/preview`)).json()).data;
         expect(rejectedPreview.shares.map((share: {shareAmount: number}) => Number(share.shareAmount)).sort((a: number, b: number) => a - b)).toEqual([30, 70]);
         expect((await page.request.post(`${endpoint}/recalculate`, {data: {expectedRevision: rejectedPreview.revision, sendEmails: false}})).ok()).toBe(true);
         await page.reload();
         await openInvoices(pool);
-        await expect(paid).not.toBeChecked();
-        await expect(payer.locator('[data-label="Calculated balance"] strong')).toHaveText('30.00');
+        await expect(paid).toHaveAttribute('data-paid', 'false');
+        await expect(payer.locator('[data-share-balance]')).toHaveText('30.00');
         const breakdown = payer.getByRole('button', {name: 'View breakdown for Invoice owner', exact: true});
         await breakdown.click();
         const details = page.locator(`#pool-${poolId}-share-breakdown`);
-        await expect(details.locator('dd').nth(3)).toHaveText('40.00');
+        // Prior credit remains traceable even when unused adjustments and derived rows are omitted.
+        const breakdownTerms = details.locator('dl').first().locator('dt');
+        await expect(breakdownTerms.filter({hasText: /^Previously settled$/}).locator('xpath=following-sibling::dd[1]')).toHaveText('40.00');
+        await expect(breakdownTerms.filter({hasText: /^Calculated balance$/}).locator('xpath=following-sibling::dd[1]')).toHaveText('30.00');
+        await expect(breakdownTerms.filter({hasText: /^Payment status$/}).locator('xpath=following-sibling::dd[1]')).toHaveText('Payment due');
         await closeModal(details);
     } finally {
         await participant.close();

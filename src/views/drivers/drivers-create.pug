@@ -1,5 +1,7 @@
 //- views/packing/packing-create.pug  – überarbeitetes „Create“-Formular
 extends ../layout
+//- Declare the static event-context notice locally; this creation form has no archival action buttons.
+include ../modules/module_entity_archive
 
 block meta
     title Create Drivers List | Surveyor
@@ -10,6 +12,9 @@ block title
         | Create drivers list
 
 block content
+    //- A list created under an archived event immediately inherits that state despite having no dates.
+    //- The route retains this projection after validation errors; context=true keeps the notice read-only.
+    +entityArchiveNotice({id: data.eventId}, 'event', data.archive, true)
     -
         let parsed = {}, parsedData = [];
         let parsedEventData = {};

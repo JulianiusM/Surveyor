@@ -37,6 +37,8 @@ export default defineConfig({
     },
     webServer: {
         command: 'npm run e2e:init',
+        // Historical fixtures must only change lifecycle when a test requests it.
+        env: {AUTO_ARCHIVE_ENABLED: 'false'},
         url: `${BASE_URL}/healthz`,
         reuseExistingServer: !IS_CI,
         timeout: 180_000,

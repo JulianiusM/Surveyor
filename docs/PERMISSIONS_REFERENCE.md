@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; security reviewers; advanced documentation contributors
 owner: permission-system maintainers
 status: current
-last-verified: 2026-09-05
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-05-d00
-verification-scope: D03 permission evaluation, storage, audience predicates, page admission, middleware, item fallback, UI management, generated bit/preset/default reference, and survey exclusion
-source-anchors: src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/types/PermissionTypes.d.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/controller/entityAdminController.ts; src/modules/database/services/EntityAdminService.ts; src/modules/database/entities/permissions/EntityPermissions.ts; src/modules/database/entities/permissions/EntityAdminAssignment.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts
+verification-scope: implemented permission-filtered entity settings, atomic property updates, authorized event discovery/reassociation, and activity context preservation; archival EDIT_META and survey-owner authority, parent boundaries, and profile-scoped visibility source review; D03 permission evaluation, storage, audience predicates, page admission, middleware, item fallback, UI management, generated bit/preset/default reference, and survey exclusion
+source-anchors: src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/controller/entityAdminController.ts; src/middleware/adminApiFactory.ts; src/modules/database/services/UserService.ts; src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/types/PermissionTypes.d.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/modules/database/services/EntityAdminService.ts; src/modules/database/entities/permissions/EntityPermissions.ts; src/modules/database/entities/permissions/EntityAdminAssignment.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts
 next-review: D12,D14
 -->
 
@@ -68,6 +68,23 @@ Consequently, audience permissions are capability grants and only a conditional 
 
 ## Persistence
 
+### Archival authority and personal visibility
+
+Shared lifecycle APIs require an authenticated account or guest session with an active profile. Events, activity plans,
+packing lists, and drivers lists require effective `EDIT_META` to archive, restore, or change supported automatic
+archival policy. The normal cumulative engine applies; `ACCESS_ADMIN`, assignment presence, and `MANAGE_ASSIGNMENTS`
+are not substitutes. Surveys require ownership and do not join the general permission-administration contract.
+
+An archived event governs linked entities. A child can be independently archived by someone authorized on that child,
+but a child restore conflicts while the parent is archived. Child ownership does not confer parent archival authority.
+Parent links in archival projections are provided only when the caller can view that event. API and card capabilities
+share the same controller/permission projection, with batched grants and registration checks for overview responses.
+
+Personal visibility uses current membership in either active-profile overview collection, checked again in the write
+transaction. `ACCESS_VIEW` alone does not authorize a preference. The endpoint takes no client-supplied profile ID and
+cannot change shared state or another profile's placement. Preferences cannot retain access after membership is revoked.
+Authoritative archival does not revoke existing access or create a read-only mode.
+
 ### Audience defaults
 
 `EntityPermissions` stores one unsigned integer mask for each `(entityType, entityId, audience)` tuple in `entity_permissions`. Valid audiences are `participant`, `guest`, `authenticated`, and `public`.
@@ -92,7 +109,7 @@ The rows below are generated from the order and values in `PERM` in `src/modules
 | `EDIT_TITLE` | Edit Title | 1 | `0x1` | Editing | Entity title mutation; item-title routes may instead use an item permission with parent fallback. |
 | `EDIT_DESC` | Edit Desc | 2 | `0x2` | Editing | Entity description mutation; child descriptions commonly accept item EDIT_DESC or parent ITEM_EDIT / ITEM_EDIT_DESC. |
 | `EDIT_CAPACITY` | Edit Capacity | 4 | `0x4` | Editing | Entity capacity mutation and supported child-capacity edits. |
-| `EDIT_META` | Edit Meta | 8 | `0x8` | Editing | Entity metadata and header-image mutation; supported child metadata checks use item EDIT_META with explicit parent fallback. |
+| `EDIT_META` | Edit Meta | 8 | `0x8` | Editing | Entity metadata, header-image mutation, authoritative archive/restore, and supported automatic archival policy; supported child metadata checks use item EDIT_META with explicit parent fallback. |
 | `ITEM_ADD` | Item Add | 16 | `0x10` | Items | Create a child item/slot/driver row on the parent entity. |
 | `ITEM_EDIT` | Item Edit | 32 | `0x20` | Items | Reorder children and broad parent fallback for several child edit operations. |
 | `ITEM_EDIT_DESC` | Item Edit Desc | 262144 | `0x40000` | Items | Narrow parent fallback for child description edits. |
@@ -191,6 +208,34 @@ Reordering is an entity-level `ITEM_EDIT` check; adding a child is an entity-lev
 Client-side checks improve feedback and visibility but are not the security boundary. Every mutation must retain the matching server-side middleware or controller authorization.
 
 ## UI contract
+
+### Entity settings
+
+The root dialog renders only capabilities granted to the active profile, using the same field policy as the API:
+
+| Field or action | Required authority |
+|---|---|
+| Title / description | `EDIT_TITLE` / `EDIT_DESC` |
+| Event or activity dates; event location, deadline, and date/cancellation policy | `EDIT_META` |
+| Event maximum participants | `EDIT_CAPACITY` |
+| Event dietary requirements, comments, and post-deadline diet updates | `MANAGE_REQUIREMENTS` |
+| Header image; archival; child event association | `EDIT_META` |
+| Group permissions / administrators | `MANAGE_PERMISSIONS` |
+| Duplicate | `DATA_DUPLICATE` and the existing full-account prerequisite |
+| Permanent delete | Root ownership |
+
+The dialog on the ordinary view does not require `ACCESS_ADMIN`. A requirements-only event editor therefore receives
+dietary controls without unrelated edit rights or dashboard access. Surveys retain owner-only properties and their
+existing standalone workflow; they do not receive event linking or permission matrices.
+
+Creating or linking an activity, packing list, or drivers list checks effective `MANAGE_ASSIGNMENTS` on the submitted
+event, using that event's own ID for participant-audience evaluation. Later changes also require `EDIT_META` on the
+child evaluated against its persisted old event inside the association transaction. Unlinking needs no destination
+grant. The picker returns only eligible destinations, including ended, deadline-passed, and archived events.
+Following a change, page admission and inherited archival are evaluated again in the new context.
+
+Outside authorized management UI, the detail notice says only **This entity is archived.** Archival explanations and
+automation status belong to the modal; ordinary cards retain the minimal **Archived** badge.
 
 ### Group Permissions
 

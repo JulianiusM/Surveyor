@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import type {EntityManager} from "typeorm";
+import type {BasicEntityPropertyPatch} from '../../../types/EntityPropertyTypes';
 import type {BasePicked, GroupedResponses, SurveyAnswer, WeekDay, WeekInMonth} from "../../../types/SurveyTypes";
 import {generateUniqueId} from '../../lib/util';
 import {AppDataSource} from '../dataSource';
@@ -84,12 +86,22 @@ export async function getSurveysByProfileId(profileId: string) {
 }
 
 export async function getSurveysByParticipant(profileId: string) {
-    return await AppDataSource.getRepository(Survey).createQueryBuilder('survey')
-        .whereExists(AppDataSource.getRepository(SurveyResponse)
+    return getSurveyParticipationQuery(profileId).getMany();
+}
+
+/**
+ * Any stored response establishes participation, regardless of the selected answer.
+ * Reuse this predicate for overview discovery and transaction-scoped visibility writes.
+ * General administration ACLs do not apply to surveys; their owner/response model
+ * remains distinct from the other entity types.
+ */
+export function getSurveyParticipationQuery(profileId: string, manager: EntityManager = AppDataSource.manager) {
+    return manager.getRepository(Survey).createQueryBuilder('survey')
+        .whereExists(manager.getRepository(SurveyResponse)
             .createQueryBuilder("resp")
             .where("resp.entity_id = survey.id")
             .andWhere("resp.profile_id = :userId", {userId: profileId})
-        ).getMany();
+        );
 }
 
 export async function deleteSurvey(id: string) {
@@ -155,4 +167,18 @@ export async function getResponsesSorted(surveyId: string): Promise<GroupedRespo
 
 export async function updateHeaderImage(surveyId: string, headerImg?: string | null) {
     await AppDataSource.getRepository(Survey).update(surveyId, {headerImg});
+}
+
+/** Lock the survey for a controller-owned property operation; absence is returned without UI policy. */
+export async function withSurveyLock<T>(id: string, action: (manager: EntityManager, current: Survey | null) => Promise<T>): Promise<T> {
+    async function readLocked(manager: EntityManager): Promise<T> {
+        const current = await manager.getRepository(Survey).findOne({where: {id}, lock: {mode: 'pessimistic_write'}});
+        return action(manager, current);
+    }
+    return AppDataSource.transaction('READ COMMITTED', readLocked);
+}
+
+/** One statement persists the controller-approved patch inside its existing transaction. */
+export async function updateSurveyProperties(id: string, patch: BasicEntityPropertyPatch, manager: EntityManager): Promise<void> {
+    await manager.getRepository(Survey).update(id, patch);
 }

@@ -6,17 +6,13 @@
 import {RecommendationsLogic} from './activity-recommendations-logic';
 import {ActivityRecommendationsState} from './activity-recommendations-state';
 import type {BootstrapGlobal, RecommendationRow} from './activity-types';
+import type {AssignmentWarning, RecommendationModalRequest} from '../../../../types/ActivityTypes';
+import {describeWarning} from './activity-assignments';
 import {cancelAlertDismissal, scheduleAlertDismissal} from '../../shared/alerts';
 
 declare const bootstrap: BootstrapGlobal;
 
-export interface RecommendationModalRequest {
-    targetSlotId: string;
-    operation: 'ASSIGN' | 'REASSIGN' | 'SWAP';
-    profileId: string;
-    sourceItemId?: string;
-    swapProfileId?: string;
-}
+export type {RecommendationModalRequest} from '../../../../types/ActivityTypes';
 
 /**
  * UI class for recommendations
@@ -36,11 +32,14 @@ export class RecommendationsUI {
     private readonly swapAssignmentGroup: HTMLElement | null;
     private readonly addConfirmBtn: HTMLButtonElement | null;
     private readonly addWarningBox: HTMLElement | null;
+    private previewRequest = 0;
+    private readonly disabledControls = new Map<HTMLButtonElement | HTMLSelectElement, boolean>();
 
     constructor(
         private readonly state: ActivityRecommendationsState,
         private readonly logic: RecommendationsLogic,
-        private readonly container: HTMLElement
+        private readonly container: HTMLElement,
+        private readonly describeSlot: (slotId: string) => string
     ) {
         this.scheduleView = container.querySelector<HTMLElement>('#recommendationScheduleView');
         this.alertBox = container.querySelector<HTMLElement>('[data-recommendations-alert]');
@@ -64,10 +63,27 @@ export class RecommendationsUI {
         }
     }
 
+    /** Freeze the reviewed draft while preview/confirmation/save is in progress, preserving disabled policies. */
+    setBusy(busy: boolean): void {
+        if (!busy) {
+            for (const [control, disabled] of this.disabledControls) control.disabled = disabled;
+            this.disabledControls.clear();
+            return;
+        }
+        for (const root of [this.container, this.addModal]) {
+            if (!root) continue;
+            const controls = root.querySelectorAll<HTMLButtonElement | HTMLSelectElement>('button, select');
+            for (const control of controls) {
+                if (!this.disabledControls.has(control)) this.disabledControls.set(control, control.disabled);
+                control.disabled = true;
+            }
+        }
+    }
+
     /**
      * Show alert message
      */
-    setAlert(message?: string, variant: 'info' | 'danger' = 'info', pending = false): void {
+    setAlert(message?: string, variant: 'info' | 'danger' = 'info', persistent = false): void {
         if (!this.alertBox) return;
         cancelAlertDismissal(this.alertBox);
         const target = this.alertBox.querySelector('span') || this.alertBox;
@@ -80,12 +96,12 @@ export class RecommendationsUI {
 
         this.alertBox.classList.remove('d-none', 'alert-info', 'alert-danger');
         this.alertBox.classList.add(variant === 'danger' ? 'alert-danger' : 'alert-info');
-        this.alertBox.classList.toggle('alert', !pending);
-        this.alertBox.classList.toggle('status-notice', pending);
-        this.alertBox.setAttribute('role', pending ? 'status' : 'alert');
+        this.alertBox.classList.toggle('alert', !persistent);
+        this.alertBox.classList.toggle('status-notice', persistent);
+        this.alertBox.setAttribute('role', persistent ? 'status' : 'alert');
         target.textContent = message;
         const alertBox = this.alertBox;
-        if (!pending) scheduleAlertDismissal(alertBox, () => alertBox.classList.add('d-none'));
+        if (!persistent) scheduleAlertDismissal(alertBox, () => alertBox.classList.add('d-none'));
     }
 
     /**
@@ -132,7 +148,7 @@ export class RecommendationsUI {
         onRemove: () => void,
     ): void {
         const recDiv = document.createElement('div');
-        recDiv.className = 'd-flex align-items-center gap-2 mb-1 p-1 border rounded';
+        recDiv.className = 'd-flex flex-wrap align-items-center gap-2 mb-1 p-1 border rounded';
         recDiv.dataset.recId = rec.id || '';
         recDiv.dataset.slotId = rec.item.id;
         if (rec.profile?.id) recDiv.dataset.profileId = rec.profile.id;
@@ -235,6 +251,21 @@ export class RecommendationsUI {
             recDiv.append(removeBtn);
         }
 
+        // Warnings belong to the review row, not a timed alert. They remain visible after
+        // cancelling confirmation so the organizer can discuss the conflict first.
+        const warnings = this.state.getWarningsForRecommendation(rec);
+        if (warnings.length) {
+            const notice = document.createElement('div');
+            notice.className = 'status-notice alert-warning small w-100 mb-0';
+            notice.setAttribute('role', 'status');
+            notice.dataset.recommendationWarnings = '';
+            for (const warning of warnings) {
+                const message = document.createElement('div');
+                message.textContent = describeWarning(warning, this.describeSlot);
+                notice.append(message);
+            }
+            recDiv.append(notice);
+        }
         container.append(recDiv);
     }
 
@@ -268,27 +299,25 @@ export class RecommendationsUI {
 
         // Clear all recommendation containers
         const containers = this.scheduleView.querySelectorAll<HTMLElement>('[data-slot-recommendations]');
-        containers.forEach((container) => {
-            container.innerHTML = '';
-        });
+        for (const container of containers) container.innerHTML = '';
 
         // Group recommendations by slot
         const bySlot = this.logic.groupRecommendationsBySlot();
 
         // Render recommendations in their respective slots
-        bySlot.forEach((recs, slotId) => {
+        for (const [slotId, recs] of bySlot) {
             const container = this.scheduleView!.querySelector<HTMLElement>(`[data-slot-recommendations="${slotId}"]`);
             if (container) {
-                recs.forEach((rec) => this.renderRecommendation(
+                for (const rec of recs) this.renderRecommendation(
                     rec,
                     container,
                     () => onApprove(rec),
                     () => onReject(rec),
                     () => onRevert(rec),
                     () => onRemove(rec),
-                ));
+                );
             }
-        });
+        }
 
         this.updateSummaryStats();
     }
@@ -299,6 +328,7 @@ export class RecommendationsUI {
     setupAddModal(
         onConfirm: (request: RecommendationModalRequest) => void,
         onUnassign: (slotId: string, profileId: string) => void,
+        onPreview: (request: RecommendationModalRequest) => Promise<AssignmentWarning[]>,
     ): void {
         if (!this.scheduleView) return;
 
@@ -322,7 +352,8 @@ export class RecommendationsUI {
             const slotElement = this.scheduleView!.querySelector(`[data-slot-id="${slotId}"]`);
             const slotDay = slotElement?.closest<HTMLElement>('[data-day]')?.dataset.day;
 
-            // Populate modal
+            // Opening a different slot invalidates any preview left in flight by an earlier selection.
+            this.previewRequest++;
             if (this.addSlotIdInput) this.addSlotIdInput.value = slotId;
             if (this.addOperationSelect) this.addOperationSelect.value = 'ASSIGN';
             if (this.addWarningBox) this.addWarningBox.classList.add('d-none');
@@ -335,47 +366,58 @@ export class RecommendationsUI {
         this.state.trackListener(this.scheduleView, 'click', scheduleViewClickHandler);
 
         if (this.addOperationSelect) {
-            const operationHandler = () => this.populateOperationFields(
-                this.addSlotIdInput?.value || '',
-                this.state.getSlots().find((slot) => slot.id === this.addSlotIdInput?.value)?.day,
-            );
+            const operationHandler = () => {
+                this.populateOperationFields(
+                    this.addSlotIdInput?.value || '',
+                    this.state.getSlots().find((slot) => slot.id === this.addSlotIdInput?.value)?.day,
+                );
+                void this.showOverlapWarning(onPreview);
+            };
             this.addOperationSelect.addEventListener('change', operationHandler);
             this.state.trackListener(this.addOperationSelect, 'change', operationHandler);
         }
         if (this.addParticipantSelect) {
             const participantHandler = () => {
                 this.populateSourceAssignments();
-                this.showOverlapWarning(this.addSlotIdInput?.value || '');
+                void this.showOverlapWarning(onPreview);
             };
             this.addParticipantSelect.addEventListener('change', participantHandler);
             this.state.trackListener(this.addParticipantSelect, 'change', participantHandler);
         }
+        const sourceHandler = () => { void this.showOverlapWarning(onPreview); };
+        for (const select of [this.addSourceSelect, this.addSwapParticipantSelect]) {
+            if (!select) continue;
+            select.addEventListener('change', sourceHandler);
+            this.state.trackListener(select, 'change', sourceHandler);
+        }
 
         if (this.addConfirmBtn) {
-            const addConfirmClickHandler = async () => {
-                const slotId = this.addSlotIdInput?.value;
-                const participantValue = this.addParticipantSelect?.value;
-                if (slotId && participantValue) {
-                    const {type, id} = this.logic.parseParticipantValue(participantValue);
-                    if (type !== 'profile') return;
-                    const operation = (this.addOperationSelect?.value || 'ASSIGN') as RecommendationModalRequest['operation'];
-                    const request: RecommendationModalRequest = {
-                        targetSlotId: slotId,
-                        operation,
-                        profileId: id as string,
-                    };
-                    if (operation !== 'ASSIGN') request.sourceItemId = this.addSourceSelect?.value;
-                    if (operation === 'SWAP') request.swapProfileId = this.addSwapParticipantSelect?.value;
-                    if ((operation !== 'ASSIGN' && !request.sourceItemId) || (operation === 'SWAP' && !request.swapProfileId)) {
-                        this.showAddWarning('Select every assignment required for this operation.');
-                        return;
-                    }
-                    onConfirm(request);
+            const addConfirmClickHandler = () => {
+                const request = this.readModalRequest();
+                if (!request) {
+                    this.showAddWarning('Select every assignment required for this operation.');
+                    return;
                 }
+                onConfirm(request);
             };
             this.addConfirmBtn.addEventListener('click', addConfirmClickHandler);
             this.state.trackListener(this.addConfirmBtn, 'click', addConfirmClickHandler);
         }
+    }
+
+    /** Read a complete operation once, so preview and staging never disagree about the selected legs. */
+    private readModalRequest(): RecommendationModalRequest | undefined {
+        const targetSlotId = this.addSlotIdInput?.value;
+        const participantValue = this.addParticipantSelect?.value;
+        if (!targetSlotId || !participantValue) return undefined;
+        const {type, id} = this.logic.parseParticipantValue(participantValue);
+        if (type !== 'profile') return undefined;
+        const operation = (this.addOperationSelect?.value || 'ASSIGN') as RecommendationModalRequest['operation'];
+        const request: RecommendationModalRequest = {targetSlotId, profileId: id as string, operation};
+        if (operation !== 'ASSIGN') request.sourceItemId = this.addSourceSelect?.value;
+        if (operation === 'SWAP') request.swapProfileId = this.addSwapParticipantSelect?.value;
+        if ((operation !== 'ASSIGN' && !request.sourceItemId) || (operation === 'SWAP' && !request.swapProfileId)) return undefined;
+        return request;
     }
 
     private showAddWarning(message: string): void {
@@ -443,23 +485,22 @@ export class RecommendationsUI {
     /**
      * Show overlap warning in modal
      */
-    private showOverlapWarning(slotId: string): void {
+    private async showOverlapWarning(onPreview: (request: RecommendationModalRequest) => Promise<AssignmentWarning[]>): Promise<void> {
         if (!this.addWarningBox || !this.addParticipantSelect) return;
-
-        // Clear warning first
+        // Selection changes can complete out of order. Only the newest server preview
+        // describes this modal; the browser never implements a second collision rule.
+        const requestId = ++this.previewRequest;
         this.addWarningBox.classList.add('d-none');
-
-        const participantValue = this.addParticipantSelect.value;
-        if (!participantValue || !slotId) return;
-
-        // Check for overlap using logic layer
-        const {type, id} = this.logic.parseParticipantValue(participantValue);
-        const profileId = type === 'profile' ? id as string : null;
-
-        const hasOverlap = this.logic.hasOverlappingAssignment(profileId, slotId);
-
-        if (hasOverlap) {
-            this.showAddWarning('This participant has an overlapping assignment on the same day. A reassignment may resolve it.');
+        const request = this.readModalRequest();
+        if (!request) return;
+        try {
+            const warnings = await onPreview(request);
+            if (requestId !== this.previewRequest) return;
+            const messages: string[] = [];
+            for (const warning of warnings) messages.push(describeWarning(warning, this.describeSlot));
+            if (messages.length) this.showAddWarning(messages.join(' '));
+        } catch {
+            if (requestId === this.previewRequest) this.showAddWarning('Warnings could not be checked. Try again before saving changes.');
         }
     }
 
@@ -467,6 +508,7 @@ export class RecommendationsUI {
      * Hide modal
      */
     hideModal(): void {
+        this.previewRequest++;
         const modalInstance = this.state.getModalInstance();
         if (modalInstance) {
             modalInstance.hide();
@@ -503,6 +545,8 @@ export class RecommendationsUI {
      * Cleanup - remove all event listeners and clear DOM
      */
     cleanup(): void {
+        this.previewRequest++;
+        this.setBusy(false);
         if (this.alertBox) cancelAlertDismissal(this.alertBox);
         // State cleanup handles event listener removal
         this.state.reset();

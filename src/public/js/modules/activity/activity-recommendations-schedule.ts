@@ -1,231 +1,259 @@
 /**
- * Activity Recommendations Schedule Module
- * Handles the enhanced schedule-based recommendations view
- *
- * Architecture: Uses layered approach with separation of concerns
- * - State layer: ActivityRecommendationsState
- * - Logic layer: RecommendationsLogic
- * - UI layer: RecommendationsUI
+ * Activity recommendations schedule view.
+ * The state, logic and UI layers own the draft. This module coordinates requests;
+ * availability decisions stay on the server for every assignment path.
  */
-
-import {get, post} from '../../core/http';
+import {assertSuccessfulResponse, get, post} from '../../core/http';
 import {generateRecommendationsAndWait} from './activity-recommendation-jobs';
 import {reloadAfterDelay} from '../../shared/ui-helpers';
 import {showInlineAlert} from '../../shared/alerts';
 import {RecommendationsLogic} from './activity-recommendations-logic';
 import {ActivityRecommendationsState} from './activity-recommendations-state';
 import {RecommendationsUI} from './activity-recommendations-ui';
-import type {RecommendationModalRequest} from './activity-recommendations-ui';
-import type {RecommendationRow} from './activity-types';
+import type {AssignmentWarning, RecommendationInput, RecommendationModalRequest,
+    RecommendationWarningPreview} from '../../../../types/ActivityTypes';
+import type {RecommendationRow, WarningModal} from './activity-types';
 
-// Module-level instances
+// Keep the explicit lifecycle: in-flight previews cannot update a replacement view.
 let state: ActivityRecommendationsState | null = null;
-let logic: RecommendationsLogic | null = null;
 let ui: RecommendationsUI | null = null;
 
-/**
- * Cleanup function to reset module state and remove event listeners
- * Should be called when tearing down the view or between tests
- */
 export function cleanupRecommendationScheduleView(): void {
-    if (ui) {
-        ui.cleanup();
-    }
-    if (state) {
-        state.reset();
-    }
+    if (ui) ui.cleanup();
     state = null;
-    logic = null;
     ui = null;
 }
 
-/**
- * Initialize recommendation schedule view with layered architecture
- * @param planId - Activity plan ID
- * @param describeSlot - Function to describe a slot by ID
- */
-export async function initRecommendationScheduleView(planId: string, describeSlot: (slotId: string) => string): Promise<ActivityRecommendationsState | null> {
+/** Initialize the existing review without exposing another collision implementation to the browser. */
+export async function initRecommendationScheduleView(
+    planId: string, describeSlot: (slotId: string) => string, warningModal: WarningModal,
+): Promise<ActivityRecommendationsState | null> {
     const panel = document.getElementById('recommendationPanel');
     const scheduleView = panel?.querySelector<HTMLElement>('#recommendationScheduleView');
-
     if (!planId || !panel || !scheduleView) return null;
 
-    // Initialize layers
-    state = new ActivityRecommendationsState();
-    logic = new RecommendationsLogic(state);
-    ui = new RecommendationsUI(state, logic, panel);
+    const viewState = new ActivityRecommendationsState();
+    const viewLogic = new RecommendationsLogic(viewState);
+    const viewUI = new RecommendationsUI(viewState, viewLogic, panel, describeSlot);
+    state = viewState;
+    ui = viewUI;
+    let saving = false;
+    let previewRequest = 0;
+    const saveResultKey = 'activity-recommendation-result-' + planId;
 
-    // Helper function to re-render - declare first
-    let renderAll: () => void;
+    function renderAll(): void {
+        viewUI.renderAllRecommendations(handleApprove, handleReject, handleRevert, handleRemove);
+        if (saving) viewUI.setBusy(true);
+    }
 
-    // Action handlers
-    const handleApprove = (rec: RecommendationRow) => {
-        logic!.approveRecommendation(rec);
-        renderAll();
-    };
+    /** Preview a complete draft without persisting it or trusting browser-calculated warnings. */
+    async function previewReview(recommendations: RecommendationInput[]): Promise<RecommendationWarningPreview> {
+        const response = await post('/api/activity/' + planId + '/recommendations/warnings', {recommendations});
+        assertSuccessfulResponse(response);
+        return response.data;
+    }
 
-    const handleReject = (rec: RecommendationRow) => {
-        logic!.rejectRecommendation(rec);
-        renderAll();
-    };
-
-    const handleRevert = (rec: RecommendationRow) => {
-        logic!.revertToPending(rec);
-        renderAll();
-    };
-
-    const handleRemove = (rec: RecommendationRow) => {
-        if (!logic!.removeRecommendation(rec)) return;
-        renderAll();
-        ui!.setAlert('Manual operation removed. Select Save changes to persist this review.', 'info');
-    };
-
-    // Define renderAll after handlers
-    renderAll = () => {
-        ui!.renderAllRecommendations(handleApprove, handleReject, handleRevert, handleRemove);
-    };
-
-    // API functions
-    const loadRecommendations = async () => {
+    async function refreshDraftWarnings(): Promise<void> {
+        const request = ++previewRequest;
+        const payload = viewLogic.createReviewPayload();
+        const draft = JSON.stringify(payload);
         try {
-            const url = `/api/activity/${planId}/recommendations`;
-            const resp = await get(url);
-
-            const data = resp.data || resp;
-            state!.setRecommendations(data.recommendations || []);
-            state!.setWarnings(data.warnings || []);
-            state!.setParticipantOptions(data.participantOptions || []);
-            state!.setSlots(data.slots || []);
-            state!.setExistingAssignments(data.existingAssignments || []);
-
+            const preview = await previewReview(payload);
+            if (state !== viewState || request !== previewRequest || draft !== JSON.stringify(viewLogic.createReviewPayload())) return;
+            viewState.setWarnings(preview.warnings);
             renderAll();
-            ui!.setAlert();
-        } catch (err) {
-            console.error('Failed to load recommendations:', err);
-            ui!.setAlert('Failed to load recommendations.', 'danger');
+        } catch (error) {
+            if (state !== viewState || request !== previewRequest) return;
+            const message = error instanceof Error ? error.message : 'Warnings could not be checked.';
+            viewUI.setAlert(message + ' Check the review again before saving.', 'danger', true);
         }
-    };
+    }
 
-    const generateRecommendations = async () => {
-        try {
-            ui!.setAlert('Generating recommendations...', 'info', true);
-            await generateRecommendationsAndWait(planId, (status) => {
-                if (status === 'RUNNING') ui!.setAlert('Calculating recommendations...', 'info', true);
-            });
-            ui!.setAlert('Recommendations generated successfully.', 'info');
-            await loadRecommendations();
-        } catch (err) {
-            console.error('Failed to generate recommendations:', err);
-            ui!.setAlert('Failed to generate recommendations.', 'danger');
-        }
-    };
-
-    const applyRecommendations = async () => {
-        const recommendations = state!.getRecommendations();
-        const payload = recommendations
-            .filter((recommendation) => !(recommendation.manual && recommendation.status === 'REJECTED'))
-            .map(r => ({
-            id: r.id,
-            itemId: r.item.id,
-            profileId: r.profile?.id || null,
-            status: r.status,
-            operation: r.operation || 'ASSIGN',
-            sourceItemId: r.sourceItem?.id || null,
-            manual: Boolean(r.manual),
-        }));
-
-        try {
-            ui!.setAlert('Saving recommendations...', 'info', true);
-            await post(`/api/activity/${planId}/recommendations/apply`, {recommendations: payload});
-            ui!.setAlert('Recommendations saved successfully! Reloading...', 'info');
-
-            const activeTabEl = document.querySelector<HTMLElement>('.nav-link.active[data-bs-target]');
-            if (activeTabEl) {
-                sessionStorage.setItem('activity-active-tab', activeTabEl.dataset.bsTarget || '');
-            }
-
-            reloadAfterDelay(500);
-        } catch (err) {
-            console.error('Failed to save recommendations:', err);
-            ui!.setAlert('Failed to save recommendations.', 'danger');
-        }
-    };
-
-    const slotFor = (slotId: string) => state!.getSlots().find((slot) => slot.id === slotId);
-    const handleAddConfirm = (request: RecommendationModalRequest) => {
-        const participant = logic!.findParticipant(request.profileId);
-        if (!participant) return;
-        if (logic!.isDuplicate(request.targetSlotId, request.profileId)
-            || logic!.isAlreadyAssigned(request.targetSlotId, request.profileId)) {
-            showInlineAlert('error', 'This recommendation already exists.', document.querySelector<HTMLElement>('#addRecommendationModal .modal-body') ?? undefined);
-            return;
-        }
-
-        const targetSlot = slotFor(request.targetSlotId);
-        if (!targetSlot) return;
-        if (request.operation === 'ASSIGN') {
-            logic!.addRecommendation(logic!.createRecommendation(
-                targetSlot,
-                participant,
-                request.profileId,
-            ));
-        } else {
-            const sourceSlot = request.sourceItemId ? slotFor(request.sourceItemId) : undefined;
-            if (!sourceSlot) return;
-            const staged = [logic!.createRecommendation(
-                targetSlot,
-                participant,
-                request.profileId,
-                'REASSIGN',
-                sourceSlot,
-            )];
-
-            if (request.operation === 'SWAP' && request.swapProfileId) {
-                const outgoingAssignment = state!.getExistingAssignments().find((assignment) =>
-                    assignment.item.id === targetSlot.id
-                    && assignment.profile.id === request.swapProfileId);
-                const outgoingParticipant = logic!.findParticipant(request.swapProfileId);
-                if (!outgoingAssignment || !outgoingParticipant) return;
-                if (logic!.isDuplicate(sourceSlot.id, request.swapProfileId)
-                    || logic!.isAlreadyAssigned(sourceSlot.id, request.swapProfileId)) {
-                    showInlineAlert('error', 'The selected participant cannot be moved into the other side of this swap.', document.querySelector<HTMLElement>('#addRecommendationModal .modal-body') ?? undefined);
-                    return;
-                }
-                staged.push(logic!.createRecommendation(
-                    sourceSlot,
-                    outgoingParticipant,
-                    request.swapProfileId,
-                    'REASSIGN',
-                    targetSlot,
-                ));
-            }
-            staged.forEach((recommendation) => logic!.addRecommendation(recommendation));
-        }
+    function handleApprove(rec: RecommendationRow): void {
+        viewLogic.approveRecommendation(rec);
         renderAll();
-        ui!.hideModal();
-    };
+        void refreshDraftWarnings();
+    }
+    function handleReject(rec: RecommendationRow): void {
+        viewLogic.rejectRecommendation(rec);
+        renderAll();
+        void refreshDraftWarnings();
+    }
+    function handleRevert(rec: RecommendationRow): void {
+        viewLogic.revertToPending(rec);
+        renderAll();
+        void refreshDraftWarnings();
+    }
+    function handleRemove(rec: RecommendationRow): void {
+        if (!viewLogic.removeRecommendation(rec)) return;
+        renderAll();
+        viewUI.setAlert('Manual operation removed. Select Save changes to persist this review.', 'info');
+        void refreshDraftWarnings();
+    }
 
-    const handleUnassign = (slotId: string, profileId: string) => {
-        if (logic!.isDuplicate(slotId, profileId)) {
+    async function loadRecommendations(): Promise<void> {
+        try {
+            const response = await get('/api/activity/' + planId + '/recommendations');
+            assertSuccessfulResponse(response);
+            if (state !== viewState) return;
+            const data = response.data;
+            viewState.setRecommendations(data.recommendations || []);
+            viewState.setWarnings(data.warnings || []);
+            viewState.setParticipantOptions(data.participantOptions || []);
+            viewState.setSlots(data.slots || []);
+            viewState.setExistingAssignments(data.existingAssignments || []);
+            renderAll();
+            const result = sessionStorage.getItem(saveResultKey);
+            sessionStorage.removeItem(saveResultKey);
+            viewUI.setAlert(result || undefined, 'info', Boolean(result));
+            // Approved rows must show the application projection. Pending proposals
+            // remain commitments and cannot release their actual source assignments.
+            await refreshDraftWarnings();
+        } catch (error) {
+            if (state !== viewState) return;
+            const message = error instanceof Error ? error.message : 'Failed to load recommendations.';
+            viewUI.setAlert(message, 'danger', true);
+        }
+    }
+
+    function showGenerationStatus(status: string): void {
+        if (status === 'RUNNING' && state === viewState) viewUI.setAlert('Calculating recommendations...', 'info', true);
+    }
+    async function generateRecommendations(): Promise<void> {
+        try {
+            viewUI.setAlert('Generating recommendations...', 'info', true);
+            await generateRecommendationsAndWait(planId, showGenerationStatus);
+            await loadRecommendations();
+        } catch (error) {
+            if (state !== viewState) return;
+            const message = error instanceof Error ? error.message : 'Failed to generate recommendations.';
+            viewUI.setAlert(message, 'danger', true);
+        }
+    }
+
+    /** Freeze, preview, display and confirm the exact draft before submitting its acknowledgement. */
+    async function applyRecommendations(): Promise<void> {
+        if (saving) return;
+        saving = true;
+        previewRequest++;
+        viewUI.setBusy(true);
+        const payload = viewLogic.createReviewPayload();
+        try {
+            const preview = await previewReview(payload);
+            if (state !== viewState) return;
+            viewState.setWarnings(preview.warnings);
+            renderAll();
+            const overlaps: AssignmentWarning[] = [];
+            for (const result of preview.warnings) {
+                if (result.recommendation.status !== 'APPROVED') continue;
+                for (const warning of result.warnings) {
+                    if (warning.type === 'overlap' && warning.confirmable) overlaps.push(warning);
+                }
+            }
+            if (preview.overlapConfirmation) {
+                const confirmed = await warningModal.confirm(overlaps, '', 'Confirm overlapping changes');
+                if (!confirmed || state !== viewState) return;
+            }
+            viewUI.setAlert('Saving recommendations...', 'info', true);
+            const response = await post('/api/activity/' + planId + '/recommendations/apply', {
+                recommendations: payload, overlapConfirmation: preview.overlapConfirmation,
+            });
+            assertSuccessfulResponse(response);
+            if (state !== viewState) return;
+            // Report actual counts, including skipped rows retained for review.
+            const result = response.data;
+            viewState.setWarnings(result.warnings || []);
+            renderAll();
+            const message = 'Saved review. Applied ' + result.applied + '; skipped ' + result.skipped + '.';
+            viewUI.setAlert(message, 'info', true);
+            sessionStorage.setItem(saveResultKey, message);
+            const activeTab = document.querySelector<HTMLElement>('.nav-link.active[data-bs-target]');
+            if (activeTab) sessionStorage.setItem('activity-active-tab', activeTab.dataset.bsTarget || '');
+            reloadAfterDelay(500);
+        } catch (error) {
+            if (state !== viewState) return;
+            const message = error instanceof Error ? error.message : 'Failed to save recommendations.';
+            viewUI.setAlert(message, 'danger', true);
+            // A stale-confirmation rejection preserves the draft and requires another
+            // deliberate save after fresh, persistent warnings have been displayed.
+            await refreshDraftWarnings();
+        } finally {
+            saving = false;
+            viewUI.setBusy(false);
+        }
+    }
+
+    function slotFor(slotId: string): RecommendationRow['item'] | undefined {
+        return viewState.getSlots().find((slot) => slot.id === slotId);
+    }
+
+    /** Construct both legs once for preview/staging; source assignments stay in this plan. */
+    function createManualRows(request: RecommendationModalRequest): RecommendationRow[] {
+        const participant = viewLogic.findParticipant(request.profileId);
+        const targetSlot = slotFor(request.targetSlotId);
+        if (!participant || !targetSlot) throw new Error('Select a participant and slot.');
+        if (viewLogic.isDuplicate(request.targetSlotId, request.profileId)
+            || viewLogic.isAlreadyAssigned(request.targetSlotId, request.profileId)) {
+            throw new Error('This recommendation already exists.');
+        }
+        if (request.operation === 'ASSIGN') return [viewLogic.createRecommendation(targetSlot, participant, request.profileId)];
+        const sourceSlot = request.sourceItemId ? slotFor(request.sourceItemId) : undefined;
+        if (!sourceSlot) throw new Error('Select the source assignment.');
+        const staged = [viewLogic.createRecommendation(targetSlot, participant, request.profileId, 'REASSIGN', sourceSlot)];
+        if (request.operation === 'SWAP') {
+            const outgoingParticipant = viewLogic.findParticipant(request.swapProfileId || null);
+            const outgoingAssignment = viewState.getExistingAssignments().find((assignment) =>
+                assignment.item.id === targetSlot.id && assignment.profile.id === request.swapProfileId);
+            if (!outgoingParticipant || !outgoingAssignment || !request.swapProfileId) throw new Error('Select the participant to swap.');
+            if (viewLogic.isDuplicate(sourceSlot.id, request.swapProfileId)
+                || viewLogic.isAlreadyAssigned(sourceSlot.id, request.swapProfileId)) {
+                throw new Error('The selected participant cannot be moved into the other side of this swap.');
+            }
+            staged.push(viewLogic.createRecommendation(sourceSlot, outgoingParticipant, request.swapProfileId, 'REASSIGN', targetSlot));
+        }
+        return staged;
+    }
+
+    async function previewManualRows(request: RecommendationModalRequest): Promise<AssignmentWarning[]> {
+        const staged = createManualRows(request);
+        const preview = await previewReview(viewLogic.createReviewPayload(staged));
+        const warnings: AssignmentWarning[] = [];
+        for (const result of preview.warnings) {
+            for (const row of staged) {
+                if (result.recommendation.itemId === row.item.id && result.recommendation.profileId === row.profile?.id) {
+                    warnings.push(...result.warnings);
+                }
+            }
+        }
+        return warnings;
+    }
+    async function handleAddConfirm(request: RecommendationModalRequest): Promise<void> {
+        try {
+            for (const recommendation of createManualRows(request)) viewLogic.addRecommendation(recommendation);
+            renderAll();
+            viewUI.hideModal();
+            await refreshDraftWarnings();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'The operation could not be added.';
+            showInlineAlert('error', message, document.querySelector<HTMLElement>('#addRecommendationModal .modal-body') ?? undefined);
+        }
+    }
+    function handleUnassign(slotId: string, profileId: string): void {
+        if (viewLogic.isDuplicate(slotId, profileId)) {
             showInlineAlert('error', 'A recommendation for this participant and slot already exists.');
             return;
         }
-        const assignment = state!.getExistingAssignments().find((existing) =>
+        const assignment = viewState.getExistingAssignments().find((existing) =>
             existing.item.id === slotId && existing.profile.id === profileId);
         if (!assignment) return;
-        logic!.addRecommendation({
-            item: assignment.item,
-            profile: assignment.profile,
-            status: 'APPROVED',
-            operation: 'UNASSIGN',
-            manual: true,
-        });
+        viewLogic.addRecommendation({item: assignment.item, profile: assignment.profile,
+            status: 'APPROVED', operation: 'UNASSIGN', manual: true});
         renderAll();
-    };
+        void refreshDraftWarnings();
+    }
 
-    ui!.setupButtons(loadRecommendations, generateRecommendations, applyRecommendations);
-    ui!.setupAddModal(handleAddConfirm, handleUnassign);
+    viewUI.setupButtons(loadRecommendations, generateRecommendations, applyRecommendations);
+    viewUI.setupAddModal(handleAddConfirm, handleUnassign, previewManualRows);
     await loadRecommendations();
-
-    return state;
+    return viewState;
 }

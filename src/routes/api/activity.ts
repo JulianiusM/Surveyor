@@ -17,7 +17,7 @@
 import express, {Request, Response} from 'express';
 
 import controller from '../../controller/activityController';
-import {createEntityAdminApiRouter} from "../../middleware/adminApiFactory";
+import {createEntityAdminApiRouter, createEntityArchiveApiRouter, createEntityPropertyApiRouter} from "../../middleware/adminApiFactory";
 import {attachAssignRoleRoutes, attachAssignRoutes} from '../../middleware/assignFlowFactory';
 import {createEntityHeaderUpdateRouter} from "../../middleware/entityHeaderUpdateHandler";
 
@@ -60,10 +60,15 @@ apiParamHandler('textFieldId', app, activityService.getActivityPlanTextFieldById
 app.use("/:id", attachPermBundle(permFct, itemPermFct));
 
 createEntityAdminApiRouter(app, entityName, permFct)
+// Reuse the :id loader above; the shared controller checks archival authority on this plan.
+// Its linked event affects archival state, while permanent deletion keeps its existing route.
+createEntityArchiveApiRouter(app, entityName, resFct);
+createEntityPropertyApiRouter(app, entityName, resFct, controller.updateProperties, controller.invalidateEventContext);
 createEntityHeaderUpdateRouter(app, permFct, resFct, controller.updateHeaderImg, controller.deleteHeaderImg);
 
 app.post('/:id/description', requirePermissionApi(permFct, PERM.EDIT_DESC), async (req: Request, res: Response) => {
-    const msg = await controller.updateDescription(resFct(req).id, req.body);
+    const plan = resFct(req);
+    const msg = await controller.updateDescription(plan.id, req.body, plan.eventId ?? null);
     renderer.respondWithSuccessJson(res, msg);
 })
 
@@ -108,14 +113,14 @@ app.post(
     '/:id/slot/:slotId/warnings',
     requirePermissionApi(permFct, PERM.ACCESS_VIEW),
     asyncHandler(async (req: Request, res: Response) => {
-        const warnings = await controller.getAssignmentWarnings(
+        const preview = await controller.getAssignmentWarningPreview(
             resFct(req).id,
             req.params.slotId as string,
             req.session,
             res.locals.permData as PermBundle | undefined,
             req.body,
         );
-        renderer.respondWithSuccessDataJson(res, undefined, {warnings});
+        renderer.respondWithSuccessDataJson(res, undefined, preview);
     }),
 );
 
@@ -150,7 +155,7 @@ app.get(
     '/:id/recommendations',
     requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
     asyncHandler(async (req: Request, res: Response) => {
-        const data = await controller.getRecommendations(resFct(req).id);
+        const data = await controller.getRecommendations(resFct(req).id, req.session);
         renderer.respondWithSuccessDataJson(res, undefined, data);
     })
 );
@@ -159,9 +164,18 @@ app.post(
     '/:id/recommendations',
     requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
     asyncHandler(async (req: Request, res: Response) => {
-        const data = await controller.updateRecommendations(resFct(req).id, req.body);
+        const data = await controller.updateRecommendations(resFct(req).id, req.body, req.session);
         renderer.respondWithSuccessDataJson(res, data.message, {warnings: data.warnings});
     })
+);
+
+app.post(
+    '/:id/recommendations/warnings',
+    requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
+    asyncHandler(async (req: Request, res: Response) => {
+        const preview = await controller.getRecommendationWarningPreview(resFct(req).id, req.body, req.session);
+        renderer.respondWithSuccessDataJson(res, undefined, preview);
+    }),
 );
 
 app.post(
@@ -187,7 +201,7 @@ app.post(
     '/:id/recommendations/apply',
     requirePermissionApi(permFct, PERM.MANAGE_ASSIGNMENTS),
     asyncHandler(async (req: Request, res: Response) => {
-        const data = await controller.applyRecommendations(resFct(req).id, req.body);
+        const data = await controller.applyRecommendations(resFct(req).id, req.body, req.session);
         renderer.respondWithSuccessDataJson(res, data.message, data.skipped !== undefined ? {
             applied: data.applied,
             skipped: data.skipped,

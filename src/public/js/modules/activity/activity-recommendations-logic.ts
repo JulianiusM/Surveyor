@@ -5,6 +5,7 @@
 
 import {formatDateLabel} from "../../core/formatting";
 import {ActivityRecommendationsState} from './activity-recommendations-state';
+import type {RecommendationInput} from '../../../../types/ActivityTypes';
 import type {
     ExistingActivityAssignment,
     RecommendationOperation,
@@ -18,6 +19,18 @@ import type {
  */
 export class RecommendationsLogic {
     constructor(private readonly state: ActivityRecommendationsState) {
+    }
+
+    /** One serializer for draft previews and application; additional rows do not mutate the draft. */
+    createReviewPayload(additional: RecommendationRow[] = []): RecommendationInput[] {
+        const payload: RecommendationInput[] = [];
+        for (const recommendation of [...this.state.getRecommendations(), ...additional]) {
+            if (recommendation.manual && recommendation.status === 'REJECTED') continue;
+            payload.push({id: recommendation.id, itemId: recommendation.item.id, profileId: recommendation.profile?.id,
+                status: recommendation.status, operation: recommendation.operation ?? 'ASSIGN',
+                sourceItemId: recommendation.sourceItem?.id ?? null, manual: Boolean(recommendation.manual)});
+        }
+        return payload;
     }
 
     /**
@@ -132,39 +145,6 @@ export class RecommendationsLogic {
         return this.state.getExistingAssignments().filter((assignment) =>
             (!profileId || assignment.profile.id === profileId)
             && assignment.roles.every((role) => role === 'default'));
-    }
-
-    /**
-     * Check for overlapping assignments on same day
-     */
-    hasOverlappingAssignment(
-        profileId: string | null,
-        slotId: string
-    ): boolean {
-        const slots = this.state.getSlots();
-        const slot = slots.find((s: any) => s.id === slotId);
-        if (!slot?.day) return false;
-
-        const slotDate = new Date(slot.day);
-        const existingAssignments = this.state.getExistingAssignments();
-
-        return existingAssignments.some((assignment) => {
-            const matchesParticipant =
-                (profileId && assignment.profile?.id === profileId);
-
-            if (!matchesParticipant) return false;
-
-            const assignmentDate = new Date(assignment.item.day || '');
-            if (assignmentDate.toDateString() !== slotDate.toDateString()) return false;
-
-            // Check time overlap
-            const slotStart = new Date(`${slot.day}T${slot.startTime}`);
-            const slotEnd = new Date(`${slot.day}T${slot.endTime}`);
-            const assignmentStart = new Date(`${assignment.item.day}T${assignment.item.startTime}`);
-            const assignmentEnd = new Date(`${assignment.item.day}T${assignment.item.endTime}`);
-
-            return slotStart < assignmentEnd && slotEnd > assignmentStart;
-        });
     }
 
     /**

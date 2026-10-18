@@ -1,63 +1,57 @@
-//- timezonePicker(name, opts?)
-//- opts: { id, label, value, required, class, help, common, refDateIso }
-//-   name          -> form field name to submit (hidden input)
-//-   value         -> preselected IANA zone (e.g. "Europe/Berlin")
-//-   common        -> array of IANA zones to show in "Common" select
-//-   refDateIso    -> ISO date (e.g. "2025-09-20T17:00") for offset labels; defaults to now
+//- Both hosts use the same searchable content. Chips and results are populated from supported
+//- IANA zones by timezone-select; no feature is removed when the picker is inside another modal.
+mixin timezonePickerContent(id)
+    label.form-label.small(for=id + '-search') Search time zones
+    .input-group.mb-2
+        span.input-group-text.text-bg-dark
+            i.bi.bi-search(aria-hidden='true')
+        input.form-control.text-bg-dark(id=id + '-search' type='search' placeholder='Search time zones…' autocomplete='off' inputmode='search')
+    details.mb-2
+        summary.small Common time zones
+        .d-flex.flex-wrap.gap-1.mt-2(id=id + '-chips')
+    ul.list-group.list-group-flush.text-bg-dark.overflow-auto(id=id + '-list' aria-label='Time zones' style='max-height: 15rem')
+    p.small.text-secondary.mt-2.mb-0(id=id + '-summary' aria-live='polite')
+
+//- timezonePicker(name, opts?): name owns the submitted hidden field, value is an IANA zone,
+//- common optionally supplies quick choices, and refDateIso controls displayed UTC offsets.
+//- Inline mode expands within the parent dialog. The default mode retains the standalone modal.
 mixin timezonePicker(name, opts)
     -
-        if (!opts) opts = {}
-        const id = (opts.id || name);
-        opts.common ||= [
-            'UTC', 'Europe/Berlin', 'Europe/London', 'America/New_York', 'America/Chicago',
-            'America/Denver', 'America/Los_Angeles', 'America/Sao_Paulo', 'Africa/Johannesburg',
-            'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney', 'Pacific/Auckland'
-        ];
+        const options = opts || {};
+        const id = options.id || name;
+        const inline = options.mode === 'inline';
+        const serializedId = JSON.stringify(id).replace(/</g, '\\u003c');
+        const serializedOptions = JSON.stringify(options).replace(/</g, '\\u003c');
 
-    .timezone-picker(class=['tz-picker-compact', opts.class])
-        if opts.label
-            label.form-label(for=id + '-input')= opts.label
-
-        //- Hidden field that submits with the form
-        input(type='hidden', name=name, id=id, value=opts.value, required=opts.required)
-
-        //- Compact trigger button shows current selection; great for mobile
+    .timezone-picker(class=['tz-picker-compact', options.class])
+        if options.label
+            label.form-label(for=id + '-btn')= options.label
+        input(type='hidden' name=name id=id value=options.value required=options.required)
         .d-flex.gap-2
-            a.btn.btn-outline-light.flex-grow-1.text-start(id=id + '-btn')
-                i.bi.bi-globe.me-2(aria-hidden="true")
-                span(id=id + '-btn-label') Select time zone
-            a.btn.btn-outline-light(id=id + '-guess' type='button' title='Use my time zone')
-                i.bi.bi-geo-alt(aria-hidden="true")
+            button.btn.btn-outline-light.flex-grow-1.text-start(type='button' id=id + '-btn' aria-label=options.label || 'Time zone' aria-controls=inline ? id + '-panel' : id + '-modal' aria-expanded=inline ? 'false' : undefined)
+                i.bi.bi-globe.me-2(aria-hidden='true')
+                span(id=id + '-btn-label')= options.value || 'Select time zone'
+            button.btn.btn-outline-light(id=id + '-guess' type='button' title='Use my time zone' aria-label='Use my time zone')
+                i.bi.bi-geo-alt(aria-hidden='true')
+        if options.help
+            .form-text.mt-1= options.help
 
-        if opts.help
-            .form-text.mt-1= opts.help
-
-        //- Modal: searchable, large tap targets
-        .modal.fade(id=id + '-modal' tabindex='-1' aria-labelledby=id + '-modal-label' aria-hidden='true')
-            .modal-dialog.modal-dialog-scrollable
-                .modal-content.text-bg-dark
-                    .modal-header.text-bg-dark
-                        h5.modal-title(id=id + '-modal-label') Choose a time zone
-                        button.btn-close(type='button' data-bs-dismiss='modal' aria-label='Close')
-                    .modal-body
-                        //- Quick access chips
-                        .mb-2(id=id + '-chips')
-                            // chips injected by JS from opts.common
-
-                        //- Search box
-                        .input-group.mb-2
-                            span.input-group-text.text-bg-dark
-                                i.bi.bi-search(aria-hidden="true")
-                            input.form-control.text-bg-dark(id=id + '-search' type='search' placeholder='Search time zones…' autocomplete='off' inputmode='search')
-
-                        //- Results list
-                        ul.list-group.list-group-flush.text-bg-dark(id=id + '-list' role='listbox' aria-label='Time zones')
-                            // items injected by JS
-
-                    .modal-footer
-                        button.btn.btn-secondary(type='button' data-bs-dismiss='modal') Cancel
-
-    // Load the module
-    script(type="module").
+        if inline
+            //- A hidden panel avoids nested focus traps; closing it returns focus to its trigger.
+            .border.border-secondary.rounded.p-2.mt-2(id=id + '-panel' hidden)
+                +timezonePickerContent(id)
+                button.btn.btn-sm.btn-outline-secondary.mt-2(type='button' id=id + '-close') Close time zones
+        else
+            .modal.fade(id=id + '-modal' tabindex='-1' aria-labelledby=id + '-modal-label' aria-hidden='true')
+                .modal-dialog.modal-dialog-scrollable
+                    .modal-content.text-bg-dark
+                        .modal-header
+                            h5.modal-title(id=id + '-modal-label') Choose a time zone
+                            button.btn-close(type='button' data-bs-dismiss='modal' aria-label='Close')
+                        .modal-body
+                            +timezonePickerContent(id)
+                        .modal-footer
+                            button.btn.btn-secondary(type='button' data-bs-dismiss='modal') Cancel
+    script(type='module').
         import { initTimezoneSelect } from "/js/modules/timezone-select.gen.js";
-        initTimezoneSelect("#{id}", !{JSON.stringify(opts)});
+        initTimezoneSelect(!{serializedId}, !{serializedOptions});

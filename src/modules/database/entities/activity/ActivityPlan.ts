@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {Column, Entity, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
+import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
 import {DefaultEntity} from "../abstract/BaseEntity";
 import {Event} from "../event/Event";
 import {ActivityAssignment} from "./ActivityAssignment";
@@ -27,7 +27,18 @@ import {ActivityRole} from "./ActivityRole";
 import {ActivitySlot} from "./ActivitySlot";
 
 @Entity("activity_plans", {schema: "surveyor"})
+// Match the automatic sweep's eligibility filters and (endDate, id) batch cursor.
+// event IS NULL limits the schedule to standalone plans without scanning linked ones.
+@Index("idx_activity_plans_auto_archive", ["archivedAt", "autoArchivePaused", "event", "endDate", "id"])
 export class ActivityPlan extends DefaultEntity {
+    /**
+     * Applies only to standalone plans; linked plans follow their event's schedule.
+     * Restoring a standalone plan sets this flag so its expired period is not archived
+     * again by the next sweep. Date edits preserve it until explicit resumption.
+     */
+    @Column("boolean", {name: "auto_archive_paused", default: false})
+    autoArchivePaused!: boolean;
+
     @Column("date", {name: "start_date"})
     startDate!: string;
 

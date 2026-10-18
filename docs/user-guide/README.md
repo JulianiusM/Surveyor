@@ -4,9 +4,9 @@ documentation-metadata
 audience: end users
 owner: product documentation maintainers
 status: current
-last-verified: 2026-09-06
+last-verified: 2026-10-03
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: D14 task-grouped navigation, contextual help entry, server-side search, per-page tables of contents, maintained visual aids, rendered semantic checks, and trusted-content guardrails; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: source-derived header, individually inspected layouts, accurate captions and full-size image links
+verification-scope: compartmentalized settings tabs, compact audience editor, paged event search, and restored searchable timezone controls; current Entity settings guidance replaces obsolete embedded controls illustration; D14 task-grouped navigation, contextual help entry, server-side search, per-page tables of contents, maintained visual aids, rendered semantic checks, and trusted-content guardrails; D14 rendered help navigation, semantic checks, and trusted-content integration; D14 visual correction: source-derived header, individually inspected layouts, accurate captions and full-size image links
 source-anchors: docs/user-guide/; docs/user-guide/assets/; docs/HELP_VISUALS.md; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; src/views/layout.pug; src/public/style/help.sass; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; .github/workflows/release.yml
 next-review: help-source-or-visible-UI-change
 -->
@@ -67,11 +67,9 @@ Several Surveyor features use audience and individual permissions to control vie
 
 The [Permissions and Sharing](PERMISSIONS.md) guide starts with common recipes, then explains cumulative grants, overlapping audiences, administrator delegation, every permission label, and the survey exception. Feature guides explain actions specific to each type of item.
 
-![Annotated comparison of participant controls such as Join, Take, Remove, and Submit with organizer controls such as New, Settings, Group Permissions, Duplicate, and Delete.](assets/participant-and-organizer-controls.png)
-
-*This is a control reference, not a screenshot. Controls appear according to the feature, active profile, registration state, ownership and effective permissions.*
-
-[View the controls image at full size](/help/assets/participant-and-organizer-controls.png).
+Participant actions such as **Join**, **Take**, **Remove**, and **Submit** remain in the relevant feature view.
+Open **Entity settings** for the properties and actions your active profile may change, including **Group Permissions**,
+**Duplicate**, archival, and owner-only **Delete permanently** when available. The dialog omits controls you cannot use.
 
 ## Common controls
 

@@ -1,81 +1,103 @@
-//- eventPicker(name, entities, opts?)
-//- opts: { id, label, value, required, class, help, placeholderLabel }
-//-   name             -> form field name to submit (hidden input)
-//-   entities         -> array of { id, title, description?, dateIso?, ... }
-//-   value            -> preselected entity id (string|number)
-//-   placeholderLabel -> text shown on button before a selection (default: "Select entity")
+//- Shared event selection content. Every DOM hook is prefixed by id; the browser module owns
+//- filtering and result navigation but changes the hidden selection only after an explicit choice.
+//- This mixin renders no form or modal, allowing creation and entity settings to share it safely.
+mixin entityPickerContent(id, opts)
+    .entity-picker-content(id=id + '-content')
+        .row.g-2.align-items-end.mb-2
+            .col
+                label.form-label(for=id + '-search') Search events
+                input.form-control.text-bg-dark(id=id + '-search' type='search' placeholder='Search by title or description…' autocomplete='off' aria-controls=id + '-list')
+            .col-auto
+                button.btn.btn-sm.btn-outline-secondary(type='button' id=id + '-reset') Reset filters
+        //- Advanced filters stay available without pushing the event choices below the fold.
+        details.border.border-secondary.rounded.p-2.mb-2
+            summary.small Filter by dates and state
+            .row.g-2.mt-1
+                .col-sm-6
+                    label.form-label.small(for=id + '-from') From
+                    input.form-control.form-control-sm.text-bg-dark(id=id + '-from' type='date')
+                .col-sm-6
+                    label.form-label.small(for=id + '-to') To
+                    input.form-control.form-control-sm.text-bg-dark(id=id + '-to' type='date')
+                .col-sm-4
+                    label.form-label.small(for=id + '-period') Period
+                    select.form-select.form-select-sm.text-bg-dark(id=id + '-period')
+                        option(value='all') All
+                        option(value='upcoming') Upcoming
+                        option(value='ongoing') Ongoing
+                        option(value='ended') Ended
+                .col-sm-4
+                    label.form-label.small(for=id + '-archive') Archive state
+                    select.form-select.form-select-sm.text-bg-dark(id=id + '-archive')
+                        option(value='all') All
+                        option(value='active') Active
+                        option(value='archived') Archived
+                .col-sm-4
+                    label.form-label.small(for=id + '-deadline') Registration deadline
+                    select.form-select.form-select-sm.text-bg-dark(id=id + '-deadline')
+                        option(value='all') All
+                        option(value='open') Not passed / no deadline
+                        option(value='passed') Passed
+        .d-flex.flex-wrap.gap-2.align-items-center.mb-2
+            if !opts.required
+                button.btn.btn-sm.btn-outline-light(type='button' id=id + '-clear' aria-pressed='false') No event
+            //- Selected state remains visible when the selected event is outside the current page.
+            p.small.mb-0(id=id + '-selection' role='status')
+        p.small.text-info.d-none(id=id + '-archive-hint') Archived with selected event. Existing access and actions remain available.
+        p.small.text-danger.d-none(id=id + '-error' aria-live='assertive')
+        p.small.text-secondary.d-none(id=id + '-loading' role='status') Loading events…
+        ul.list-group.list-group-flush.text-bg-dark.overflow-auto(id=id + '-list' aria-label='Available events' aria-describedby=id + '-summary' style='max-height: 22rem')
+        p.small.text-secondary.mt-2.mb-2(id=id + '-summary' aria-live='polite')
+        .d-flex.gap-2
+            button.btn.btn-sm.btn-outline-light.d-none(type='button' id=id + '-previous') Previous page
+            button.btn.btn-sm.btn-outline-light.d-none(type='button' id=id + '-more') Next page
+            button.btn.btn-sm.btn-outline-secondary.d-none(type='button' id=id + '-retry') Try again
+
+//- name is the submitted hidden field; entities contains authorized seeds, normally the current event.
+//- opts follows EntityPickerOptions. mode='inline' embeds content without creating a nested modal.
+//- Existing creation calls retain their API and use the authorized collection endpoint by default.
 mixin entityPicker(name, entities, opts)
     -
-        if (!opts) opts = {};
-        const id = (opts.id || name);
-        const placeholder = opts.placeholderLabel || 'Select entity';
-        const preselectedId = (opts.value ?? null);
-
-        let initialLabel = placeholder; // Resolve initial label if preselected
-        try {
-            if (preselectedId != null && Array.isArray(entities)) {
-                const match = entities.find(e => String(e.id) === String(preselectedId));
-                if (match && match.title) initialLabel = match.title;
-            }
-        } catch (e) {
+        const options = opts || {};
+        const id = options.id || name;
+        const inline = options.mode === 'inline';
+        const pickerOptions = Object.assign({endpoint: name === 'event_id' ? '/api/event/link-options' : null}, options);
+        const initialValue = options.value == null ? '' : String(options.value);
+        const initialOptions = Array.isArray(entities) ? entities : [];
+        let initialLabel = initialValue ? 'Current event' : (options.placeholderLabel || 'No event');
+        for (const entity of initialOptions) {
+            if (String(entity.id) === initialValue && entity.title) initialLabel = entity.title;
         }
+        // Escaping '<' prevents a stored title/description from closing the inline module script.
+        const serializedId = JSON.stringify(id).replace(/</g, '\\u003c');
+        const serializedEntities = JSON.stringify(initialOptions).replace(/</g, '\\u003c');
+        const serializedOptions = JSON.stringify(pickerOptions).replace(/</g, '\\u003c');
 
-    .entity-picker(class=[opts.class])
-        if opts.label
-            label.form-label(for=id + '-btn')= opts.label
-
-        //- Hidden field that submits with the form
-        input(type='hidden', name=name, id=id, value=preselectedId, required=opts.required)
-
-        //- Compact trigger button shows current selection
-        .d-flex.gap-2
-            a.btn.btn-outline-light.flex-grow-1.text-start(id=id + '-btn' data-bs-toggle='modal', data-bs-target='#' + id + '-modal', role='button')
-                i.bi.bi-calendar-event.me-2(aria-hidden="true")
+    .entity-picker(class=options.class id=id + '-picker')
+        if options.label
+            if inline
+                p.form-label= options.label
+            else
+                label.form-label(for=id + '-btn')= options.label
+        input(type='hidden' name=name id=id value=initialValue required=options.required)
+        if inline
+            +entityPickerContent(id, options)
+        else
+            button.btn.btn-outline-light.w-100.text-start(type='button' id=id + '-btn' data-bs-toggle='modal' data-bs-target='#' + id + '-modal')
+                i.bi.bi-calendar-event.me-2(aria-hidden='true')
                 span(id=id + '-btn-label')= initialLabel
-
-        if opts.help
-            .form-text.mt-1= opts.help
-
-        //- Modal: searchable list of events
-        .modal.fade(id=id + '-modal' tabindex='-1' aria-labelledby=id + '-modal-label' aria-hidden='true')
-            .modal-dialog.modal-dialog-scrollable
-                .modal-content.text-bg-dark
-                    .modal-header.text-bg-dark
-                        h5.modal-title(id=id + '-modal-label') Choose an entity
-                        button.btn-close(type='button' data-bs-dismiss='modal' aria-label='Close')
-                    .modal-body
-                        //- Search box
-                        .input-group.mb-2
-                            span.input-group-text.text-bg-dark
-                                i.bi.bi-search(aria-hidden="true")
-                            input.form-control.text-bg-dark(
-                                id=id + '-search'
-                                type='search'
-                                placeholder='Search entities by name…'
-                                autocomplete='off'
-                                inputmode='search'
-                                aria-controls=id + '-list'
-                                aria-describedby=id + '-sr'
-                            )
-
-                        //- Results list
-                        ul.list-group.list-group-flush.text-bg-dark(
-                            id=id + '-list'
-                            role='listbox'
-                            aria-label='Entities'
-                        )
-                            // items injected by JS
-
-                        //- Assistive summary
-                        span.visually-hidden(id=id + '-sr' aria-live='polite')
-
-                        //- Empty state (hidden until needed)
-                        .text-secondary.small.mt-2.d-none(id=id + '-empty') No entities match your search.
-
-                    .modal-footer
-                        button.btn.btn-secondary(type='button' data-bs-dismiss='modal') Cancel
-
-    // Load the module
-    script(type="module").
+            .modal.fade(id=id + '-modal' tabindex='-1' aria-labelledby=id + '-modal-label' aria-hidden='true')
+                .modal-dialog.modal-lg.modal-dialog-scrollable
+                    .modal-content.text-bg-dark
+                        .modal-header
+                            h5.modal-title(id=id + '-modal-label') Choose an event
+                            button.btn-close(type='button' data-bs-dismiss='modal' aria-label='Close')
+                        .modal-body
+                            +entityPickerContent(id, options)
+                        .modal-footer
+                            button.btn.btn-secondary(type='button' data-bs-dismiss='modal') Cancel
+        if options.help
+            .form-text.mt-1= options.help
+    script(type='module').
         import { initEntitySelect } from "/js/modules/entity-select.gen.js";
-        initEntitySelect("#{id}", !{JSON.stringify(entities || [])}, !{JSON.stringify(opts || {})});
+        initEntitySelect(!{serializedId}, !{serializedEntities}, !{serializedOptions});

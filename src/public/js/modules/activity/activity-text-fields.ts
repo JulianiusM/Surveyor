@@ -92,7 +92,7 @@ export function initTextFields(planId: string): void {
                     payloadKey: 'text',
                     successMessage: 'Text updated',
                     placeholder: textField.dataset.placeholder || 'double-click to edit',
-                    maxLength: 5000,
+                    maxLength: 16000,
                     onSave: () => reloadAfterDelay(100),
                 },
             );
