@@ -31,8 +31,9 @@ const emit = defineEmits<{close: []; saved: []; accessLost: []}>();
 const context = usePilot();
 const api = props.operations;
 const {messages} = context;
-// Shared panels receive catalog wording and admitted presentation. Packing retains
-// the draft/token and command owners, including each field's deliberate exceptions.
+// Shared panels receive catalog wording and admitted presentation. This dialog and
+// its section editors own drafts, tokens and commands for Packing, Event and Drivers;
+// each feature injects its operations and retains its deliberate field exceptions.
 const headerLabels = computed<EntityHeaderLabels>(() => ({
     title: messages.value.t('packing.headerImage'), choose: messages.value.t('packing.chooseImage'),
     hint: messages.value.t('packing.imageHint'), upload: messages.value.t('packing.upload'),

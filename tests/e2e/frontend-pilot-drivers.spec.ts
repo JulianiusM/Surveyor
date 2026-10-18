@@ -3,9 +3,14 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import type {components} from '../../src/types/api/v1';
 import {createE2EDriversList, createE2ELogin} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectVisiblePresentation, loginForE2E, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
+import {closeModalForE2E, createResourceViaForm, expectVisiblePresentation, loginForE2E, readVisiblePresentation,
+    withProfileWorkflowFixtureForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {createFrontendEventFixture, frontendEventHeaders as apiHeaders} from '../keywords/frontendEventE2EKeywords';
+import {captureDriversSettingsPresentation, createDriversSettingsFixture, exerciseDriversAdministratorForE2E, expectDriversSettingsPresentation,
+    observeDriversSettingsCommand, openDriversSettingsForE2E, readDriversSettingsForE2E,
+    selectDriversSettingsSurface} from '../keywords/frontendDriversE2EKeywords';
+import {PERM} from '../../src/modules/lib/permissions';
 
 type DriversView = components['schemas']['DriversListView'];
 
@@ -219,6 +224,11 @@ test('offers, edits, reorders and removes rides and passenger places in the same
     await command(page, resource.id, `/items/${second.id}/self-assignment`, 'DELETE',
         () => secondRow.locator('td').last().getByRole('button', {name: 'Remove', exact: true}).click());
 
+    // The HTTP receipt precedes the protected follow-up read. A table cell is
+    // not a disabled HTML control, so wait for both the resulting membership
+    // and the shared command's enabled action before entering its inline editor.
+    await expect(secondRow.locator('td').nth(3)).toHaveText('0 / 1');
+    await expect(secondRow.getByRole('button', {name: 'Take', exact: true})).toBeEnabled();
     await row.locator('td').nth(1).dblclick();
     const description = row.getByRole('textbox', {name: 'Description', exact: true});
     await description.fill('Changed airport pickup');
@@ -319,6 +329,11 @@ test('opens and creates Drivers from Event children and returns through Overview
     await page.getByRole('button', {name: 'Overview', exact: true}).click();
     await page.getByRole('link', {name: 'Your overview', exact: true}).click();
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
+    // The shared account can own more than one bounded page of fixtures. Search
+    // the exact new child before opening its parent instead of assuming that a
+    // randomly named Event sorts onto the first page of the owner collection.
+    await owner.getByRole('searchbox').fill(title);
+    await owner.getByRole('searchbox').press('Enter');
     await owner.locator(`[data-overview-event="${event.id}"]`).click();
     const card = owner.locator(`[data-id="${id}"]`);
     await expect(card).toBeVisible();
@@ -327,3 +342,218 @@ test('opens and creates Drivers from Event children and returns through Overview
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('drivers-context');
     expect(navigation).toEqual([]);
 });
+
+for (const width of [1280, 390]) {
+    for (const surface of ['General', 'General with image controls', 'Linked event', 'Access', 'Administrators', 'Actions'] as const) {
+        test(`Drivers settings ${surface} native/Vue parity at ${width}px`, async function compareDriversSettings({page}, info) {
+            test.setTimeout(90_000);
+            await page.setViewportSize({width, height: 900});
+            const errors: string[] = [];
+            page.on('pageerror', function captureBrowserError(error) { errors.push(error.message); });
+            const {event, resource} = await createDriversSettingsFixture(page, surface === 'Linked event');
+            const native = await openDriversSettingsForE2E(page, resource.path, false);
+            await selectDriversSettingsSurface(native, page, surface, event);
+            const original = await captureDriversSettingsPresentation(page, info, 'native-' + surface, native);
+            await closeModalForE2E(page.locator('#entityPropertiesModal'));
+            const pilot = await openDriversSettingsForE2E(page, resource.path, true);
+            await selectDriversSettingsSurface(pilot, page, surface, event);
+            const migrated = await captureDriversSettingsPresentation(page, info, 'vue-' + surface, pilot);
+            expect(errors).toEqual([]);
+            expectDriversSettingsPresentation(original, migrated, surface === 'Actions');
+        });
+    }
+}
+
+test('Drivers settings UI saves metadata, defaults, administrators, images, event linkage and lifecycle without document replacement', async function exerciseDriversSettings({page}) {
+    test.setTimeout(150_000);
+    const {event, resource} = await createDriversSettingsFixture(page);
+    const dialog = await openDriversSettingsForE2E(page, resource.path, true);
+    await page.evaluate(() => { document.documentElement.dataset.pilotDocument = 'drivers-settings-review'; });
+    const navigation: string[] = [];
+    page.on('request', function captureNavigation(request) {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigation.push(request.url());
+    });
+    page.on('dialog', function confirmUserCommand(confirmation) { void confirmation.accept(); });
+
+    // Metadata has an independent sparse command and retains the same dialog.
+    const title = resource.title + ' edited';
+    await dialog.locator('[name="title"]').fill(title);
+    await dialog.locator('[name="description"]').fill('Updated through Drivers settings');
+    const metadataReply = page.waitForResponse(function matchMetadata(response) {
+        return response.request().method() === 'PATCH' && new URL(response.url()).pathname === `/api/v1/drivers-lists/${resource.id}/metadata`;
+    });
+    await dialog.getByRole('button', {name: 'Save properties', exact: true}).click();
+    expect((await metadataReply).status()).toBe(200);
+    await expect(page.locator('main h1')).toHaveText(title);
+    await expect(dialog.locator('[name="title"]')).toBeEnabled();
+
+    // A changed public audience proves this feature's injected default operation,
+    // rather than only rendering a reused matrix with no production consumer.
+    await dialog.getByRole('tab', {name: 'Access', exact: true}).click();
+    const baseline = await readDriversSettingsForE2E(page.request, resource.id);
+    const access = baseline.access!;
+    await dialog.locator('.perm-matrix select').first().selectOption('public');
+    const permission = access.permissions[0]!;
+    const checkbox = dialog.locator(`.perm-matrix input[id$="-${permission.key}"]`);
+    await checkbox.setChecked(!(access.defaults.public & permission.bit));
+    await observeDriversSettingsCommand(page, resource.id, '/default-permissions', 'PUT', async function saveAudience() {
+        await dialog.getByRole('button', {name: 'Update permissions', exact: true}).click();
+    });
+    expect((await readDriversSettingsForE2E(page.request, resource.id)).access!.defaults.public).toBe(access.defaults.public ^ permission.bit);
+
+    // Shared-account profiles accumulate across the broad suite. A unique
+    // existing account/profile fixture makes the discovered target unambiguous;
+    // its owner cleans exact fixture IDs after the real UI removes the grant.
+    await withProfileWorkflowFixtureForE2E(async function exerciseIndependentAdministrator(fixture) {
+        await exerciseDriversAdministratorForE2E(page, resource.id, fixture.account);
+    });
+
+    // The actual file chooser supplies bytes to the feature's multipart adapter.
+    await dialog.getByRole('tab', {name: 'General', exact: true}).click();
+    await dialog.locator('summary').filter({hasText: /^Header image$/u}).click();
+    const image = dialog.locator('[data-entity-section="image"]');
+    await image.locator('input[type="file"]').setInputFiles('src/public/img/logo.png');
+    await observeDriversSettingsCommand(page, resource.id, '/header', 'PUT', async function uploadImage() {
+        await image.getByRole('button', {name: 'Upload', exact: true}).click();
+    });
+    expect((await readDriversSettingsForE2E(page.request, resource.id)).headerUrl).toBeTruthy();
+    await observeDriversSettingsCommand(page, resource.id, '/header', 'DELETE', async function removeImage() {
+        await image.getByRole('button', {name: 'Remove image', exact: true}).click();
+    });
+    expect((await readDriversSettingsForE2E(page.request, resource.id)).headerUrl).toBeNull();
+
+    await dialog.getByRole('tab', {name: 'Linked event', exact: true}).click();
+    await dialog.getByLabel('Search events', {exact: true}).fill(event.title);
+    const choice = dialog.locator(`button[data-event-id="${event.id}"]`);
+    await expect(choice).toBeVisible();
+    await choice.click();
+    await observeDriversSettingsCommand(page, resource.id, '/event', 'PUT', async function saveEvent() {
+        await dialog.getByRole('button', {name: 'Save event link', exact: true}).click();
+    });
+    expect((await readDriversSettingsForE2E(page.request, resource.id)).currentEvent!.id).toBe(event.id);
+
+    await dialog.getByRole('tab', {name: 'Actions', exact: true}).click();
+    await observeDriversSettingsCommand(page, resource.id, '/archive', 'POST', async function archiveRoot() {
+        await dialog.getByRole('button', {name: 'Archive for everyone', exact: true}).click();
+    });
+    expect((await readDriversSettingsForE2E(page.request, resource.id)).archive.direct).toBe(true);
+    await observeDriversSettingsCommand(page, resource.id, '/restore', 'POST', async function restoreRoot() {
+        await dialog.getByRole('button', {name: 'Restore for everyone', exact: true}).click();
+    });
+    expect((await readDriversSettingsForE2E(page.request, resource.id)).archive.direct).toBe(false);
+
+    const removed = page.waitForResponse(function matchDeletion(response) {
+        return response.request().method() === 'DELETE' && new URL(response.url()).pathname === `/api/v1/drivers-lists/${resource.id}`;
+    });
+    await dialog.getByRole('button', {name: 'Delete permanently', exact: true}).click();
+    expect((await removed).status()).toBe(200);
+    await expect(page).toHaveURL(/\/frontend-pilot$/u);
+    expect((await page.request.get(`/drivers/${resource.id}`)).status()).toBe(404);
+    expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('drivers-settings-review');
+    expect(navigation).toEqual([]);
+});
+
+for (const width of [1280, 390]) {
+    test(`compares restricted Drivers actions and description-only settings at ${width}px`, async function compareRestrictedDrivers({page, browser, baseURL}, info) {
+        test.setTimeout(90_000);
+        const resource = await driversFixture(page.request);
+        const original = await readDriversSettingsForE2E(page.request, resource.id);
+        // Standalone page admission remains broader than assignment authority.
+        // Clear only this unique fixture's audience grants, using the real owner.
+        const changed = await page.request.put(`/api/v1/drivers-lists/${resource.id}/default-permissions`, {
+            headers: {...await apiHeaders(page.request), 'If-Match': original.settingsToken},
+            data: {participant: 0, guest: 0, authenticated: 0, public: 0},
+        });
+        expect(changed.status()).toBe(200);
+
+        const restricted = await browser.newContext({baseURL, viewport: {width, height: 900}});
+        try {
+            const joined = await restricted.request.post(`${resource.path}/guest`, {
+                form: {username: `P3 restricted ${randomUUID().slice(0, 8)}`, email: ''}, maxRedirects: 0,
+            });
+            expect(joined.status()).toBe(302);
+            const participant = await restricted.newPage();
+            const session = await (await restricted.request.get('/api/v1/session')).json() as components['schemas']['SessionView'];
+            const deniedView = await readDrivers(restricted.request, resource.id);
+            expect(deniedView.capabilities).toMatchObject({selfAssign: false, addItem: false, reorder: false, manageSettings: false});
+            let nativeTable: Awaited<ReturnType<typeof readVisiblePresentation>> | undefined;
+
+            for (const pilot of [false, true]) {
+                await participant.goto(`${pilot ? '/frontend-pilot' : ''}${resource.path}?locale=en`, {waitUntil: 'domcontentloaded'});
+                if (pilot) await waitForPilotHydration(participant);
+                const table = participant.locator('main table');
+                await expect(table.locator('tbody tr')).toHaveCount(2);
+                await expect(participant.getByRole('button', {name: 'Entity settings', exact: true})).toHaveCount(0);
+                await expect(participant.locator('main form:has(input[readonly])')).toHaveCount(0);
+                await expect(table.locator('td[data-edit]')).toHaveCount(0);
+                await expect(table.getByRole('button', {name: 'Delete item', exact: true})).toHaveCount(0);
+                // Preserve the explicitly excluded native Take-control mismatch
+                // (IMP-028), while proving its actual command remains forbidden.
+                await expect(table.getByRole('button', {name: 'Take', exact: true})).toHaveCount(2);
+                const measured = await presentation(participant, info, `${pilot ? 'vue' : 'native'}-restricted-table`, table,
+                    ['th', 'td', 'li', 'button']);
+                if (pilot) expectVisiblePresentation(nativeTable!, measured);
+                else nativeTable = measured;
+                const deniedPath = pilot ? `/api/v1/drivers-lists/${resource.id}/items/${deniedView.items[0].id}/self-assignment`
+                    : `/api/drivers/${resource.id}/assign`;
+                const rejected = participant.waitForResponse(function matchDeniedAssignment(response) {
+                    return response.request().method() === (pilot ? 'PUT' : 'POST') && new URL(response.url()).pathname === deniedPath;
+                });
+                await table.getByRole('button', {name: 'Take', exact: true}).first().click();
+                expect((await rejected).status()).toBe(403);
+                expect((await readDrivers(restricted.request, resource.id)).items[0].assignedCount).toBe(0);
+            }
+
+            // One independently granted field must not reveal the owner-only
+            // title, header, event, administrator or lifecycle controls.
+            const baseline = await readDriversSettingsForE2E(page.request, resource.id);
+            const grant = await page.request.post(`/api/v1/drivers-lists/${resource.id}/admins`, {
+                headers: {...await apiHeaders(page.request), 'If-Match': baseline.settingsToken},
+                data: {profileId: session.activeProfile!.id, mask: PERM.EDIT_DESC},
+            });
+            expect(grant.status()).toBe(200);
+            const admitted = await readDriversSettingsForE2E(restricted.request, resource.id);
+            expect(admitted.editableFields).toEqual(['description']);
+            expect(admitted.access).toBeNull();
+            let nativeSettings: Awaited<ReturnType<typeof readVisiblePresentation>> | undefined;
+            for (const pilot of [false, true]) {
+                const dialog = await openDriversSettingsForE2E(participant, resource.path, pilot, 'description');
+                await expect(dialog.locator('[name="title"],input[type="file"],.perm-matrix')).toHaveCount(0);
+                await expect(dialog.getByRole('tab')).toHaveCount(0);
+                await expect(dialog.getByRole('button', {name: 'Delete permanently', exact: true})).toHaveCount(0);
+                const measured = await captureDriversSettingsPresentation(participant, info,
+                    `${pilot ? 'vue' : 'native'}-description-only-settings`, dialog);
+                if (pilot) expectDriversSettingsPresentation(nativeSettings!, measured);
+                else nativeSettings = measured;
+                if (!pilot) await closeModalForE2E(participant.locator('#entityPropertiesModal'));
+            }
+        } finally {
+            await restricted.close();
+        }
+    });
+
+    test(`compares Drivers inherited Event archival actions at ${width}px`, async function compareInheritedDriversArchive({page}, info) {
+        test.setTimeout(60_000);
+        await page.setViewportSize({width, height: 900});
+        const {event, resource} = await createDriversSettingsFixture(page, true);
+        const archived = await page.request.post(`/api/v1/events/${event.id}/archive`, {headers: await apiHeaders(page.request)});
+        expect(archived.status()).toBe(200);
+        const state = await readDriversSettingsForE2E(page.request, resource.id);
+        expect(state.archive).toMatchObject({direct: false, inherited: true});
+        expect(state.capabilities.restore).toBe(false);
+        let native: Awaited<ReturnType<typeof readVisiblePresentation>> | undefined;
+
+        for (const pilot of [false, true]) {
+            const dialog = await openDriversSettingsForE2E(page, resource.path, pilot);
+            await selectDriversSettingsSurface(dialog, page, 'Actions', event);
+            await expect(dialog.getByText('This entity is archived with its event. Restore the event before restoring this entity.', {exact: false})).toBeVisible();
+            await expect(dialog.getByRole('button', {name: 'Restore for everyone', exact: true})).toHaveCount(0);
+            await expect(dialog.getByRole('link', {name: 'Open event', exact: true})).toHaveAttribute('href',
+                pilot ? state.archive.eventUrl! : state.archive.eventUrl!.replace(/^\/frontend-pilot/u, ''));
+            const measured = await captureDriversSettingsPresentation(page, info, `${pilot ? 'vue' : 'native'}-inherited-actions`, dialog);
+            if (pilot) expectDriversSettingsPresentation(native!, measured, true);
+            else native = measured;
+            if (!pilot) await closeModalForE2E(page.locator('#entityPropertiesModal'));
+        }
+    });
+}

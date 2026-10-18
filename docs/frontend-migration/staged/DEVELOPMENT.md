@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P3 Drivers and Packing actual shared creation/read/reorder/metadata/passenger adoption source-reconciled; existing command/navigation/draft and native/backend boundaries retained; actual execution belongs to paired review; no publication
+verification-scope: P3 shared creation/read/reorder/metadata/passenger and settings ownership source-reconciled; Drivers multipart and dynamic reload eligibility corrected; meaningful parity comparison guidance retained; execution belongs to paired review; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -89,7 +89,7 @@ primitive union and passes the raw scalar to the existing signed nullable SQL co
 remain authoritative; creation/new-item validation stays separate. Do not generalize either extension into coercion
 or a copied database-limit policy. Native metadata diagnostics remain owned by their native adapter.
 
-The current HTTP adapter decodes single scalar path/query/header values, JSON and Event/Packing multipart, and
+The current HTTP adapter decodes single scalar path/query/header values, JSON and Event/Packing/Drivers multipart, and
 delivers JSON or scoped binary image responses. Creation decodes the `data` JSON part once against its authored nested schema
 and handles `image` separately. Repeated query parameters, absent/empty values and malformed input stay distinct.
 The maintainer's [2026-10-15 correction](decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15)
@@ -219,6 +219,12 @@ unused abstraction or a general CRUD engine. Shared backend/domain/catalog owner
    Exercise actual click and keyboard targets too: wrapping descriptive checkbox text in a label changes activation
    even when the resulting screenshots are identical. Keep fixture focus equal, then compare focused states explicitly.
 
+   Characterize incidental computed-style differences before changing a comparator. In Actions, the native button
+   sits inside a form which is a flex item; the Vue button is itself a flex item, so the browser blockifies its
+   computed display. Any comparison adjustment stays specific to that established structure and preserves the
+   button's wording, availability, focus, painted styles and geometry. Keep semantic links/actions, destinations and
+   command-effect assertions intact; this case does not permit global display normalization.
+
 Readable source is part of every step. Keep template controls and render branches in logical groups with purposeful
 blank lines, explain inputs and non-obvious lifecycle steps, and prefer named operations to nested anonymous flows.
 A syntax-clean checker result does not establish useful comments, actual reuse or human-readable formatting.
@@ -250,7 +256,7 @@ Adding an editable field follows one coherent path:
 A read-only view stops before editor/command work but still owns admission, privacy, cancellation, retry,
 localization and visual behavior. No universal CRUD engine or wrapper per HTML element is needed.
 
-#### Worked composition: Event and Packing
+#### Worked composition: Event, Packing and Drivers
 
 The implemented consumers illustrate the migration handoff without another controller or state store:
 
@@ -263,8 +269,9 @@ The implemented consumers illustrate the migration handoff without another contr
 | Root or captured Event-child operation, current capability, native wording and refresh dependencies | `createEntityLifecycle` shares archive/restore and pause/resume behavior through the caller's existing command. |
 
 Event keeps schedule/capacity rules, registration and actual date drafts in their feature owners. Packing keeps item
-commands and its browser-local checklist. Shared presentation neither constructs endpoints nor grants authority;
-matching current consumers adopt the shared owner together while feature differences remain explicit.
+commands and its browser-local checklist. Drivers keeps ride/passenger semantics. Packing and Drivers inject their
+event-association operations; Event has no parent association editor. Shared presentation neither constructs endpoints
+nor grants authority; matching current consumers adopt the shared owner together while feature differences remain explicit.
 
 #### Worked composition: Packing and Drivers
 
@@ -663,8 +670,8 @@ pending/unknown command protection. Reuse startup, mount and update owners; neve
 commands to recover startup.
 
 Automatic full-document reload additionally requires an explicitly eligible dynamic route and dynamic admitted
-content. Overview, Packing detail and Event detail/admin opt in; creation, duplication, user-management and Help remain excluded even
-when pristine. Static admitted errors/completions on a dynamic URL remain excluded through the existing shared
+content. Overview, Packing/Drivers detail and Event detail/admin opt in. Creation, duplication, user-management and
+Help remain excluded even when pristine. Static admitted errors/completions on a dynamic URL remain excluded through the existing shared
 content classifier, rather than a copied list of bootstrap fields. `usePageEntry` registers its live static predicate
 and document visit with the context; registration captures the actor/epoch and retires on unmount, identity change or
 disposal. The context owns no second query payload. A visible denial stays static after initial-data retirement;
@@ -841,7 +848,7 @@ src/frontend/                      Vue app, components, composables and feature 
 contracts/api/v1/                   authored API schema and operation policy
 src/locales/                        shared UI/server catalogs
 src/types/                          shared .d.ts contracts
-src/public/js/                     existing browser modules and shared helpers
+src/public/js/                     native browser modules and their helpers
 
 <!-- /delta:amendment-03 -->
 

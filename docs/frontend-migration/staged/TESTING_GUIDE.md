@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-16
+last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P2 complete workflow/body/Overview and reactive R1 notice assertions source-mapped in existing suites; scoped execution and failures belong to paired review; scalar/parity/environment and document-boundary guidance retained; no publication
+verification-scope: P3 settings/restricted/inherited assertions, characterized deletion display, unique-profile isolation and rendered-control readiness source-reconciled alongside retained coverage; actual execution and failures belong to paired review; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -174,6 +174,19 @@ is masked. Packing compares creation, persisted table, Quick Add and Packed rest
 fresh empty region, populated owner cards and a search with no matches at those same sizes. Matched screenshots
 still require individual inspection; one field's geometry cannot establish its surrounding workflow's parity.
 
+Drivers extends its existing built suite with General, expanded image controls, Linked event, Access, Administrators
+and Actions comparisons at both sizes. Its actual settings journey submits metadata/defaults, adds/zeros/removes an
+administrator, uploads/removes an image, changes the event, archives/restores and deletes through the generated
+operations without document replacement. Restricted actions, description-only settings and inherited Event archival
+are separate scenes. The feature helper asserts the exact computed display difference for its native form-wrapped
+versus Vue direct flex-item deletion button before comparison; every other style, field and box remains checked.
+Shared-component reuse alone cannot establish a feature's injected operation or restricted-control behavior.
+
+Apply [assertion and isolation guidance](#assertions-and-isolation) to actual actor-owned records too. Administrator
+tests use a unique profile and assert its exact identifier; a shared account can accumulate other profiles while
+parallel workflows run. Locate an Overview fixture through its ordinary search instead of assuming first-page
+membership, retaining the real card/navigation assertions.
+
 Identity completion assertions retain the same confirmed notice while switching English/German and back, checking
 the complete conditional former-user/guest deletion wording without command replay or receipt renewal. Existing
 native and versioned operation assertions protect the same branch outcomes, original native prose and inherited
@@ -201,6 +214,8 @@ Hydration confirms that client owners mounted; it does not admit a feature's ind
 layout assertions, wait for the current admitted fields and enabled top-level controls of the actual feature or
 dialog. Assert readiness through their observable values/states, then exercise the unchanged focus sequence and
 measure the complete surface. Fixed sleeps or measurements of a loading skeleton cannot establish that boundary.
+After a command response, wait for its required follow-up read/render to show the saved value and release pending
+controls before the next action. A completed HTTP response alone does not establish that the next field/action is enabled.
 
 Exercise actual initial Vue setup, mount and first-readiness failures, including partial handlers: initialization stays
 unconfirmed, static navigation/search remains usable and edited-control recovery retains consent. Keep this bounded

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit P3 Drivers implementation, actual shared-consumer/source/approval review and scoped build/compiler/database-free/ORM/browser evidence recorded; prior P0-P2 receipts and failed-attempt limits retained; no P4-P11 or cutover authority
+verification-scope: approved frontend-only pilot corrections and expanded P3 settings/restricted/inherited coverage verified; final 135-case built selection, scoped source/client/ORM evidence and prepared-guide review recorded with failures/limits preserved; no P4-P11 or cutover authority
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,65 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Full-pilot review follow-up (2026-10-18)
+
+The maintainer directly authorizes the reviewed frontend corrections and
+[resolves native isolation and backend scope](FRONTEND_FOUNDATION_DESIGN.md#direct-frontend-only-implementation-and-native-isolation-clarification-2026-10-18).
+Staged architecture, development and operations now describe actual Drivers shared consumers, multipart transport
+and dynamic reload eligibility. `IMP-070` records the excluded deeper backend administration repetition once;
+native sources, production guides, original decisions and cutover-retirement records retain their boundaries.
+
+The current Drivers built suite adds its six settings surfaces, actual injected settings commands, restricted
+actions/description-only settings and inherited archival. The [coverage map](TEST_COVERAGE.md#p3-drivers-source-to-implementation-assertions-2026-10-18)
+owns the source-to-assertion mapping. The original five Drivers tests remain; the expanded suite contains 22 cases.
+Its first actual run passed 20 and failed the two inherited-archival comparisons: Vue inserted a literal space before
+the parent link in addition to the native margin, changing text and horizontal placement by about 4.4px. The existing
+`EntityLifecycleActions` now keeps that text/link adjacent for all matching Packing/Drivers consumers, with an intent
+comment. Native source, backend behavior and the strict comparator remain unchanged. This is current correction
+work, not a later-phase deferral.
+
+Current executed evidence retains its actual input boundaries:
+
+- The full build passed after the final Vue correction. The test compiler passed after the subsequent test-only
+  corrections. Before the Vue whitespace delta, the complete database-free selection passed 74 files/1,622 tests;
+  afterward, four affected client files passed 97 tests. The three selected real-ORM files passed 41 tests; no backend
+  behavior changed after that run. `IMP-071` records the shared presentation correction and its verification.
+- The final Drivers selection passed all 22 cases. The final ordinary managed built selection then passed 134 of
+  135 cases in 4.9 minutes, with one appropriate configuration-specific alternate-login skip. The disabled-authentication
+  case passed separately in 25.9 seconds against the ordinary prepared database. These counts are separate runs.
+- Final engineering checks report 369 global sources, 11 DBAL owners and zero findings; whitespace checks pass.
+  The existing documentation tooling selection passed 26 cases. Native frontend and frozen production-guide sources
+  remain unchanged; the task-owned disposable database was removed after verification.
+
+Earlier failed selections remain explicit evidence. The initial review's 118-case selection passed 116, skipped one
+and failed the Drivers Overview-card test's first-page fixture assumption; ordinary feature search now selects that
+unique card. After the shared Vue correction, the first 135-case run passed 132, skipped one and failed the Drivers
+ride/passenger and settings-command journeys. The shared account actually exposed nine profiles. Source/request
+timing supported a pending-control race after assignment removal; no exact click-time trace establishes that cause.
+The test corrections use an isolated profile with exact identifier/mask assertions, and observe saved capacity plus
+an enabled Take control before the next single editor click. Both journeys pass in the final accumulated broad run;
+no application/backend change, weakened assertion, longer deadline or repeated click was used for those corrections.
+
+Independent reviewer `/root/documentation_audit` inspected all 36 final-run settings/restricted/inherited originals
+(18 native/Vue pairs at 1280px/390px), finding no unexplained difference inside those compared surfaces. Root also
+inspected both corrected inherited desktop/mobile pairs after the final test corrections. Access captures show the initial scroll viewport; mobile tables
+retain native horizontal clipping. These images do not establish below-fold/offscreen appearance or every locale,
+browser or accessibility state.
+
+All eight assembled guide outputs received actual independent `/root/architecture_audit` and root source/byte review,
+including inherited database/operator procedures and the final isolation/readiness wording. Their reviewed output
+digest is `d73ef31f737ceafe5a15f108d1b5283da4bd51aba729feb0c3d1b62caecedde8`. Live and assembled advisory reports find no
+broken links, missing paths/scripts, metadata or classification errors; frozen-guide/amendment checks report zero
+findings. The historical source-fingerprint mismatch remains visible without rebaselining. Exact preparation/review
+receipts stay in ignored output; no guide publication or cutover is authorized.
+
+Execution used strict MariaDB 10.11.14 with separate disposable integration/E2E schemas and the available Node.js
+24.13.0, below the repository's 24.15.0 baseline. Finite English Chromium desktop/mobile checks do not certify every
+locale/browser/accessibility combination, live provider/mail delivery, rendered PDF output or deployment. The earlier
+P3 receipt below retains its original scope. Current logs stay under ignored `artifacts/pilot-corrections-20261018/`.
+The reviewed frontend corrections are complete; no P3 workflow is assigned to a later phase. The explicitly excluded
+backend debt remains open in its central owner, and P4–P11/cutover retain their separate authorization boundaries.
 
 ## P3 Drivers implementation and scoped verification (2026-10-18)
 

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-16
+last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: digest-guarded frontend amendments retained and inherited development GRANT example reconciled with dedicated literal-schema scope; production references unchanged; no runtime or cutover execution claimed
+verification-scope: digest-guarded frontend amendments and dedicated development-schema example retained; native browser source ownership clarified without a Vue dependency; production references unchanged; no runtime or cutover execution claimed
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -83,7 +83,7 @@ src/frontend/                         Vue app, components, composables and featu
 contracts/api/v1/                     authored wire schemas
 src/locales/                          shared browser/server catalogs
 src/types/                            shared declaration contracts (.d.ts)
-src/public/js/                        existing browser modules and shared pure helpers
+src/public/js/                        native browser modules and their helpers
 
 <!-- /delta:amendment-08 -->
 

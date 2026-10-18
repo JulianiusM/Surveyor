@@ -42,6 +42,7 @@ const publicPreviewOwners = new Set([
     'src/routes/frontendPilotDrivers.ts',
     'src/types/FrontendListTypes.d.ts',
     'tests/e2e/frontend-pilot-drivers.spec.ts',
+    'tests/keywords/frontendDriversE2EKeywords.ts',
     'tests/frontend/frontend-drivers.spec.ts',
     'tests/integration/drivers-v1-api.spec.ts',
     'contracts/api/v1/events.yaml',

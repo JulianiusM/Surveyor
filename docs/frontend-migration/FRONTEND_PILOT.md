@@ -33,6 +33,9 @@ P2 adds Event creation/duplication, settings, registration, organizer tools and 
 [full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the remaining phase contracts for surveys, activity plans,
 invoice pools and eventual cutover. Implemented portions retain native behavior and maintainability
 requirements; the paired review records actual scoped checks, including the P2 review corrections.
+The [October 18 direct clarification](FRONTEND_FOUNDATION_DESIGN.md#direct-frontend-only-implementation-and-native-isolation-clarification-2026-10-18)
+retains native isolation, shared Vue owners and shared backend operations, while excluding deeper backend
+administration refactoring from the current frontend correction.
 The maintainer's [S1 decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-implemented-pilot-scope-2026-10-16) limits the
 October 16 delivery through implemented P2; later phases wait for stable repeated reviews and an explicit future trigger.
 The maintainer's [October 18 P3 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p3-implementation-trigger-2026-10-18)
@@ -244,7 +247,7 @@ the write; confirmed navigation retains its destination/receipt through canceled
 Dialog close checks its own draft subtree; route/identity/release departures resolve the whole affected tree.
 
 D5 replacement detection uses ordinary session refresh and the explicit 2026-10-15 route/content classifier. Current
-eligible dynamic views are Overview, Packing detail and P2 Event detail/admin; creation, duplication,
+eligible dynamic views are Overview, Packing and Drivers detail, and Event detail/admin; creation, duplication,
 user-management, Help and static error/completion presentations are excluded. Eligible pages still require clean
 drafts, no pending/unknown command and working loop protection. Compatible mounted edits may finish; missing lazy
 chunks or incompatible commands preserve drafts and guarded deliberate recovery on every page. Periodic content

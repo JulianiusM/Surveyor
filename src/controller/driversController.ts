@@ -616,25 +616,55 @@ export async function patchDriversDescription(id: string, patch: components['sch
     return saveDriversMetadata(id, {description: patch.description}, {kind: 'description', ifMatch, session, prepare});
 }
 
+// These adapter contexts stay private to the metadata owner. Naming each branch
+// keeps overloads readable without exposing persistence/admission details as a shared contract.
+type NativeMetadataContext = {
+    kind: 'native';
+    expectedEventId?: string | null;
+};
+
+type VersionedMetadataContext = {
+    kind: 'versioned';
+    ifMatch?: string;
+    session: SessionLike;
+    prepare?: DriversCommandPreparation<ReturnType<typeof metadataResult>>;
+};
+
+type DescriptionMetadataContext = {
+    kind: 'description';
+    ifMatch?: string;
+    session: SessionLike;
+    prepare?: DriversCommandPreparation<components['schemas']['DriversDescriptionBaseline']>;
+};
+
+type MetadataContext = NativeMetadataContext | VersionedMetadataContext | DescriptionMetadataContext;
+
 /**
  * One metadata operation serves both adapters. Native routes already apply the shared
  * property/method policy and retain their captured-parent check and root-only lock.
  * Versioned JSON adds current field grants, reviewed values and parent locks. Neither
  * adapter owns an independent property write or changes the other's wire contract.
  */
-async function saveDriversMetadata(id: string, patch: BasicEntityPropertyPatch, context: {kind: 'native'; expectedEventId?: string | null}): Promise<void>;
+async function saveDriversMetadata(
+    id: string,
+    patch: BasicEntityPropertyPatch,
+    context: NativeMetadataContext
+): Promise<void>;
 async function saveDriversMetadata(
     id: string,
     patch: components['schemas']['DriversMetadataPatch'],
-    context: {kind: 'versioned'; ifMatch?: string; session: SessionLike; prepare?: DriversCommandPreparation<ReturnType<typeof metadataResult>>}
+    context: VersionedMetadataContext
 ): Promise<ReturnType<typeof metadataResult>>;
 async function saveDriversMetadata(
     id: string,
     patch: components['schemas']['DriversDescriptionPatch'],
-    context: {kind: 'description'; ifMatch?: string; session: SessionLike; prepare?: DriversCommandPreparation<components['schemas']['DriversDescriptionBaseline']>}
+    context: DescriptionMetadataContext
 ): Promise<components['schemas']['DriversDescriptionBaseline']>;
-async function saveDriversMetadata(id: string, patch: BasicEntityPropertyPatch,
-    context: {kind: 'native'; expectedEventId?: string | null} | {kind: 'versioned'; ifMatch?: string; session: SessionLike; prepare?: DriversCommandPreparation<ReturnType<typeof metadataResult>>} | {kind: 'description'; ifMatch?: string; session: SessionLike; prepare?: DriversCommandPreparation<components['schemas']['DriversDescriptionBaseline']>}): Promise<void | ReturnType<typeof metadataResult> | components['schemas']['DriversDescriptionBaseline']> {
+async function saveDriversMetadata(
+    id: string,
+    patch: BasicEntityPropertyPatch,
+    context: MetadataContext
+): Promise<void | ReturnType<typeof metadataResult> | components['schemas']['DriversDescriptionBaseline']> {
     /** Interpret the caller's locked root once, then persist only its normalized
      * sparse command. Each adapter retains its own admission/diagnostic boundary. */
     async function persistMetadata(manager: EntityManager, row: DriversList | null) {

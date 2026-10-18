@@ -1706,6 +1706,61 @@ implementation_defects:
       no-match comparisons passed; all six captured pairs were byte-identical. Both complete built selections and
       final client/compiler checks passed. Independent/root review confirms actual shared adoption without another
       owner or native/backend changes. Header has no native-equivalence claim; preceding failures remain historical.
+  - id: IMP-070
+    status: open
+    discovered_on: 2026-10-18
+    severity: medium
+    owner: backend administration maintainers
+    package: backend-administration-maintenance
+    out_of_scope_for_documentation_migration: true
+    title: Repeated versioned permission and administrator orchestration
+    evidence:
+      - src/controller/packingController.ts and src/controller/driversController.ts repeat audience-mask baseline
+        projection, selected-field comparison, administrator baseline admission and grant-result orchestration in
+        updatePackingDefaults/updateDriversDefaults, readPackingAdminBaseline/readDriversAdminBaseline and
+        setPackingAdmin/setDriversAdmin. src/controller/eventController.ts contains corresponding Event orchestration.
+      - The controllers already reuse entityAdminController.applyEntityAdministrator, permission-engine mask
+        persistence and EntityAdminService queries. The repetition concerns their versioned controller orchestration,
+        not a second DBAL or a demonstrated user-visible authorization defect.
+    impact: Matching backend changes must be reconciled across feature controllers, increasing maintenance cost and
+      the risk of later differences in method authority, private comparison values or administrator outcomes.
+    authorization: The maintainer's direct 2026-10-18 implementation reply limits the correction to frontend migration
+      and explicitly sends deeper backend changes that do not support major frontend work to this backlog. The
+      shared administration refactor is excluded from this effort; it is not a pending approval or parity blocker.
+    documentation_contract: Native and Vue retain their existing shared backend operations and feature-specific
+      method/private-projection boundaries. Bounded readability corrections do not establish a new common owner.
+    closes_when:
+      - A separately authorized backend maintenance change resolves the repeated orchestration through its existing
+        logical owners without changing native or versioned permission, projection, comparison and result behavior.
+      - Actual matching callers adopt the reviewed owner and focused real-persistence assertions protect those boundaries.
+  - id: IMP-071
+    status: closed
+    closed_on: 2026-10-18
+    discovered_on: 2026-10-18
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-pilot-review-corrections
+    out_of_scope_for_documentation_migration: true
+    title: Inherited archival inserts an extra space before the parent-event link
+    evidence:
+      - The first expanded Drivers built selection passed 20 cases and failed both desktop/mobile inherited-archival
+        comparisons. EntityLifecycleActions.vue inserted literal whitespace before its RouterLink in addition to
+        the existing ms-1 margin; native module_entity_archive.pug uses only that margin.
+      - Complete text comparison and measured placement exposed the extra space and about 4.4px link offset.
+        The shared component serves matching Packing and Drivers settings; native frontend and backend were unchanged.
+    impact: Inherited archival wording and parent-link spacing differ from the native comparison in the shared Vue dialog.
+    authorization: The maintainer's direct 2026-10-18 frontend correction instruction requires visual and behavioral
+      parity while retaining native isolation. The bounded shared Vue text/link adjacency correction preserves the
+      existing wording, margin, Router destination, grants, archive/restore commands and backend behavior.
+    documentation_contract: Shared lifecycle presentation preserves the native inherited explanation and parent-link gap.
+    closes_when:
+      - Matching Vue consumers use the existing shared lifecycle owner with the native text/link adjacency and margin.
+      - Built 1280px/390px comparisons enforce full text, styles, geometry, parent destination and absent inherited restore.
+      - Current build, affected mounted-client checks and Drivers built workflows pass after the correction.
+    disposition: EntityLifecycleActions retains adjacent hint/link text with an intent comment. The final build and
+      four affected client files/97 tests passed; all 22 Drivers built cases then passed, including both previously
+      failing inherited scenes. Root and independent reviewers inspected the corrected source and final desktop/mobile
+      originals without unexplained dialog differences. The strict comparator and native/backend behavior were unchanged.
 findings:
   - id: DESIGN-EVENT-CREATION-TRANSPORT
     status: closed

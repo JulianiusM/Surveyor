@@ -17,9 +17,9 @@ const {messages} = usePilot();
         <h3 class="fs-5">{{ messages.t('common.archival') }}</h3>
         <div data-command-feedback aria-live="polite"></div>
         <p>{{ inherited || direct ? labels.archivedHint : labels.activeHint }}</p>
+        <!-- The native gap comes from ms-1 alone; adjacent text/link avoids another collapsed space. -->
         <p v-if="inherited">
-            {{ labels.inheritedHint }}
-            <RouterLink v-if="eventUrl" class="ms-1" :to="eventUrl">{{ labels.openEvent }}</RouterLink>
+            {{ labels.inheritedHint }}<RouterLink v-if="eventUrl" class="ms-1" :to="eventUrl">{{ labels.openEvent }}</RouterLink>
         </p>
         <p v-if="automation?.paused">{{ automation.pausedHint }}</p>
         <div class="d-flex flex-wrap gap-2">

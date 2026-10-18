@@ -11,7 +11,7 @@ source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRON
 next-review: authorized-migration-follow-up-or-next-phase
 -->
 
-## Current disposition (2026-10-16)
+## Current disposition (2026-10-18)
 
 P0 readiness and P1A–D identity/common presentation have recorded implementation and scoped verification in the
 [P0 receipt](PILOT_PARITY_REVIEW.md#p0-foundation-verification-2026-10-14) and
@@ -51,6 +51,9 @@ continuation. Existing phase contracts and backend-remedy exclusions remain in f
 
 The maintainer's [October 18 explicit P3 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p3-implementation-trigger-2026-10-18)
 starts Drivers under the phase contract below. It does not start P4–P11 or change the separate cutover decisions.
+The subsequent [direct frontend-only clarification](FRONTEND_FOUNDATION_DESIGN.md#direct-frontend-only-implementation-and-native-isolation-clarification-2026-10-18)
+retains native isolation and excludes the deeper shared administration refactor from these frontend corrections;
+the existing backlog owns that debt. It grants no later-phase continuation.
 
 The [October 16 full-pilot review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16)
 qualifies earlier readiness statements with its scalar-display, visual-assertion and verification-environment

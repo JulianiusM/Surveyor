@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; AI coding agents
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-16
+last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: direct 2026-10-16 native isolation, production-coexistence exclusion and ordinary SPA source adoption reconciled with scoped verification; sharing within Vue, backend exclusions and production-guide freeze retained; no later-phase or cutover authorization
+verification-scope: direct 2026-10-18 frontend-only and native-isolation clarification routed to preserved decision history; existing ordinary SPA, shared Vue/backend, production-guide freeze and later-phase/cutover boundaries retained
 source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; src/frontend/; docs/user-guide/en/; docs/user-guide/de/
 next-review: next-authorized-migration-slice-or-cutover
 activation-scope: frontend framework migration, frontend pilot review/maintenance, migration documentation or associated cutover preparation
@@ -58,6 +58,8 @@ handling rather than native frontend imports/links.
 The maintainer's [October 16 R1 clarification](FRONTEND_FOUNDATION_DESIGN.md#direct-native-isolation-clarification-2026-10-16)
 confirms that Vue copies are separately mutable: the sharing requirement concerns matching Vue consumers, and
 native application presentation/frontend logic does not become a common owner for both frontends.
+The [October 18 direct clarification](FRONTEND_FOUNDATION_DESIGN.md#direct-frontend-only-implementation-and-native-isolation-clarification-2026-10-18)
+expressly retains this boundary and excludes deeper backend administration refactoring from the frontend correction.
 The [review](PILOT_PARITY_REVIEW.md#native-frontend-isolation-implementation-2026-10-15) records the bounded dependency
 and parity checks; this implementation does not complete feature migration or authorize cutover.
 Preserve the current approved comparator with its dated exceptions; this decision does not direct a rollback of
@@ -78,7 +80,7 @@ not pending approval requests. Continue the corresponding frontend journeys agai
 Previously approved bounded corrections retain their scope. New frontend/adapter code still follows security,
 private-projection, contract, readability, no-replay and delivery requirements without claiming a repaired backend.
 
-The same direct reply rejects D1's Event document-POST exception and reinforces ordinary SPA commands/navigation
+The October 16 direct reply rejects D1's Event document-POST exception and reinforces ordinary SPA commands/navigation
 throughout implemented P0–P2. Classify every changed form/link by its actual purpose: ordinary internal commands
 use authored generated JSON/multipart contracts and shared Vue owners, while true provider/capability arrivals,
 outputs and unmigrated destinations retain their explicit boundaries. Partial backend completion is not a reason

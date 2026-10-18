@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit P3 Drivers trigger recorded after implemented-slice reviews; original P0-P2 decisions, S1 trigger requirement and native/backend exclusions retained; actual execution belongs to paired review; no P4-P11 or cutover authority
+verification-scope: direct frontend-only implementation and native-isolation clarification recorded alongside P3 trigger; existing decisions, backend exclusions and separate later-phase/cutover authority retained; actual execution belongs to paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -19,7 +19,7 @@ queries, transactions, locks and persistence.
 The [baseline](FRONTEND_MIGRATION_BASELINE.md) and its 121 edge-case IDs describe the native contract.
 The original step-two design was based on `0a3662ae0a6e99e0df0a38f603831d3ac9ff4b61`; the native comparison reference
 is `2dfa2573c64178f54684cc4877b5a945f66e24c8`. The reference does not identify a deployed site's version.
-Help/Packing were the original pilot obligation. P1 identity/common presentation and P2 Events extend that scope;
+Help/Packing were the original pilot obligation. P1 identity/common presentation, P2 Events and P3 Drivers extend that scope;
 the [full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the remaining phase contracts. The
 [paired review](PILOT_PARITY_REVIEW.md) records current implementation evidence and its limits. Other feature
 migration and default-route cutover remain future work.
@@ -705,6 +705,19 @@ full P3 implementation and reiterates approval, visual/behavioral parity and mod
 This supplies S1's future trigger for Drivers only. Its existing phase contract, native frontend isolation,
 shared backend owners and excluded backend remedies remain in force. It grants no P4–P11 implementation,
 default-route cutover, guide publication or native removal. The paired review owns actual implementation evidence.
+
+### Direct frontend-only implementation and native isolation clarification (2026-10-18)
+
+After the pilot review, the maintainer directly authorizes its frontend migration corrections and explicitly resolves
+R1 by retaining the October 15–16 native-isolation boundary. Native frontend code remains unchanged until separately
+authorized cutover/removal; Vue remains self-contained and matching Vue consumers share their visual and behavioral
+owners. Both frontends continue to share backend operations, contracts, algorithms, domain rules and catalogs.
+
+The same reply excludes deeper backend work that does not support major frontend migration work. Repeated versioned
+permission/administrator orchestration remains recorded once as `IMP-070` in the existing backlog, rather than being
+refactored or made a parity-migration prerequisite. This is an explicit scope exclusion, not an unanswered approval
+request. Bounded readability corrections preserve existing behavior and do not authorize that extraction. Existing
+backend-remedy exclusions, P4–P11 triggers, production-guide freeze and separate cutover/publication decisions remain.
 
 ## Cutover retirement inventory
 
