@@ -21,6 +21,7 @@ const {messages} = usePilot();
         <p v-if="inherited">
             {{ labels.inheritedHint }}<RouterLink v-if="eventUrl" class="ms-1" :to="eventUrl">{{ labels.openEvent }}</RouterLink>
         </p>
+        <p v-if="contextHint">{{ contextHint }}</p>
         <p v-if="automation?.paused">{{ automation.pausedHint }}</p>
         <div class="d-flex flex-wrap gap-2">
             <ActionButton v-if="canArchive" class="btn-sm" variant="outline-light" :disabled="disabled"
@@ -32,12 +33,13 @@ const {messages} = usePilot();
         </div>
     </section>
     <!-- Preserve ordinary duplicate-link semantics; deletion is a separately confirmed command. -->
-    <section v-if="canDuplicate || canRemove" data-entity-section="actions">
+    <section v-if="canDuplicate || canRemove || exportLink" data-entity-section="actions">
         <h3 class="fs-5">{{ labels.otherActions }}</h3>
         <div class="d-flex flex-wrap gap-2">
             <RouterLink v-if="canDuplicate" class="btn btn-outline-light" :to="duplicateTo">{{
                 messages.t('common.duplicate')
             }}</RouterLink
+            ><a v-if="exportLink" class="btn btn-outline-light" :href="exportLink.url" target="_blank" rel="noopener">{{ exportLink.label }}</a
             ><ActionButton v-if="canRemove" variant="outline-danger" :disabled="disabled"
                 @click="emit('remove', $event)">{{ labels.deletePermanently }}</ActionButton>
         </div>

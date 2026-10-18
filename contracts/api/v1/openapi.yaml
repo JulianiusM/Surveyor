@@ -4,7 +4,7 @@ jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Surveyor API
   version: 1.0.0
-  description: Versioned frontend API for Help, Packing, Drivers, Surveys, Events, overview and identity. Existing feature routes remain available.
+  description: Versioned frontend API for Help, Packing, Drivers, Surveys, Activities, Events, overview and identity. Existing feature routes remain available.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -13,6 +13,70 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /activity-plans/{planId}/automatic-archive:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1automatic-archive
+  /activity-plans/create-entry:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1create-entry
+  /activity-plans/create-context:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1create-context
+  /activity-plans/events:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1events
+  /activity-plans/{planId}/entry:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1entry
+  /activity-plans/{planId}/guest:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1guest
+  /activity-plans:
+    $ref: ./activity.yaml#/paths/~1activity-plans
+  /activity-plans/{planId}:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}
+  /activity-plans/{planId}/duplicate:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1duplicate
+  /activity-plans/{planId}/metadata:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1metadata
+  /activity-plans/{planId}/settings:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1settings
+  /activity-plans/{planId}/event:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1event
+  /activity-plans/{planId}/default-permissions:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1default-permissions
+  /activity-plans/{planId}/admins:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1admins
+  /activity-plans/{planId}/admins/{profileId}/edit-baseline:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1admins~1{profileId}~1edit-baseline
+  /activity-plans/{planId}/admins/{profileId}:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1admins~1{profileId}
+  /activity-plans/{planId}/profiles:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1profiles
+  /activity-plans/{planId}/header/edit-baseline:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1header~1edit-baseline
+  /activity-plans/{planId}/header:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1header
+  /activity-plans/{planId}/archive:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1archive
+  /activity-plans/{planId}/restore:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1restore
+  /activity-plans/{planId}/slots:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1slots
+  /activity-plans/{planId}/slots/{slotId}/edit-baseline:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1slots~1{slotId}~1edit-baseline
+  /activity-plans/{planId}/slots/{slotId}:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1slots~1{slotId}
+  /activity-plans/{planId}/slot-order:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1slot-order
+  /activity-plans/{planId}/slots/{slotId}/warnings:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1slots~1{slotId}~1warnings
+  /activity-plans/{planId}/slots/{slotId}/self-assignment:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1slots~1{slotId}~1self-assignment
+  /activity-plans/{planId}/assignments/{assignmentId}:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1assignments~1{assignmentId}
+  /activity-plans/{planId}/roles:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1roles
+  /activity-plans/{planId}/slots/{slotId}/role-assignments:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1slots~1{slotId}~1role-assignments
+  /activity-plans/{planId}/text-fields:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1text-fields
+  /activity-plans/{planId}/text-fields/{textFieldId}:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1text-fields~1{textFieldId}
   /surveys/create-entry:
     $ref: ./surveys.yaml#/paths/~1surveys~1create-entry
   /surveys/{surveyId}/entry:
@@ -1345,6 +1409,94 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    ActivityWeek:
+      $ref: ./activity.yaml#/schemas/ActivityWeek
+    ActivityCreateContext:
+      $ref: ./activity.yaml#/schemas/ActivityCreateContext
+    ActivityCreateEntry:
+      $ref: ./activity.yaml#/schemas/ActivityCreateEntry
+    ActivityResourceEntry:
+      $ref: ./activity.yaml#/schemas/ActivityResourceEntry
+    ActivityCreated:
+      $ref: ./activity.yaml#/schemas/ActivityCreated
+    ActivitySlotInput:
+      $ref: ./activity.yaml#/schemas/ActivitySlotInput
+    ActivityCreateInput:
+      $ref: ./activity.yaml#/schemas/ActivityCreateInput
+    ActivityCreateForm:
+      $ref: ./activity.yaml#/schemas/ActivityCreateForm
+    ActivityDuplicate:
+      $ref: ./activity.yaml#/schemas/ActivityDuplicate
+    ActivityDuplicateSlot:
+      $ref: ./activity.yaml#/schemas/ActivityDuplicateSlot
+    ActivityRole:
+      $ref: ./activity.yaml#/schemas/ActivityRole
+    ActivitySlotRole:
+      $ref: ./activity.yaml#/schemas/ActivitySlotRole
+    ActivityAssignee:
+      $ref: ./activity.yaml#/schemas/ActivityAssignee
+    ActivitySlotView:
+      $ref: ./activity.yaml#/schemas/ActivitySlotView
+    ActivityProgress:
+      $ref: ./activity.yaml#/schemas/ActivityProgress
+    ActivityParticipant:
+      $ref: ./activity.yaml#/schemas/ActivityParticipant
+    ActivityTextField:
+      $ref: ./activity.yaml#/schemas/ActivityTextField
+    ActivityView:
+      $ref: ./activity.yaml#/schemas/ActivityView
+    ActivityMetadata:
+      $ref: ./activity.yaml#/schemas/ActivityMetadata
+    ActivityMetadataPatch:
+      $ref: ./activity.yaml#/schemas/ActivityMetadataPatch
+    ActivitySettings:
+      $ref: ./activity.yaml#/schemas/ActivitySettings
+    ActivitySlotPatch:
+      $ref: ./activity.yaml#/schemas/ActivitySlotPatch
+    ActivitySlotBaseline:
+      $ref: ./activity.yaml#/schemas/ActivitySlotBaseline
+    ActivityNewSlot:
+      $ref: ./activity.yaml#/schemas/ActivityNewSlot
+    ActivityOrderInput:
+      $ref: ./activity.yaml#/schemas/ActivityOrderInput
+    ActivityOrderBaseline:
+      $ref: ./activity.yaml#/schemas/ActivityOrderBaseline
+    ActivityAssignmentInput:
+      $ref: ./activity.yaml#/schemas/ActivityAssignmentInput
+    ActivityWarningTarget:
+      $ref: ./activity.yaml#/schemas/ActivityWarningTarget
+    ActivityWarningDetail:
+      $ref: ./activity.yaml#/schemas/ActivityWarningDetail
+    ActivityWarning:
+      $ref: ./activity.yaml#/schemas/ActivityWarning
+    ActivityWarningPreview:
+      $ref: ./activity.yaml#/schemas/ActivityWarningPreview
+    ActivityTextFieldInput:
+      $ref: ./activity.yaml#/schemas/ActivityTextFieldInput
+    ActivityTextFieldPatch:
+      $ref: ./activity.yaml#/schemas/ActivityTextFieldPatch
+    ActivityRoleInput:
+      $ref: ./activity.yaml#/schemas/ActivityRoleInput
+    ActivityRoleAssignmentsInput:
+      $ref: ./activity.yaml#/schemas/ActivityRoleAssignmentsInput
+    ActivityEventOptions:
+      $ref: ./activity.yaml#/schemas/ActivityEventOptions
+    ActivityEventChange:
+      $ref: ./activity.yaml#/schemas/ActivityEventChange
+    ActivityEventChanged:
+      $ref: ./activity.yaml#/schemas/ActivityEventChanged
+    ActivityDefaultsBaseline:
+      $ref: ./activity.yaml#/schemas/ActivityDefaultsBaseline
+    ActivityAdminBaseline:
+      $ref: ./activity.yaml#/schemas/ActivityAdminBaseline
+    ActivityAdminInput:
+      $ref: ./activity.yaml#/schemas/ActivityAdminInput
+    ActivityAdminPatch:
+      $ref: ./activity.yaml#/schemas/ActivityAdminPatch
+    ActivityProfileOptions:
+      $ref: ./activity.yaml#/schemas/ActivityProfileOptions
+    ActivityHeaderBaseline:
+      $ref: ./activity.yaml#/schemas/ActivityHeaderBaseline
     SurveyCreateContext:
       $ref: ./surveys.yaml#/schemas/SurveyCreateContext
     SurveyCreateEntry:

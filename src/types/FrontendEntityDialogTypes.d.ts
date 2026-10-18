@@ -5,10 +5,11 @@ import type {EntityAutomationMessages, EntityLifecycleOperations} from './Fronte
 import type {PilotEventPickerSource, PilotPlainMessageKey, PilotRequestScope} from './FrontendPilotUiTypes';
 
 /** Shared root settings presentation; standalone roots have no parent selector. */
-export type EntitySettingsProjection = Omit<components['schemas']['PackingSettings'], 'currentEvent' | 'capabilities' | 'editableFields'> & {
+export type EntitySettingsProjection = Omit<components['schemas']['PackingSettings'], 'currentEvent' | 'capabilities' | 'editableFields' | 'archive'> & {
     editableFields: string[];
     currentEvent?: components['schemas']['PackingSettings']['currentEvent'];
-    capabilities: Omit<components['schemas']['PackingSettings']['capabilities'], 'linkEvent'> & {linkEvent?: boolean; manageAutomation?: boolean};
+    capabilities: Omit<components['schemas']['PackingSettings']['capabilities'], 'linkEvent'> & {linkEvent?: boolean; manageAutomation?: boolean; export?: boolean};
+    archive: components['schemas']['PackingSettings']['archive'] & {hasAutomaticSchedule?: boolean};
 };
 
 /** Existing feature adapters retain generated operation and endpoint selection. */
@@ -46,4 +47,8 @@ export interface EntitySettingsDialogProps {
     restoreConfirmation?: PilotPlainMessageKey;
     archiveConfirmation?: PilotPlainMessageKey;
     automationLabels?: EntityAutomationLabels;
+    eventExtraHint?: string;
+    linkedEventArchiveHint?: string;
+    exportLink?: {url: string; label: string};
+    scheduledRestoreConfirmation?: PilotPlainMessageKey;
 }

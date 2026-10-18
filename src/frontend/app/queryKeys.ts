@@ -82,6 +82,32 @@ export const driversKeys = {
         [...driversKeys.eventFilters(context, locale, filters), parameters] as const,
 };
 
+/** Activity schedule, participants and editor grants belong to one admitted plan
+ * and actor. Local schedule filters do not create another authority snapshot. */
+export const activityKeys = {
+    all: (context: string | null | undefined) => ['v1', context, 'activity'] as const,
+    resource: (context: string | null | undefined, id: string) => [...activityKeys.all(context), id] as const,
+    detailFamily: (context: string | null | undefined, id: string) => [...activityKeys.resource(context, id), 'detail'] as const,
+    detail: (context: string | null | undefined, id: string) => activityKeys.detailFamily(context, id),
+    entry: (context: string | null | undefined, id: string, intent: 'guest' | 'detail') =>
+        [...activityKeys.resource(context, id), 'entry', intent] as const,
+    editors: (context: string | null | undefined, id: string) => [...activityKeys.resource(context, id), 'editors'] as const,
+    metadata: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'metadata'] as const,
+    settings: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'settings'] as const,
+    profilesFamily: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'profiles'] as const,
+    profiles: (context: string | null | undefined, id: string, search: string) => [...activityKeys.profilesFamily(context, id), {search}] as const,
+    creation: (context: string | null | undefined, eventId?: string) =>
+        [...activityKeys.all(context), 'create-context', ...(eventId ? [{eventId}] : [])] as const,
+    duplicate: (context: string | null | undefined, id: string | null, eventId?: string) =>
+        [...activityKeys.all(context), id, 'duplicate', ...(eventId ? [{eventId}] : [])] as const,
+    guest: (context: string | null | undefined, id: string) => [...activityKeys.resource(context, id), 'guest'] as const,
+    events: (context: string | null | undefined) => [...activityKeys.all(context), 'events'] as const,
+    eventFilters: (context: string | null | undefined, _locale: string, filters: string) =>
+        [...activityKeys.events(context), {filters}] as const,
+    eventPage: (context: string | null | undefined, locale: string, filters: string, parameters: unknown) =>
+        [...activityKeys.eventFilters(context, locale, filters), parameters] as const,
+};
+
 /** Survey ballots and named results belong to one admitted profile and standalone
  * survey. Editor authority remains a separate family from participation reads. */
 export const surveyKeys = {

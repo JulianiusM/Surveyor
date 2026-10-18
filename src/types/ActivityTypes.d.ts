@@ -43,6 +43,9 @@ export type PlanParticipant = {
 
 export type SlotAssignmentMap = Record<string, SlotAssignee[]>;
 
+/** Optional completion is prepared while the existing creation transaction can still roll back. */
+export type ActivityCreationCompletion = (id: string) => void;
+
 /** Only root properties accepted by the activity property editor; omission preserves saved values. */
 export interface ActivityPropertyPatch {
     title?: string;

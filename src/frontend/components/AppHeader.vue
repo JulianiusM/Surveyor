@@ -191,9 +191,9 @@ async function retryCompletion(): Promise<void> {
                                 >
                             </li>
                             <li>
-                                <a class="dropdown-item" href="/activity/create"
+                                <RouterLink class="dropdown-item" to="/frontend-pilot/activity/create"
                                     ><i class="bi bi-calendar2-check me-2" aria-hidden="true"></i
-                                    >{{ messages.t('app.activity') }}</a
+                                    >{{ messages.t('app.activity') }}</RouterLink
                                 >
                             </li>
                             <li>

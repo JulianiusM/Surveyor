@@ -1,0 +1,2715 @@
+schemas:
+  ActivityCreateContext:
+    "$ref": "./drivers.yaml#/schemas/DriversCreateContext"
+  ActivityCreateEntry:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "entry"
+      - "context"
+    properties:
+      entry:
+        "$ref": "./common.yaml#/schemas/PageEntryOutcome"
+      context:
+        anyOf:
+          -
+            "$ref": "#/schemas/ActivityCreateContext"
+          -
+            type: "null"
+      selectedEvent:
+        anyOf:
+          -
+            "$ref": "./common.yaml#/schemas/EventPickerOption"
+          -
+            type: "null"
+  ActivityResourceEntry:
+    "$ref": "./packing.yaml#/schemas/PackingResourceEntry"
+  ActivityCreated:
+    "$ref": "./packing.yaml#/schemas/PackingCreated"
+  ActivitySlotInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "id"
+      - "day"
+      - "position"
+      - "title"
+      - "description"
+      - "startTime"
+      - "endTime"
+      - "maxAssignees"
+    properties:
+      id:
+        "$ref": "./common.yaml#/schemas/Uuid"
+      day:
+        type: "string"
+        format: "date"
+      position:
+        type: "integer"
+      title:
+        type: "string"
+        minLength: 1
+        maxLength: 255
+      description:
+        type: "string"
+        maxLength: 16000
+      startTime:
+        type:
+          - "string"
+          - "null"
+        pattern: "^\\d{2}:\\d{2}(?::\\d{2})?$"
+      endTime:
+        type:
+          - "string"
+          - "null"
+        pattern: "^\\d{2}:\\d{2}(?::\\d{2})?$"
+      maxAssignees:
+        type: "integer"
+        minimum: 1
+  ActivityCreateInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "title"
+      - "description"
+      - "startDate"
+      - "endDate"
+      - "eventId"
+      - "slots"
+      - "defaultPermissions"
+    properties:
+      title:
+        type: "string"
+        minLength: 1
+        maxLength: 255
+      description:
+        type: "string"
+        maxLength: 16000
+      startDate:
+        type: "string"
+        format: "date"
+      endDate:
+        type: "string"
+        format: "date"
+      eventId:
+        "$ref": "./common.yaml#/schemas/NullableUuid"
+      slots:
+        type: "array"
+        items:
+          "$ref": "#/schemas/ActivitySlotInput"
+      defaultPermissions:
+        "$ref": "./packing.yaml#/schemas/PermissionDefaults"
+  ActivityCreateForm:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "data"
+    properties:
+      data:
+        "$ref": "#/schemas/ActivityCreateInput"
+      image:
+        type: "string"
+        format: "binary"
+  ActivityDuplicateSlot:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "id"
+      - "day"
+      - "position"
+      - "title"
+      - "description"
+      - "startTime"
+      - "endTime"
+      - "maxAssignees"
+    properties:
+      id:
+        "$ref": "./common.yaml#/schemas/Uuid"
+      day:
+        type: "string"
+        format: "date"
+      position:
+        type: "integer"
+      title:
+        type: "string"
+      description:
+        type: "string"
+      startTime:
+        type:
+          - "string"
+          - "null"
+      endTime:
+        type:
+          - "string"
+          - "null"
+      maxAssignees:
+        type: "integer"
+  ActivityDuplicate:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "title"
+      - "description"
+      - "startDate"
+      - "endDate"
+      - "eventId"
+      - "slots"
+      - "defaultPermissions"
+      - "formContext"
+    properties:
+      title:
+        type: "string"
+      description:
+        type:
+          - "string"
+          - "null"
+      startDate:
+        type: "string"
+        format: "date"
+      endDate:
+        type: "string"
+        format: "date"
+      eventId:
+        "$ref": "./common.yaml#/schemas/NullableUuid"
+      slots:
+        type: "array"
+        items:
+          "$ref": "#/schemas/ActivityDuplicateSlot"
+      defaultPermissions:
+        "$ref": "./packing.yaml#/schemas/PermissionDefaults"
+      formContext:
+        "$ref": "#/schemas/ActivityCreateContext"
+      selectedEvent:
+        anyOf:
+          -
+            "$ref": "./common.yaml#/schemas/EventPickerOption"
+          -
+            type: "null"
+  ActivityRole:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "id"
+      - "title"
+      - "description"
+    properties:
+      id:
+        type: "integer"
+        minimum: 1
+      title:
+        type: "string"
+      description:
+        type:
+          - "string"
+          - "null"
+  ActivitySlotRole:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "id"
+      - "name"
+      - "maxQty"
+      - "assignedQty"
+      - "assignmentId"
+      - "assigneeName"
+      - "self"
+    properties:
+      id:
+        type: "integer"
+        minimum: 1
+      name:
+        type: "string"
+      maxQty:
+        type: "integer"
+        minimum: 0
+      assignedQty:
+        type: "integer"
+        minimum: 0
+      assignmentId:
+        type:
+          - "string"
+          - "null"
+      assigneeName:
+        type:
+          - "string"
+          - "null"
+      self:
+        type: "boolean"
+  ActivityAssignee:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "assignmentId"
+      - "name"
+      - "roles"
+    properties:
+      assignmentId:
+        "$ref": "./common.yaml#/schemas/DecimalId"
+      name:
+        type: "string"
+      roles:
+        type: "array"
+        items:
+          type: "string"
+  ActivitySlotView:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "id"
+      - "day"
+      - "position"
+      - "title"
+      - "description"
+      - "startTime"
+      - "endTime"
+      - "maxAssignees"
+      - "assignedCount"
+      - "selfAssigned"
+      - "selfRoles"
+      - "roles"
+      - "assignees"
+      - "editToken"
+      - "capabilities"
+    properties:
+      id:
+        "$ref": "./common.yaml#/schemas/Uuid"
+      day:
+        type: "string"
+        format: "date"
+      position:
+        type: "integer"
+      title:
+        type: "string"
+      description:
+        type:
+          - "string"
+          - "null"
+      startTime:
+        type:
+          - "string"
+          - "null"
+        pattern: "^\\d{2}:\\d{2}(?::\\d{2})?$"
+      endTime:
+        type:
+          - "string"
+          - "null"
+        pattern: "^\\d{2}:\\d{2}(?::\\d{2})?$"
+      maxAssignees:
+        type:
+          - "number"
+          - "null"
+      assignedCount:
+        type: "integer"
+        minimum: 0
+      selfAssigned:
+        type: "boolean"
+      selfRoles:
+        type: "array"
+        items:
+          type: "string"
+      roles:
+        type: "array"
+        items:
+          "$ref": "#/schemas/ActivitySlotRole"
+      assignees:
+        type: "array"
+        items:
+          "$ref": "#/schemas/ActivityAssignee"
+      editToken:
+        type: "string"
+      capabilities:
+        type: "object"
+        additionalProperties: false
+        required:
+          - "editTitle"
+          - "editDescription"
+          - "editMeta"
+          - "inlineMetadataAdmission"
+          - "editCapacity"
+          - "editRoles"
+          - "manageAssignments"
+          - "remove"
+        properties:
+          editTitle:
+            type: "boolean"
+          editDescription:
+            type: "boolean"
+          editMeta:
+            type: "boolean"
+          inlineMetadataAdmission:
+            type: boolean
+          editCapacity:
+            type: "boolean"
+          editRoles:
+            type: "boolean"
+          manageAssignments:
+            type: "boolean"
+          remove:
+            type: "boolean"
+  ActivityProgress:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "assignedShifts"
+      - "requiredShifts"
+      - "remainingShifts"
+      - "complete"
+    properties:
+      assignedShifts:
+        type: "integer"
+        minimum: 0
+      requiredShifts:
+        type: "integer"
+        minimum: 0
+      remainingShifts:
+        type: "integer"
+        minimum: 0
+      complete:
+        type: "boolean"
+  ActivityParticipant:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "participantKey"
+      - "name"
+      - "count"
+      - "assignedShifts"
+      - "roles"
+      - "roleIds"
+      - "requiredShifts"
+      - "remainingShifts"
+      - "source"
+      - "attendanceDays"
+      - "attendance"
+      - "assignmentMode"
+    properties:
+      participantKey:
+        type: "string"
+      name:
+        type: "string"
+      count:
+        type: "integer"
+        minimum: 0
+      assignedShifts:
+        type: "integer"
+        minimum: 0
+      roles:
+        type: "array"
+        items:
+          type: "string"
+      roleIds:
+        type: "array"
+        items:
+          type: "integer"
+      requiredShifts:
+        type: "integer"
+        minimum: 0
+      remainingShifts:
+        type: "integer"
+        minimum: 0
+      source:
+        type: "string"
+      attendanceDays:
+        type: "integer"
+        minimum: 0
+      attendance:
+        anyOf:
+          -
+            type: "object"
+            additionalProperties: false
+            required:
+              - "arrivalDate"
+              - "departureDate"
+            properties:
+              arrivalDate:
+                type:
+                  - "string"
+                  - "null"
+              departureDate:
+                type:
+                  - "string"
+                  - "null"
+          -
+            type: "null"
+      assignmentMode:
+        type: "string"
+        enum:
+          - "FREE"
+          - "REQUIRED"
+  ActivityTextField:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "id"
+      - "title"
+      - "text"
+      - "editToken"
+      - "capabilities"
+    properties:
+      id:
+        "$ref": "./common.yaml#/schemas/Uuid"
+      title:
+        type: "string"
+      text:
+        type: "string"
+      editToken:
+        type: "string"
+      capabilities:
+        type: "object"
+        additionalProperties: false
+        required:
+          - "edit"
+          - "editTitle"
+          - "delete"
+        properties:
+          edit:
+            type: "boolean"
+          editTitle:
+            type: "boolean"
+          delete:
+            type: "boolean"
+  ActivityView:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "entityType"
+      - "id"
+      - "title"
+      - "description"
+      - "startDate"
+      - "endDate"
+      - "headerUrl"
+      - "headerVersion"
+      - "currentEventId"
+      - "currentEventUrl"
+      - "archived"
+      - "inheritedArchived"
+      - "assignmentMode"
+      - "canSelfAssign"
+      - "allowOverfillAfterFull"
+      - "bindingDeadline"
+      - "requirementProgress"
+      - "slots"
+      - "weeks"
+      - "allRoles"
+      - "textFields"
+      - "participants"
+      - "counters"
+      - "orderToken"
+      - "capabilities"
+    properties:
+      entityType:
+        type: "string"
+        const: "activity"
+      id:
+        "$ref": "./common.yaml#/schemas/Uuid"
+      title:
+        type: "string"
+      description:
+        type:
+          - "string"
+          - "null"
+      startDate:
+        type: "string"
+        format: "date"
+      endDate:
+        type: "string"
+        format: "date"
+      headerUrl:
+        type:
+          - "string"
+          - "null"
+      headerVersion:
+        type:
+          - "string"
+          - "null"
+      currentEventId:
+        "$ref": "./common.yaml#/schemas/NullableUuid"
+      currentEventUrl:
+        type:
+          - "string"
+          - "null"
+      archived:
+        type: "boolean"
+      inheritedArchived:
+        type: "boolean"
+      assignmentMode:
+        type: "string"
+        enum:
+          - "FREE"
+          - "REQUIRED"
+      canSelfAssign:
+        type: "boolean"
+      allowOverfillAfterFull:
+        type: "boolean"
+      bindingDeadline:
+        type:
+          - "string"
+          - "null"
+      requirementProgress:
+        anyOf:
+          -
+            "$ref": "#/schemas/ActivityProgress"
+          -
+            type: "null"
+      slots:
+        type: "array"
+        items:
+          "$ref": "#/schemas/ActivitySlotView"
+      weeks:
+        type: array
+        items:
+          "$ref": "#/schemas/ActivityWeek"
+      allRoles:
+        type: "array"
+        items:
+          "$ref": "#/schemas/ActivityRole"
+      textFields:
+        type: "array"
+        items:
+          "$ref": "#/schemas/ActivityTextField"
+      participants:
+        type: "array"
+        items:
+          "$ref": "#/schemas/ActivityParticipant"
+      counters:
+        type: "object"
+        additionalProperties: false
+        required:
+          - "participants"
+          - "open"
+          - "empty"
+        properties:
+          participants:
+            type:
+              - "integer"
+              - "null"
+            minimum: 0
+          open:
+            type: "integer"
+            minimum: 0
+          empty:
+            type: "integer"
+            minimum: 0
+      orderToken:
+        type: "string"
+      capabilities:
+        type: "object"
+        additionalProperties: false
+        required:
+          - "editTitle"
+          - "editDescription"
+          - "editDates"
+          - "addSlot"
+          - "reorderSlots"
+          - "manageSettings"
+          - "manageRequirements"
+          - "roleCreationAdmission"
+          - "rulesWorkspace"
+          - "exportSchedule"
+          - "duplicate"
+          - "remove"
+        properties:
+          editTitle:
+            type: "boolean"
+          editDescription:
+            type: "boolean"
+          editDates:
+            type: "boolean"
+          addSlot:
+            type: "boolean"
+          reorderSlots:
+            type: "boolean"
+          manageSettings:
+            type: "boolean"
+          manageRequirements:
+            type: "boolean"
+          roleCreationAdmission:
+            type: boolean
+          rulesWorkspace:
+            type: boolean
+          exportSchedule:
+            type: "boolean"
+          duplicate:
+            type: "boolean"
+          remove:
+            type: "boolean"
+  ActivityWeek:
+    description: Native server-rendered week start and visible day keys, preserving its local Date iteration.
+    type: object
+    additionalProperties: false
+    required: [start, days]
+    properties:
+      start:
+        type: string
+        description: Native heading key; an earliest supported year may place its preceding Monday in year 999.
+        pattern: '^[0-9]{3,4}-[0-9]{2}-[0-9]{2}$'
+      days:
+        type: array
+        items:
+          type: string
+          format: date
+  ActivityMetadata:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "entityType"
+      - "id"
+      - "values"
+      - "editableFields"
+      - "currentEventId"
+      - "archived"
+      - "inheritedArchived"
+    properties:
+      entityType:
+        type: "string"
+        const: "activity"
+      id:
+        "$ref": "./common.yaml#/schemas/Uuid"
+      values:
+        type: "object"
+        additionalProperties: false
+        required: []
+        properties:
+          title:
+            type: "string"
+          description:
+            type:
+              - "string"
+              - "null"
+          startDate:
+            type: "string"
+            format: "date"
+          endDate:
+            type: "string"
+            format: "date"
+      editableFields:
+        type: "array"
+        items:
+          type: "string"
+          enum:
+            - "title"
+            - "description"
+            - "startDate"
+            - "endDate"
+      currentEventId:
+        "$ref": "./common.yaml#/schemas/NullableUuid"
+      archived:
+        type: "boolean"
+      inheritedArchived:
+        type: "boolean"
+  ActivityMetadataPatch:
+    type: "object"
+    additionalProperties: false
+    required: []
+    properties:
+      title:
+        type: "string"
+        minLength: 1
+      description:
+        type:
+          - "string"
+          - "null"
+      startDate:
+        type: "string"
+        format: "date"
+      endDate:
+        type: "string"
+        format: "date"
+  ActivitySettings:
+    type: object
+    additionalProperties: false
+    required: [id, title, headerUrl, headerVersion, editableFields, settingsToken, capabilities, currentEvent, archive, access]
+    properties:
+      id:
+        "$ref": "./common.yaml#/schemas/Uuid"
+      title: {type: string}
+      headerUrl: {type: [string, "null"]}
+      headerVersion: {type: [string, "null"]}
+      editableFields:
+        type: array
+        uniqueItems: true
+        items:
+          type: string
+          enum: [title, description, startDate, endDate]
+      settingsToken:
+        "$ref": "./common.yaml#/schemas/FieldComparisonToken"
+      capabilities:
+        type: object
+        additionalProperties: false
+        required: [editHeader, linkEvent, managePermissions, duplicate, remove, archive, restore, manageArchive, manageAutomation, export]
+        properties:
+          editHeader: {type: boolean}
+          linkEvent: {type: boolean}
+          managePermissions: {type: boolean}
+          duplicate: {type: boolean}
+          remove: {type: boolean}
+          archive: {type: boolean}
+          restore: {type: boolean}
+          manageArchive: {type: boolean}
+          manageAutomation: {type: boolean}
+          export: {type: boolean}
+      currentEvent:
+        "$ref": "./packing.yaml#/schemas/PackingSettings/properties/currentEvent"
+      archive:
+        type: object
+        additionalProperties: false
+        required: [direct, inherited, archivedAt, autoArchivePaused, eventUrl, hasAutomaticSchedule]
+        properties:
+          direct: {type: boolean}
+          inherited: {type: boolean}
+          archivedAt: {type: [string, "null"]}
+          autoArchivePaused: {type: boolean}
+          eventUrl: {type: [string, "null"]}
+          hasAutomaticSchedule: {type: boolean}
+      access:
+        "$ref": "./packing.yaml#/schemas/PackingSettings/properties/access"
+  ActivitySlotPatch:
+    type: "object"
+    additionalProperties: false
+    required: []
+    properties:
+      title:
+        type: "string"
+      description:
+        type:
+          - "string"
+          - "null"
+      startTime:
+        type:
+          - "string"
+          - "null"
+        pattern: "^\\d{2}:\\d{2}(?::\\d{2})?$"
+      endTime:
+        type:
+          - "string"
+          - "null"
+        pattern: "^\\d{2}:\\d{2}(?::\\d{2})?$"
+      maxAssignees:
+        anyOf:
+          - type: number
+          - type: string
+          - type: "null"
+      roles:
+        type: "array"
+        items:
+          type: "integer"
+          minimum: 1
+  ActivitySlotBaseline:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "values"
+      - "editableFields"
+      - "editToken"
+    properties:
+      values:
+        "$ref": "#/schemas/ActivitySlotPatch"
+      editableFields:
+        type: "array"
+        items:
+          type: "string"
+          enum:
+            - "title"
+            - "description"
+            - "startTime"
+            - "endTime"
+            - "maxAssignees"
+            - "roles"
+      editToken:
+        type: "string"
+  ActivityNewSlot:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "day"
+      - "title"
+      - "description"
+      - "startTime"
+      - "endTime"
+      - "maxAssignees"
+      - "roles"
+    properties:
+      day:
+        type: "string"
+        format: "date"
+      title:
+        type: "string"
+        minLength: 1
+      description:
+        type: "string"
+      startTime:
+        type:
+          - "string"
+          - "null"
+        pattern: "^\\d{2}:\\d{2}(?::\\d{2})?$"
+      endTime:
+        type:
+          - "string"
+          - "null"
+        pattern: "^\\d{2}:\\d{2}(?::\\d{2})?$"
+      maxAssignees:
+        type: "integer"
+        minimum: 1
+      roles:
+        type: "array"
+        items:
+          type: "integer"
+          minimum: 1
+  ActivityOrderInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "order"
+    properties:
+      order:
+        type: "array"
+        items:
+          type: "object"
+          additionalProperties: false
+          required:
+            - "slotId"
+            - "position"
+          properties:
+            slotId:
+              "$ref": "./common.yaml#/schemas/Uuid"
+            position:
+              type: "integer"
+  ActivityOrderBaseline:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "order"
+      - "editToken"
+    properties:
+      order:
+        type: "array"
+        items:
+          type: "object"
+          additionalProperties: false
+          required:
+            - "slotId"
+            - "position"
+          properties:
+            slotId:
+              "$ref": "./common.yaml#/schemas/Uuid"
+            position:
+              type: "integer"
+      editToken:
+        type: "string"
+  ActivityAssignmentInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "assigned"
+    properties:
+      assigned:
+        type: "boolean"
+      role:
+        type: "string"
+      overlapConfirmation:
+        type: "string"
+  ActivityWarningTarget:
+    type: "object"
+    additionalProperties: false
+    required: []
+    properties:
+      profileId:
+        "$ref": "./common.yaml#/schemas/Uuid"
+  ActivityWarningDetail:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "id"
+      - "day"
+    properties:
+      id:
+        type: "string"
+      day:
+        type: "string"
+      startTime:
+        type:
+          - "string"
+          - "null"
+      endTime:
+        type:
+          - "string"
+          - "null"
+      pos:
+        type:
+          - "integer"
+          - "null"
+      isArrivalEvening:
+        type:
+          - "boolean"
+          - "null"
+      isDepartureMorning:
+        type:
+          - "boolean"
+          - "null"
+      hasNamedRole:
+        type: "boolean"
+      planId:
+        type: "string"
+      planTitle:
+        type: "string"
+      title:
+        type: "string"
+      assignmentMode:
+        type: "string"
+        enum:
+          - "FREE"
+          - "REQUIRED"
+      recommendationId:
+        type: "string"
+      recommendationStatus:
+        type: "string"
+        enum:
+          - "PENDING"
+          - "APPROVED"
+          - "APPLIED"
+          - "REJECTED"
+      operation:
+        type: "string"
+        enum:
+          - "ASSIGN"
+          - "REASSIGN"
+          - "UNASSIGN"
+      sourceItemId:
+        type:
+          - "string"
+          - "null"
+  ActivityWarning:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "type"
+    properties:
+      type:
+        type: "string"
+        enum:
+          - "ineligible_participant"
+          - "outside_attendance"
+          - "arrival_day"
+          - "departure_day"
+          - "arrival_time_restricted"
+          - "departure_time_restricted"
+          - "overlap"
+          - "over_capacity"
+      conflicts:
+        type: "array"
+        items:
+          type: "string"
+      overlapDetails:
+        type: "array"
+        items:
+          "$ref": "#/schemas/ActivityWarningDetail"
+      overlapTarget:
+        "$ref": "#/schemas/ActivityWarningDetail"
+      confirmable:
+        type: "boolean"
+      requiredPriority:
+        type: "boolean"
+  ActivityWarningPreview:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "warnings"
+    properties:
+      warnings:
+        type: "array"
+        items:
+          "$ref": "#/schemas/ActivityWarning"
+      overlapConfirmation:
+        type: "string"
+  ActivityTextFieldInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "title"
+      - "text"
+    properties:
+      title:
+        type: "string"
+        minLength: 1
+        maxLength: 255
+      text:
+        type: "string"
+        maxLength: 16000
+  ActivityTextFieldPatch:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "text"
+    properties:
+      title:
+        type: "string"
+        maxLength: 255
+      text:
+        type: "string"
+        maxLength: 16000
+  ActivityRoleInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "name"
+    properties:
+      name:
+        type: "string"
+        minLength: 1
+        maxLength: 255
+      description:
+        type: "string"
+      isDefault:
+        type: "boolean"
+  ActivityRoleAssignmentsInput:
+    type: "object"
+    additionalProperties: false
+    required:
+      - "assignments"
+    properties:
+      assignments:
+        type: "array"
+        items:
+          type: "object"
+          additionalProperties: false
+          required:
+            - "role"
+            - "assignmentId"
+          properties:
+            role:
+              type: "string"
+            assignmentId:
+              type:
+                - "string"
+                - "null"
+  ActivityEventOptions:
+    "$ref": "./drivers.yaml#/schemas/DriversEventOptions"
+  ActivityEventChange:
+    "$ref": "./drivers.yaml#/schemas/DriversEventChange"
+  ActivityEventChanged:
+    "$ref": "./drivers.yaml#/schemas/DriversEventChanged"
+  ActivityDefaultsBaseline:
+    "$ref": "./drivers.yaml#/schemas/DriversDefaultsBaseline"
+  ActivityAdminBaseline:
+    "$ref": "./drivers.yaml#/schemas/DriversAdminBaseline"
+  ActivityAdminInput:
+    "$ref": "./drivers.yaml#/schemas/DriversAdminInput"
+  ActivityAdminPatch:
+    "$ref": "./drivers.yaml#/schemas/DriversAdminPatch"
+  ActivityProfileOptions:
+    "$ref": "./drivers.yaml#/schemas/DriversProfileOptions"
+  ActivityHeaderBaseline:
+    "$ref": "./drivers.yaml#/schemas/DriversHeaderBaseline"
+paths:
+  "/activity-plans/{planId}/automatic-archive":
+    put:
+      operationId: setActivityAutomaticArchival
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Pause or resume an activity plan's existing automatic archival schedule
+      parameters:
+        - "$ref": "./openapi.yaml#/components/parameters/Context"
+        - "$ref": "./openapi.yaml#/components/parameters/Locale"
+        - "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        - name: planId
+          in: path
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              "$ref": "./events.yaml#/schemas/EventAutomaticArchivalInput"
+      responses:
+        "200":
+          description: Authorized schedule command acknowledgement
+          content:
+            application/json:
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/create-entry":
+    get:
+      operationId: "getActivityCreateEntry"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Create Entry"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "returnTo"
+          in: "query"
+          schema:
+            type: "string"
+            maxLength: 2048
+        -
+          name: "eventId"
+          in: "query"
+          schema:
+            type: "string"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityCreateEntry"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      security: []
+  "/activity-plans/create-context":
+    get:
+      operationId: "getActivityCreateContext"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Create Context"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityCreateContext"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/events":
+    get:
+      operationId: "searchActivityEvents"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "search Activity Events"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "q"
+          in: "query"
+          schema:
+            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/q"
+        - name: from
+          in: query
+          schema:
+            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/from"
+        - name: to
+          in: query
+          schema:
+            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/to"
+        - name: period
+          in: query
+          schema:
+            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/period"
+        - name: archive
+          in: query
+          schema:
+            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/archive"
+        - name: deadline
+          in: query
+          schema:
+            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/deadline"
+        -
+          name: "selectedId"
+          in: "query"
+          schema:
+            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/selectedId"
+        -
+          name: "cursor"
+          in: "query"
+          schema:
+            "$ref": "./common.yaml#/schemas/EventPickerQuery/properties/cursor"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityEventOptions"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/entry":
+    get:
+      operationId: "getActivityResourceEntry"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Resource Entry"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "view"
+          in: "query"
+          schema:
+            type: "string"
+            enum:
+              - "detail"
+              - "guest"
+          required: true
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityResourceEntry"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      security: []
+  "/activity-plans/{planId}/guest":
+    get:
+      operationId: "getActivityGuestEntry"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Guest Entry"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/GuestEntry"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      security: []
+    post:
+      operationId: "registerActivityGuest"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "register Activity Guest"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/IdentityResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/GuestRegistrationInput"
+  "/activity-plans":
+    post:
+      operationId: "createActivityPlan"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "create Activity Plan"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "201":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityCreated"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "multipart/form-data":
+            schema:
+              "$ref": "#/schemas/ActivityCreateForm"
+  "/activity-plans/{planId}":
+    get:
+      operationId: "getActivityPlan"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Plan"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityView"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+    delete:
+      operationId: "deleteActivityPlan"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "delete Activity Plan"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/duplicate":
+    get:
+      operationId: "getActivityDuplicate"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Duplicate"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "eventId"
+          in: "query"
+          schema:
+            type: "string"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityDuplicate"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/metadata":
+    get:
+      operationId: "getActivityMetadata"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Metadata"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityMetadata"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+    patch:
+      operationId: "updateActivityMetadata"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "metadata"
+      summary: "update Activity Metadata"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityMetadata"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityMetadataPatch"
+  "/activity-plans/{planId}/settings":
+    get:
+      operationId: "getActivitySettings"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Settings"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivitySettings"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/event":
+    put:
+      operationId: "updateActivityEvent"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "settings"
+      summary: "update Activity Event"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityEventChanged"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityEventChange"
+  "/activity-plans/{planId}/default-permissions":
+    get:
+      operationId: "getActivityDefaultsBaseline"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Defaults Baseline"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityDefaultsBaseline"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+    put:
+      operationId: "updateActivityDefaults"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "settings"
+      summary: "update Activity Defaults"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/PermissionDefaultsPatch"
+  "/activity-plans/{planId}/admins":
+    post:
+      operationId: "addActivityAdmin"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "settings"
+      summary: "add Activity Admin"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityAdminInput"
+  "/activity-plans/{planId}/admins/{profileId}/edit-baseline":
+    get:
+      operationId: "getActivityAdminBaseline"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Admin Baseline"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "profileId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityAdminBaseline"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/admins/{profileId}":
+    patch:
+      operationId: "updateActivityAdmin"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "settings"
+      summary: "update Activity Admin"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "profileId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityAdminPatch"
+    delete:
+      operationId: "deleteActivityAdmin"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "settings"
+      summary: "delete Activity Admin"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "profileId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/profiles":
+    get:
+      operationId: "searchActivityProfiles"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "search Activity Profiles"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "q"
+          in: "query"
+          schema:
+            type: "string"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityProfileOptions"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/header/edit-baseline":
+    get:
+      operationId: "getActivityHeaderBaseline"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Header Baseline"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityHeaderBaseline"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/header":
+    get:
+      operationId: "getActivityHeader"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Header"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/octet-stream":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/PackingHeaderBinary"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+    put:
+      operationId: "uploadActivityHeader"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "settings"
+      summary: "upload Activity Header"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "multipart/form-data":
+            schema:
+              "$ref": "./openapi.yaml#/components/schemas/PackingHeaderUpload"
+    delete:
+      operationId: "deleteActivityHeader"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "settings"
+      summary: "delete Activity Header"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/archive":
+    post:
+      operationId: "archiveActivityPlan"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "archive Activity Plan"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/restore":
+    post:
+      operationId: "restoreActivityPlan"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "restore Activity Plan"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/slots":
+    post:
+      operationId: "addActivitySlot"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "add Activity Slot"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityNewSlot"
+  "/activity-plans/{planId}/slots/{slotId}/edit-baseline":
+    get:
+      operationId: "getActivitySlotBaseline"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Slot Baseline"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "slotId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivitySlotBaseline"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/slots/{slotId}":
+    patch:
+      operationId: "updateActivitySlot"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "item"
+      summary: "update Activity Slot"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "slotId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivitySlotPatch"
+    delete:
+      operationId: "deleteActivitySlot"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "delete Activity Slot"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "slotId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/slot-order":
+    get:
+      operationId: "getActivityOrderBaseline"
+      x-surveyor-command:
+        retryPolicy: "read"
+        precondition: "none"
+      summary: "get Activity Order Baseline"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityOrderBaseline"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+    put:
+      operationId: "updateActivityOrder"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "order"
+      summary: "update Activity Order"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityOrderInput"
+  "/activity-plans/{planId}/slots/{slotId}/warnings":
+    post:
+      operationId: "previewActivityAssignment"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "preview Activity Assignment"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "slotId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "#/schemas/ActivityWarningPreview"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityWarningTarget"
+  "/activity-plans/{planId}/slots/{slotId}/self-assignment":
+    put:
+      operationId: "setActivityAssignment"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "set Activity Assignment"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "slotId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityAssignmentInput"
+  "/activity-plans/{planId}/assignments/{assignmentId}":
+    delete:
+      operationId: "removeActivityAssignment"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "remove Activity Assignment"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "assignmentId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/DecimalId"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+  "/activity-plans/{planId}/roles":
+    post:
+      operationId: "addActivityRole"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "add Activity Role"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityRoleInput"
+  "/activity-plans/{planId}/slots/{slotId}/role-assignments":
+    put:
+      operationId: "updateActivityRoleAssignments"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "update Activity Role Assignments"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "slotId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityRoleAssignmentsInput"
+  "/activity-plans/{planId}/text-fields":
+    post:
+      operationId: "addActivityTextField"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "add Activity Text Field"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityTextFieldInput"
+  "/activity-plans/{planId}/text-fields/{textFieldId}":
+    put:
+      operationId: "updateActivityTextField"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "item"
+      summary: "update Activity Text Field"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "textFieldId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/IfMatch"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              "$ref": "#/schemas/ActivityTextFieldPatch"
+    delete:
+      operationId: "deleteActivityTextField"
+      x-surveyor-command:
+        retryPolicy: "reconcile-only"
+        precondition: "none"
+      summary: "delete Activity Text Field"
+      parameters:
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Context"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Locale"
+        -
+          name: "planId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          name: "textFieldId"
+          in: "path"
+          required: true
+          schema:
+            "$ref": "./common.yaml#/schemas/Uuid"
+        -
+          "$ref": "./openapi.yaml#/components/parameters/Csrf"
+      responses:
+        "200":
+          description: "Authorized operation result"
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: "string"
+          content:
+            "application/json":
+              schema:
+                "$ref": "./openapi.yaml#/components/schemas/MutationResult"
+        default:
+          "$ref": "./openapi.yaml#/components/responses/Problem"

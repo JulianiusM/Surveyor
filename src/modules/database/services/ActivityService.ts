@@ -15,7 +15,7 @@
  */
 
 import {EntityManager, In, Not} from "typeorm";
-import type {ActivityPropertyPatch, PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
+import type {ActivityCreationCompletion, ActivityPropertyPatch, PlanParticipant, PlanParticipantRow, SlotAssignmentMap} from "../../../types/ActivityTypes";
 import {AssignmentCandidate} from "../../activity/availability";
 import {toParticipantKey} from "../../activity/requirements";
 import {generateUniqueId} from "../../lib/util";
@@ -256,6 +256,7 @@ export async function createActivityPlan(
     await repo.save(plan);
 }
 
+/** Persist root and initial slots atomically; optional completion prepares caller output before commit. */
 export async function createActivityPlanTx(
     ownerId: string,
     title: string,
@@ -265,12 +266,14 @@ export async function createActivityPlanTx(
     slots: Partial<ActivitySlot>[],
     eventId?: string,
     headerImg?: string | null,
+    complete?: ActivityCreationCompletion,
 ) {
     return await AppDataSource.transaction(async (manager) => {
         const id = generateUniqueId();
         const planRepo = manager.getRepository(ActivityPlan);
         const slotRepo = manager.getRepository(ActivitySlot);
 
+        // Create the same root metadata and optional event relationship first.
         await planRepo.insert({
             id,
             owner: {id: ownerId},
@@ -283,6 +286,8 @@ export async function createActivityPlanTx(
         });
 
         if (slots.length) {
+            // New slot identities belong to this plan rather than a duplicated
+            // source's existing assignments or transient draft identities.
             const slotEntities = slots.map((s) =>
                 slotRepo.create({
                     id: generateUniqueId(),
@@ -299,6 +304,9 @@ export async function createActivityPlanTx(
             await slotRepo.save(slotEntities);
         }
 
+        // The optional caller prepares its result while this existing transaction
+        // can still roll back. Persistence order and native callers are unchanged.
+        complete?.(id);
         return id;
     });
 }

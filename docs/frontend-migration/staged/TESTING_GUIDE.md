@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: expanded P4 card/scroll/settings/focus/archived assertions, deterministic fixtures, Windows/Linux Vitest pools and bounded Windows system execution source-reconciled; execution and failures belong to paired review; no publication
+verification-scope: P5 Activity assertion and visual-capture boundaries source-reconciled alongside retained P0-P4, deterministic fixtures and runner contracts; execution and failures belong to paired review; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -194,6 +194,16 @@ operations without document replacement. Restricted actions, description-only se
 are separate scenes. The feature helper asserts the exact computed display difference for its native form-wrapped
 versus Vue direct flex-item deletion button before comparison; every other style, field and box remains checked.
 Shared-component reuse alone cannot establish a feature's injected operation or restricted-control behavior.
+
+Basic Activity adds strict desktop/mobile comparisons for dated creation, schedule/progress, participant status,
+shared notes, slot/role/text dialogs, warning review and settings. Wait for the native tab's completed fade before
+measuring; an empty transition capture proves no participant parity. Expanded image controls need their own matching
+scrolled capture when the modal viewport clips them. Preserve complete measured JSON beside original screenshots.
+Real built workflows assert same-document creation/copy, self/organizer assignments, changed-warning rejection and
+fresh explicit confirmation, shared-text edits, settings/image/lifecycle/automation, private projections and separate
+print documents. The genuine ORM suite retains native engine/transaction checks; the isolated calendar comparison
+renders actual native Pug/controller output in an isolated child process across four timezones, without mutating its parent
+worker. Source mappings and executed acceptance remain distinct in the migration review.
 
 Apply [assertion and isolation guidance](#assertions-and-isolation) to actual actor-owned records too. Administrator
 tests use a unique profile and assert its exact identifier; a shared account can accumulate other profiles while

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit P4 trigger and standalone Surveys implementation linked; original phase contracts and P0-P3 receipts retained; P5-P11, E1 exclusion and separate cutover boundaries preserved
+verification-scope: explicit P5 trigger and basic Activity completion linked alongside retained P0-P4 receipts; P6-P11, backend exclusions and separate cutover boundaries preserved
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -88,6 +88,13 @@ follow-up records two complete passing built selections; those earlier selection
 [current review](PILOT_PARITY_REVIEW.md#complete-pilot-readiness-correction-and-scoped-verification-2026-10-18) owns actual inputs,
 execution and remaining limits. The subsequent approved R1 identity-notice adaptation changes presentation, not
 the shared command transport or inherited operation guarantees. General backend completion remedies remain excluded.
+
+The subsequent [explicit P5 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p5-implementation-trigger-2026-10-18)
+starts basic Activity planning and participation under its existing contract. The instruction covers P5A and P5B;
+it does not start advanced Activity workflows, the later finance phases or cutover.
+Both packages now have an [implementation and scoped verification receipt](PILOT_PARITY_REVIEW.md#p5-basic-activity-implementation-and-scoped-verification-2026-10-18).
+The declared P5 journeys are complete; requirement editing/recommendations remain P6. Earlier receipts retain their
+original inputs and limits rather than becoming an assertion that the full application has migrated.
 
 ## Phase contracts
 

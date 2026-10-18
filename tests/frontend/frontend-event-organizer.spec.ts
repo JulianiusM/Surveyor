@@ -25,7 +25,7 @@ const roster: components['schemas']['EventParticipants'] = {participants: [parti
 const link: components['schemas']['EventRegistrationLink'] = {id: linkId, token: 'real-row-token',
     createdAt: '2026-10-16T00:00:00Z', expiresAt: null, revokedAt: null, used: false, profileId: null, status: 'active'};
 const card: components['schemas']['OverviewCard'] = {id: childId, type: 'activity', title: 'Shared shifts',
-    description: 'An archived plan', url: `/activity/${childId}`, headerUrl: null, headerVersion: null,
+    description: 'An archived plan', url: `/frontend-pilot/activity/${childId}`, headerUrl: null, headerVersion: null,
     eventContext: null, visibility: 'hidden', overviewHidden: true, archived: true, inheritedArchived: false,
     capabilities: {archive: false, restore: true, duplicate: false, remove: false}, children: null,
     automation: {paused: true, canManage: true}};
@@ -438,7 +438,7 @@ describe('Event organizer workflows', () => {
             return json({items: [card]});
         });
         vi.mocked(window.confirm).mockReturnValue(true);
-        expect(wrapper.get('article .card-body').attributes('href')).toBe(`/activity/${childId}`);
+        expect(wrapper.get('article .card-body').attributes('href')).toBe(`/frontend-pilot/activity/${childId}`);
         expect(wrapper.text()).not.toContain('Only my overview');
         expect(wrapper.text()).not.toContain('Hidden for me');
         expect(wrapper.text()).toContain('Shared shifts');

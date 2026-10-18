@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: complete authorized shared Vue correction source-reviewed; normal Vitest, production builds, compilers, built client and complete managed system execution recorded with finite visual evidence and failed-run history; staged guidance reconciled; native defects and separate cutover boundaries retained
+verification-scope: P5 basic Activity implementation, independent semantic review and finite supported-runtime verification recorded alongside prior P0-P4 receipts; native defects and separate later-phase/cutover boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,70 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## P5 basic Activity implementation and scoped verification (2026-10-18)
+
+The maintainer's [explicit P5 trigger](FRONTEND_FOUNDATION_DESIGN.md#explicit-p5-implementation-trigger-2026-10-18)
+covers P5A/P5B and ACT-01–07. Dated creation/copy, settings, schedule and participant filters/progress, shared text,
+slots/roles, self/organizer assignments, explicit warning review and separate print are implemented. Overview,
+landing, shell and Event child hosts use Activity SPA destinations. The
+[source map](TEST_COVERAGE.md#p5-basic-activity-source-map-2026-10-18) owns exact assertion mappings.
+
+Activity adopts the existing Vue entry, guest, header, creation, metadata, settings, access, image, lifecycle,
+list/read/command, dialog and inline owners. Optional presentation inputs preserve other consumers. Feature components
+retain dated drafts, filters and warning intent; no second server snapshot, token, command or persistence owner is
+introduced. Dirty descriptions survive a remote empty value, and slot editors retain disabled opening fields after
+permission loss. Native browser admission remains distinct from server method grants. A separate copied-slot read
+shape preserves native blank titles/signed capacities for correction; creation validation remains strict.
+
+Native/v1 callers share the existing Activity controller, assignment/warning engines and DBAL. New adapters scope
+actors/children, redact private participants/siblings and prepare invariant receipts before mutations; creation and
+metadata response preparation use their existing transactions. This does not strengthen inherited multi-step
+defaults, role updates or other excluded backend guarantees. The new router maps the shared owner's actual conflict
+to the existing API problem without changing native error handling.
+
+| Executed boundary | Result and exact scope |
+|---|---|
+| Production build and compilers | Normal `npm run build` passes on Node.js 24.15.0 after the final duplicate/ratio correction, including generation, server, native client, Vue client/SSR and copies. The final test compiler passes. Existing Sass/chunk and npm configuration notices remain warnings. |
+| Shared mounted selection | Ten affected shared/host frontend files pass all 233 cases. This covers the shared field/dialog/settings/lifecycle extensions and existing Event, Packing, Drivers and Survey consumers; later Activity-only presentation changes do not alter those owners. |
+| Focused Activity/contracts/localization | Four database-free files pass 43 cases: 20 mounted Activity cases, existing contract/localization cases and the calendar comparison. Subsequent copied-read and presentation refinements are exercised by the final persistence/built selections below. The calendar case compares 16 actual native Pug/controller results across four timezones/ranges in an isolated child process, including both DST transitions and year 1000. |
+| Real persistence | The four Activity integration files pass 73 cases on isolated MariaDB 10.11.14: 58 unchanged native engine/property/interlinking cases and 15 versioned cases. After the final copied-slot read correction, all 15 versioned cases pass again, including generated read acceptance, unchanged creation rejection/no writes and deliberate correction. |
+| Complete P5 built selection | All 12 cases pass together on the final full build with Node.js 24.15.0/MariaDB 10.11.14 and one worker. The ordinary managed initializer/server, real routes/sessions and persistence are used. Creation/copy, slot/role/text workflows, settings/image/archive/automation, fresh warning confirmation, private projections and separate print retain same-document assertions. |
+| Engineering | Full development inventory: 405 authored sources, 11 DBAL files, 44 touched readability files / 107 nontrivial operations, zero findings. Tracked/index and all 23 untracked source files pass whitespace checks. Independent source review separately checks readability, actual adoption and semantic boundaries. |
+| Documentation boundary | Production freeze and amendment guard report zero findings. Advisory structure/Help reports have no broken links, metadata errors, missing commands/paths or Help findings; the sole finding is the unregistered current source fingerprint. No baseline is rewritten to hide it. |
+
+The first complete passing build supplies 56 original PNGs: 28 native/Vue pairs covering creation, schedule,
+participants, notes, role/slot/text dialogs, warnings and six settings surfaces at 1280px/390px. Independent reviewer
+`/root/activity_verification` views all 50 distinct originals and verifies six counterpart images byte-identical.
+The scrolled image-chooser captures include the controls clipped by the retained full-modal captures. Native tab
+captures wait for completed fade; blank transition images are not accepted as participant evidence.
+
+That review catches a capacity-ratio whitespace difference beyond the outer-box assertions. After correction,
+the same reviewer reopens all four ratio-corrected schedule originals and checks their saved JSON. Both count/capacity child
+positions and dimensions match exactly under the unchanged one-pixel limit; the desktop schedule is decoded
+pixel-identical and the mobile difference is confined to 30 pixels on its bottom boundary. Other reviewed images
+have only border/corner rasterization differences, with no remaining unexplained content difference. Root additionally
+inspects mobile creation, participants, scrolled image controls and the final schedule pair. These are finite English
+Chromium surfaces, not an exhaustive locale/browser/accessibility or whole-application certification.
+
+Earlier attempts remain failed in ignored artifacts. They expose real Vue filter hiding, conflict translation,
+spacing/text/icon differences and copied-read constraints, plus native selector, reorder-fixture and transition-capture
+issues. Corrections preserve strict content/control/one-pixel assertions and their deadlines; the final ratio assertion
+is stronger. Root and the nonauthor backend/UI/test reviewers inspect actual owners, approval provenance, private/draft
+lifetimes, the duplicate contract and guidance. Their reviews supply no new authority beyond the direct P5 request.
+
+Native frontend sources remain untouched. IMP-016/017/018 keep their existing dispositions; new adapter privacy does
+not repair the native participant leak. The blank total badge, calendar timezone inconsistency and date-label activation
+defects remain recorded as IMP-076/077/078 and preserved. Role creation retains native quantity one and existing quota
+enforcement, without inventing a quantity editor. The advanced Rules link retains native handoff, including its existing
+fragment/session-tab behavior; P6 editing/generation/recommendations are excluded. No task-owned P5 workflow is deferred.
+
+Current logs and original evidence remain ignored under `artifacts/p5-*` and the ordinary Playwright output. Initial
+Node.js 24.13.0/MariaDB 10.4.32 checks retain their older scope; the supported-runtime results above supersede them
+only for these selections. The verified task-owned MariaDB container, anonymous volume and temporary credential files
+are removed; other containers remain untouched. No repository-wide test rerun, live provider/mail delivery, exhaustive concurrency matrix,
+deployment, default-route cutover, native removal or production-guide publication is claimed. The previous prepared
+guide-output acceptance is not renewed by source reconciliation; publication retains separate authorization.
 
 ## Complete pilot-readiness correction and scoped verification (2026-10-18)
 

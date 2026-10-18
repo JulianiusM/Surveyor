@@ -160,7 +160,8 @@ const panels = computed(() => {
             label: 'packing.actions' as const,
             icon: 'bi-three-dots',
             enabled:
-                state.capabilities.manageArchive || state.capabilities.duplicate || state.capabilities.remove,
+                state.capabilities.manageArchive || state.capabilities.duplicate || state.capabilities.remove
+                    || state.capabilities.export && props.exportLink,
         },
     ].filter((candidate) => candidate.enabled);
 });
@@ -403,8 +404,12 @@ function reviewEvent(): void {
  * command. These are shared resource actions; personal visibility and permanent
  * deletion remain separate operations with their own confirmation and authority. */
 async function archive(restore: boolean, source?: Event): Promise<void> {
+    // A dated feature supplies the native alternate wording, while the admitted
+    // schedule flag decides whether this actual resource uses that schedule.
+    const restoreConfirmation = data.value?.archive.hasAutomaticSchedule && props.scheduledRestoreConfirmation
+        ? props.scheduledRestoreConfirmation : props.restoreConfirmation;
     await lifecycle.archive(props.resourceId, restore, !!data.value?.archive.inherited, source,
-        restore ? props.restoreConfirmation : props.archiveConfirmation);
+        restore ? restoreConfirmation : props.archiveConfirmation);
 }
 
 /** Automatic archival remains a separate shared lifecycle command. Resuming an
@@ -507,6 +512,7 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                 <EntityEventEditor v-model="event.value" :original="event.original"
                     :current="data.currentEvent ?? null" :source="api.eventPicker" prefix="settings"
                     :title="messages.t('packing.linkedEvent')" :hint="messages.t('packing.eventHint')"
+                    :extra-hint="eventExtraHint"
                     :submit-label="messages.t('packing.saveEvent')" :active="panel === 'event'"
                     :conflict="eventConflict" :disabled="!!blocked" @review="reviewEvent" @save="saveEvent" />
             </section>
@@ -525,6 +531,8 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                     :manage-archive="data.capabilities.manageArchive" :can-archive="data.capabilities.archive"
                     :can-restore="data.capabilities.restore" :can-duplicate="data.capabilities.duplicate"
                     :can-remove="data.capabilities.remove" :duplicate-to="duplicateTo"
+                    :context-hint="data.currentEvent ? linkedEventArchiveHint : undefined"
+                    :export-link="data.capabilities.export ? exportLink : undefined"
                     :automation="data.capabilities.manageAutomation && api.automate && automationLabels ? {paused: data.archive.autoArchivePaused,
                         pauseLabel: automationLabels.pause, resumeLabel: automationLabels.resume, pausedHint: automationLabels.pausedHint} : undefined"
                     :disabled="!!blocked" @archive="archive" @remove="remove" @automate="automate" />

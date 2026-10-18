@@ -3,6 +3,7 @@ import * as userController from '../../../controller/userController';
 import {readPackingGuestEntry} from '../../../controller/packingController';
 import {readDriversGuestEntry} from '../../../controller/driversController';
 import {readSurveyGuestEntry} from '../../../controller/surveyController';
+import {readActivityGuestEntry} from '../../../controller/activityController';
 import {readEventGuestEntry} from '../../../controller/eventController';
 import {ApiProblem} from '../../../modules/api/problem';
 import {committedSessionView, prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, requireApiContext} from '../../../modules/api/session';
@@ -306,6 +307,18 @@ router.post('/surveys/:surveyId/guest', asyncHandler(async function registerSurv
     await registerGuestForEntry(req, res, `/frontend-pilot/survey/${survey.id}`, 'registerSurveyGuest');
 }));
 
+/** Activity guest entry uses the existing identity transaction and plan admission. */
+router.get('/activity-plans/:planId/guest', asyncHandler(async function getActivityGuestEntry(req, res) {
+    await admit(req, res, 'getActivityGuestEntry');
+    sendValidatedJson(req, res, 'getActivityGuestEntry', 200, await readActivityGuestEntry(String(req.params.planId)));
+}));
+
+router.post('/activity-plans/:planId/guest', asyncHandler(async function registerActivityGuest(req, res) {
+    await admit(req, res, 'registerActivityGuest');
+    const plan = await readActivityGuestEntry(String(req.params.planId));
+    await registerGuestForEntry(req, res, `/frontend-pilot/activity/${plan.id}`, 'registerActivityGuest');
+}));
+
 router.get('/events/:eventId/guest', asyncHandler(async function getEventGuestEntry(req, res) {
     await admit(req, res, 'getEventGuestEntry');
     sendValidatedJson(req, res, 'getEventGuestEntry', 200, await readEventGuestEntry(String(req.params.eventId)));
@@ -326,7 +339,7 @@ router.post('/events/:eventId/guest', asyncHandler(async function registerEventG
  * this owner prepares delivery outcomes and adopts only the committed Session.
  */
 async function registerGuestForEntry(req: Request, res: Response, next: string,
-    operation: 'registerPackingGuest' | 'registerEventGuest' | 'registerDriversGuest' | 'registerSurveyGuest'): Promise<void> {
+    operation: 'registerPackingGuest' | 'registerEventGuest' | 'registerDriversGuest' | 'registerSurveyGuest' | 'registerActivityGuest'): Promise<void> {
     const body = req.body as components['schemas']['GuestRegistrationInput'];
     /** Prepare both SMTP outcomes before identity/session persistence commits. */
     function prepareGuestReply(staged: Request['session'], personalLink: string): Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {

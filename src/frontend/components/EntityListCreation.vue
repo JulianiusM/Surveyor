@@ -29,12 +29,15 @@ import FileField from './FileField.vue';
 // Feature collections are supplied through explicit slots and collector callbacks.
 const props = defineProps<{icon: string; heading: PilotPlainMessageKey; documentTitle?: PilotPlainMessageKey; headerLabel: PilotPlainMessageKey; notFound: PilotPlainMessageKey;
     created: PilotPlainMessageKey; leaveUnknown: PilotPlainMessageKey; creationUnknown: PilotPlainMessageKey;
+    submitLabel?: PilotPlainMessageKey; fullWidthSubmit?: boolean; resourceParam?: string;
+    descriptionName?: string; headerName?: string;
     source: FrontendListCreationSource<TCopy>}>();
 const context = usePilot();
 const {messages} = context;
 const route = useRoute();
 const sourceId = computed(() =>
-    typeof route.params.listId === 'string' ? route.params.listId.toLowerCase() : null,
+    typeof route.params[props.resourceParam ?? 'listId'] === 'string'
+        ? String(route.params[props.resourceParam ?? 'listId']).toLowerCase() : null,
 );
 const initialEventId = computed(() => typeof route.query.eventId === 'string' ? route.query.eventId : undefined);
 const bootstrapError = computed(() => isInitialForm() ? props.source.initialError : undefined);
@@ -280,14 +283,19 @@ function collectCreation() {
                 <!-- Additional native draft controls opt in to the shared mount boundary.
                      Hydration restores their models without submitting or replaying actions. -->
                 <fieldset :disabled="blocked || !formContext">
-                    <FormField id="create-title" v-model="title" class="mb-3" :name="null"
-                        :label="messages.t('packing.title')" label-icon="bi-tag" label-class="" required />
+                    <!-- Features with dated roots supply their native title/date row;
+                         title still belongs to this shared creation draft owner. -->
+                    <slot name="root-fields" :title="title" :update-title="(value: string) => title = value" :disabled="blocked || !formContext">
+                        <FormField id="create-title" v-model="title" class="mb-3" :name="null"
+                            :label="messages.t('packing.title')" label-icon="bi-tag" label-class="" required />
+                    </slot>
                     <div class="row mb-3">
-                        <FormField id="create-description" v-model="description" class="col-md-12" :name="null"
+                        <FormField id="create-description" v-model="description" class="col-md-12" :name="descriptionName ?? null"
                             :label="messages.t('packing.descriptionOptional')" label-icon="bi-pencil-square" label-class="" multiline />
                     </div>
                     <div class="row mb-3">
                         <FileField id="create-header" class="col-12" :label="messages.t(headerLabel)"
+                            :name="headerName"
                             label-icon="bi-card-image" :selected-file="image" hydration-draft @choose="image = $event" />
                     </div>
                     <div class="row mb-3">
@@ -309,11 +317,11 @@ function collectCreation() {
                         </div>
                     </div>
                     <slot :disabled="blocked || !formContext"></slot>
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div :class="fullWidthSubmit ? 'd-grid mt-4' : 'd-flex justify-content-between align-items-center'">
                         <slot name="before-submit" :disabled="blocked || !formContext"></slot>
                         <ActionButton type="submit" variant="success" :state="createAction"
                             ><i class="bi bi-check-lg me-1" aria-hidden="true"></i
-                            >{{ messages.t('packing.createList') }}</ActionButton
+                            >{{ messages.t(submitLabel ?? 'packing.createList') }}</ActionButton
                         >
                     </div>
                 </fieldset>

@@ -1873,6 +1873,60 @@ implementation_defects:
     disposition: Recorded once as inherited native layout evidence; the Vue comparison retains the measured native
       behavior. No runtime repair is made and no task-owned P4 workflow is deferred by this finding. Any remedy remains
       outside the current correction and requires its own explicit scope.
+  - id: IMP-076
+    status: open
+    discovered_on: 2026-10-18
+    severity: low
+    owner: native frontend maintainers
+    package: native-activity-schedule
+    out_of_scope_for_documentation_migration: true
+    title: Activity schedule total slot badge reads an array length from grouped data
+    evidence:
+      - src/controller/activityController.ts fetchForView returns slots grouped by date, while
+        src/views/activity/parts/schedule.pug renders the total badge from data.slots.length.
+      - P5 source review finds no length member on that grouped record; the native total badge is therefore blank.
+        The open and unassigned counters have independent calculated values.
+    impact: The schedule shows no total slot count beside its open and unassigned counts.
+    authorization: The direct P5 request retains visual and behavioral parity and excludes existing native repairs.
+      This finding grants no native or Vue correction approval.
+    documentation_contract: The schedule total should count saved slots independently of date grouping and local filters.
+    disposition: The Vue schedule preserves the native blank total during P5. A correction remains separate work;
+      no basic Activity workflow is deferred by this cosmetic inherited defect.
+  - id: IMP-077
+    status: open
+    discovered_on: 2026-10-18
+    severity: medium
+    owner: native frontend maintainers
+    package: native-activity-calendar
+    out_of_scope_for_documentation_migration: true
+    title: Activity calendar labels and week grouping mix UTC dates with local timezone operations
+    evidence:
+      - src/public/js/modules/activity/activity-filters.ts constructs UTC-midnight dates, then formats their
+        weekday/date in the browser timezone; negative UTC offsets can display the previous civil day.
+      - Native creation adjusts week boundaries with browser-local calendar arithmetic but adds day cells by fixed
+        milliseconds. src/views/activity/activity-view.pug instead performs week/day arithmetic in the server timezone.
+        These algorithms can differ across timezone offsets and daylight-saving boundaries.
+    impact: Displayed dates or week grouping can depend on browser/server timezone rather than only the saved civil date.
+    authorization: P5 preserves the native comparator; no calendar timezone correction is authorized by the phase trigger.
+    documentation_contract: Calendar dates should identify their saved civil days consistently across supported timezones.
+    disposition: The Vue creation copy retains native browser arithmetic and formatting. The detail adapter projects
+      the native server calendar before rendering; no timezone remedy or exhaustive timezone certification is claimed.
+  - id: IMP-078
+    status: open
+    discovered_on: 2026-10-18
+    severity: low
+    owner: native frontend maintainers
+    package: native-activity-creation
+    out_of_scope_for_documentation_migration: true
+    title: Activity creation date labels target absent control identifiers
+    evidence:
+      - src/views/activity/activity-create.pug renders date labels for start/end but inputs with IDs startDate/endDate.
+        Standard label activation therefore does not focus the corresponding date input.
+    impact: Clicking a creation date label does not activate its date control.
+    authorization: P5 preserves native visual and behavioral parity; no label-activation exception was requested or approved.
+    documentation_contract: Date labels should identify their corresponding date controls.
+    disposition: Activity supplies the native label targets to the shared Vue field owner; other consumers retain
+      their existing default targets. A correction remains separately authorized work.
 findings:
   - id: DESIGN-EVENT-CREATION-TRANSPORT
     status: closed

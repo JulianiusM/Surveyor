@@ -6,6 +6,7 @@ const props = withDefaults(
         id: string;
         name?: string | null;
         label: string;
+        labelFor?: string;
         labelClass?: string;
         requiredMarker?: boolean;
         modelValue?: string;
@@ -54,7 +55,7 @@ function updateValue(): void {
         <!-- Label, native field name and accessible feedback remain one shared form contract.
              Native labels put text immediately after the icon: me-1 owns that gap.
              Extra template whitespace would widen it and change narrow-screen wrapping. -->
-        <label class="form-label" :class="labelClass" :for="id">
+        <label class="form-label" :class="labelClass" :for="labelFor ?? id">
             <i v-if="labelIcon" class="bi me-1" :class="labelIcon" aria-hidden="true"></i><slot name="label">{{ label }}</slot><template v-if="required && requiredMarker"> *</template>
         </label>
         <div :class="{'input-group': inputIcon || largeGroup, 'input-group-lg': largeGroup}">

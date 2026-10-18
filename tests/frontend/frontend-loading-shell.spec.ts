@@ -140,6 +140,36 @@ describe('shared skeleton accessibility', () => {
         expect(skeleton.querySelector('input, button, a, select, textarea, [tabindex]')).toBeNull();
     }, 30_000);
 
+    it.each(['create', '11111111-1111-4111-8111-111111111111/duplicate'])(
+        'renders Activity %s loading with title/date columns and initial slots', async destination => {
+            const result = await render('/frontend-pilot/activity/' + destination, {session});
+            const host = document.createElement('div');
+            host.innerHTML = result.html;
+            const skeleton = host.querySelector<HTMLElement>('main [data-loading-skeleton="activity-create"]')!;
+            expect(skeleton).not.toBeNull();
+            expect(Array.from(skeleton.querySelectorAll('.pilot-skeleton-field'), field =>
+                Array.from(field.classList).find(name => name.startsWith('col-md-'))))
+                .toEqual(['col-md-6', 'col-md-3', 'col-md-3', 'col-md-12', 'col-md-12', 'col-md-12']);
+            expect(skeleton.querySelectorAll('.pilot-skeleton-textarea')).toHaveLength(1);
+            expect(skeleton.querySelectorAll('.pilot-skeleton-table-viewport')).toHaveLength(1);
+            expect(skeleton.querySelectorAll('[role="status"]')).toHaveLength(1);
+            expect(skeleton.querySelector('input, button, a, select, textarea, [tabindex]')).toBeNull();
+        }, 30_000,
+    );
+
+    it('renders Activity loading with a weekly schedule and no list Quick Add', async () => {
+        const result = await render('/frontend-pilot/activity/11111111-1111-4111-8111-111111111111', {session});
+        const host = document.createElement('div');
+        host.innerHTML = result.html;
+        const skeleton = host.querySelector<HTMLElement>('main [data-loading-skeleton="activity"]')!;
+        expect(skeleton).not.toBeNull();
+        expect(skeleton.querySelector('[data-skeleton-columns]')?.getAttribute('data-skeleton-columns')).toBe('7');
+        expect(skeleton.querySelector('.pilot-skeleton-counters')).not.toBeNull();
+        expect(skeleton.querySelector('.pilot-skeleton-field')).toBeNull();
+        expect(skeleton.querySelectorAll('[role="status"]')).toHaveLength(1);
+        expect(skeleton.querySelector('input, button, a, select, textarea, [tabindex]')).toBeNull();
+    }, 30_000);
+
     it('hydrates a scoped readable completion at an initial fragment without changing it into a skeleton', async () => {
         const url = '/frontend-pilot/guest/recovery';
         const rendered = await render(url, {session, pageCompletion: {context: session.context,

@@ -18,7 +18,7 @@ const quickCreate = initialDocument?.landing?.quickCreate
 const creationTargets = {
     survey: {url: '/frontend-pilot/survey/create', icon: 'bi-bar-chart-steps'},
     event: {url: '/frontend-pilot/event/create', icon: 'bi-calendar-event'},
-    activity: {url: '/activity/create', icon: 'bi-clock-history'},
+    activity: {url: '/frontend-pilot/activity/create', icon: 'bi-clock-history'},
     packing: {url: '/frontend-pilot/packing/create', icon: 'bi-bag-fill'},
     drivers: {url: '/frontend-pilot/drivers/create', icon: 'bi-car-front-fill'},
 } as const;
@@ -106,11 +106,10 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
                     <RouterLink class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" to="/frontend-pilot">
                         <i class="bi bi-speedometer2" aria-hidden="true"></i>{{ messages.t('landing.openDashboard') }}
                     </RouterLink>
-                    <component :is="['packing', 'event', 'drivers', 'survey'].includes(quickCreate) ? RouterLink : 'a'"
-                        class="btn btn-outline-light btn-lg d-inline-flex align-items-center gap-2"
-                        :to="quickTarget.url" :href="quickTarget.url">
+                    <RouterLink class="btn btn-outline-light btn-lg d-inline-flex align-items-center gap-2"
+                        :to="quickTarget.url">
                         <i class="bi" :class="quickTarget.icon" aria-hidden="true"></i>{{ messages.t(`landing.quickCreate.${quickCreate}`) }}
-                    </component>
+                    </RouterLink>
                 </div>
             </template>
             <template v-else>

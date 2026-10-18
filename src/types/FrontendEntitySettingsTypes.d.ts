@@ -72,6 +72,7 @@ export interface EntityEventEditorProps {
     prefix: string;
     title: string;
     hint: string;
+    extraHint?: string;
     submitLabel: string;
     active: boolean;
     conflict: boolean;
@@ -101,6 +102,8 @@ export interface EntityLifecycleActionsProps {
     canRemove: boolean;
     duplicateTo: string;
     disabled: boolean;
+    contextHint?: string;
+    exportLink?: {url: string; label: string};
     /** Only entities with an admitted automatic schedule expose this distinct action. */
     automation?: {paused: boolean; pauseLabel: string; resumeLabel: string; pausedHint: string};
 }

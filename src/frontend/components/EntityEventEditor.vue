@@ -24,6 +24,7 @@ function chooseEvent(value: string | null): void {
         <EventPicker :model-value="modelValue" :source="source" :current="current"
             :prefix="prefix" inline :active="active" :disabled="disabled" @update:model-value="chooseEvent" />
         <p class="form-text">{{ hint }}</p>
+        <p v-if="extraHint" class="form-text">{{ extraHint }}</p>
         <!-- Original/local/current values stay distinct until the feature explicitly reviews. -->
         <StatusNotice v-if="conflict" kind="warning"
             ><p>{{ messages.t('draft.readConflict') }}</p>

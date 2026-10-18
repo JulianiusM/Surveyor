@@ -17,13 +17,17 @@ const props = withDefaults(defineProps<{
     required?: boolean;
     maxLength?: number;
     disabled?: boolean;
+    tag?: string;
+    multiline?: boolean;
+    rows?: number;
+    placeholder?: string;
     save: (value: string, token: string) => Promise<boolean>;
 }>(), {writeAdmission: true});
 const emit = defineEmits<{editing: [active: boolean]; denied: [source?: Event]}>();
 const context = usePilot();
 const {messages} = context;
 const editing = ref(false);
-const input = ref<HTMLInputElement | null>(null);
+const input = ref<HTMLInputElement | HTMLTextAreaElement | null>(null);
 // Keep the DOM's string value even for number inputs. Vue's numeric v-model coercion
 // otherwise changes this draft to a number before its trim/validation/save boundary.
 const local = ref('');
@@ -127,10 +131,13 @@ onBeforeUnmount(() => {
     // A remotely deleted row must release the page's drag lock exactly once.
     if (editing.value) emit('editing', false);
 });
+// Explicit edit buttons delegate to the same field entry/authority/lifetime as
+// double-click; callers never maintain a second inline draft or input mirror.
+defineExpose({begin});
 </script>
 
 <template>
-    <td
+    <component :is="tag ?? 'td'"
         :data-edit="editable ? label : undefined"
         @dblclick="begin"
         @keydown.enter.self.prevent="begin"
@@ -138,7 +145,12 @@ onBeforeUnmount(() => {
         :aria-label="editable ? label : undefined"
     >
         <template v-if="editing">
-            <input
+            <textarea v-if="multiline" ref="input" :value="local"
+                class="form-control form-control-sm text-bg-dark" :aria-label="label"
+                :disabled="pending || disabled || !editable" :required="required" :maxlength="maxLength"
+                :rows="rows ?? 5" :placeholder="placeholder" @input="local = ($event.target as HTMLTextAreaElement).value"
+                @blur="commit" @keydown.ctrl.enter.prevent="commit" @keydown.esc.prevent="cancel"></textarea>
+            <input v-else
                 ref="input"
                 :value="local"
                 class="form-control form-control-sm text-bg-dark"
@@ -173,5 +185,5 @@ onBeforeUnmount(() => {
             </div>
         </template>
         <slot v-else>{{ value }}</slot>
-    </td>
+    </component>
 </template>

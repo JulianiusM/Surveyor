@@ -14,6 +14,8 @@ const props = withDefaults(
         // shared focus, pending-dismissal and portal owner. Defaults retain Settings.
         standard?: boolean;
         titleClass?: string;
+        titleIcon?: string;
+        closeClass?: string;
         contentClass?: string;
         footerClass?: string;
         fullscreenOnSmall?: boolean;
@@ -79,13 +81,11 @@ function restoreFocus(event: Event): void {
             >
                 <header class="modal-header">
                     <div>
-                        <DialogTitle as="h2" class="modal-title" :class="[{'fs-5': !compact}, titleClass]">{{
-                            title
-                        }}</DialogTitle>
+                        <DialogTitle as="h2" class="modal-title" :class="[{'fs-5': !compact}, titleClass]"><i v-if="titleIcon" class="bi me-2" :class="titleIcon" aria-hidden="true"></i>{{ title }}</DialogTitle>
                         <p v-if="subtitle" class="small text-secondary mb-0 text-break">{{ subtitle }}</p>
                     </div>
                     <DialogClose
-                        class="btn-close btn-close-white"
+                        class="btn-close" :class="closeClass ?? 'btn-close-white'"
                         :disabled="pending"
                         :aria-label="messages.t('common.close')"
                     />

@@ -28,6 +28,8 @@ const DriversEntry = () => import('../features/drivers/DriversEntry.vue');
 const DriversCreatePage = () => import('../features/drivers/DriversCreatePage.vue');
 const SurveyEntry = () => import('../features/surveys/SurveyEntry.vue');
 const SurveyCreatePage = () => import('../features/surveys/SurveyCreatePage.vue');
+const ActivityEntry = () => import('../features/activity/ActivityEntry.vue');
+const ActivityCreatePage = () => import('../features/activity/ActivityCreatePage.vue');
 
 // One route declaration drives the initial skeleton for every interactive page.
 // Readable admitted errors/completions are classified by the shared context owner.
@@ -42,6 +44,8 @@ const packingPage = javascriptPage({variant: 'list-detail', rows: 4, columns: 6}
 const driversPage = javascriptPage({variant: 'list-detail', rows: 4, columns: 5});
 const surveyPage = javascriptPage({variant: 'survey', rows: 2, columns: 4});
 const surveyCreatePage = javascriptPage({variant: 'survey-create'});
+const activityPage = javascriptPage({variant: 'activity', rows: 2, columns: 7});
+const activityCreatePage = javascriptPage({variant: 'activity-create', footer: 'full'});
 const listCreatePage = javascriptPage({variant: 'list-create'});
 const packingCreatePage = javascriptPage({variant: 'packing-create'});
 const eventPage = javascriptPage({variant: 'event'});
@@ -92,6 +96,10 @@ export const pilotRoutes: readonly RouteRecordRaw[] = [
     {path: '/frontend-pilot/survey/:surveyId/duplicate', component: SurveyCreatePage, meta: surveyCreatePage},
     {path: '/frontend-pilot/survey/:surveyId/guest', component: SurveyEntry, meta: guestPage},
     {path: '/frontend-pilot/survey/:surveyId', component: SurveyEntry, meta: {...surveyPage, dynamicContent: true}},
+    {path: '/frontend-pilot/activity/create', component: ActivityCreatePage, meta: activityCreatePage},
+    {path: '/frontend-pilot/activity/:planId/duplicate', component: ActivityCreatePage, meta: activityCreatePage},
+    {path: '/frontend-pilot/activity/:planId/guest', component: ActivityEntry, meta: guestPage},
+    {path: '/frontend-pilot/activity/:planId', component: ActivityEntry, meta: {...activityPage, dynamicContent: true}},
     {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {...loginPage, identityMode: 'login'}},
     {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...registerPage, identityMode: 'register'}},
     {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {...identityMessagePage, identityMode: 'oidc'}},

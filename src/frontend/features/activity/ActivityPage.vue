@@ -1,0 +1,298 @@
+<script setup lang="ts">
+import {computed, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
+import {useRoute} from 'vue-router';
+import type {components} from '../../../types/api/v1';
+import type {ActivityAssignmentReview} from '../../../types/FrontendActivityTypes';
+import {usePilot} from '../../app/context';
+import {activityKeys, overviewKeys} from '../../app/queryKeys';
+import {evictQueryFamilies, retireQueryFamily} from '../../app/queryCache';
+import {ApiFailure} from '../../app/transport';
+import {useListCommands, useListDetail} from '../../composables/listDetail';
+import {usePageTitle} from '../../composables/pageTitle';
+import {useActivityApi} from './api';
+import {activitySlotLabel} from './presentation';
+import ActivitySchedule from './ActivitySchedule.vue';
+import ActivityParticipants from './ActivityParticipants.vue';
+import ActivityTextFields from './ActivityTextFields.vue';
+import ActivitySlotEditor from './ActivitySlotEditor.vue';
+import ActivityRoleAssignments from './ActivityRoleAssignments.vue';
+import ActivityWarnings from './ActivityWarnings.vue';
+import ActivitySettings from './ActivitySettings.vue';
+import EntityHeader from '../../components/EntityHeader.vue';
+import EntityDescription from '../../components/EntityDescription.vue';
+import EntityDetailReadState from '../../components/EntityDetailReadState.vue';
+import EntityListToolbar from '../../components/EntityListToolbar.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
+import StatusNotice from '../../components/StatusNotice.vue';
+
+// A single detail/read/command owner covers P5. Specialized editors retain their
+// own drafts beneath its departure protection; ordinary refresh never resets them.
+const route = useRoute();
+const context = usePilot();
+const {messages} = context;
+const api = useActivityApi(context);
+const planId = computed(() => String(route.params.planId).toLowerCase());
+const key = computed(() => activityKeys.detail(context.session.value?.context, planId.value));
+const tab = ref('schedule');
+const settingsOpen = ref(false);
+const editor = ref<{id?: string; day: string} | null>(null);
+const roleSlotId = ref<string | null>(null);
+const review = shallowRef<ActivityAssignmentReview | null>(null);
+const reviewOpen = ref(false);
+const previewPending = ref(false);
+let previewAbort: AbortController | undefined;
+let active = true;
+onBeforeUnmount(() => { active = false; previewAbort?.abort(); });
+const {list, data, denied, refresh: readFresh, isActive} = useListDetail({resourceId: planId, queryKey: key,
+    resourceFamily: () => activityKeys.resource(context.session.value?.context, planId.value), read: api.activity.bind(api), denied: revokeAccess});
+const {command, blocked: commandBlocked, readAction, retryAt, refresh, denyInlineEdit} = useListCommands({active: isActive, denied: () => denied.value,
+    reading: () => list.isFetching.value, error: () => list.error.value, refresh: readFresh},
+{dirty: () => false, busy: () => previewPending.value, unknownMessage: 'draft.leaveUnknown'});
+const blocked = computed(() => commandBlocked.value || previewPending.value);
+const editingSlot = computed(() => data.value?.slots.find(slot => slot.id === editor.value?.id));
+const roleSlot = computed(() => data.value?.slots.find(slot => slot.id === roleSlotId.value));
+const warningBlocked = computed(() => review.value?.preview.warnings.some(warning => warning.confirmable === false) ?? false);
+const readHeader = api.header.bind(api);
+usePageTitle(() => messages.value.t('activity.documentTitle', {title: data.value?.title ?? messages.value.t('app.activity')}), true);
+
+/** Denial retires private server snapshots and pending warning authority together.
+ * Existing command leases still settle under their captured actor without replay. */
+function revokeAccess(failure: Error): void {
+    settingsOpen.value = false;
+    editor.value = null;
+    roleSlotId.value = null;
+    review.value = null;
+    reviewOpen.value = false;
+    previewAbort?.abort();
+    const actor = context.capture().context;
+    void retireQueryFamily(context.queryClient, activityKeys.resource(actor, planId.value), failure);
+    void evictQueryFamilies(context.queryClient, [activityKeys.events(actor), overviewKeys.all(actor)]);
+}
+watch([planId, context.epoch], () => {
+    command.acknowledge();
+    settingsOpen.value = false;
+    editor.value = null;
+    roleSlotId.value = null;
+    review.value = null;
+    reviewOpen.value = false;
+    tab.value = 'schedule';
+    previewAbort?.abort();
+});
+
+/** Losing settings authority does not imply loss of detail/participation access. */
+async function settingsAccessLost(): Promise<void> {
+    settingsOpen.value = false;
+    const actor = context.session.value?.context;
+    const resource = planId.value;
+    const family = {queryKey: activityKeys.editors(actor, resource)};
+    await context.queryClient.cancelQueries(family);
+    context.queryClient.removeQueries(family);
+    if (resource === planId.value && actor === context.session.value?.context && context.mayRead()) await refresh();
+}
+function openEditor(day: string, id?: string): void { if (!blocked.value) editor.value = {day, id}; }
+/** The shared inline owner supplies its captured value/token; persist just that
+ * field so sibling draft values never become incidental updates. */
+async function patch(slot: components['schemas']['ActivitySlotView'], field: 'title' | 'description' | 'maxAssignees', value: string, token: string): Promise<boolean> {
+    return !!await command.run(scope => api.updateSlot(planId.value, slot.id, {[field]: value}, token, scope), true, false,
+        {presentation: 'inline', success: 'common.updated'});
+}
+/** Submit one captured day-order gesture without optimistic DOM persistence. */
+async function reorder(order: components['schemas']['ActivityOrderInput']['order'], token: string): Promise<unknown> {
+    return command.run(scope => api.reorder(planId.value, order, token, scope), true, false,
+        {presentation: 'inline', success: 'common.orderSaved'});
+}
+/** Confirm the native destructive slot action before its independent server check. */
+async function removeSlot(slot: components['schemas']['ActivitySlotView']): Promise<void> {
+    // Existing controller deletion retains its own assignment cleanup semantics.
+    if (!blocked.value && slot.capabilities.remove && window.confirm(messages.value.t('activity.deleteSlot')))
+        await command.run(scope => api.deleteSlot(planId.value, slot.id, scope), true, false, {presentation: 'inline', success: 'common.removed'});
+}
+/** Organizer removal remains immediate and operates on an admitted assignment ID. */
+async function removeAssignment(id: string): Promise<void> {
+    if (!blocked.value) await command.run(scope => api.removeAssignment(planId.value, id, scope), true, false,
+        {presentation: 'inline', success: 'common.removed'});
+}
+
+/** Read fresh warnings before Join or an available named role. Native role review
+ * concerns the role's unoccupied position even when the actor already joined. */
+async function assign(slot: components['schemas']['ActivitySlotView'], assigned: boolean, role?: string): Promise<void> {
+    if (blocked.value) return;
+    if (!assigned) {
+        await command.run(scope => api.assign(planId.value, slot.id, {assigned, ...(role ? {role} : {})}, scope), true, false,
+            {presentation: 'inline', success: 'common.updated'});
+        return;
+    }
+    const scope = context.capture();
+    const resource = planId.value;
+    previewAbort?.abort();
+    const controller = new AbortController();
+    previewAbort = controller;
+    previewPending.value = true;
+    try {
+        const preview = await api.warnings(resource, slot.id, scope, controller.signal);
+        // A canceled/retired read cannot attach warnings or a token to another
+        // actor/plan. Cancellation preserves the previous review without a write.
+        if (!active || controller.signal.aborted || !context.isCurrent(scope) || resource !== planId.value || denied.value) return;
+        review.value = {slotId: slot.id, title: activitySlotLabel(slot, messages.value.t), assigned, role, preview};
+        if (preview.warnings.length) reviewOpen.value = true;
+        else {
+            previewPending.value = false;
+            await confirmAssignment();
+        }
+    } catch (failure) {
+        if (active && context.isCurrent(scope) && !controller.signal.aborted)
+            command.setError(failure instanceof ApiFailure ? failure : 'state.loadFailed');
+    } finally {
+        if (previewAbort === controller) previewPending.value = false;
+    }
+}
+
+/** A confirmation consumes exactly the reviewed intent/digest once. Rejection
+ * closes it; the next deliberate Join performs a new read and fresh review. */
+async function confirmAssignment(): Promise<void> {
+    const intent = review.value;
+    if (!intent || warningBlocked.value || blocked.value) return;
+    reviewOpen.value = false;
+    const input = {assigned: intent.assigned, ...(intent.role ? {role: intent.role} : {}),
+        ...(intent.preview.overlapConfirmation ? {overlapConfirmation: intent.preview.overlapConfirmation} : {})};
+    await command.run(scope => api.assign(planId.value, intent.slotId, input, scope), true, false,
+        {presentation: 'inline', success: 'common.updated'});
+}
+</script>
+
+<template>
+    <section class="card bg-dark text-white mb-3" :aria-busy="!!data && list.isFetching.value">
+        <EntityHeader
+            :resource-id="planId"
+            :title="data?.title || messages.t('app.activity')"
+            icon="bi-calendar-check"
+            :image-version="data?.headerVersion"
+            :image-query-key="key"
+            :read-image="readHeader"
+            :image-enabled="!!data && !denied"
+            :parent-url="data?.currentEventUrl"
+            :settings-available="!!data?.capabilities.manageSettings"
+            :settings-disabled="blocked"
+            @settings="settingsOpen = true"
+        />
+        <div class="card-body">
+            <CommandFeedback :feedback="command.feedback" />
+            <EntityDetailReadState
+                :denied="denied"
+                :error="list.error.value"
+                :has-data="!!data"
+                :pending="list.isPending.value"
+                :last-updated-at="list.data.value ? list.dataUpdatedAt.value : undefined"
+                :retry-at="retryAt"
+                :skeleton="route.meta.loadingSkeleton"
+            />
+            <template v-if="data">
+                <StatusNotice v-if="data.archived || data.inheritedArchived" kind="info">{{ messages.t('packing.archived') }}</StatusNotice>
+                <EntityDescription :description="data.description" separator />
+                <ActivityTextFields
+                    :key="planId"
+                    :plan-id="planId"
+                    :fields="data.textFields"
+                    :manage="data.capabilities.manageRequirements"
+                    :disabled="blocked"
+                    :refresh="readFresh"
+                />
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item">
+                        <button
+                            type="button"
+                            class="nav-link"
+                            :class="{active: tab === 'schedule'}"
+                            role="tab"
+                            :aria-selected="tab === 'schedule'"
+                            @click="tab = 'schedule'">
+                            <i class="bi bi-calendar3 me-1" aria-hidden="true"></i>{{ messages.t('activity.schedule') }}</button>
+                    </li>
+                    <li v-if="data.participants.length" class="nav-item">
+                        <button
+                            type="button"
+                            class="nav-link"
+                            :class="{active: tab === 'participants'}"
+                            role="tab"
+                            :aria-selected="tab === 'participants'"
+                            @click="tab = 'participants'">
+                            <i class="bi bi-people-fill me-1" aria-hidden="true"></i>{{ messages.t('activity.participants') }}</button>
+                    </li>
+                    <!-- The advanced workspace is P6. Keep its existing explicit
+                    destination available without starting recommendation reads. -->
+                    <li
+                        v-if="data.capabilities.rulesWorkspace"
+                        class="nav-item">
+                        <a class="nav-link" :href="'/activity/' + planId + '#tab-rules'">
+                            <i class="bi bi-sliders me-1" aria-hidden="true"></i>{{ messages.t('activity.rules') }}</a>
+                    </li>
+                </ul>
+                <div v-show="tab === 'schedule'" id="tab-schedule" role="tabpanel">
+                    <ActivitySchedule
+                        :key="planId"
+                        :view="data"
+                        :disabled="blocked"
+                        :patch="patch"
+                        :reorder="reorder"
+                        @edit="openEditor($event.day, $event.id)"
+                        @add="openEditor($event)"
+                        @remove="removeSlot"
+                        @assign="assign"
+                        @denied="denyInlineEdit"
+                        @remove-assignment="removeAssignment"
+                        @roles="roleSlotId = $event.id"
+                    />
+                </div>
+                <ActivityParticipants
+                    v-if="data.participants.length"
+                    v-show="tab === 'participants'"
+                    :key="planId + '-participants'"
+                    :participants="data.participants"
+                    :assignment-mode="data.assignmentMode"
+                />
+                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="readAction" @refresh="refresh" />
+            </template>
+        </div>
+    </section>
+    <ActivitySettings
+        v-if="settingsOpen && !denied"
+        :key="planId"
+        :plan-id="planId"
+        :plan-title="data?.title"
+        :metadata-available="!!(data?.capabilities.editTitle || data?.capabilities.editDescription || data?.capabilities.editDates)"
+        @close="settingsOpen = false"
+        @saved="refresh"
+        @access-lost="settingsAccessLost"
+    />
+    <ActivitySlotEditor
+        v-if="editor && data"
+        :key="planId + ':' + (editor.id ?? editor.day)"
+        :plan-id="planId"
+        :day="editor.day"
+        :slot="editingSlot"
+        :all-roles="data.allRoles"
+        :role-creation-admission="data.capabilities.roleCreationAdmission"
+        :disabled="blocked || (!editor.id && !data.capabilities.addSlot)"
+        :refresh="readFresh"
+        @close="editor = null"
+    />
+    <ActivityRoleAssignments
+        v-if="roleSlot"
+        :key="roleSlot.id"
+        :plan-id="planId"
+        :slot="roleSlot"
+        :all-roles="data?.allRoles ?? []"
+        :refresh="readFresh"
+        @close="roleSlotId = null"
+    />
+    <ActivityWarnings
+        :open="reviewOpen"
+        :title="review?.title ?? ''"
+        :warnings="review?.preview.warnings ?? []"
+        :slots="data?.slots ?? []"
+        :pending="command.pending.value"
+        :blocked="warningBlocked"
+        @close="reviewOpen = false"
+        @confirm="confirmAssignment"
+    />
+</template>

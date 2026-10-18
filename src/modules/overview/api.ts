@@ -43,12 +43,14 @@ export async function readOverview(query: operations['getOverview']['parameters'
  */
 export function projectOverviewCard(card: Entity, session: SessionLike, ownerCollection = false,
     sharedLifecycle = false): components['schemas']['OverviewCard'] {
-    // Native child destinations remain ordinary links until their own migrations.
-    const migrated = card.type === 'packing' || card.type === 'event' || card.type === 'drivers' || card.type === 'survey';
+    // Activity joins the existing explicit opt-in roots. Output documents retain
+    // their feature-owned URLs independently of these card destinations.
+    const migrated = card.type === 'packing' || card.type === 'event' || card.type === 'drivers'
+        || card.type === 'survey' || card.type === 'activity';
     const ownerActions = (migrated || sharedLifecycle) && ownerCollection && isOwner(session, card.ownerId);
     const resource = encodeURIComponent(card.id);
     const headerFamily = card.type === 'event' ? 'events' : card.type === 'drivers' ? 'drivers-lists'
-        : card.type === 'survey' ? 'surveys' : 'packing-lists';
+        : card.type === 'survey' ? 'surveys' : card.type === 'activity' ? 'activity-plans' : 'packing-lists';
     const eventContext = card.eventContext ? {...card.eventContext,
         url: card.eventContext.url.replace(/^\/event\//u, '/frontend-pilot/event/')} : null;
     return {id: card.id, type: card.type, title: card.title, description: card.description ?? null,

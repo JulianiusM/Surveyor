@@ -93,6 +93,10 @@ export interface FrontendPilotBootstrap {
     /** Standalone Survey forms copy recurring choices without ballots or image bytes. */
     surveyCreateContext?: components['schemas']['SurveyCreateContext'];
     surveyDuplicate?: components['schemas']['SurveyDuplicate'];
+    /** Activity duplication copies dated slots without assignments or review history. */
+    activityCreateContext?: components['schemas']['ActivityCreateContext'];
+    activitySelectedEvent?: components['schemas']['EventPickerOption'] | null;
+    activityDuplicate?: components['schemas']['ActivityDuplicate'];
     /** Event document admission never carries the complete native invoice aggregate. */
     eventEntry?: components['schemas']['EventResourceEntry'];
     eventCreateContext?: components['schemas']['EventCreateContext'];

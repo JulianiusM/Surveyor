@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: actual shared field/description/multipart and list read/feedback/toolbar/counter/Quick Add owners source-reconciled with contribution examples, lexical input, native isolation and Survey exceptions; execution separate; no publication
+verification-scope: P5 Activity adoption and bounded optional shared presentation inputs source-reconciled with existing contribution owners, native isolation and retained P0-P4 contracts; execution separate; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -99,11 +99,11 @@ primitive union and passes the raw scalar to the existing signed nullable SQL co
 remain authoritative; creation/new-item validation stays separate. Do not generalize either extension into coercion
 or a copied database-limit policy. Native metadata diagnostics remain owned by their native adapter.
 
-The current HTTP adapter decodes single scalar path/query/header values, JSON and Event/Packing/Drivers/Survey multipart, and
+The current HTTP adapter decodes single scalar path/query/header values, JSON and Event/Packing/Drivers/Survey/Activity multipart, and
 delivers JSON or scoped binary image responses. Creation decodes the `data` JSON part once against its authored nested schema
 and handles `image` separately. Repeated query parameters, absent/empty values and malformed input stay distinct.
 The browser's `createMultipartForm` in the existing transport owner supplies the matching creation/header envelope
-for Packing, Drivers, Event and Survey. Features validate their own generated input and select the operation; the
+for Packing, Drivers, Event, Survey and Activity. Features validate their own generated input and select the operation; the
 serializer only encodes an optional `data` part and appends the original optional image bytes. Header operations
 pass no metadata. It neither chooses an endpoint nor changes headers, comparison evidence or file lifetime.
 The maintainer's [2026-10-15 correction](decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15)
@@ -137,7 +137,7 @@ icon, constraints, rows and required-marker policy explicitly. An omitted native
 from the default name derived from its ID. `FileField` composes the same label/control owner and the existing file
 release composable; the feature retains its selected File and command/draft decisions. Rejected or unknown commands
 keep that exact input mounted. Do not copy a chooser merely because its caller creates rather than edits an entity.
-Read-only Packing/Drivers/Survey/Event descriptions use `EntityDescription` for escaped lines. Lists retain their
+Read-only Packing/Drivers/Survey/Event/Activity descriptions use `EntityDescription` for escaped lines. Lists retain their
 paragraph hook, spacing and optional divider; Event supplies an unnamed ordinary paragraph inside its own labeled
 column. The shared owner does not add wrappers or copy a feature's draft. Survey ballot and result labels share the
 answer appearance mapping while retaining their different wording.
@@ -145,6 +145,19 @@ answer appearance mapping while retaining their different wording.
 This preserves lexical Event capacity rather than silently adopting the directive's numeric conversion. Explicit
 readonly/class inputs and the label slot preserve existing control presentation and Event's inline deadline hint;
 field constraints and normalization remain with the feature.
+
+Activity creation supplies its title/date row and initial dated slots to `EntityListCreation`; that shared owner
+retains admission, root drafts, files, Event selection, permissions and confirmed navigation. Optional submit wording,
+layout and resource parameter inputs preserve existing Packing/Drivers defaults. `InlineCell` supplies Activity's
+non-table and multiline editors through explicit presentation inputs; its existing draft/conflict/save owner remains
+shared with list cells. Activity owns warning-review intent and cancellation separately from the shared command owner;
+the server's current preview and exact overlap acknowledgement remain authoritative. Participant progress is read-only
+in the basic Activity phase, and printable schedules retain their authorized document destination.
+Settings receive optional linked-Event/archive hints and export links through the existing settings/lifecycle owners;
+defaults preserve other consumers. `FormField` accepts an explicit label target separately from its input ID/name
+when a native comparator requires it. Neither optional presentation inputs nor native client guards grant method
+authority. Detail calendar grouping comes from the shared controller's projection of the native server loop, while
+creation retains its separate native browser algorithm; do not normalize their inherited timezone differences.
 
 1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;

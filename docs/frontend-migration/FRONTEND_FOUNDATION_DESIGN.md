@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: complete pilot-readiness/shared-frontend correction authorization recorded after renewed P4 review; original Survey exceptions, P0-P4 decisions, native isolation and backend exclusions retained; execution belongs to paired review
+verification-scope: explicit P5 implementation trigger recorded alongside original P0-P4 decisions and shared correction history; native isolation and backend exclusions retained; execution belongs to paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -783,6 +783,22 @@ The native-isolation decision and its approved exceptions remain unchanged. Both
 shared backend/controller/DBAL/domain/catalog owners; temporary native/Vue presentation copies remain permitted.
 No new behavior, technology substitution, excluded backend remedy, later feature phase, cutover, publication or
 deployment is authorized by this correction. The paired review owns actual implementation and executed evidence.
+
+### Explicit P5 implementation trigger (2026-10-18)
+
+The maintainer directly requests full P5 implementation with approval, visual/behavioral parity and
+modularization/DRY requirements. This starts both basic Activity packages under the existing
+[P5 contract](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#phase-contracts): root creation/duplication/settings,
+schedule/filters/print, shared text, slot and named-role management, participation and explicit warning review.
+Existing participant progress is read-only in this phase; requirement editing and recommendation workflows retain
+P6's separate trigger. P6–P11, default routing, cutover, native removal, deployment and guide publication are not
+authorized by this request.
+
+The frontend reuses the existing Activity controller, assignment/warning engines and DBAL operations. The recorded
+backend role-update defect IMP-016 and native presentation/privacy defects IMP-017/IMP-018 retain their existing
+dispositions; this instruction supplies no separate remedy approval. New API projections enforce their own method
+permissions and disclosure boundaries. Actual implementation, independent review and executed evidence belong to
+the paired review, rather than this authorization record.
 
 ## Cutover retirement inventory
 
