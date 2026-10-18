@@ -23,6 +23,7 @@ import {readPackingCreateEntry, readPackingDuplicate, readPackingResourceEntry} 
 import {resolvePilotHelpQuery} from '../modules/lib/helpNavigation';
 import {createEventPilotRouter} from './frontendPilotEvent';
 import {createDriversPilotRouter} from './frontendPilotDrivers';
+import {createSurveysPilotRouter} from './frontendPilotSurveys';
 
 const router = Router();
 
@@ -188,6 +189,7 @@ router.get('/message', asyncHandler(async function renderMessagePilot(req, res) 
 // Their controller projections and initial GET compatibility stay feature-owned.
 router.use('/event', createEventPilotRouter({bootstrap, applyPageEntry}));
 router.use('/drivers', createDriversPilotRouter({bootstrap, applyPageEntry}));
+router.use('/survey', createSurveysPilotRouter({bootstrap, applyPageEntry}));
 
 /** Preserve native account/guest admission before sending administration's progressive shell. */
 router.get(['/users/profile', '/users/profile/manage', '/users/profile/create'],

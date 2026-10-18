@@ -2,6 +2,7 @@ import {Router, type Request, type Response} from 'express';
 import * as userController from '../../../controller/userController';
 import {readPackingGuestEntry} from '../../../controller/packingController';
 import {readDriversGuestEntry} from '../../../controller/driversController';
+import {readSurveyGuestEntry} from '../../../controller/surveyController';
 import {readEventGuestEntry} from '../../../controller/eventController';
 import {ApiProblem} from '../../../modules/api/problem';
 import {committedSessionView, prepareAccountRegistrationReplies, prepareGuestIdentityReplies, prepareIdentityReply, requireApiContext} from '../../../modules/api/session';
@@ -292,6 +293,19 @@ router.post('/drivers-lists/:listId/guest', asyncHandler(async function register
 
 }));
 
+router.get('/surveys/:surveyId/guest', asyncHandler(async function getSurveyGuestEntry(req, res) {
+    await admit(req, res, 'getSurveyGuestEntry');
+    sendValidatedJson(req, res, 'getSurveyGuestEntry', 200, await readSurveyGuestEntry(String(req.params.surveyId)));
+}));
+
+/** Survey entry adopts the existing guest identity completion without adding
+ * event membership or a second session/registration owner. */
+router.post('/surveys/:surveyId/guest', asyncHandler(async function registerSurveyGuest(req, res) {
+    await admit(req, res, 'registerSurveyGuest');
+    const survey = await readSurveyGuestEntry(String(req.params.surveyId));
+    await registerGuestForEntry(req, res, `/frontend-pilot/survey/${survey.id}`, 'registerSurveyGuest');
+}));
+
 router.get('/events/:eventId/guest', asyncHandler(async function getEventGuestEntry(req, res) {
     await admit(req, res, 'getEventGuestEntry');
     sendValidatedJson(req, res, 'getEventGuestEntry', 200, await readEventGuestEntry(String(req.params.eventId)));
@@ -312,7 +326,7 @@ router.post('/events/:eventId/guest', asyncHandler(async function registerEventG
  * this owner prepares delivery outcomes and adopts only the committed Session.
  */
 async function registerGuestForEntry(req: Request, res: Response, next: string,
-    operation: 'registerPackingGuest' | 'registerEventGuest' | 'registerDriversGuest'): Promise<void> {
+    operation: 'registerPackingGuest' | 'registerEventGuest' | 'registerDriversGuest' | 'registerSurveyGuest'): Promise<void> {
     const body = req.body as components['schemas']['GuestRegistrationInput'];
     /** Prepare both SMTP outcomes before identity/session persistence commits. */
     function prepareGuestReply(staged: Request['session'], personalLink: string): Record<RegistrationEmailDelivery, PreparedApiJsonResponse> {

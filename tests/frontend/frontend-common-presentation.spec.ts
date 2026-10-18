@@ -107,7 +107,7 @@ describe('common frontend presentation', () => {
             ...(kind === 'account' ? {userId: 1} : {guestId: 'guest'})}}).querySelector('main > .card')!;
         const {wrapper, request} = await mounted(LandingPage, {}, {session: current, landing: {quickCreate: 'survey'}});
         expect(texts(wrapper.element, 'h1, h2, p, li')).toEqual(texts(native, 'h1, h2, p, li'));
-        expect(wrapper.get('a.btn-outline-light').attributes('href')).toBe('/survey/create');
+        expect(wrapper.get('a.btn-outline-light').attributes('href')).toBe('/frontend-pilot/survey/create');
         expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/frontend-pilot');
         expect(wrapper.find('fixture').exists()).toBe(false);
         expect(request).not.toHaveBeenCalled();

@@ -82,6 +82,23 @@ export const driversKeys = {
         [...driversKeys.eventFilters(context, locale, filters), parameters] as const,
 };
 
+/** Survey ballots and named results belong to one admitted profile and standalone
+ * survey. Editor authority remains a separate family from participation reads. */
+export const surveyKeys = {
+    all: (context: string | null | undefined) => ['v1', context, 'survey'] as const,
+    resource: (context: string | null | undefined, id: string) => [...surveyKeys.all(context), id] as const,
+    detailFamily: (context: string | null | undefined, id: string) => [...surveyKeys.resource(context, id), 'detail'] as const,
+    detail: (context: string | null | undefined, id: string) => surveyKeys.detailFamily(context, id),
+    entry: (context: string | null | undefined, id: string, intent: 'guest' | 'detail') =>
+        [...surveyKeys.resource(context, id), 'entry', intent] as const,
+    editors: (context: string | null | undefined, id: string) => [...surveyKeys.resource(context, id), 'editors'] as const,
+    metadata: (context: string | null | undefined, id: string) => [...surveyKeys.editors(context, id), 'metadata'] as const,
+    settings: (context: string | null | undefined, id: string) => [...surveyKeys.editors(context, id), 'settings'] as const,
+    creation: (context: string | null | undefined) => [...surveyKeys.all(context), 'create-context'] as const,
+    duplicate: (context: string | null | undefined, id: string | null) => [...surveyKeys.all(context), id, 'duplicate'] as const,
+    guest: (context: string | null | undefined, id: string) => [...surveyKeys.resource(context, id), 'guest'] as const,
+};
+
 /** Overview owns the mixed-feature projection, rather than placing five entity types in packing. */
 export const overviewKeys = {
     all: (context: string | null | undefined) => ['v1', context, 'overview'] as const,

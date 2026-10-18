@@ -9,6 +9,7 @@ import {overviewQueryParameters, useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
 import {useEventApi} from '../event/api';
 import {useDriversApi} from '../drivers/api';
+import {useSurveysApi} from '../surveys/api';
 import {createEntityLifecycle, useEntityRemoval} from '../../composables/entityLifecycle';
 import {useActionState, usePilot, refreshInterval} from '../../app/context';
 import {useCommand} from '../../composables/command';
@@ -38,6 +39,7 @@ const api = useOverviewApi(context);
 const packingApi = usePackingApi(context);
 const eventApi = useEventApi(context);
 const driversApi = useDriversApi(context);
+const surveyApi = useSurveysApi(context);
 // The mixed projection already owns feature command dispatch. Keep its bounded
 // migration decision here too; card components receive operations, never import
 // feature APIs or grow a registry as subsequent route families migrate.
@@ -47,6 +49,7 @@ const nativeInteraction: PilotOverviewCardInteraction = {migrated: false};
 function cardInteraction(card: components['schemas']['OverviewCard']): PilotOverviewCardInteraction {
     if (card.type === 'event') return {migrated: true, readHeader: eventApi.header.bind(eventApi), duplicateUrl: card.url + '/duplicate'};
     if (card.type === 'drivers') return {migrated: true, readHeader: driversApi.header.bind(driversApi), duplicateUrl: card.url + '/duplicate'};
+    if (card.type === 'survey') return {migrated: true, readHeader: surveyApi.header.bind(surveyApi), duplicateUrl: card.url + '/duplicate'};
     if (card.type !== 'packing') return nativeInteraction;
     return {...packingInteraction, duplicateUrl: card.url + '/duplicate'};
 }
@@ -234,6 +237,7 @@ const command = useCommand(refresh);
 const packingLifecycle = createEntityLifecycle(packingApi, command, messages);
 const eventLifecycle = createEntityLifecycle(eventApi, command, messages);
 const driversLifecycle = createEntityLifecycle(driversApi, command, messages);
+const surveyLifecycle = createEntityLifecycle(surveyApi, command, messages);
 const removal = useEntityRemoval(command, destination);
 const blocked = computed(() => command.action.disabled.value
     || !!destination.target.value);
@@ -585,7 +589,8 @@ async function setVisibility(
  * regions and cannot silently turn restore/archive into personal hiding. */
 async function archive(card: components['schemas']['OverviewCard'], restore: boolean): Promise<void> {
     if (actionsBlocked.value) return;
-    const lifecycle = card.type === 'event' ? eventLifecycle : card.type === 'drivers' ? driversLifecycle : packingLifecycle;
+    const lifecycle = card.type === 'event' ? eventLifecycle : card.type === 'drivers' ? driversLifecycle
+        : card.type === 'survey' ? surveyLifecycle : packingLifecycle;
     await lifecycle.archive(card.id, restore, card.inheritedArchived, undefined,
         card.type === 'event' ? restore ? 'event.confirmRestore' : 'event.confirmArchive' : undefined);
 }
@@ -595,12 +600,14 @@ async function archive(card: components['schemas']['OverviewCard'], restore: boo
  * deleted card cannot become another eligible DELETE just because delivery failed. */
 async function remove(card: components['schemas']['OverviewCard']): Promise<void> {
     if (actionsBlocked.value) return;
-    const success = card.type === 'event' ? 'event.deleted' : card.type === 'drivers' ? 'drivers.deleted' : 'packing.deleted';
+    const success = card.type === 'event' ? 'event.deleted' : card.type === 'drivers' ? 'drivers.deleted'
+        : card.type === 'survey' ? 'survey.deleted' : 'packing.deleted';
     await removal.remove({operation: deleteCard, confirmation: 'overview.confirmDelete', success});
 
     async function deleteCard(commandScope: PilotRequestScope): Promise<void> {
         if (card.type === 'event') await eventApi.deleteEvent(card.id, commandScope);
         else if (card.type === 'drivers') await driversApi.deleteDrivers(card.id, commandScope);
+        else if (card.type === 'survey') await surveyApi.deleteSurvey(card.id, commandScope);
         else await packingApi.deletePacking(card.id, commandScope);
     }
 }

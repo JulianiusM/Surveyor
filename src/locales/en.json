@@ -558,6 +558,57 @@
         "placeCount_one": "{{count}} place",
         "placeCount_other": "{{count}} places"
       },
+      "survey": {
+        "create": "Create Survey",
+        "title": "Survey Title",
+        "description": "Description",
+        "headerOptional": "Header image (optional)",
+        "selectCombinations": "Select date combinations",
+        "weekdayLabel": "Weekday",
+        "weekOfMonth": "Week of month",
+        "dayInMonth": "Day in month",
+        "last": "Last",
+        "nthDayInMonth": "{{nth}}. day in month",
+        "lastDayInMonth": "Last (4./5.) day in month",
+        "addCombination": "Add combination",
+        "addNewCombination": "Add new combination",
+        "remove": "Remove",
+        "add": "Add",
+        "submit": "Submit",
+        "yourResponse": "Your response",
+        "you": "You",
+        "allAnswers": "All answers",
+        "user": "User",
+        "noAnswers": "No answers yet…",
+        "yes": "Yes",
+        "maybe": "Maybe",
+        "no": "No",
+        "answer": {
+          "yes": "yes",
+          "maybe": "maybe",
+          "no": "no"
+        },
+        "weekday": {
+          "MON": "Monday",
+          "TUE": "Tuesday",
+          "WED": "Wednesday",
+          "THU": "Thursday",
+          "FRI": "Friday",
+          "SAT": "Saturday",
+          "SUN": "Sunday"
+        },
+        "nthCombination": "{{nth}}. {{weekday}} of the month",
+        "lastCombination": "Last (4./5.) {{weekday}} of the month",
+        "created": "survey created",
+        "deleted": "survey deleted",
+        "ballotSaved": "Answers updated",
+        "combinationAdded": "Combination successfully added",
+        "creationUnknown": "Creation could not be confirmed. Check your overview before creating it again.",
+        "leaveUnknown": "The new survey may already exist. Leave this form and check your overview before creating it again?",
+        "reviewUnknownCombination": "The combination may already have been added. Check the refreshed survey before adding it again.",
+        "confirmUnknownReviewed": "I checked the current survey. Continue editing this combination?",
+        "notFound": "survey not found"
+      },
       "drivers": {
         "notFound": "drivers not found",
         "eventRegistrationRequired": "You must be registered for the event to access this resource",
@@ -930,6 +981,9 @@
     "landing.welcome": {"parameters": {"name": "string"}},
     "common.errorStatus": {"parameters": {"code": "number"}},
     "profile.profileTitle": {"parameters": {"name": "string"}},
-    "profile.tokenIntro": {"parameters": {"name": "string"}}
+    "profile.tokenIntro": {"parameters": {"name": "string"}},
+    "survey.nthDayInMonth": {"parameters": {"nth": "string"}},
+    "survey.nthCombination": {"parameters": {"nth": "string", "weekday": "string"}},
+    "survey.lastCombination": {"parameters": {"weekday": "string"}}
   }
 }

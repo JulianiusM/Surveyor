@@ -11,7 +11,7 @@ import type {PilotApi} from '../frontend/app/api';
  * records or capabilities. Matching page and scoped reads consume this same shape. */
 export interface PilotLoadingSkeleton {
     variant?: 'lines' | 'form' | 'table' | 'cards' | 'article' | 'overview' | 'list-detail'
-        | 'list-create' | 'packing-create' | 'event' | 'event-admin' | 'event-create' | 'identity'
+        | 'list-create' | 'packing-create' | 'survey' | 'survey-create' | 'event' | 'event-admin' | 'event-create' | 'identity'
         | 'login' | 'profile' | 'roster' | 'workflow' | 'guest';
     rows?: number;
     columns?: number;

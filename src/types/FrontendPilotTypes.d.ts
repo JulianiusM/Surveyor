@@ -90,6 +90,9 @@ export interface FrontendPilotBootstrap {
     driversCreateContext?: components['schemas']['DriversCreateContext'];
     driversSelectedEvent?: components['schemas']['EventPickerOption'] | null;
     driversDuplicate?: components['schemas']['DriversDuplicate'];
+    /** Standalone Survey forms copy recurring choices without ballots or image bytes. */
+    surveyCreateContext?: components['schemas']['SurveyCreateContext'];
+    surveyDuplicate?: components['schemas']['SurveyDuplicate'];
     /** Event document admission never carries the complete native invoice aggregate. */
     eventEntry?: components['schemas']['EventResourceEntry'];
     eventCreateContext?: components['schemas']['EventCreateContext'];

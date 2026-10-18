@@ -185,9 +185,9 @@ async function retryCompletion(): Promise<void> {
                                 <h6 class="dropdown-header">{{ messages.t('app.planDecide') }}</h6>
                             </li>
                             <li>
-                                <a class="dropdown-item" href="/survey/create"
+                                <RouterLink class="dropdown-item" to="/frontend-pilot/survey/create"
                                     ><i class="bi bi-bar-chart-steps me-2" aria-hidden="true"></i
-                                    >{{ messages.t('app.survey') }}</a
+                                    >{{ messages.t('app.survey') }}</RouterLink
                                 >
                             </li>
                             <li>

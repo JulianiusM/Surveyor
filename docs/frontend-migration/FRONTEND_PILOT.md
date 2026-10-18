@@ -6,12 +6,12 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared feedback placement, route-declared module loading and P3 consumers source-reconciled; direct E1 exclusion and native/backend boundaries retained; scoped execution belongs to paired review; no P4-P11 or cutover authorization
+verification-scope: P4 standalone Survey routes and shared presentation adoption source-reconciled; P0-P3 contracts, native/backend boundaries and pending defect exceptions retained; scoped execution belongs to paired review; no P5-P11 or cutover authorization
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
 
-The opt-in Vue pilot migrates Packing, Help, Events, Drivers and their necessary identity, overview and shared foundation journeys.
+The opt-in Vue pilot migrates Packing, Help, Events, Drivers, Surveys and their necessary identity, overview and shared foundation journeys.
 Native application routes remain available as the visual/behavioral reference. The comparator is
 `2dfa2573c64178f54684cc4877b5a945f66e24c8`, subject only to explicit exceptions in the
 [foundation decision ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
@@ -30,7 +30,7 @@ deletion (P1C), plus opt-in landing and common message/error presentation (P1D).
 [parity-only clarification](FRONTEND_FOUNDATION_DESIGN.md#authorized-parity-only-migration-clarification-2026-10-14)
 excludes existing backend remedies rather than making them prerequisites. Their backlog records remain open.
 P2 adds Event creation/duplication, settings, registration, organizer tools and Things to do. The
-[full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the remaining phase contracts for surveys, activity plans,
+[full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the phase contracts for surveys, activity plans,
 invoice pools and eventual cutover. Implemented portions retain native behavior and maintainability
 requirements; the paired review records actual scoped checks, including the P2 review corrections.
 The [October 18 direct clarification](FRONTEND_FOUNDATION_DESIGN.md#direct-frontend-only-implementation-and-native-isolation-clarification-2026-10-18)
@@ -40,6 +40,9 @@ The maintainer's [S1 decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-implemen
 October 16 delivery through implemented P2; later phases wait for stable repeated reviews and an explicit future trigger.
 The maintainer's [October 18 P3 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p3-implementation-trigger-2026-10-18)
 starts Drivers under its existing parity contract. P4–P11 and cutover remain separately scoped.
+The subsequent [P4 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p4-implementation-trigger-2026-10-18)
+starts standalone Surveys. They reuse guest/entry/header/settings/metadata/lifecycle and creation-command owners,
+without event association or general permissions. P5–P11 and cutover remain separately scoped.
 
 The [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
 excludes native/Vue production coexistence coordination and rejects the ordinary Event document-POST exception.
@@ -75,7 +78,7 @@ The exact duplicate URL after login is an explicitly approved native exception.
 | Pilot route family | Contract |
 |---|---|
 | `/frontend-pilot` | Bounded mixed overview; native membership, search and personal visibility; other feature destinations remain native until migrated. |
-| `/frontend-pilot/home` | Explicit opt-in native-equivalent landing; captured quick-create suggestion, account/guest welcome and migrated Packing/Event/Drivers creation destinations. Other creation destinations remain native. The Overview root stays unchanged. |
+| `/frontend-pilot/home` | Explicit opt-in native-equivalent landing; captured quick-create suggestion, account/guest welcome and migrated Packing/Event/Drivers/Survey creation destinations. Other creation destinations remain native. The Overview root stays unchanged. |
 | `/frontend-pilot/message` | Admitted informational/command feedback; route query data cannot supply message authority. Common error presentation retains server-selected status and development-only diagnostics. |
 | `/frontend-pilot/users/profile`, `/frontend-pilot/users/profile/manage`, `/frontend-pilot/users/profile/create` | Current profile editing for accounts/guests; account-only owned roster/creation and existing profile switching. Creation preserves the active profile. |
 | `/frontend-pilot/users/profile/migrate/request`, `/frontend-pilot/users/profile/migrate/show` | Ordinary warm entry, explicit generated token issuance and body-only preview/transfer use SPA command/navigation owners. Private draft/result/token state stays mounted; a fixed nonsecret fragment supports local history without replay. The existing initial token GET compatibility remains distinct. Receiving active profile and former-owner cleanup stay unchanged; no stronger backend token/transaction guarantee is introduced. |
@@ -86,6 +89,8 @@ The exact duplicate URL after login is an explicitly approved native exception.
 | `/frontend-pilot/event/create`, `/frontend-pilot/event/<id>`, `/frontend-pilot/event/<id>/duplicate`, `/frontend-pilot/event/<id>/admin` | Native Event admission, creation/copy boundaries through generated multipart and shared creation/navigation, detail, own registration and permission-filtered organizer/settings tools. Event-rendered child deletion uses its shared command owner; PDF and unmigrated child pages retain native destinations. |
 | `/frontend-pilot/event/<id>/guest`, `/frontend-pilot/event/<id>/register` | Guest entry and the register alias preserve `regToken` and return to admitted pilot detail. Native `/event/<id>` and `/event/<id>/register` destinations remain available unchanged. |
 | `/frontend-pilot/drivers/create`, `/frontend-pilot/drivers/<id>/duplicate`, `/frontend-pilot/drivers/<id>` | Account-only creation, independent duplicate admission, metadata/defaults/image/event context, ride offers, passenger assignment/removal, edits, ordering and settings through shared controller owners and generated SPA commands. Creation and duplication contain no rides. |
+| `/frontend-pilot/survey/create`, `/frontend-pilot/survey/<id>/duplicate`, `/frontend-pilot/survey/<id>` | Standalone recurring choices, independent owner duplicate admission and account-only creation, personal ballot replacement, named results and collaborative combination creation. Owner settings expose metadata/image/archive/duplicate/delete only. Representation ETags do not add write preconditions; existing native description/prefill defects remain pending separate approval. |
+| `/frontend-pilot/survey/<id>/guest` | Shared guest presentation and existing identity completion; every admitted account/guest profile may vote and add combinations. Overview actions and images use generated Survey operations. |
 | Packing/Event/Drivers guest entry/recovery | Shared presentation with feature-specific native fields, notices, title, canonical detail/success destinations and invalid-token outcomes. Drivers uses `/frontend-pilot/drivers/<id>/guest`. |
 | Pilot login/register/recovery/reset | Existing account policy, return context and confirmed destinations; provider/token boundaries remain ordinary navigation. |
 | `/frontend-pilot/help` | Complete localized read-only Help SSR, search, links and SPA hydration. |

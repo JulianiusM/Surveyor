@@ -4,7 +4,7 @@ jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Surveyor API
   version: 1.0.0
-  description: Versioned frontend API for Help, Packing, Drivers, Events, overview and identity. Existing feature routes remain available.
+  description: Versioned frontend API for Help, Packing, Drivers, Surveys, Events, overview and identity. Existing feature routes remain available.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -13,6 +13,32 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /surveys/create-entry:
+    $ref: ./surveys.yaml#/paths/~1surveys~1create-entry
+  /surveys/{surveyId}/entry:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}~1entry
+  /surveys/{surveyId}/guest:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}~1guest
+  /surveys:
+    $ref: ./surveys.yaml#/paths/~1surveys
+  /surveys/{surveyId}:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}
+  /surveys/{surveyId}/duplicate:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}~1duplicate
+  /surveys/{surveyId}/settings:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}~1settings
+  /surveys/{surveyId}/metadata:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}~1metadata
+  /surveys/{surveyId}/ballot:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}~1ballot
+  /surveys/{surveyId}/combinations:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}~1combinations
+  /surveys/{surveyId}/header:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}~1header
+  /surveys/{surveyId}/archive:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}~1archive
+  /surveys/{surveyId}/restore:
+    $ref: ./surveys.yaml#/paths/~1surveys~1{surveyId}~1restore
   /drivers-lists/create-entry:
     $ref: ./drivers.yaml#/paths/~1drivers-lists~1create-entry
   /drivers-lists/{listId}/entry:
@@ -1319,6 +1345,36 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    SurveyCreateContext:
+      $ref: ./surveys.yaml#/schemas/SurveyCreateContext
+    SurveyCreateEntry:
+      $ref: ./surveys.yaml#/schemas/SurveyCreateEntry
+    SurveyResourceEntry:
+      $ref: ./surveys.yaml#/schemas/SurveyResourceEntry
+    SurveyCombinationInput:
+      $ref: ./surveys.yaml#/schemas/SurveyCombinationInput
+    SurveyCombination:
+      $ref: ./surveys.yaml#/schemas/SurveyCombination
+    SurveyBallotInput:
+      $ref: ./surveys.yaml#/schemas/SurveyBallotInput
+    SurveyResponseView:
+      $ref: ./surveys.yaml#/schemas/SurveyResponseView
+    SurveyView:
+      $ref: ./surveys.yaml#/schemas/SurveyView
+    SurveyCreateInput:
+      $ref: ./surveys.yaml#/schemas/SurveyCreateInput
+    SurveyCreateForm:
+      $ref: ./surveys.yaml#/schemas/SurveyCreateForm
+    SurveyCreated:
+      $ref: ./surveys.yaml#/schemas/SurveyCreated
+    SurveyDuplicate:
+      $ref: ./surveys.yaml#/schemas/SurveyDuplicate
+    SurveyMetadata:
+      $ref: ./surveys.yaml#/schemas/SurveyMetadata
+    SurveyMetadataPatch:
+      $ref: ./surveys.yaml#/schemas/SurveyMetadataPatch
+    SurveySettings:
+      $ref: ./surveys.yaml#/schemas/SurveySettings
     DriversEventOption:
       $ref: ./drivers.yaml#/schemas/DriversEventOption
     DriversEventOptions:

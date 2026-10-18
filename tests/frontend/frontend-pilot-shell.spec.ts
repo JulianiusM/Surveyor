@@ -928,7 +928,7 @@ describe('native shell and help presentation contract', () => {
     it('renders the current navigation destinations, responsive toggle, public footer and help structure', async () => {
         const {wrapper, context} = await renderHelp();
         try {
-            for (const path of ['/frontend-pilot', '/survey/create', '/activity/create', '/frontend-pilot/event/create', '/frontend-pilot/packing/create', '/frontend-pilot/drivers/create']) {
+            for (const path of ['/frontend-pilot', '/frontend-pilot/survey/create', '/activity/create', '/frontend-pilot/event/create', '/frontend-pilot/packing/create', '/frontend-pilot/drivers/create']) {
                 expect(wrapper.find(`header a[href="${path}"]`).exists()).toBe(true);
             }
             expect(wrapper.get('main#pilot-main').classes()).toContain('container-fluid');
@@ -950,7 +950,7 @@ describe('native shell and help presentation contract', () => {
             await createMenu.get('summary').trigger('keydown', {key: 'ArrowDown'});
             expect((createMenu.element as HTMLDetailsElement).open).toBe(true);
             expect(dropdown.element.style.bottom).toBe('100%');
-            expect(document.activeElement).toBe(createMenu.get('a[href="/survey/create"]').element);
+            expect(document.activeElement).toBe(createMenu.get('a[href="/frontend-pilot/survey/create"]').element);
             await createMenu.trigger('keydown', {key: 'Escape'});
             expect((createMenu.element as HTMLDetailsElement).open).toBe(false);
             expect(document.activeElement).toBe(createMenu.get('summary').element);

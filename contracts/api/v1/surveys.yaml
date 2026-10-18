@@ -1,0 +1,682 @@
+schemas:
+  SurveyCreateContext:
+    description: Standalone creation exposes no event, permission or administrator setup.
+    type: object
+    additionalProperties: false
+  SurveyCreateEntry:
+    type: object
+    additionalProperties: false
+    required: [entry, context]
+    properties:
+      entry:
+        $ref: ./common.yaml#/schemas/PageEntryOutcome
+      context:
+        anyOf:
+          - $ref: '#/schemas/SurveyCreateContext'
+          - type: 'null'
+  SurveyResourceEntry:
+    $ref: ./packing.yaml#/schemas/PackingResourceEntry
+  SurveyCombinationInput:
+    description: A recurring monthly weekday and occurrence, not a concrete date.
+    type: object
+    additionalProperties: false
+    required: [weekday, nthWeek]
+    properties:
+      weekday:
+        type: string
+        enum: [MON, TUE, WED, THU, FRI, SAT, SUN]
+      nthWeek:
+        type: string
+        enum: ['1', '2', '3', '4', LAST]
+  SurveyCombination:
+    type: object
+    additionalProperties: false
+    required: [id, weekday, nthWeek]
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/DecimalId
+      weekday:
+        $ref: '#/schemas/SurveyCombinationInput/properties/weekday'
+      nthWeek:
+        $ref: '#/schemas/SurveyCombinationInput/properties/nthWeek'
+  SurveyBallotInput:
+    description: Replaces only the current profile's ballot. Omitted choices are removed, and an empty map clears it. Persistence retains the existing non-atomic delete/save sequence.
+    type: object
+    additionalProperties: false
+    required: [answers]
+    properties:
+      answers:
+        type: object
+        propertyNames:
+          pattern: '^[1-9][0-9]*$'
+          maxLength: 16
+        additionalProperties:
+          type: string
+          enum: [yes, maybe, no]
+  SurveyResponseView:
+    type: object
+    additionalProperties: false
+    required: [profileId, name, answers]
+    properties:
+      profileId:
+        $ref: ./common.yaml#/schemas/Uuid
+      name:
+        type: string
+      answers:
+        $ref: '#/schemas/SurveyBallotInput/properties/answers'
+  SurveyView:
+    type: object
+    additionalProperties: false
+    required: [entityType, id, title, description, headerUrl, headerVersion, archived, combinations, responses, ownAnswers, profileName, capabilities]
+    properties:
+      entityType: {type: string, const: survey}
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      title: {type: string}
+      description: {type: [string, 'null']}
+      headerUrl: {type: [string, 'null']}
+      headerVersion: {type: [string, 'null']}
+      archived: {type: boolean}
+      combinations:
+        type: array
+        items:
+          $ref: '#/schemas/SurveyCombination'
+      responses:
+        type: array
+        items:
+          $ref: '#/schemas/SurveyResponseView'
+      ownAnswers:
+        $ref: '#/schemas/SurveyBallotInput/properties/answers'
+      profileName: {type: string}
+      capabilities:
+        type: object
+        additionalProperties: false
+        required: [manageSettings, addCombination, submitBallot]
+        properties:
+          manageSettings: {type: boolean}
+          addCombination: {type: boolean, const: true}
+          submitBallot: {type: boolean, const: true}
+  SurveyCreateInput:
+    type: object
+    additionalProperties: false
+    required: [title, description, combinations]
+    properties:
+      title: {type: string, minLength: 1, maxLength: 255, pattern: '\S'}
+      description: {type: string, maxLength: 65535}
+      combinations:
+        type: array
+        minItems: 1
+        items:
+          $ref: '#/schemas/SurveyCombinationInput'
+  SurveyCreateForm:
+    type: object
+    additionalProperties: false
+    required: [data]
+    properties:
+      data:
+        $ref: '#/schemas/SurveyCreateInput'
+      image: {type: string, format: binary}
+  SurveyCreated:
+    $ref: ./packing.yaml#/schemas/PackingCreated
+  SurveyDuplicate:
+    type: object
+    additionalProperties: false
+    required: [title, description, combinations]
+    properties:
+      title: {type: string}
+      description: {type: [string, 'null']}
+      combinations:
+        type: array
+        items:
+          $ref: '#/schemas/SurveyCombinationInput'
+  SurveyMetadata:
+    description: Owner-editable metadata. ETag identifies the returned representation for draft refresh only; saves retain native last-write behavior.
+    type: object
+    additionalProperties: false
+    required: [entityType, id, values, editableFields, currentEventId, archived, inheritedArchived]
+    properties:
+      entityType: {type: string, const: survey}
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      values:
+        type: object
+        additionalProperties: false
+        required: [title, description]
+        properties:
+          title: {type: string}
+          description: {type: [string, 'null']}
+      editableFields:
+        type: array
+        uniqueItems: true
+        items: {type: string, enum: [title, description]}
+      currentEventId: {type: 'null'}
+      archived: {type: boolean}
+      inheritedArchived: {type: boolean, const: false}
+  SurveyMetadataPatch:
+    $ref: ./packing.yaml#/schemas/PackingMetadataPatch
+  SurveySettings:
+    description: Applicable owner settings only. The presentation token is not a write precondition; surveys expose no event association, general permissions, administrators or automatic archival.
+    type: object
+    additionalProperties: false
+    required: [id, title, headerUrl, headerVersion, settingsToken, editableFields, capabilities, currentEvent, archive, access]
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      title: {type: string}
+      headerUrl: {type: [string, 'null']}
+      headerVersion: {type: [string, 'null']}
+      settingsToken:
+        $ref: ./common.yaml#/schemas/FieldComparisonToken
+      editableFields:
+        type: array
+        uniqueItems: true
+        items: {type: string, enum: [title, description]}
+      capabilities:
+        type: object
+        additionalProperties: false
+        required: [editHeader, linkEvent, managePermissions, duplicate, remove, archive, restore, manageArchive]
+        properties:
+          editHeader: {type: boolean}
+          linkEvent: {type: boolean, const: false}
+          managePermissions: {type: boolean, const: false}
+          duplicate: {type: boolean}
+          remove: {type: boolean}
+          archive: {type: boolean}
+          restore: {type: boolean}
+          manageArchive: {type: boolean}
+      currentEvent: {type: 'null'}
+      archive:
+        $ref: ./packing.yaml#/schemas/PackingArchive
+      access: {type: 'null'}
+paths:
+  /surveys/create-entry:
+    get:
+      operationId: getSurveyCreateEntry
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read account-only standalone survey creation admission
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: returnTo
+          in: query
+          schema:
+            type: string
+            maxLength: 4096
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/SurveyCreateEntry
+        default: &a1
+          $ref: ./openapi.yaml#/components/responses/Problem
+      security: []
+  /surveys/{surveyId}/entry:
+    get:
+      operationId: getSurveyResourceEntry
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read standalone survey detail or guest page admission
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - &a2
+          name: surveyId
+          in: path
+          required: true
+          schema:
+            $ref: ./common.yaml#/schemas/Uuid
+        - name: view
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - detail
+              - guest
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/SurveyResourceEntry
+        default: *a1
+      security: []
+  /surveys/{surveyId}/guest:
+    get:
+      operationId: getSurveyGuestEntry
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read the public survey guest-entry title
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/GuestEntry
+        default: *a1
+      security: []
+    post:
+      operationId: registerSurveyGuest
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Register a guest through the shared identity owner
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/IdentityResult
+        default: *a1
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/GuestRegistrationInput
+  /surveys:
+    post:
+      operationId: createSurvey
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Create a standalone recurring-choice survey through its existing operation
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "201":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/SurveyCreated
+        default: *a1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/SurveyCreateForm
+  /surveys/{surveyId}:
+    get:
+      operationId: getSurvey
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read recurring choices and named ballots for an admitted profile
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/SurveyView
+        "304":
+          description: Authorized representation unchanged; no body
+        default: *a1
+    delete:
+      operationId: deleteSurvey
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Permanently delete a survey as its owner
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default: *a1
+  /surveys/{surveyId}/duplicate:
+    get:
+      operationId: getSurveyDuplicate
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Copy standalone survey form content without ballots or lifecycle state
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/SurveyDuplicate
+        default: *a1
+  /surveys/{surveyId}/settings:
+    get:
+      operationId: getSurveySettings
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read applicable owner-only survey settings
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/SurveySettings
+        default: *a1
+  /surveys/{surveyId}/metadata:
+    get:
+      operationId: getSurveyMetadata
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read owner-editable metadata with a presentation-only refresh identity
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/IfNoneMatch
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/SurveyMetadata
+        "304":
+          description: Authorized representation unchanged; no body
+        default: *a1
+    patch:
+      operationId: updateSurveyMetadata
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Save owner metadata with existing last-write behavior
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/SurveyMetadata
+        default: *a1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/SurveyMetadataPatch
+  /surveys/{surveyId}/ballot:
+    put:
+      operationId: submitSurveyBallot
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Replace this profile ballot through the existing non-atomic operation
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default: *a1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/SurveyBallotInput
+  /surveys/{surveyId}/combinations:
+    post:
+      operationId: addSurveyCombination
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Add a recurring choice as any admitted account or registered guest profile
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default: *a1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/SurveyCombinationInput
+  /surveys/{surveyId}/header:
+    get:
+      operationId: getSurveyHeader
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: Read header bytes after detail admission
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/octet-stream:
+              schema:
+                $ref: ./packing.yaml#/schemas/PackingHeaderBinary
+        default: *a1
+    put:
+      operationId: uploadSurveyHeader
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Replace the survey header through its existing image operation
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default: *a1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: ./openapi.yaml#/components/schemas/PackingHeaderUpload
+    delete:
+      operationId: deleteSurveyHeader
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Remove the survey header through its existing image operation
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default: *a1
+  /surveys/{surveyId}/archive:
+    post:
+      operationId: archiveSurvey
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Archive a survey as its owner without deletion
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default: *a1
+  /surveys/{surveyId}/restore:
+    post:
+      operationId: restoreSurvey
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      summary: Restore a survey as its owner
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - *a2
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default: *a1

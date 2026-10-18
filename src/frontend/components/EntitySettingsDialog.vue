@@ -5,6 +5,7 @@ import type {components} from '../../types/api/v1';
 import type {EntityHeaderLabels, EntityLifecycleLabels} from '../../types/FrontendEntitySettingsTypes';
 import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {EntitySettingsDialogProps, EntitySettingsProjection} from '../../types/FrontendEntityDialogTypes';
+import type {EntityAccessOperations} from '../../types/FrontendEntityAccessTypes';
 import {createEntityLifecycle, useEntityRemoval} from '../composables/entityLifecycle';
 import {useActionState, usePilot, refreshInterval} from '../app/context';
 import {isReadDenial} from '../app/transport';
@@ -32,7 +33,7 @@ const context = usePilot();
 const api = props.operations;
 const {messages} = context;
 // Shared panels receive catalog wording and admitted presentation. This dialog and
-// its section editors own drafts, tokens and commands for Packing, Event and Drivers;
+// its section editors own drafts, tokens and commands for migrated root features;
 // each feature injects its operations and retains its deliberate field exceptions.
 const headerLabels = computed<EntityHeaderLabels>(() => ({
     title: messages.value.t('packing.headerImage'), choose: messages.value.t('packing.chooseImage'),
@@ -56,8 +57,21 @@ function retireEditor(): void {
 type Settings = EntitySettingsProjection;
 const panel = ref(props.metadataAvailable === true ? 'general' : '');
 const accessEditor = ref<InstanceType<typeof EntityAccessEditor> | null>(null);
-const profileFamily = computed(() => props.profileFamily);
-function profileQueryKey(query: string) { return props.profileKey(query); }
+// Surveys deliberately have no general permission model. Require a complete
+// feature adapter and profile-query inputs before composing the shared ACL panel;
+// absent controls never require dummy operations or create discovery requests.
+const accessSetup = computed(() => {
+    if (!hasAccessOperations(api) || !props.profileKey || !props.profileFamily) return null;
+    return {operations: api, profileKey: props.profileKey, profileFamily: props.profileFamily};
+});
+
+/** Narrow the optional access contract only when its actual caller implements
+ * every operation. Server-projected capabilities still decide admission. */
+function hasAccessOperations(operations: EntitySettingsDialogProps['operations']): operations is EntitySettingsDialogProps['operations'] & EntityAccessOperations {
+    // Keep these methods on their owning API object so method receivers survive.
+    return !!operations.profiles && !!operations.setDefaults && !!operations.addAdmin
+        && !!operations.updateAdmin && !!operations.removeAdmin;
+}
 const fields = ref<InstanceType<typeof EntityMetadataEditor> | null>(null);
 const image = ref<File | null>(null);
 const event = ref<{original: string | null; value: string | null; token: string;
@@ -139,7 +153,7 @@ const panels = computed(() => {
             key: 'access',
             label: 'packing.access' as const,
             icon: 'bi-people',
-            enabled: state.capabilities.managePermissions && state.access,
+            enabled: state.capabilities.managePermissions && state.access && accessSetup.value,
         },
         {
             key: 'actions',
@@ -496,9 +510,9 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                     :submit-label="messages.t('packing.saveEvent')" :active="panel === 'event'"
                     :conflict="eventConflict" :disabled="!!blocked" @review="reviewEvent" @save="saveEvent" />
             </section>
-            <EntityAccessEditor v-if="data.access" ref="accessEditor" v-show="panel === 'access'"
-                :settings="data" :resource-id="resourceId" :command="command" :operations="api"
-                :profile-key="profileQueryKey" :profile-family="profileFamily" :blocked="!!blocked"
+            <EntityAccessEditor v-if="data.access && accessSetup" ref="accessEditor" v-show="panel === 'access'"
+                :settings="data" :resource-id="resourceId" :command="command" :operations="accessSetup.operations"
+                :profile-key="accessSetup.profileKey" :profile-family="accessSetup.profileFamily" :blocked="!!blocked"
                 :controls-pending="!!controlsPending" />
             <div
                 v-show="panel === 'actions'"

@@ -26,6 +26,8 @@ const EventEntry = () => import('../features/event/EventEntry.vue');
 const EventCreatePage = () => import('../features/event/EventCreatePage.vue');
 const DriversEntry = () => import('../features/drivers/DriversEntry.vue');
 const DriversCreatePage = () => import('../features/drivers/DriversCreatePage.vue');
+const SurveyEntry = () => import('../features/surveys/SurveyEntry.vue');
+const SurveyCreatePage = () => import('../features/surveys/SurveyCreatePage.vue');
 
 // One route declaration drives the initial skeleton for every interactive page.
 // Readable admitted errors/completions are classified by the shared context owner.
@@ -38,6 +40,8 @@ function javascriptPage(loadingSkeleton: PilotLoadingSkeleton) {
 const overviewPage = javascriptPage({variant: 'overview'});
 const packingPage = javascriptPage({variant: 'list-detail', rows: 4, columns: 6});
 const driversPage = javascriptPage({variant: 'list-detail', rows: 4, columns: 5});
+const surveyPage = javascriptPage({variant: 'survey', rows: 2, columns: 4});
+const surveyCreatePage = javascriptPage({variant: 'survey-create'});
 const listCreatePage = javascriptPage({variant: 'list-create'});
 const packingCreatePage = javascriptPage({variant: 'packing-create'});
 const eventPage = javascriptPage({variant: 'event'});
@@ -84,6 +88,10 @@ export const pilotRoutes: readonly RouteRecordRaw[] = [
     {path: '/frontend-pilot/drivers/:listId/duplicate', component: DriversCreatePage, meta: listCreatePage},
     {path: '/frontend-pilot/drivers/:listId/guest', component: DriversEntry, meta: guestPage},
     {path: '/frontend-pilot/drivers/:listId', component: DriversEntry, meta: {...driversPage, dynamicContent: true}},
+    {path: '/frontend-pilot/survey/create', component: SurveyCreatePage, meta: surveyCreatePage},
+    {path: '/frontend-pilot/survey/:surveyId/duplicate', component: SurveyCreatePage, meta: surveyCreatePage},
+    {path: '/frontend-pilot/survey/:surveyId/guest', component: SurveyEntry, meta: guestPage},
+    {path: '/frontend-pilot/survey/:surveyId', component: SurveyEntry, meta: {...surveyPage, dynamicContent: true}},
     {path: '/frontend-pilot/users/login', component: IdentityPage, meta: {...loginPage, identityMode: 'login'}},
     {path: '/frontend-pilot/users/register', component: IdentityPage, meta: {...registerPage, identityMode: 'register'}},
     {path: '/frontend-pilot/users/oidc/login', component: IdentityPage, meta: {...identityMessagePage, identityMode: 'oidc'}},

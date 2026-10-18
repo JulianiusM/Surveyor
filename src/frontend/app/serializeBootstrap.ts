@@ -30,6 +30,8 @@ const bootstrapValidators = {
     driversCreateContext: validateDriversCreate,
     driversSelectedEvent: validateSelectedEvent,
     driversDuplicate: validateDriversDuplicate,
+    surveyCreateContext: validateSurveyCreate,
+    surveyDuplicate: validateSurveyDuplicate,
     eventEntry: validateEventEntry,
     eventCreateContext: validateEventCreateContext,
     eventDuplicate: validateEventDuplicate,
@@ -140,6 +142,16 @@ async function validateGuest(value: unknown): Promise<boolean> {
 async function validatePackingCreate(value: unknown): Promise<boolean> {
     const {validatePackingCreateContext} = await import('../../../.generated/api/v1/browser/validatePackingCreateContext.mjs');
     return validatePackingCreateContext(value);
+}
+
+async function validateSurveyCreate(value: unknown): Promise<boolean> {
+    const {validateSurveyCreateContext} = await import('../../../.generated/api/v1/browser/validateSurveyCreateContext.mjs');
+    return validateSurveyCreateContext(value);
+}
+
+async function validateSurveyDuplicate(value: unknown): Promise<boolean> {
+    const {validateSurveyDuplicate} = await import('../../../.generated/api/v1/browser/validateSurveyDuplicate.mjs');
+    return validateSurveyDuplicate(value);
 }
 
 /** Initial selection uses the same generated option contract as API discovery.

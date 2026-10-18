@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: feedback and module-shaped loading source/client/built/browser evidence and guide review recorded; failed cold development-runtime deadline and first fixture failures retained; prior P3 receipts keep their scope; no publication or cutover authority
+verification-scope: P4 Survey source/client/ORM/built/browser evidence and shared-consumer review recorded; pending native defect exceptions and earlier receipts retain their scopes; no later phase, publication or cutover authority
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,48 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## P4 Surveys implementation and scoped verification (2026-10-18)
+
+The maintainer's [explicit P4 request](FRONTEND_FOUNDATION_DESIGN.md#explicit-p4-implementation-trigger-2026-10-18)
+authorizes standalone Surveys under SRV-01–05. Generated contracts and Vue APIs reuse `surveyController`, its existing
+`SurveyService` reads/writes and shared administration/lifecycle/image operations. Initial documents and warm entry
+share admission. Creation, independent owner duplication, personal ballots, named results, collaborative combinations,
+applicable settings and Overview navigation/actions are implemented; no task-owned P4 workflow is deferred.
+
+Matching Vue consumers adopt existing guest/entry/read/command/header/metadata/settings/lifecycle owners. Recurring
+fields and column headings are shared within Surveys. `CreationAdmissionNotices` is adopted by Survey, Event and
+list creation, and the existing skeleton owner now composes Survey-specific form/table geometry. Surveys acquire
+no event association, permission matrix, administrators or automation. Representation ETags support cache/draft
+reconciliation only; ballot replacement and last-write metadata/header guarantees remain inherited.
+
+| Executed boundary | Current result and scope |
+|---|---|
+| Generation/build/compilers | `npm run build` passed with client/SSR checking and generated API/locales; `npm run typecheck:tests --ignore-scripts` passed on the final test graph. |
+| Complete frontend selection | `npm run test:frontend -- --pool=forks --maxWorkers=1 --reporter=dot`: 47 files, 1,056 tests passed. This includes 8 Survey mounted cases, shared creation/settings consumers and module-specific loading/navigation assertions. |
+| Real persistence | Dedicated MariaDB 10.11.14 container; literal grants limited to `surveyor_p4_test` and `surveyor_p4_e2e` on local port 23319. Final serial Vitest selection of `surveys-v1-api`, native `survey-workflows` and `entity-overview`: 3 files, 30 tests passed, including 9 Survey API/controller cases. |
+| Built application | Standard managed Playwright initializer/server and real persistence: final `npm run e2e -- tests/e2e/frontend-pilot-surveys.spec.ts --workers=1` passed all 5 workflows. Desktop/mobile comparisons, same-document creation/duplicate, account/guest ballot collaboration and owner management ran together on the final production build. Duplication uses an answered source with an image and proves both are excluded from the copy. No intercepted server or prepared-schema substitute was used. |
+| Visual inspection | Root and independent test reviewer inspected all 20 original paired native/Vue captures at 1280/390px: creation, ballot, results, combination form and General settings. Complete control/style/relative-geometry assertions passed for these surfaces; no unexpected difference was found. |
+| Engineering/documentation | Final development checker: 0 findings; whitespace check passed. Production freeze and amendment boundary: 0 findings. Advisory live documentation report has no broken links, metadata/path/script errors or stale terms; the unregistered changed-source fingerprint remains an advisory finding, without rebaselining. |
+
+Earlier run artifacts record a duplicate-combination fixture, hidden-form/Save selectors and a default Windows worker
+process crash. Fixtures were corrected without weakening assertions or deadlines; the complete frontend suite passed
+with forked workers. An initial task-runner environment let an integration reset select the disposable E2E schema;
+the final runner uses test mode for Vitest, E2E mode for Playwright and distinct task-owned schemas. No production,
+shared development or external database was touched. Current logs, targets and captures remain ignored under
+`artifacts/p4/`; these diagnostics do not establish broader application acceptance.
+
+Independent backend/test agents reviewed controller reuse, actual shared Vue adoption, private projections,
+draft/confirmed/unknown lifetimes, native isolation and readability; root reviewed source and execution. The review
+corrected initial-document duplicate admission to match native independent owner GET versus account-only creation.
+The six-field R1/R2 questions received independent and root review plus structural preflight before presentation;
+neither has a maintainer answer. Voting descriptions therefore remain hidden and duplicate descriptions/occurrences
+retain the native empty/first-occurrence behavior. IMP-019/IMP-020 stay open; no stronger backend remedy is claimed.
+
+Production guides and native Help remain frozen. Existing working-contract guidance and its tracked defects retain
+their owners; shared contribution guidance is reconciled only in the existing staged amendment. This receipt covers
+the declared scenes and checks, not an exhaustive locale/browser/accessibility/concurrency matrix, live provider/mail
+delivery, deployment, P5–P11, default routing, native removal or guide publication.
 
 ## Feedback and module-shaped loading correction (2026-10-18)
 

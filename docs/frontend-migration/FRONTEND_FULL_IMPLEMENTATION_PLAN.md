@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit P3 trigger and full Drivers implementation source/acceptance receipt linked; prior P0-P2 corrections and original phase contracts retained; P4-P11, E1 exclusion and separate cutover boundaries preserved
+verification-scope: explicit P4 trigger and standalone Surveys implementation linked; original phase contracts and P0-P3 receipts retained; P5-P11, E1 exclusion and separate cutover boundaries preserved
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -54,6 +54,11 @@ starts Drivers under the phase contract below. It does not start P4–P11 or cha
 The subsequent [direct frontend-only clarification](FRONTEND_FOUNDATION_DESIGN.md#direct-frontend-only-implementation-and-native-isolation-clarification-2026-10-18)
 retains native isolation and excludes the deeper shared administration refactor from these frontend corrections;
 the existing backlog owns that debt. It grants no later-phase continuation.
+
+The subsequent [explicit P4 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p4-implementation-trigger-2026-10-18)
+starts standalone Surveys under the existing phase contract. Its
+[receipt](PILOT_PARITY_REVIEW.md#p4-surveys-implementation-and-scoped-verification-2026-10-18) records current evidence
+and pending Vue-only defect exceptions; it grants no P5–P11 or cutover authority.
 
 The [October 16 full-pilot review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16)
 qualifies earlier readiness statements with its scalar-display, visual-assertion and verification-environment
@@ -203,7 +208,7 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
    records actual shared adoption, scoped passing checks, visual comparison and inherited-defect/environment limits.
    P4–P11 still require their own explicit triggers; no task-owned P3 workflow is assigned to a later phase.
 
-5. **P4 — Migrate Surveys independently**  
+5. **P4 — Migrate Surveys independently; implemented against the phase contract.**
    **Complexity:** Medium. **Prerequisites:** P0 and shared guest-entry contracts. Can run alongside Drivers or Events.
 
     - Implement creation/duplication and recurring weekday/occurrence choices.
@@ -221,6 +226,11 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
 
    Do not claim atomic concurrent ballot replacement already exists. Any stronger persistence guarantee requires a
    separately reviewed scope.
+
+   The [October 18 receipt](PILOT_PARITY_REVIEW.md#p4-surveys-implementation-and-scoped-verification-2026-10-18)
+   maps source adoption, tests and inspected desktop/mobile comparisons. Existing native description and duplicate
+   prefill defects remain the comparator while separately presented Vue-only R1/R2 requests are unanswered; neither
+   legacy defect is closed. No task-owned P4 workflow is deferred to P5.
 
 6. **P5 — Migrate basic Activity planning and participation**  
    **Complexity:** High. **Prerequisites:** stable Event admission/attendance contracts from P2; completed Event UI is

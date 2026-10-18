@@ -6,7 +6,7 @@ owner: project maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared feedback and module-shaped loading assertion mapping extends retained P0-P3 evidence; native differences and backend exclusions preserved; current execution, first fixture failures and limits belong to paired review
+verification-scope: P4 Survey behavior, shared creation notices and module-shaped loading assertion mapping extends retained P0-P3 evidence; native defects and backend exclusions preserved; execution and limits belong to paired review
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -79,7 +79,7 @@ beyond its declared assertions.
 | Native presentation differences | Compare equivalent component geometry; identify recorded one-time-flash/surrounding-shell offsets separately. Independently issued tokens differ in content. T1 compares dietary entries by choice while each frontend preserves its own response order and complete values. |
 | Identity completion R1 | Typed catalog notices replace the inherited-prose exception for implemented transfer/deactivation/account/guest deletion. Conditional former-owner details, native wording and existing business sequencing remain. |
 | Excluded backend remedies | General token, transfer, last-profile/deletion finality, native mixed-reset/activation, provider preparation, Event capacity and whole-session/permission remedies remain separately owned. E1 excludes native/Vue production coexistence coordination; it supplies no repair claim. |
-| Later scope and external evidence | S1 requires explicit phase triggers; the October 18 instruction supplies P3's trigger only. P4–P11, principal-language persistence and email/PDF/domain localization remain separately scoped. No live OIDC, successful SMTP/inbox, rendered PDF, exhaustive browser/locale/accessibility matrix, hosted CI, deployment, cutover, native removal or guide publication is certified by this checklist. |
+| Later scope and external evidence | S1 requires explicit phase triggers; separate October 18 instructions supply P3 and P4 triggers. P5–P11, principal-language persistence and email/PDF/domain localization remain separately scoped. No live OIDC, successful SMTP/inbox, rendered PDF, exhaustive browser/locale/accessibility matrix, hosted CI, deployment, cutover, native removal or guide publication is certified by this checklist. |
 
 The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments) retains original choices
 and dated approvals; [DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md) owns durable technology and future-target
@@ -430,6 +430,19 @@ one-off captures and inspection recorded in the [visual baseline](VISUAL_BASELIN
   before replacing those views; a captured image is not a recurring reference-image assertion. Record viewport,
   theme, data/setup and route with each artifact; keep generated screenshots in the established artifact location
   rather than treating ignored run output as maintained source.
+
+## P4 Surveys source-to-implementation assertions (2026-10-18)
+
+The [explicit P4 trigger](FRONTEND_FOUNDATION_DESIGN.md#explicit-p4-implementation-trigger-2026-10-18) authorizes
+standalone Surveys. Execution and limits belong to the [paired receipt](PILOT_PARITY_REVIEW.md#p4-surveys-implementation-and-scoped-verification-2026-10-18).
+
+| Contract | Production adoption and assertions |
+|---|---|
+| SRV-01/05: create and duplicate | `SurveyCreatePage`, generated multipart contracts and existing `surveyController` creator; [built workflows](../../tests/e2e/frontend-pilot-surveys.spec.ts) assert same-document creation with recurrence/image and copying without ballots/image. [ORM cases](../../tests/integration/surveys-v1-api.spec.ts) protect stored recurrence, guest-owner duplicate reading and account-only creation. Native prefill defects remain pending R2. |
+| SRV-02: personal ballots | Existing foreign-choice validation and delete/save operation; ORM cases protect rejection before deletion, profile isolation, omissions and empty ballots. [Mounted cases](../../tests/frontend/frontend-surveys.spec.ts) protect unknown results, dirty drafts, new columns and confirmed commands whose follow-up read fails. Built account/guest workflows assert stored answers and same-document delivery. No atomic concurrent replacement is claimed. |
+| SRV-03/04: results and collaborative choices | Named result rows, missing-answer No and independent no-answers state; shared recurring fields/column headers. ORM/built cases admit accounts and guests to combination creation while denying owner settings. Desktop/mobile assertions compare original native/Vue ballot/results/add controls, geometry, colors and labels. |
+| SRV-05 and navigation | Shared entry/guest/header/metadata/settings/lifecycle owners, generated Survey operations and Overview projections. Built owner workflow asserts properties, header bytes/removal, archive/restore and deletion without document replacement. Shell tests protect migrated creation links. Surveys gain no parent, Access panel or administrator controls. |
+| Shared presentation | Creation read/submission warnings use `CreationAdmissionNotices` in Survey, Event and list creation. The full frontend selection protects matching consumers; loading-shell SSR cases assert Survey-specific noninteractive form/table geometry and one announcement. |
 
 ## Verification selection for subsequent migration slices
 

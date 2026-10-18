@@ -22,6 +22,7 @@ import PageMessage from './PageMessage.vue';
 import LoadingSkeleton from './LoadingSkeleton.vue';
 import EventPicker from './EventPicker.vue';
 import AudiencePermissions from './permissions/AudiencePermissions.vue';
+import CreationAdmissionNotices from './CreationAdmissionNotices.vue';
 
 // One matching root form owns admission, root drafts and confirmed destination.
 // Feature collections are supplied through explicit slots and collector callbacks.
@@ -267,16 +268,11 @@ function collectCreation() {
                 :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">
                 {{ messages.t('state.saved') }}
             </StatusNotice>
-            <StatusNotice v-if="loadError" kind="danger" :last-updated-at="lastUpdatedAt"
-                :retry-at="retryAt" :read-error="loadError"
-                :action="{state: readAction, label: messages.t('common.retry')}" @action="retryRead">
-                {{ messages.t(lastUpdatedAt ? 'state.stale' : 'state.loadFailed') }}
-            </StatusNotice>
-            <StatusNotice v-if="submissionAdmissionError" kind="warning" :last-updated-at="submissionAdmittedAt"
-                :retry-at="submissionRetryAt" :read-error="submissionAdmissionError"
-                :action="{state: submissionRetryAction, label: messages.t('common.retry')}" @action="retrySubmissionAdmission">
-                {{ messages.t(submissionAdmittedAt ? 'state.stale' : 'state.loadFailed') }}
-            </StatusNotice>
+            <CreationAdmissionNotices
+                :read="{error: loadError, lastUpdatedAt, retryAt, action: readAction, stale: !!lastUpdatedAt, kind: 'danger'}"
+                :submission="{error: submissionAdmissionError, lastUpdatedAt: submissionAdmittedAt,
+                    retryAt: submissionRetryAt, action: submissionRetryAction}"
+                @retry-read="retryRead" @retry-submission="retrySubmissionAdmission" />
             <!-- Both create and duplicate use one admitted initial projection. The
                  event picker loads independently; a refresh never replaces this draft. -->
             <LoadingSkeleton v-if="initialLoading" v-bind="route.meta.loadingSkeleton" />

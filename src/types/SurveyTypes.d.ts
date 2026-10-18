@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import type {components} from './api/v1';
+
 export type WeekDay = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
 export type WeekInMonth = "1" | "2" | "3" | "4" | "LAST";
 export type SurveyAnswer = "yes" | "no" | "maybe" | null;
@@ -26,4 +28,11 @@ export type BasePicked = {
     name: string;
 };
 
-export type GroupedResponses = Record<string, Array<UserResponseItem | GuestResponseItem>>;
+export type GroupedResponses = Record<string, BasePicked[]>;
+
+/** Adapter-only response preparation happens before the existing shared write. */
+export type SurveyMutationPreparation = (result: components['schemas']['MutationResult']) => void;
+
+/** Every survey mutation acknowledgement has the same generated result shape. */
+export type SurveyMutationOperation = 'submitSurveyBallot' | 'addSurveyCombination' | 'uploadSurveyHeader'
+    | 'deleteSurveyHeader' | 'archiveSurvey' | 'restoreSurvey' | 'deleteSurvey';

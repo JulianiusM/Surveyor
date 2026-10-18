@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: direct feedback placement and module-shaped loading correction recorded alongside frontend-only native isolation and P3 trigger; original choices, backend exclusions and separate later-phase/cutover authority retained; execution belongs to paired review
+verification-scope: explicit P4 trigger and pending Vue-only Survey defect exceptions recorded alongside retained P0-P3 decisions, native isolation, shared presentation and backend exclusions; separate later-phase/cutover authority retained; execution belongs to paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -736,6 +736,21 @@ regions use the same decorative primitives without duplicating an existing heade
 responsive geometry, accessibility and reduced motion. Placeholder shape never grants authority, invents record
 counts or replaces readable content/drafts during a background read. The original initialization/static-Help and
 independent-region requirements remain unchanged. Actual verification belongs to the paired review.
+
+### Explicit P4 implementation trigger (2026-10-18)
+
+The maintainer directly requests full P4 implementation with approval, visual/behavioral parity and
+modularization/DRY requirements. This supplies the phase trigger for standalone Surveys under the existing
+[P4 contract](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#phase-contracts), without starting P5–P11, cutover, publication,
+deployment or native removal. Survey participation and collaborative combinations retain DEC-001/DEC-005;
+owner settings reuse existing business operations and shared Vue presentation. Ballot replacement retains its
+existing non-atomic persistence, and representation ETags do not add Survey write preconditions.
+
+The source review reconfirms existing native defects IMP-019/IMP-020. The separately presented Vue-only description
+and duplicate-prefill requests R1/R2 have no maintainer answer at this record's creation and grant no approval.
+The Vue comparator therefore retains the hidden voting description and the duplicate form's empty description and
+first-occurrence selections. Native code and the original backlog dispositions remain unchanged. Actual execution,
+independent review and remaining limits belong to the paired review rather than this authorization record.
 
 ## Cutover retirement inventory
 

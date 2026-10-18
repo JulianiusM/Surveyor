@@ -26,6 +26,7 @@ const footerLayout = computed(footerWidth);
 function fieldLayout(): readonly number[] {
     if (props.fieldWidths) return props.fieldWidths;
     if (props.variant === 'list-create' || props.variant === 'packing-create') return [12, 12, 12, 12];
+    if (props.variant === 'survey-create') return [12, 12, 12];
     if (props.variant === 'event-create') return [12, 6, 6, 8, 4, 8, 4, 12, 12];
     if (props.variant === 'guest') return Array(count.value).fill(8);
     if (['identity', 'login', 'profile'].includes(props.variant)) return Array(count.value).fill(6);
@@ -131,6 +132,23 @@ function footerWidth(): NonNullable<PilotLoadingSkeleton['footer']> {
                         <LoadingSkeleton class="card-body" variant="form" :field-widths="[4, 4, 2, 2]" decorative />
                     </span>
                 </template>
+                <template v-else-if="variant === 'survey'">
+                    <!-- Voting and named results have separate horizontally scrolling
+                         tables. A standalone two-select combination form follows them;
+                         Surveys have neither list counters nor a Quick Add card. -->
+                    <span class="pilot-skeleton-bar pilot-skeleton-heading" />
+                    <LoadingSkeleton variant="table" :rows="1" :columns="columnCount" decorative />
+                    <span class="pilot-skeleton-form-footer pilot-skeleton-form-footer-full">
+                        <span class="pilot-skeleton-bar pilot-skeleton-control" />
+                    </span>
+                    <span class="pilot-skeleton-bar pilot-skeleton-heading mt-5" />
+                    <LoadingSkeleton variant="table" :rows="count" :columns="columnCount" decorative />
+                    <span class="pilot-skeleton-bar pilot-skeleton-heading mt-5" />
+                    <LoadingSkeleton variant="form" :field-widths="[6, 6]" decorative />
+                    <span class="pilot-skeleton-form-footer pilot-skeleton-form-footer-full">
+                        <span class="pilot-skeleton-bar pilot-skeleton-control" />
+                    </span>
+                </template>
                 <template v-else-if="variant === 'event' || variant === 'event-admin'">
                     <span class="card bg-dark border-secondary-subtle p-3 pilot-skeleton-summary">
                         <LoadingSkeleton :rows="4" decorative />
@@ -148,7 +166,7 @@ function footerWidth(): NonNullable<PilotLoadingSkeleton['footer']> {
                         <span class="pilot-skeleton-bar" /><span class="pilot-skeleton-bar pilot-skeleton-control" />
                     </span>
                 </template>
-                <template v-else-if="variant === 'form' || variant === 'list-create' || variant === 'packing-create' || variant === 'event-create'
+                <template v-else-if="variant === 'form' || variant === 'list-create' || variant === 'packing-create' || variant === 'survey-create' || variant === 'event-create'
                     || variant === 'identity' || variant === 'login' || variant === 'profile' || variant === 'workflow' || variant === 'guest'">
                     <LoadingSkeleton v-if="variant === 'identity' || variant === 'login' || variant === 'profile' || variant === 'workflow' || variant === 'guest'"
                         class="pilot-skeleton-introduction" :rows="variant === 'guest' || variant === 'workflow' ? 3 : 2" decorative />
@@ -159,14 +177,19 @@ function footerWidth(): NonNullable<PilotLoadingSkeleton['footer']> {
                         <span v-for="(width, index) in fields" :key="index" class="col-12 pilot-skeleton-field" :class="'col-md-' + width">
                             <span class="pilot-skeleton-bar pilot-skeleton-label" />
                             <span class="pilot-skeleton-bar pilot-skeleton-control"
-                                :class="{'pilot-skeleton-textarea': ((variant === 'list-create' || variant === 'packing-create') && index === 1)
+                                :class="{'pilot-skeleton-textarea': ((variant === 'list-create' || variant === 'packing-create' || variant === 'survey-create') && index === 1)
                                     || (variant === 'event-create' && index === 7)}" />
                         </span>
                     </span>
-                    <!-- Packing alone owns editable initial items. Drivers reuses the
-                         preceding creation fields without inventing that feature. -->
+                    <!-- Collection-specific editable rows follow the matching fields;
+                         Drivers retains its separate creation family without rows. -->
                     <LoadingSkeleton v-if="variant === 'packing-create'" variant="table" :rows="2" :columns="4" decorative />
-                    <span v-if="variant !== 'form'" class="pilot-skeleton-form-footer"
+                    <LoadingSkeleton v-if="variant === 'survey-create'" variant="table" :rows="1" :columns="3" decorative />
+                    <span v-if="variant === 'survey-create'" class="pilot-skeleton-toolbar justify-content-between">
+                        <span class="pilot-skeleton-bar pilot-skeleton-control" />
+                        <span class="pilot-skeleton-bar pilot-skeleton-control" />
+                    </span>
+                    <span v-else-if="variant !== 'form'" class="pilot-skeleton-form-footer"
                         :class="'pilot-skeleton-form-footer-' + footerLayout">
                         <span class="pilot-skeleton-bar pilot-skeleton-control" />
                     </span>

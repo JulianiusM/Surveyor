@@ -19,6 +19,7 @@ import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
+import CreationAdmissionNotices from '../../components/CreationAdmissionNotices.vue';
 
 const context = usePilot();
 const {messages} = context;
@@ -150,16 +151,12 @@ function collectCreation() {
             </StatusNotice>
             <PageMessage v-if="entry.outcome.value?.kind === 'denied'" kind="error"
                 :message="messages.t('common.notAllowed')" :renewal="entry.outcome.value" />
-            <StatusNotice v-if="entry.error.value" kind="warning" :read-error="entry.error.value" :retry-at="retryAt"
-                :last-updated-at="entry.admittedAt.value"
-                :action="{state: entry.retryAction, label: messages.t('common.retry')}" @action="entry.retry">
-                {{ messages.t(definitions ? 'state.stale' : 'state.loadFailed') }}
-            </StatusNotice>
-            <StatusNotice v-if="submissionAdmissionError" kind="warning" :last-updated-at="submissionAdmittedAt"
-                :retry-at="submissionRetryAt" :read-error="submissionAdmissionError"
-                :action="{state: submissionRetryAction, label: messages.t('common.retry')}" @action="retrySubmissionAdmission">
-                {{ messages.t(submissionAdmittedAt ? 'state.stale' : 'state.loadFailed') }}
-            </StatusNotice>
+            <CreationAdmissionNotices
+                :read="{error: entry.error.value, lastUpdatedAt: entry.admittedAt.value, retryAt,
+                    action: entry.retryAction, stale: !!definitions}"
+                :submission="{error: submissionAdmissionError, lastUpdatedAt: submissionAdmittedAt,
+                    retryAt: submissionRetryAt, action: submissionRetryAction}"
+                @retry-read="entry.retry" @retry-submission="retrySubmissionAdmission" />
             <LoadingSkeleton v-if="!definitions && baseline === null && entry.outcome.value?.kind !== 'denied'"
                 v-bind="route.meta.loadingSkeleton" />
 

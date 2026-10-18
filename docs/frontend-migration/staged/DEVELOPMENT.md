@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-18
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared feedback placement, static route presentation and module-shaped loading contribution rules source-reconciled alongside P3 adoption, transport/reload and meaningful parity guidance; execution belongs to paired review; no publication
+verification-scope: P4 shared creation warnings, optional settings access and Survey module loading contribution rules source-reconciled alongside retained P0-P3 guidance, transport/reload and parity boundaries; execution belongs to paired review; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -50,6 +50,15 @@ their existing owners under `src/frontend/`, with one implementation for matchin
 third-party dependencies and browser-safe backend/domain/catalog owners retain their actual shared ownership.
 During native coexistence, required native frontend behavior has separately mutable Vue copies. Native application
 presentation/frontend logic remains isolated; new Vue consumers share Vue owners rather than depend on native code.
+
+`CreationAdmissionNotices` shares read and submission-admission warning presentation across Survey, Event and list
+creation. Callers pass errors, timestamps, retry actions and stale/cold classification; reads, drafts and commands
+remain with their existing owners. Shared settings composes Access only when the feature supplies its complete
+access operations and profile-query inputs as well as admitted server capabilities. Standalone Surveys supply none.
+Route metadata selects the shared loading composition for the actual module: Survey creation has three fields and
+recurring-choice rows, while voting has separate ballot/results tables and a two-select combination form. Decorative
+geometry introduces no controls, records or authority. Survey metadata ETags identify representations for draft
+refresh; they do not strengthen its existing last-write persistence or non-atomic ballot replacement.
 
 #### Contract authoring and generated consumers
 

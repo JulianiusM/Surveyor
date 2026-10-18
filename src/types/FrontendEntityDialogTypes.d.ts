@@ -4,7 +4,7 @@ import type {EntityAccessOperations} from './FrontendEntityAccessTypes';
 import type {EntityAutomationMessages, EntityLifecycleOperations} from './FrontendEntitySettingsTypes';
 import type {PilotEventPickerSource, PilotPlainMessageKey, PilotRequestScope} from './FrontendPilotUiTypes';
 
-/** Shared root settings presentation; Event roots deliberately have no parent selector. */
+/** Shared root settings presentation; standalone roots have no parent selector. */
 export type EntitySettingsProjection = Omit<components['schemas']['PackingSettings'], 'currentEvent' | 'capabilities' | 'editableFields'> & {
     editableFields: string[];
     currentEvent?: components['schemas']['PackingSettings']['currentEvent'];
@@ -12,7 +12,7 @@ export type EntitySettingsProjection = Omit<components['schemas']['PackingSettin
 };
 
 /** Existing feature adapters retain generated operation and endpoint selection. */
-export interface EntitySettingsOperations extends EntityAccessOperations, EntityLifecycleOperations {
+export interface EntitySettingsOperations extends Partial<EntityAccessOperations>, EntityLifecycleOperations {
     settings(id: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<EntitySettingsProjection>;
     uploadHeader(id: string, image: File, token: string, scope: PilotRequestScope): Promise<unknown>;
     removeHeader(id: string, token: string, scope: PilotRequestScope): Promise<unknown>;
@@ -38,8 +38,9 @@ export interface EntitySettingsDialogProps {
     metadataProps: Record<string, unknown>;
     operations: EntitySettingsOperations;
     settingsKey: readonly unknown[];
-    profileKey: (query: string) => readonly unknown[];
-    profileFamily: readonly unknown[];
+    /** Only features with an admitted general access model supply profile discovery. */
+    profileKey?: (query: string) => readonly unknown[];
+    profileFamily?: readonly unknown[];
     duplicateTo: string;
     deletedKey: PilotPlainMessageKey;
     restoreConfirmation?: PilotPlainMessageKey;

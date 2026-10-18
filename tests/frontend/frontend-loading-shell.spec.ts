@@ -99,8 +99,45 @@ describe('shared skeleton accessibility', () => {
         expect(host.querySelector('#pilot-navbar-main')?.classList.contains('show')).toBe(true);
         expect(host.querySelector('.navbar-toggler')).toBeNull();
         expect(host.querySelector<HTMLSelectElement>('#pilot-locale')?.disabled).toBe(true);
-        expect(host.querySelector('details a[href="/survey/create"]')).not.toBeNull();
+        expect(host.querySelector('details a[href="/frontend-pilot/survey/create"]')).not.toBeNull();
         expect(host.querySelector('details summary')?.hasAttribute('aria-expanded')).toBe(false);
+    }, 30_000);
+
+    it.each(['create', '11111111-1111-4111-8111-111111111111/duplicate'])(
+        'renders Survey %s loading as three full-width fields and recurring-choice rows', async destination => {
+            const result = await render('/frontend-pilot/survey/' + destination, {session});
+            const host = document.createElement('div');
+            host.innerHTML = result.html;
+            const skeleton = host.querySelector<HTMLElement>('main [data-loading-skeleton="survey-create"]')!;
+            expect(skeleton).not.toBeNull();
+            expect(skeleton.querySelectorAll('.pilot-skeleton-field')).toHaveLength(3);
+            expect(skeleton.querySelectorAll('.pilot-skeleton-field.col-md-12')).toHaveLength(3);
+            expect(skeleton.querySelectorAll('.pilot-skeleton-textarea')).toHaveLength(1);
+            expect(skeleton.querySelectorAll('.pilot-skeleton-table-viewport')).toHaveLength(1);
+            expect(skeleton.querySelector('[data-skeleton-columns]')?.getAttribute('data-skeleton-columns')).toBe('3');
+            expect(skeleton.querySelectorAll('.pilot-skeleton-toolbar > .pilot-skeleton-control')).toHaveLength(2);
+            expect(skeleton.querySelector('.pilot-skeleton-counters')).toBeNull();
+            expect(skeleton.querySelectorAll('[role="status"]')).toHaveLength(1);
+            expect(skeleton.querySelector('input, button, a, select, textarea, [tabindex]')).toBeNull();
+        }, 30_000,
+    );
+
+    it('renders Survey detail loading as separate ballot/results tables and a two-column combination form', async () => {
+        const result = await render('/frontend-pilot/survey/11111111-1111-4111-8111-111111111111', {session});
+        const host = document.createElement('div');
+        host.innerHTML = result.html;
+        const skeleton = host.querySelector<HTMLElement>('main [data-loading-skeleton="survey"]')!;
+        expect(skeleton).not.toBeNull();
+        expect(skeleton.querySelectorAll('.pilot-skeleton-table-viewport')).toHaveLength(2);
+        expect(Array.from(skeleton.querySelectorAll('[data-skeleton-columns]'), table =>
+            table.getAttribute('data-skeleton-columns'))).toEqual(['4', '4']);
+        expect(skeleton.querySelectorAll('.pilot-skeleton-field')).toHaveLength(2);
+        expect(skeleton.querySelectorAll('.pilot-skeleton-field.col-md-6')).toHaveLength(2);
+        expect(skeleton.querySelectorAll('.pilot-skeleton-form-footer-full')).toHaveLength(2);
+        expect(skeleton.querySelector('.pilot-skeleton-counters')).toBeNull();
+        expect(skeleton.querySelector('.pilot-skeleton-content .card')).toBeNull();
+        expect(skeleton.querySelectorAll('[role="status"]')).toHaveLength(1);
+        expect(skeleton.querySelector('input, button, a, select, textarea, [tabindex]')).toBeNull();
     }, 30_000);
 
     it('hydrates a scoped readable completion at an initial fragment without changing it into a skeleton', async () => {
