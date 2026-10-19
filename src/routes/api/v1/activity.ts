@@ -4,16 +4,15 @@
  */
 
 import {Router, type ErrorRequestHandler, type Request, type Response} from 'express';
-import path from 'node:path';
-import fs from 'node:fs/promises';
 import * as activityApi from '../../../controller/activityController';
 import type {components} from '../../../types/api/v1';
 import type {PreparedApiJsonResponse} from '../../../types/ApiTransportTypes';
 import type {ActivitySimpleMutationOperation} from '../../../types/ActivityV1Types';
 import {ApiProblem} from '../../../modules/api/problem';
 import {APIError} from '../../../modules/lib/errors';
+import {RecommendationQueueFullError} from '../../../modules/activity/recommendationJobs';
 import {requireApiContext} from '../../../modules/api/session';
-import {prepareValidatedJson, sendPreparedJson, sendValidatedBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+import {decodeApiMultipartData, decodeApiMultipartImage, prepareValidatedJson, receiveApiUpload, sendPreparedJson, sendStoredApiBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {prepareFileUploader, removeImage} from '../../../modules/lib/fileCommons';
 import {searchLimiter} from '../../../middleware/adminApiFactory';
@@ -30,25 +29,6 @@ async function sendActivityMutation(req: Request, res: Response, operation: Acti
     const prepared = prepareValidatedJson(req, operation, 200, {changed: true});
     await execute();
     sendPreparedJson(req, res, prepared);
-}
-
-/** Multer retains existing byte/type/extension limits before generated metadata validation. */
-async function readImageUpload(req: Request, res: Response): Promise<void> {
-    await new Promise<void>((resolve, reject) => uploadHeader(req, res, error => {
-        if (!error) resolve();
-        else reject(new ApiProblem(error.code === 'LIMIT_FILE_SIZE' ? 'PAYLOAD_TOO_LARGE' : 'UPLOAD_INVALID'));
-    }));
-}
-
-/** Multipart preserves unknown fields for closed-shape rejection; only admitted bytes supply image metadata. */
-function decodeActivityCreateForm(body: unknown, file?: Express.Multer.File): unknown {
-    const form = body as Record<string, unknown>;
-    if (Object.hasOwn(form, 'image') && !file) throw new ApiProblem('UPLOAD_INVALID');
-    // Decode exactly one metadata part, retaining absent/malformed distinctions.
-    let data: unknown;
-    try { data = typeof form.data === 'string' ? JSON.parse(form.data) : form.data; }
-    catch { throw new ApiProblem('VALIDATION_FAILED'); }
-    return {...form, data, ...(file ? {image: file.originalname} : {})};
 }
 
 router.get('/create-entry', asyncHandler(async function getActivityCreateEntry(req, res) {
@@ -75,8 +55,8 @@ router.post('/', asyncHandler(async function createActivityPlan(req, res) {
     let committed = false;
     let prepared: PreparedApiJsonResponse;
     try {
-        await readImageUpload(req, res);
-        validateOperationRequest(req, 'createActivityPlan', body => decodeActivityCreateForm(body, req.file));
+        await receiveApiUpload(req, res, uploadHeader);
+        validateOperationRequest(req, 'createActivityPlan', body => decodeApiMultipartData(body, req.file));
         function retainPersistedImage(): void { committed = true; }
         function prepareCreated(data: components['schemas']['ActivityCreated']): void {
             prepared = prepareValidatedJson(req, 'createActivityPlan', 201, data);
@@ -389,8 +369,8 @@ router.put('/:planId/header', asyncHandler(async function uploadActivityHeader(r
     await activityApi.readActivityHeaderBaseline(String(req.params.planId), actor);
     let committed = false;
     try {
-        await readImageUpload(req, res);
-        validateOperationRequest(req, 'uploadActivityHeader', body => ({...body as object, ...(req.file ? {image: req.file.originalname} : {})}));
+        await receiveApiUpload(req, res, uploadHeader);
+        validateOperationRequest(req, 'uploadActivityHeader', body => decodeApiMultipartImage(body, req.file));
         if (!req.file) throw new ApiProblem('UPLOAD_INVALID');
         await sendActivityMutation(req, res, 'uploadActivityHeader', async function replaceHeader() {
             await activityApi.setActivityHeader(String(req.params.planId), req.file, actor, req.get('If-Match'));
@@ -407,21 +387,85 @@ router.get('/:planId/header', asyncHandler(async function getActivityHeader(req,
     validateOperationRequest(req, 'getActivityHeader');
     const storedPath = await activityApi.readActivityHeaderPath(String(req.params.planId), actor);
     // Resolve and confine the stored reference before accessing its bytes.
-    const directory = path.resolve(process.cwd(), settings.value.headerImgDir);
-    const fullPath = path.resolve(process.cwd(), storedPath);
-    const relative = path.relative(directory, fullPath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new ApiProblem('NOT_FOUND');
-    let bytes: Buffer;
-    try { bytes = await fs.readFile(fullPath); }
-    catch { throw new ApiProblem('NOT_FOUND'); }
-    sendValidatedBinary(req, res, 'getActivityHeader', 200, bytes);
+    await sendStoredApiBinary(req, res, 'getActivityHeader', 200, settings.value.headerImgDir, storedPath);
+}));
+
+router.get('/:planId/requirements', asyncHandler(async function getActivityRequirements(req, res) {
+    const actor = await requireApiContext(req, res);
+    // Requirements remain a private management projection with generated scalar validation.
+    validateOperationRequest(req, 'getActivityRequirements');
+    sendValidatedJson(req, res, 'getActivityRequirements', 200,
+        await activityApi.readActivityRequirements(String(req.params.planId), actor));
+}));
+
+router.put('/:planId/requirements', asyncHandler(async function updateActivityRequirements(req, res) {
+    const actor = await requireApiContext(req, res);
+    // Prepare the invariant receipt before the existing shared settings transaction.
+    validateOperationRequest(req, 'updateActivityRequirements');
+    await sendActivityMutation(req, res, 'updateActivityRequirements', async function saveRequirements() {
+        await activityApi.saveActivityRequirements(String(req.params.planId), req.body, actor);
+    });
+}));
+
+router.get('/:planId/recommendations', asyncHandler(async function getActivityRecommendations(req, res) {
+    const actor = await requireApiContext(req, res);
+    // This recovery snapshot cannot maintain proposals or enqueue automatic work.
+    validateOperationRequest(req, 'getActivityRecommendations');
+    sendValidatedJson(req, res, 'getActivityRecommendations', 200,
+        await activityApi.readActivityRecommendations(String(req.params.planId), actor));
+}));
+
+router.post('/:planId/recommendations/entry', asyncHandler(async function enterActivityRecommendations(req, res) {
+    const actor = await requireApiContext(req, res);
+    // Deliberate native-equivalent workspace entry retains maintenance and possible enqueue.
+    validateOperationRequest(req, 'enterActivityRecommendations');
+    sendValidatedJson(req, res, 'enterActivityRecommendations', 200,
+        await activityApi.readActivityRecommendations(String(req.params.planId), actor, true));
+}));
+
+router.post('/:planId/recommendations/warnings', asyncHandler(async function previewActivityRecommendations(req, res) {
+    const actor = await requireApiContext(req, res);
+    // Preview is read-only but carries the exact draft and captured actor's CSRF context.
+    validateOperationRequest(req, 'previewActivityRecommendations');
+    sendValidatedJson(req, res, 'previewActivityRecommendations', 200,
+        await activityApi.previewActivityRecommendations(String(req.params.planId), req.body, actor));
+}));
+
+router.post('/:planId/recommendations/apply', asyncHandler(async function applyActivityRecommendations(req, res) {
+    const actor = await requireApiContext(req, res);
+    // Apply once through the existing controller; no postcommit read renews admission.
+    validateOperationRequest(req, 'applyActivityRecommendations');
+    sendValidatedJson(req, res, 'applyActivityRecommendations', 200,
+        await activityApi.applyActivityRecommendations(String(req.params.planId), req.body, actor));
+}));
+
+router.post('/:planId/recommendations/auto', asyncHandler(async function generateActivityRecommendations(req, res) {
+    const actor = await requireApiContext(req, res);
+    // Explicit dispatch returns the coordinator's identity, including coalesced work.
+    validateOperationRequest(req, 'generateActivityRecommendations');
+    sendValidatedJson(req, res, 'generateActivityRecommendations', 202,
+        await activityApi.generateActivityRecommendations(String(req.params.planId), actor));
+}));
+
+router.get('/:planId/recommendations/auto/:jobId', asyncHandler(async function getActivityRecommendationJob(req, res) {
+    const actor = await requireApiContext(req, res);
+    // Poll only the specified domain job; this endpoint cannot dispatch recommendations.
+    validateOperationRequest(req, 'getActivityRecommendationJob');
+    sendValidatedJson(req, res, 'getActivityRecommendationJob', 200,
+        await activityApi.readActivityRecommendationJob(String(req.params.planId), String(req.params.jobId), actor));
 }));
 
 /** Existing Activity owners report stale warning reviews, full slots and other
  * domain conflicts as native APIError(409). Adapt that trusted class/status at
  * this feature boundary; never expose native prose/data or reinterpret an
  * arbitrary status-shaped exception. Existing declared Problems keep their code. */
-const activityConflict: ErrorRequestHandler = function activityConflict(error, _req, _res, next) {
+const activityConflict: ErrorRequestHandler = function activityConflict(error, _req, res, next) {
+    // Only the existing queue's trusted cause supplies the native bounded retry advice.
+    if (error instanceof APIError && error.cause instanceof RecommendationQueueFullError) {
+        res.set('Retry-After', '5');
+        next(new ApiProblem('RECOMMENDATION_QUEUE_FULL'));
+        return;
+    }
     // The shared versioned classifier cannot infer each feature's generic 409.
     // Activity's existing conflict result maps to its stable safe contract here.
     next(error instanceof APIError && !(error instanceof ApiProblem) && error.status === 409

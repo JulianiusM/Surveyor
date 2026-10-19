@@ -40,6 +40,7 @@ import {
     RecommendationJobCoordinator,
     RecommendationQueueFullError,
     fingerprintRecommendationContext,
+    type RecommendationJobView,
 } from "../modules/activity/recommendationJobs";
 import {
     calculateBaselineRequirementForPlan,
@@ -1846,7 +1847,10 @@ async function authorizeSelfAssignment(
     }
 }
 
-async function getRecommendations(planId: string, session?: SessionLike) {
+/** Native workspace entry maintains saved proposals; the versioned recovery read
+ * explicitly disables those effects while sharing the same safe presentation inputs. */
+async function getRecommendations(planId: string, session?: SessionLike, maintain = true) {
+    // Both entry and recovery use existing feature reads rather than a second domain model.
     const [plan, requirementConfig, initialRecommendations, slots, assignments, assignees] = await Promise.all([
         activityService.getActivityPlanById(planId),
         requireRequirementConfiguration(planId),
@@ -1863,38 +1867,41 @@ async function getRecommendations(planId: string, session?: SessionLike) {
     const fulfilledIds: string[] = [];
     const obsoletePendingIds: string[] = [];
     const obsoleteApprovedIds: string[] = [];
-    for (const recommendation of initialRecommendations) {
-        if (!["PENDING", "APPROVED"].includes(recommendation.status)) continue;
-        const operation = recommendation.operation ?? "ASSIGN";
-        const hasTarget = (assignees[recommendation.item.id] ?? [])
-            .some((assignee) => assignee.profileId === recommendation.profile.id);
-        const sourceSlotId = operation === "REASSIGN"
-            ? recommendation.sourceItem?.id
-            : operation === "UNASSIGN"
-                ? recommendation.item.id
-                : undefined;
-        const hasSource = sourceSlotId
-            ? (assignees[sourceSlotId] ?? []).some((assignee) => assignee.profileId === recommendation.profile.id)
-            : false;
-        const fulfilled = (operation === "ASSIGN" && hasTarget)
-            || (operation === "REASSIGN" && hasTarget && !hasSource)
-            || (operation === "UNASSIGN" && !hasSource);
-        if (fulfilled) {
-            fulfilledIds.push(recommendation.id);
-            recommendation.status = "APPLIED";
-        } else if (operation === "REASSIGN" && (!hasSource || hasTarget)) {
-            if (recommendation.status === "PENDING") obsoletePendingIds.push(recommendation.id);
-            else {
-                obsoleteApprovedIds.push(recommendation.id);
-                recommendation.status = "REJECTED";
+    // Only deliberate workspace entry performs native fulfilled/obsolete-row maintenance.
+    if (maintain) {
+        for (const recommendation of initialRecommendations) {
+            if (!["PENDING", "APPROVED"].includes(recommendation.status)) continue;
+            const operation = recommendation.operation ?? "ASSIGN";
+            const hasTarget = (assignees[recommendation.item.id] ?? [])
+                .some((assignee) => assignee.profileId === recommendation.profile.id);
+            const sourceSlotId = operation === "REASSIGN"
+                ? recommendation.sourceItem?.id
+                : operation === "UNASSIGN"
+                    ? recommendation.item.id
+                    : undefined;
+            const hasSource = sourceSlotId
+                ? (assignees[sourceSlotId] ?? []).some((assignee) => assignee.profileId === recommendation.profile.id)
+                : false;
+            const fulfilled = (operation === "ASSIGN" && hasTarget)
+                || (operation === "REASSIGN" && hasTarget && !hasSource)
+                || (operation === "UNASSIGN" && !hasSource);
+            if (fulfilled) {
+                fulfilledIds.push(recommendation.id);
+                recommendation.status = "APPLIED";
+            } else if (operation === "REASSIGN" && (!hasSource || hasTarget)) {
+                if (recommendation.status === "PENDING") obsoletePendingIds.push(recommendation.id);
+                else {
+                    obsoleteApprovedIds.push(recommendation.id);
+                    recommendation.status = "REJECTED";
+                }
             }
         }
+        await Promise.all([
+            recommendationService.markRecommendationsApplied(planId, fulfilledIds),
+            recommendationService.deleteRecommendations(planId, obsoletePendingIds),
+            recommendationService.markRecommendationsRejected(planId, obsoleteApprovedIds),
+        ]);
     }
-    await Promise.all([
-        recommendationService.markRecommendationsApplied(planId, fulfilledIds),
-        recommendationService.deleteRecommendations(planId, obsoletePendingIds),
-        recommendationService.markRecommendationsRejected(planId, obsoleteApprovedIds),
-    ]);
     const recommendations = initialRecommendations.filter(
         (recommendation) => !obsoletePendingIds.includes(recommendation.id),
     );
@@ -1904,11 +1911,12 @@ async function getRecommendations(planId: string, session?: SessionLike) {
     let autoGenerationJob;
 
     // If the binding deadline passed and no recommendations exist, seed them automatically
-    if (shouldAutoGenerateRecommendations(plan, recommendations)) {
+    if (maintain && shouldAutoGenerateRecommendations(plan, recommendations)) {
         const queued = await queueAutoGenerateRecommendations(planId);
         autoGenerationJob = queued.job;
     }
 
+    // Warnings retain their existing server projection and sibling privacy filtering.
     const normalized = visibleRecommendations.map((rec) => ({
         itemId: rec.item.id,
         profileId: rec.profileId ?? null,
@@ -2964,7 +2972,8 @@ export async function readActivityPlan(id: string, session: SessionLike) {
             manageSettings: Boolean(metadata.editableFields.length || permissions.any('MANAGE_PERMISSIONS', 'EDIT_META', 'DATA_DUPLICATE', 'DATA_EXPORT') || isOwner(session, plan.ownerId)),
             // Native role creation has a separate browser EDIT_META admission;
             // its unchanged server operation still requires MANAGE_ASSIGNMENTS.
-            manageRequirements: permissions.has('MANAGE_REQUIREMENTS'), roleCreationAdmission: permissions.has('EDIT_META'), exportSchedule: permissions.has('DATA_EXPORT'),
+            manageRequirements: permissions.has('MANAGE_REQUIREMENTS'), manageRecommendations: permissions.has('MANAGE_ASSIGNMENTS'),
+            roleCreationAdmission: permissions.has('EDIT_META'), exportSchedule: permissions.has('DATA_EXPORT'),
             // The retained advanced destination is a root grant on linked plans;
             // empty schedules and unrelated item grants do not change its visibility.
             rulesWorkspace: Boolean(plan.eventId && permissions.any('MANAGE_REQUIREMENTS', 'MANAGE_ASSIGNMENTS')),
@@ -3330,4 +3339,128 @@ export async function patchActivityTextField(id: string, fieldId: string, body: 
 export async function removeActivityTextField(id: string, fieldId: string, session: SessionLike): Promise<void> {
     await requireActivityMethod(id, 'MANAGE_REQUIREMENTS', session);
     await deleteTextField(id, fieldId);
+}
+
+/** Project private requirement inputs explicitly, retaining the shared pure engine's
+ * saved analysis and calculation inputs without sending ORM relations or profile records. */
+export async function readActivityRequirements(id: string, session: SessionLike): Promise<components['schemas']['ActivityRequirements']> {
+    // Requirement management has its own native grant, separate from page admission.
+    await requireActivityMethod(id, 'MANAGE_REQUIREMENTS', session);
+    const [data, allRoles] = await Promise.all([getRequirements(id), activityService.getAllRoles(id)]);
+    const plan = data.plan;
+
+    // Select scalars from each persistence result before it crosses the versioned boundary.
+    return {
+        plan: {id: plan.id, assignmentMode: plan.assignmentMode, generalRequiredShifts: plan.generalRequiredShifts ?? null,
+            roundingMode: plan.roundingMode ?? null, bindingDeadline: plan.bindingDeadline?.toISOString() ?? null,
+            startDate: plan.startDate, endDate: plan.endDate, allowOverfillAfterFull: Boolean(plan.allowOverfillAfterFull),
+            allowExternalAssignees: Boolean(plan.allowExternalAssignees), allowArrivalDayEvening: Boolean(plan.allowArrivalDayEvening),
+            allowDepartureDayMorning: Boolean(plan.allowDepartureDayMorning)},
+        roleRequirements: data.roleRequirements.map(row => ({roleId: Number(row.roleId), requiredShifts: row.requiredShifts})),
+        stayRequirements: data.stayRequirements.map(row => ({stayDays: row.stayDays, requiredShifts: row.requiredShifts})),
+        overrides: data.overrides.map(row => ({id: row.id, profileId: row.profileId, roleId: row.roleId ?? null,
+            requiredShifts: row.requiredShifts, profileName: row.profile?.name ?? null})),
+        participants: data.participants.map(row => ({participantKey: row.participantKey, name: row.name ?? null,
+            roleIds: row.roleIds ?? [], requiredShifts: row.requiredShifts, assignedShifts: row.assignedShifts,
+            remainingShifts: row.remainingShifts, source: row.source, attendanceDays: row.attendanceDays,
+            attendance: {arrivalDate: row.attendance?.arrivalDate ?? null, departureDate: row.attendance?.departureDate ?? null},
+            roles: row.roles, assignmentMode: row.assignmentMode})),
+        capacitySummary: {availableSlots: data.capacitySummary.availableSlots, requiredSlots: data.capacitySummary.requiredSlots,
+            difference: data.capacitySummary.difference, configurationComplete: data.capacitySummary.configurationComplete},
+        calculationContext: {
+            participants: data.calculationContext.participants.map(row => ({profileId: row.profileId ?? null,
+                name: row.name ?? null, arrivalDate: row.arrivalDate ?? null, departureDate: row.departureDate ?? null,
+                roleIds: row.roleIds ?? []})),
+            assignedShiftCounts: data.calculationContext.assignedShiftCounts,
+            slots: data.calculationContext.slots.map(slot => ({id: slot.id, day: slot.day,
+                startTime: slot.startTime ?? null, endTime: slot.endTime ?? null, maxAssignees: slot.maxAssignees ?? null,
+                roles: slot.roles})),
+        },
+        overrideTargets: data.overrideTargets,
+        allRoles: allRoles.map(role => ({id: Number(role.id), title: role.title, description: role.description ?? null})),
+    };
+}
+
+/** Preserve the native settings transaction, validation, override retention and job invalidation. */
+export async function saveActivityRequirements(id: string, input: components['schemas']['ActivityRequirementsInput'], session: SessionLike): Promise<void> {
+    // The existing controller owns all requirement decisions and its transaction lifecycle.
+    await requireActivityMethod(id, 'MANAGE_REQUIREMENTS', session);
+    await updateRequirements(id, input);
+}
+
+/** Recommendations display only their native slot labels, never full slot persistence records. */
+function activityRecommendationSlot(slot: Pick<ActivitySlot, 'id' | 'title' | 'day' | 'startTime' | 'endTime'>): components['schemas']['ActivityRecommendationSlot'] {
+    return {id: slot.id, title: slot.title, day: slot.day, startTime: slot.startTime ?? null, endTime: slot.endTime ?? null};
+}
+
+/** Domain job diagnostics remain server-owned; status and identity are sufficient
+ * for the localized terminal presentation without exposing worker or database errors. */
+function activityRecommendationJob(job: RecommendationJobView): components['schemas']['ActivityRecommendationJob'] {
+    return {id: job.id, planId: job.planId, status: job.status, createdAt: job.createdAt, updatedAt: job.updatedAt,
+        ...(job.recommendationCount === undefined ? {} : {recommendationCount: job.recommendationCount})};
+}
+
+/** Whitelist a warning's operation identity after the shared warning owner redacts sibling details. */
+function activityRecommendationWarnings(results: RecommendationWarningResult[]): components['schemas']['ActivityRecommendationWarning'][] {
+    // Existing domain warnings are plain scalar projections; normalize their optional profile shape.
+    return results.map(result => ({recommendation: {
+        ...(result.recommendation.id ? {id: result.recommendation.id} : {}),
+        itemId: result.recommendation.itemId, profileId: result.recommendation.profileId ?? undefined,
+        status: result.recommendation.status, operation: result.recommendation.operation,
+        sourceItemId: result.recommendation.sourceItemId, manual: result.recommendation.manual,
+    }, warnings: result.warnings}));
+}
+
+/** Entry intentionally retains native maintenance/enqueue semantics. Recovery reads and
+ * domain-job observation never call that mutation path, so periodic reads cannot start work. */
+export async function readActivityRecommendations(id: string, session: SessionLike, enter = false): Promise<components['schemas']['ActivityRecommendations']> {
+    // Independently authorize the private recommendation workspace on every invocation.
+    await requireActivityMethod(id, 'MANAGE_ASSIGNMENTS', session);
+    const data = await getRecommendations(id, session, enter);
+
+    // Reuse the existing presentation inputs but exclude ORM timestamps, ownership and relations.
+    return {
+        recommendations: data.recommendations.map(row => ({id: row.id, item: activityRecommendationSlot(row.item),
+            profile: {id: row.profile.id, name: row.profile.name}, sourceItem: row.sourceItem ? activityRecommendationSlot(row.sourceItem) : null,
+            status: row.status, operation: row.operation, manual: row.manual})),
+        participantOptions: data.participantOptions,
+        slots: data.slots.map(activityRecommendationSlot),
+        existingAssignments: data.existingAssignments.map(row => ({item: activityRecommendationSlot(row.item),
+            profile: row.profile, roles: row.roles})),
+        warnings: activityRecommendationWarnings(data.warnings),
+        autoGenerationJob: data.autoGenerationJob ? activityRecommendationJob(data.autoGenerationJob) : null,
+    };
+}
+
+/** Preview the exact batch with existing source validation and permission-redacted collisions. */
+export async function previewActivityRecommendations(id: string, input: components['schemas']['ActivityRecommendationReview'], session: SessionLike): Promise<components['schemas']['ActivityRecommendationPreview']> {
+    // Preview remains read-only; its opaque overlap digest grants no broader authority.
+    await requireActivityMethod(id, 'MANAGE_ASSIGNMENTS', session);
+    const result = await getRecommendationWarningPreview(id, input, session);
+    return {warnings: activityRecommendationWarnings(result.warnings), overlapConfirmation: result.overlapConfirmation};
+}
+
+/** Apply the submitted batch once, preserving native skipped counts, reciprocal moves and
+ * inherited postcommit regeneration behavior. No adapter refresh follows the command. */
+export async function applyActivityRecommendations(id: string, input: components['schemas']['ActivityRecommendationApplication'], session: SessionLike): Promise<components['schemas']['ActivityRecommendationApplyResult']> {
+    // The existing controller rechecks the warning review before its transaction writes.
+    await requireActivityMethod(id, 'MANAGE_ASSIGNMENTS', session);
+    const result = await applyRecommendations(id, input, session);
+    return {applied: result.applied, skipped: result.skipped, warnings: activityRecommendationWarnings(result.warnings)};
+}
+
+/** Explicit generation reuses the existing coordinator and coalescing identity. */
+export async function generateActivityRecommendations(id: string, session: SessionLike): Promise<components['schemas']['ActivityRecommendationQueued']> {
+    // Generation remains a deliberate command; ordinary snapshots cannot dispatch it.
+    await requireActivityMethod(id, 'MANAGE_ASSIGNMENTS', session);
+    const result = await queueAutoGenerateRecommendations(id);
+    return {job: activityRecommendationJob(result.job), coalesced: result.coalesced};
+}
+
+/** Observe only the specified domain job, including its current terminal state. */
+export async function readActivityRecommendationJob(id: string, jobId: string, session: SessionLike): Promise<components['schemas']['ActivityRecommendationJobResult']> {
+    // The existing owner scopes job identity to this plan and returns missing jobs honestly.
+    await requireActivityMethod(id, 'MANAGE_ASSIGNMENTS', session);
+    const result = await getAutoRecommendationJob(id, jobId);
+    return {job: activityRecommendationJob(result.job)};
 }

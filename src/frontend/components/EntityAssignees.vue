@@ -13,8 +13,14 @@ const emit = defineEmits<{remove: [id: string]}>();
         <li v-for="(assignee, index) in assignees" :key="assignee.assignmentId ?? index"
             class="d-flex align-items-center gap-1">
             <i class="bi bi-person-fill" aria-hidden="true"></i><span class="flex-grow-1">{{ assignee.name }}</span>
-            <ActionButton v-if="removable && assignee.assignmentId !== null" class="btn-sm" variant="outline-danger"
-                :disabled="disabled" :aria-label="removeLabel" @click="emit('remove', assignee.assignmentId)">&times;</ActionButton>
+            <!-- Features may retain native button spacing/data hooks. This list
+                 still admits removal only for an explicitly disclosed identity. -->
+            <template v-if="removable && assignee.assignmentId !== null">
+                <slot name="remove" :assignment-id="assignee.assignmentId">
+                    <ActionButton class="btn-sm" variant="outline-danger"
+                        :disabled="disabled" :aria-label="removeLabel" @click="emit('remove', assignee.assignmentId)">&times;</ActionButton>
+                </slot>
+            </template>
         </li>
     </ul>
 </template>

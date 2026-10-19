@@ -13,6 +13,20 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /activity-plans/{planId}/requirements:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1requirements
+  /activity-plans/{planId}/recommendations:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1recommendations
+  /activity-plans/{planId}/recommendations/entry:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1recommendations~1entry
+  /activity-plans/{planId}/recommendations/warnings:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1recommendations~1warnings
+  /activity-plans/{planId}/recommendations/apply:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1recommendations~1apply
+  /activity-plans/{planId}/recommendations/auto:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1recommendations~1auto
+  /activity-plans/{planId}/recommendations/auto/{jobId}:
+    $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1recommendations~1auto~1{jobId}
   /activity-plans/{planId}/automatic-archive:
     $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1automatic-archive
   /activity-plans/create-entry:
@@ -1409,6 +1423,50 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    ActivityRequirementRole:
+      $ref: ./activity.yaml#/schemas/ActivityRequirementRole
+    ActivityRequirementStay:
+      $ref: ./activity.yaml#/schemas/ActivityRequirementStay
+    ActivityParticipantOption:
+      $ref: ./activity.yaml#/schemas/ActivityParticipantOption
+    ActivityRecommendationProfile:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationProfile
+    ActivityRecommendationWarning:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationWarning
+    ActivityRecommendationWarningInput:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationWarningInput
+    ActivityRequirementsInput:
+      $ref: ./activity.yaml#/schemas/ActivityRequirementsInput
+    ActivityRequirementAttendance:
+      $ref: ./activity.yaml#/schemas/ActivityRequirementAttendance
+    ActivityRequirementSlot:
+      $ref: ./activity.yaml#/schemas/ActivityRequirementSlot
+    ActivityRequirementCapacity:
+      $ref: ./activity.yaml#/schemas/ActivityRequirementCapacity
+    ActivityRequirementParticipant:
+      $ref: ./activity.yaml#/schemas/ActivityRequirementParticipant
+    ActivityRequirements:
+      $ref: ./activity.yaml#/schemas/ActivityRequirements
+    ActivityRecommendationInput:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationInput
+    ActivityRecommendationReview:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationReview
+    ActivityRecommendationApplication:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationApplication
+    ActivityRecommendationSlot:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationSlot
+    ActivityRecommendationJob:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationJob
+    ActivityRecommendationJobResult:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationJobResult
+    ActivityRecommendationQueued:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationQueued
+    ActivityRecommendationPreview:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationPreview
+    ActivityRecommendationApplyResult:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendationApplyResult
+    ActivityRecommendations:
+      $ref: ./activity.yaml#/schemas/ActivityRecommendations
     ActivityWeek:
       $ref: ./activity.yaml#/schemas/ActivityWeek
     ActivityCreateContext:

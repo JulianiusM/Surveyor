@@ -5,8 +5,9 @@ import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
 import {usePilot} from '../../app/context';
-import {overviewKeys, eventKeys} from '../../app/queryKeys';
+import {eventKeys} from '../../app/queryKeys';
 import {useEventApi} from './api';
+import {eventDeniedQueries} from './useEventSection';
 import EventPage from './EventPage.vue';
 import EntityEntryPage from '../../components/EntityEntryPage.vue';
 import GuestEntryPage from '../identity/GuestEntryPage.vue';
@@ -36,28 +37,7 @@ const initialEntry = nativeInitial?.eventEntry;
  * Public guest admission has its own policy; a participant denial does not revoke it.
  * Copied duplicate drafts also remain independent of their source Event's read authority. */
 function deniedQueries(entry: {readonly status: number}, scope: PilotRequestScope): EntityEntryRetirement {
-    const actor = scope.context;
-    const resource = eventId.value;
-    // Losing administration does not revoke independent roster, participant or
-    // metadata grants. Retire only this page intent unless the root is missing.
-    const families: (readonly unknown[])[] = guestRoute.value ? [eventKeys.guest(actor, resource)]
-        : [eventKeys.detail(actor, resource, intent.value === 'admin'), eventKeys.things(actor, resource, intent.value === 'admin')];
-    if (entry.status === 404) {
-        // Missing resources invalidate every other intent and token visit. The
-        // shared owner preserves the current response that produced this denial.
-        for (const view of ['detail', 'guest', 'admin'] as const) {
-            if (view !== intent.value) families.push(eventKeys.entry(actor, resource, view));
-        }
-        families.push(eventKeys.guest(actor, resource));
-        families.push(eventKeys.detail(actor, resource), eventKeys.detail(actor, resource, true),
-            eventKeys.participants(actor, resource), eventKeys.links(actor, resource), eventKeys.things(actor, resource),
-            eventKeys.things(actor, resource, true), eventKeys.editors(actor, resource), overviewKeys.all(actor));
-    }
-    // Previous token visits and unused duplicate seeds retire only while inactive.
-    // A mounted creation draft stays independent of the source's missing detail.
-    const inactiveFamilies = entry.status === 404
-        ? [eventKeys.entry(actor, resource, intent.value), eventKeys.duplicate(actor, resource)] : [];
-    return {families, inactiveFamilies};
+    return eventDeniedQueries(scope.context, eventId.value, intent.value, entry.status);
 }
 
 /** The server owns the distinction between detail admission and the explicit public guest

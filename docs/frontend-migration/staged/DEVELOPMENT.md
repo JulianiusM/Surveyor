@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-18
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P5 Activity adoption and bounded optional shared presentation inputs source-reconciled with existing contribution owners, native isolation and retained P0-P4 contracts; execution separate; no publication
+verification-scope: P0-P6 contribution owners reconciled with shared safe UI recovery, Settings retirement, upload transport, advanced Activity composition and approved automatic job observation; execution separate; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -102,6 +102,10 @@ or a copied database-limit policy. Native metadata diagnostics remain owned by t
 The current HTTP adapter decodes single scalar path/query/header values, JSON and Event/Packing/Drivers/Survey/Activity multipart, and
 delivers JSON or scoped binary image responses. Creation decodes the `data` JSON part once against its authored nested schema
 and handles `image` separately. Repeated query parameters, absent/empty values and malformed input stay distinct.
+On the server, `receiveApiUpload`, `decodeApiMultipartData`, `decodeApiMultipartImage` and `sendStoredApiBinary`
+in the existing transport owner share matching upload completion, multipart decoding and confined binary delivery.
+All five feature adapters use these owners. Features still select their parser, byte/type/filename limits, generated
+operation, authorized storage root, method admission, cleanup and controller; transport performs no domain write.
 The browser's `createMultipartForm` in the existing transport owner supplies the matching creation/header envelope
 for Packing, Drivers, Event, Survey and Activity. Features validate their own generated input and select the operation; the
 serializer only encodes an optional `data` part and appends the original optional image bytes. Header operations
@@ -145,6 +149,24 @@ answer appearance mapping while retaining their different wording.
 This preserves lexical Event capacity rather than silently adopting the directive's numeric conversion. Explicit
 readonly/class inputs and the label slot preserve existing control presentation and Event's inline deadline hint;
 field constraints and normalization remain with the feature.
+Existing Event numeric/date fields and timezone pickers use the control slot where retaining the original native
+directive or picker preserves coercion, lexical drafts or focus targets. Keep the feature's actual node and constraints;
+the slot does not create another input model. Matching Bootstrap command/filter buttons use `ActionButton` with their
+existing variant, size, form and disabled policy. Passing only `disabled` retains a native no-spinner workflow; do not
+add pending presentation merely because the shared component supports it. Durable feature warnings use `StatusNotice`,
+with feature-owned content, visibility and warning intent rather than a new timer or command owner.
+Its default live-region role follows the feedback kind. Pass an explicit null role only for an existing plain notice
+whose contract has no live-region announcement, rather than silently adding accessibility behavior during composition.
+
+`AppTabList` shares the native tab keyboard contract and Reka roving tab stops across Settings and Activity. Its default
+presentation is pills; Activity supplies the tabs variant, IDs and panel targets. Arrow keys, Home and End activate
+and wrap without scrolling, including modified keys. PageUp/PageDown retain browser behavior rather than Reka's extra
+activation. Pages own admission and keep their dirty panels mounted; do not bind a broader command lock to Activity's
+otherwise enabled tabs. Shared assignee lists likewise retain admitted names and removable IDs; feature-specific
+remove controls may use the existing list's slot without copying list markup or changing server authority.
+`AppAccordionButton` shares matching expanded/collapsed trigger presentation and initialized activation across Event,
+Overview and administrator disclosures. Features retain which panel is open, panel markup, contents and reads; pass
+their existing disabled condition and control target. A visual trigger never owns query admission or a draft.
 
 Activity creation supplies its title/date row and initial dated slots to `EntityListCreation`; that shared owner
 retains admission, root drafts, files, Event selection, permissions and confirmed navigation. Optional submit wording,
@@ -158,6 +180,27 @@ defaults preserve other consumers. `FormField` accepts an explicit label target 
 when a native comparator requires it. Neither optional presentation inputs nor native client guards grant method
 authority. Detail calendar grouping comes from the shared controller's projection of the native server loop, while
 creation retains its separate native browser algorithm; do not normalize their inherited timezone differences.
+
+For advanced Activity, compose `ActivityRequirements` and `ActivityRecommendations` inside the admitted Rules tab;
+changing tabs preserves their independent drafts. Requirements keep lexical form values and the saved calculation
+context separate from refreshed snapshots. `requirements.ts` calls the existing pure requirements engine for local
+coverage and baseline calculation, and `ActivityParticipants` renders both saved and unsaved progress. Structural
+engine inputs and the shared `RoundingMode` declaration under `src/types/` keep ORM entity imports out of browser
+compilation; this type boundary changes no calculation or database behavior.
+The form emits only its current mode for native-equivalent Auto control; it remains the sole requirement draft and
+generation still uses saved server settings. Slot-role and manual recommendation editors retain valid selections
+while clearing fields and IDs released by fresh admitted options. Dictionary keys from role titles remain data.
+
+Recommendations keep their local rows, manual modal and frozen application batch in feature owners. Shared
+command/query admission, warning presentation and dialogs retain their existing lifetimes. Entry, explicit Reload,
+explicit generation completion and confirmed application deliberately reuse native maintenance; never place that
+operation in Query, background refresh, retry or ordinary job-status reads. Pure recovery reads do not prove that an
+uncertain dispatch failed. Poll only a confirmed job identity and stop on terminal, retired or denied context.
+The approved automatic deadline-job observation also consumes an identity returned by entry. Its completion reads
+saved proposals through a pure snapshot; only an explicitly dispatched generation retains the maintenance trigger.
+Submit the identical previewed batch with its current overlap acknowledgement; existing server engines retain
+generated/manual provenance, both swap legs and applied/skipped decisions. Keep job diagnostics private and pass
+only explicit permitted scalar projections. Inherited postcommit regeneration failures remain outside this adaptation.
 
 1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;
@@ -344,7 +387,7 @@ and feature-supplied assignment/full wording. Each feature supplies its own oper
 Drivers displays the offering profile as driver and counts only passenger assignments; Packing alone has Everyone
 and browser-local Packed? state. Shared controls never infer those feature rules.
 
-`useListCommands` in the existing `listDetail.ts` owner supplies matching Packing/Drivers/Survey command/read recovery.
+`useListCommands` in the existing `listDetail.ts` owner supplies matching Packing/Drivers/Survey/Activity command/read recovery.
 Each feature injects its active/denied/read state, actual fresh read and dirty policy. The shared composition owns
 cooldown/action state, guarded post-command reads, explicit reconciliation/stale feedback and acknowledged review of
 an uncertain creation; no recovery repeats a mutation. Survey supplies its existing ballot merge after a fresh read. Packing and
@@ -352,8 +395,20 @@ Drivers additionally select `listProblemKey` for their common permission wording
 presentation. Its `denyInlineEdit` supplies Packing/Drivers' existing local transient inline feedback without creating
 an operation, status lease or HTTP request. These are shared lifetimes, not another query/draft store or feature policy.
 
+Deliberate UI retries use `command.reconcileSafely`; a failed read returns false. Query retains diagnostics and
+cooldown. Command success normally publishes its saved notice; an explicit `success: null` preserves a native
+operation that completes quietly, as with recommendation entry and Reload. Select silence before publication;
+clearing a manufactured receipt afterward may already have triggered its shared inline focus/scroll reveal.
+This input changes no confirmation, uncertainty, protection or failure handling. Other callers retain their defaults.
+Feature drafts and unknown-command status stay with their existing owners. Causal post-command reads retain their rejecting contract so confirmed
+save plus failed refresh remains distinguishable. `useSettingsAccessRetirement` in the same list-detail owner shares
+editor-family cancellation/removal and actor/resource/lifetime fences across all five detail Settings consumers.
+Each feature closes its dialog and injects its families and fresh read, retaining Survey's ballot merge and Event's
+independent projections. Event entry and detail denial use one `eventDeniedQueries` selection in its existing read
+owner: a method denial releases only its affected intent, while missing-root absence invalidates associated families.
+
 `EntityDetailReadState` shares the denied, stale/cold warning and missing-pending-data skeleton fragment across
-Packing, Drivers and Survey. Features pass the actual denied/error/data/pending state, timestamps, cooldown and route
+Packing, Drivers, Survey and Activity. Features pass the actual denied/error/data/pending state, timestamps, cooldown and route
 shape. Lists retain their `list.data`-based successful timestamp; Survey retains its displayed-data timestamp.
 Its slot preserves Survey's Refresh row between warnings and loading. The component never infers admission, replaces
 a retained draft or owns a query, receipt or retry timer. Common presentation does not authorize normalizing distinct
@@ -745,7 +800,7 @@ pending/unknown command protection. Reuse startup, mount and update owners; neve
 commands to recover startup.
 
 Automatic full-document reload additionally requires an explicitly eligible dynamic route and dynamic admitted
-content. Overview, Packing/Drivers/Survey detail and Event detail/admin opt in. Creation, duplication, user-management and
+content. Overview, Packing/Drivers/Survey/Activity detail and Event detail/admin opt in. Creation, duplication, user-management and
 Help remain excluded even when pristine. Static admitted errors/completions on a dynamic URL remain excluded through the existing shared
 content classifier, rather than a copied list of bootstrap fields. `usePageEntry` registers its live static predicate
 and document visit with the context; registration captures the actor/epoch and retires on unmount, identity change or

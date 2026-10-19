@@ -6,15 +6,13 @@
  */
 
 import {Router, type Request, type Response} from 'express';
-import path from 'node:path';
-import fs from 'node:fs/promises';
 import * as surveyApi from '../../../controller/surveyController';
 import type {components} from '../../../types/api/v1';
 import type {PreparedApiJsonResponse} from '../../../types/ApiTransportTypes';
 import type {SurveyMutationOperation, SurveyMutationPreparation} from '../../../types/SurveyTypes';
 import {ApiProblem} from '../../../modules/api/problem';
 import {requireApiContext} from '../../../modules/api/session';
-import {prepareValidatedJson, sendPreparedJson, sendValidatedBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+import {decodeApiMultipartData, decodeApiMultipartImage, prepareValidatedJson, receiveApiUpload, sendPreparedJson, sendStoredApiBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {prepareFileUploader, removeImage} from '../../../modules/lib/fileCommons';
 import settings from '../../../modules/settings';
@@ -33,29 +31,6 @@ async function sendSurveyCommand(req: Request, res: Response, operation: SurveyM
     }
     await execute(prepareResult);
     sendPreparedJson(req, res, prepared!);
-}
-
-/** Multer owns byte/type/extension limits. Generated schemas validate the decoded
- * multipart fields independently, including every unknown submitted field. */
-async function readImageUpload(req: Request, res: Response): Promise<void> {
-    await new Promise<void>((resolve, reject) => uploadHeader(req, res, error => {
-        if (!error) resolve();
-        else reject(new ApiProblem(error.code === 'LIMIT_FILE_SIZE' ? 'PAYLOAD_TOO_LARGE' : 'UPLOAD_INVALID'));
-    }));
-}
-
-/** Decode serialized metadata while retaining unknown fields for closed-shape
- * rejection. Only an actual Multer upload may populate the image wire field. */
-function decodeSurveyCreateForm(body: unknown, file?: Express.Multer.File): unknown {
-    const form = body as Record<string, unknown>;
-    if (Object.hasOwn(form, 'image') && !file) throw new ApiProblem('UPLOAD_INVALID');
-
-    // Multipart JSON text crosses the same generated structural validator as
-    // already decoded metadata. Malformed text never reaches the business owner.
-    let data: unknown;
-    try { data = typeof form.data === 'string' ? JSON.parse(form.data) : form.data; }
-    catch { throw new ApiProblem('VALIDATION_FAILED'); }
-    return {...form, data, ...(file ? {image: file.originalname} : {})};
 }
 
 router.get('/create-entry', asyncHandler(async function getSurveyCreateEntry(req, res) {
@@ -78,8 +53,8 @@ router.post('/', asyncHandler(async function createSurvey(req, res) {
     try {
         // Reject a nonaccount before storing bytes. The existing creator retains
         // its own transaction, and the adapter never replays an uncertain command.
-        await readImageUpload(req, res);
-        validateOperationRequest(req, 'createSurvey', body => decodeSurveyCreateForm(body, req.file));
+        await receiveApiUpload(req, res, uploadHeader);
+        validateOperationRequest(req, 'createSurvey', body => decodeApiMultipartData(body, req.file));
         const form = req.body as components['schemas']['SurveyCreateForm'];
         const result = await surveyApi.createSurvey(form.data, req.file, actor);
         committed = true;
@@ -149,8 +124,8 @@ router.put('/:surveyId/header', asyncHandler(async function uploadSurveyHeader(r
     try {
         // Owner admission precedes disk storage; the controller independently
         // rechecks the captured actor before invoking the shared image operation.
-        await readImageUpload(req, res);
-        validateOperationRequest(req, 'uploadSurveyHeader', body => ({...body as object, ...(req.file ? {image: req.file.originalname} : {})}));
+        await receiveApiUpload(req, res, uploadHeader);
+        validateOperationRequest(req, 'uploadSurveyHeader', body => decodeApiMultipartImage(body, req.file));
         if (!req.file) throw new ApiProblem('UPLOAD_INVALID');
         let prepared: PreparedApiJsonResponse;
         function prepareHeader(result: components['schemas']['MutationResult']): void {
@@ -179,17 +154,7 @@ router.get('/:surveyId/header', asyncHandler(async function getSurveyHeader(req,
     validateOperationRequest(req, 'getSurveyHeader');
     const storedPath = await surveyApi.readSurveyHeaderPath(String(req.params.surveyId), actor);
 
-    // The browser never selects a filesystem path. Reject an escaped stored
-    // reference before reading, matching the existing header transport boundary.
-    const directory = path.resolve(process.cwd(), settings.value.headerImgDir);
-    const fullPath = path.resolve(process.cwd(), storedPath);
-    const relative = path.relative(directory, fullPath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new ApiProblem('NOT_FOUND');
-
-    let bytes: Buffer;
-    try { bytes = await fs.readFile(fullPath); }
-    catch { throw new ApiProblem('NOT_FOUND'); }
-    sendValidatedBinary(req, res, 'getSurveyHeader', 200, bytes);
+    await sendStoredApiBinary(req, res, 'getSurveyHeader', 200, settings.value.headerImgDir, storedPath);
 }));
 
 /** Archive remains a shared owner command, separate from permanent removal. */

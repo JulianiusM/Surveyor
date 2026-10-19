@@ -131,10 +131,9 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
     const releaseInitialReloadGuard = initialReloadGuard
         ? context.updates.registerGuard(initialReloadGuard) : () => {};
     const app = createSSRApp(App);
-    // TODO (docs/frontend-migration/FRONTEND_PILOT.md): Add remaining feature
-    // routes in their authorized increments. Common presentation and the
-    // complete profile/account presentation now join Help/Packing; default
-    // routing remains a separately authorized cutover after the remaining migrations.
+    // Identity, Overview, Help, Packing, Events, Drivers, Surveys and Activity
+    // share this router. Remaining feature families join only in their authorized
+    // increments; default routing retains its separately authorized cutover.
     const router = createRouter({
         history: browser ? createWebHistory() : createMemoryHistory(),
         routes: pilotRoutes,

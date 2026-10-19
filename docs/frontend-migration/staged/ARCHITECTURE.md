@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-18
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P5 Activity shared-owner adoption reconciled alongside existing field/description/multipart and list ownership; SPA/native/backend boundaries retained; execution separate; no publication
+verification-scope: P0-P6 common recovery, Settings retirement, Event disclosure and upload transport reconciled alongside advanced Activity and approved automatic job observation; SPA/native/backend boundaries retained; execution separate; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -101,6 +101,12 @@ Controls and feature drafts share an explicit value lifetime, including file rel
 `StatusNotice` presents actions with optional injected state and emits actions. Omitting state retains shared
 `ActionButton` initialization and caller-handler guards. Features retain placement, wording and recovery operations.
 These controls introduce no second receipt, query or draft owner.
+`command.reconcileSafely` is the deliberate UI recovery boundary; causal command dependencies retain rejecting
+fresh reads. `useSettingsAccessRetirement` shares selected editor-cache retirement and scoped recovery across all
+five detail Settings consumers. Event admission/detail share one intent-specific denial-family selection, preserving
+independent method grants and the producing observer's error/recovery state. Existing API transport functions share
+upload completion, multipart decoding and confined stored-binary delivery across the five feature adapters; feature
+admission, parser policy, cleanup and business operations remain with their existing owners.
 
 Page command confirmations preserve viewport context in the shared sticky live-alert host without programmatically
 changing focus or scrolling the document; normal browser scroll anchoring remains available.
@@ -153,7 +159,11 @@ native preprocessing, upload, creation and permission initialization in their ex
 `EntityListCreation` used by Packing, Drivers and Activity adopt `useCreationCommand`; Settings, Overview and Event-child deletion
 adopt `useEntityRemoval`. Packing/Drivers also share `BasicEntityMetadataFields`, `useListDetail`, `useListReorder`,
 `EntityAssignees` and `EntityAssignmentActions`, retaining Packing's checklist/Everyone behavior and Drivers' distinct
-driver/passenger meanings in their feature owners. These shared Vue owners compose existing
+driver/passenger meanings in their feature owners. Activity also adopts `EntityAssignees`; its remove-control slot
+preserves native spacing and data hooks under the shared disclosed-identity guard. `AppTabList` shares native tab
+keyboard behavior and Reka focus ownership across Settings and Activity, while feature panels retain their lifetimes.
+`AppAccordionButton` shares trigger presentation and initialized activation across matching Event, Overview and
+administrator disclosures without owning open panels or reads. These shared Vue owners compose existing
 command/consent/confirmed-navigation lifetimes, while features retain their fields and
 generated operations. Packing/Drivers/Survey/Activity compose `useListCommands` from the existing detail-read owner for
 cooldowns, explicit stale recovery, guarded post-command refresh and deliberate unknown-creation review. Features
@@ -171,8 +181,21 @@ owns inline values, comparison and conflict recovery; optional tag/multiline inp
 Active description flags retain that same editor through a remote empty value, and slot modals retain opening fields
 while current permission loss disables submission. Native client admission remains separate from server method grants.
 Detail weeks project the native server calendar; creation copies its distinct browser algorithm. Neither calendar
-normalizes the inherited timezone defects or introduces a second persistence owner. Participant progress is read-only;
-advanced Rules remain a native destination until the separate P6 trigger.
+normalizes the inherited timezone defects or introduces a second persistence owner.
+
+`ActivityRequirements` owns its lexical settings draft and saved calculation context. It composes the existing
+`ActivityParticipants` presentation with unsaved results from the shared pure requirements engine; ordinary reads
+cannot overwrite dirty controls. Engine inputs are structural values, and the shared `RoundingMode` declaration
+keeps browser compilation independent of ORM entity metadata without changing the database column or algorithm.
+`ActivityRecommendations` owns local review rows, exact submitted batches and domain-job identity. Its schedule
+and manual editor share feature presentation, while `ActivityWarnings` and the established dialog/command owners
+retain warning acknowledgement, pending locks and recovery. Server snapshots remain in Query.
+
+Recommendation entry, explicit Reload, explicit generation completion and confirmed application retain the native
+maintenance invocations through a deliberate command. Recovery uses a pure snapshot; job polling observes only
+the captured domain job. Neither read path maintains rows or enqueues work. The existing Activity controller and
+engines retain eligibility, provenance, reciprocal moves, collision privacy, application and inherited completion
+behavior. Versioned projections select scalars, including former-participant override labels, and omit raw job diagnostics.
 
 Versioned reads and guest identity completion cannot create an Event; the adapter does not strengthen inherited multi-step creation
 finality. Ordinary profile workflow and Event child-deletion commands follow the same SPA transport boundary,

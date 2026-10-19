@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-18
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P5 basic Activity implementation, independent semantic review and finite supported-runtime verification recorded alongside prior P0-P4 receipts; native defects and separate later-phase/cutover boundaries retained
+verification-scope: approved R1 and full P0-P6 baseline review findings reconciled with original choices, shared adoption and finite verification; unresolved localization/design decisions and separate backend/cutover boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,146 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Full implemented-pilot review (2026-10-19)
+
+The maintainer directly approves automatic deadline-job observation as a frontend fix, then requests review of the
+entire implemented pilot and complete P5/P6 against the original baseline and explicit amendments. The
+[dated approval](FRONTEND_FOUNDATION_DESIGN.md#approved-automatic-recommendation-job-observation-2026-10-19)
+preserves the condition that IMP-030 remains open until actual native-to-Vue cutover. The implementation needs no
+backend change: automatic completion reads the saved snapshot, while explicit generation retains native maintenance.
+Dirty recommendation edits survive that read; failures, stale jobs and retired contexts do not replay generation.
+
+**The pilot is not fully ready.** The review identifies an existing, unapproved extension of the translation design:
+Activity count emphasis and its Add-badge hint use named Vue-element placeholders even though DEC-006 defers that
+capability. Their current implementation does not declare or validate those placeholders. The original decision is
+preserved, and the conflict is reported directly to the maintainer; existing code is not approval. German Activity
+requirement-source badges also retain untranslated native labels. These are explicit unresolved decisions, not
+silently deferred P5/P6 work. Earlier completion statements do not establish design compliance or close this review.
+German narrow-screen Rules captures also expose crowded headings/hints and clipped header actions (IMP-082).
+That bounded presentation decision remains explicit; English native clipping IMP-080 retains its separate scope.
+
+The review withdraws earlier assertions that healthy-view Refresh controls had an identified visual-exception
+approval. Refresh/recovery functionality is designed, but no specific conversational authorization was found for
+the added healthy controls and row height. Raw Survey cards show the extra 35px row, and Drivers ancestor captures
+show a control outside the measured table. Those scoped comparisons cannot certify whole-image native parity or
+grant permission. This is an unresolved decision alongside the localization findings, not approval inferred from code.
+
+The baseline review also finds and corrects frontend omissions: unsaved Free mode now disables Auto; refreshed
+role selections release unavailable IDs while retaining valid edits and treating role titles as data; failed UI
+recovery stays with existing query diagnostics without rejecting its event handler; matching Settings-denial and
+Event-denial lifetimes share existing owners. Matching Activity tabs, actions and durable warnings, plus ordinary
+Event fields, adopt the existing shared controls. Feature owners retain drafts, grants, warning intent and commands.
+Running-app keyboard review also exposes a manufactured recommendation-load Saved receipt whose brief publication
+can invoke shared inline focus/scroll before cleanup. Entry and Reload now suppress that nonexistent native receipt
+before publication through the existing command owner. Other callers retain the default feedback and failure rules.
+The analogous follow-up calls after generation/application remain unchanged after automatic approval review rejects
+that broader patch; their source-based reveal risk remains a direct pending decision, not a reproduced E2E claim.
+Matching Event/Overview/administrator accordion triggers now share one presentation/activation owner; ordinary
+Survey/Common notices retain their original absence of a live-region role through an explicit shared input.
+Versioned upload parsing/decoding and confined binary delivery now share the existing transport owner across all
+five migrated root features. An unused new recommendation-save route is removed; reviewed application remains the
+single adopted operation. Native authored frontend sources remain unchanged.
+
+The original Vue/Router/Query/Vite, generated-contract, catalog, controller/domain and DBAL choices remain the
+architecture. No second business implementation, backend cleanup layer or feature-specific framework is introduced.
+The staged contribution guide documents actual owners, value lifetimes, recovery, transport, advanced Activity and
+worked migration examples. German Activity Help is reconciled with current rendered labels; both language articles
+retain user-task content rather than implementation provenance. Completed SPA correction steps are condensed into
+adopted contracts. Remaining baseline, edge-case, phase, retirement and amendment records retain unique active uses
+until their authorized retirement; editorial cleanup supplies no authority to delete those contracts.
+Assembled-guide review corrects stale Activity recovery enumeration and the overbroad description-length summary.
+It also identifies an inherited contradiction: Architecture reserves schema synchronization for disposable dev/test,
+while Database/Operations prescribe it for confirmed-empty production first installation. The original guidance is
+preserved pending direct resolution; no database action or change to runtime synchronization is inferred. Complete
+guide semantic readiness remains withheld rather than silently selecting a procedure or publishing the preview.
+
+| Executed boundary | Current evidence |
+|---|---|
+| Repository Vitest | The final Node.js 24.15.0 / MariaDB 10.11.14 full run reports 106 passing files and one failing file: 2,241 cases pass and the opt-in landing integration case reaches its five-second timeout, repeated in its unchanged isolated run. Both documents return 200 but their combined time exceeds that budget. Preparing the actual built entry then Overview module alongside the existing listener infrastructure produces a focused 12/12 pass with unchanged assertions and five-second/30-second case/hook deadlines. A route-first preparation attempt also times out the hook; earlier failed runs remain failed. There is no subsequent full-suite pass claim. |
+| Build and compilers | Final frontend, SSR and test compilers pass. Normal `npm run build` fails on this Windows host with child-process file-write errors, including after approved sandbox escalation. Its unchanged stages complete when Vite is invoked directly with the same production arguments; the final quiet-loading correction receives another successful client/SSR build. No script, dependency or native asset change conceals the normal-command limitation. The precise host cause remains unproven. |
+| Client browser | The final built client selection passes all 49 cases. |
+| Full-system browser | The initial configured run reports 203 passed, seven failed and one configuration skip. Every failure has a passing targeted rerun; the native archival and invoice cases pass unchanged, without an established cause for their earlier worker exit/timeout. The final 20-case Activity/Overview run has 18 passes and two strict capture failures; both capture cases then pass separately after including the shared warning node in their symmetric selectors. The authentication-disabled case passes separately with local login disabled. Neither failed run is reported as a passing run. |
+| Original images | Independent review accounts for 345 implemented-pilot originals across the retained full run and final Activity selections, with attachment hashes and stored measurements. All eight advanced native/Vue pairs match content, styles, controls and geometry exactly at 1280px/390px. Root additionally views final mobile Rules/recommendation and basic Schedule pairs plus the three German scenes. Raw Refresh differences and German crowding remain explicit; finite component comparisons do not establish unrestricted native parity. |
+| Engineering and shared ownership | Development inventory checks 415 sources, 11 DBAL files and 56 readability files / 87 nontrivial operations with zero findings. Tracked/index and all 14 new authored files pass whitespace checks. Independent source review accepts actual shared-consumer adoption, quiet entry/Reload feedback, lifecycle/privacy boundaries and readable internal comments; it supplies no approval for unresolved decisions. |
+| Documentation and staging | Freeze and amendment checks report zero findings across 715 review inputs. Eight complete guides are prepared and reviewed against their staged deltas; the inherited first-install contradiction withholds complete semantic readiness. Preview/advisory checks have zero broken links, metadata errors or missing documented scripts/paths, and Help authoring has zero findings. The sole structural finding is the unregistered source fingerprint, retained without rewriting the baseline. Preparation, semantic review and publication remain distinct; documentation diagnostics are advisory. |
+
+The ordinary built-application runner and real disposable persistence remain required for current browser evidence.
+Finite matched scenes establish their exercised text, style, geometry and behavior; they cannot certify every browser,
+locale or concurrency combination. P7–P11, default-route cutover, native removal, deployment, guide publication and
+explicitly excluded legacy backend remedies retain their separate boundaries. No task-owned P5/P6 omission is
+reclassified as future work without a maintainer decision.
+Ignored `artifacts/pilot-full-review-*` logs, originals and review receipts retain the actual results and failed
+attempts. The managed server is stopped; the identity-checked task container, anonymous volume and private runtime
+credential files are removed. Original decisions, native sources and IMP-030's cutover condition remain intact.
+
+## P6 advanced Activity implementation and scoped verification (2026-10-19)
+
+The maintainer's [explicit P6 trigger](FRONTEND_FOUNDATION_DESIGN.md#explicit-p6-implementation-trigger-2026-10-18)
+covers P6A–C and ACT-08–14. The admitted Rules workspace now implements Free/Required settings, binding deadline,
+stay tables, rounding, role requirements, participant overrides and unsaved coverage. Explicit recommendation
+generation observes its returned domain job; reviewed generated/manual changes support approval, rejection, revert,
+removal, assignment, unassignment, reassignment and paired swaps. Warning acknowledgement applies the exact frozen
+reviewed batch and displays actual applied/skipped results. Ordinary interactions retain the SPA document. The
+[source map](TEST_COVERAGE.md#p6-advanced-activity-source-map-2026-10-18) owns assertion-to-consumer mappings.
+
+Requirements reuse the existing pure requirements engine; its structural inputs and declaration-only rounding
+contract keep ORM metadata outside the browser graph. Recommendations reuse the existing controller, generation,
+provenance, warnings and application owners. New generated adapters admit each method independently and project
+explicit scalars rather than entities or raw job diagnostics. Native frontend sources remain untouched.
+
+The Vue owners share existing commands, feedback, draft protection, reads, dialogs, warning confirmation and
+participant presentation. Feature drafts remain independent of Query snapshots. Fresh data preserves intentional
+edits, while revoked grants and Event unlink release private advanced caches, jobs and dialogs. Linked-to-linked
+context changes preserve the draft and refresh pure inputs. The manual editor clears only unavailable selections,
+so visible controls and staged IDs agree. No duplicate business calculation or persistence owner is introduced.
+
+Native-equivalent entry, deliberate Reload, explicit generation completion and confirmed application retain their
+existing maintenance triggers. Ordinary detail refresh, uncertain-outcome reconciliation and job polling use pure
+reads; they cannot maintain rows or enqueue generation. An unknown dispatch/application is never replayed, and a
+failed subsequent detail refresh does not reject a confirmed receipt.
+
+| Executed boundary | Result and exact scope |
+|---|---|
+| Build and compilers | Normal `npm run build` passes on Node.js 24.13.0, including generation, server/native client, Vue client/SSR and copies. After the final frontend selection/admission corrections, `npm run build:frontend` and the test compiler pass again. Existing Sass/chunk and npm configuration notices remain warnings. |
+| Focused database-free selection | Five Activity/frontend/domain files pass all 65 cases: 21 basic Activity, 14 recommendation review, eight requirements, 16 pure requirement and six domain-job cases. The separate generated-contract/API-problem selection passes all 50 cases. HTTP substitution in mounted cases does not establish persistence or layout. |
+| Real persistence | All four Activity integration files pass 77 cases on the guarded disposable MariaDB 10.4.32 target: 19 versioned cases and 58 existing workflow/interlinking/property cases. These cover scalar/zero overrides, independent grants, pure reads versus maintenance, generated provenance, exact reviewed application and domain-job identity/scoping. This run does not renew the earlier P5 MariaDB 10.11 evidence. |
+| Built workflows | The final combined selection passes all 17 cases with one worker: five advanced P6 cases and all 12 existing Activity cases. The ordinary managed initializer/server, real sessions/routes and disposable `cgd_e2e` persistence are used. Generation, draft Reload, both swap legs, unassignment/assignment, canceled and stale overlap review, fresh exact application and same-document behavior are asserted. |
+| Engineering | Full development inventory: 414 authored sources, 11 DBAL files, 20 touched readability files / 50 nontrivial operations, zero findings. Task-owned tracked and new files pass whitespace checks. Independent source review separately checks actual adoption, approval provenance, privacy/draft lifetimes, readability and native invocation semantics. |
+| Documentation boundary | Final production freeze/amendment guard reports zero findings. Advisory structure/Help reports have no broken links, metadata errors, missing commands/paths or Help-authoring findings; the sole finding is the unregistered current source fingerprint. Exact new P6 inputs extend the existing amendment review inventory; no baseline or freeze receipt is weakened. Source reconciliation does not renew prepared-guide output acceptance or authorize publication. |
+
+Independent reviewer `/root/p6_source_review` inspects all 16 final original P6 PNGs: eight native/Vue pairs for
+Rules settings, live participant coverage, recommendation schedule and populated reassignment dialog at 1280px/390px.
+The unchanged strict comparison finds equal visible content, styles, values/options and zero maximum geometry
+difference across 50 Rules, 31 coverage, 40 recommendation and 12 dialog boxes at each width. Root additionally
+views the four final mobile Rules/recommendation originals. Reviewer `/root/p6_requirements` inspects all eight P5
+Participants/warning originals; all four strict pairs match content and geometry. Those participant images show
+Full plan, while a separate mounted assertion protects the default ISO date bounds. These are finite English
+Chromium surfaces, not whole-application, exhaustive locale/browser or accessibility certification.
+
+Earlier failed runs remain in ignored artifacts. They exposed localized date and copied-selector spacing omissions,
+an unequal transient sticky-scroll capture, fixture attendance/selector mistakes and a mounted-test harness error.
+Corrections preserve comparator assertions and deadlines. The advanced capture wrapper scrolls each real surface
+to the same viewport state and waits two animation frames before invoking the existing comparator; no DOM styling,
+position filtering or relaxed geometry tolerance is used. Independent source reviews include the final parent
+unlink cleanup and manual selection correction. Root reconciles the changed design, source map, staged guidance
+and exact manifest inputs against those owners. Reviewer `/root/p6_backend` independently accepts the final receipt,
+staged amendments and exact 13-input inventory, including their preserved historical and publication boundaries.
+
+The initial task-local **R1** concerned observing an automatically queued first post-deadline job, improving the
+native omission recorded in IMP-030. The maintainer identified its tool-only presentation as a policy violation;
+that presentation was withdrawn and the complete request was reissued directly in the conversation. The subsequent
+explicit approval and frontend implementation belong to the current review above. Neither implementation nor
+tests resolve IMP-030 before cutover. IMP-079 records the inherited postcommit
+application/regeneration failure path without an injected-failure claim. IMP-080 records matching narrow-screen
+recommendation-header clipping. Both remedies remain separately authorized work.
+
+Runtime Help's German label reconciliation is completed in the current full review above. The initial receipt's
+statement that no task-owned P6 work remained did not identify the named-placeholder design conflict; the current
+findings qualify that completion claim. P7–P11, default-route changes, native removal, production-guide publication,
+deployment and excluded backend completion remedies remain outside this request. Logs and originals remain ignored
+under `artifacts/p6-*` and ordinary Playwright output; the managed server is stopped. No repository-wide test rerun,
+live provider/mail delivery or exhaustive concurrency verification is claimed.
 
 ## P5 basic Activity implementation and scoped verification (2026-10-18)
 
@@ -119,13 +259,15 @@ different native/Vue commands and are supplemental behavior evidence. Root addit
 counter, Packing Quick Add and Survey empty-card pairs. Twenty native finance originals are outside this frontend
 correction; they do not expand its visual acceptance.
 
-P4 assertions now measure complete card structure, account only for the measured approved Refresh row, reach the
+P4 assertions measure complete card structure, account for the measured Refresh row (then described as approved), reach the
 final wide-table column while keeping first cells stationary, and exercise keyboard image disclosure, tab selection,
 Escape dismissal and actual opener focus return. The native form versus Vue flex-parent Delete display is narrowly
 characterized while its painted geometry, controls and focus remain asserted. Retained raw JSON establishes the
 inherited wide-page root scrolling as well as local table behavior; `IMP-075` owns that finding's exact measurements
 and unknown cause. Preserving this native comparator creates no delayed P4 work or layout-remedy authorization.
-Approved Refresh, locale controls, saved descriptions and native flash boundaries remain explicit.
+The receipt treated Refresh, locale controls, saved descriptions and native flash boundaries as explicit exceptions.
+The October 19 full review above withdraws its Refresh approval assertion; neither the old receipt nor its adjusted
+card comparison supplies the missing visual-exception authorization. Other exceptions retain their actual amendments.
 
 The first complete two-worker system run remains failed: 190 pass, one configuration skip and one Windows native
 worker exit (3221226505) without an assertion result in the existing independent item/order baseline case. A narrow
@@ -398,7 +540,7 @@ resolves the earlier unanswered decisions:
 - `DESIGN-EVENT-CREATION-TRANSPORT` closes for the implemented current-phase correction. The maintainer rejects
   retaining Event creation/duplication document POST and requests the original ordinary-JavaScript JSON/multipart
   commands and client navigation across equivalent implemented P0–P2 forms/links. Earlier code, prose and passing
-  tests supply no retrospective exception approval. The [completed correction](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#current-spa-correction-plan-2026-10-16)
+  tests supply no retrospective exception approval. The [completed correction](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#completed-spa-correction-2026-10-16)
   covers generated adapters, shared Vue consumers, lifecycle/privacy, removal of displaced document-only owners
   and renewed same-document built-application checks. Source adoption and configured workflow evidence are now
   reviewed. The failed broad run and focused positive receipts remain distinct below; closure supplies no blanket

@@ -6,7 +6,7 @@ import EventPage from '../../src/frontend/features/event/EventPage.vue';
 import EventSummary from '../../src/frontend/features/event/EventSummary.vue';
 import {eventKeys, overviewKeys} from '../../src/frontend/app/queryKeys';
 import {refetchFreshQueries} from '../../src/frontend/app/queryCache';
-import {UnconfirmedResponseError} from '../../src/frontend/app/transport';
+import {ApiFailure, UnconfirmedResponseError} from '../../src/frontend/app/transport';
 import {createFrontendEventSession, createFrontendEventView, frontendEventId} from '../factories/frontendEventFactory';
 import {frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendEventKeywords';
 
@@ -47,6 +47,46 @@ async function submitRegistration(mounted: Awaited<ReturnType<typeof registratio
 }
 
 describe('Event page read dependencies', () => {
+    it.each([403, 404])('retires only affected Event projections after detail denial %s and keeps explicit recovery attached', async status => {
+        const view = createFrontendEventView({requireDietaryInfo: false});
+        let denied = false;
+        const mounted = await mountFrontendEvent(EventPage, async request => new URL(request.url).pathname.endsWith('/things-to-do')
+            ? json({items: []}) : denied
+            ? new Response(JSON.stringify({type: 'about:blank', title: 'Unavailable', status,
+                detail: 'Event projection unavailable', requestId: 'event-detail-denial',
+                code: status === 404 ? 'NOT_FOUND' : 'FORBIDDEN',
+                messageKey: status === 404 ? 'api:errors.NOT_FOUND' : 'api:errors.FORBIDDEN', params: {}}),
+            {status, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': createFrontendEventSession().context}})
+            : json(view), {});
+        cleanups.push(mounted.dispose);
+        mounted.router.addRoute({path: '/frontend-pilot/event/:eventId/admin', component: EventPage});
+        await mounted.router.push(`/frontend-pilot/event/${frontendEventId}/admin`);
+        await flushPromises();
+        const actor = mounted.context.session.value?.context;
+        const detail = eventKeys.detail(actor, frontendEventId, true);
+        const siblings = [eventKeys.things(actor, frontendEventId, true), eventKeys.things(actor, frontendEventId),
+            eventKeys.participants(actor, frontendEventId), eventKeys.links(actor, frontendEventId), eventKeys.editors(actor, frontendEventId)];
+        for (const key of siblings) mounted.context.queryClient.setQueryData(key, {private: key});
+        const errors = vi.fn();
+        mounted.wrapper.vm.$.appContext.config.errorHandler = errors;
+        denied = true;
+        await mounted.context.queryClient.refetchQueries({queryKey: detail, exact: true});
+        await flushPromises();
+
+        for (const [index, key] of siblings.entries()) {
+            if (status === 404 || index === 0) expect(mounted.context.queryClient.getQueryData(key)).toBeUndefined();
+            else expect(mounted.context.queryClient.getQueryData(key)).toEqual({private: key});
+        }
+        expect(mounted.context.queryClient.getQueryState(detail)?.error).toBeInstanceOf(ApiFailure);
+        expect(mounted.context.queryClient.getQueryData(detail)).toBeUndefined();
+        const readsBeforeRetry = mounted.request.mock.calls.length;
+        await mounted.wrapper.findAll('button').find(control => control.text().trim() === 'Refresh')!.trigger('click');
+        await flushPromises();
+        expect(mounted.request.mock.calls.length).toBe(readsBeforeRetry + 1);
+        expect(errors).not.toHaveBeenCalled();
+        expect(mounted.context.queryClient.getQueryState(detail)?.error).toBeInstanceOf(ApiFailure);
+    });
+
     it.each([null, '', 'First line\nBring <strong>your own</strong> lunch.'])('retains the native description column for %j', async description => {
         const view = createFrontendEventView({description});
         const mounted = await mountFrontendEvent(EventSummary, async () => json(view), {event: view});

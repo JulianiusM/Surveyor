@@ -9,6 +9,7 @@ export type ActivityCommandPreparation<Result> = (result: Result) => void;
 
 /** These established operations acknowledge success with the same invariant receipt. */
 export type ActivitySimpleMutationOperation = 'updateActivityDefaults'
+    | 'updateActivityRequirements'
     | 'setActivityAutomaticArchival'
     | 'addActivityTextField'
     | 'addActivityAdmin'

@@ -225,6 +225,30 @@ describe('Event participant registration', () => {
         expect(button(mounted.wrapper, 'Save registration').attributes('disabled')).toBeUndefined();
     });
 
+    it('keeps unknown registration input when its deliberate recovery read fails without leaking an event rejection', async () => {
+        const event = createFrontendEventView({requireDietaryInfo: false});
+        const refresh = vi.fn(async () => { throw new TypeError('Recovery read unavailable'); });
+        const mounted = await mountFrontendEvent(EventRegistration, async () => { throw new TypeError('Lost write response'); },
+            {event, refresh});
+        cleanups.push(mounted.dispose);
+        const eventErrors = vi.fn();
+        mounted.wrapper.vm.$.appContext.config.errorHandler = eventErrors;
+        await enterDates(mounted.wrapper);
+        const arrival = mounted.wrapper.get<HTMLInputElement>('[name="arrivalDate"]');
+        await mounted.wrapper.get('form').trigger('submit');
+        await flushPromises();
+        await button(mounted.wrapper, 'Refresh').trigger('click');
+        await flushPromises();
+
+        expect(eventErrors).not.toHaveBeenCalled();
+        expect(refresh).toHaveBeenCalledOnce();
+        expect(mounted.request).toHaveBeenCalledOnce();
+        expect(mounted.wrapper.get('[name="arrivalDate"]').element).toBe(arrival.element);
+        expect(arrival.element.value).toBe('2027-06-01');
+        expect(button(mounted.wrapper, 'Save registration').attributes('disabled')).toBeDefined();
+        expect(mounted.wrapper.text()).toContain(mounted.context.messages.value.t('state.unknownOutcome'));
+    });
+
     it('releases participant fields when the resource or admitted actor changes', async () => {
         const event = createFrontendEventView({requireDietaryInfo: false});
         const mounted = await mountFrontendEvent(EventRegistration, async () => json({changed: true}), {event, refresh: async () => {}});

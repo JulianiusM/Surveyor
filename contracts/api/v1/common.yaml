@@ -297,6 +297,12 @@ schemas:
           params: {type: object, additionalProperties: false, maxProperties: 0}
         required: [code, messageKey, status, params]
       - properties:
+          code: {const: RECOMMENDATION_QUEUE_FULL}
+          messageKey: {const: 'api:errors.RECOMMENDATION_QUEUE_FULL'}
+          status: {const: 503}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
           code:
             const: PAYLOAD_TOO_LARGE
           messageKey:

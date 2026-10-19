@@ -63,8 +63,9 @@ export async function captureSurveyPresentation(page: Page, info: TestInfo, name
 }
 
 /** Measure the complete unarchived voting card, including the gaps between its
- * independently compared controls. Only the approved Vue Refresh row is removed
+ * independently compared controls. Only the existing Vue Refresh row is removed
  * from vertical measurements; native shell/flash offsets stay outside the card.
+ * This scoped comparison does not authorize that row's visible difference.
  * Callers use an empty description so its approved Vue-only text is not hidden. */
 export async function readSurveyCardLayout(card: Locator, pilot: boolean) {
     return card.evaluate(function inspectSurveyCard(element, isPilot) {

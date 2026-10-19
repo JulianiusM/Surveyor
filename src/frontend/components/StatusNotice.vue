@@ -30,6 +30,9 @@ const props = withDefaults(defineProps<{
     // A current read can add its validated issue to the generic stale/cold warning.
     // The transport remains the trust boundary; arbitrary exception text is hidden.
     readError?: Error | null;
+    // Existing plain notices may deliberately omit a live-region role. Undefined
+    // keeps the shared feedback default; null preserves that caller's semantics.
+    role?: 'alert' | 'status' | null;
     // The caller retains dispatch, admission and cooldown. Only the repeated
     // in-notice action layout belongs here, before the read diagnostics below.
     action?: PilotNoticeAction;
@@ -110,7 +113,7 @@ function dismiss(): void {
     <Teleport :to="liveTarget ?? 'body'" :disabled="!inlineNotice || !liveTarget">
         <div v-bind="$attrs" ref="element" :class="[transientNotice ? 'alert' : 'status-notice', `alert-${noticeKind}`, `mb-${noMargin ? 0 : marginBottom}`,
              {'alert-dismissible': inlineNotice, fade: inlineNotice, show: inlineNotice}]"
-             :role="transientNotice || noticeKind === 'danger' ? 'alert' : 'status'"
+             :role="role === null ? undefined : role ?? (transientNotice || noticeKind === 'danger' ? 'alert' : 'status')"
              :tabindex="inlineNotice ? -1 : undefined">
             <slot /><ActionButton v-if="action" :class="action.class ?? 'btn-sm ms-2'" variant="outline-light"
                 :state="action.state" @click="emit('action', $event)">{{ action.label }}</ActionButton>

@@ -3,10 +3,35 @@ import type {ComputedRef} from 'vue';
 import {hashKey, useQuery} from '@tanstack/vue-query';
 import type {Query, QueryFunctionContext} from '@tanstack/vue-query';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
+import {eventKeys, overviewKeys} from '../../app/queryKeys';
 import {refreshInterval, useActionState, usePilot} from '../../app/context';
 import {refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
 import {isReadDenial, ObsoleteRequestError} from '../../app/transport';
 import {readFailureMessage, useReadRetry, useReadRetryAt} from '../../composables/feedback';
+
+/** Event admission and detail failures retire the same affected projections.
+ * Administration, roster and Settings retain their independently granted scopes;
+ * only a missing root invalidates all of that Event's cached private projections. */
+export function eventDeniedQueries(actor: string | null | undefined, resource: string,
+                                  intent: 'detail' | 'guest' | 'admin', status: number): EntityEntryRetirement {
+    const families: (readonly unknown[])[] = intent === 'guest' ? [eventKeys.guest(actor, resource)]
+        : [eventKeys.detail(actor, resource, intent === 'admin'), eventKeys.things(actor, resource, intent === 'admin')];
+    if (status === 404) {
+        // Other intents and token visits cannot retain a missing Event. The
+        // producing owner separately preserves its live denial/recovery query.
+        for (const view of ['detail', 'guest', 'admin'] as const) {
+            if (view !== intent) families.push(eventKeys.entry(actor, resource, view));
+        }
+        families.push(eventKeys.guest(actor, resource));
+        families.push(eventKeys.detail(actor, resource), eventKeys.detail(actor, resource, true),
+            eventKeys.participants(actor, resource), eventKeys.links(actor, resource), eventKeys.things(actor, resource),
+            eventKeys.things(actor, resource, true), eventKeys.editors(actor, resource), overviewKeys.all(actor));
+    }
+    // A mounted creation draft remains independent of its source's read authority.
+    return {families, inactiveFamilies: status === 404
+        ? [eventKeys.entry(actor, resource, intent), eventKeys.duplicate(actor, resource)] : []};
+}
 
 /** Share Event section delivery without sharing its business projection or drafts.
  * Each caller supplies its admitted key/read and visibility. Disclosure controls

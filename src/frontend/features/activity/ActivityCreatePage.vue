@@ -7,6 +7,7 @@ import {usePilot} from '../../app/context';
 import {activityKeys} from '../../app/queryKeys';
 import {useActivityApi} from './api';
 import {activityDateLabel, activityDayLabel, activityCreationWeeks} from './presentation';
+import ActionButton from '../../components/ActionButton.vue';
 import EntityListCreation from '../../components/EntityListCreation.vue';
 import FormField from '../../components/FormField.vue';
 
@@ -207,20 +208,20 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
                                                 :disabled="disabled"
                                                 @input="slot.maxAssignees = ($event.target as HTMLInputElement).value"
                                             />
-                                            <button
+                                            <ActionButton
                                                 type="button"
-                                                class="btn btn-sm btn-outline-danger align-self-end"
+                                                class="btn-sm align-self-end" variant="outline-danger"
                                                 :disabled="disabled"
                                                 @click="removeSlot(slot.id)">
                                                 <i class="bi bi-x-lg" aria-hidden="true"></i>
-                                            </button>
+                                            </ActionButton>
                                         </div>
                                     </div>
-                                    <button
+                                    <ActionButton
                                         type="button"
-                                        class="btn btn-sm btn-outline-info w-100 add-slot"
+                                        class="btn-sm w-100 add-slot" variant="outline-info"
                                         :disabled="disabled"
-                                        @click="addSlot(day)">{{ messages.t('activity.addSlot') }}</button>
+                                        @click="addSlot(day)">{{ messages.t('activity.addSlot') }}</ActionButton>
                                 </td>
                             </tr>
                         </tbody>

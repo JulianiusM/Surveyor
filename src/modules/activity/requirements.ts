@@ -14,10 +14,7 @@
  * limitations under the License.
  */
 
-import type {ParticipantRow} from "../../types/EventTypes";
-import type {ActivityPlan} from "../database/entities/activity/ActivityPlan";
-
-export type RoundingMode = NonNullable<ActivityPlan["roundingMode"]>;
+import type {RoundingMode} from "../../types/ActivityRequirementTypes";
 
 export interface ParticipantAttendance {
     profileId?: string | null;
@@ -241,12 +238,12 @@ export function applyRounding(value: number, mode: RoundingMode): number {
     }
 }
 
-export function toParticipantKey(participant: ParticipantAttendance | ParticipantRow): string {
+export function toParticipantKey(participant: ParticipantAttendance): string {
     if (participant.profileId) return `profile:${participant.profileId}`;
     return "participant:unknown";
 }
 
-export function toParticipantName(participant: ParticipantAttendance | ParticipantRow): string {
+export function toParticipantName(participant: ParticipantAttendance): string {
     if (participant.name) return participant.name;
     if (participant.profileId) return `Profile #${participant.profileId}`;
     return "Participant";
@@ -1035,13 +1032,19 @@ export interface BaselineSlotInput {
     roles?: HypotheticalRoleCapacity[];
 }
 
+/** Select the closest integer stay-based baseline against the admitted plan's
+ * capacity, preserving fixed participant/role requirements and hypothetical open
+ * role coverage. This pure calculation returns a duration table and diagnostics;
+ * it never changes assignments, settings or persistence. */
 export function calculateBaselineRequirementForPlan(options: {
-    plan: Pick<ActivityPlan, "startDate" | "endDate" | "roundingMode">;
+    plan: Pick<RequirementPlanInput, "startDate" | "endDate" | "roundingMode">;
     slots: BaselineSlotInput[];
     participants: ParticipantAttendance[];
     roleRequirements: RoleRequirementLike[];
     overrides: RequirementOverrideLike[];
 }): BaselineRequirementComputationResult {
+    // Capacity and attendance use the same inclusive civil-date window as the
+    // saved requirement analysis. No transport or ORM entity is needed here.
     const planDays = countInclusiveDays(options.plan.startDate, options.plan.endDate);
     const slotDemand = options.slots.reduce(
         (total, slot) => total + ensureNonNegativeInteger(slot.maxAssignees ?? 0, 0),
@@ -1078,6 +1081,8 @@ export function calculateBaselineRequirementForPlan(options: {
         stayRequirements: StayRequirementInput[];
         capacitySummary: RequirementCapacitySummary;
     }
+    // Candidate analysis includes override precedence and hypothetical role
+    // coverage. Cache complete evaluations while searching the integer range.
     const candidateCache = new Map<number, CandidateEvaluation>();
     const evaluate = (candidate: number): CandidateEvaluation => {
         const baseline = ensureNonNegativeInteger(candidate);
@@ -1101,6 +1106,8 @@ export function calculateBaselineRequirementForPlan(options: {
         return result;
     };
 
+    // Compare zero with a bounded upper candidate before searching. Fixed-only
+    // requirements may be insensitive to every possible stay-based baseline.
     const zero = evaluate(0);
     const rawUpperBound = Math.max(1, (slotDemand + zero.capacitySummary.requiredSlots + 1) * Math.max(planDays, 1));
     const upperBound = Math.min(rawUpperBound, Math.floor(Number.MAX_SAFE_INTEGER / 4));
@@ -1110,6 +1117,8 @@ export function calculateBaselineRequirementForPlan(options: {
     let chosen = zero;
     if (zero.capacitySummary.requiredSlots < slotDemand && baselineInfluencesRequirements) {
         if (upper.capacitySummary.requiredSlots >= slotDemand) {
+            // Find the first baseline reaching demand, then choose its closer
+            // neighbor. Equal distance retains the lower integer baseline.
             let low = 0;
             let high = upperBound;
             while (low < high) {
@@ -1127,6 +1136,8 @@ export function calculateBaselineRequirementForPlan(options: {
         }
     }
 
+    // Participant diagnostics use the chosen hypothetical role placements only
+    // for analysis. These placements remain distinct from real assignments.
     const hypotheticalRoleByParticipant = new Map(
         (chosen.capacitySummary.hypotheticalRoleCoverage?.matches ?? [])
             .map((match) => [match.participantKey, match.roleId]),
@@ -1164,6 +1175,8 @@ export function calculateBaselineRequirementForPlan(options: {
             baselineContribution: group === "baseline" ? requirement.requiredShifts : 0,
         };
     });
+    // Aggregate the chosen projection and explain why exact capacity may be
+    // unreachable without changing fixed requirements or integer rounding.
     const fixedRequiredShifts = participantResults.reduce(
         (total, participant) => total + participant.fixedContribution,
         0,

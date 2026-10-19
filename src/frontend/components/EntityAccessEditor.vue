@@ -17,6 +17,7 @@ import AppTabList from './AppTabList.vue';
 import StatusNotice from './StatusNotice.vue';
 import AudiencePermissions from './permissions/AudiencePermissions.vue';
 import PermissionFields from './permissions/PermissionFields.vue';
+import AppAccordionButton from './AppAccordionButton.vue';
 
 // Inject feature operations and the complete-dialog command owner. Access drafts,
 // discovery and native presentation are shared; server owners still decide grants.
@@ -505,11 +506,9 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                             data-entity-section="administrator"
                         >
                             <h2 class="accordion-header">
-                                <button
-                                    class="accordion-button text-light bg-dark"
-                                    :class="{collapsed: openAdmin !== admin.profileId}"
-                                    type="button"
-                                    :aria-expanded="openAdmin === admin.profileId"
+                                <AppAccordionButton
+                                    class="text-light bg-dark"
+                                    :expanded="openAdmin === admin.profileId"
                                     :disabled="controlsPending"
                                     @click="toggleAdmin(admin.profileId)"
                                 >
@@ -521,7 +520,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                     ><span class="badge bg-secondary ms-2"
                                         >{{ adminPermissionCount(admin.mask) }}/{{ data.access.permissions.length }}</span
                                     >
-                                </button>
+                                </AppAccordionButton>
                             </h2>
                             <div v-show="openAdmin === admin.profileId" class="accordion-body bg-dark pt-2">
                                 <div data-command-feedback aria-live="polite"></div>

@@ -1,5 +1,8 @@
 import {randomUUID} from 'node:crypto';
+import {readdir} from 'node:fs/promises';
 import http from 'node:http';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 import * as userService from '../../src/modules/database/services/UserService';
 import {AppDataSource} from '../../src/modules/database/dataSource';
@@ -16,11 +19,36 @@ let listener: http.Server | undefined;
 let application: typeof import('../../src/app')['default'] | undefined;
 let origin: string | undefined;
 
-beforeAll(async () => {
+/** The real server needs admitted persistence before installing its listener. */
+async function prepareApplicationListener(): Promise<void> {
     await initializeIntegrationDatabase();
     // Prepare the real application's cold imports/listener as suite infrastructure,
     // leaving each workflow's ordinary assertion timeout unchanged.
     await applicationOrigin();
+}
+
+/** Import only the actual built module graph; never render or prime private state. */
+async function prepareOverviewSsrModule(): Promise<void> {
+    // This case measures route/bootstrap behavior, not lazy module compilation.
+    // Prepare the actual built graph used by the renderer, without pre-rendering
+    // a document, creating a request or priming any actor/query state.
+    const directory = path.resolve(__dirname, '../../dist/frontend-server');
+    const modules = (await readdir(directory)).filter(file => /^OverviewPage-[\w-]+\.mjs$/u.test(file));
+    if (modules.length !== 1) throw new Error('Build exactly one Overview SSR module before this integration suite.');
+    // Follow production's entry-before-route import order through shared chunks.
+    await import(pathToFileURL(path.join(directory, 'entry-server.mjs')).href);
+    await import(pathToFileURL(path.join(directory, modules[0]!)).href);
+}
+
+/** Prepare independent server and pure module infrastructure within one hook.
+ * Each test still owns fresh HTTP requests and rendering under its normal deadline. */
+beforeAll(async function prepareApplicationInfrastructure(): Promise<void> {
+    // Module evaluation creates no app/context and needs no backend listener or
+    // database. Keep the persistence-before-listen dependency in its own branch.
+    const preparation = await Promise.allSettled([prepareApplicationListener(), prepareOverviewSsrModule()]);
+    // A failed module lookup must not let teardown race the admitted listener
+    // branch. Finish both preparations before preserving their actual rejection.
+    for (const result of preparation) if (result.status === 'rejected') throw result.reason;
 });
 
 afterAll(async () => {

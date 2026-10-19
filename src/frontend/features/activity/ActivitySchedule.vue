@@ -5,6 +5,9 @@ import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
 import {useListReorder} from '../../composables/listReorder';
 import {activityDateLabel, activityDayLabel} from './presentation';
+import ActionButton from '../../components/ActionButton.vue';
+import StatusNotice from '../../components/StatusNotice.vue';
+import EntityAssignees from '../../components/EntityAssignees.vue';
 import InlineCell from '../../components/InlineCell.vue';
 
 // The schedule owns only its All/My/Open view and a captured drag gesture.
@@ -89,18 +92,18 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
             <small class="d-none d-md-inline">{{ messages.t('activity.progressHint') }}</small>
         </div>
     </template>
-    <div v-if="!view.canSelfAssign" class="status-notice alert-info py-2 px-3 mb-3">
-        <i class="bi bi-info-circle me-2" aria-hidden="true"></i>{{ messages.t('activity.registrationHint') }}</div>
+    <StatusNotice v-if="!view.canSelfAssign" kind="info" class="py-2 px-3" :role="null">
+        <i class="bi bi-info-circle me-2" aria-hidden="true"></i>{{ messages.t('activity.registrationHint') }}</StatusNotice>
     <div id="schedule-filter-bar" class="d-flex flex-wrap justify-content-between align-items-center mb-3">
         <div class="btn-group btn-group-sm" role="group" :aria-label="messages.t('activity.slotFilters')">
-            <button
+            <ActionButton
                 v-for="option in (['all', 'mine', 'open'] as const)"
                 :key="option"
                 type="button"
-                class="btn btn-outline-light"
+                variant="outline-light"
                 :class="{active: filter === option}"
                 :data-slot-filter="option"
-                @click="filter = option">{{ messages.t(option === 'all' ? 'activity.allSlots' : option === 'mine' ? 'activity.mySlots' : 'activity.openSlots') }}</button>
+                @click="filter = option">{{ messages.t(option === 'all' ? 'activity.allSlots' : option === 'mine' ? 'activity.mySlots' : 'activity.openSlots') }}</ActionButton>
         </div>
         <small class="text-secondary mb-0">{{ messages.t('activity.filterHint') }}</small>
         <div v-if="view.capabilities.exportSchedule" class="d-flex align-items-center gap-2 mt-2 mt-sm-0">
@@ -185,27 +188,27 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                                 style="width:.7rem;height:.7rem;display:inline-block"
                                                 :title="messages.t(slot.assignedCount > (slot.maxAssignees ?? 0) ? 'activity.overbooked' : !slot.assignedCount ? 'activity.emptyAssignment' : 'activity.ok')">
                                             </span>
-                                            <button
+                                            <ActionButton
                                                 v-if="canEdit(slot)"
                                                 type="button"
-                                                class="btn btn-sm btn-outline-light"
+                                                class="btn-sm" variant="outline-light"
                                                 data-slot-edit
                                                 :disabled="disabled"
                                                 :aria-label="messages.t('activity.editSlot')"
                                                 @click="emit('edit', slot)">
                                                 <i class="bi bi-pencil" aria-hidden="true"></i>
-                                            </button>
-                                            <button
+                                            </ActionButton>
+                                            <ActionButton
                                                 v-if="slot.capabilities.remove"
                                                 type="button"
-                                                class="btn btn-sm btn-outline-danger"
+                                                class="btn-sm" variant="outline-danger"
                                                 data-delete-slot
                                                 :data-slotid="slot.id"
                                                 :disabled="disabled"
                                                 :aria-label="messages.t('packing.deleteItem')"
                                                 @click="emit('remove', slot)">
                                                 <i class="bi bi-trash" aria-hidden="true"></i>
-                                            </button>
+                                            </ActionButton>
                                         </div>
                                     </div>
                                     <hr class="m-0" />
@@ -233,32 +236,32 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                             A redacted ID never turns an occupied role into Take. -->
                                             <i class="bi bi-person-badge" aria-hidden="true"></i>
                                             <span class="flex-grow-1">{{ role.assignedQty > 0 ? roleLabel(role) + ': ' + (role.assigneeName ?? messages.t('activity.privateAssignee')) : messages.t('activity.noRoleAssignee', {role: roleLabel(role)}) }}</span>
-                                            <button
+                                            <ActionButton
                                                 v-if="role.self"
                                                 type="button"
-                                                class="btn btn-sm btn-outline-warning"
+                                                class="btn-sm" variant="outline-warning"
                                                 data-action="leave-role"
                                                 :data-role="role.name"
                                                 :disabled="disabled"
-                                                @click="emit('assign', slot, false, role.name)">{{ messages.t('activity.leave') }}</button>
-                                            <button
+                                                @click="emit('assign', slot, false, role.name)">{{ messages.t('activity.leave') }}</ActionButton>
+                                            <ActionButton
                                                 v-else-if="!role.assignedQty && view.canSelfAssign && (slot.selfAssigned || mayJoin(slot))"
                                                 type="button"
-                                                class="btn btn-sm btn-outline-primary"
+                                                class="btn-sm" variant="outline-primary"
                                                 data-action="take-role"
                                                 :data-role="role.name"
                                                 :disabled="disabled"
-                                                @click="emit('assign', slot, true, role.name)">{{ messages.t('activity.take') }}</button>
+                                                @click="emit('assign', slot, true, role.name)">{{ messages.t('activity.take') }}</ActionButton>
                                         </div>
-                                        <button
+                                        <ActionButton
                                             v-if="slot.capabilities.manageAssignments"
                                             type="button"
-                                            class="btn btn-sm btn-outline-light mt-1 w-100"
+                                            class="btn-sm mt-1 w-100" variant="outline-light"
                                             data-slot-role-admin
                                             :data-slotid="slot.id"
                                             :disabled="disabled"
                                             @click="emit('roles', slot)">
-                                            <i class="bi bi-people-fill me-1" aria-hidden="true"></i>{{ messages.t('activity.manageRoles') }}</button>
+                                            <i class="bi bi-people-fill me-1" aria-hidden="true"></i>{{ messages.t('activity.manageRoles') }}</ActionButton>
                                     </div>
                                     <div class="mt-2">
                                         <div class="d-flex justify-content-between align-items-center mb-1">
@@ -279,40 +282,39 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                                 />
                                             </span>
                                         </div>
-                                        <ul v-if="slot.assignees.length" class="list-unstyled mb-0">
-                                            <li v-for="person in slot.assignees" :key="person.assignmentId" class="d-flex align-items-center gap-1">
-                                                <i class="bi bi-person-fill" aria-hidden="true"></i>
-                                                <span class="flex-grow-1">{{ person.name }}</span>
-                                                <button
-                                                    v-if="slot.capabilities.manageAssignments"
+                                        <EntityAssignees v-if="slot.assignees.length" :assignees="slot.assignees"
+                                            :removable="slot.capabilities.manageAssignments" :disabled="!!disabled"
+                                            :remove-label="messages.t('packing.removeAssignment')">
+                                            <template #remove="{assignmentId}">
+                                                <ActionButton
                                                     type="button"
-                                                    class="btn btn-sm btn-outline-danger ms-1"
+                                                    class="btn-sm ms-1" variant="outline-danger"
                                                     data-owner-remove
-                                                    :data-assignid="person.assignmentId"
+                                                    :data-assignid="assignmentId"
                                                     :disabled="disabled"
                                                     :aria-label="messages.t('packing.removeAssignment')"
-                                                    @click="emit('removeAssignment', person.assignmentId)">×</button>
-                                            </li>
-                                        </ul>
+                                                    @click="emit('removeAssignment', assignmentId)">×</ActionButton>
+                                            </template>
+                                        </EntityAssignees>
                                     </div>
                                     <div class="d-flex gap-2 mt-2">
-                                        <button
+                                        <ActionButton
                                             v-if="slot.selfAssigned"
                                             type="button"
-                                            class="btn btn-sm btn-outline-danger flex-grow-1"
+                                            class="btn-sm flex-grow-1" variant="outline-danger"
                                             data-action="unassign"
                                             :disabled="disabled"
-                                            @click="emit('assign', slot, false)">{{ messages.t('activity.leave') }}</button>
-                                        <button
+                                            @click="emit('assign', slot, false)">{{ messages.t('activity.leave') }}</ActionButton>
+                                        <ActionButton
                                             v-else-if="mayJoin(slot)"
                                             type="button"
-                                            class="btn btn-sm flex-grow-1"
-                                            :class="full(slot) ? 'btn-outline-warning' : 'btn-outline-success'"
+                                            class="btn-sm flex-grow-1"
+                                            :variant="full(slot) ? 'outline-warning' : 'outline-success'"
                                             data-action="assign"
                                             :disabled="disabled"
                                             :title="full(slot) ? messages.t('activity.fullHint') : undefined"
                                             @click="emit('assign', slot, true)">
-                                            <i v-if="full(slot)" class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>{{ messages.t(full(slot) ? 'activity.fullJoin' : 'activity.join') }}</button>
+                                            <i v-if="full(slot)" class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>{{ messages.t(full(slot) ? 'activity.fullJoin' : 'activity.join') }}</ActionButton>
                                         <span v-else class="badge bg-secondary flex-grow-1 text-center">{{ messages.t(view.canSelfAssign ? 'packing.full' : 'activity.registrationRequired') }}</span>
                                     </div>
                                 </div>
@@ -325,7 +327,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                 <tfoot v-if="view.capabilities.addSlot">
                     <tr>
                         <td v-for="day in week.days" :key="day" class="text-center">
-                            <button type="button" class="btn btn-sm btn-outline-info w-100" data-add-slot :data-date="day" :disabled="disabled" @click="emit('add', day)">{{ messages.t('activity.addSlot') }}</button>
+                            <ActionButton type="button" class="btn-sm w-100" variant="outline-info" data-add-slot :data-date="day" :disabled="disabled" @click="emit('add', day)">{{ messages.t('activity.addSlot') }}</ActionButton>
                         </td>
                     </tr>
                 </tfoot>

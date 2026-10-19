@@ -20,6 +20,7 @@ import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import AppAccordionButton from '../../components/AppAccordionButton.vue';
 
 type Card = components['schemas']['OverviewCard'];
 type ChildType = 'packing' | 'activity' | 'drivers';
@@ -153,7 +154,7 @@ function createChildLifecycle(card: Card) {
     }
 }
 
-/** The P2 organizer owns deletion even when a child's detail page is native.
+/** The Event organizer owns deletion through its parent-scoped child operation.
  * Shared removal approves sibling drafts before writing and retains the existing
  * dashboard destination as client navigation after its confirmed JSON receipt. */
 async function deleteChild(card: Card, initiator: Event): Promise<void> {
@@ -173,7 +174,7 @@ async function deleteChild(card: Card, initiator: Event): Promise<void> {
 }
 async function refresh(): Promise<void> {
     if (!refreshAction.isAvailable()) return;
-    try { await command.reconcile(section.refresh); } catch { /* Retained query failure remains visible. */ }
+    await command.reconcileSafely(section.refresh);
 }
 </script>
 
@@ -213,16 +214,14 @@ async function refresh(): Promise<void> {
                 <div class="accordion accordion-dark">
                     <div v-for="group in groups" :key="group.type" class="accordion-item dashboard-accordion-item">
                         <h2 class="accordion-header">
-                            <button
-                                type="button"
-                                class="accordion-button dashboard-accordion-button"
-                                :class="{collapsed: adminOpen !== group.type}"
-                                :aria-expanded="adminOpen === group.type"
-                                :aria-controls="`${id}-${group.type}`"
+                            <AppAccordionButton
+                                class="dashboard-accordion-button"
+                                :expanded="adminOpen === group.type"
+                                :controls="`${id}-${group.type}`"
                                 @click="toggleGroup(group.type)"
                             >
                                 <i class="bi me-2" :class="group.icon" aria-hidden="true"></i>{{ messages.t(group.title) }}<span class="badge bg-secondary ms-2">{{ groupItems(group.type).length }}</span>
-                            </button>
+                            </AppAccordionButton>
                         </h2>
                         <div
                             v-show="adminOpen === group.type"
@@ -309,16 +308,13 @@ async function refresh(): Promise<void> {
             <div v-else class="accordion accordion-dark">
                 <div class="accordion-item entity-overview overflow-visible">
                     <h2 class="accordion-header">
-                        <button
-                            type="button"
-                            class="accordion-button"
-                            :class="{collapsed: !expanded}"
-                            :aria-expanded="expanded"
-                            :aria-controls="`${id}-things`"
+                        <AppAccordionButton
+                            :expanded="expanded"
+                            :controls="`${id}-things`"
                             @click="expanded = !expanded"
                         >
                             <i class="bi bi-clipboard-check me-2" aria-hidden="true"></i>{{ messages.t('event.organizer.thingsToDo') }}<span class="badge bg-secondary ms-2">{{ items.length }}</span>
-                        </button>
+                        </AppAccordionButton>
                     </h2>
                     <div v-show="expanded" :id="`${id}-things`" class="accordion-collapse">
                         <div class="accordion-body">

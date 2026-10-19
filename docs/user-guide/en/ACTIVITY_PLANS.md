@@ -4,9 +4,9 @@ documentation-metadata
 audience: activity participants; activity organizers
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
+verification-scope: Existing Activity task guidance retained; basic-rule introduction removes a maintainer package identifier; declared anchors and business instructions preserved.
 source-anchors: tests/unit/activity-linked-recommendations.spec.ts; tests/frontend/activity-recommendation-warnings.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/activity-plan-interlinking.spec.ts; src/public/js/modules/activity/activity-assignments.ts; src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/activity/activity-create.pug; src/views/activity/activity-view.pug; src/views/activity/parts/schedule.pug; src/views/activity/parts/participants.pug; src/views/activity/parts/participant-status.pug; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; src/views/activity/export/schedule.pug; src/views/modules/module_role_assignment_addon.pug; src/public/js/activity-create.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/routes/activity.ts; src/routes/api/activity.ts; src/controller/activityController.ts; src/middleware/assignFlowFactory.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityService.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: activity-plan-visible-UI-or-behavior-change
 production-reference: 2dfa257 native frontend documentation; not an installed production commit
@@ -262,7 +262,7 @@ Attendance and requirement information is meaningful mainly for a plan assigned 
 
 ### Configure basic assignment rules
 
-For an event-linked plan, authorized organizers can open **Rules & auto-assign**. D07 covers the controls that directly affect everyday participation:
+For an event-linked plan, authorized organizers can open **Rules & auto-assign**. These controls directly affect everyday participation:
 
 - **Assignment mode** — **Free** means no minimum slot count; **Required** enables participant requirements.
 - **Binding deadline** — after this time, participants cannot join or leave on their own.

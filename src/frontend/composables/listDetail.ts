@@ -1,11 +1,12 @@
 import {computed, onBeforeUnmount, shallowRef, watch} from 'vue';
 import {useQuery, type QueryFunctionContext} from '@tanstack/vue-query';
-import type {FrontendListCommandSource, FrontendListSource} from '../../types/FrontendListTypes';
+import type {FrontendListCommandSource, FrontendListSettingsRetirement, FrontendListSettingsRetirementSource,
+    FrontendListSource} from '../../types/FrontendListTypes';
 import type {PilotCommandDraft, PilotPlainMessageKey, PilotRead} from '../../types/FrontendPilotUiTypes';
 import type {components} from '../../types/api/v1';
 import {refreshInterval, useActionState, usePilot} from '../app/context';
 import {belongsToQueryFamily} from '../app/queryKeys';
-import {refetchFreshQuery, useQueryAdmission} from '../app/queryCache';
+import {evictQueryFamilies, refetchFreshQuery, useQueryAdmission} from '../app/queryCache';
 import {isReadDenial, ObsoleteRequestError} from '../app/transport';
 import {useCommand} from './command';
 import {useReadRetry, useReadRetryAt} from './feedback';
@@ -84,6 +85,24 @@ export function useListDetail<T>(source: FrontendListSource<T>) {
     return {list, data, denied, refresh, isActive: () => active};
 }
 
+/** Share Settings retirement across detail families without introducing another
+ * command, query or draft. Callers retain dialog closing and their fresh-read policy. */
+export function useSettingsAccessRetirement(source: FrontendListSettingsRetirementSource) {
+    const context = usePilot();
+
+    /** Losing Settings authority retires only the feature-selected editor family.
+     * A still-current page recovers independent detail authority through its own
+     * cooldown and merge owner after the private editor reads have been canceled. */
+    return async function retireSettingsAccess(selection: FrontendListSettingsRetirement): Promise<void> {
+        const scope = context.capture();
+        // Cancellation/removal finishes before recovery can admit related data.
+        // Resource/actor changes make this continuation obsolete.
+        await evictQueryFamilies(context.queryClient, selection.families);
+        if (!source.active() || selection.resourceId !== selection.currentResource() || !context.mayRead(scope)) return;
+        await source.refresh();
+    };
+}
+
 /** Detail pages compose the same read/command recovery without retaining another
  * server snapshot or draft. Features inject their actual fresh read (including
  * Survey's ballot merge), lifetime and dirty policy; generated mutations stay
@@ -96,6 +115,7 @@ export function useListCommands(source: FrontendListCommandSource, draft: PilotC
     const blocked = computed(() => command.action.disabled.value);
     const readAction = useActionState({eligible: mayRefresh, pending: source.reading,
         blocked: () => command.recoveryAction.disabled.value});
+    const retireSettingsAccess = useSettingsAccessRetirement({active: source.active, refresh});
 
     function mayRefresh(): boolean { return source.active() && context.mayRead() && retryAvailable.value; }
 
@@ -140,7 +160,7 @@ export function useListCommands(source: FrontendListCommandSource, draft: PilotC
         command.setError('packing.inlineMetadataDenied', 'transient', 'inline');
     }
 
-    return {command, blocked, readAction, retryAt, refresh, reviewUnknownCreation, denyInlineEdit};
+    return {command, blocked, readAction, retryAt, refresh, retireSettingsAccess, reviewUnknownCreation, denyInlineEdit};
 }
 
 /** Packing and Drivers retain the native list permission wording. Other detail

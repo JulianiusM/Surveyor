@@ -1,7 +1,41 @@
-import type {Request, Response} from 'express';
+import type {Request, RequestHandler, Response} from 'express';
+import path from 'node:path';
+import fs from 'node:fs/promises';
 import type {ApiOperationId, ApiSuccessStatus, ApiResponseBody, PreparedApiJsonResponse} from '../../types/ApiTransportTypes';
 import {contractValidator, operationContract} from './contracts';
 import {ApiProblem, requestLocale} from './problem';
+
+/** Await the caller's uploader without changing its filename, byte or type policy.
+ * Parser diagnostics stay private; routes retain admission and upload cleanup. */
+export async function receiveApiUpload(req: Request, res: Response, upload: RequestHandler): Promise<void> {
+    // Only the existing bounded upload categories cross the versioned boundary.
+    /** Settle parser completion before the route validates or consumes its uploaded bytes. */
+    await new Promise<void>(function receiveUpload(resolve, reject) {
+        // The injected parser retains its own storage policy; expose only bounded completion categories.
+        upload(req, res, error => {
+            if (!error) resolve();
+            else reject(new ApiProblem(error.code === 'LIMIT_FILE_SIZE' ? 'PAYLOAD_TOO_LARGE' : 'UPLOAD_INVALID'));
+        });
+    });
+}
+
+/** Populate wire image metadata only from the actual upload, preserving unknown form fields. */
+export function decodeApiMultipartImage(body: unknown, file?: Express.Multer.File): unknown {
+    return {...body as object, ...(file ? {image: file.originalname} : {})};
+}
+
+/** Decode the shared multipart data part before generated closed-shape validation.
+ * A submitted filename cannot substitute for uploaded bytes or hide unknown fields. */
+export function decodeApiMultipartData(body: unknown, file?: Express.Multer.File): unknown {
+    const form = body as Record<string, unknown>;
+    if (Object.hasOwn(form, 'image') && !file) throw new ApiProblem('UPLOAD_INVALID');
+
+    // Keep already decoded values and absent/malformed JSON distinctions intact.
+    let data: unknown;
+    try { data = typeof form.data === 'string' ? JSON.parse(form.data) : form.data; }
+    catch { throw new ApiProblem('VALIDATION_FAILED'); }
+    return decodeApiMultipartImage({...form, data}, file);
+}
 
 /** Decode only the serialization subset declared in the contract; JSON request bodies stay untouched. */
 function scalarParameter(value: unknown, type: unknown): unknown {
@@ -131,6 +165,22 @@ export function sendValidatedBinary<Operation extends ApiOperationId>(req: Reque
     }
     privateResponse(req, res);
     res.status(status).type('application/octet-stream').send(bytes);
+}
+
+/** Read an authorized stored reference within the caller's configured directory.
+ * Feature admission precedes this helper; path/read failures reveal no filesystem details. */
+export async function sendStoredApiBinary<Operation extends ApiOperationId>(req: Request, res: Response, operationId: Operation,
+    status: ApiSuccessStatus<NoInfer<Operation>>, directory: string, storedPath: string): Promise<void> {
+    // Preserve the existing application-relative confinement policy before I/O.
+    const root = path.resolve(process.cwd(), directory);
+    const fullPath = path.resolve(process.cwd(), storedPath);
+    const relative = path.relative(root, fullPath);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new ApiProblem('NOT_FOUND');
+
+    let bytes: Buffer;
+    try { bytes = await fs.readFile(fullPath); }
+    catch { throw new ApiProblem('NOT_FOUND'); }
+    sendValidatedBinary(req, res, operationId, status, bytes);
 }
 
 /** Reauthorization/projection occurs before this helper, including before a conditional 304. */

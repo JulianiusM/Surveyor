@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-18
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P4 Survey dynamic detail and personal ballot drafts reconciled with shared read ownership and existing subsequent-route provision; retained P3 reorder, refresh/draft and anonymous context boundaries; no new concurrency guarantee
-source-anchors: src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/event/; src/frontend/features/overview/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
+verification-scope: implemented P5/P6 Activity requirement drafts, recommendation/job observation and dynamic-route admission reconciled with shared read ownership; retained P0-P4 refresh/draft and anonymous context boundaries; no new concurrency guarantee
+source-anchors: src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/event/; src/frontend/features/overview/; src/frontend/features/activity/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
 next-review: next-refresh-migration-or-authorized-cutover
 -->
 
@@ -75,9 +75,13 @@ arbitrary age-based command prohibition.
 | Reviewed finance preview | Explicit preview/refresh; stale detection cannot replace reviewed values/token. |
 | Recommendation/job | Existing job-specific backoff/expiry/terminal rules. |
 
-The last two rows describe intended future frontend integrations, not implemented pilot query consumers.
-[DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets) preserves
-their durable status and domain boundaries; it supplies no implementation approval.
+Reviewed finance previews remain a future frontend integration under
+[DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets).
+P6 implements recommendation snapshots and known-job observation through pure reads, separately from deliberate
+maintenance and generation commands. The
+[approved automatic-job amendment](FRONTEND_FOUNDATION_DESIGN.md#approved-automatic-recommendation-job-observation-2026-10-19)
+permits observing an already queued deadline job and reading its saved results without another generation trigger.
+The existing domain engines retain their lifecycle and application rules.
 
 Honor Retry-After and per-client jitter. Safe reads can retry with bounded shared backoff; commands default to zero.
 Do not run independent interval/retry timers against the same failed endpoint.
@@ -206,8 +210,9 @@ fragments and pending drafts. Optional images inject feature operations and own 
 
 D5 ordinary session refresh detects binary-folder replacement. The explicit 2026-10-15 amendment limits automatic
 full-document reload to eligible dynamic route/content. Its initial Overview and Packing detail scope now also
-includes P2 Event detail/administration (2026-10-16), P3 Drivers detail and P4 Survey detail (2026-10-18) under the approved
-subsequent-dynamic-route provision. Packing, Drivers and Surveys share `useListDetail` for scoped reads/recovery;
+includes P2 Event detail/administration (2026-10-16), P3 Drivers detail, P4 Survey detail and P5/P6 Activity detail
+(2026-10-18) under the approved subsequent-dynamic-route provision. Packing, Drivers, Surveys and Activity share
+`useListDetail` for scoped reads/recovery;
 Packing and Drivers share `useListReorder` for the captured gesture. Feature operations and private drafts remain independent.
 Survey ballots retain dirty personal choices while adopting new columns as No and refreshing named results.
 Representation ETags do not introduce conditional Survey writes or atomic concurrent ballot replacement.
@@ -223,7 +228,7 @@ or session/security revalidation.
 Use real mounted query/transport consumers for cancellation/authority, actual controller/DBAL calls for coexistence,
 and selected browser focus/navigation/SSR cases when their boundary is affected.
 Keep native/v1 action policy and private projection scenarios independent of full-page membership.
-Future finance/activity slices preserve baseline exception IDs and existing server protocols.
+Implemented Activity and future finance slices preserve baseline exception IDs and existing server protocols.
 
 Completed scoped correction evidence and its limits belong to the [review](PILOT_PARITY_REVIEW.md).
 Use the [risk procedure](staged/TESTING_GUIDE.md#risk-and-test-cost), not a mandatory full-stack test cross-product.

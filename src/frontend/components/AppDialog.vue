@@ -6,6 +6,7 @@ import {usePilot} from '../app/context';
 const props = withDefaults(
     defineProps<{
         open: boolean;
+        id?: string;
         title: string;
         subtitle?: string;
         pending?: boolean;
@@ -71,6 +72,7 @@ function restoreFocus(event: Event): void {
         <DialogPortal>
             <DialogOverlay class="pilot-dialog-backdrop" />
             <DialogContent
+                :id="id"
                 class="pilot-dialog modal-content bg-dark"
                 :class="[contentClass ?? 'text-white', {'pilot-dialog-compact': compact, 'pilot-dialog-standard': standard, 'pilot-dialog-fullscreen': fullscreenOnSmall}]"
                 :aria-describedby="undefined"

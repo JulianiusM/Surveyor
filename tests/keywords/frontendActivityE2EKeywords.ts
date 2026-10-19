@@ -25,8 +25,8 @@ export async function createActivityForE2E(request: APIRequestContext, eventId?:
     return {...resource, view: await readActivityForE2E(request, resource.id)};
 }
 
-/** Read only the bounded Activity projection. Recommendation reads can perform
- * maintenance/enqueue work and are deliberately absent from these P5 fixtures. */
+/** Read only the bounded Activity projection. Native recommendation entry can
+ * perform maintenance/enqueue work and is deliberately absent from these P5 fixtures. */
 export async function readActivityForE2E(request: APIRequestContext, planId: string): Promise<components['schemas']['ActivityView']> {
     const response = await request.get(`/api/v1/activity-plans/${planId}`, {headers: await frontendEventHeaders(request)});
     expect(response.status()).toBe(200);
@@ -56,6 +56,58 @@ export async function observeActivityCommand(page: Page, planId: string, suffix:
 export async function waitForNativeActivityPane(pane: Locator): Promise<void> {
     await expect(pane).toHaveClass(/\bshow\b/u);
     await expect(pane).toHaveCSS('opacity', '1');
+}
+
+/** Exercise the same real keyboard journey in both renderers. Page keys retain
+ * browser scrolling, while Bootstrap's six tab keys wrap and activate in place. */
+export async function expectActivityTabKeyboard(page: Page): Promise<void> {
+    const tabs = page.locator('main .nav-tabs [role="tab"]');
+    const count = await tabs.count();
+    expect(count).toBeGreaterThan(1);
+    // Establish keyboard focus without starting Bootstrap's smooth page scroll;
+    // only the actual keys below should determine the measured scroll behavior.
+    await tabs.first().evaluate(element => (element as HTMLElement).focus({preventScroll: true}));
+    // Opening Rules may already have started Bootstrap's smooth scrolling, and
+    // Vue renders its focus-selected panel asynchronously. Observe the actual
+    // browser position until that setup settles, without canceling its motion.
+    await page.evaluate(() => new Promise<void>(resolve => {
+        let previous = window.scrollY;
+        let stableFrames = 0;
+        function observePosition(): void {
+            const current = window.scrollY;
+            stableFrames = current === previous ? stableFrames + 1 : 0;
+            previous = current;
+            if (stableFrames >= 3) resolve();
+            else requestAnimationFrame(observePosition);
+        }
+        requestAnimationFrame(observePosition);
+    }));
+    const steps = [
+        {key: 'Home', index: 0}, {key: 'End', index: count - 1},
+        {key: 'ArrowRight', index: 0}, {key: 'ArrowDown', index: 1},
+        {key: 'ArrowLeft', index: 0}, {key: 'ArrowUp', index: count - 1},
+        {key: 'Control+Home', index: 0}, {key: 'Shift+End', index: count - 1},
+        {key: 'PageUp', index: count - 1}, {key: 'PageDown', index: count - 1},
+        {key: 'Home', index: 0},
+    ];
+    for (const [index, step] of steps.entries()) {
+        const before = await page.evaluate(() => window.scrollY);
+        await page.keyboard.press(step.key);
+        const selected = tabs.nth(step.index);
+        await expect(selected).toBeFocused();
+        await expect(selected).toHaveAttribute('aria-selected', 'true');
+        // Native Bootstrap declares its panel through data-bs-target. Vue's
+        // shared tab owner declares aria-controls; require its explicit link.
+        const nativeTarget = await selected.getAttribute('data-bs-target');
+        const controls = await selected.getAttribute('aria-controls');
+        if (!nativeTarget) expect(controls).toBeTruthy();
+        const target = nativeTarget ?? '#' + controls;
+        expect(target).toMatch(/^#tab-(?:schedule|participants|rules)$/u);
+        await expect(page.locator(target)).toBeVisible();
+        // Page keys keep the browser's default scroll, which may still settle
+        // when the final Home restores Schedule. Measure only the preceding keys.
+        if (index < 8) expect(await page.evaluate(() => window.scrollY), `Scroll after ${step.key}`).toBe(before);
+    }
 }
 
 /** Retain an inspectable screenshot and complete visible text/control measures.

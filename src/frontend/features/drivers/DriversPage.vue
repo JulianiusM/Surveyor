@@ -55,7 +55,7 @@ const items = computed(() =>
 // supplies its admitted version, exact detail key and generated image operation.
 const readHeader = api.header.bind(api);
 
-const {command, blocked, readAction, retryAt, refresh, reviewUnknownCreation, denyInlineEdit} = useListCommands({
+const {command, blocked, readAction, retryAt, refresh, retireSettingsAccess, reviewUnknownCreation, denyInlineEdit} = useListCommands({
     active: isActive, denied: () => denied.value, reading: () => list.isFetching.value,
     error: () => list.error.value, refresh: refreshCurrentList,
 }, {
@@ -90,16 +90,8 @@ function revokeAccess(failure: Error): void {
 async function settingsAccessLost(): Promise<void> {
     editorOpen.value = false;
     const actor = context.session.value?.context;
-    const resource = listId.value;
-    // Losing edit authority does not prove that reading or self-assignment was revoked.
-    // Cancel and remove editor projections, then let the list endpoint
-    // authoritatively decide which remaining view/actions this profile can still use.
-    const editors = {queryKey: driversKeys.editors(actor, resource)};
-    await context.queryClient.cancelQueries(editors);
-    context.queryClient.removeQueries(editors);
-
-    if (!context.mayRead() || resource !== listId.value || actor !== context.session.value?.context) return;
-    await refresh();
+    await retireSettingsAccess({resourceId: listId.value, currentResource: () => listId.value,
+        families: [driversKeys.editors(actor, listId.value)]});
 }
 /** Preserve the native treatment of historical null capacities (IMP-026). */
 function isFull(item: Item): boolean {

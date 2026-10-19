@@ -26,6 +26,20 @@ const transientReference = /frontend-migration\/|canonical-merge-target:|product
 // Exact reviewed public owners may be copied before a normal commit makes them
 // tracked. This does not admit an unlisted test, a directory or ignored private state.
 const publicPreviewOwners = new Set([
+    'src/frontend/components/AppAccordionButton.vue',
+    'src/frontend/features/activity/ActivityRecommendationEditor.vue',
+    'src/frontend/features/activity/ActivityRecommendationSchedule.vue',
+    'src/frontend/features/activity/ActivityRecommendations.vue',
+    'src/frontend/features/activity/ActivityRequirements.vue',
+    'src/frontend/features/activity/recommendationDraft.ts',
+    'src/frontend/features/activity/requirements.ts',
+    'src/types/ActivityRequirementTypes.d.ts',
+    'src/types/FrontendActivityRecommendationTypes.d.ts',
+    'src/types/FrontendActivityRequirementTypes.d.ts',
+    'tests/e2e/frontend-pilot-activity-advanced.spec.ts',
+    'tests/frontend/frontend-activity-recommendations.spec.ts',
+    'tests/frontend/frontend-activity-requirements.spec.ts',
+    'tests/keywords/frontendActivityAdvancedE2EKeywords.ts',
     'contracts/api/v1/drivers.yaml',
     'src/frontend/components/BasicEntityMetadataFields.vue',
     'src/frontend/components/EntityAssignees.vue',

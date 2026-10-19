@@ -355,6 +355,20 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         }
     }
 
+    /** Deliberate UI recovery consumes a failed read at its existing query surface.
+     * Unlike a causal post-command refresh, an event handler has no awaiting owner
+     * to receive rejection. Preserve its draft/status and report unsuccessful recovery. */
+    async function reconcileSafely(read: PilotRecoveryRead = refreshAuthority): Promise<boolean> {
+        try {
+            // Keep all current-actor, command and fresh-read checks in reconcile;
+            // consuming delivery failure never acknowledges or retries a write.
+            return await reconcile(read);
+        } catch {
+            // The read owner retains its failure, cooldown and last admitted data.
+            return false;
+        }
+    }
+
     /** Recover authority without interpreting an unchanged read as a failed creation or
      * mail request. One retained status lease protects the whole read, even if a denied
      * response retires this editor. Actor/document/component retirement stops follow-up
@@ -491,7 +505,9 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
             }
             // The DOM target was captured before dispatch ended. Do not resolve
             // that expired event again when confirmation arrives asynchronously.
-            publishNotice(feedback?.success ?? 'state.saved', feedback?.presentation);
+            // Successful maintenance can deliberately have no native success notice.
+            // This presentation choice leaves confirmation and every failure path intact.
+            if (feedback?.success !== null) publishNotice(feedback?.success ?? 'state.saved', feedback?.presentation);
         } catch (failure) {
             // Actual actor retirement still closes every result. Before confirmation,
             // intentional disposal also keeps its existing obsolete outcome.
@@ -559,6 +575,6 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
 
     return {action, recoveryAction, pending, recovering, uncertain, reviewRequired, feedback, error, transientError, errorRenewal, errorPresentation, feedbackKind, feedbackTarget,
         notice, noticeKind, transientNotice, noticeInline, noticeRenewal, outcome, setError, setInformation, setNotice,
-        clearRecoveredError, captureFeedback, run, reconcile, recover, acknowledge,
+        clearRecoveredError, captureFeedback, run, reconcile, reconcileSafely, recover, acknowledge,
         mayLeave: protection.mayLeave, prepareDeparture: protection.prepareDeparture};
 }

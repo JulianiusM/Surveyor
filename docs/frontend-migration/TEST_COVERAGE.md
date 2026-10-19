@@ -4,9 +4,9 @@ documentation-metadata
 audience: frontend migration implementers; reviewers; test maintainers
 owner: project maintainers
 status: migration-pending
-last-verified: 2026-10-18
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P5 basic Activity source and assertion map alongside retained P0-P4 evidence; execution and original visual review belong to paired review; native defects remain open until cutover
+verification-scope: P6 advanced Activity source/adoption and assertion map alongside retained P0-P5 evidence; execution and original visual review belong to paired review; native defects remain open until cutover
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -43,7 +43,11 @@ Coverage does not measure Pug/Sass layout. The managed E2E server starts the com
 
 ## Implemented P0–P2 acceptance matrix (2026-10-16)
 
-This is the current implemented-slice checklist, not a full-application or Cartesian browser/state certification.
+This preserves the P0–P2 slice's assertion matrix. The later [Drivers](#p3-drivers-source-to-implementation-assertions-2026-10-18),
+[Surveys](#p4-surveys-source-to-implementation-assertions-2026-10-18),
+[basic Activity](#p5-basic-activity-source-map-2026-10-18) and
+[advanced Activity](#p6-advanced-activity-source-map-2026-10-18) sections extend it through implemented P6.
+No section establishes a full-application or Cartesian browser/state certification.
 The E2E assertions below use the actual built application, integrated backend and prepared disposable database.
 Matched visual pairs use the same actor, records, loaded fonts and viewport; screenshots supplement explicit
 text, control-state, constraint, geometry, style and browser-error assertions. Existing client/ORM rows below protect
@@ -79,7 +83,7 @@ beyond its declared assertions.
 | Native presentation differences | Compare equivalent component geometry; identify recorded one-time-flash/surrounding-shell offsets separately. Independently issued tokens differ in content. T1 compares dietary entries by choice while each frontend preserves its own response order and complete values. |
 | Identity completion R1 | Typed catalog notices replace the inherited-prose exception for implemented transfer/deactivation/account/guest deletion. Conditional former-owner details, native wording and existing business sequencing remain. |
 | Excluded backend remedies | General token, transfer, last-profile/deletion finality, native mixed-reset/activation, provider preparation, Event capacity and whole-session/permission remedies remain separately owned. E1 excludes native/Vue production coexistence coordination; it supplies no repair claim. |
-| Later scope and external evidence | S1 requires explicit phase triggers; separate October 18 instructions supply P3 and P4 triggers. P5–P11, principal-language persistence and email/PDF/domain localization remain separately scoped. No live OIDC, successful SMTP/inbox, rendered PDF, exhaustive browser/locale/accessibility matrix, hosted CI, deployment, cutover, native removal or guide publication is certified by this checklist. |
+| Later scope and external evidence | S1 requires explicit phase triggers; separate October 18 instructions supply P3–P6 triggers. P7–P11, principal-language persistence and email/PDF/domain localization remain separately scoped. No live OIDC, successful SMTP/inbox, rendered PDF, exhaustive browser/locale/accessibility matrix, hosted CI, deployment, cutover, native removal or guide publication is certified by this checklist. |
 
 The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments) retains original choices
 and dated approvals; [DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md) owns durable technology and future-target
@@ -107,7 +111,7 @@ no production native/Vue coordination repair or stronger legacy capacity/partici
 
 The direct October 16 D1 reply requires ordinary SPA commands/navigation across current P0–P2. The current rows
 map the corrected source; superseded document-command choices remain historical in the decision ledger and P1
-receipt. The [current correction map](#ordinary-spa-correction-coverage-plan-2026-10-16) retains its planned boundaries
+receipt. The [adopted correction map](#adopted-spa-correction-assertions-2026-10-16) retains its assertion boundaries
 with actual owner adoption. Executed evidence and its failed-run/coverage limits belong to the paired review.
 
 These rows identify current implementation and precise observable assertions for the bounded pilot. They do not
@@ -310,7 +314,7 @@ Independent source review confirms adoption; actual focused/full execution and f
 | **ENT-10** duplicate/delete | Event duplicate projection, creation draft owner and shared settings deletion flow | [Mounted foundation](../../tests/frontend/frontend-event-foundation.spec.ts), `retains an entered duplicate and selected file after canceled departure, then releases both on accepted warm navigation`, protects source/draft lifetime. Built creation source submits a real duplicate and checks copied dates/location/capacity, empty native rendered deadline, excluded image and fresh empty attendance; its source has no registration to exclude. The built HTTP settings source verifies permanent deletion through the independent native detail route. Shared Packing management assertions protect the adopted deletion interaction. This does not cover every duplicate grant combination or deletion race. |
 | **EXP-02** participant PDF | Native `/event/:id/export/participants` route and existing combined permission check | [Built-browser source](../../tests/e2e/frontend-event-organizer.spec.ts), `organizer dates, link revocation and participant PDF use the integrated application`, asserts status 200, PDF content type and `%PDF` bytes from the retained native route. It does not assert every denial combination, PDF content/layout or broader export localization. |
 
-## Ordinary SPA correction coverage plan (2026-10-16)
+## Adopted SPA correction assertions (2026-10-16)
 
 These adopted assertion boundaries survive retirement of the completed correction sequence. E1 excludes native/Vue
 production coexistence and its Event coordination remedy; approved Packing schedules retain their original scope.
@@ -326,7 +330,7 @@ The [review](PILOT_PARITY_REVIEW.md#current-verification-evidence-2026-10-16) ow
 Use the existing pilot document-marker pattern and observe main-frame navigation requests alongside the actual
 generated operation, visible result and persisted effect. Test true provider/capability arrivals and outputs at their
 own boundary; do not turn all document traffic into a failure or replace full-application E2E with synthetic HTML.
-The [current plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#current-spa-correction-plan-2026-10-16) owns sequence and scope;
+The [completed correction](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#completed-spa-correction-2026-10-16) records adoption and scope;
 the [paired review](PILOT_PARITY_REVIEW.md#current-verification-evidence-2026-10-16) owns actual commands/results and their practical limits.
 
 ## Full-pilot correction source assertions (2026-10-16)
@@ -489,6 +493,32 @@ and native client admission. Persistence cases distinguish these client guards f
 Native frontend sources remain untouched. IMP-017, the blank total-slot badge IMP-076, calendar timezone
 inconsistency IMP-077 and date-label activation defect IMP-078 retain the native comparator;
 this map supplies no remedy, P6–P11, default routing or cutover authority.
+
+## P6 advanced Activity source map (2026-10-18)
+
+The [explicit P6 trigger](FRONTEND_FOUNDATION_DESIGN.md#explicit-p6-implementation-trigger-2026-10-18) covers
+requirements/progress, recommendation jobs and reviewed changes. This table maps authored production consumers
+and test assertions. Current execution, image inspection and acceptance limits belong to the paired review;
+the existence of a built-browser test does not establish that it has run successfully.
+
+| Contract | Production adoption and assertions |
+|---|---|
+| ACT-08/09: settings and unsaved coverage | `ActivityRequirements` owns mode, deadline, stay rows, rounding, role requirements and overrides. Its `requirements.ts` helper calls the existing pure engine, and `ActivityParticipants` renders unsaved progress through the existing participant table. [Mounted/helper cases](../../tests/frontend/frontend-activity-requirements.spec.ts) assert zero and override precedence, hypothetical role coverage, lexical controls and calculation without persistence. [Versioned persistence](../../tests/integration/activity-v1-api.spec.ts) asserts scalar private projections, actual saved zero overrides and independent management grants. |
+| ACT-10: requirement draft lifetime | The existing list-command/departure owners protect the independent requirement draft. Mounted cases retain dirty controls through background reads and canceled departure/Reload, preserve a confirmed save through its failed subsequent read, and retire private settings on denial. [Built workflows](../../tests/e2e/frontend-pilot-activity-advanced.spec.ts) author real zero settings and exercise canceled/accepted Reload while retaining the document. |
+| ACT-11: domain jobs and uncertain dispatch | `ActivityRecommendations` dispatches once through `ActivityApi`, retains the returned domain job identity and observes only that job. [Mounted recommendation cases](../../tests/frontend/frontend-activity-recommendations.spec.ts) assert native-equivalent entry maintenance, pure recovery, no replay after uncertain generation, retirement and preservation of newer edits. Versioned persistence distinguishes a pure snapshot from explicit maintenance and checks job identity, plan scoping, grants and completion. Built workflows assert real generation, observed job paths and subsequent proposal adoption. |
+| ACT-12: reviewed rows and manual operations | `recommendationDraft.ts`, `ActivityRecommendationSchedule` and `ActivityRecommendationEditor` retain manual/generated provenance, source placements, reciprocal swaps and visible row warnings. Mounted cases construct both roleless swap legs and preserve rejection semantics. Built workflows stage/revert/approve/remove both legs together, then inspect real swap, unassignment and assignment results through independent API reads. The shared server recommendation owner remains authoritative. |
+| ACT-13: exact reviewed application | `ActivityRecommendations` freezes the previewed batch and submits that same batch plus its overlap acknowledgement once. `ActivityWarnings` shares confirmation/cancellation with participation; existing controller engines decide current eligibility, sources, provenance and applied/skipped results. Mounted cases freeze preview/application identity and preserve canceled drafts. Versioned persistence protects generated provenance and exact approved selection. Built workflows assert matching preview/application bodies, cancellation, changed-overlap rejection without assignments, retained warnings and a fresh successful review. |
+| ACT-14: relationship/context preservation | The requirement projection retains former-participant override IDs and safe names without silently selecting a different participant. Mounted requirement cases protect that choice. Existing [interlinking](../../tests/integration/activity-plan-interlinking.spec.ts), [property integrity](../../tests/integration/activity-property-integrity.spec.ts) and [workflow](../../tests/integration/activity-workflows.spec.ts) cases retain context invalidation, assignments, overrides and review history through the shared controller/DBAL boundaries. New frontend reads and job observation do not replace those domain rules or strengthen inherited completion guarantees. |
+| Matched advanced presentation | Built advanced scenes compare native/Vue saved Rules controls, participant coverage, recommendation schedule and manual reassignment dialog at 1280px and 390px. Both basic and advanced scenes exercise native/Vue tab keys, wrapping, focus, selected panels and scroll behavior. A separate German 390px journey checks actual advanced labels, saved zero requirements and the manual dialog; it is not a native German comparison. Authored checks cover visible labels, constraints, control state, geometry, styles and browser errors; captures require separate original-image inspection recorded in the paired review. |
+
+The P6 composition keeps the native frontend unchanged. `ActivityApi` consumes generated shapes; private server
+projections exclude full entities and raw job diagnostics. The shared pure requirements engine receives structural
+values and imports its rounding declaration without bringing ORM metadata into the browser graph. No P7–P11,
+backend remedy, default-route change, guide publication or cutover follows from this source map.
+The native active schedule does not observe automatically queued post-deadline work (IMP-030). The maintainer's
+[approved R1 amendment](FRONTEND_FOUNDATION_DESIGN.md#approved-automatic-recommendation-job-observation-2026-10-19)
+allows Vue to observe that existing job and read its saved results without another generation trigger. The fix is
+frontend-only; IMP-030 remains open until native-to-Vue cutover. Actual current verification belongs to the paired review.
 
 ## Verification selection for subsequent migration slices
 

@@ -9,6 +9,7 @@ import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/fron
 import {expectDriversSettingsPresentation as expectSettingsPresentation,
     openDriversSettingsForE2E as openSettingsForE2E} from '../keywords/frontendDriversE2EKeywords';
 import {assignActivityThroughNative, captureActivityPresentation, createActivityForE2E, createActivityOverlapForE2E,
+    expectActivityTabKeyboard,
     observeActivityCommand, readActivityForE2E, readActivitySettingsForE2E,
     waitForNativeActivityPane} from '../keywords/frontendActivityE2EKeywords';
 
@@ -64,6 +65,7 @@ for (const width of [1280, 390]) {
                     page.locator('.card').filter({has: page.getByText('Kitchen notes', {exact: true})}).last(),
                     ['strong', 'small', 'p', 'button']),
             };
+            await expectActivityTabKeyboard(page);
             await (pilot ? page.getByRole('tab', {name: 'Participants', exact: true})
                 : page.locator('[data-bs-target="#tab-participants"]')).click();
             if (!pilot) await waitForNativeActivityPane(page.locator('#tab-participants'));

@@ -65,7 +65,7 @@ function receiveRegistration(): void {
 
 /** Recover an uncertain desired-state command through fresh reads only. */
 async function recover(): Promise<void> {
-    await command.reconcile();
+    await command.reconcileSafely();
 }
 
 /** Release only the completed form values; rejection and uncertain delivery keep them. */

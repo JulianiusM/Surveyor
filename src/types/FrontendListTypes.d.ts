@@ -40,6 +40,21 @@ export interface FrontendListCommandSource {
     refresh(): Promise<void>;
 }
 
+/** Features choose which editor projections retire and how to identify the live
+ * resource. The shared lifetime neither infers grants nor chooses a feature key. */
+export interface FrontendListSettingsRetirement {
+    resourceId: string;
+    currentResource(): string;
+    families: readonly (readonly unknown[])[];
+}
+
+/** The caller retains recovery semantics and its optional receipt. Retirement
+ * waits for completion without interpreting that result as new authority. */
+export interface FrontendListSettingsRetirementSource {
+    active(): boolean;
+    refresh(): Promise<unknown>;
+}
+
 /** Matching list creation forms share root fields; feature collections remain
  * in their own draft owner and are read only at the explicit submit boundary. */
 export interface FrontendListCreationValues {

@@ -5,6 +5,7 @@ import type {ActivitySlotDraft} from '../../../types/FrontendActivityTypes';
 import {usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useActivityApi} from './api';
+import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import FormField from '../../components/FormField.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
@@ -100,7 +101,7 @@ async function save(): Promise<void> {
     if (result) emit('close');
 }
 async function reviewUnknown(): Promise<void> {
-    if (await command.reconcile() && window.confirm(messages.value.t('activity.confirmUnknownReviewed'))) command.acknowledge();
+    if (await command.reconcileSafely() && window.confirm(messages.value.t('activity.confirmUnknownReviewed'))) command.acknowledge();
 }
 </script>
 
@@ -185,14 +186,14 @@ async function reviewUnknown(): Promise<void> {
                         v-for="id in draft.roles"
                         :key="id"
                         class="badge text-bg-secondary me-1 mb-1 d-inline-flex align-items-center gap-1">{{ roleTitle(id) }}
-                        <button
+                        <ActionButton
                             type="button"
-                            class="btn btn-sm btn-outline-light px-1 py-0"
+                            class="btn-sm px-1 py-0" variant="outline-light"
                             :disabled="blocked"
                             :title="messages.t('activity.removeRole')"
                             @click="removeRole(id)">
                             <i class="bi bi-x" aria-hidden="true"></i>
-                        </button>
+                        </ActionButton>
                     </span>
                 </div>
                 <div class="input-group input-group-sm mt-2">
@@ -237,12 +238,12 @@ async function reviewUnknown(): Promise<void> {
             <StatusNotice v-if="conflict" kind="warning">
                 <p>{{ messages.t('draft.readConflict') }}</p>
                 <p v-if="slot">{{ slot.title }}<br />{{ slot.description }}<br />{{ slot.startTime }} – {{ slot.endTime }}<br />{{ slot.maxAssignees }}</p>
-                <button
+                <ActionButton
                     v-if="slot"
                     type="button"
-                    class="btn btn-sm btn-outline-warning"
+                    class="btn-sm" variant="outline-warning"
                     :disabled="blocked"
-                    @click="token = slot.editToken">{{ messages.t('draft.review') }}</button>
+                    @click="token = slot.editToken">{{ messages.t('draft.review') }}</ActionButton>
             </StatusNotice>
             <CommandFeedback
                 :feedback="command.feedback"
@@ -251,13 +252,13 @@ async function reviewUnknown(): Promise<void> {
             />
         </form>
         <template #footer>
-            <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="command.pending.value" @click="close">{{ messages.t('common.cancel') }}</button>
-            <button
+            <ActionButton type="button" class="btn-sm" variant="outline-secondary" :disabled="command.pending.value" @click="close">{{ messages.t('common.cancel') }}</ActionButton>
+            <ActionButton
                 id="slotEditorSave"
                 type="submit"
                 form="slotEditorForm"
-                class="btn btn-sm btn-primary"
-                :disabled="blocked || conflict">{{ messages.t('common.save') }}</button>
+                class="btn-sm" variant="primary"
+                :disabled="blocked || conflict">{{ messages.t('common.save') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

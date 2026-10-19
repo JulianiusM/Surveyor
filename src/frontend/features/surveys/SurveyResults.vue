@@ -2,6 +2,7 @@
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
 import {answerVariants} from './presentation';
+import StatusNotice from '../../components/StatusNotice.vue';
 import SurveyCombinationHeaders from './SurveyCombinationHeaders.vue';
 
 // Named results are an admitted shared projection. Missing answers retain the
@@ -28,5 +29,5 @@ const labels = {yes: 'survey.answer.yes', maybe: 'survey.answer.maybe', no: 'sur
             </tr></tbody>
         </table>
     </div>
-    <div v-else class="status-notice alert-info text-center"><i class="bi bi-info-circle me-1" aria-hidden="true"></i>{{ messages.t('survey.noAnswers') }}</div>
+    <StatusNotice v-else kind="info" :role="null" class="text-center"><i class="bi bi-info-circle me-1" aria-hidden="true"></i>{{ messages.t('survey.noAnswers') }}</StatusNotice>
 </template>

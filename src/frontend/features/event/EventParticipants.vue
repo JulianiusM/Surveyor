@@ -12,8 +12,10 @@ import EventTotals from './EventTotals.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
+import FormField from '../../components/FormField.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import AppAccordionButton from '../../components/AppAccordionButton.vue';
 
 type Participant = components['schemas']['EventParticipant'];
 type DetailsSelection = {kind: 'summary'} | {kind: 'participant'; id: string};
@@ -179,7 +181,7 @@ async function copyEmail(row: Participant): Promise<void> {
 }
 async function refresh(): Promise<void> {
     if (!refreshAction.isAvailable()) return;
-    try { await command.reconcile(section.refresh); } catch { /* The query owns its visible read error. */ }
+    await command.reconcileSafely(section.refresh);
 }
 </script>
 
@@ -201,10 +203,10 @@ async function refresh(): Promise<void> {
         <div class="accordion accordion-flush">
             <div class="accordion-item bg-dark border-secondary">
                 <h2 class="accordion-header">
-                    <button class="accordion-button text-light bg-dark" :class="{collapsed: !open}" type="button"
-                        :aria-expanded="open" :aria-controls="`${id}-roster`" @click="open = !open">
+                    <AppAccordionButton class="text-light bg-dark"
+                        :expanded="open" :controls="`${id}-roster`" @click="open = !open">
                         <i class="bi bi-people-fill me-2" aria-hidden="true"></i>{{ messages.t('event.organizer.participants') }}<span class="badge bg-secondary ms-2">{{ section.data.value ? section.data.value.participants.length : messages.t('common.unknown') }}</span>
-                    </button>
+                    </AppAccordionButton>
                 </h2>
                 <div v-show="open" :id="`${id}-roster`" class="accordion-collapse">
                     <div class="accordion-body bg-dark">
@@ -333,18 +335,22 @@ async function refresh(): Promise<void> {
                     :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refresh" />
             </div>
             <form :id="`${id}-date-form`" @submit.prevent="saveDates">
-                <div class="mb-3">
-                    <label class="form-label" :for="`${id}-arrival`">{{ messages.t('event.organizer.arrival') }}</label>
-                    <input :id="`${id}-arrival`" v-model="edit.arrivalDate" class="form-control text-bg-dark"
-                        type="date" name="arrivalDate" required :min="startDate" :max="endDate"
-                        :disabled="management.disabled.value" />
-                </div>
-                <div class="mb-0">
-                    <label class="form-label" :for="`${id}-departure`">{{ messages.t('event.organizer.departure') }}</label>
-                    <input :id="`${id}-departure`" v-model="edit.departureDate" class="form-control text-bg-dark"
-                        type="date" name="departureDate" required :min="startDate" :max="endDate"
-                        :disabled="management.disabled.value" />
-                </div>
+                <FormField :id="`${id}-arrival`" class="mb-3" :label="messages.t('event.organizer.arrival')"
+                    label-class="" required :required-marker="false">
+                    <template #control>
+                        <input :id="`${id}-arrival`" v-model="edit.arrivalDate" class="form-control text-bg-dark"
+                            type="date" name="arrivalDate" required :min="startDate" :max="endDate"
+                            :disabled="management.disabled.value" />
+                    </template>
+                </FormField>
+                <FormField :id="`${id}-departure`" class="mb-0" :label="messages.t('event.organizer.departure')"
+                    label-class="" required :required-marker="false">
+                    <template #control>
+                        <input :id="`${id}-departure`" v-model="edit.departureDate" class="form-control text-bg-dark"
+                            type="date" name="departureDate" required :min="startDate" :max="endDate"
+                            :disabled="management.disabled.value" />
+                    </template>
+                </FormField>
             </form>
             <template #footer>
                 <small class="text-secondary">{{ messages.t('event.organizer.eventWindow') }}</small>

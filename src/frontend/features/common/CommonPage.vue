@@ -7,6 +7,7 @@ import {isPlainMessageKey} from '../../../modules/localization/translator';
 import {usePilot} from '../../app/context';
 import {usePageTitle} from '../../composables/pageTitle';
 import PageMessage from '../../components/PageMessage.vue';
+import StatusNotice from '../../components/StatusNotice.vue';
 
 const props = defineProps<{page?: FrontendCommonPage}>();
 const context = usePilot();
@@ -67,13 +68,13 @@ function resolvePresentation(): {page: FrontendCommonPage; renewal: unknown} {
             <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>{{ messages.t('common.errorHeading') }}
         </h1>
         <div class="card-body">
-            <div class="status-notice alert-danger d-flex align-items-center">
+            <StatusNotice kind="danger" :role="null" class="d-flex align-items-center">
                 <i class="bi bi-x-circle-fill me-3 fs-3" aria-hidden="true"></i>
                 <div>
                     <strong>{{ localizedMessage || messages.t('common.internalError') }}</strong>
                     <template v-if="page.status">{{ ' ' + messages.t('common.errorStatus', {code: page.status}) }}</template>
                 </div>
-            </div>
+            </StatusNotice>
             <!-- Development stack admission belongs to Express. Vue only escapes the
                  explicitly supplied text; no error object or production stack is inferred. -->
             <details v-if="page.stack" class="mb-0">

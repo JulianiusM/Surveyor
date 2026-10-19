@@ -3,10 +3,12 @@ import {computed, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import {usePilot} from '../../app/context';
 import {belongsToQueryFamily, eventKeys, overviewKeys} from '../../app/queryKeys';
-import {refetchFreshQueries} from '../../app/queryCache';
+import {evictQueryFamilies, refetchFreshQueries} from '../../app/queryCache';
+import {isReadDenial} from '../../app/transport';
+import {useSettingsAccessRetirement} from '../../composables/listDetail';
 import {usePageTitle} from '../../composables/pageTitle';
 import {useEventApi} from './api';
-import {useEventSection} from './useEventSection';
+import {eventDeniedQueries, useEventSection} from './useEventSection';
 import EventSummary from './EventSummary.vue';
 import EventSettings from './EventSettings.vue';
 import EventRegistration from './EventRegistration.vue';
@@ -28,11 +30,28 @@ const key = computed(() => eventKeys.detail(context.session.value?.context, even
 const section = useEventSection(key, readEvent, computed(() => true));
 const event = section.data;
 const editorOpen = ref(false);
+const retireSettingsAccess = useSettingsAccessRetirement({active: () => section.readAction.isAvailable(), refresh: refreshPresentation});
 // Event supplies its admitted image/query operation to the same displayed
 // header as Packing. Dashboard headings deliberately retain their native shape.
 const readHeader = api.header.bind(api);
 usePageTitle(pageTitle, true);
 watch(section.denied, closeDeniedSettings);
+watch(section.query.error, retireDeniedProjections, {flush: 'sync'});
+
+/** Detail failures use the same Event-specific boundaries as page admission.
+ * Preserve this observer's error/recovery while releasing affected sibling caches. */
+function retireDeniedProjections(failure: Error | null): void {
+    if (!isReadDenial(failure)) return;
+    const actor = context.session.value?.context;
+    const resource = eventId.value;
+    const intent = admin.value ? 'admin' : 'detail';
+    const selection = eventDeniedQueries(actor, resource, intent, failure.status);
+    // The read owner already cleared its producing query's private body. Removing
+    // that observed Query would detach the visible explicit recovery control.
+    void evictQueryFamilies(context.queryClient, selection.families, 'all', key.value);
+    if (selection.inactiveFamilies?.length)
+        void evictQueryFamilies(context.queryClient, selection.inactiveFamilies, 'inactive', eventKeys.entry(actor, resource, intent));
+}
 
 function pageTitle(): string {
     // Document branding differs from the visible dashboard heading. Keep both
@@ -46,9 +65,24 @@ function readEvent(scope: Parameters<typeof api.event>[1], signal: AbortSignal) 
 function closeDeniedSettings(denied: boolean): void {
     if (denied) editorOpen.value = false;
 }
+/** Release Settings separately from independently granted Event projections.
+ * The shared retirement owner cancels private editor reads before safe detail recovery. */
 function settingsAccessLost(): void {
+    // Close this dialog immediately; its loss does not revoke roster/child grants.
     editorOpen.value = false;
-    void refresh();
+    const actor = context.session.value?.context;
+    void retireSettingsAccess({resourceId: eventId.value, currentResource: () => eventId.value,
+        families: [eventKeys.editors(actor, eventId.value)]});
+}
+
+/** UI events leave failed-read presentation with its query. Causal command
+ * follow-ups still call the rejecting refresh below to preserve saved/stale outcomes. */
+async function refreshPresentation(): Promise<void> {
+    try {
+        await refresh();
+    } catch {
+        // The affected query retains its durable failure and recovery action.
+    }
 }
 
 /** The own Event GET is required authority after a command. Mounted sibling
@@ -91,7 +125,7 @@ async function refresh(): Promise<void> {
                 :retry-at="section.retryAt.value"
                 :last-updated-at="event ? section.query.dataUpdatedAt.value : undefined"
                 :action="{state: section.readAction, label: messages.t('common.refresh')}"
-                @action="refresh"
+                @action="refreshPresentation"
             >
                 {{ section.failure.value }}
             </StatusNotice>
@@ -153,7 +187,7 @@ async function refresh(): Promise<void> {
                     :event-id="event.id"
                     :event-title="event.title"
                     @close="editorOpen = false"
-                    @saved="refresh"
+                    @saved="refreshPresentation"
                     @access-lost="settingsAccessLost"
                 />
             </template>

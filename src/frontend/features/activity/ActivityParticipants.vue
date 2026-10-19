@@ -3,10 +3,14 @@ import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {PilotPlainMessageKey} from '../../../types/FrontendPilotUiTypes';
 import {usePilot} from '../../app/context';
+import {activityDateLabel} from './presentation';
+import ActionButton from '../../components/ActionButton.vue';
 
 // Search/filter are local presentation only. The server has already admitted
 // every participant field, requirement target, role and attendance window.
-const props = defineProps<{participants: components['schemas']['ActivityParticipant'][]; assignmentMode: 'FREE' | 'REQUIRED'}>();
+const props = withDefaults(defineProps<{participants: components['schemas']['ActivityParticipant'][]; assignmentMode: 'FREE' | 'REQUIRED';
+    id?: string; heading?: boolean; localizeAttendance?: boolean}>(),
+{id: 'participant-status-overview', heading: true, localizeAttendance: false});
 const {messages} = usePilot();
 const search = ref('');
 const filter = ref('all');
@@ -31,21 +35,31 @@ const visible = computed(() => props.participants.filter(person => {
     return filter.value === 'all' || filter.value === 'assigned' && person.assignedShifts > 0
         || filter.value === 'unassigned' && person.assignedShifts === 0 || state(person) === filter.value;
 }));
+/** Saved participant overviews keep their native ISO dates; the live Rules
+ * coverage consumer opts into the native browser date-label presentation. */
 function attendance(person: components['schemas']['ActivityParticipant']): string {
     if (!person.attendance?.arrivalDate && !person.attendance?.departureDate) return messages.value.t('activity.fullPlan');
-    return (person.attendance.arrivalDate ?? messages.value.t('activity.attendanceStart')) + ' – '
-        + (person.attendance.departureDate ?? messages.value.t('activity.attendanceEnd'));
+    // Presentation never changes the admitted civil dates or attendance count.
+    // Both native paths retain the same missing-boundary wording.
+    const arrival = person.attendance?.arrivalDate;
+    const departure = person.attendance?.departureDate;
+    return (arrival ? props.localizeAttendance ? activityDateLabel(arrival, messages.value.locale) : arrival
+        : messages.value.t('activity.attendanceStart')) + ' – '
+        + (departure ? props.localizeAttendance ? activityDateLabel(departure, messages.value.locale) : departure
+            : messages.value.t('activity.attendanceEnd'));
 }
 </script>
 
 <template>
     <section
-        id="participant-status-overview"
+        :id="id"
         class="participant-status-component"
         data-participant-status
         :data-assignment-mode="assignmentMode">
-        <h4 class="mb-2">{{ messages.t('activity.participants') }}</h4>
-        <p class="small text-secondary mb-3">{{ messages.t('activity.participantDescription') }}</p>
+        <!-- The Rules coverage step supplies its own native heading. Both views
+        retain one participant/filter presentation and their independent search. -->
+        <h4 v-if="heading" class="mb-2">{{ messages.t('activity.participants') }}</h4>
+        <p v-if="heading" class="small text-secondary mb-3">{{ messages.t('activity.participantDescription') }}</p>
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2 participant-status-toolbar">
             <div class="d-flex flex-wrap gap-2 align-items-center participant-status-controls">
                 <div class="input-group input-group-sm participant-status-search">
@@ -65,14 +79,14 @@ function attendance(person: components['schemas']['ActivityParticipant']): strin
                     class="d-flex flex-wrap gap-1 participant-status-filters"
                     role="group"
                     :aria-label="messages.t('activity.participantFilters')">
-                    <button
+                    <ActionButton
                         v-for="option in filters"
                         :key="option.value"
                         type="button"
-                        class="btn"
-                        :class="['btn-outline-' + option.color, {active: filter === option.value}]"
+                        :variant="'outline-' + option.color"
+                        :class="{active: filter === option.value}"
                         :data-participant-filter="option.value"
-                        @click="filter = option.value">{{ messages.t(option.label) }}</button>
+                        @click="filter = option.value">{{ messages.t(option.label) }}</ActionButton>
                 </div>
             </div>
             <div class="d-flex flex-wrap gap-1 participant-status-stats" data-participant-summary-stats>

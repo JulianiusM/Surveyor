@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import {computed, reactive} from 'vue';
+import {computed, reactive, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useActivityApi} from './api';
 import {activitySlotLabel} from './presentation';
+import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 
@@ -15,10 +16,37 @@ const emit = defineEmits<{close: []}>();
 const context = usePilot();
 const {messages} = context;
 const api = useActivityApi(context);
-const selected = reactive<Record<string, string>>(Object.fromEntries(props.slot.roles.map(role => [role.name, role.assignmentId ?? ''])));
-const baseline = JSON.stringify(selected);
-const command = useCommand(props.refresh, false, {dirty: () => JSON.stringify(selected) !== baseline, unknownMessage: 'draft.leaveUnknown'});
+// Role titles are data, including names such as constructor or __proto__.
+// Null-prototype dictionaries keep every admitted title an ordinary own field.
+const selected = reactive<Record<string, string>>(Object.create(null));
+for (const role of props.slot.roles) selected[role.name] = role.assignmentId ?? '';
+const baseline: Record<string, string> = Object.assign(Object.create(null), selected);
+const command = useCommand(props.refresh, false, {dirty: () => props.slot.roles.some(role => selected[role.name] !== baseline[role.name]), unknownMessage: 'draft.leaveUnknown'});
 const blocked = computed(() => command.action.disabled.value || !props.slot.capabilities.manageAssignments);
+watch(() => [props.slot.roles, props.slot.assignees], reconcileSelections);
+
+/** A fresh admitted slot can release roles or assignees while this dialog stays
+ * open. Retain valid edits and retire unavailable IDs from controls and baseline. */
+function reconcileSelections(): void {
+    const roleNames = new Set(props.slot.roles.map(role => role.name));
+    const assignees = new Set(props.slot.assignees.map(person => person.assignmentId));
+    // Removed fields no longer own a draft or departure warning. New fields
+    // begin with the current admitted assignment rather than a hidden old value.
+    for (const name of Object.keys(selected)) {
+        if (!roleNames.has(name)) {
+            delete selected[name];
+            delete baseline[name];
+        }
+    }
+
+    for (const role of props.slot.roles) {
+        if (!Object.hasOwn(selected, role.name)) selected[role.name] = baseline[role.name] = role.assignmentId ?? '';
+        // Releasing an assignee is not an unsaved user edit. Clear it from both
+        // representations while keeping any other deliberate choice unchanged.
+        if (selected[role.name] && !assignees.has(selected[role.name])) selected[role.name] = '';
+        if (baseline[role.name] && !assignees.has(baseline[role.name])) baseline[role.name] = '';
+    }
+}
 function close(): void { if (command.mayLeave()) emit('close'); }
 /** Keep native role descriptions as labels while submitting stable role names. */
 function roleLabel(role: components['schemas']['ActivitySlotRole']): string {
@@ -79,14 +107,14 @@ async function save(): Promise<void> {
             <CommandFeedback :feedback="command.feedback" />
         </div>
         <template #footer>
-            <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="command.pending.value" @click="close">{{ messages.t('common.cancel') }}</button>
-            <button
+            <ActionButton type="button" class="btn-sm" variant="outline-secondary" :disabled="command.pending.value" @click="close">{{ messages.t('common.cancel') }}</ActionButton>
+            <ActionButton
                 id="slotRoleAdminSave"
                 type="submit"
                 form="slotRoleAdminForm"
-                class="btn btn-sm btn-primary"
+                class="btn-sm" variant="primary"
                 :disabled="blocked || !slot.roles.length">
-                <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('activity.saveChanges') }}</button>
+                <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('activity.saveChanges') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

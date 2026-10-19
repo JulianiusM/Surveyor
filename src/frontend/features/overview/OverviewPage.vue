@@ -10,6 +10,7 @@ import type {PilotOverviewCountRead, PilotRequestScope} from '../../../types/Fro
 import {overviewKeys} from '../../app/queryKeys';
 import {overviewQueryParameters} from './api';
 import OverviewRegion from './OverviewRegion.vue';
+import AppAccordionButton from '../../components/AppAccordionButton.vue';
 const context = usePilot();
 const {messages} = context;
 const route = useRoute();
@@ -171,12 +172,9 @@ function hiddenHref(collection: string): string {
                     <div class="accordion accordion-dark">
                         <div class="accordion-item entity-overview overflow-visible">
                             <h2 class="accordion-header">
-                                <button
-                                    class="accordion-button"
-                                    :class="{collapsed: !open[collection]}"
-                                    type="button"
-                                    :aria-expanded="open[collection]"
-                                    :aria-controls="'overview-' + collection"
+                                <AppAccordionButton
+                                    :expanded="open[collection]"
+                                    :controls="'overview-' + collection"
                                     @click="open[collection] = !open[collection]"
                                 >
                                     <i
@@ -201,7 +199,7 @@ function hiddenHref(collection: string): string {
                                     <!-- Unknown counts are not empty membership. The region announces
                                          loading; keep this inline placeholder free of another live status. -->
                                     <span v-else class="badge bg-secondary ms-2" aria-hidden="true">…</span>
-                                </button>
+                                </AppAccordionButton>
                             </h2>
                             <div
                                 v-show="open[collection]"

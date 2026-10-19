@@ -422,8 +422,9 @@ for (const width of [1280, 390]) {
                     surface, state === 'populated' ? ['h4', 'p', '.badge', 'button', 'summary[role="button"]', 'a'] : []);
                 if (pilot) expectVisiblePresentation(original!, current);
                 else original = current;
-                // The approved Vue Refresh control is outside the compared card
-                // and empty-state surfaces; native links remain the independent oracle.
+                // The Vue Refresh control is outside the compared card and empty-state
+                // surfaces. Its visible exception needs an explicit decision; this
+                // scoped comparison cannot supply that approval.
                 expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
             }
         }
@@ -1752,7 +1753,7 @@ test('pilot creates and duplicates complete lists through the SPA forms with row
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('creation');
 });
 
-test('pilot overview preserves personal visibility, shared archive state and linked navigation across collections', async ({page}) => {
+test('pilot overview preserves personal visibility, shared archive state and linked navigation across collections', async ({page}, info) => {
     test.setTimeout(60_000);
     await loginForE2E(page.request, createE2ELogin());
     // A fresh active profile gives this lifecycle a bounded overview without deleting existing fixtures.
@@ -1869,14 +1870,29 @@ test('pilot overview preserves personal visibility, shared archive state and lin
     await page.evaluate(() => document.fonts.ready);
     await expansion.scrollIntoViewIfNeeded();
     const originalScroll = await page.evaluate(() => window.scrollY);
+    // Both renderers save the position at activation. Playwright may scroll the
+    // anchor again while preparing its click, so observe that real event without
+    // reading component state or changing the gesture's default behavior.
+    await expansion.evaluate(element => element.addEventListener('click', function observeActivation() {
+        element.setAttribute('data-test-activation-scroll', String(window.scrollY));
+        element.setAttribute('data-test-activation-count', String(Number(element.getAttribute('data-test-activation-count')) + 1));
+    }, {capture: true}));
     await expansion.click();
+    await expect(expansion).toHaveAttribute('data-test-activation-count', '1');
+    const activationScroll = Number(await expansion.getAttribute('data-test-activation-scroll'));
     await expect(page).toHaveURL(new RegExp('owner_main_event=' + event.id));
     await expect(owner.locator('.entity-overview-children')).toContainText(linked.title);
     await expect(owner.locator('.entity-overview-children')).toContainText('Linked entities 1–1 of 1');
     await owner.getByRole('link', {name: 'Back to overview', exact: true}).click();
     await expect(owner.locator('.entity-overview-children')).toHaveCount(0);
     await expect(expansion).toBeFocused();
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(originalScroll, 0);
+    await info.attach('overview-return-scroll', {contentType: 'application/json', body: JSON.stringify({
+        beforeClick: originalScroll,
+        afterReturn: await page.evaluate(() => window.scrollY),
+        activation: activationScroll,
+        maximum: await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight),
+    })});
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeCloseTo(activationScroll, 0);
     await eventCard.getByRole('link', {name: 'Show linked entities for ' + event.title, exact: true}).click();
     await owner.locator(`[data-id="${linked.id}"] > a.card-body`).click();
     await expect(page).toHaveURL(new RegExp('/frontend-pilot/packing/' + linked.id + '$'));

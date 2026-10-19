@@ -1004,8 +1004,8 @@ describe('pilot mixed overview projection', () => {
         expect(contractValidator('OverviewRegion')(surveyOnly)).toBe(true);
         expect(surveyOnly).toMatchObject({type: 'all', availableTypes: ['survey'], totalEntities: 1,
             matchingEntities: 1, totalCards: 1});
-        // P4 Surveys are migrated destinations even inside the mixed Overview.
-        // Unmigrated Activity children below keep their original native URL.
+        // P4 Survey and P5 Activity destinations stay inside the pilot even
+        // when discovered through the mixed Overview or its Event children.
         expect(surveyOnly.items).toMatchObject([{id: surveyId, type: 'survey', url: `/frontend-pilot/survey/${surveyId}`}]);
 
         const eventId = await createIntegrationEvent(isolatedOwner.id, 'Mixed trip');
@@ -1019,7 +1019,7 @@ describe('pilot mixed overview projection', () => {
         const children = await readOverview({collection: 'owner', region: 'main', eventId}, session);
         expect(children.parent?.children).toEqual({total: 2, matching: 2});
         expect(new Set(children.items.map(card => card.id))).toEqual(new Set([activityId, packingId]));
-        expect(children.items.find(card => card.id === activityId)?.url).toBe(`/activity/${activityId}`);
+        expect(children.items.find(card => card.id === activityId)?.url).toBe(`/frontend-pilot/activity/${activityId}`);
         expect(children.items.find(card => card.id === packingId)?.url).toBe(`/frontend-pilot/packing/${packingId}`);
 
         const filtered = await readOverview({collection: 'owner', region: 'main', type: 'activity'}, session);

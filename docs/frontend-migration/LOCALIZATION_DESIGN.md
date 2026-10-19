@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; documentation contributors
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-16
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved R1 typed catalog completion reconciled with current grammar/preference guidance; superseded inherited-prose exception retained in decision history; future locale/output targets remain in active DEC-006; Help/fallback and query-locale boundaries retained
+verification-scope: typed catalog grammar and existing Activity named-slot deviation inspected against the deferred ADR choice; specific adoption approval remains pending; superseded inherited-prose exception and Help/fallback/query-locale boundaries retained
 source-anchors: src/locales/; scripts/generate-locales.mjs; src/modules/localization/; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/controller/helpController.ts; docs/user-guide/en/; docs/user-guide/de/; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: frontend-production-cutover
 -->
@@ -39,8 +39,14 @@ shared runtime resources/manifest. A second language registry/backend dictionary
 
 The immutable typed translator owns locale and message lookup, wrapping an application/request-local initialized
 i18next instance. Vue uses the shared provider/i18next-vue binding; API Problems use the same catalogs.
-The pilot supports plain text/cardinal plurals and a shared explicit-UTC formatter for read receipts/Retry instants.
-Entity civil dates/deadlines retain their existing meaning.
+The typed translator supports plain text/cardinal plurals and a shared explicit-UTC formatter for read receipts/Retry
+instants. Entity civil dates/deadlines retain their existing meaning.
+
+The full-pilot source review found that Activity progress emphasis and the recommendation hint badge already use
+i18next-vue's `TranslationComponent` with named slots. This conflicts with the
+[ADR's deferred status](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets);
+no specific approval for these consumers was found. They supply explicit application nodes rather than catalog HTML,
+but that implementation does not authorize a supported extension. A separate direct decision is pending.
 
 The preference currently lives in a server-issued browser cookie. PUT /api/v1/locale returns resolved session
 presentation without persisting User/Guest preference or changing active profile.

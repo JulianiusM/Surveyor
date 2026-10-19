@@ -15,6 +15,7 @@
  */
 
 import {Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, RelationId,} from "typeorm";
+import type {RoundingMode} from "../../../../types/ActivityRequirementTypes";
 import {DefaultEntity} from "../abstract/BaseEntity";
 import {Event} from "../event/Event";
 import {ActivityAssignment} from "./ActivityAssignment";
@@ -64,7 +65,7 @@ export class ActivityPlan extends DefaultEntity {
     allowExternalAssignees!: boolean;
 
     @Column('simple-enum', {name: 'rounding_mode', enum: ['CEIL', 'ROUND', 'FLOOR'], nullable: true})
-    roundingMode?: 'CEIL' | 'ROUND' | 'FLOOR' | null;
+    roundingMode?: RoundingMode | null;
 
     @Column("timestamp", {name: "binding_deadline", nullable: true})
     bindingDeadline?: Date | null;

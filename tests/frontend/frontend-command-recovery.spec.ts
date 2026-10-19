@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {mount, flushPromises} from '@vue/test-utils';
-import {defineComponent, nextTick, ref} from 'vue';
+import {defineComponent, nextTick, onBeforeUnmount, ref} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import I18NextVue from 'i18next-vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../../src/frontend/app/transport';
 import {useCommand} from '../../src/frontend/composables/command';
+import {useSettingsAccessRetirement} from '../../src/frontend/composables/listDetail';
 import CommandFeedback from '../../src/frontend/components/CommandFeedback.vue';
 import type {components} from '../../src/types/api/v1';
 import type {PilotRequestScope} from '../../src/types/FrontendPilotUiTypes';
@@ -75,6 +76,116 @@ function unloadAttempt(): Event {
 }
 
 describe('reconcile-only commands', () => {
+    it('confirms explicitly silent success while retaining ordinary saved feedback by default', async () => {
+        const {command, refresh, context} = await mountedCommand();
+        const operation = vi.fn(async () => ({changed: true}));
+        command.setNotice('state.saved');
+
+        expect(await command.run(operation, false, false, {success: null})).toEqual({changed: true});
+        expect(command.outcome.value).toEqual({confirmation: 'confirmed', refresh: 'not-requested'});
+        expect(command.notice.value).toBeNull();
+        expect(command.pending.value).toBe(false);
+        expect(command.uncertain.value).toBe(false);
+        expect(context.mayChangeIdentity()).toBe(true);
+        expect(refresh).not.toHaveBeenCalled();
+
+        // Silence is an explicit caller choice, never a new command-wide default.
+        expect(await command.run(operation, false)).toEqual({changed: true});
+        expect(command.notice.value).toBe('state.saved');
+        expect(operation).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(['validation', 'unknown', 'refresh'] as const)('retains %s feedback when success would be silent', async failure => {
+        const {command, refresh, context} = await mountedCommand(true);
+        cleanups.push(() => command.acknowledge());
+        const operation = vi.fn(async () => {
+            if (failure === 'validation') throw new InvalidInputError();
+            if (failure === 'unknown') throw new TypeError('Response lost after dispatch');
+            return {changed: true};
+        });
+        if (failure === 'refresh') refresh.mockRejectedValueOnce(new TypeError('Saved-state read failed'));
+
+        const result = await command.run(operation, failure === 'refresh', true, {success: null});
+        expect(operation).toHaveBeenCalledOnce();
+        expect(command.pending.value).toBe(false);
+        if (failure === 'validation') {
+            expect(result).toBeUndefined();
+            expect(command.outcome.value).toEqual({confirmation: 'rejected', refresh: 'not-requested'});
+            expect(command.error.value).toBe(context.messages.value.t('api:errors.VALIDATION_FAILED'));
+            expect(command.transientError.value).toBe(true);
+            expect(command.uncertain.value).toBe(false);
+        } else if (failure === 'unknown') {
+            expect(result).toBeUndefined();
+            expect(command.outcome.value).toEqual({confirmation: 'unknown', refresh: 'not-requested'});
+            expect(command.notice.value).toBe('state.unknownOutcome');
+            expect(command.uncertain.value).toBe(true);
+            const leave = vi.fn(() => false);
+            vi.stubGlobal('confirm', leave);
+            expect(context.mayChangeIdentity()).toBe(false);
+            expect(leave).toHaveBeenCalledOnce();
+        } else {
+            expect(result).toEqual({changed: true});
+            expect(command.outcome.value).toEqual({confirmation: 'confirmed', refresh: 'failed'});
+            expect(command.notice.value).toBe('state.savedRefreshFailed');
+            expect(command.uncertain.value).toBe(false);
+            expect(context.mayChangeIdentity()).toBe(true);
+        }
+    });
+
+    it.each(['current', 'resource', 'actor', 'disposed'] as const)('retires Settings caches before recovering only a current detail owner (%s)', async change => {
+        const {context} = await mountedCommand();
+        const refresh = vi.fn(async () => undefined);
+        let resource = 'original-resource';
+        let active = true;
+        let retire!: ReturnType<typeof useSettingsAccessRetirement>;
+        const owner = mount(defineComponent({
+            setup() {
+                retire = useSettingsAccessRetirement({active: () => active, refresh});
+                onBeforeUnmount(() => { active = false; });
+                return {};
+            }, template: '<p>Settings retirement owner</p>',
+        }), {global: {plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context}}});
+        cleanups.push(() => owner.unmount());
+        const editorKey = ['private-editors', resource] as const;
+        const detailKey = ['independent-detail', resource] as const;
+        context.queryClient.setQueryData(editorKey, {private: 'Settings projection'});
+        context.queryClient.setQueryData(detailKey, {title: 'Readable detail'});
+        const retiring = retire({resourceId: resource, currentResource: () => resource, families: [editorKey]});
+
+        // Cache cancellation yields before recovery. A changed visit/actor or
+        // retired component must not start a later detail read from this callback.
+        if (change === 'resource') resource = 'replacement-resource';
+        if (change === 'actor') context.epoch.value++;
+        if (change === 'disposed') owner.unmount();
+        await retiring;
+        expect(context.queryClient.getQueryData(editorKey)).toBeUndefined();
+        expect(context.queryClient.getQueryData(detailKey)).toEqual({title: 'Readable detail'});
+        expect(refresh).toHaveBeenCalledTimes(change === 'current' ? 1 : 0);
+    });
+
+    it('consumes failed UI recovery without releasing an unknown command or its mounted draft', async () => {
+        const {command, refresh, wrapper} = await mountedCommand(true);
+        cleanups.push(() => command.acknowledge());
+        const draft = wrapper.get<HTMLInputElement>('input');
+        await draft.setValue('Keep this unknown-operation draft');
+        const write = vi.fn(async () => { throw new TypeError('Response lost after dispatch'); });
+        await command.run(write, false);
+        refresh.mockRejectedValue(new TypeError('Recovery GET failed'));
+
+        // UI delivery resolves false, while the original throwing reconciliation
+        // contract remains available to causal/dependent refresh owners.
+        await expect(command.reconcileSafely()).resolves.toBe(false);
+        expect(command.uncertain.value).toBe(true);
+        expect(command.notice.value).toBe('state.unknownOutcome');
+        expect(command.recovering.value).toBe(false);
+        expect(wrapper.get('input').element).toBe(draft.element);
+        expect(draft.element.value).toBe('Keep this unknown-operation draft');
+        expect(write).toHaveBeenCalledOnce();
+        await expect(command.reconcile()).rejects.toThrow('Recovery GET failed');
+        expect(command.uncertain.value).toBe(true);
+        expect(write).toHaveBeenCalledOnce();
+    });
+
     it('presents a command receipt without inferring another caller\'s dismissal lock', async () => {
         const {context, command} = await mountedCommand();
         command.setError('common.error', 'transient', 'inline');

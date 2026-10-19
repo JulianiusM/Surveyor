@@ -7,6 +7,7 @@ import type {Profile} from '../../src/modules/database/entities/user/Profile';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as adminService from '../../src/modules/database/services/EntityAdminService';
 import * as eventService from '../../src/modules/database/services/EventService';
+import * as recommendationService from '../../src/modules/database/services/ActivityRecommendationService';
 import {contractValidator} from '../../src/modules/api/contracts';
 import {PERM} from '../../src/modules/lib/permissions';
 import type {components} from '../../src/types/api/v1';
@@ -43,6 +44,101 @@ beforeAll(async function prepareDatabase() {
 afterAll(closeIntegrationDatabase);
 
 describe('versioned Activity production operations', () => {
+    it('projects private requirements and preserves zero overrides through the shared settings owner', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Requirement transport camp');
+        await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
+        const {id} = await fixture(eventId);
+        const input: components['schemas']['ActivityRequirementsInput'] = {
+            assignmentMode: 'REQUIRED', generalRequiredShifts: 2, roundingMode: 'FLOOR', bindingDeadline: null,
+            allowOverfillAfterFull: false, allowExternalAssignees: false, allowArrivalDayEvening: true,
+            allowDepartureDayMorning: true, roleRequirements: [],
+            stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 1}, {stayDays: 3, requiredShifts: 2}],
+            overrides: [{profileId: participant.id, roleId: null, requiredShifts: 0}],
+        };
+        await activity.saveActivityRequirements(id, input, actor(owner));
+        const data = await activity.readActivityRequirements(id, actor(owner));
+        const validateRequirements = contractValidator('ActivityRequirements');
+        expect(validateRequirements(data), JSON.stringify(validateRequirements.errors)).toBe(true);
+        expect(data.overrides).toEqual([{id: expect.any(Number), profileId: participant.id, profileName: participant.name,
+            roleId: null, requiredShifts: 0}]);
+        expect(data.participants).toContainEqual(expect.objectContaining({requiredShifts: 0, source: 'override'}));
+        expect(data.calculationContext.participants).toContainEqual(expect.objectContaining({profileId: participant.id}));
+        expect(JSON.stringify(data)).not.toContain('password');
+        expect(data).not.toHaveProperty('owner');
+        await expect(activity.readActivityRequirements(id, actor(other))).rejects.toMatchObject({status: 403});
+        await adminService.addAdmin('activity', id, other.id, PERM.MANAGE_ASSIGNMENTS);
+        await expect(activity.saveActivityRequirements(id, input, actor(other))).rejects.toMatchObject({status: 403});
+        expect((await activity.readActivityPlan(id, actor(other))).data.capabilities.manageRecommendations).toBe(true);
+    });
+
+    it('keeps recovery snapshots read-only while explicit entry retains native recommendation maintenance', async () => {
+        const {id, slot} = await fixture();
+        await recommendationService.saveRecommendations(id, [{itemId: slot.id, profileId: participant.id,
+            status: 'PENDING', operation: 'ASSIGN', manual: false}]);
+        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
+
+        const snapshot = await activity.readActivityRecommendations(id, actor(owner));
+        expect(contractValidator('ActivityRecommendations')(snapshot)).toBe(true);
+        expect(snapshot.recommendations).toMatchObject([{item: {id: slot.id}, profile: {id: participant.id}, status: 'PENDING', manual: false}]);
+        expect((await recommendationService.getRecommendations(id))[0].status).toBe('PENDING');
+        expect(snapshot.autoGenerationJob).toBeNull();
+        expect(snapshot.recommendations[0]).not.toHaveProperty('entity');
+        expect(snapshot.recommendations[0].profile).toEqual({id: participant.id, name: participant.name});
+
+        const entered = await activity.readActivityRecommendations(id, actor(owner), true);
+        expect(entered.recommendations).toEqual([]);
+        expect((await recommendationService.getRecommendations(id))[0].status).toBe('APPLIED');
+        await expect(activity.readActivityRecommendations(id, actor(other))).rejects.toMatchObject({status: 403});
+        await expect(activity.generateActivityRecommendations(id, actor(owner))).rejects.toMatchObject({status: 409});
+    });
+
+    it('retains generated provenance and applies only the submitted reviewed manual batch', async () => {
+        const {id, slot} = await fixture();
+        await recommendationService.saveRecommendations(id, [{itemId: slot.id, profileId: participant.id,
+            status: 'PENDING', operation: 'ASSIGN', manual: false}]);
+        const loaded = await activity.readActivityRecommendations(id, actor(owner));
+        const generated = loaded.recommendations[0];
+        const review: components['schemas']['ActivityRecommendationReview'] = {recommendations: [
+            {id: generated.id, itemId: slot.id, profileId: participant.id, status: 'REJECTED', operation: 'ASSIGN', manual: true},
+            {itemId: slot.id, profileId: other.id, status: 'APPROVED', operation: 'ASSIGN', manual: true},
+        ]};
+        const preview = await activity.previewActivityRecommendations(id, review, actor(owner));
+        expect(contractValidator('ActivityRecommendationPreview')(preview)).toBe(true);
+        const applied = await activity.applyActivityRecommendations(id, {...review, overlapConfirmation: preview.overlapConfirmation}, actor(owner));
+        expect(contractValidator('ActivityRecommendationApplyResult')(applied)).toBe(true);
+        expect(applied).toMatchObject({applied: 1, skipped: 0});
+        expect((await recommendationService.getRecommendations(id)).find(row => row.profileId === participant.id)).toMatchObject({manual: false, status: 'REJECTED'});
+        expect(await activityService.getActivitySlotAssignments(id, participant.id)).toEqual([]);
+        expect(await activityService.getActivitySlotAssignments(id, other.id)).toEqual([slot.id]);
+    });
+
+    it('scopes job observation to its plan and keeps read-only snapshots from dispatching work', async () => {
+        const eventId = await createIntegrationEvent(owner.id, 'Job transport camp');
+        await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
+        const {id} = await fixture(eventId);
+        const second = await fixture(eventId);
+        await nativeActivity.updateRequirements(id, {assignmentMode: 'REQUIRED', bindingDeadline: '2020-01-01T00:00:00Z',
+            stayRequirements: [{stayDays: 1, requiredShifts: 0}, {stayDays: 2, requiredShifts: 0}, {stayDays: 3, requiredShifts: 1}]});
+        expect((await activity.readActivityRecommendations(id, actor(owner))).autoGenerationJob).toBeNull();
+        const queued = await activity.generateActivityRecommendations(id, actor(owner));
+        expect(contractValidator('ActivityRecommendationQueued')(queued)).toBe(true);
+        const observed = await activity.readActivityRecommendationJob(id, queued.job.id, actor(owner));
+        expect(observed.job.id).toBe(queued.job.id);
+        expect(contractValidator('ActivityRecommendationJobResult')(observed)).toBe(true);
+        await expect(activity.readActivityRecommendationJob(second.id, queued.job.id, actor(owner))).rejects.toMatchObject({status: 404});
+        await expect(activity.readActivityRecommendationJob(id, queued.job.id, actor(other))).rejects.toMatchObject({status: 403});
+        // Wait for this fixture's existing worker before database teardown or another schema reset.
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+            const current = await activity.readActivityRecommendationJob(id, queued.job.id, actor(owner));
+            if (!['QUEUED', 'RUNNING'].includes(current.job.status)) {
+                expect(current.job.status).toBe('COMPLETE');
+                return;
+            }
+            await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        throw new Error('Recommendation job did not finish before teardown');
+    });
+
     it('retains the native linked Rules destination for assignment managers with no slots', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Empty linked schedule');
         const {id, slot} = await fixture(eventId);

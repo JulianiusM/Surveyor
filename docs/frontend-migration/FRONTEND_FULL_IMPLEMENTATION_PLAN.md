@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers; AI agents
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-18
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit P5 trigger and basic Activity completion linked alongside retained P0-P4 receipts; P6-P11, backend exclusions and separate cutover boundaries preserved
+verification-scope: P6 adoption and full-pilot review qualifications reconciled alongside retained P0-P5 evidence; unresolved localization, feedback, Refresh and guide decisions explicit; P7-P11, backend exclusions and cutover boundaries preserved
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -68,21 +68,17 @@ findings. The maintainer authorizes their correction and existing-guidance recon
 owns renewed shared-implementation, P4 parity and complete execution results with their finite limits. Earlier
 phase receipts retain their original scopes; no later phase or cutover authority follows from passing checks.
 
-## Current SPA correction plan (2026-10-16)
+## Completed SPA correction (2026-10-16)
 
 The maintainer's [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
 excludes production coexistence coordination and rejects ordinary Event document submissions. The completed
 correction's execution sequence remains in Git history. Its lasting contribution rules belong to the existing
 [playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature-view); its behavior-to-assertion mappings belong to the
-[coverage map](TEST_COVERAGE.md#ordinary-spa-correction-coverage-plan-2026-10-16).
+[coverage map](TEST_COVERAGE.md#adopted-spa-correction-assertions-2026-10-16).
 
-The implementation now follows this sequence: Event/Packing use `useCreationCommand`; Settings, Overview and Event
-children use `useEntityRemoval`; private profile workflows use generated commands, read-only warm admission and the
-existing minimal identity-completion owner. Ordinary migrated parent, context, shell and workflow links use Router.
-Displaced document-only Vue command adapters/helpers are retired. Build, test compiler, complete client, selected
-ORM and configured built workflows have scoped results in the review. The preceding SPA correction's failed broad
-run, focused corrections and unchanged-drag repetitions retain their original scopes. That correction's readiness
-follow-up records two complete passing built selections; those earlier selections do not certify the full application.
+The correction restored generated SPA commands, shared Vue owners and ordinary Router navigation; displaced
+document-only Vue command adapters/helpers are retired. Its failed attempts, focused corrections and scoped
+verification remain in the paired review rather than another active execution checklist.
 
 `DESIGN-EVENT-CREATION-TRANSPORT` retains its reviewed closure in the central backlog. The
 [current review](PILOT_PARITY_REVIEW.md#complete-pilot-readiness-correction-and-scoped-verification-2026-10-18) owns actual inputs,
@@ -95,6 +91,21 @@ it does not start advanced Activity workflows, the later finance phases or cutov
 Both packages now have an [implementation and scoped verification receipt](PILOT_PARITY_REVIEW.md#p5-basic-activity-implementation-and-scoped-verification-2026-10-18).
 The declared P5 journeys are complete; requirement editing/recommendations remain P6. Earlier receipts retain their
 original inputs and limits rather than becoming an assertion that the full application has migrated.
+
+The subsequent [explicit P6 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p6-implementation-trigger-2026-10-18)
+starts all three advanced Activity packages. Requirements and unsaved coverage, domain-job observation and reviewed
+manual/generated batches now have production Vue owners and generated transport through the existing Activity
+controller and engines. The [P6 source map](TEST_COVERAGE.md#p6-advanced-activity-source-map-2026-10-18) identifies
+actual consumers and assertions. The [P6 receipt](PILOT_PARITY_REVIEW.md#p6-advanced-activity-implementation-and-scoped-verification-2026-10-19)
+records passing build, mounted, persistence and built-browser selections plus original visual review and finite limits.
+The declared P6 journeys implement the native workflows with the directly approved Vue job-observation exception. That fix
+uses the existing read operations without backend changes; IMP-030 remains open until native-to-Vue cutover.
+The subsequent [full review](PILOT_PARITY_REVIEW.md#full-implemented-pilot-review-2026-10-19) qualifies readiness:
+the existing Activity named-element translations conflict with the deferred design choice, German badges remain
+untranslated, and German Rules rows crowd at narrow widths. Healthy Refresh presentation, the inherited first-install
+guide contradiction and recommendation follow-up feedback also retain explicit unresolved decisions. These findings
+prevent an unconditional P5/P6 compliance or rapid-migration-readiness claim; they are not approved future work.
+P7–P11 and cutover remain separately scoped.
 
 ## Phase contracts
 
@@ -285,6 +296,14 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
 
    **Completion:** ACT-08–14, zero/override precedence, dirty requirement recovery, manual/generated provenance, both
    swap legs, stale-review rejection, and applied/skipped results are protected.
+
+   **Current implementation:** `ActivityRequirements` owns the independent lexical settings draft and composes
+   `ActivityParticipants` with unsaved results from the same pure requirements engine. `ActivityRecommendations`
+   owns reviewed rows and exact-batch submission; its schedule and manual editor share feature presentation and
+   existing warning/dialog owners. Deliberate entry, Reload, explicit generation completion and confirmed
+   application retain native maintenance triggers. Recovery snapshots and ordinary job-status reads cannot maintain
+   rows or enqueue work. The existing controller retains generation, provenance, warning privacy and application
+   decisions; no stronger legacy completion guarantee is introduced. Verification status belongs to the paired review.
 
 8. **P7 — Migrate finance read models and participant invoices**  
    **Complexity:** High. **Prerequisites:** P2’s Event participation and authorization contracts. Can overlap Activity

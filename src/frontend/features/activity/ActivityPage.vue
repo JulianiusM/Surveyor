@@ -18,14 +18,17 @@ import ActivitySlotEditor from './ActivitySlotEditor.vue';
 import ActivityRoleAssignments from './ActivityRoleAssignments.vue';
 import ActivityWarnings from './ActivityWarnings.vue';
 import ActivitySettings from './ActivitySettings.vue';
+import ActivityRequirements from './ActivityRequirements.vue';
+import ActivityRecommendations from './ActivityRecommendations.vue';
 import EntityHeader from '../../components/EntityHeader.vue';
 import EntityDescription from '../../components/EntityDescription.vue';
 import EntityDetailReadState from '../../components/EntityDetailReadState.vue';
 import EntityListToolbar from '../../components/EntityListToolbar.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import AppTabList from '../../components/AppTabList.vue';
 
-// A single detail/read/command owner covers P5. Specialized editors retain their
+// A single detail/read/command owner covers the schedule. Specialized editors retain their
 // own drafts beneath its departure protection; ordinary refresh never resets them.
 const route = useRoute();
 const context = usePilot();
@@ -40,20 +43,41 @@ const roleSlotId = ref<string | null>(null);
 const review = shallowRef<ActivityAssignmentReview | null>(null);
 const reviewOpen = ref(false);
 const previewPending = ref(false);
+const requirementMode = ref<components['schemas']['ActivityView']['assignmentMode'] | null>(null);
 let previewAbort: AbortController | undefined;
 let active = true;
 onBeforeUnmount(() => { active = false; previewAbort?.abort(); });
-const {list, data, denied, refresh: readFresh, isActive} = useListDetail({resourceId: planId, queryKey: key,
+const {list, data, denied, refresh: readDetail, isActive} = useListDetail({resourceId: planId, queryKey: key,
     resourceFamily: () => activityKeys.resource(context.session.value?.context, planId.value), read: api.activity.bind(api), denied: revokeAccess});
-const {command, blocked: commandBlocked, readAction, retryAt, refresh, denyInlineEdit} = useListCommands({active: isActive, denied: () => denied.value,
+const {command, blocked: commandBlocked, readAction, retryAt, refresh, retireSettingsAccess, denyInlineEdit} = useListCommands({active: isActive, denied: () => denied.value,
     reading: () => list.isFetching.value, error: () => list.error.value, refresh: readFresh},
 {dirty: () => false, busy: () => previewPending.value, unknownMessage: 'draft.leaveUnknown'});
 const blocked = computed(() => commandBlocked.value || previewPending.value);
 const editingSlot = computed(() => data.value?.slots.find(slot => slot.id === editor.value?.id));
+const tabs = computed(() => [
+    {key: 'schedule', label: messages.value.t('activity.schedule'), id: 'activity-schedule-tab', controls: 'tab-schedule', icon: 'bi-calendar3'},
+    ...(data.value?.participants.length ? [
+        {key: 'participants', label: messages.value.t('activity.participants'), id: 'activity-participants-tab', controls: 'tab-participants', icon: 'bi-people-fill'},
+    ] : []),
+    ...(data.value?.capabilities.rulesWorkspace ? [
+        {key: 'rules', label: messages.value.t('activity.rules'), id: 'activity-rules-tab', controls: 'tab-rules', icon: 'bi-sliders'},
+    ] : []),
+]);
 const roleSlot = computed(() => data.value?.slots.find(slot => slot.id === roleSlotId.value));
 const warningBlocked = computed(() => review.value?.preview.warnings.some(warning => warning.confirmable === false) ?? false);
 const readHeader = api.header.bind(api);
 usePageTitle(() => messages.value.t('activity.documentTitle', {title: data.value?.title ?? messages.value.t('app.activity')}), true);
+
+/** Basic commands refresh the admitted detail and its requirement dependency.
+ * Recommendation snapshots react separately to the same detail value change. */
+async function readFresh(): Promise<void> {
+    const previous = data.value;
+    await readDetail();
+    // Pure requirement recalculation follows changed assignments/slots/dates.
+    // Its editor retains dirty values; ordinary polling cannot run maintenance.
+    if (data.value !== previous && data.value?.capabilities.manageRequirements)
+        void context.queryClient.invalidateQueries({queryKey: activityKeys.requirements(context.session.value?.context, planId.value), exact: true});
+}
 
 /** Denial retires private server snapshots and pending warning authority together.
  * Existing command leases still settle under their captured actor without replay. */
@@ -76,18 +100,46 @@ watch([planId, context.epoch], () => {
     review.value = null;
     reviewOpen.value = false;
     tab.value = 'schedule';
+    requirementMode.value = null;
     previewAbort?.abort();
 });
+watch(() => data.value?.capabilities.rulesWorkspace, available => {
+    if (!available && tab.value === 'rules') tab.value = 'schedule';
+});
+watch(() => [!!(data.value?.currentEventId && data.value.capabilities.rulesWorkspace && data.value.capabilities.manageRequirements),
+    !!(data.value?.currentEventId && data.value.capabilities.rulesWorkspace && data.value.capabilities.manageRecommendations)],
+    /** Release private snapshots when a fresh detail receipt withdraws advanced admission. */
+    function retireAdvancedCapabilities([requirements, recommendations], [previousRequirements, previousRecommendations]) {
+        // Unlinking can retain management grants while releasing Event participant
+        // context. Either loss retires that private family without denying the schedule.
+        const actor = context.session.value?.context;
+        const families: (readonly unknown[])[] = [];
+        if (previousRequirements && requirements === false) {
+            requirementMode.value = null;
+            families.push(activityKeys.requirements(actor, planId.value));
+        }
+        if (previousRecommendations && recommendations === false) families.push(activityKeys.recommendations(actor, planId.value));
+        if (families.length) void evictQueryFamilies(context.queryClient, families);
+    });
+
+/** Advanced commands retain their own confirmed outcomes. The detail query owns
+ * any failed follow-up or denial, so event delivery must not reject the command. */
+async function advancedChanged(): Promise<void> {
+    try {
+        // Refresh only the schedule/participant projection. Recommendation
+        // maintenance remains with its explicit native-equivalent lifecycle.
+        await readFresh();
+    } catch {
+        // The existing detail state presents the failure and retires denied data.
+    }
+}
 
 /** Losing settings authority does not imply loss of detail/participation access. */
 async function settingsAccessLost(): Promise<void> {
     settingsOpen.value = false;
     const actor = context.session.value?.context;
-    const resource = planId.value;
-    const family = {queryKey: activityKeys.editors(actor, resource)};
-    await context.queryClient.cancelQueries(family);
-    context.queryClient.removeQueries(family);
-    if (resource === planId.value && actor === context.session.value?.context && context.mayRead()) await refresh();
+    await retireSettingsAccess({resourceId: planId.value, currentResource: () => planId.value,
+        families: [activityKeys.editors(actor, planId.value)]});
 }
 function openEditor(day: string, id?: string): void { if (!blocked.value) editor.value = {day, id}; }
 /** The shared inline owner supplies its captured value/token; persist just that
@@ -197,37 +249,8 @@ async function confirmAssignment(): Promise<void> {
                     :disabled="blocked"
                     :refresh="readFresh"
                 />
-                <ul class="nav nav-tabs mb-3" role="tablist">
-                    <li class="nav-item">
-                        <button
-                            type="button"
-                            class="nav-link"
-                            :class="{active: tab === 'schedule'}"
-                            role="tab"
-                            :aria-selected="tab === 'schedule'"
-                            @click="tab = 'schedule'">
-                            <i class="bi bi-calendar3 me-1" aria-hidden="true"></i>{{ messages.t('activity.schedule') }}</button>
-                    </li>
-                    <li v-if="data.participants.length" class="nav-item">
-                        <button
-                            type="button"
-                            class="nav-link"
-                            :class="{active: tab === 'participants'}"
-                            role="tab"
-                            :aria-selected="tab === 'participants'"
-                            @click="tab = 'participants'">
-                            <i class="bi bi-people-fill me-1" aria-hidden="true"></i>{{ messages.t('activity.participants') }}</button>
-                    </li>
-                    <!-- The advanced workspace is P6. Keep its existing explicit
-                    destination available without starting recommendation reads. -->
-                    <li
-                        v-if="data.capabilities.rulesWorkspace"
-                        class="nav-item">
-                        <a class="nav-link" :href="'/activity/' + planId + '#tab-rules'">
-                            <i class="bi bi-sliders me-1" aria-hidden="true"></i>{{ messages.t('activity.rules') }}</a>
-                    </li>
-                </ul>
-                <div v-show="tab === 'schedule'" id="tab-schedule" role="tabpanel">
+                <AppTabList v-model="tab" :tabs="tabs" variant="tabs" class="mb-3" />
+                <div v-show="tab === 'schedule'" id="tab-schedule" role="tabpanel" aria-labelledby="activity-schedule-tab">
                     <ActivitySchedule
                         :key="planId"
                         :view="data"
@@ -243,13 +266,29 @@ async function confirmAssignment(): Promise<void> {
                         @roles="roleSlotId = $event.id"
                     />
                 </div>
-                <ActivityParticipants
-                    v-if="data.participants.length"
-                    v-show="tab === 'participants'"
-                    :key="planId + '-participants'"
-                    :participants="data.participants"
-                    :assignment-mode="data.assignmentMode"
-                />
+                <div v-if="data.participants.length" v-show="tab === 'participants'" id="tab-participants"
+                    role="tabpanel" aria-labelledby="activity-participants-tab">
+                    <ActivityParticipants
+                        :key="planId + '-participants'"
+                        :participants="data.participants"
+                        :assignment-mode="data.assignmentMode"
+                    />
+                </div>
+                <!-- Keep admitted advanced workspaces mounted across local tabs.
+                Native initializes these on page entry; ordinary detail polling must
+                never repeat recommendation maintenance or replace their drafts. -->
+                <div v-if="data.capabilities.rulesWorkspace" v-show="tab === 'rules'" id="tab-rules" role="tabpanel" aria-labelledby="activity-rules-tab">
+                    <h4 class="mb-3">{{ messages.t('activity.rules') }}</h4>
+                    <p class="small text-secondary mb-4">{{ messages.t('activity.rulesDescription') }}</p>
+                    <ActivityRequirements v-if="data.currentEventId && data.capabilities.manageRequirements"
+                        :key="planId + ':requirements:' + context.epoch.value"
+                        :plan-id="planId" :disabled="blocked" @mode="requirementMode = $event"
+                        @changed="advancedChanged" @denied="advancedChanged" />
+                    <ActivityRecommendations v-if="data.currentEventId && data.capabilities.manageRecommendations"
+                        :key="planId + ':recommendations:' + context.epoch.value"
+                        :plan-id="planId" :view="data" :assignment-mode="requirementMode ?? data.assignmentMode" :disabled="blocked"
+                        @changed="advancedChanged" @denied="advancedChanged" />
+                </div>
                 <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="readAction" @refresh="refresh" />
             </template>
         </div>

@@ -879,7 +879,9 @@
 
 /* Recommendations visual enhancements - parent background colors */
 
-#recommendations-schedule
+// The Vue schedule keeps the copied native geometry through its repeated table
+// hook. An attribute selector applies to every week without duplicate DOM IDs.
+[data-recommendations-schedule]
   .slot
     position: relative
 

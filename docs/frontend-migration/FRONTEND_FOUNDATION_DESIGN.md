@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-18
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit P5 implementation trigger recorded alongside original P0-P4 decisions and shared correction history; native isolation and backend exclusions retained; execution belongs to paired review
+verification-scope: implemented P0-P6 routing and approved automatic-job observation reconciled with the original decision ledger; native isolation, backend exclusions and separate later-phase/cutover boundaries retained; execution belongs to paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -19,8 +19,9 @@ queries, transactions, locks and persistence.
 The [baseline](FRONTEND_MIGRATION_BASELINE.md) and its 121 edge-case IDs describe the native contract.
 The original step-two design was based on `0a3662ae0a6e99e0df0a38f603831d3ac9ff4b61`; the native comparison reference
 is `2dfa2573c64178f54684cc4877b5a945f66e24c8`. The reference does not identify a deployed site's version.
-Help/Packing were the original pilot obligation. P1 identity/common presentation, P2 Events, P3 Drivers and P4
-standalone Surveys extend that scope; the [full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the remaining phase contracts. The
+Help/Packing were the original pilot obligation. P1 identity/common presentation, P2 Events, P3 Drivers, P4
+standalone Surveys and P5/P6 basic/advanced Activity extend that scope through their explicit phase triggers.
+The [full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the current and remaining phase contracts. The
 [paired review](PILOT_PARITY_REVIEW.md) records current implementation evidence and its limits. Other feature
 migration and default-route cutover remain future work.
 
@@ -673,8 +674,8 @@ and explicitly unmigrated destinations retain their distinct document boundaries
 Existing native operation order and possible partial completion remain inherited. JSON transport does not imply a
 new transaction, repaired identity/token authority, guaranteed rollback or automatic replay. Confirmed results stay
 confirmed through failed follow-up reads/navigation; uncertain outcomes retain input and require explicit review.
-The [current plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#current-spa-correction-plan-2026-10-16) owns the bounded
-implementation sequence. `DESIGN-EVENT-CREATION-TRANSPORT` now closes for reviewed current-consumer adoption and
+The [completed correction](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#completed-spa-correction-2026-10-16) records the bounded
+adoption and scope. `DESIGN-EVENT-CREATION-TRANSPORT` now closes for reviewed current-consumer adoption and
 fresh scoped same-document evidence, with failed broad runs and focused receipts distinguished in the review.
 This correction does not start P3–P11 or authorize cutover.
 
@@ -799,6 +800,32 @@ backend role-update defect IMP-016 and native presentation/privacy defects IMP-0
 dispositions; this instruction supplies no separate remedy approval. New API projections enforce their own method
 permissions and disclosure boundaries. Actual implementation, independent review and executed evidence belong to
 the paired review, rather than this authorization record.
+
+### Explicit P6 implementation trigger (2026-10-18)
+
+The maintainer explicitly requests full P6 implementation and reiterates all policies, particularly approval,
+visual/behavioral parity and modularization/DRY. This starts requirements and progress, recommendation jobs, and
+reviewed batch changes under the existing phase contract. The original P5 boundary above remains its historical
+scope. P7–P11 and the separate cutover, publication, native-removal and deployment decisions are not triggered.
+
+Existing controller and pure requirements/recommendation engines remain the business owners. Native frontend
+code stays isolated. Recommendation maintenance retains its native page-entry, explicit Reload, explicit
+generation-completion and post-application entry triggers; ordinary recovery and job-status reads use pure
+projections without maintenance or enqueue. Existing backend remedies, including inherited application/regeneration partial-failure behavior, remain
+outside this frontend adaptation. Execution and finite verification belong to the paired review.
+
+### Approved automatic recommendation-job observation (2026-10-19)
+
+The maintainer explicitly approves the directly reissued P6 R1 request, conditioned on a frontend fix with at most
+a few minor backend changes. Vue may observe the already queued first post-deadline recommendation job, show its
+progress and terminal outcome, and read saved proposals without starting another calculation. The implementation
+uses existing API reads and needs no backend change. Explicit generation retains its native completion trigger;
+automatic completion uses a pure snapshot read. This is a narrow behavioral-parity exception, not authorization for
+backend repairs or additional generation triggers. Native frontend sources remain unchanged. IMP-030 stays open
+until the native-to-Vue cutover has actually happened; Vue implementation or passing tests alone cannot resolve it.
+The subsequent full-pilot review is directly requested against the original baseline and approved amendments,
+including complete P5/P6, meaningful common ownership, human maintainability, staged guidance and running-app parity.
+Potentially unintended changes still require advance direct conversational approval.
 
 ## Cutover retirement inventory
 

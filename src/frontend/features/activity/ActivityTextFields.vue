@@ -4,6 +4,7 @@ import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useActivityApi} from './api';
+import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import InlineCell from '../../components/InlineCell.vue';
 import FormField from '../../components/FormField.vue';
@@ -72,7 +73,7 @@ async function inline(field: components['schemas']['ActivityTextField'], value: 
         {presentation: 'inline', success: 'common.updated'});
 }
 async function reviewUnknown(): Promise<void> {
-    if (await command.reconcile() && window.confirm(messages.value.t('activity.confirmUnknownReviewed'))) command.acknowledge();
+    if (await command.reconcileSafely() && window.confirm(messages.value.t('activity.confirmUnknownReviewed'))) command.acknowledge();
 }
 </script>
 
@@ -81,14 +82,14 @@ async function reviewUnknown(): Promise<void> {
         <div class="d-flex justify-content-between align-items-center mt-3">
             <h5 class="mb-3">
                 <i class="bi bi-journal-text me-2" aria-hidden="true"></i>{{ messages.t('activity.sharedTextFields') }}</h5>
-            <button
+            <ActionButton
                 v-if="manage"
                 id="addTextFieldBtn"
                 type="button"
-                class="btn btn-sm btn-outline-primary"
+                class="btn-sm" variant="outline-primary"
                 :disabled="blocked"
                 @click="edit()">
-                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>{{ messages.t('activity.addTextField') }}</button>
+                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>{{ messages.t('activity.addTextField') }}</ActionButton>
         </div>
         <CommandFeedback :feedback="command.feedback" />
         <p v-if="!fields.length" class="text-secondary small mt-2 mb-3">{{ messages.t('activity.noTextFields') }}</p>
@@ -96,26 +97,26 @@ async function reviewUnknown(): Promise<void> {
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong class="mb-0">{{ field.title }}</strong>
                 <div class="d-flex gap-2">
-                    <button
+                    <ActionButton
                         v-if="field.capabilities.delete"
                         type="button"
-                        class="btn btn-sm btn-outline-danger text-field-delete"
+                        class="btn-sm text-field-delete" variant="outline-danger"
                         :data-text-field-id="field.id"
                         :disabled="blocked"
                         :aria-label="messages.t('packing.deleteItem')"
                         @click="remove(field)">
                         <i class="bi bi-trash" aria-hidden="true"></i>
-                    </button>
-                    <button
+                    </ActionButton>
+                    <ActionButton
                         v-if="field.capabilities.edit"
                         type="button"
-                        class="btn btn-sm btn-outline-secondary text-field-edit"
+                        class="btn-sm text-field-edit" variant="outline-secondary"
                         :data-text-field-id="field.id"
                         :disabled="blocked"
                         :aria-label="messages.t('activity.editTextField')"
                         @click="edit(field)">
                         <i class="bi bi-pencil" aria-hidden="true"></i>
-                    </button>
+                    </ActionButton>
                 </div>
             </div>
             <div class="card-body pt-2 pb-3">
@@ -174,11 +175,11 @@ async function reviewUnknown(): Promise<void> {
                 <StatusNotice v-if="conflict" kind="warning">
                     <p>{{ messages.t('draft.readConflict') }}</p>
                     <p>{{ current?.title }}<br />{{ current?.text }}</p>
-                    <button
+                    <ActionButton
                         type="button"
-                        class="btn btn-sm btn-outline-warning"
+                        class="btn-sm" variant="outline-warning"
                         :disabled="blocked"
-                        @click="editToken = current?.editToken ?? ''">{{ messages.t('draft.review') }}</button>
+                        @click="editToken = current?.editToken ?? ''">{{ messages.t('draft.review') }}</ActionButton>
                 </StatusNotice>
                 <CommandFeedback
                     :feedback="command.feedback"
@@ -187,13 +188,13 @@ async function reviewUnknown(): Promise<void> {
                 />
             </form>
             <template #footer>
-                <button type="button" class="btn btn-sm btn-outline-secondary" :disabled="command.pending.value" @click="close">{{ messages.t('common.cancel') }}</button>
-                <button
+                <ActionButton type="button" class="btn-sm" variant="outline-secondary" :disabled="command.pending.value" @click="close">{{ messages.t('common.cancel') }}</ActionButton>
+                <ActionButton
                     type="submit"
                     form="textFieldForm"
-                    class="btn btn-sm btn-primary"
+                    class="btn-sm" variant="primary"
                     :disabled="blocked || !maySave || conflict">
-                    <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('common.save') }}</button>
+                    <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('common.save') }}</ActionButton>
             </template>
         </AppDialog>
     </section>

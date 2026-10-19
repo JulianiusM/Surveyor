@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
+import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import {activityWarningLabel} from './presentation';
 
 // Warnings are already permission-redacted by the server. Render user content
 // as text and never look up hidden sibling plans/slots from an identifier.
-const props = defineProps<{open: boolean; title: string; warnings: components['schemas']['ActivityWarning'][]; slots: components['schemas']['ActivitySlotView'][]; pending?: boolean; blocked?: boolean}>();
+const props = defineProps<{open: boolean; title: string; warnings: components['schemas']['ActivityWarning'][]; slots: components['schemas']['ActivitySlotView'][]; pending?: boolean; blocked?: boolean; confirmDisabled?: boolean; confirmLabel?: string}>();
 const emit = defineEmits<{close: []; confirm: []}>();
 const {messages} = usePilot();
 function description(warning: components['schemas']['ActivityWarning']): string {
@@ -39,18 +40,18 @@ function description(warning: components['schemas']['ActivityWarning']): string 
             <p v-if="blocked" class="small text-danger mt-2 mb-0">{{ messages.t('activity.warningBlocked') }}</p>
         </div>
         <template #footer>
-            <button
+            <ActionButton
                 id="assignmentWarningCancel"
                 type="button"
-                class="btn btn-outline-secondary"
+                variant="outline-secondary"
                 :disabled="pending"
-                @click="emit('close')">{{ messages.t('common.cancel') }}</button>
-            <button
+                @click="emit('close')">{{ messages.t('common.cancel') }}</ActionButton>
+            <ActionButton
                 id="assignmentWarningConfirm"
                 type="button"
-                class="btn btn-warning"
-                :disabled="pending || blocked"
-                @click="emit('confirm')">{{ messages.t('activity.continueAnyway') }}</button>
+                variant="warning"
+                :disabled="pending || blocked || confirmDisabled"
+                @click="emit('confirm')">{{ confirmLabel ?? messages.t('activity.continueAnyway') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

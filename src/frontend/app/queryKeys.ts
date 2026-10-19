@@ -94,6 +94,10 @@ export const activityKeys = {
     editors: (context: string | null | undefined, id: string) => [...activityKeys.resource(context, id), 'editors'] as const,
     metadata: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'metadata'] as const,
     settings: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'settings'] as const,
+    requirements: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'requirements'] as const,
+    recommendations: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'recommendations'] as const,
+    recommendationJob: (context: string | null | undefined, id: string, jobId: string) =>
+        [...activityKeys.recommendations(context, id), 'job', jobId] as const,
     profilesFamily: (context: string | null | undefined, id: string) => [...activityKeys.editors(context, id), 'profiles'] as const,
     profiles: (context: string | null | undefined, id: string, search: string) => [...activityKeys.profilesFamily(context, id), {search}] as const,
     creation: (context: string | null | undefined, eventId?: string) =>

@@ -1,11 +1,9 @@
 import {Router, type NextFunction, type Request, type Response} from 'express';
-import path from 'node:path';
-import fs from 'node:fs/promises';
 import type {components} from '../../../types/api/v1';
 import * as eventApi from '../../../controller/eventController';
 import {ApiProblem} from '../../../modules/api/problem';
 import {requireApiContext} from '../../../modules/api/session';
-import {prepareValidatedJson, sendPreparedJson, sendValidatedBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+import {decodeApiMultipartData, decodeApiMultipartImage, prepareValidatedJson, receiveApiUpload, sendPreparedJson, sendStoredApiBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {prepareFileUploader, removeImage} from '../../../modules/lib/fileCommons';
 import {searchLimiter} from '../../../middleware/adminApiFactory';
@@ -22,17 +20,8 @@ router.post('/', asyncHandler(async function createEvent(req, res) {
     try {
         // Account admission precedes byte storage. Structural validation then
         // decodes only the data part, retaining unknown fields for rejection.
-        await readEventImageUpload(req, res);
-        validateOperationRequest(req, 'createEvent', function decodeCreation(body) {
-            // Decode only the authored multipart JSON part. Retain every other
-            // field so the generated closed schema can reject unknown input.
-            const form = body as Record<string, unknown>;
-            if (Object.hasOwn(form, 'image') && !req.file) throw new ApiProblem('UPLOAD_INVALID');
-            let data: unknown;
-            try { data = typeof form.data === 'string' ? JSON.parse(form.data) : form.data; }
-            catch { throw new ApiProblem('VALIDATION_FAILED'); }
-            return {...form, data, ...(req.file ? {image: req.file.originalname} : {})};
-        });
+        await receiveApiUpload(req, res, uploadHeader);
+        validateOperationRequest(req, 'createEvent', body => decodeApiMultipartData(body, req.file));
         // The controller cleans native validation failures before creation. Once
         // its existing creation owner runs, an uploaded image may be committed.
         enteredCreation = true;
@@ -267,28 +256,14 @@ router.get('/:eventId/profiles', asyncHandler(admitEventProfileSearch), searchLi
     sendValidatedJson(req, res, 'searchEventProfiles', 200, result);
 }));
 
-/** Native uploader owns byte/type limits; generated validation owns the declared form fields. */
-async function readEventImageUpload(req: Request, res: Response): Promise<void> {
-    /** Adapt the native uploader callback to the router's ordinary async error boundary. */
-    await new Promise<void>(function receiveUpload(resolve, reject) {
-        // Keep transport failures bounded; filenames, file paths and parser internals stay private.
-        uploadHeader(req, res, error => {
-            if (!error) resolve();
-            else reject(new ApiProblem(error.code === 'LIMIT_FILE_SIZE' ? 'PAYLOAD_TOO_LARGE' : 'UPLOAD_INVALID'));
-        });
-    });
-}
-
 router.put('/:eventId/header', asyncHandler(async function uploadEventHeader(req, res) {
     const actor = await requireApiContext(req, res);
     // Reject forbidden writes before accepting bytes, then recheck under the controller's lock.
     await eventApi.readEventHeaderBaseline(String(req.params.eventId), actor);
     let committed = false;
     try {
-        await readEventImageUpload(req, res);
-        validateOperationRequest(req, 'uploadEventHeader', function decodeHeader(body) {
-            return {...body as object, ...(req.file ? {image: req.file.originalname} : {})};
-        });
+        await receiveApiUpload(req, res, uploadHeader);
+        validateOperationRequest(req, 'uploadEventHeader', body => decodeApiMultipartImage(body, req.file));
         if (!req.file) throw new ApiProblem('UPLOAD_INVALID');
         const result = await eventApi.setEventHeader(String(req.params.eventId), req.file, actor, req.get('If-Match'));
         committed = true;
@@ -303,16 +278,7 @@ router.get('/:eventId/header', asyncHandler(async function getEventHeader(req, r
     const actor = await requireApiContext(req, res);
     validateOperationRequest(req, 'getEventHeader');
     const storedPath = await eventApi.readEventHeaderPath(String(req.params.eventId), actor);
-    const root = path.resolve(process.cwd(), settings.value.headerImgDir);
-    const fullPath = path.resolve(process.cwd(), storedPath);
-    const relative = path.relative(root, fullPath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new ApiProblem('NOT_FOUND');
-
-    // File paths and read errors remain server-side; only admitted bytes reach transport.
-    let bytes: Buffer;
-    try { bytes = await fs.readFile(fullPath); }
-    catch { throw new ApiProblem('NOT_FOUND'); }
-    sendValidatedBinary(req, res, 'getEventHeader', 200, bytes);
+    await sendStoredApiBinary(req, res, 'getEventHeader', 200, settings.value.headerImgDir, storedPath);
 }));
 
 router.post('/:eventId/things-to-do/:entityType/:entityId/archive', asyncHandler(async function archiveEventChild(req, res) {

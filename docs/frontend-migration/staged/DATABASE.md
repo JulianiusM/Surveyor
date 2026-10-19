@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-14
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: digest-guarded frontend amendments preserve complete reviewed candidate guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
+verification-scope: generated frontend inputs, current-value persistence and operation-specific description limits source-reconciled; inherited schema procedures unchanged; no runtime or cutover execution claimed
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -44,3 +44,14 @@ operations and database logs; do not bypass the checks or change transaction iso
 ## Database backup
 
 <!-- /delta:amendment-02 -->
+
+## Free-text storage — amendment-03
+
+<!-- delta:amendment-03 -->
+the existing entity descriptions and activity text fields. Validation limits belong to each operation: metadata
+description editors and activity text fields allow 16,000 characters, while Packing creation, Quick Add and general
+item updates retain separate existing bounds. Inspect the actual controls and authored API operation rather than
+infer a universal character limit from the database's byte-limited `TEXT` type.
+Allergy details and dietary comments use nullable `VARCHAR(4000)` columns and accept
+
+<!-- /delta:amendment-03 -->

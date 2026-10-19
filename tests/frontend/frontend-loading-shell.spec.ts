@@ -10,6 +10,7 @@ import I18NextVue from 'i18next-vue';
 import App from '../../src/frontend/app/App.vue';
 import LoadingSkeleton from '../../src/frontend/components/LoadingSkeleton.vue';
 import ActionButton from '../../src/frontend/components/ActionButton.vue';
+import AppAccordionButton from '../../src/frontend/components/AppAccordionButton.vue';
 import StatusNotice from '../../src/frontend/components/StatusNotice.vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {render} from '../../src/frontend/app/entry-server';
@@ -73,6 +74,34 @@ async function mountedApp() {
 }
 
 describe('shared skeleton accessibility', () => {
+    it('keeps accordion state with its feature and guards synthetic activation before initialization or while disabled', async () => {
+        const context = createPilotContext({session}, false);
+        const wrapper = mount(AppAccordionButton, {props: {expanded: false, controls: 'retained-panel'},
+            slots: {default: '<span>Existing section</span>'},
+            global: {provide: {[pilotContextKey as symbol]: context}}});
+        cleanups.push(() => { wrapper.unmount(); context.start()(); });
+        const button = wrapper.element;
+        expect(wrapper.attributes('type')).toBe('button');
+        expect(wrapper.attributes('aria-expanded')).toBe('false');
+        expect(wrapper.attributes('aria-controls')).toBe('retained-panel');
+        expect(wrapper.classes()).toContain('collapsed');
+        button.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+        expect(wrapper.emitted('click')).toBeUndefined();
+
+        context.hydrated.value = true;
+        await flushPromises();
+        await wrapper.trigger('click');
+        expect(wrapper.emitted('click')).toHaveLength(1);
+        // Activation emits intent; only the feature's new input changes disclosure.
+        expect(wrapper.attributes('aria-expanded')).toBe('false');
+        await wrapper.setProps({expanded: true, disabled: true});
+        expect(wrapper.element).toBe(button);
+        expect(wrapper.classes()).not.toContain('collapsed');
+        expect(wrapper.attributes('aria-expanded')).toBe('true');
+        button.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+        expect(wrapper.emitted('click')).toHaveLength(1);
+    });
+
     it('gates contextual retry and dismiss controls until initialization while keeping standalone controls usable', async () => {
         const context = createPilotContext({session}, false);
         const view = defineComponent({components: {ActionButton, StatusNotice}, template:

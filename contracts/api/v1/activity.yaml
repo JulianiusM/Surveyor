@@ -604,6 +604,7 @@ schemas:
           - "reorderSlots"
           - "manageSettings"
           - "manageRequirements"
+          - "manageRecommendations"
           - "roleCreationAdmission"
           - "rulesWorkspace"
           - "exportSchedule"
@@ -623,6 +624,8 @@ schemas:
           manageSettings:
             type: "boolean"
           manageRequirements:
+            type: "boolean"
+          manageRecommendations:
             type: "boolean"
           roleCreationAdmission:
             type: boolean
@@ -1101,6 +1104,738 @@ schemas:
     "$ref": "./drivers.yaml#/schemas/DriversProfileOptions"
   ActivityHeaderBaseline:
     "$ref": "./drivers.yaml#/schemas/DriversHeaderBaseline"
+  ActivityRequirementsInput:
+    type: object
+    additionalProperties: false
+    required:
+      - assignmentMode
+      - generalRequiredShifts
+      - roundingMode
+      - bindingDeadline
+      - allowOverfillAfterFull
+      - allowExternalAssignees
+      - allowArrivalDayEvening
+      - allowDepartureDayMorning
+      - roleRequirements
+      - stayRequirements
+      - overrides
+    properties:
+      assignmentMode:
+        type: string
+        enum:
+          - FREE
+          - REQUIRED
+      generalRequiredShifts:
+        type:
+          - integer
+          - "null"
+        minimum: 0
+      roundingMode:
+        type:
+          - string
+          - "null"
+        enum:
+          - CEIL
+          - ROUND
+          - FLOOR
+          - null
+      bindingDeadline:
+        type:
+          - string
+          - "null"
+      allowOverfillAfterFull:
+        type: boolean
+      allowExternalAssignees:
+        type: boolean
+      allowArrivalDayEvening:
+        type: boolean
+      allowDepartureDayMorning:
+        type: boolean
+      roleRequirements:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRequirementRole"
+      stayRequirements:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRequirementStay"
+      overrides:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required:
+            - profileId
+            - requiredShifts
+          properties:
+            id:
+              type: integer
+              minimum: 1
+            profileId:
+              $ref: ./common.yaml#/schemas/Uuid
+            roleId:
+              type:
+                - integer
+                - "null"
+              minimum: 1
+            requiredShifts:
+              type: integer
+              minimum: 0
+  ActivityRequirementAttendance:
+    type: object
+    additionalProperties: false
+    required:
+      - profileId
+      - name
+      - arrivalDate
+      - departureDate
+      - roleIds
+    properties:
+      profileId:
+        type:
+          - string
+          - "null"
+      name:
+        type:
+          - string
+          - "null"
+      arrivalDate:
+        type:
+          - string
+          - "null"
+      departureDate:
+        type:
+          - string
+          - "null"
+      roleIds:
+        type: array
+        items:
+          type: integer
+          minimum: 1
+  ActivityRequirementSlot:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - day
+      - startTime
+      - endTime
+      - maxAssignees
+      - roles
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      day:
+        type: string
+        format: date
+      startTime:
+        type:
+          - string
+          - "null"
+      endTime:
+        type:
+          - string
+          - "null"
+      maxAssignees:
+        type:
+          - number
+          - "null"
+      roles:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required:
+            - roleId
+            - maxQty
+            - assignedQty
+          properties:
+            roleId:
+              type: integer
+              minimum: 1
+            maxQty:
+              type: integer
+              minimum: 0
+            assignedQty:
+              type: integer
+              minimum: 0
+  ActivityRequirementCapacity:
+    type: object
+    additionalProperties: false
+    required:
+      - availableSlots
+      - requiredSlots
+      - difference
+      - configurationComplete
+    properties:
+      availableSlots:
+        type: number
+      requiredSlots:
+        type: number
+      difference:
+        type: number
+      configurationComplete:
+        type: boolean
+  ActivityRequirementParticipant:
+    type: object
+    additionalProperties: false
+    required:
+      - participantKey
+      - name
+      - roleIds
+      - requiredShifts
+      - assignedShifts
+      - remainingShifts
+      - source
+      - attendanceDays
+      - attendance
+      - roles
+      - assignmentMode
+    properties:
+      participantKey:
+        type: string
+      name:
+        type:
+          - string
+          - "null"
+      roleIds:
+        type: array
+        items:
+          type: integer
+          minimum: 1
+      requiredShifts:
+        type: integer
+        minimum: 0
+      assignedShifts:
+        type: integer
+        minimum: 0
+      remainingShifts:
+        type: integer
+        minimum: 0
+      source:
+        type: string
+        enum:
+          - none
+          - general
+          - role
+          - override
+          - unconfigured
+      attendanceDays:
+        type: integer
+        minimum: 0
+      attendance:
+        type: object
+        additionalProperties: false
+        required:
+          - arrivalDate
+          - departureDate
+        properties:
+          arrivalDate:
+            type:
+              - string
+              - "null"
+          departureDate:
+            type:
+              - string
+              - "null"
+      roles:
+        type: array
+        items:
+          type: string
+      assignmentMode:
+        type: string
+        enum:
+          - FREE
+          - REQUIRED
+  ActivityRequirements:
+    type: object
+    additionalProperties: false
+    required:
+      - plan
+      - roleRequirements
+      - stayRequirements
+      - overrides
+      - participants
+      - capacitySummary
+      - calculationContext
+      - overrideTargets
+      - allRoles
+    properties:
+      plan:
+        type: object
+        additionalProperties: false
+        required:
+          - id
+          - assignmentMode
+          - generalRequiredShifts
+          - roundingMode
+          - bindingDeadline
+          - allowOverfillAfterFull
+          - allowExternalAssignees
+          - allowArrivalDayEvening
+          - allowDepartureDayMorning
+          - startDate
+          - endDate
+        properties:
+          id:
+            $ref: ./common.yaml#/schemas/Uuid
+          assignmentMode:
+            type: string
+            enum:
+              - FREE
+              - REQUIRED
+          generalRequiredShifts:
+            type:
+              - integer
+              - "null"
+            minimum: 0
+          roundingMode:
+            type:
+              - string
+              - "null"
+            enum:
+              - CEIL
+              - ROUND
+              - FLOOR
+              - null
+          bindingDeadline:
+            type:
+              - string
+              - "null"
+          allowOverfillAfterFull:
+            type: boolean
+          allowExternalAssignees:
+            type: boolean
+          allowArrivalDayEvening:
+            type: boolean
+          allowDepartureDayMorning:
+            type: boolean
+          startDate:
+            type: string
+            format: date
+          endDate:
+            type: string
+            format: date
+      roleRequirements:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRequirementRole"
+      stayRequirements:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRequirementStay"
+      overrides:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required:
+            - profileId
+            - requiredShifts
+            - profileName
+          properties:
+            id:
+              type: integer
+              minimum: 1
+            profileId:
+              $ref: ./common.yaml#/schemas/Uuid
+            roleId:
+              type:
+                - integer
+                - "null"
+              minimum: 1
+            requiredShifts:
+              type: integer
+              minimum: 0
+            profileName:
+              type:
+                - string
+                - "null"
+      participants:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRequirementParticipant"
+      capacitySummary:
+        $ref: "#/schemas/ActivityRequirementCapacity"
+      calculationContext:
+        type: object
+        additionalProperties: false
+        required:
+          - participants
+          - assignedShiftCounts
+          - slots
+        properties:
+          participants:
+            type: array
+            items:
+              $ref: "#/schemas/ActivityRequirementAttendance"
+          assignedShiftCounts:
+            type: object
+            additionalProperties:
+              type: integer
+              minimum: 0
+          slots:
+            type: array
+            items:
+              $ref: "#/schemas/ActivityRequirementSlot"
+      overrideTargets:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityParticipantOption"
+      allRoles:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRole"
+  ActivityRecommendationInput:
+    type: object
+    additionalProperties: false
+    required:
+      - itemId
+      - profileId
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      itemId:
+        $ref: ./common.yaml#/schemas/Uuid
+      profileId:
+        $ref: ./common.yaml#/schemas/Uuid
+      status:
+        type: string
+        enum:
+          - PENDING
+          - APPROVED
+          - APPLIED
+          - REJECTED
+      operation:
+        type: string
+        enum:
+          - ASSIGN
+          - REASSIGN
+          - UNASSIGN
+      sourceItemId:
+        type:
+          - string
+          - "null"
+      manual:
+        type: boolean
+  ActivityRecommendationReview:
+    type: object
+    additionalProperties: false
+    required:
+      - recommendations
+    properties:
+      recommendations:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRecommendationInput"
+  ActivityRecommendationApplication:
+    type: object
+    additionalProperties: false
+    required:
+      - recommendations
+    properties:
+      recommendations:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRecommendationInput"
+      overlapConfirmation:
+        type: string
+  ActivityRecommendationSlot:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - title
+      - day
+      - startTime
+      - endTime
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      title:
+        type: string
+      day:
+        type: string
+        format: date
+      startTime:
+        type:
+          - string
+          - "null"
+      endTime:
+        type:
+          - string
+          - "null"
+  ActivityRecommendationJob:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - planId
+      - status
+      - createdAt
+      - updatedAt
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      planId:
+        $ref: ./common.yaml#/schemas/Uuid
+      status:
+        type: string
+        enum:
+          - QUEUED
+          - RUNNING
+          - COMPLETE
+          - FAILED
+          - STALE
+      createdAt:
+        type: string
+      updatedAt:
+        type: string
+      recommendationCount:
+        type: integer
+        minimum: 0
+  ActivityRecommendationJobResult:
+    type: object
+    additionalProperties: false
+    required:
+      - job
+    properties:
+      job:
+        $ref: "#/schemas/ActivityRecommendationJob"
+  ActivityRecommendationQueued:
+    type: object
+    additionalProperties: false
+    required:
+      - job
+      - coalesced
+    properties:
+      job:
+        $ref: "#/schemas/ActivityRecommendationJob"
+      coalesced:
+        type: boolean
+  ActivityRecommendationPreview:
+    type: object
+    additionalProperties: false
+    required:
+      - warnings
+    properties:
+      warnings:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRecommendationWarning"
+      overlapConfirmation:
+        type: string
+  ActivityRecommendationApplyResult:
+    type: object
+    additionalProperties: false
+    required:
+      - applied
+      - skipped
+      - warnings
+    properties:
+      applied:
+        type: integer
+        minimum: 0
+      skipped:
+        type: integer
+        minimum: 0
+      warnings:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRecommendationWarning"
+  ActivityRecommendations:
+    type: object
+    additionalProperties: false
+    required:
+      - recommendations
+      - participantOptions
+      - slots
+      - existingAssignments
+      - warnings
+      - autoGenerationJob
+    properties:
+      recommendations:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required:
+            - id
+            - item
+            - profile
+            - sourceItem
+            - status
+            - operation
+            - manual
+          properties:
+            id:
+              $ref: ./common.yaml#/schemas/Uuid
+            item:
+              $ref: "#/schemas/ActivityRecommendationSlot"
+            profile:
+              $ref: "#/schemas/ActivityRecommendationProfile"
+            sourceItem:
+              anyOf:
+                - $ref: "#/schemas/ActivityRecommendationSlot"
+                - type: "null"
+            status:
+              type: string
+              enum:
+                - PENDING
+                - APPROVED
+                - APPLIED
+                - REJECTED
+            operation:
+              type: string
+              enum:
+                - ASSIGN
+                - REASSIGN
+                - UNASSIGN
+            manual:
+              type: boolean
+      participantOptions:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityParticipantOption"
+      slots:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRecommendationSlot"
+      existingAssignments:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required:
+            - item
+            - profile
+            - roles
+          properties:
+            item:
+              $ref: "#/schemas/ActivityRecommendationSlot"
+            profile:
+              $ref: "#/schemas/ActivityRecommendationProfile"
+            roles:
+              type: array
+              items:
+                type: string
+      warnings:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityRecommendationWarning"
+      autoGenerationJob:
+        anyOf:
+          - $ref: "#/schemas/ActivityRecommendationJob"
+          - type: "null"
+  ActivityRequirementRole:
+    type: object
+    additionalProperties: false
+    required:
+      - roleId
+      - requiredShifts
+    properties:
+      roleId:
+        type: integer
+        minimum: 1
+      requiredShifts:
+        type: integer
+        minimum: 0
+  ActivityRequirementStay:
+    type: object
+    additionalProperties: false
+    required:
+      - stayDays
+      - requiredShifts
+    properties:
+      stayDays:
+        type: integer
+        minimum: 1
+      requiredShifts:
+        type: integer
+        minimum: 0
+  ActivityParticipantOption:
+    type: object
+    additionalProperties: false
+    required:
+      - key
+      - profileId
+      - label
+      - arrivalDate
+      - departureDate
+    properties:
+      key:
+        type: string
+      profileId:
+        type:
+          - string
+          - "null"
+      label:
+        type: string
+      arrivalDate:
+        type:
+          - string
+          - "null"
+      departureDate:
+        type:
+          - string
+          - "null"
+  ActivityRecommendationProfile:
+    type: object
+    additionalProperties: false
+    required:
+      - id
+      - name
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      name:
+        type: string
+  ActivityRecommendationWarning:
+    type: object
+    additionalProperties: false
+    required:
+      - recommendation
+      - warnings
+    properties:
+      recommendation:
+        $ref: "#/schemas/ActivityRecommendationWarningInput"
+      warnings:
+        type: array
+        items:
+          $ref: "#/schemas/ActivityWarning"
+  ActivityRecommendationWarningInput:
+    type: object
+    additionalProperties: false
+    required:
+      - itemId
+    properties:
+      id:
+        $ref: ./common.yaml#/schemas/Uuid
+      itemId:
+        $ref: ./common.yaml#/schemas/Uuid
+      profileId:
+        $ref: ./common.yaml#/schemas/Uuid
+      status:
+        type: string
+        enum:
+          - PENDING
+          - APPROVED
+          - APPLIED
+          - REJECTED
+      operation:
+        type: string
+        enum:
+          - ASSIGN
+          - REASSIGN
+          - UNASSIGN
+      sourceItemId:
+        type:
+          - string
+          - "null"
+      manual:
+        type: boolean
+      hidden:
+        type: boolean
 paths:
   "/activity-plans/{planId}/automatic-archive":
     put:
@@ -2713,3 +3448,254 @@ paths:
                 "$ref": "./openapi.yaml#/components/schemas/MutationResult"
         default:
           "$ref": "./openapi.yaml#/components/responses/Problem"
+  /activity-plans/{planId}/requirements:
+    get:
+      operationId: getActivityRequirements
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: getActivityRequirements
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: planId
+          in: path
+          required: true
+          schema:
+            $ref: ./common.yaml#/schemas/Uuid
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/schemas/ActivityRequirements"
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+    put:
+      operationId: updateActivityRequirements
+      summary: updateActivityRequirements
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: planId
+          in: path
+          required: true
+          schema:
+            $ref: ./common.yaml#/schemas/Uuid
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: ./openapi.yaml#/components/schemas/MutationResult
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/schemas/ActivityRequirementsInput"
+  /activity-plans/{planId}/recommendations:
+    get:
+      operationId: getActivityRecommendations
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: getActivityRecommendations
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: planId
+          in: path
+          required: true
+          schema:
+            $ref: ./common.yaml#/schemas/Uuid
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/schemas/ActivityRecommendations"
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+  /activity-plans/{planId}/recommendations/entry:
+    post:
+      operationId: enterActivityRecommendations
+      summary: enterActivityRecommendations
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: planId
+          in: path
+          required: true
+          schema:
+            $ref: ./common.yaml#/schemas/Uuid
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/schemas/ActivityRecommendations"
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+  /activity-plans/{planId}/recommendations/warnings:
+    post:
+      operationId: previewActivityRecommendations
+      summary: previewActivityRecommendations
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: planId
+          in: path
+          required: true
+          schema:
+            $ref: ./common.yaml#/schemas/Uuid
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/schemas/ActivityRecommendationPreview"
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/schemas/ActivityRecommendationReview"
+  /activity-plans/{planId}/recommendations/apply:
+    post:
+      operationId: applyActivityRecommendations
+      summary: applyActivityRecommendations
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: planId
+          in: path
+          required: true
+          schema:
+            $ref: ./common.yaml#/schemas/Uuid
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/schemas/ActivityRecommendationApplyResult"
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/schemas/ActivityRecommendationApplication"
+  /activity-plans/{planId}/recommendations/auto:
+    post:
+      operationId: generateActivityRecommendations
+      summary: generateActivityRecommendations
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: planId
+          in: path
+          required: true
+          schema:
+            $ref: ./common.yaml#/schemas/Uuid
+        - $ref: ./openapi.yaml#/components/parameters/Csrf
+      responses:
+        "202":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/schemas/ActivityRecommendationQueued"
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem
+      x-surveyor-command:
+        retryPolicy: reconcile-only
+        precondition: none
+  /activity-plans/{planId}/recommendations/auto/{jobId}:
+    get:
+      operationId: getActivityRecommendationJob
+      x-surveyor-command:
+        retryPolicy: read
+        precondition: none
+      summary: getActivityRecommendationJob
+      parameters:
+        - $ref: ./openapi.yaml#/components/parameters/Context
+        - $ref: ./openapi.yaml#/components/parameters/Locale
+        - name: planId
+          in: path
+          required: true
+          schema:
+            $ref: ./common.yaml#/schemas/Uuid
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            $ref: ./common.yaml#/schemas/Uuid
+      responses:
+        "200":
+          description: Authorized operation result
+          headers:
+            X-Surveyor-Context:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/schemas/ActivityRecommendationJobResult"
+        default:
+          $ref: ./openapi.yaml#/components/responses/Problem

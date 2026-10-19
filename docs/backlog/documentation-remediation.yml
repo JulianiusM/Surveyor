@@ -705,10 +705,17 @@ implementation_defects:
       progress or reloading its result.
     documentation_contract: D08 treats automatic initial post-deadline generation as a visible queued workflow that
       completes into the review schedule.
+    remediation_progress:
+      - On 2026-10-19 the maintainer explicitly approved directly reissued P6 R1 as a frontend correction with at most
+        a few minor backend changes. Vue observes the returned domain job and reads saved proposals through the
+        existing pure projection; no backend change or additional generation trigger is required.
+      - The native frontend remains unchanged. Per the same direct decision this record must remain open until
+        native-to-Vue cutover has actually occurred; implementation or verification alone cannot resolve IMP-030.
     closes_when:
       - the active schedule detects autoGenerationJob, shows its status, polls it, and reloads terminal results
       - stale, failed, and timed-out jobs produce actionable visible messages
       - frontend or E2E tests cover the first post-deadline load with no recommendation history
+      - The native-to-Vue cutover has actually occurred, as explicitly required by the maintainer on 2026-10-19.
   - id: IMP-031
     status: resolved
     title: Long takeover lists overflow their modal dialog
@@ -1927,7 +1934,147 @@ implementation_defects:
     documentation_contract: Date labels should identify their corresponding date controls.
     disposition: Activity supplies the native label targets to the shared Vue field owner; other consumers retain
       their existing default targets. A correction remains separately authorized work.
+  - id: IMP-079
+    status: open
+    discovered_on: 2026-10-18
+    severity: high
+    owner: application maintainers
+    package: activity-recommendation-completion
+    out_of_scope_for_documentation_migration: true
+    title: Recommendation application can report failure after assignments have committed
+    evidence:
+      - src/controller/activityController.ts applyRecommendations commits applyReviewed through withActivityTransaction,
+        then conditionally awaits getRecommendations and generateAndSaveRecommendations before returning its result.
+      - The versioned adapter reuses this existing operation. A failure in the later regeneration work propagates
+        after assignments and applied recommendation history have already committed.
+    impact: A regeneration failure can leave committed assignments without an application receipt. This is a
+      source-established failure path; no injected postcommit failure was executed during P6 verification.
+    authorization: The P6 request retains existing shared backend behavior and excludes separately authorized backend
+      remedies. Recording this finding does not authorize a completion or transaction redesign.
+    documentation_contract: Delivery uncertainty must remain distinct from business rejection and must not trigger
+      automatic replay or speculative deletion.
+    disposition: P6 preserves the inherited operation and presents an unconfirmed result for fresh-read review,
+      without replay. Backend completion repair remains a separate effort.
+    closes_when:
+      - An explicitly approved shared-backend completion design prevents regeneration failure from rejecting a
+        committed application or distinctly reports the committed application and regeneration outcome.
+      - Real persistence tests exercise the approved behavior and confirm that application cannot replay implicitly.
+  - id: IMP-080
+    status: open
+    discovered_on: 2026-10-18
+    severity: medium
+    owner: native frontend maintainers
+    package: activity-recommendation-mobile-presentation
+    out_of_scope_for_documentation_migration: true
+    title: The recommendation card header clips its rightmost action on a narrow screen
+    evidence:
+      - src/views/activity/parts/assignments.pug renders a non-wrapping recommendation title and three action buttons
+        together in its flex card header.
+      - Same-actor English Chromium comparisons at 390px show the Save changes action extending beyond the 332px
+        recommendation card in both the native comparator and the parity-preserving Vue presentation.
+    impact: The rightmost recommendation header action can be clipped on a narrow screen.
+    authorization: P6 preserves native visual and behavioral parity; no mobile-header presentation exception has been
+      requested or approved.
+    documentation_contract: Organizer actions should remain visible and usable at supported narrow viewport sizes.
+    disposition: Preserve this inherited rendering during P6. A responsive header correction remains separately
+      authorized work; the parity comparison does not certify the inherited layout as ideal.
+    closes_when:
+      - A separately approved presentation change keeps the title and all actions usable at narrow viewport sizes.
+      - Built desktop and mobile comparisons verify the approved layout without changing command authority or drafts.
+  - id: IMP-081
+    status: open
+    discovered_on: 2026-10-19
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    out_of_scope_for_documentation_migration: true
+    title: German Activity progress retains untranslated requirement-source badges
+    evidence:
+      - ActivityParticipants displays GENERAL, ROLE and OVERRIDE directly from the admitted source value.
+      - Both saved Participants and live Rules coverage consume this shared component under German UI language.
+    impact: German organizers see English source labels beside translated participant progress.
+    authorization: A direct conversational R2 decision is required; no approval is recorded. Automatic approval
+      review rejected the proposed visible correction for lack of specific authorization; no patch was applied.
+    documentation_contract: Supported UI languages should use shared catalogs while retaining admitted data values.
+    disposition: Recorded as a current review gap, not approved future work. Native parity and advance approval
+      still govern any visible badge change; this entry supplies no implementation authority.
+  - id: IMP-082
+    status: open
+    discovered_on: 2026-10-19
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    out_of_scope_for_documentation_migration: true
+    title: German Activity Rules headings and actions crowd at narrow widths
+    evidence:
+      - Built German Chromium captures at 390px show requirement subsection headings crowding their hints and
+        card-header actions extending beyond the card. Both advanced workspaces retain fixed native flex rows.
+    impact: Longer translated headings and organizer actions are difficult to read or reach on narrow screens.
+    authorization: A direct conversational R4 decision is required for a bounded German presentation exception;
+      no approval is recorded. English native clipping IMP-080 retains its independent disposition.
+    documentation_contract: Supported localized controls should remain readable and reachable at narrow widths.
+    disposition: Current review gap, not approved future work or permission to change the native comparator.
 findings:
+  - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
+    status: open
+    discovered_on: 2026-10-19
+    severity: medium
+    category: design-provenance
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    title: Recommendation follow-up maintenance briefly publishes then clears a generic success receipt
+    evidence: Initial entry and Reload now suppress a nonexistent native Saved receipt before publication. The
+      follow-up maintenance after explicit generation and confirmed application retains the same publish-then-clear
+      pattern. Its analogous reveal risk is source-based; no corresponding E2E failure is claimed for those two calls.
+    authorization: Automatic approval review rejected extending the narrow correction to these two follow-up calls
+      without specific authorization. Direct conversational R7 remains required; no expanded patch was applied.
+    disposition: Current review decision, not approved future work. Progress, application results, errors, uncertainty
+      and the approved shared local-feedback reveal contract remain intact.
+  - id: DESIGN-HEALTHY-REFRESH-CONTROLS
+    status: open
+    discovered_on: 2026-10-19
+    severity: medium
+    category: design-provenance
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    title: Healthy-view Refresh controls lack identified approval for their native visual difference
+    evidence: Existing migrated detail pages and sections display read-only Refresh controls absent from some
+      native counterparts. Survey card captures expose an added 35px row; Drivers captures expose an extra control
+      outside the measured table. Earlier receipts call this approved, but no specific conversational approval was found.
+    authorization: Functional refresh and recovery are approved; those choices do not independently authorize the
+      additional healthy-view controls and row geometry. A direct conversational R6 decision is required.
+    disposition: Earlier visual-approval assertions are withdrawn for this difference. Scoped table/card comparisons
+      and passing tests do not establish full native-image parity or supply the missing approval.
+  - id: DOC-FIRST-INSTALL-SYNCHRONIZATION
+    status: open
+    discovered_on: 2026-10-19
+    severity: medium
+    category: conflicting-guidance
+    owner: architecture and database documentation maintainers
+    package: frontend-pilot-readiness
+    title: Inherited schema-sync summary conflicts with the documented first-install procedure
+    evidence: Architecture reserves synchronization for disposable development/tests, while Database and Operations
+      prescribe synchronization when bootstrapping a confirmed empty production database. Both statements predate
+      this frontend review; runtime synchronization is disabled and existing-production upgrades use migrations.
+    authorization: A direct conversational R5 resolution is required before reconciling the staged summary. No
+      database action, production-guide edit, publication or relaxation of agent database safety is authorized.
+    disposition: The original statements remain intact. Assembled-guide review identifies this inherited limit
+      rather than silently choosing a procedure or declaring complete semantic readiness.
+  - id: DESIGN-ACTIVITY-COMPONENT-MESSAGES
+    status: open
+    discovered_on: 2026-10-19
+    severity: medium
+    category: design-provenance
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    title: Activity translations use named Vue elements despite the deferred design choice
+    evidence: ActivitySchedule count emphasis and ActivityRecommendationSchedule hint badge use i18next-vue
+      TranslationComponent placeholders. DEC-006 defers that capability, and the locale generator validates scalar
+      parameters without declaring these component placeholders. No specific implementation approval was found.
+    authorization: Full pilot review authorizes identifying this conflict, not silently amending the ADR or declaring
+      the existing extension approved. A direct conversational R3 decision is required; no approval is recorded.
+    disposition: The original design remains authoritative. Current code and the missing validation are explicitly
+      unresolved; the pilot cannot claim complete design compliance while this decision is pending.
   - id: DESIGN-EVENT-CREATION-TRANSPORT
     status: closed
     closed_on: 2026-10-16

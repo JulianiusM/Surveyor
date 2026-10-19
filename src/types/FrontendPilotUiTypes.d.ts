@@ -178,7 +178,8 @@ export type PilotPlainMessageKey = {
 export interface PilotCommandFeedback {
     initiator?: Event | Element;
     presentation?: 'flash' | 'inline';
-    success?: PilotPlainMessageKey;
+    /** Null keeps successful maintenance silent; omission retains the ordinary saved notice. */
+    success?: PilotPlainMessageKey | null;
 }
 
 /** Reuse neutral authored wire shapes while the caller owns its discovery endpoint,

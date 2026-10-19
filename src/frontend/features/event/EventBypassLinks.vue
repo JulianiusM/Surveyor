@@ -11,8 +11,10 @@ import {formatEventTimestamp} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
+import FormField from '../../components/FormField.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
+import AppAccordionButton from '../../components/AppAccordionButton.vue';
 
 type Link = components['schemas']['EventRegistrationLink'];
 const props = withDefaults(defineProps<{eventId: string; active?: boolean}>(), {active: true});
@@ -92,15 +94,13 @@ async function revoke(link: Link, event: MouseEvent): Promise<void> {
  * a response, so only an explicit acknowledgement releases its uncertain status. */
 async function refresh(): Promise<void> {
     if (!refreshAction.isAvailable()) return;
-    try {
-        const read = await command.reconcile(section.refresh);
-        if (read && command.uncertain.value && window.confirm(messages.value.t('draft.leaveUnknown'))) {
-            // Accepted departure reveals the fresh list instead of leaving the
-            // previous creation draft ready to submit again behind its modal.
-            command.acknowledge();
-            retireLocalState();
-        }
-    } catch { /* The list query retains its durable read failure. */ }
+    const read = await command.reconcileSafely(section.refresh);
+    if (read && command.uncertain.value && window.confirm(messages.value.t('draft.leaveUnknown'))) {
+        // Accepted departure reveals the fresh list instead of leaving the
+        // previous creation draft ready to submit again behind its modal.
+        command.acknowledge();
+        retireLocalState();
+    }
 }
 function statusClass(status: Link['status']): string {
     return status === 'active' ? 'text-bg-success' : status === 'consumed' ? 'text-bg-warning'
@@ -124,10 +124,10 @@ function statusClass(status: Link['status']): string {
         <div class="accordion accordion-flush">
             <div class="accordion-item bg-dark border-secondary">
                 <h2 class="accordion-header">
-                    <button class="accordion-button text-light bg-dark" :class="{collapsed: !expanded}" type="button"
-                        :aria-expanded="expanded" :aria-controls="`${id}-links`" @click="expanded = !expanded">
+                    <AppAccordionButton class="text-light bg-dark"
+                        :expanded="expanded" :controls="`${id}-links`" @click="expanded = !expanded">
                         <i class="bi bi-link-45deg me-2" aria-hidden="true"></i>{{ messages.t('event.organizer.links') }}<span class="badge bg-secondary ms-2">{{ section.data.value ? section.data.value.items.length : messages.t('common.unknown') }}</span>
-                    </button>
+                    </AppAccordionButton>
                 </h2>
                 <div v-show="expanded" :id="`${id}-links`" class="accordion-collapse">
                     <div class="accordion-body bg-dark">
@@ -206,18 +206,24 @@ function statusClass(status: Link['status']): string {
             </div>
             <form :id="`${id}-create-form`" @submit.prevent="createLink">
                 <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label" :for="`${id}-uses`"><i class="bi bi-hash me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.uses') }}</label>
-                        <input :id="`${id}-uses`" v-model="uses" class="form-control text-bg-dark" type="number"
-                            min="1" step="1" placeholder="1" :disabled="command.action.disabled.value" />
+                    <!-- Shared labels wrap the existing native directives; Uses
+                         retains number coercion and expiry retains its local draft. -->
+                    <FormField :id="`${id}-uses`" class="col-md-6" :label="messages.t('event.organizer.uses')"
+                        label-icon="bi-hash" label-class="" :required-marker="false">
+                        <template #control>
+                            <input :id="`${id}-uses`" v-model="uses" class="form-control text-bg-dark" type="number"
+                                min="1" step="1" placeholder="1" :disabled="command.action.disabled.value" />
+                        </template>
                         <small class="text-secondary d-block">{{ messages.t('event.organizer.singleUse') }}</small>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label" :for="`${id}-expires`"><i class="bi bi-calendar2-event me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.expiresLocal') }}</label>
-                        <input :id="`${id}-expires`" v-model="expiry" class="form-control text-bg-dark"
-                            type="datetime-local" :disabled="command.action.disabled.value" />
+                    </FormField>
+                    <FormField :id="`${id}-expires`" class="col-md-6" :label="messages.t('event.organizer.expiresLocal')"
+                        label-icon="bi-calendar2-event" label-class="" :required-marker="false">
+                        <template #control>
+                            <input :id="`${id}-expires`" v-model="expiry" class="form-control text-bg-dark"
+                                type="datetime-local" :disabled="command.action.disabled.value" />
+                        </template>
                         <small class="text-secondary d-block">{{ messages.t('event.organizer.expiresHelp') }}</small>
-                    </div>
+                    </FormField>
                 </div>
             </form>
             <template #footer>

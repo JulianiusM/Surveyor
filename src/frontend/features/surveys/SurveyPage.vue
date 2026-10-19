@@ -38,7 +38,7 @@ const {list, data, denied, refresh: readFresh, isActive} = useListDetail({
     resourceId: surveyId, queryKey: key, resourceFamily: () => surveyKeys.resource(context.session.value?.context, surveyId.value),
     read: api.survey.bind(api), denied: revokeAccess,
 });
-const {command, blocked, readAction, retryAt, refresh, reviewUnknownCreation} = useListCommands({
+const {command, blocked, readAction, retryAt, refresh, retireSettingsAccess, reviewUnknownCreation} = useListCommands({
     active: isActive, denied: () => denied.value, reading: () => list.isFetching.value,
     error: () => list.error.value, refresh: refreshBallot,
 }, {dirty: () => ballotDirty.value || combinationDirty.value, unknownMessage: 'draft.leaveUnknown'});
@@ -105,10 +105,8 @@ function revokeAccess(failure: Error): void {
 async function settingsAccessLost(): Promise<void> {
     editorOpen.value = false;
     const actor = context.session.value?.context;
-    const id = surveyId.value;
-    // Cancel editor reads before detail recovery can admit another projection.
-    await evictQueryFamilies(context.queryClient, [surveyKeys.editors(actor, id)]);
-    if (isActive() && id === surveyId.value && actor === context.session.value?.context) await refresh();
+    await retireSettingsAccess({resourceId: surveyId.value, currentResource: () => surveyId.value,
+        families: [surveyKeys.editors(actor, surveyId.value)]});
 }
 
 /** Explicit recovery can read after denial. Only a successful new GET restores

@@ -1,11 +1,14 @@
 import {describe, expect, it} from 'vitest';
+import {mkdtemp, rm, writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
 import * as server from '../../.generated/api/v1/server.cjs';
 import * as browser from '../../.generated/api/v1/browser.mjs';
 import type {components} from '../../src/types/api/v1';
 import {isRegistrationPasswordValid} from '../../src/modules/lib/frontendIdentity';
-import type {Request} from 'express';
+import type {Request, RequestHandler, Response} from 'express';
 import {normalizePackingMetadataPatch} from '../../src/controller/packingController';
-import {validateOperationRequest} from '../../src/modules/api/transport';
+import {decodeApiMultipartData, decodeApiMultipartImage, receiveApiUpload, sendStoredApiBinary, validateOperationRequest} from '../../src/modules/api/transport';
 import {operationContract} from '../../src/modules/api/contracts';
 
 const listId = 'd506d78a-e2d7-4be9-bc95-04d83bbd22ec';
@@ -33,6 +36,76 @@ function packingMetadataRequest(body: unknown): Request {
 }
 
 describe('generated v1 contract boundaries', () => {
+    it('retains generated multipart validation after decoding actual upload metadata', () => {
+        const data = {title: 'Camp', startDate: '2027-06-01', endDate: '2027-06-03',
+            defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0}};
+        const file = {originalname: 'camp.png'} as Express.Multer.File;
+        const req = {params: {}, query: {}, body: {data: JSON.stringify(data)},
+            get() { return undefined; }, is() { return 'multipart/form-data'; }} as unknown as Request;
+        validateOperationRequest(req, 'createEvent', body => decodeApiMultipartData(body, file));
+        expect(req.body).toEqual({data, image: 'camp.png'});
+
+        // Neither a claimed file nor extra multipart fields may bypass the parser/schema boundary.
+        expect(() => decodeApiMultipartData({data: JSON.stringify(data), image: 'forged.png'}))
+            .toThrow(expect.objectContaining({code: 'UPLOAD_INVALID'}));
+        expect(() => decodeApiMultipartData({data: '{private-malformed-data'}))
+            .toThrow(expect.objectContaining({code: 'VALIDATION_FAILED'}));
+        req.body = {data: JSON.stringify(data), ownerId: listId};
+        expect(() => validateOperationRequest(req, 'createEvent', body => decodeApiMultipartData(body, file)))
+            .toThrow(expect.objectContaining({code: 'VALIDATION_FAILED'}));
+        expect(server.validatePackingHeaderUpload(decodeApiMultipartImage({unexpected: true}, file))).toBe(false);
+    });
+
+    it('waits for the selected uploader and bounds parser diagnostics', async () => {
+        const req = {} as Request;
+        const res = {} as Response;
+        const upload: RequestHandler = (request, response, next) => {
+            expect(request).toBe(req);
+            expect(response).toBe(res);
+            // An asynchronous callback must settle before the route consumes its uploaded file.
+            void Promise.resolve().then(() => { request.file = {originalname: 'camp.png'} as Express.Multer.File; next(); });
+        };
+        await receiveApiUpload(req, res, upload);
+        expect(req.file?.originalname).toBe('camp.png');
+        for (const [code, expected] of [['LIMIT_FILE_SIZE', 'PAYLOAD_TOO_LARGE'], ['PRIVATE_PARSER_CODE', 'UPLOAD_INVALID']]) {
+            const rejected: RequestHandler = (_request, _response, next) => next(Object.assign(new Error('Private upload path'), {code}));
+            await expect(receiveApiUpload(req, res, rejected)).rejects.toMatchObject({code: expected});
+            await expect(receiveApiUpload(req, res, rejected)).rejects.not.toHaveProperty('message', 'Private upload path');
+        }
+    });
+
+    it('delivers each admitted header through the same private binary boundary and confines stored references', async () => {
+        const directory = await mkdtemp(path.join(tmpdir(), 'surveyor-api-transport-'));
+        const file = path.join(directory, 'header.png');
+        const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]);
+        const req = {get() { return undefined; }, acceptsLanguages() { return ['de']; },
+            apiActor: {context: 'captured-context'}} as unknown as Request;
+        const result = {headers: {} as Record<string, string>, vary: [] as string[], status: 0, type: '', body: null as Buffer | null};
+        const res = {
+            set(name: string, value: string) { result.headers[name] = value; return this; },
+            vary(name: string) { result.vary.push(name); return this; },
+            status(value: number) { result.status = value; return this; },
+            type(value: string) { result.type = value; return this; },
+            send(value: Buffer) { result.body = value; return this; },
+        } as unknown as Response;
+        try {
+            await writeFile(file, bytes);
+            for (const operation of ['getActivityHeader', 'getSurveyHeader', 'getPackingHeader', 'getDriversHeader', 'getEventHeader'] as const) {
+                await sendStoredApiBinary(req, res, operation, 200, directory, file);
+                expect(result).toMatchObject({status: 200, type: 'application/octet-stream', body: bytes,
+                    headers: {'Cache-Control': 'private, no-store', 'Content-Language': 'de', 'X-Surveyor-Context': 'captured-context'}});
+                expect(result.vary).toEqual(expect.arrayContaining(['Cookie', 'X-Surveyor-Context', 'X-Surveyor-Locale']));
+            }
+            // Outside and missing references share the safe response, without disclosing path/read errors.
+            for (const storedPath of [path.join(directory, '..', 'outside.png'), path.join(directory, 'missing.png')]) {
+                await expect(sendStoredApiBinary(req, res, 'getEventHeader', 200, directory, storedPath))
+                    .rejects.toMatchObject({code: 'NOT_FOUND', status: 404});
+            }
+        } finally {
+            await rm(directory, {recursive: true, force: true});
+        }
+    });
+
     it('normalizes metadata at its HTTP boundary and rejects malformed patches before a typed command can run', () => {
         const submitted = {title: '  Trimmed title  ', description: ''};
         const req = packingMetadataRequest(submitted);

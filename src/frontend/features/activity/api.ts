@@ -21,6 +21,15 @@ import {validateActivityResourceEntry} from '../../../../.generated/api/v1/brows
 import {validateActivityWarningPreview} from '../../../../.generated/api/v1/browser/validateActivityWarningPreview.mjs';
 import {validateActivityTextFieldInput} from '../../../../.generated/api/v1/browser/validateActivityTextFieldInput.mjs';
 import {validateMutationResult} from '../../../../.generated/api/v1/browser/validateMutationResult.mjs';
+import {validateActivityRequirements} from '../../../../.generated/api/v1/browser/validateActivityRequirements.mjs';
+import {validateActivityRequirementsInput} from '../../../../.generated/api/v1/browser/validateActivityRequirementsInput.mjs';
+import {validateActivityRecommendations} from '../../../../.generated/api/v1/browser/validateActivityRecommendations.mjs';
+import {validateActivityRecommendationReview} from '../../../../.generated/api/v1/browser/validateActivityRecommendationReview.mjs';
+import {validateActivityRecommendationApplication} from '../../../../.generated/api/v1/browser/validateActivityRecommendationApplication.mjs';
+import {validateActivityRecommendationPreview} from '../../../../.generated/api/v1/browser/validateActivityRecommendationPreview.mjs';
+import {validateActivityRecommendationApplyResult} from '../../../../.generated/api/v1/browser/validateActivityRecommendationApplyResult.mjs';
+import {validateActivityRecommendationQueued} from '../../../../.generated/api/v1/browser/validateActivityRecommendationQueued.mjs';
+import {validateActivityRecommendationJobResult} from '../../../../.generated/api/v1/browser/validateActivityRecommendationJobResult.mjs';
 
 type List = components['schemas']['ActivityView'];
 type Metadata = components['schemas']['ActivityMetadata'];
@@ -28,6 +37,85 @@ type Metadata = components['schemas']['ActivityMetadata'];
 /** Feature operations own their generated validators; transport and actor admission are shared. */
 export class ActivityApi {
     constructor(private transport: PilotApi) {}
+
+    /** Requirements are independently private; reads preserve cancellation and shared cooldowns. */
+    async requirements(planId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['ActivityRequirements']> {
+        const transport = this.transport;
+        async function readRequirements(): Promise<components['schemas']['ActivityRequirements']> {
+            const response = await transport.client.GET('/activity-plans/{planId}/requirements', {
+                params: {path: {planId}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getActivityRequirements', {...response, signal}, validateActivityRequirements, scope).data;
+        }
+        return transport.allowedRead(`activity/${planId}/requirements`, scope, readRequirements, signal);
+    }
+
+    /** Submit the generated flat settings draft once through the existing business owner. */
+    async saveRequirements(planId: string, input: components['schemas']['ActivityRequirementsInput'], scope: PilotRequestScope) {
+        // Zero-valued requirements and explicit nulls survive generated structural validation.
+        if (!validateActivityRequirementsInput(input)) throw new InvalidInputError('Invalid activity requirements.');
+        return this.transport.read('updateActivityRequirements', await this.transport.client.PUT('/activity-plans/{planId}/requirements', {
+            params: {path: {planId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateMutationResult, scope).data;
+    }
+
+    /** Deliberate workspace entry retains native maintenance and possible automatic dispatch.
+     * It is a command, so shared read recovery never repeats it automatically. */
+    async recommendationWorkspace(planId: string, scope: PilotRequestScope): Promise<components['schemas']['ActivityRecommendations']> {
+        // The caller owns page entry/explicit refresh; ordinary query refresh uses the pure read.
+        return this.transport.read('enterActivityRecommendations', await this.transport.client.POST('/activity-plans/{planId}/recommendations/entry', {
+            params: {path: {planId}, header: this.transport.headers(scope)}, cache: 'no-store',
+        }), validateActivityRecommendations, scope).data;
+    }
+
+    /** Observe a safe snapshot for authority/unknown-result recovery without maintaining or enqueuing. */
+    async recommendations(planId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['ActivityRecommendations']> {
+        const transport = this.transport;
+        async function readRecommendations(): Promise<components['schemas']['ActivityRecommendations']> {
+            const response = await transport.client.GET('/activity-plans/{planId}/recommendations', {
+                params: {path: {planId}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getActivityRecommendations', {...response, signal}, validateActivityRecommendations, scope).data;
+        }
+        return transport.allowedRead(`activity/${planId}/recommendations`, scope, readRecommendations, signal);
+    }
+
+    /** Preview the submitted batch and retain the digest for its explicit warning acknowledgement. */
+    async previewRecommendations(planId: string, input: components['schemas']['ActivityRecommendationReview'], scope: PilotRequestScope, signal?: AbortSignal) {
+        // The preview carries the same generated draft that application will submit.
+        if (!validateActivityRecommendationReview(input)) throw new InvalidInputError('Invalid recommendation review.');
+        return this.transport.read('previewActivityRecommendations', await this.transport.client.POST('/activity-plans/{planId}/recommendations/warnings', {
+            params: {path: {planId}, header: this.transport.headers(scope)}, body: input, signal, cache: 'no-store',
+        }), validateActivityRecommendationPreview, scope).data;
+    }
+
+    /** Apply once with the reviewed batch and optional acknowledgement; uncertainty never replays. */
+    async applyRecommendations(planId: string, input: components['schemas']['ActivityRecommendationApplication'], scope: PilotRequestScope) {
+        // The server rechecks current sources and warnings before its existing transaction writes.
+        if (!validateActivityRecommendationApplication(input)) throw new InvalidInputError('Invalid recommendation application.');
+        return this.transport.read('applyActivityRecommendations', await this.transport.client.POST('/activity-plans/{planId}/recommendations/apply', {
+            params: {path: {planId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateActivityRecommendationApplyResult, scope).data;
+    }
+
+    /** Explicit dispatch returns the domain coordinator's identity and coalescing result. */
+    async generateRecommendations(planId: string, scope: PilotRequestScope) {
+        return this.transport.read('generateActivityRecommendations', await this.transport.client.POST('/activity-plans/{planId}/recommendations/auto', {
+            params: {path: {planId}, header: this.transport.headers(scope)}, cache: 'no-store',
+        }), validateActivityRecommendationQueued, scope).data;
+    }
+
+    /** Poll only a known domain job; transport cooldown/cancellation remain shared. */
+    async recommendationJob(planId: string, jobId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['ActivityRecommendationJob']> {
+        const transport = this.transport;
+        async function readJob(): Promise<components['schemas']['ActivityRecommendationJob']> {
+            const response = await transport.client.GET('/activity-plans/{planId}/recommendations/auto/{jobId}', {
+                params: {path: {planId, jobId}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            return transport.read('getActivityRecommendationJob', {...response, signal}, validateActivityRecommendationJobResult, scope).data.job;
+        }
+        return transport.allowedRead(`activity/${planId}/recommendations/jobs/${jobId}`, scope, readJob, signal);
+    }
 
     /** Slot commands adapt existing controller operations. The component supplies only
      * its admitted sparse values; actor, ownership and business policy stay server-owned. */

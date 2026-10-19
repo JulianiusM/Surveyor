@@ -6,8 +6,6 @@
  */
 
 import {Router, type NextFunction, type Request, type Response} from 'express';
-import path from 'node:path';
-import fs from 'node:fs/promises';
 import type {components} from '../../../types/api/v1';
 import type {ApiOperationId, ApiResponseBody, ApiSuccessStatus, PreparedApiJsonResponse} from '../../../types/ApiTransportTypes';
 import {ApiProblem} from '../../../modules/api/problem';
@@ -17,7 +15,7 @@ import * as driversApi from '../../../controller/driversController';
 import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {requireApiContext} from '../../../modules/api/session';
 import {searchLimiter} from '../../../middleware/adminApiFactory';
-import {prepareValidatedJson, sendPreparedJson, sendValidatedBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
+import {decodeApiMultipartData, decodeApiMultipartImage, prepareValidatedJson, receiveApiUpload, sendPreparedJson, sendStoredApiBinary, sendValidatedJson, validateOperationRequest} from '../../../modules/api/transport';
 import {patchDriversMetadata, normalizeDriversMetadataPatch, readDriversList, readDriversMetadata, setDriversSelfAssignment} from '../../../controller/driversController';
 
 const router = Router();
@@ -54,14 +52,6 @@ router.get('/:listId/entry', asyncHandler(async function getDriversResourceEntry
         await driversApi.readDriversResourceEntry(String(req.params.listId), view, actor));
 }));
 
-/** Multer owns byte/file limits; the generated schema validates decoded multipart metadata. */
-async function readImageUpload(req: Request, res: Response): Promise<void> {
-    await new Promise<void>((resolve, reject) => uploadHeader(req, res, error => {
-        if (!error) resolve();
-        else reject(new ApiProblem(error.code === 'LIMIT_FILE_SIZE' ? 'PAYLOAD_TOO_LARGE' : 'UPLOAD_INVALID'));
-    }));
-}
-
 router.get('/create-context', asyncHandler(async function getDriversCreateContext(req, res) {
     const actor = await requireApiContext(req, res, true);
     validateOperationRequest(req, 'getDriversCreateContext');
@@ -79,26 +69,8 @@ router.post('/', asyncHandler(async function createDriversList(req, res) {
     driversApi.requireDriversCreation(actor);
     let committed = false;
     try {
-        await readImageUpload(req, res);
-        /** Decode the multipart metadata field before generated validation.
-         * Uploaded bytes come only from Multer's admitted file; submitted names
-         * never substitute for a file or authorize its persistence. */
-        validateOperationRequest(req, 'createDriversList', function decodeCreateForm(body) {
-            const form = body as Record<string, unknown>;
-            // A claimed image field without an admitted upload is invalid. Keep
-            // that diagnostic distinct from malformed serialized metadata.
-            if (Object.hasOwn(form, 'image') && !req.file) throw new ApiProblem('UPLOAD_INVALID');
-
-            // Multipart carries data as JSON text, while already decoded values
-            // still cross the same generated closed-shape validator afterward.
-            let data: unknown;
-            try { data = typeof form.data === 'string' ? JSON.parse(form.data) : form.data; }
-            catch { throw new ApiProblem('VALIDATION_FAILED'); }
-
-            // Preserve all submitted fields for unknown-field rejection and add
-            // only the actual upload's name for the declared multipart shape.
-            return {...form, data, ...(req.file ? {image: req.file.originalname} : {})};
-        });
+        await receiveApiUpload(req, res, uploadHeader);
+        validateOperationRequest(req, 'createDriversList', body => decodeApiMultipartData(body, req.file));
         const form = req.body as components['schemas']['DriversCreateForm'];
         let prepared: PreparedApiJsonResponse;
         function prepareCreation(data: components['schemas']['DriversCreated']): void {
@@ -348,10 +320,8 @@ router.put('/:listId/header', asyncHandler(async function uploadDriversHeader(re
     await driversApi.readDriversHeaderBaseline(String(req.params.listId), actor);
     let committed = false;
     try {
-        await readImageUpload(req, res);
-        validateOperationRequest(req, 'uploadDriversHeader', function decodeHeaderForm(body) {
-            return {...body as object, ...(req.file ? {image: req.file.originalname} : {})};
-        });
+        await receiveApiUpload(req, res, uploadHeader);
+        validateOperationRequest(req, 'uploadDriversHeader', body => decodeApiMultipartImage(body, req.file));
         if (!req.file) throw new ApiProblem('UPLOAD_INVALID');
         let prepared: PreparedApiJsonResponse;
         function prepareHeader(data: components['schemas']['MutationResult']): void {
@@ -384,20 +354,7 @@ router.get('/:listId/header', asyncHandler(async function getDriversHeader(req, 
     validateOperationRequest(req, 'getDriversHeader');
     const storedPath = await driversApi.readDriversHeaderPath(String(req.params.listId), actor);
 
-    // Normalize both paths against the application directory, then reject a
-    // reference outside the configured upload root before touching the filesystem.
-    const directory = path.resolve(process.cwd(), settings.value.headerImgDir);
-    const fullPath = path.resolve(process.cwd(), storedPath);
-    const relative = path.relative(directory, fullPath);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new ApiProblem('NOT_FOUND');
-
-    // Keep the existing read-failure outcome free of filesystem paths/details;
-    // successful bytes leave through the common private binary response owner.
-    let bytes: Buffer;
-    try { bytes = await fs.readFile(fullPath); }
-    catch { throw new ApiProblem('NOT_FOUND'); }
-
-    sendValidatedBinary(req, res, 'getDriversHeader', 200, bytes);
+    await sendStoredApiBinary(req, res, 'getDriversHeader', 200, settings.value.headerImgDir, storedPath);
 }));
 
 router.post('/:listId/archive', asyncHandler(async function archiveDriversList(req, res) {

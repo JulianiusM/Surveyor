@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-18
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P5 Activity assertion and visual-capture boundaries source-reconciled alongside retained P0-P4, deterministic fixtures and runner contracts; execution and failures belong to paired review; no publication
+verification-scope: P5/P6 Activity assertion, domain-job observation and visual-capture boundaries source-reconciled alongside retained P0-P4, deterministic fixtures and runner contracts; execution and failures belong to paired review; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -110,6 +110,10 @@ actual lazy route modules in a named `beforeAll` under the existing hook budget.
 rendering inside each unchanged assertion deadline. This follows the existing route-fixture pattern without
 pre-rendering output, priming private state or replacing real components. Cold-compilation attribution still needs
 evidence; a timeout alone does not establish an application rendering defect.
+For an HTTP integration suite with an existing owned listener, prepare its actual built lazy module alongside that
+server infrastructure. The profile-document suite resolves exactly one built Overview module and imports it without
+a setup request or render. Its real HTTP/bootstrap assertions retain their deadline; this does not measure cold
+module initialization as application latency. Keep earlier failed runs visible when recording the focused rerun.
 
 Source HMR, serialized contract/catalog regeneration, coherent production SSR dependencies and release/chunk recovery
 cross different boundaries. Exercise the relevant owner when changed; a build or hydration marker alone does not
@@ -205,6 +209,17 @@ print documents. The genuine ORM suite retains native engine/transaction checks;
 renders actual native Pug/controller output in an isolated child process across four timezones, without mutating its parent
 worker. Source mappings and executed acceptance remain distinct in the migration review.
 
+Advanced Activity adds focused requirement/recommendation component cases and a built Rules workflow. Protect
+zero and override precedence through the existing pure requirements engine, unsaved coverage, canceled Reload,
+dirty drafts across refreshed snapshots and confirmed saves whose following read fails. Observe only an admitted
+domain job identity: status polling and automatic-job completion read saved data without maintenance or dispatch;
+explicit generation retains its separate completion trigger. Assert terminal and unavailable jobs, uncertain
+dispatch without replay, manual/generated provenance, both reciprocal swap legs and the identical previewed/applied
+batch. A changed overlap acknowledgement must reject before saving review or assignments. Compare complete Rules,
+coverage, recommendation and manual-dialog surfaces at desktop/mobile sizes, retaining strict content/control/style
+and geometry assertions beside individually inspected originals. Existing Activity engines and persistence suites
+retain the transactional rules; the Vue rewrite does not duplicate those algorithms in browser tests.
+
 Apply [assertion and isolation guidance](#assertions-and-isolation) to actual actor-owned records too. Administrator
 tests use a unique profile and assert its exact identifier; a shared account can accumulate other profiles while
 parallel workflows run. Locate an Overview fixture through its ordinary search instead of assuming first-page
@@ -264,8 +279,10 @@ card and assert placement separately from cropped form/table controls. A full-ca
 not an assertion of every dimension. Explicitly approved frontend exceptions retain their own expected results;
 do not hide them by normalizing away native differences. Survey duplicate checks include every saved description,
 weekday and occurrence, plus independent exclusion of answers and the source image.
-Survey comparisons additionally measure the full voting-card and inter-section geometry, accounting only for the
-actual approved Refresh row. Empty results retain their own notice and layout. Wide ballot/result tables exercise
+Survey comparisons additionally measure voting-card and inter-section geometry, separately identifying the existing
+Vue Refresh row's effect. A comparison adjusted for that row does not establish complete native parity or approval
+for the visible difference; verify the actual decision before accepting an exception. Empty results retain their
+own notice and layout. Wide ballot/result tables exercise
 real horizontal overflow, sticky participant headings/cells and the reachable final column at desktop/mobile sizes.
 Compare each frontend's delivered page overflow too; a responsive table class alone does not establish its actual
 document width or viewport movement.

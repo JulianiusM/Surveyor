@@ -273,8 +273,7 @@ function mayRefreshRegion(): boolean {
 async function refreshOverview(): Promise<void> {
     if (!refreshAction.isAvailable()) return;
     if (failedRead.value) { await retryNavigation(); return; }
-    try { await command.reconcile(); }
-    catch { /* Each failed query retains its durable warning and last confirmed cards. */ }
+    await command.reconcileSafely();
 }
 
 /** Capture a read before awaiting its response. Input retires the generation immediately,

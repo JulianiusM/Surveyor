@@ -160,7 +160,7 @@ function mayLeave(): boolean {
     if (unknown.value) return window.confirm(messages.value.t('draft.leaveUnknown'));
     return !dirty.value || window.confirm(messages.value.t('draft.discard'));
 }
-// PackingSettings owns navigation and identity decisions for the complete dialog and
+// EntitySettingsDialog owns navigation and identity decisions for the complete dialog and
 // reads the exposed draft state once; separate child guards would prompt twice.
 
 /** Offer the latest authority for review without replaying an uncertain PATCH. */

@@ -41,11 +41,13 @@ const propertyInputs = [
             :model-value="String(values.description ?? '')" :label="messages.t('packing.description')" label-class=""
             multiline :rows="4" :max-length="16000" @update:model-value="values.description = $event" />
 
-        <div v-if="fields.includes('deadlineTz')" class="col-12">
-            <label class="form-label" :for="prefix + '-timezone-btn'">{{ messages.t('event.timezone') }}</label>
-            <TimezonePicker :id="prefix + '-timezone'" :model-value="String(values.deadlineTz || 'UTC')"
-                :disabled="disabled" @update:model-value="values.deadlineTz = $event" />
-        </div>
+        <FormField v-if="fields.includes('deadlineTz')" :id="prefix + '-timezone'" class="col-12"
+            :label="messages.t('event.timezone')" :label-for="prefix + '-timezone-btn'" label-class="" :required-marker="false">
+            <template #control>
+                <TimezonePicker :id="prefix + '-timezone'" :model-value="String(values.deadlineTz || 'UTC')"
+                    :disabled="disabled" @update:model-value="values.deadlineTz = $event" />
+            </template>
+        </FormField>
 
         <div v-for="option in flags.filter(option => fields?.includes(option.field))" :key="option.field"
             class="col-12">
@@ -90,12 +92,14 @@ const propertyInputs = [
                 label-icon="bi-hourglass-split" label-class="" @update:model-value="values.bindingDeadline = $event">
                 <template #label>{{ messages.t('event.bindingDeadline') }}<small class="ms-1">{{ messages.t('event.deadlineHint') }}</small></template>
             </FormField>
-            <div class="col-md-4">
-                <label class="form-label" :for="prefix + '-timezone-btn'">{{ messages.t('event.timezone') }}</label>
-                <TimezonePicker :id="prefix + '-timezone'" :model-value="String(values.deadlineTz || 'UTC')"
-                    :disabled="disabled" mode="modal" @update:model-value="values.deadlineTz = $event" />
+            <FormField :id="prefix + '-timezone'" class="col-md-4" :label="messages.t('event.timezone')"
+                :label-for="prefix + '-timezone-btn'" label-class="" :required-marker="false">
+                <template #control>
+                    <TimezonePicker :id="prefix + '-timezone'" :model-value="String(values.deadlineTz || 'UTC')"
+                        :disabled="disabled" mode="modal" @update:model-value="values.deadlineTz = $event" />
+                </template>
                 <div class="form-text mt-1">{{ messages.t('event.timezoneHint') }}</div>
-            </div>
+            </FormField>
         </div>
         <div class="row mb-3">
             <div v-for="option in flags" :key="option.field" class="col-md-4">

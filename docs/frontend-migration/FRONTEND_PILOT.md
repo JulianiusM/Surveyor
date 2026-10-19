@@ -4,20 +4,20 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-18
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P5 basic Activity routes and actual shared owner adoption source-reconciled alongside P0-P4; execution belongs to paired review; later phases and separate cutover boundaries retained
+verification-scope: P6 advanced Activity route composition and shared engine/transport adoption source-reconciled alongside P0-P5; execution belongs to paired review; later phases and separate cutover boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
 
-The opt-in Vue pilot migrates Packing, Help, Events, Drivers, Surveys, basic Activity planning and their necessary identity, overview and shared foundation journeys.
+The opt-in Vue pilot migrates Packing, Help, Events, Drivers, Surveys, Activity planning and their necessary identity, overview and shared foundation journeys.
 Native application routes remain available as the visual/behavioral reference. The comparator is
 `2dfa2573c64178f54684cc4877b5a945f66e24c8`, subject only to explicit exceptions in the
 [foundation decision ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
 This guide describes ownership and scope; the [paired review](PILOT_PARITY_REVIEW.md) owns
 completed scoped acceptance and execution evidence, including its remaining limits.
-The [October 16 full-pilot review](PILOT_PARITY_REVIEW.md#current-acceptance-and-correction-boundary-2026-10-16)
+The [current full-pilot review](PILOT_PARITY_REVIEW.md#full-implemented-pilot-review-2026-10-19)
 qualifies prior acceptance with current findings; source mappings and earlier passing selections do not establish
 complete visual/behavioral parity for every implemented journey and relevant state.
 
@@ -45,10 +45,14 @@ starts standalone Surveys. They reuse guest/entry/header/settings/metadata/lifec
 without event association or general permissions. P5–P11 and cutover remain separately scoped.
 The subsequent [P5 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p5-implementation-trigger-2026-10-18)
 starts basic Activity planning, participation and read-only participant progress. P6–P11 and cutover remain separately scoped.
+The subsequent [P6 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p6-implementation-trigger-2026-10-18) starts
+advanced requirements, unsaved coverage, recommendation jobs and reviewed changes. Those workflows now compose
+the admitted Activity page through generated SPA operations and the existing shared backend engines. P7–P11 and
+cutover remain separately scoped; the paired review records actual verification and its limits.
 
 The [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
 excludes native/Vue production coexistence coordination and rejects the ordinary Event document-POST exception.
-The [current six-step plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#current-spa-correction-plan-2026-10-16) restores
+The [completed correction](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#completed-spa-correction-2026-10-16) restored
 generated JSON/multipart commands, shared Vue owners and Router navigation across equivalent current P0–P2
 forms/links. The route contracts below have reviewed source adoption and fresh scoped same-document application
 evidence in the review, including the failed broad run and focused positive receipts. Existing operation ordering and partial outcomes
@@ -93,7 +97,7 @@ The exact duplicate URL after login is an explicitly approved native exception.
 | `/frontend-pilot/drivers/create`, `/frontend-pilot/drivers/<id>/duplicate`, `/frontend-pilot/drivers/<id>` | Account-only creation, independent duplicate admission, metadata/defaults/image/event context, ride offers, passenger assignment/removal, edits, ordering and settings through shared controller owners and generated SPA commands. Creation and duplication contain no rides. |
 | `/frontend-pilot/survey/create`, `/frontend-pilot/survey/<id>/duplicate`, `/frontend-pilot/survey/<id>` | Standalone recurring choices, independent owner duplicate admission and account-only creation, personal ballot replacement, named results and collaborative combination creation. Owner settings expose metadata/image/archive/duplicate/delete only. Representation ETags do not add write preconditions. Approved R1/R2 correct Vue descriptions and duplicate prefill; native defect records remain open until cutover. |
 | `/frontend-pilot/survey/<id>/guest` | Shared guest presentation and existing identity completion; every admitted account/guest profile may vote and add combinations. Overview actions and images use generated Survey operations. |
-| `/frontend-pilot/activity/create`, `/frontend-pilot/activity/<id>/duplicate`, `/frontend-pilot/activity/<id>` | Dated creation/copy, schedule and filters, shared text, slots/roles, participation and warning review through shared backend owners. Settings compose metadata/image/access/Event/lifecycle owners; print remains a separate document. Advanced Rules destinations retain native handoff until P6. |
+| `/frontend-pilot/activity/create`, `/frontend-pilot/activity/<id>/duplicate`, `/frontend-pilot/activity/<id>` | Dated creation/copy, schedule and filters, shared text, slots/roles, participation and warning review through shared backend owners. The admitted Rules tab composes requirement drafts/coverage, recommendation jobs and reviewed manual/generated changes in the same document. Private management grants remain independent; recovery and job reads cannot dispatch generation or run maintenance. Settings compose metadata/image/access/Event/lifecycle owners; print remains a separate document. |
 | Packing/Event/Drivers/Survey/Activity guest entry/recovery | Shared presentation with feature-specific native fields, notices, title, canonical detail/success destinations and invalid-token outcomes. Drivers and Activity use their `/frontend-pilot/<feature>/<id>/guest` destinations. |
 | Pilot login/register/recovery/reset | Existing account policy, return context and confirmed destinations; provider/token boundaries remain ordinary navigation. |
 | `/frontend-pilot/help` | Complete localized read-only Help SSR, search, links and SPA hydration. |
@@ -298,7 +302,7 @@ the write; confirmed navigation retains its destination/receipt through canceled
 Dialog close checks its own draft subtree; route/identity/release departures resolve the whole affected tree.
 
 D5 replacement detection uses ordinary session refresh and the explicit 2026-10-15 route/content classifier. Current
-eligible dynamic views are Overview, Packing/Drivers/Survey detail, and Event detail/admin; creation, duplication,
+eligible dynamic views are Overview, Packing/Drivers/Survey/Activity detail, and Event detail/admin; creation, duplication,
 user-management, Help and static error/completion presentations are excluded. Eligible pages still require clean
 drafts, no pending/unknown command and working loop protection. Compatible mounted edits may finish; missing lazy
 chunks or incompatible commands preserve drafts and guarded deliberate recovery on every page. Periodic content

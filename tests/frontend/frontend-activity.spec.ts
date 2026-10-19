@@ -38,7 +38,7 @@ const view: components['schemas']['ActivityView'] = {
     allRoles: [{id: 1, title: 'Kitchen lead', description: null}], textFields: [], participants: [],
     counters: {participants: 1, open: 2, empty: 1}, orderToken: '"order-fixture"',
     capabilities: {editTitle: true, editDescription: true, editDates: true, addSlot: true, reorderSlots: true,
-        manageSettings: false, manageRequirements: true, exportSchedule: true, duplicate: true, remove: true, roleCreationAdmission: true, rulesWorkspace: false},
+        manageSettings: false, manageRequirements: true, manageRecommendations: false, exportSchedule: true, duplicate: true, remove: true, roleCreationAdmission: true, rulesWorkspace: false},
 };
 const cleanups: Array<() => Promise<void>> = [];
 
@@ -58,7 +58,7 @@ function json(value: unknown, status = 200): Response {
 /** Mount production components and generated transport; only HTTP delivery is
  * substituted. Persistence and native/built parity have their own integration layers. */
 async function mounted(component: Component, handler: (request: Request) => Promise<Response>,
-    path = `/frontend-pilot/activity/${planId}`) {
+    path = `/frontend-pilot/activity/${planId}`, stubs: Record<string, boolean> = {}) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createPilotContext({session}, true, request);
     context.hydrated.value = true;
@@ -72,6 +72,7 @@ async function mounted(component: Component, handler: (request: Request) => Prom
     const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
         provide: {[pilotContextKey as symbol]: context},
+        stubs,
     }});
     await flushPromises();
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
@@ -164,12 +165,45 @@ describe('Activity production frontend consumers', () => {
         expect(wrapper.find('[data-action="take-role"]').exists()).toBe(false);
     });
 
-    it('retains the native advanced destination for an admitted empty linked plan without reading that workspace', async () => {
-        const {wrapper, request} = await mounted(ActivityPage, async () => json({...view, slots: [], currentEventId: otherId,
-            capabilities: {...view.capabilities, manageRequirements: false, rulesWorkspace: true}}));
-        expect(wrapper.get('a.nav-link').attributes('href')).toBe('/activity/' + planId + '#tab-rules');
-        expect(wrapper.get('a.nav-link').text()).toBe('Rules & auto-assign');
-        expect(request.mock.calls.some(([request]) => new URL((request as Request).url).pathname.includes('recommendation'))).toBe(false);
+    it('opens the Rules tab in the same document without reading unavailable advanced methods', async () => {
+        const {wrapper, request, context, router} = await mounted(ActivityPage, async () => json({...view, slots: [], currentEventId: otherId,
+            capabilities: {...view.capabilities, manageRequirements: false, manageRecommendations: false, rulesWorkspace: true}}));
+        const rules = wrapper.findAll('button[role="tab"]').find(button => button.text() === 'Rules & auto-assign')!;
+        expect(rules.exists()).toBe(true);
+        expect(wrapper.find('a[href*="#tab-rules"]').exists()).toBe(false);
+        await rules.trigger('click');
+        expect(wrapper.get('#tab-rules').isVisible()).toBe(true);
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/activity/' + planId);
+
+        // A normal detail refresh preserves tab selection and cannot invoke a
+        // method that this admitted actor does not hold.
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+        await flushPromises();
+        expect(wrapper.get('#tab-rules').isVisible()).toBe(true);
+        expect(request.mock.calls.some(([request]) => /\/(recommendations|requirements)(?:\/|$)/u.test(new URL((request as Request).url).pathname))).toBe(false);
+    });
+
+    it('retires advanced caches on Event unlink even when independent grants remain enabled', async () => {
+        let current: components['schemas']['ActivityView'] = {...view, currentEventId: otherId, capabilities: {...view.capabilities,
+            manageRequirements: true, manageRecommendations: true, rulesWorkspace: true}};
+        // Isolate the parent's admitted-subtree/cache ownership. Each advanced
+        // child's actual read, draft and denial lifecycle has its own mounted cases.
+        const {wrapper, context} = await mounted(ActivityPage, async () => json(current), undefined,
+            {ActivityRequirements: true, ActivityRecommendations: true});
+        const requirements = activityKeys.requirements(session.context, planId);
+        const recommendations = activityKeys.recommendations(session.context, planId);
+        const job = activityKeys.recommendationJob(session.context, planId, otherId);
+        context.queryClient.setQueryData(requirements, {private: 'former Event requirements'});
+        context.queryClient.setQueryData(recommendations, {private: 'former Event participants'});
+        context.queryClient.setQueryData(job, {private: 'former Event job'});
+        current = {...current, currentEventId: null, capabilities: {...current.capabilities, rulesWorkspace: false}};
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+        await flushPromises();
+        expect(wrapper.find('#tab-rules').exists()).toBe(false);
+        expect(context.queryClient.getQueryData(requirements)).toBeUndefined();
+        expect(context.queryClient.getQueryData(recommendations)).toBeUndefined();
+        expect(context.queryClient.getQueryData(job)).toBeUndefined();
+        expect(context.queryClient.getQueryData(activityKeys.detail(session.context, planId))).toBeDefined();
     });
 
     it('preserves authoritative schedule time ordering when saved positions differ', async () => {
@@ -177,6 +211,44 @@ describe('Activity production frontend consumers', () => {
             {...slot, position: 1}, {...slot, id: otherId, title: 'Evening help', startTime: '18:00:00', endTime: '19:00:00', position: 0},
         ]}));
         expect(wrapper.findAll('.slot-container .slot').map(element => element.attributes('data-slotid'))).toEqual([slotId, otherId]);
+    });
+
+    it('releases removed role assignees and fields while keeping valid selections in the actual dialog', async () => {
+        let current: components['schemas']['ActivityView'] = {...view, slots: [{...slot,
+            roles: [{id: 1, name: 'Kitchen lead', maxQty: 1, assignedQty: 1, assignmentId: '10', assigneeName: 'Alex', self: false},
+                {id: 2, name: 'Helper', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false}],
+            assignees: [{assignmentId: '10', name: 'Alex', roles: ['Kitchen lead']},
+                {assignmentId: '11', name: 'Blair', roles: ['Helper']}]}]};
+        const writes: unknown[] = [];
+        const {wrapper, context} = await mounted(ActivityPage, async request => {
+            if (request.method === 'GET') return json(current);
+            writes.push(await request.json());
+            return json({changed: true});
+        });
+        const opener = wrapper.findAll('button').find(button => button.text() === 'Manage role assignments')!;
+        await opener.trigger('click');
+        await flushPromises();
+        expect(document.querySelector<HTMLSelectElement>('[data-role-name="Kitchen lead"] select')!.value).toBe('10');
+        current = {...current, slots: [{...current.slots[0], assignees: [current.slots[0].assignees[1]]}]};
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+        await flushPromises();
+        expect(document.querySelector<HTMLSelectElement>('[data-role-name="Kitchen lead"] select')!.value).toBe('');
+        expect(document.querySelector<HTMLSelectElement>('[data-role-name="Helper"] select')!.value).toBe('11');
+        current = {...current, slots: [{...current.slots[0], roles: [...current.slots[0].roles,
+            {id: 3, name: 'constructor', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false},
+            {id: 4, name: '__proto__', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false}]}]};
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+        await flushPromises();
+        expect(document.querySelector<HTMLSelectElement>('[data-role-name="constructor"] select')!.value).toBe('11');
+        expect(document.querySelector<HTMLSelectElement>('[data-role-name="__proto__"] select')!.value).toBe('11');
+        current = {...current, slots: [{...current.slots[0], roles: [current.slots[0].roles[0]]}]};
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+        await flushPromises();
+        expect(document.querySelector('[data-role-name="Helper"]')).toBeNull();
+        // The visible blank must submit null, never the released assignment ID.
+        document.querySelector<HTMLFormElement>('#slotRoleAdminForm')!.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+        await flushPromises();
+        expect(writes).toEqual([{assignments: [{role: 'Kitchen lead', assignmentId: null}]}]);
     });
 
     it('retains a dirty inline description when a fresh read clears the shared text', async () => {
@@ -343,6 +415,7 @@ describe('Activity production frontend consumers', () => {
         expect(wrapper.get('#my-requirement-progress').text()).toContain('You participate in1 of 2required slots.Take 1 more.');
         expect(wrapper.get('#my-requirement-progress').findAll('strong').map(element => element.text())).toEqual(['1 of 2', 'Take 1 more.']);
         await wrapper.findAll('[role="tab"]').find(button => button.text() === 'Participants')!.trigger('click');
+        expect(wrapper.get('#participant-status-overview').text()).toContain('2030-06-01 – 2030-06-02');
         await wrapper.get('[data-participant-filter="needs-more"]').trigger('click');
         expect(wrapper.findAll('[data-participant-row]').map(row => row.text())).toHaveLength(1);
         await wrapper.get('[data-participant-search]').setValue('Sam');
