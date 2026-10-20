@@ -83,14 +83,7 @@ const profileRetryAvailable = useReadRetry(() => profiles.error.value);
 const profileRetryAt = useReadRetryAt(() => profiles.error.value, profileRetryAvailable);
 watch(profiles.error, retireDeniedProfiles, {flush: 'sync'});
 
-
-
 const profileRetryAction = useActionState({eligible: mayRetryProfiles, pending: () => profiles.isFetching.value});
-
-
-
-
-
 
 watch(profileQuery, () => {
     // A datalist choice is the returned username (or ID for guests without email).
@@ -99,7 +92,6 @@ watch(profileQuery, () => {
     if (!selectMatchingProfile()) profileSearchInput.value = profileQuery.value.trim();
 });
 watch(profiles.data, selectMatchingProfile);
-
 
 /** The authorized Access projection admits all four audience fields. Keep that
  * feature mapping here; generic draft reconciliation owns neither audiences nor grants. */

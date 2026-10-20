@@ -338,6 +338,11 @@ outside this adaptation.
    independent semantic review and report actual commands, failures and limits. A build, helper test or screenshot
    alone cannot establish feature completeness.
 
+   Choose risk-relevant cases with multiple independent records and changing selection or permission eligibility.
+   Assert exactly which records and controls change and which remain, rather than counts alone. Derive expectations
+   from the original contract and approved exceptions; native agreement cannot establish that a copied defect is
+   intended. A regression for a known defect must distinguish its broken behavior from the intended result.
+
    For an ordinary migrated form/link, extend its existing built-application E2E with a document marker and
    observation of main-frame navigation requests, then assert the generated request, visible result and persisted
    effect. Exercise warm entry and completion, rejected input, canceled departure, pending/unknown no-replay and

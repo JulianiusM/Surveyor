@@ -4,7 +4,7 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-19
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: P6 advanced Activity route composition and shared engine/transport adoption source-reconciled alongside P0-P5; execution belongs to paired review; later phases and separate cutover boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
@@ -17,9 +17,10 @@ Native application routes remain available as the visual/behavioral reference. T
 [foundation decision ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
 This guide describes ownership and scope; the [paired review](PILOT_PARITY_REVIEW.md) owns
 completed scoped acceptance and execution evidence, including its remaining limits.
-The [current full-pilot review](PILOT_PARITY_REVIEW.md#full-implemented-pilot-review-2026-10-19)
-qualifies prior acceptance with current findings; source mappings and earlier passing selections do not establish
-complete visual/behavioral parity for every implemented journey and relevant state.
+The [current implementation review](PILOT_PARITY_REVIEW.md#current-approved-interface-implementation-review-2026-10-20)
+and subsequent [Activity correction follow-up](PILOT_PARITY_REVIEW.md#activity-correction-follow-up-2026-10-20)
+record completed corrections and their scoped verification. Source mappings and earlier passing selections do not
+establish complete visual/behavioral parity for every implemented journey and relevant state.
 
 ## Migration boundary and current iteration
 
