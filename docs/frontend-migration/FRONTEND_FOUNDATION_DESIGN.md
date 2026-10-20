@@ -877,6 +877,28 @@ The implementation review records actual adoption and checks separately from the
 remains recorded; native repair, default-route cutover, guide publication, deployment, P7–P11 and unrelated backend
 redesign are not authorized. IMP-030 and IMP-080 retain their actual-cutover resolution conditions.
 
+### Approved Activity review pairing and available-tab correction (2026-10-20)
+
+After the full pilot review, the maintainer explicitly instructs the correction plan and individually approves its
+R2 frontend change, including counterpart selection when saved review rows do not identify one unambiguous pair.
+This R2 belongs to the October 20 Activity review; it is separate from earlier numbered R2 decisions above.
+
+New local swaps retain their explicitly constructed relationship in the existing recommendation draft owner.
+Approving, rejecting, reverting or removing one leg acts on that pair only. Saved rows carry no such local origin;
+the Vue review may infer a mutually unique eligible reciprocal counterpart, but ambiguity requires the organizer's
+explicit choice before any review row changes. Generated recommendations and independently staged moves retain
+their own identity. Pair metadata remains local and is excluded from the existing review request.
+
+The same correction keeps Activity's selected tab among the panels admitted by current data. If the selected
+Participants or Rules panel disappears, the page selects Schedule through its existing tab state; returning data
+does not switch the reader back. Admitted panels keep their existing draft, focus and command lifetimes.
+
+This bounded frontend correction changes no native source, shared controller, DBAL, API shape or stored review.
+The maintainer separately requests the backend ambiguity finding in the central backlog. `IMP-083` records the
+source-based `includeBlockedSwapLegs` concern at P2 priority; no real backend reproduction or remedy is claimed.
+Original P5/P6 choices and earlier verification remain historical evidence. Actual current source adoption and
+executed checks belong to the paired review; P7–P11, cutover and publication remain separately authorized.
+
 ## Cutover retirement inventory
 
 The [boundary manifest](documentation-boundary.json) is the sole amendment-to-destination inventory.

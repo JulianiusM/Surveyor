@@ -1876,7 +1876,8 @@ implementation_defects:
         start at x=0 and retain their viewport widths. These are actual document movements, not scrollWidth alone.
       - Internal ballot/results scrolling, stationary sticky headings and participant cells, and reachability of the
         last answer column all pass in the same real browser workflows. The original comparison did not establish the cause.
-      - The 2026-10-20 source review traces clipped absolute controls escaping their unpositioned table viewport.
+      - >-
+        The 2026-10-20 source review traces clipped absolute controls escaping their unpositioned table viewport.
         Giving the existing shared Vue viewport a containing block removes actual document travel in both rebuilt
         focused comparisons: all 16 English/German samples fit 1280px/390px and reach window.scrollX 0, with visible
         HTML/body overflow. All 29 columns, local scrolling, sticky cells, final-label/keyboard choice and draft-only
@@ -1931,7 +1932,8 @@ implementation_defects:
       - Native creation adjusts week boundaries with browser-local calendar arithmetic but adds day cells by fixed
         milliseconds. src/views/activity/activity-view.pug instead performs week/day arithmetic in the server timezone.
         These algorithms can differ across timezone offsets and daylight-saving boundaries.
-      - The 2026-10-20 Vue review also finds the matching previous-day shift in Event summary, saved attendance and
+      - >-
+        The 2026-10-20 Vue review also finds the matching previous-day shift in Event summary, saved attendance and
         roster formatting before the approved correction: src/frontend/features/event/presentation.ts then formatted
         raw date-only values in the browser timezone. Its original R2 locale adoption changed the language while
         deliberately leaving that policy intact; R10 separately supersedes it.
@@ -2054,6 +2056,43 @@ implementation_defects:
     disposition: Shared locale-neutral heading/action/field owners keep the actual Rules consumers usable in the
       English/German 320/390/1280 built matrix. Independent source and original-image review accepts those scoped
       results. Native authored frontend sources remain unchanged; IMP-080 stays open until actual cutover.
+  - id: IMP-083
+    status: open
+    discovered_on: 2026-10-20
+    severity: medium
+    priority: P2
+    owner: application maintainers
+    out_of_scope_for_documentation_migration: true
+    out_of_scope_for_frontend_migration: true
+    title: Recommendation blocking infers swap partners from reciprocal slots without pair provenance
+    evidence:
+      - src/controller/activityController.ts includeBlockedSwapLegs selects the first reciprocal REASSIGN by source
+        and target slot IDs without participant identity or an explicit swap relationship.
+      - prepareRecommendationApplication invokes that helper while removing blocked approved operations, so its
+        pairing decision can change the remaining applicable set and reported skipped count.
+      - The frontend review independently reproduced the analogous wrong-partner selection in recommendationDraft.ts
+        with multiple manual moves between the same two slots. That reproduction does not establish a persisted
+        backend failure; this backend finding is a source-based inference and needs a dedicated reproduction.
+    impact: With several reciprocal moves, blocking one operation can also block an unrelated participant's move
+      rather than its intended swap partner, changing applied/skipped outcomes. The possibility affects organizer
+      review correctness; the existing warning review and result counts remain available.
+    authorization: On 2026-10-20 the maintainer explicitly approved R2's frontend-only pairing correction and requested
+      a backend backlog item with appropriate severity. This records P2 priority and does not authorize a backend fix,
+      a wire or stored-data change, native changes, or stronger application guarantees.
+    documentation_contract: Local review actions preserve the explicitly selected swap pair; the shared controller
+      remains authoritative for warnings, blocking, application and actual applied/skipped results.
+    disposition: The Vue correction retains local pair identity and requires an explicit counterpart when saved rows
+      are ambiguous. It does not repair or replace includeBlockedSwapLegs. Backend remediation remains a separately
+      authorized effort, distinct from IMP-029's warning/result presentation coverage.
+    closes_when:
+      - A production-shaped backend regression reproduces multiple independent reciprocal moves and demonstrates
+        the incorrect blocking relationship or establishes a narrower verified condition.
+      - An explicit maintainer decision defines reliable swap provenance and compatibility for saved rows before
+        any dependent controller, wire or persistence change.
+      - The shared controller propagates blocking only across the intended swap while retaining eligibility,
+        overlap acknowledgement, exact reviewed inputs and truthful applied/skipped results.
+      - Focused persistence coverage protects independent moves, both true swap legs, payload ordering and repeated
+        slot directions without silently broadening native or versioned behavior.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed
@@ -2129,7 +2168,8 @@ findings:
       i18next-vue TranslationComponent placeholders. Original DEC-006 deferred that capability, and the generator
       validated scalar parameters without declaring component placeholders. No specific approval was found before
       the later direct R3 decision.
-    authorization: The maintainer directly approved R3 on 2026-10-19: controlled declared/validated Vue component
+    authorization: >-
+      The maintainer directly approved R3 on 2026-10-19: controlled declared/validated Vue component
       placeholders through the selected shared catalog and i18next-vue owners. This explicitly supersedes the original
       rich-slot deferral; the prior unvalidated implementation did not authorize itself.
     disposition: The dated ADR amendment preserves the original choice and scopes the approved extension. Shared

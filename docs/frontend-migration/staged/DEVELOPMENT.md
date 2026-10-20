@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P6 contribution owners reconciled with integrated Refresh, common non-jumping notifications, controlled component messages, locale-neutral usability, saved-slot totals and shared civil-date ownership with retained authority/draft lifetimes; execution separate; no publication
+verification-scope: P0-P6 contribution owners, dynamic panel retirement and local versus saved recommendation pairing reconciled with approved frontend scope; authority, draft and backend boundaries retained; execution separate; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -163,7 +163,12 @@ whose contract has no live-region announcement, rather than silently adding acce
 presentation is pills; Activity supplies the tabs variant, IDs and panel targets. Arrow keys, Home and End activate
 and wrap without scrolling, including modified keys. PageUp/PageDown retain browser behavior rather than Reka's extra
 activation. Pages own admission and keep their dirty panels mounted; do not bind a broader command lock to Activity's
-otherwise enabled tabs. Shared assignee lists likewise retain admitted names and removable IDs; feature-specific
+otherwise enabled tabs. A page's selected key must remain among its current admitted tabs. Reevaluate that selection
+when fresh data removes the selected panel: Activity returns to Schedule when the selected Participants panel
+becomes empty or the selected Rules panel loses admission, without switching back merely because that panel later
+returns. Keep an admitted panel's dirty controls mounted and preserve independently available panels; the tab
+primitive cannot infer feature eligibility.
+Shared assignee lists likewise retain admitted names and removable IDs; feature-specific
 remove controls may use the existing list's slot without copying list markup or changing server authority.
 `AppAccordionButton` shares matching expanded/collapsed trigger presentation and initialized activation across Event,
 Overview and administrator disclosures. Features retain which panel is open, panel markup, contents and reads; pass
@@ -230,9 +235,22 @@ operation in Query, background refresh, retry or ordinary job-status reads. Pure
 uncertain dispatch failed. Poll only a confirmed job identity and stop on terminal, retired or denied context.
 The approved automatic deadline-job observation also consumes an identity returned by entry. Its completion reads
 saved proposals through a pure snapshot; only an explicitly dispatched generation retains the maintenance trigger.
+New local swaps also retain their explicit partner relationship in the existing feature draft. Review/removal
+operations use that identity, not the first row moving between reciprocal slots: multiple participants can make
+independent moves across the same two slots. Saved rows have no local creation provenance. Infer a reciprocal
+counterpart only when both directions are unique; otherwise require explicit selection before changing
+review state. Cancel preserves all rows. Harmless fresh snapshots, renamed labels and locale changes preserve the
+captured choice. Revalidate the relevant operations and their saved review versions; a changed or retired reviewed
+operation releases the chooser, and a changed or retired candidate clears its selection before confirmation.
+Actor/admission retirement releases the chooser. Never include local pair metadata in preview/application
+serialization. If a known partner is removed or replaced, release both former legs as explicit single moves
+instead of guessing a replacement partner.
+Generated rows and known independent local moves remain separate. This review relationship supplies no new server
+application guarantee.
 Submit the identical previewed batch with its current overlap acknowledgement; existing server engines retain
-generated/manual provenance, both swap legs and applied/skipped decisions. Keep job diagnostics private and pass
-only explicit permitted scalar projections. Inherited postcommit regeneration failures remain outside this adaptation.
+authority over generated/manual provenance, swap-leg blocking and applied/skipped decisions. Keep job diagnostics
+private and pass only explicit permitted scalar projections. Inherited postcommit regeneration failures remain
+outside this adaptation.
 
 1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;

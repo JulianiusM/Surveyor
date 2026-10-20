@@ -13,7 +13,12 @@ next-review: authorized-migration-follow-up-or-next-phase
 
 ## Current disposition (2026-10-20)
 
-P0–P6 are implemented against their phase contracts and direct amendments. The
+P0–P6 are implemented against their phase contracts and direct amendments. The subsequent
+[Activity follow-up](PILOT_PARITY_REVIEW.md#activity-correction-follow-up-2026-10-20) qualifies the earlier completion
+receipts with the completed selected-tab retirement and ambiguous swap-review pairing corrections. The maintainer
+explicitly authorizes their frontend correction, including R2's local pair identity and counterpart choice; final
+source adoption and renewed verification are recorded in that follow-up. The separately recorded P2 backend
+inference `IMP-083` is excluded from this frontend correction rather than silently treated as implemented. The
 [current review](PILOT_PARITY_REVIEW.md#current-approved-interface-implementation-review-2026-10-20) records final
 source adoption, scoped execution and remaining limits. The directly approved October 20 R8–R10 corrections extend
 the staged Operations wording, saved-slot total and shared civil-day policy. Their actual implementation, scoped

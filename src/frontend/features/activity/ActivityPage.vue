@@ -103,9 +103,17 @@ watch([planId, context.epoch], () => {
     requirementMode.value = null;
     previewAbort?.abort();
 });
-watch(() => data.value?.capabilities.rulesWorkspace, available => {
-    if (!available && tab.value === 'rules') tab.value = 'schedule';
-});
+watch(tabs, reconcileSelectedTab);
+
+/** Preserve a selected panel only while the current projection still admits it.
+ * Empty/redacted participant data and withdrawn Rules access both fall back to
+ * Schedule without replacing its mounted controls or unrelated feature drafts. */
+function reconcileSelectedTab(): void {
+    // The same tab list drives the shared controls and this feature's selection.
+    // A valid local choice survives refreshes, including newly available panels.
+    if (!tabs.value.some(candidate => candidate.key === tab.value)) tab.value = 'schedule';
+}
+
 watch(() => [!!(data.value?.currentEventId && data.value.capabilities.rulesWorkspace && data.value.capabilities.manageRequirements),
     !!(data.value?.currentEventId && data.value.capabilities.rulesWorkspace && data.value.capabilities.manageRecommendations)],
     /** Release private snapshots when a fresh detail receipt withdraws advanced admission. */

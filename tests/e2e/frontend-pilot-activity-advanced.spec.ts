@@ -1,13 +1,14 @@
 import {expect, test, type Locator} from '@playwright/test';
+import type {components} from '../../src/types/api/v1';
 import {createTranslator} from '../../src/modules/localization/translator';
 import {closeModalForE2E, expectUsableFrontendLayout, expectVisiblePresentation, openModalForE2E,
     readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createActivityOverlapForE2E, expectActivityTabKeyboard, observeActivityCommand,
     readActivityForE2E} from '../keywords/frontendActivityE2EKeywords';
-import {captureAdvancedActivityPresentation, createAdvancedActivityForE2E, openActivityRulesForE2E, readActivityRecommendationsForE2E,
-    readActivityRequirementsForE2E} from '../keywords/frontendActivityAdvancedE2EKeywords';
+import {captureAdvancedActivityPresentation, createActivitySwapPairsForE2E, createAdvancedActivityForE2E, openActivityRulesForE2E, readActivityRecommendationsForE2E,
+    readActivityRequirementsForE2E, stageActivitySwapForE2E} from '../keywords/frontendActivityAdvancedE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
-import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
+import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 
 /** Check a real control's visible hit target without dispatching its operation.
  * Browser scrolling is allowed to reveal it; its center must remain unobscured. */
@@ -349,14 +350,8 @@ test('keeps both manual swap legs together and saves swap, unassignment and assi
     /** Stage the public modal's complete reciprocal move, preserving its sources
      * until the reviewed application commits both legs together. */
     async function stageSwap(): Promise<void> {
-        await page.locator(`.slot[data-slot-id="${second!.id}"] [data-add-recommendation]`).click();
-        const modal = page.locator('#addRecommendationModal');
-        await modal.locator('#addRecommendationOperation').selectOption('SWAP');
-        await modal.locator('#addRecommendationParticipant').selectOption(`profile:${plan.owner.id}`);
-        await modal.locator('#addRecommendationSource').selectOption(first!.id);
-        await modal.locator('#addRecommendationSwapParticipant').selectOption(plan.other.id);
-        await modal.getByRole('button', {name: 'Stage as approved', exact: true}).click();
-        await expect(modal).not.toBeVisible();
+        await stageActivitySwapForE2E(page, {sourceSlotId: first!.id, targetSlotId: second!.id,
+            profileId: plan.owner.id, counterpartId: plan.other.id});
         await expect(page.locator('#recommendationScheduleView [data-rec-id]')).toHaveCount(2);
     }
     await stageSwap();
@@ -401,6 +396,182 @@ test('keeps both manual swap legs together and saves swap, unassignment and assi
     await expect.poll(async () => (await readActivityRecommendationsForE2E(page.request, plan.id)).existingAssignments.length).toBe(2);
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('activity-swaps');
     expect(navigation).toEqual([]);
+});
+
+for (const scenario of [
+    {restored: false, locale: 'en', width: 1280, label: 'a newly staged English desktop'},
+    {restored: true, locale: 'en', width: 1280, label: 'a restored English desktop'},
+    {restored: true, locale: 'de', width: 390, label: 'a restored German mobile'},
+] as const) {
+    test(`keeps two swaps independent in ${scenario.label} review`, async ({page}, info) => {
+        test.setTimeout(60000);
+        const {restored, locale} = scenario;
+        const messages = createTranslator(locale);
+        await page.setViewportSize({width: scenario.width, height: 900});
+        const plan = await createActivitySwapPairsForE2E(page.request);
+        const [first, second] = plan.view.slots;
+        const pairs = [[plan.owner, plan.other], [plan.extraFirst, plan.extraSecond]] as const;
+
+        if (restored) {
+            // Save through the existing native review operation, without applying
+            // any assignment. Stored REASSIGN rows deliberately have no pair ID.
+            const recommendations: components['schemas']['ActivityRecommendationReview']['recommendations'] = [];
+            for (const [incoming, outgoing] of pairs) {
+                recommendations.push({itemId: second!.id, sourceItemId: first!.id, profileId: incoming.id,
+                    status: 'PENDING', operation: 'REASSIGN', manual: true});
+                recommendations.push({itemId: first!.id, sourceItemId: second!.id, profileId: outgoing.id,
+                    status: 'PENDING', operation: 'REASSIGN', manual: true});
+            }
+            expect((await page.request.post(`/api/activity/${plan.id}/recommendations`, {data: {recommendations}})).status()).toBe(200);
+        }
+
+        await page.goto(`/frontend-pilot${plan.path}?locale=${locale}`, {waitUntil: 'domcontentloaded'});
+        await waitForPilotHydration(page);
+        await page.getByRole('tab', {name: messages.t('activity.rules'), exact: true}).click();
+        await expect(page.locator('[data-requirements-dirty]')).toHaveText(messages.t('activity.requirements.savedBadge'));
+        const rows = page.locator('#recommendationScheduleView [data-rec-id]');
+        if (!restored) {
+            for (const [incoming, outgoing] of pairs) {
+                await stageActivitySwapForE2E(page, {sourceSlotId: first!.id, targetSlotId: second!.id,
+                    profileId: incoming.id, counterpartId: outgoing.id}, messages.t('activity.recommendations.stage'));
+            }
+        }
+        await expect(rows).toHaveCount(4);
+        await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'two-activity-swaps';});
+        // A row carries its own profile attribute, so direct matching is kept
+        // separate from descendants that may contain other assignment controls.
+        const selected = page.locator(`#recommendationScheduleView [data-rec-id][data-profile-id="${plan.extraFirst.id}"]`);
+        const counterpart = page.locator(`#recommendationScheduleView [data-rec-id][data-profile-id="${plan.extraSecond.id}"]`);
+        const originalPair = page.locator(`#recommendationScheduleView [data-rec-id][data-profile-id="${plan.owner.id}"], #recommendationScheduleView [data-rec-id][data-profile-id="${plan.other.id}"]`);
+        const chooser = page.locator('#recommendationPairDialog');
+        const action = restored ? 'approve' : 'revert';
+        await selected.getByRole('button', {name: messages.t(`activity.recommendations.${action}`), exact: true}).click();
+
+        if (restored) {
+            await expect(chooser).toBeVisible();
+            await expectUsableFrontendLayout(chooser);
+            await captureAdvancedActivityPresentation(page, info, 'restored-swap-counterpart-choice', chooser,
+                ['.modal-title', 'p', 'label', 'select', 'button']);
+            await chooser.locator('#recommendationPairCancel').click();
+            await expect(chooser).not.toBeVisible();
+            await expect(rows.locator('.badge').filter({hasText: messages.t('activity.recommendations.pending')})).toHaveCount(4);
+            await selected.getByRole('button', {name: messages.t('activity.recommendations.approve'), exact: true}).click();
+            const choice = chooser.locator('#recommendationPairCounterpart');
+            const option = choice.locator('option').filter({hasText: plan.extraSecond.name});
+            await expect(option).toHaveCount(1);
+            const value = await option.getAttribute('value');
+            expect(value).toBeTruthy();
+            await choice.selectOption(value!);
+            await chooser.locator('#recommendationPairConfirm').click();
+            await expect(chooser).not.toBeVisible();
+        } else await expect(chooser).not.toBeVisible();
+
+        const selectedStatus = messages.t(restored ? 'activity.recommendations.approved' : 'activity.recommendations.pending');
+        const untouchedStatus = messages.t(restored ? 'activity.recommendations.pending' : 'activity.recommendations.approved');
+        await expect(selected.locator('.badge').filter({hasText: selectedStatus})).toHaveCount(1);
+        await expect(counterpart.locator('.badge').filter({hasText: selectedStatus})).toHaveCount(1);
+        await expect(originalPair.locator('.badge').filter({hasText: untouchedStatus})).toHaveCount(2);
+        await selected.getByRole('button', {name: messages.t('activity.recommendations.removeFor', {name: plan.extraFirst.name}), exact: true}).click();
+        await expect(rows).toHaveCount(2);
+        await expect(originalPair).toHaveCount(2);
+        await expect(chooser).not.toBeVisible();
+
+        // Recreate only the removed pair. Applying all four eligible moves
+        // protects unchanged wire/persistence behavior without claiming repair
+        // of the separately tracked backend's blocked-operation pairing.
+        await stageActivitySwapForE2E(page, {sourceSlotId: first!.id, targetSlotId: second!.id,
+            profileId: plan.extraFirst.id, counterpartId: plan.extraSecond.id}, messages.t('activity.recommendations.stage'));
+        await expect(rows).toHaveCount(4);
+        if (restored) await originalPair.first().getByRole('button', {name: messages.t('activity.recommendations.approve'), exact: true}).click();
+        await expect(rows.locator('.badge').filter({hasText: messages.t('activity.recommendations.approved')})).toHaveCount(4);
+        const applying = page.waitForResponse(response => response.request().method() === 'POST'
+            && new URL(response.url()).pathname === `/api/v1/activity-plans/${plan.id}/recommendations/apply`);
+        await page.locator('[data-recommendations-apply]').click();
+        const applied = await applying;
+        expect(applied.status()).toBe(200);
+        expect(await applied.json()).toMatchObject({applied: 4, skipped: 0});
+        const submitted = applied.request().postDataJSON().recommendations as Array<Record<string, unknown>>;
+        expect(submitted).toHaveLength(4);
+        for (const recommendation of submitted) {
+            expect(Object.keys(recommendation).sort()).toEqual(expect.arrayContaining(['itemId', 'manual', 'operation', 'profileId', 'sourceItemId', 'status']));
+            expect(Object.keys(recommendation).every(key => ['id', 'itemId', 'manual', 'operation', 'profileId', 'sourceItemId', 'status'].includes(key))).toBe(true);
+        }
+        await expect.poll(async () => (await readActivityRecommendationsForE2E(page.request, plan.id)).existingAssignments)
+            .toEqual(expect.arrayContaining(pairs.flatMap(([incoming, outgoing]) => [
+                expect.objectContaining({item: expect.objectContaining({id: second!.id}), profile: expect.objectContaining({id: incoming.id})}),
+                expect.objectContaining({item: expect.objectContaining({id: first!.id}), profile: expect.objectContaining({id: outgoing.id})}),
+            ])));
+        expect((await readActivityRecommendationsForE2E(page.request, plan.id)).existingAssignments).toHaveLength(4);
+        expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('two-activity-swaps');
+    });
+}
+
+test('relinks an Event with live advanced drafts and retires those workspaces on unlink without replay', async ({page}) => {
+    test.setTimeout(60000);
+    const plan = await createAdvancedActivityForE2E(page.request, {assigned: true, recommendation: true});
+    const destination = await createFrontendEventFixture(page.request);
+    expect((await page.request.post(`/api/event/${destination.id}/register`, {data: {
+        arrivalDate: plan.attendance.startDate, departureDate: plan.attendance.endDate, dietary: ['MEAT'],
+    }})).status()).toBe(200);
+    await openActivityRulesForE2E(page, plan);
+    await page.locator('#requiredShifts').fill('7');
+    const requirementInput = await page.locator('#requiredShifts').elementHandle();
+    await page.locator(`.slot[data-slot-id="${plan.view.slots[1]!.id}"] [data-add-recommendation]`).click();
+    const editor = page.locator('#addRecommendationModal');
+    await editor.locator('#addRecommendationParticipant').selectOption(`profile:${plan.owner.id}`);
+    await editor.getByRole('button', {name: 'Stage as approved', exact: true}).click();
+    await expect(editor).not.toBeVisible();
+    const manualRow = page.locator(`#recommendationScheduleView [data-rec-id=""][data-profile-id="${plan.owner.id}"]`);
+    await expect(manualRow).toHaveCount(1);
+    const manualElement = await manualRow.elementHandle();
+    const baseline = await readActivityRecommendationsForE2E(page.request, plan.id);
+    const writes: string[] = [];
+    page.on('request', request => {
+        const path = new URL(request.url()).pathname;
+        if (request.method() !== 'GET' && path.startsWith(`/api/v1/activity-plans/${plan.id}/`)) writes.push(path);
+    });
+    await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'activity-live-relink';});
+
+    /** The shared settings owner changes only its explicit relationship draft.
+     * Advanced editors remain independent until unlink releases their admission. */
+    async function changeLink(target: {id: string; title: string} | null): Promise<void> {
+        await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
+        const dialog = page.locator('.pilot-dialog');
+        await dialog.getByRole('tab', {name: 'Linked event', exact: true}).click();
+        if (target) {
+            await dialog.getByRole('searchbox', {name: 'Search events', exact: true}).fill(target.title);
+            await dialog.locator(`[data-event-id="${target.id}"]`).click();
+        } else await dialog.getByRole('button', {name: 'No event', exact: true}).click();
+        page.once('dialog', confirmation => confirmation.accept());
+        await observeActivityCommand(page, plan.id, '/event', 'PUT',
+            () => dialog.getByRole('button', {name: 'Save event link', exact: true}).click());
+        await expect.poll(async () => (await readActivityForE2E(page.request, plan.id)).currentEventId).toBe(target?.id ?? null);
+        await dialog.getByRole('button', {name: 'Close', exact: true}).last().click();
+        await expect(dialog).not.toBeVisible();
+    }
+
+    await changeLink(destination);
+    // Relinking keeps the same resource, actor and admitted advanced owners.
+    // Neither a server snapshot nor a settings save may replace these local inputs.
+    await expect(page.locator('#requiredShifts')).toHaveValue('7');
+    expect(await requirementInput!.evaluate(element => element === document.getElementById('requiredShifts'))).toBe(true);
+    await expect(page.locator('[data-requirements-dirty]')).toHaveText('Unsaved changes');
+    await expect(manualRow).toHaveCount(1);
+    expect(await manualElement!.evaluate(element => element.isConnected)).toBe(true);
+    expect((await readActivityRequirementsForE2E(page.request, plan.id)).plan.generalRequiredShifts).toBe(2);
+    expect((await readActivityRecommendationsForE2E(page.request, plan.id)).existingAssignments).toEqual(baseline.existingAssignments);
+
+    await changeLink(null);
+    // Unlink deliberately releases advanced Event context. Its private forms
+    // disappear; the independently admitted schedule and saved assignments remain.
+    await expect(page.locator('#requirementPanel')).toHaveCount(0);
+    await expect(page.locator('#recommendationPanel')).toHaveCount(0);
+    await expect(page.getByRole('tab', {name: 'Schedule', exact: true})).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tab-schedule')).toBeVisible();
+    expect((await readActivityForE2E(page.request, plan.id)).slots[0]!.assignees).toEqual(plan.view.slots[0]!.assignees);
+    expect(writes.filter(path => path.endsWith('/event'))).toHaveLength(2);
+    expect(writes.some(path => /\/(requirements|recommendations\/apply|recommendations\/entry|recommendations\/auto)$/u.test(path))).toBe(false);
+    expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('activity-live-relink');
 });
 
 test('retains manual warnings after cancellation and rejects a stale overlap review before applying the newly reviewed batch', async ({page}) => {

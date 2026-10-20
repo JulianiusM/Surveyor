@@ -19,6 +19,8 @@ const legend = [
     {label: 'confirmed', detail: 'existing', color: 'bg-success'}, {label: 'pending', detail: 'new', color: 'bg-warning'},
     {label: 'rejected', detail: 'declined', color: 'bg-danger'}, {label: 'reassignment', detail: 'moves', color: 'bg-info text-dark'},
 ] as const;
+/** Presentation uses the same admitted relationship as status/removal. Ambiguous
+ * restored moves retain move labels until their counterpart is established. */
 function isSwap(row: ActivityRecommendationDraftRow): boolean { return recommendationPartners(props.rows, row).length > 1; }
 function rowClass(row: ActivityRecommendationDraftRow): string {
     return row.value.status === 'APPROVED' ? 'border-success' : row.value.status === 'REJECTED' ? 'border-danger' : 'border-warning';

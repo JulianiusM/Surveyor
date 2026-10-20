@@ -67,7 +67,60 @@ export async function createAdvancedActivityForE2E(request: APIRequestContext,
             itemId: plan.view.slots[1]!.id, profileId: other.id, status: 'PENDING', operation: 'ASSIGN', manual: false,
         }]}})).status()).toBe(200);
     }
-    return {...plan, view: await readActivityForE2E(request, plan.id), event, owner, other, roleId, days};
+    return {...plan, view: await readActivityForE2E(request, plan.id), event, owner, other, roleId, days, attendance};
+}
+
+/** Prepare two independent swaps sharing the same slot directions. Every profile
+ * registers and joins through the normal application; no recommendation origin
+ * or pair identity is manufactured in persistence. */
+export async function createActivitySwapPairsForE2E(request: APIRequestContext) {
+    const plan = await createAdvancedActivityForE2E(request, {assigned: true, secondAssigned: true});
+    const [first, second] = plan.view.slots;
+    // Each slot needs two real occupants. Increasing the existing second slot
+    // keeps capacity warnings separate from the review-pairing regression.
+    expect((await request.post(`/api/activity/${plan.id}/slot/${second!.id}/attr`, {
+        data: {maxAssignees: 2},
+    })).status()).toBe(200);
+    const additional: Array<{id: string; name: string}> = [];
+
+    try {
+        for (const slot of [first!, second!]) {
+            const name = `Swap participant ${randomUUID().slice(0, 8)}`;
+            expect((await request.post('/users/profile/create', {form: {name}, maxRedirects: 0})).status()).toBe(302);
+            const session = await (await request.get('/api/v1/session')).json() as components['schemas']['SessionView'];
+            const profile = session.profiles.find(candidate => candidate.name === name);
+            expect(profile).toBeTruthy();
+            expect((await request.get(`/users/profile/change/${profile!.id}`, {maxRedirects: 0})).status()).toBe(302);
+            expect((await request.post(`/api/event/${plan.event.id}/register`, {data: {
+                arrivalDate: plan.attendance.startDate, departureDate: plan.attendance.endDate, dietary: ['MEAT'],
+            }})).status()).toBe(200);
+            await assignActivityThroughNative(request, plan.id, slot.id);
+            additional.push({id: profile!.id, name});
+        }
+    } finally {
+        // The page under test belongs to the original organizer, independently
+        // of which fixture registration/assignment last changed the session.
+        expect((await request.get(`/users/profile/change/${plan.owner.id}`, {maxRedirects: 0})).status()).toBe(302);
+    }
+
+    return {...plan, view: await readActivityForE2E(request, plan.id),
+        extraFirst: additional[0]!, extraSecond: additional[1]!};
+}
+
+/** Stage one complete swap through the actual manual editor. Its two emitted
+ * legs remain a client draft until the separate reviewed application command. */
+export async function stageActivitySwapForE2E(page: Page,
+    selection: {sourceSlotId: string; targetSlotId: string; profileId: string; counterpartId: string}, stageLabel = 'Stage as approved'): Promise<void> {
+    await page.locator(`.slot[data-slot-id="${selection.targetSlotId}"] [data-add-recommendation]`).click();
+    const dialog = page.locator('#addRecommendationModal');
+    // Use the real participant/source controls so pairing is established by
+    // the same intentional staging gesture as an organizer's ordinary swap.
+    await dialog.locator('#addRecommendationOperation').selectOption('SWAP');
+    await dialog.locator('#addRecommendationParticipant').selectOption(`profile:${selection.profileId}`);
+    await dialog.locator('#addRecommendationSource').selectOption(selection.sourceSlotId);
+    await dialog.locator('#addRecommendationSwapParticipant').selectOption(selection.counterpartId);
+    await dialog.getByRole('button', {name: stageLabel, exact: true}).click();
+    await expect(dialog).not.toBeVisible();
 }
 
 /** Open the real built route and wait for saved Rules inputs, rather than a

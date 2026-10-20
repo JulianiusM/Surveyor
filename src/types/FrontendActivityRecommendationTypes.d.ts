@@ -1,4 +1,5 @@
 import type {components} from './api/v1';
+import type {PilotRequestScope} from './FrontendPilotUiTypes';
 
 /** New manual rows have no persisted ID until the shared server saves the review. */
 export type ActivityRecommendationRow = Omit<components['schemas']['ActivityRecommendations']['recommendations'][number], 'id' | 'profile'> & {
@@ -12,9 +13,32 @@ export type ActivityRecommendationRow = Omit<components['schemas']['ActivityReco
 export interface ActivityRecommendationDraftRow {
     key: string;
     value: ActivityRecommendationRow;
+    /** A local swap group binds exactly two reviewed operations. Null records an
+     * explicitly independent move, including a retired swap leg; absent means
+     * restored data has no pairing evidence. */
+    swapGroup?: string | null;
 }
 
-/** Both swap legs share one local group; that identity never enters the wire contract. */
+/** One relationship owner supplies presentation and every local review mutation. */
+export interface ActivityRecommendationRelationship {
+    kind: 'single' | 'paired' | 'ambiguous';
+    partners: ActivityRecommendationDraftRow[];
+    candidates: ActivityRecommendationDraftRow[];
+}
+
+export type ActivityRecommendationReviewAction = {kind: 'status'; status: 'PENDING' | 'APPROVED' | 'REJECTED'}
+    | {kind: 'remove'};
+
+/** A chooser retains intent/evidence only. No draft row changes before confirmation. */
+export interface ActivityRecommendationPairChoice {
+    scope: PilotRequestScope;
+    rowIdentity: string;
+    rowVersion: string;
+    action: ActivityRecommendationReviewAction;
+    candidates: {identity: string; version: string}[];
+}
+
+/** Manual construction distinguishes a new swap from independently staged moves. */
 export interface ActivityManualRecommendation {
     targetSlotId: string;
     operation: 'ASSIGN' | 'REASSIGN' | 'SWAP';

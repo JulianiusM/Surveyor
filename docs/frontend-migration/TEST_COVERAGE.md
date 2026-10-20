@@ -6,7 +6,7 @@ owner: project maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented P0-P6 source/adoption and functional interface assertions reconciled with direct R2-R10 decisions, the shared civil-date owner, Help readiness, shared notifications and locale-neutral usability; execution and original visual review belong to paired review; native cutover defects remain open
+verification-scope: P0-P6 source/adoption retained; October 20 dynamic-tab and explicit swap-review pairing correction mapped separately from earlier evidence; execution and original visual review belong to paired review; native/backend exclusions remain open
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -540,6 +540,30 @@ the existence of a built-browser test does not establish that it has run success
 | ACT-14: relationship/context preservation | The requirement projection retains former-participant override IDs and safe names without silently selecting a different participant. Mounted requirement cases protect that choice. Existing [interlinking](../../tests/integration/activity-plan-interlinking.spec.ts), [property integrity](../../tests/integration/activity-property-integrity.spec.ts) and [workflow](../../tests/integration/activity-workflows.spec.ts) cases retain context invalidation, assignments, overrides and review history through the shared controller/DBAL boundaries. New frontend reads and job observation do not replace those domain rules or strengthen inherited completion guarantees. |
 | Authored name fallback provenance | The existing Activity presentation helper localizes explicitly identified generic names across saved/live progress, search, override targets and manual/staged recommendations. The versioned projections opt into optional provenance from shared controller presentation owners; native defaults omit it. Real-ORM assertions distinguish empty raw names from literal Participant/Profile text, validate generated results and protect unchanged native shapes. Mounted cases exercise reactive labels while command serializers retain only operation identities and values. |
 | Matched advanced presentation | Built advanced scenes compare native/Vue saved Rules controls, participant coverage, recommendation schedule and manual reassignment dialog at 1280px and 390px. Basic and advanced scenes exercise native/Vue tab keys, wrapping, focus and selected panels; enhanced tab activation and passive reads retain the current viewport rather than reproduce native incidental jumps. A separate English/German × 320/390/1280 matrix checks localized provenance, actual associated field labels, ordinary headings/actions/coverage/manual-control fit and hit targets, override add/remove, Free-mode generation gating and persisted zero requirements. These six finite enhanced scenes are not native German comparisons. Visible labels, constraints, control state, selected painted identity, usable fit and browser errors are asserted; complete raw geometry/styles and originals remain separate review evidence. |
+
+The October 20 correction adds a specific boundary to those earlier mappings. `ActivityPage` derives selected-tab
+validity from the same admitted `tabs` collection used by `AppTabList`. Mounted Activity cases remove the selected
+Participants projection with both empty and redacted count variants, withdraw Rules, and retain valid Schedule
+selection, mounted controls and independent drafts when data returns. The built basic Activity journey removes and
+restores the actual participant membership, refreshes through the live read owner and observes no replayed write.
+
+For ACT-12, `recommendationDraft.ts` is the sole relationship owner for both schedule labels and local review
+mutations. Explicitly staged single moves remain independent; new swaps retain exact local groups. Restored moves
+preserve the one-step paired action only when both reciprocal directions are unique. Otherwise the existing
+recommendation/dialog owner requires an explicit counterpart and revalidates its captured actor, operation and
+candidate before changing either row. Local pair metadata never enters `recommendationReview` serialization.
+The built advanced correction journeys stage two swaps across the same slot pair and restore four saved moves,
+covering English desktop and German mobile review, cancellation, intended counterpart selection, independent
+status/removal and unchanged eligible application. They do not reproduce or repair server blocking ambiguity;
+`IMP-083` owns that source-based inference. Current execution and image inspection belong to the
+[correction follow-up](PILOT_PARITY_REVIEW.md#activity-correction-follow-up-2026-10-20); earlier passing selections
+do not certify these new assertions.
+
+The ACT-14 built follow-up also relinks a plan while its requirement and recommendation drafts are live. It keeps
+those independent controls through the admitted context change, checks the existing pure-read/command boundary,
+then unlinks and verifies retirement of the advanced workspaces without replay. Existing domain persistence tests
+remain the authority for backend invalidation, saved assignments and reviewed history; this browser case adds the
+missing live-component boundary rather than another backend implementation.
 
 The P6 composition keeps the native frontend unchanged. `ActivityApi` consumes generated shapes; private server
 projections exclude full entities and raw job diagnostics. The shared pure requirements engine receives structural

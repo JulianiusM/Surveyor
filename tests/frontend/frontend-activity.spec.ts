@@ -191,9 +191,62 @@ describe('Activity production frontend consumers', () => {
         expect(wrapper.find('[data-action="take-role"]').exists()).toBe(false);
     });
 
-    it('opens the Rules tab in the same document without reading unavailable advanced methods', async () => {
-        const {wrapper, request, context, router} = await mounted(ActivityPage, async () => json({...view, slots: [], currentEventId: otherId,
-            capabilities: {...view.capabilities, manageRequirements: false, manageRecommendations: false, rulesWorkspace: true}}));
+    it.each([{reason: 'the last participant leaves', count: 0}, {reason: 'participant access is redacted', count: null}])(
+        'restores Schedule when $reason without replacing independent drafts', async ({count}) => {
+            const person: components['schemas']['ActivityParticipant'] = {participantKey: otherId, name: 'Alex Participant', count: 1,
+                assignedShifts: 1, roles: ['default'], roleIds: [], requiredShifts: 0, remainingShifts: 0,
+                source: 'none', attendanceDays: 2, attendance: {arrivalDate: '2030-06-01', departureDate: '2030-06-02'}, assignmentMode: 'FREE'};
+            let current: components['schemas']['ActivityView'] = {...view, participants: [person], textFields: [{id: otherId,
+                title: 'Shared notes', text: 'Saved instructions', editToken: '"text-fixture"',
+                capabilities: {edit: true, editTitle: true, delete: true}}]};
+            const {wrapper, context, request} = await mounted(ActivityPage, async () => json(current));
+
+            // Shared text is a real independent business draft outside the panels.
+            // A valid Participants selection and its local search also survive reads.
+            await wrapper.get('.text-field-content').trigger('dblclick');
+            await flushPromises();
+            const draft = wrapper.get<HTMLTextAreaElement>('.text-field-content textarea');
+            await draft.setValue('Independent unsaved instructions');
+            await wrapper.get('#activity-participants-tab').trigger('click');
+            const search = wrapper.get<HTMLInputElement>('[data-participant-search]');
+            await search.setValue('Alex');
+            current = {...current, title: 'Refreshed camp duties'};
+            await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+            await flushPromises();
+            expect(wrapper.get('#activity-participants-tab').attributes('aria-selected')).toBe('true');
+            expect(wrapper.get('[data-participant-search]').element).toBe(search.element);
+            expect(search.element.value).toBe('Alex');
+
+            // Empty membership and denied disclosure produce the same absent panel,
+            // while retained assignment counts distinguish their admitted snapshots.
+            current = {...current, participants: [], counters: {...current.counters, participants: count},
+                slots: current.slots.map(value => ({...value, assignees: [],
+                    ...(count === null ? {} : {assignedCount: 0, selfAssigned: false})}))};
+            await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+            await flushPromises();
+            expect(wrapper.find('#activity-participants-tab').exists()).toBe(false);
+            expect(wrapper.find('#tab-participants').exists()).toBe(false);
+            expect(wrapper.get('#activity-schedule-tab').attributes('aria-selected')).toBe('true');
+            expect(wrapper.get('#tab-schedule').isVisible()).toBe(true);
+            expect(wrapper.get('.text-field-content textarea').element).toBe(draft.element);
+            expect(draft.element.value).toBe('Independent unsaved instructions');
+
+            // Restored participation adds an available tab without overriding the
+            // now-valid Schedule selection or admitting any automatic mutation.
+            current = {...current, participants: [person], counters: {...current.counters, participants: 1}};
+            await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+            await flushPromises();
+            expect(wrapper.find('#activity-participants-tab').exists()).toBe(true);
+            expect(wrapper.get('#activity-schedule-tab').attributes('aria-selected')).toBe('true');
+            expect(wrapper.get('.text-field-content textarea').element).toBe(draft.element);
+            expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+        },
+    );
+
+    it('retains admitted Rules selection and restores Schedule when that workspace is withdrawn', async () => {
+        let current: components['schemas']['ActivityView'] = {...view, slots: [], currentEventId: otherId,
+            capabilities: {...view.capabilities, manageRequirements: false, manageRecommendations: false, rulesWorkspace: true}};
+        const {wrapper, request, context, router} = await mounted(ActivityPage, async () => json(current));
         const rules = wrapper.findAll('button[role="tab"]').find(button => button.text() === 'Rules & auto-assign')!;
         expect(rules.exists()).toBe(true);
         expect(wrapper.find('a[href*="#tab-rules"]').exists()).toBe(false);
@@ -207,6 +260,16 @@ describe('Activity production frontend consumers', () => {
         await flushPromises();
         expect(wrapper.get('#tab-rules').isVisible()).toBe(true);
         expect(request.mock.calls.some(([request]) => /\/(recommendations|requirements)(?:\/|$)/u.test(new URL((request as Request).url).pathname))).toBe(false);
+
+        // The same admitted-tab reconciliation handles advanced access withdrawal;
+        // it must not rely on a separate Rules-only selection mirror or watcher.
+        current = {...current, currentEventId: null, capabilities: {...current.capabilities, rulesWorkspace: false}};
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+        await flushPromises();
+        expect(wrapper.find('#tab-rules').exists()).toBe(false);
+        expect(wrapper.get('#activity-schedule-tab').attributes('aria-selected')).toBe('true');
+        expect(wrapper.get('#tab-schedule').isVisible()).toBe(true);
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
     });
 
     it('retires advanced caches on Event unlink even when independent grants remain enabled', async () => {

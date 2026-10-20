@@ -418,6 +418,86 @@ test('retains schedule filters across assignments, edits shared text and slot de
     expect(navigation).toEqual([]);
 });
 
+test('restores Schedule after a refreshed participant roster disappears without replaying writes', async function recoverParticipantPanel({page}) {
+    const plan = await createActivityForE2E(page.request);
+    const first = plan.view.slots[0]!;
+    await assignActivityThroughNative(page.request, plan.id, first.id);
+    const admitted = await readActivityForE2E(page.request, plan.id);
+    expect(admitted.participants).toHaveLength(1);
+    const assignment = admitted.slots.find(value => value.id === first.id)!.assignees[0]!;
+    const participantName = admitted.participants[0]!.name;
+
+    await page.goto(`/frontend-pilot${plan.path}?locale=en`, {waitUntil: 'domcontentloaded'});
+    await waitForPilotHydration(page);
+    await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'activity-participant-recovery';});
+    const navigation: string[] = [];
+    const mutations: {method: string; path: string}[] = [];
+    page.on('request', request => {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigation.push(request.url());
+        const path = new URL(request.url()).pathname;
+        if (request.method() !== 'GET' && path.startsWith(`/api/v1/activity-plans/${plan.id}`))
+            mutations.push({method: request.method(), path});
+    });
+    const schedule = page.locator('#tab-schedule');
+    const scheduleTab = page.getByRole('tab', {name: 'Schedule', exact: true});
+    const participantsTab = page.getByRole('tab', {name: 'Participants', exact: true});
+    await page.locator('[data-slot-filter="mine"]').click();
+    await participantsTab.click();
+    await page.locator('[data-participant-search]').fill(participantName);
+    await refreshPlan();
+    await expect(participantsTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tab-participants')).toBeVisible();
+    await expect(page.locator('[data-participant-search]')).toHaveValue(participantName);
+
+    // Another real client operation removes the final assignment. Refresh must
+    // consume the new authorized roster and recover the existing schedule panel.
+    const removed = await page.request.post(`/api/activity/${plan.id}/assignment/${assignment.assignmentId}/delete`, {data: {}});
+    expect(removed.status()).toBe(200);
+    expect((await readActivityForE2E(page.request, plan.id)).participants).toEqual([]);
+    await refreshPlan();
+    await expect(participantsTab).toHaveCount(0);
+    await expect(page.locator('#tab-participants')).toHaveCount(0);
+    await expect(scheduleTab).toHaveAttribute('aria-selected', 'true');
+    await expect(schedule).toBeVisible();
+    await expect(page.locator('[data-slot-filter="mine"]')).toHaveClass(/active/u);
+    await expect(schedule.locator('.slot:visible')).toHaveCount(0);
+    expect(mutations).toEqual([]);
+
+    // A later deliberate Join restores participation. Adding that tab must
+    // preserve Schedule, and subsequent reads retain an explicitly reentered tab.
+    await page.locator('[data-slot-filter="all"]').click();
+    await observeActivityCommand(page, plan.id, `/slots/${first.id}/self-assignment`, 'PUT',
+        () => page.locator(`.slot[data-slotid="${first.id}"] [data-action="assign"]`).click());
+    await expect(participantsTab).toHaveCount(1);
+    await expect(scheduleTab).toHaveAttribute('aria-selected', 'true');
+    await participantsTab.click();
+    await refreshPlan();
+    await expect(participantsTab).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tab-participants')).toBeVisible();
+    await expect(page.locator('[data-participant-row]')).toHaveCount(1);
+    expect((await readActivityForE2E(page.request, plan.id)).slots.find(value => value.id === first.id)!.assignedCount).toBe(1);
+    // Deliberate Join first reads warnings with POST, then writes once. Refresh
+    // must add neither another preview nor a replayed assignment command.
+    expect(mutations).toEqual([
+        {method: 'POST', path: `/api/v1/activity-plans/${plan.id}/slots/${first.id}/warnings`},
+        {method: 'PUT', path: `/api/v1/activity-plans/${plan.id}/slots/${first.id}/self-assignment`},
+    ]);
+    expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('activity-participant-recovery');
+    expect(navigation).toEqual([]);
+
+    /** The public Refresh control must dispatch a real detail read. Its fresh
+     * receipt, rather than cached state, drives each selection assertion above. */
+    async function refreshPlan(): Promise<void> {
+        // Observe before the click so a quick local response cannot be missed.
+        const response = page.waitForResponse(result => result.request().method() === 'GET'
+            && new URL(result.url()).pathname === `/api/v1/activity-plans/${plan.id}`);
+        await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+        // A real conditional GET may confirm an unchanged projection with 304;
+        // the browser then supplies its admitted cached body to the application.
+        expect([200, 304]).toContain((await response).status());
+    }
+});
+
 test('requires a fresh overlap review after cancellation or changed sibling commitments', async ({page}) => {
     const {target, sibling} = await createActivityOverlapForE2E(page.request);
     const slot = target.view.slots[0]!;

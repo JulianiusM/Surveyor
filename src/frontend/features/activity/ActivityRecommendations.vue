@@ -2,7 +2,8 @@
 import {computed, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
 import {useQuery, type QueryFunctionContext} from '@tanstack/vue-query';
 import type {components} from '../../../types/api/v1';
-import type {ActivityRecommendationDraftRow, ActivityRecommendationRow} from '../../../types/FrontendActivityRecommendationTypes';
+import type {ActivityRecommendationDraftRow, ActivityRecommendationPairChoice, ActivityRecommendationReviewAction,
+    ActivityRecommendationRow} from '../../../types/FrontendActivityRecommendationTypes';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {useActionState, usePilot} from '../../app/context';
 import {activityKeys} from '../../app/queryKeys';
@@ -11,12 +12,16 @@ import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../../app/transpor
 import {useCommand} from '../../composables/command';
 import {useReadRetry} from '../../composables/feedback';
 import ActionButton from '../../components/ActionButton.vue';
+import AppDialog from '../../components/AppDialog.vue';
+import FormField from '../../components/FormField.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import ActivityRecommendationSchedule from './ActivityRecommendationSchedule.vue';
 import ActivityRecommendationEditor from './ActivityRecommendationEditor.vue';
 import ActivityWarnings from './ActivityWarnings.vue';
-import {recommendationPartners, recommendationReview} from './recommendationDraft';
+import {pairRecommendationRows, reconcileRecommendationRows, recommendationIdentity, recommendationPartners,
+    recommendationRelationship, recommendationReview, revalidateRecommendationGroups} from './recommendationDraft';
+import {activityParticipantName} from './presentation';
 import {useActivityApi} from './api';
 
 type Workspace = components['schemas']['ActivityRecommendations'];
@@ -44,6 +49,9 @@ const previewing = ref(false);
 const frozen = shallowRef<components['schemas']['ActivityRecommendationApplication'] | null>(null);
 const confirmation = ref(false);
 const manualSlot = ref<string | null>(null);
+const pairChoice = shallowRef<ActivityRecommendationPairChoice | null>(null);
+const pairSelection = ref('');
+const pairStale = ref(false);
 const jobId = ref<string | null>(null);
 const jobStartedAt = ref(0);
 const jobTimedOut = ref(false);
@@ -64,7 +72,9 @@ const snapshot = useQuery({queryKey: key, ...admission, queryFn: readSnapshot, s
 const workspace = computed(() => revoked.value ? undefined : snapshot.data.value);
 const command = useCommand(refreshSnapshot, true, {dirty: () => dirty.value,
     busy: () => previewing.value || confirmation.value, unknownMessage: 'draft.leaveUnknown'});
-const blocked = computed(() => !!props.disabled || revoked.value || command.action.disabled.value || previewing.value || confirmation.value);
+const reviewBlocked = computed(() => !!props.disabled || revoked.value || command.action.disabled.value || previewing.value || confirmation.value);
+const blocked = computed(() => reviewBlocked.value || pairChoice.value !== null);
+const pairOptions = computed(currentPairOptions);
 // The admitted requirement form supplies its live mode, matching native's local
 // Auto control. The server still decides generation from persisted settings.
 const assignmentMode = computed(() => props.assignmentMode ?? props.view.assignmentMode);
@@ -107,6 +117,9 @@ async function refreshSnapshot(): Promise<void> {
  * New data still supplies current modal choices; applying always rechecks them. */
 function receive(value: Workspace, replace = false): void {
     if (!active || revoked.value) return;
+    // Saved legs may retire while intentional status edits remain local. Their
+    // former partner must never attach itself to a different reverse operation.
+    revalidateRecommendationGroups(rows.value, value.recommendations);
     // Approved R1: entry may return an already queued deadline job. Observe its
     // identity without another dispatch or changing native maintenance triggers.
     if (value.autoGenerationJob) observeJob(value.autoGenerationJob);
@@ -122,7 +135,7 @@ function receive(value: Workspace, replace = false): void {
     }
     // Clone mutable review rows out of Query. Their status belongs to the draft;
     // the authorized server snapshot remains unchanged for other observers.
-    rows.value = value.recommendations.map(value => ({key: String(++rowSequence), value: {...value}}));
+    rows.value = reconcileRecommendationRows(value.recommendations, rows.value, nextRecommendationKey);
     baseline.value = JSON.stringify(recommendationReview(rows.value));
     warnings.value = value.warnings;
     previewFailed.value = false;
@@ -168,6 +181,7 @@ function retireAdvancedAccess(): void {
     frozen.value = null;
     confirmation.value = false;
     manualSlot.value = null;
+    cancelPairChoice();
     jobId.value = null;
     jobTerminal.value = null;
     result.value = null;
@@ -314,27 +328,162 @@ async function updateWarnings(): Promise<void> {
         if (active && !revoked.value && request === sequence && context.isCurrent(scope)) previewFailed.value = true;
     }
 }
-/** A swap's paired status changes together before warnings are recomputed. */
+/** A swap's paired status changes together; ambiguous saved rows first need
+ * explicit counterpart selection without changing either local review value. */
 function changeStatus(row: ActivityRecommendationDraftRow, status: 'PENDING' | 'APPROVED' | 'REJECTED'): void {
-    if (blocked.value) return;
-    // Generated rows retain independent review state; manual swaps retain both legs.
-    for (const partner of recommendationPartners(rows.value, row)) partner.value.status = status;
-    void updateWarnings();
+    requestReviewAction(row, {kind: 'status', status});
 }
 /** Removing a manual intent cancels its reciprocal leg without a server write. */
 function remove(row: ActivityRecommendationDraftRow): void {
-    if (blocked.value || !row.value.manual) return;
-    // Filter by draft identity so no unrelated saved row is incidentally removed.
+    if (row.value.manual) requestReviewAction(row, {kind: 'remove'});
+}
+
+/** Keys are local render identity; operation identity owns read reconciliation. */
+function nextRecommendationKey(): string { return String(++rowSequence); }
+
+/** An admitted snapshot must still contain a saved operation before review can
+ * change it. Newly staged operations have no saved identity to retire yet. */
+function currentSavedOperation(row: ActivityRecommendationDraftRow): boolean {
+    return !row.value.id || !!workspace.value?.recommendations.some(value => recommendationIdentity(value) === recommendationIdentity(row.value));
+}
+
+/** Capture the reviewed operation and its corresponding admitted server value.
+ * Names and locale are presentation only; a changed/removed saved operation
+ * cannot inherit a chooser confirmation intended for its former contents. */
+function pairVersion(row: ActivityRecommendationDraftRow): string {
+    // Retain local review status and fresh saved status as separate evidence;
+    // either can change while the operation's stable identity remains equal.
+    const saved = row.value.id ? workspace.value?.recommendations.find(value => value.id === row.value.id) : undefined;
+    return JSON.stringify([recommendationIdentity(row.value), row.value.status,
+        row.value.id ? saved ? [recommendationIdentity(saved), saved.status] : null : 'local']);
+}
+
+/** Resolve only unchanged candidates from this chooser's captured actor and row.
+ * Locale and clean-read labels remain presentation only; unavailable or replaced
+ * operations disappear without replacing intentional dirty review values. */
+function currentPairOptions(): ActivityRecommendationDraftRow[] {
+    const choice = pairChoice.value;
+    if (!choice || !context.isCurrent(choice.scope)) return [];
+    const row = rows.value.find(value => recommendationIdentity(value.value) === choice.rowIdentity);
+    if (!row || !currentSavedOperation(row) || pairVersion(row) !== choice.rowVersion) return [];
+    // Only the relationship owner selects eligible opposite moves. A known
+    // local pair or explicit single move cannot be borrowed by this chooser.
+    const relationship = recommendationRelationship(rows.value, row);
+    if (relationship.kind !== 'ambiguous') return [];
+    const candidates: ActivityRecommendationDraftRow[] = [];
+    for (const candidate of relationship.candidates) {
+        const captured = choice.candidates.find(value => value.identity === recommendationIdentity(candidate.value));
+        if (captured && currentSavedOperation(candidate) && captured.version === pairVersion(candidate)) candidates.push(candidate);
+    }
+    return candidates;
+}
+
+/** Stage no status/removal until pairing is known. Every matching review action
+ * uses the same resolver as schedule labels, keeping distinct swaps independent. */
+function requestReviewAction(row: ActivityRecommendationDraftRow, action: ActivityRecommendationReviewAction): void {
+    if (!active || blocked.value || !rows.value.includes(row)) return;
+    const relationship = recommendationRelationship(rows.value, row);
+    // Dirty snapshots retain values for review, but cannot revive retired saved
+    // operations or apply a paired action to a replaced leg.
+    if (!relationship.partners.every(currentSavedOperation)) {
+        command.setError('activity.recommendations.pairStale');
+        return;
+    }
+    if (relationship.kind === 'ambiguous') {
+        pairSelection.value = '';
+        pairStale.value = false;
+        pairChoice.value = {scope: context.capture(), rowIdentity: recommendationIdentity(row.value),
+            rowVersion: pairVersion(row), action, candidates: relationship.candidates.map(candidate =>
+                ({identity: recommendationIdentity(candidate.value), version: pairVersion(candidate)}))};
+        return;
+    }
+    // Remember a mutually unique restored pair once the user acts on it. Future
+    // harmless reads preserve that relationship even if other moves are added.
+    if (relationship.kind === 'paired') pairRecommendationRows(row, relationship.partners.find(partner => partner !== row)!);
+    applyReviewAction(row, action);
+}
+
+/** Apply one already admitted local action to exactly its resolved relationship.
+ * The existing warning/application owners retain every later server boundary. */
+function applyReviewAction(row: ActivityRecommendationDraftRow, action: ActivityRecommendationReviewAction): void {
     const partners = recommendationPartners(rows.value, row);
-    rows.value = rows.value.filter(candidate => !partners.includes(candidate));
-    command.setNotice('activity.recommendations.removed');
+    if (action.kind === 'status') {
+        for (const partner of partners) partner.value.status = action.status;
+    } else {
+        // Object identity selects this current draft's exact legs; no first
+        // reverse-slot match can delete a participant from another swap.
+        rows.value = rows.value.filter(candidate => !partners.includes(candidate));
+        command.setNotice('activity.recommendations.removed');
+    }
     void updateWarnings();
+}
+
+/** Cancel releases chooser state only; the review's values remain byte-for-byte unchanged. */
+function cancelPairChoice(): void {
+    pairChoice.value = null;
+    pairSelection.value = '';
+    pairStale.value = false;
+}
+
+/** Revalidate immediately before grouping or mutating. Background replacement,
+ * lost authority or an actor change can never turn an old choice into a new action. */
+function confirmPairChoice(): void {
+    const choice = pairChoice.value;
+    if (!active || !choice || reviewBlocked.value || !context.isCurrent(choice.scope)) return;
+    // Resolve again against current draft and authority. A former option's
+    // identity alone cannot confirm a changed saved status or endpoint.
+    const row = rows.value.find(value => recommendationIdentity(value.value) === choice.rowIdentity);
+    const partner = pairOptions.value.find(value => recommendationIdentity(value.value) === pairSelection.value);
+    if (!row || !partner || pairVersion(row) !== choice.rowVersion || !pairRecommendationRows(row, partner)) {
+        pairSelection.value = '';
+        pairStale.value = true;
+        return;
+    }
+    // Only this final admission records a group and releases the captured action.
+    // Cancellation and every earlier failure leave the review untouched.
+    const action = choice.action;
+    cancelPairChoice();
+    applyReviewAction(row, action);
+}
+
+/** A chooser's captured operation must survive the same admission lifecycle as
+ * its containing review. Losing a candidate clears that selection before render. */
+function reconcilePairChoice(): void {
+    const choice = pairChoice.value;
+    if (!choice) return;
+    // Authority/command retirement closes the whole chooser before any action.
+    if (!active || revoked.value || reviewBlocked.value || !context.isCurrent(choice.scope)) {
+        cancelPairChoice();
+        return;
+    }
+    // Losing one candidate clears only that selection; losing the requested
+    // operation or all evidence retires the intent instead of guessing a partner.
+    if (!pairOptions.value.length) {
+        cancelPairChoice();
+        command.setError('activity.recommendations.pairStale');
+    } else if (pairSelection.value && !pairOptions.value.some(row => recommendationIdentity(row.value) === pairSelection.value)) {
+        pairSelection.value = '';
+        pairStale.value = true;
+    }
+}
+watch([rows, workspace, reviewBlocked, context.epoch], reconcilePairChoice, {flush: 'sync'});
+
+/** Identify a counterpart through admitted participant/slot labels, never opaque
+ * local group keys. Translation changes labels without changing the chosen value. */
+function pairOptionLabel(row: ActivityRecommendationDraftRow): string {
+    return messages.value.t('activity.recommendations.pairOption', {
+        name: activityParticipantName(row.value.profile.name, messages.value.t, row.value.profile.nameIsFallback, row.value.profile.id),
+        source: row.value.sourceItem?.title ?? '', target: row.value.item.title,
+    });
 }
 /** Publish the already constructed manual rows together into the local draft. */
 function stage(values: ActivityRecommendationRow[]): void {
     if (blocked.value) return;
-    // Local keys keep unsaved rows stable without inventing persisted UUIDs.
-    rows.value.push(...values.map(value => ({key: String(++rowSequence), value})));
+    // Construction supplies both swap legs together. A single staged move is
+    // explicitly independent, even if a later separate move has reverse endpoints.
+    const staged: ActivityRecommendationDraftRow[] = values.map(value => ({key: nextRecommendationKey(), value, swapGroup: null}));
+    if (staged.length === 2) pairRecommendationRows(staged[0]!, staged[1]!);
+    rows.value.push(...staged);
     manualSlot.value = null;
     void updateWarnings();
 }
@@ -531,6 +680,26 @@ function statusLabel(status: typeof statuses[number]): string {
         @close="manualSlot = null"
         @stage="stage"
     />
+    <!-- Saved wire rows contain no swap identity. This shared dialog asks for
+         the missing relationship before changing status or removing either leg. -->
+    <AppDialog id="recommendationPairDialog" :open="pairChoice !== null"
+        :title="messages.t('activity.recommendations.pairTitle')" standard :fullscreen-on-small="false"
+        :pending="reviewBlocked" initial-focus="#recommendationPairCounterpart" @close="cancelPairChoice">
+        <p>{{ messages.t('activity.recommendations.pairHint') }}</p>
+        <FormField id="recommendationPairCounterpart" :label="messages.t('activity.recommendations.pairCounterpart')" label-class="">
+            <template #control>
+                <select id="recommendationPairCounterpart" v-model="pairSelection" class="form-select text-bg-dark" :disabled="reviewBlocked">
+                    <option value="">{{ messages.t('activity.recommendations.pairChoose') }}</option>
+                    <option v-for="candidate in pairOptions" :key="candidate.key" :value="recommendationIdentity(candidate.value)">{{ pairOptionLabel(candidate) }}</option>
+                </select>
+            </template>
+        </FormField>
+        <StatusNotice v-if="pairStale" kind="warning">{{ messages.t('activity.recommendations.pairStale') }}</StatusNotice>
+        <template #footer>
+            <ActionButton id="recommendationPairCancel" variant="outline-secondary" :disabled="reviewBlocked" @click="cancelPairChoice">{{ messages.t('common.cancel') }}</ActionButton>
+            <ActionButton id="recommendationPairConfirm" variant="primary" :disabled="reviewBlocked || !pairSelection" @click="confirmPairChoice">{{ messages.t('activity.recommendations.pairConfirm') }}</ActionButton>
+        </template>
+    </AppDialog>
     <ActivityWarnings
         :open="confirmation"
         title=""

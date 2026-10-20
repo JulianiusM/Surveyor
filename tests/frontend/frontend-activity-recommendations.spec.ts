@@ -6,10 +6,12 @@ import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {components} from '../../src/types/api/v1';
+import type {ActivityRecommendationDraftRow} from '../../src/types/FrontendActivityRecommendationTypes';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
 import {activityKeys} from '../../src/frontend/app/queryKeys';
 import ActivityRecommendations from '../../src/frontend/features/activity/ActivityRecommendations.vue';
-import {manualRecommendationRows, recommendationPartners, recommendationReview,
+import {manualRecommendationRows, pairRecommendationRows, reconcileRecommendationRows, recommendationIdentity,
+    recommendationPartners, recommendationRelationship, recommendationReview, revalidateRecommendationGroups,
     rolelessRecommendationAssignments} from '../../src/frontend/features/activity/recommendationDraft';
 
 const planId = '11111111-1111-4111-8111-111111111111';
@@ -31,6 +33,28 @@ function workspace(): components['schemas']['ActivityRecommendations'] {
         operation: 'ASSIGN', status: 'PENDING', manual: false}], slots: [slot, {...slot, id: otherId, title: 'Lunch', startTime: '12:00:00', endTime: '13:00:00'}],
         participantOptions: [{key: 'profile:' + profileId, profileId, label: 'Alex', arrivalDate: null, departureDate: null}],
         existingAssignments: [], warnings: [], autoGenerationJob: null};
+}
+
+/** Four saved moves share endpoints but belong to two independently authored
+ * swaps. Their wire representation deliberately contains no pairing metadata. */
+function reciprocalWorkspace(): components['schemas']['ActivityRecommendations'] {
+    const saved = workspace();
+    const people = [{id: profileId, name: 'Alex'}, {id: otherId, name: 'Blair'},
+        {id: nextId, name: 'Casey'}, {id: jobId, name: 'Dana'}];
+    const ids = [recommendationId, jobId, nextId, '88888888-8888-4888-8888-888888888888'];
+    saved.recommendations = [];
+    saved.existingAssignments = [];
+    saved.participantOptions = [];
+    for (const [index, person] of people.entries()) {
+        const source = saved.slots[index % 2]!;
+        const target = saved.slots[1 - index % 2]!;
+        saved.recommendations.push({id: ids[index]!, profile: person, item: target, sourceItem: source,
+            status: 'PENDING', operation: 'REASSIGN', manual: true});
+        saved.existingAssignments.push({profile: person, item: source, roles: ['default']});
+        saved.participantOptions.push({key: 'profile:' + person.id, profileId: person.id, label: person.name,
+            arrivalDate: null, departureDate: null});
+    }
+    return saved;
 }
 function view(): components['schemas']['ActivityView'] {
     return {entityType: 'activity', id: planId, title: 'Camp duties', description: '', startDate: '2030-06-01', endDate: '2030-06-01',
@@ -79,13 +103,40 @@ async function mounted(handler: (request: Request) => Promise<Response>) {
         provide: {[pilotContextKey as symbol]: context},
     }});
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
-    await vi.waitFor(() => expect(root.find('[data-rec-id]').exists()).toBe(true));
+    await vi.waitFor(() => expect(root.find('[data-recommendations-schedule]').exists()).toBe(true));
     await flushPromises();
     return {root, context, requests, router, currentView};
 }
 function path(request: Request): string { return new URL(request.url).pathname; }
 function button(root: ReturnType<typeof mount>, title: string) {
     return root.findAll('button').find(button => button.attributes('title') === title)!;
+}
+
+/** Teleported dialogs retain real native selects and their public change event. */
+async function selectDialogValue(id: string, value: string): Promise<void> {
+    const select = document.querySelector<HTMLSelectElement>('#' + id)!;
+    select.value = value;
+    select.dispatchEvent(new Event('change', {bubbles: true}));
+    await flushPromises();
+}
+
+/** Inspect the review status rather than a move/swap operation badge. */
+function reviewStatus(root: ReturnType<typeof mount>, id: string): string {
+    return root.get(`[data-rec-id="${id}"]`).findAll('.badge').at(-1)!.text();
+}
+
+/** Stage through the actual editor so its SWAP/single distinction reaches the
+ * production draft owner, including the real server preview boundary. */
+async function stageMove(root: ReturnType<typeof mount>, profile: string, counterpart?: string,
+                         sourceSlot = slotId, targetSlot = otherId): Promise<void> {
+    await root.get(`[data-add-recommendation][data-slot-id="${targetSlot}"]`).trigger('click');
+    await flushPromises();
+    await selectDialogValue('addRecommendationOperation', counterpart ? 'SWAP' : 'REASSIGN');
+    await selectDialogValue('addRecommendationParticipant', 'profile:' + profile);
+    await selectDialogValue('addRecommendationSource', sourceSlot);
+    if (counterpart) await selectDialogValue('addRecommendationSwapParticipant', counterpart);
+    document.querySelector<HTMLButtonElement>('#addRecommendationConfirm')!.click();
+    await flushPromises();
 }
 
 describe('Activity recommendation review production frontend', () => {
@@ -407,6 +458,230 @@ describe('Activity recommendation review production frontend', () => {
         expect(applications).toEqual([{...previews.at(-1), overlapConfirmation: 'reviewed-overlap'}]);
         expect(root.text()).toContain('Applied 1; skipped 0');
         expect(root.text()).not.toMatch(/\bSaved\b/u);
+    });
+
+    it('keeps two staged swaps independent across status, removal and serialization', async () => {
+        const saved = reciprocalWorkspace();
+        saved.recommendations = [];
+        const previews: components['schemas']['ActivityRecommendationReview'][] = [];
+        const {root} = await mounted(async request => {
+            if (path(request).endsWith('/warnings')) {
+                previews.push(await request.json());
+                return json({warnings: []});
+            }
+            return json(saved);
+        });
+        await stageMove(root, profileId, otherId);
+        await stageMove(root, nextId, jobId);
+        expect(root.findAll('[data-rec-id]')).toHaveLength(4);
+        const third = root.get(`[data-rec-id][data-profile-id="${nextId}"]`);
+        await third.get('button[title="Revert to Pending"]').trigger('click');
+        await flushPromises();
+        for (const person of [profileId, otherId]) expect(root.get(`[data-rec-id][data-profile-id="${person}"]`).text()).toContain('Approved');
+        for (const person of [nextId, jobId]) expect(root.get(`[data-rec-id][data-profile-id="${person}"]`).text()).toContain('Pending');
+        expect(document.querySelector('#recommendationPairDialog')).toBeNull();
+        await third.get('button[title="Remove manual operation"]').trigger('click');
+        await flushPromises();
+        expect(root.findAll('[data-rec-id]').map(row => row.attributes('data-profile-id')).sort()).toEqual([profileId, otherId].sort());
+        expect(JSON.stringify(previews)).not.toMatch(/swapGroup|rowIdentity|rowVersion|"key"/u);
+        expect(previews.at(-1)?.recommendations.map(row => row.profileId).sort()).toEqual([profileId, otherId].sort());
+    });
+
+    it('requires an explicit counterpart before saved ambiguous status/removal and keeps cancellation unchanged', async () => {
+        const saved = reciprocalWorkspace();
+        const previews: components['schemas']['ActivityRecommendationReview'][] = [];
+        const {root, context, requests} = await mounted(async request => {
+            if (path(request).endsWith('/warnings')) {
+                previews.push(await request.json());
+                return json({warnings: []});
+            }
+            return json(saved);
+        });
+        const third = root.get(`[data-rec-id="${nextId}"]`);
+        const original = root.findAll('[data-rec-id]').map(row => row.text());
+        await third.get('button[title="Approve"]').trigger('click');
+        await flushPromises();
+        expect(document.querySelector('#recommendationPairDialog')?.textContent).toContain('Choose swap counterpart');
+        expect(root.findAll('[data-rec-id]').map(row => row.text())).toEqual(original);
+        expect(previews).toHaveLength(0);
+        document.querySelector<HTMLButtonElement>('#recommendationPairCancel')!.click();
+        await flushPromises();
+        expect(root.findAll('[data-rec-id]').map(row => row.text())).toEqual(original);
+
+        // Renaming/relocalizing a fresh saved read retains the pending chooser,
+        // its selected machine identity and the row's real DOM identity.
+        await third.get('button[title="Approve"]').trigger('click');
+        await flushPromises();
+        const select = document.querySelector<HTMLSelectElement>('#recommendationPairCounterpart')!;
+        const selected = Array.from(select.options).find(option => option.textContent?.startsWith('Dana'))!.value;
+        await selectDialogValue('recommendationPairCounterpart', selected);
+        saved.recommendations[3]!.profile.name = 'Dana renamed';
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.recommendations(session.context, planId)});
+        await flushPromises();
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(document.querySelector('#recommendationPairCounterpart')).toBe(select);
+        expect(select.value).toBe(selected);
+        expect(select.textContent).toContain('Dana renamed');
+        expect(root.get(`[data-rec-id="${nextId}"]`).element).toBe(third.element);
+        document.querySelector<HTMLButtonElement>('#recommendationPairConfirm')!.click();
+        await flushPromises();
+        expect(reviewStatus(root, recommendationId)).toBe('Ausstehend');
+        expect(reviewStatus(root, jobId)).toBe('Ausstehend');
+        expect(reviewStatus(root, nextId)).toBe('Genehmigt');
+        expect(reviewStatus(root, '88888888-8888-4888-8888-888888888888')).toBe('Genehmigt');
+
+        // Dirty reconciliation preserves the known pair through another fresh
+        // server receipt; removal now acts once on exactly that chosen pair.
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.recommendations(session.context, planId)});
+        await flushPromises();
+        await root.get(`[data-rec-id="${nextId}"] button[title="Manuellen Vorgang entfernen"]`).trigger('click');
+        await flushPromises();
+        expect(root.findAll('[data-rec-id]').map(row => row.attributes('data-rec-id')).sort()).toEqual([recommendationId, jobId].sort());
+        expect(document.querySelector('#recommendationPairDialog')).toBeNull();
+        expect(JSON.stringify(previews)).not.toMatch(/swapGroup|rowIdentity|rowVersion|"key"/u);
+        expect(requests.some(request => path(request).endsWith('/apply'))).toBe(false);
+    });
+
+    it('keeps separately staged opposite moves independent through their real review controls', async () => {
+        const saved = reciprocalWorkspace();
+        saved.recommendations = [];
+        const {root} = await mounted(async request => path(request).endsWith('/warnings') ? json({warnings: []}) : json(saved));
+        await stageMove(root, profileId);
+        await stageMove(root, otherId, undefined, otherId, slotId);
+        const first = root.get(`[data-rec-id][data-profile-id="${profileId}"]`);
+        const second = root.get(`[data-rec-id][data-profile-id="${otherId}"]`);
+        expect(first.text()).toContain('REASSIGNMENT');
+        expect(second.text()).toContain('REASSIGNMENT');
+        await first.get('button[title="Revert to Pending"]').trigger('click');
+        await flushPromises();
+        expect(first.text()).toContain('Pending');
+        expect(second.text()).toContain('Approved');
+        expect(document.querySelector('#recommendationPairDialog')).toBeNull();
+        await first.get('button[title="Remove manual operation"]').trigger('click');
+        await flushPromises();
+        expect(root.findAll('[data-rec-id]').map(row => row.attributes('data-profile-id'))).toEqual([otherId]);
+    });
+
+    it('rejects a stale chosen saved leg without changing any review status', async () => {
+        const saved = reciprocalWorkspace();
+        const {root, context, requests} = await mounted(async request => path(request).endsWith('/warnings') ? json({warnings: []}) : json(saved));
+        await root.get(`[data-rec-id="${nextId}"] button[title="Approve"]`).trigger('click');
+        await flushPromises();
+        const select = document.querySelector<HTMLSelectElement>('#recommendationPairCounterpart')!;
+        const selected = Array.from(select.options).find(option => option.textContent?.startsWith('Dana'))!.value;
+        await selectDialogValue('recommendationPairCounterpart', selected);
+        saved.recommendations[3]!.status = 'REJECTED';
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.recommendations(session.context, planId)});
+        await flushPromises();
+        expect(select.value).toBe('');
+        expect(document.querySelector<HTMLButtonElement>('#recommendationPairConfirm')!.disabled).toBe(true);
+        expect(reviewStatus(root, nextId)).toBe('Pending');
+        expect(reviewStatus(root, '88888888-8888-4888-8888-888888888888')).toBe('Rejected');
+        document.querySelector<HTMLButtonElement>('#recommendationPairConfirm')!.click();
+        await flushPromises();
+        expect(reviewStatus(root, nextId)).toBe('Pending');
+        expect(requests.some(request => path(request).endsWith('/warnings') || path(request).endsWith('/apply'))).toBe(false);
+    });
+
+    it('retires an unresolved chooser when its admitted permission retires', async () => {
+        const saved = reciprocalWorkspace();
+        let denied = false;
+        const {root, context, requests} = await mounted(async request => {
+            if (denied && request.method === 'GET') return new Response(JSON.stringify({type: 'about:blank', title: 'Forbidden', status: 403,
+                detail: 'Access denied.', requestId: 'pair-grant-revoked', code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}}),
+            {status: 403, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+            return json(saved);
+        });
+        await root.get(`[data-rec-id="${nextId}"] button[title="Approve"]`).trigger('click');
+        await flushPromises();
+        denied = true;
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.recommendations(session.context, planId)});
+        await flushPromises();
+        expect(document.querySelector('#recommendationPairDialog')).toBeNull();
+        expect(root.find('[data-rec-id]').exists()).toBe(false);
+        expect(requests.some(request => path(request).endsWith('/warnings') || path(request).endsWith('/apply'))).toBe(false);
+        expect(context.queryClient.getQueryData(activityKeys.recommendations(session.context, planId))).toBeUndefined();
+    });
+
+    it.each(['status', 'operation', 'removed'] as const)('retires pending intent when its saved row is %s', async change => {
+        const saved = reciprocalWorkspace();
+        const {root, context, requests} = await mounted(async () => json(saved));
+        await root.get(`[data-rec-id="${nextId}"] button[title="Approve"]`).trigger('click');
+        await flushPromises();
+        if (change === 'status') saved.recommendations[2]!.status = 'REJECTED';
+        else if (change === 'operation') {
+            saved.recommendations[2]!.operation = 'ASSIGN';
+            saved.recommendations[2]!.sourceItem = null;
+        } else saved.recommendations.splice(2, 1);
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.recommendations(session.context, planId)});
+        await flushPromises();
+        expect(document.querySelector('#recommendationPairDialog')).toBeNull();
+        expect(reviewStatus(root, recommendationId)).toBe('Pending');
+        expect(reviewStatus(root, jobId)).toBe('Pending');
+        expect(reviewStatus(root, '88888888-8888-4888-8888-888888888888')).toBe('Pending');
+        expect(requests.some(request => path(request).endsWith('/warnings') || path(request).endsWith('/apply'))).toBe(false);
+    });
+
+    it('releases a pending counterpart choice through the real actor bootstrap boundary', async () => {
+        const saved = reciprocalWorkspace();
+        const otherSession = {...session, context: 'another-activity-actor-context', csrfToken: 'another-activity-actor-csrf'};
+        let switched = false;
+        const {root, context, requests} = await mounted(async request => {
+            if (path(request).endsWith('/session')) switched = true;
+            // Post-switch reads belong to the new actor too. An old response
+            // header would correctly trigger another identity-recovery cycle.
+            return new Response(JSON.stringify(path(request).endsWith('/session') ? otherSession : saved), {status: 200,
+                headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': switched ? otherSession.context : session.context}});
+        });
+        await root.get(`[data-rec-id="${nextId}"] button[title="Approve"]`).trigger('click');
+        await flushPromises();
+        expect(document.querySelector('#recommendationPairDialog')).not.toBeNull();
+        await context.refreshSession(true);
+        await flushPromises();
+        expect(context.session.value?.context).toBe(otherSession.context);
+        expect(document.querySelector('#recommendationPairDialog')).toBeNull();
+        expect(requests.some(request => path(request).endsWith('/warnings') || path(request).endsWith('/apply'))).toBe(false);
+    });
+
+    it('preserves explicit single moves and known pairs through fresh operation identities', () => {
+        const saved = reciprocalWorkspace();
+        const previous: ActivityRecommendationDraftRow[] = saved.recommendations.map((value, index) => ({key: String(index), value}));
+        pairRecommendationRows(previous[0]!, previous[1]!);
+        pairRecommendationRows(previous[2]!, previous[3]!);
+        let key = 10;
+        function nextKey(): string { return String(++key); }
+        const renamed = saved.recommendations.map(value => ({...value, profile: {...value.profile, name: 'Renamed'}}));
+        const refreshed = reconcileRecommendationRows(renamed, previous, nextKey);
+        expect(recommendationPartners(refreshed, refreshed[2]!).map(row => row.value.profile.id)).toEqual([nextId, jobId]);
+        expect(refreshed.map(row => row.key)).toEqual(previous.map(row => row.key));
+        expect(recommendationIdentity(renamed[0]!)).toBe(recommendationIdentity(previous[0]!.value));
+
+        // A real save first gives local legs server IDs. Operation identity
+        // retains the known pair despite that one-way identity transition.
+        const staged: ActivityRecommendationDraftRow[] = previous.map(row => ({key: row.key,
+            value: {...row.value, id: undefined}, swapGroup: row.swapGroup}));
+        const persisted = reconcileRecommendationRows(renamed, staged, nextKey);
+        expect(recommendationPartners(persisted, persisted[2]!).map(row => row.value.profile.id)).toEqual([nextId, jobId]);
+
+        // A missing known leg cannot turn the survivor into another swap merely
+        // because a new reverse move would be the only available candidate.
+        const replacement = {...renamed[1]!, id: '99999999-9999-4999-8999-999999999999', profile: {id: slotId, name: 'Replacement'}};
+        const replaced = reconcileRecommendationRows([renamed[0]!, replacement], refreshed, nextKey);
+        expect(replaced[0]!.swapGroup).toBeNull();
+        expect(recommendationPartners(replaced, replaced[0]!)).toEqual([replaced[0]]);
+        revalidateRecommendationGroups(refreshed, [renamed[0]!, replacement, renamed[2]!, renamed[3]!]);
+        expect(refreshed[0]!.swapGroup).toBeNull();
+        expect(refreshed[1]!.swapGroup).toBeNull();
+        expect(recommendationPartners(refreshed, refreshed[2]!)).toHaveLength(2);
+
+        const singles: ActivityRecommendationDraftRow[] = saved.recommendations.slice(0, 2).map((value, index) => ({key: String(index), value, swapGroup: null}));
+        expect(recommendationRelationship(singles, singles[0]!).kind).toBe('single');
+        expect(recommendationPartners(singles, singles[1]!)).toEqual([singles[1]]);
+        const restored = singles.map(row => ({key: row.key, value: row.value}));
+        expect(recommendationRelationship(restored, restored[0]!).kind).toBe('paired');
+        const ambiguous = previous.map(row => ({key: row.key, value: row.value}));
+        expect(recommendationRelationship(ambiguous, ambiguous[0]!).kind).toBe('ambiguous');
     });
 
     it('constructs reciprocal roleless swaps and preserves manual/generated rejection provenance', () => {

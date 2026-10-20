@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: direct R2-R10 decisions and current implementation review separated from prior full-pilot evidence; original baseline/history, shared ownership and IMP-030/IMP-080 cutover conditions retained; renewed execution remains separately scoped
+verification-scope: October 20 Activity tab/pairing correction and backend inference qualified separately from earlier R2-R10 implementation evidence; original baseline/history, shared ownership and cutover conditions retained; renewed execution remains separately scoped
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,43 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Activity correction follow-up (2026-10-20)
+
+The subsequent full review qualifies the earlier P0–P6 completion receipts with two frontend gaps: Activity can
+retain the Participants selection after its last displayed participant disappears, and recommendation review can
+select the wrong reciprocal move when several manual operations share the same two slots. The first gap is a page
+selection defect; the second is reproduced against the existing frontend draft helper, not a demonstrated backend
+application failure.
+
+The maintainer explicitly instructs the correction plan and approves this review's R2 frontend pairing change,
+including an explicit counterpart choice for ambiguous saved rows. The
+[dated amendment](FRONTEND_FOUNDATION_DESIGN.md#approved-activity-review-pairing-and-available-tab-correction-2026-10-20)
+preserves that scope and the original choices. Existing Activity page/draft/dialog owners implement the correction;
+native sources and shared server operations remain outside it. `IMP-083` separately records the analogous server
+blocking heuristic as a source-based P2 finding, with no claimed backend reproduction or authorized repair.
+
+The existing Activity page now reconciles selection against its admitted tabs, preserving valid selections and
+drafts while returning to Schedule when the selected panel disappears. Shared recommendation draft logic supplies
+pair labels, review changes and removal; local pair identity stays out of server requests. Ambiguous saved moves
+use the existing dialog and form owners for explicit counterpart choice, cancellation and stale-context checks.
+Native frontend, backend business logic, contracts and schema remain unchanged.
+
+Final build, client/SSR typechecks and test compiler pass. The quick selection passes all 1,797 tests across 81
+files, including 27 Activity and 29 recommendation cases. On Node.js 24.15 and isolated disposable MariaDB 10.11.14
+with strict SQL mode, the complete built frontend selection passes 183 of 184 cases with one configuration skip;
+that disabled-authentication case separately passes 1/1 with `LOCAL_LOGIN_ENABLED=false`. All five new browser
+journeys pass in the full selection. Scoped engineering review reports zero findings across 418 source files,
+11 DBAL files and the four changed executable files' 14 nontrivial operations; whitespace checks pass.
+
+Root and independent review individually inspected four chooser originals across the focused and full runs,
+covering two captured states at English 1280px and German 390px: labels and actions fit without a confirmed visual
+defect. These closed-select dialog captures do not certify the option popup, every viewport or every page state;
+the approved new chooser has no native screenshot counterpart.
+Browser assertions separately cover the new workflows. Current documentation has no broken link, metadata, path or
+classification finding; its existing unregistered fingerprint remains advisory. Earlier runs and original-image
+inventories below retain their own source scope. No task-owned frontend correction is deferred, and these checks
+do not close the separately excluded backend finding or authorize cutover or publication.
 
 ## Current approved interface implementation review (2026-10-20)
 

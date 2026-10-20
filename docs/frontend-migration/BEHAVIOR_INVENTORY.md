@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: 2026-10-11 retained packing assertion references reconciled after test consolidation; original 2026-10-04 source-reviewed behavior baseline and deliberate exceptions remain unchanged; does not claim a migrated frontend, executed tests, or browser validation
+verification-scope: Original source-reviewed behavior baseline retained; October 20 approved Vue tab-availability and swap-pairing clarification added separately; source mappings do not establish executed acceptance
 source-anchors: src/views/; src/public/js/; src/routes/; src/controller/; src/modules/renderer.ts; src/modules/invoice/; src/modules/activity/; tests/frontend/; tests/integration/; tests/e2e/; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/PERMISSIONS_REFERENCE.md; docs/TESTING_GUIDE.md; docs/user-guide/; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md
 next-review: frontend-route-cutover-or-user-visible-contract-change
 -->
@@ -226,6 +226,14 @@ Related tests: [activity persistence](../../tests/integration/activity-workflows
 | ACT-12 | Approve, reject, revert or remove a suggestion; stage assignment, unassignment, reassignment or swap. | Manual draft operations and generated pending rows remain distinguishable. Reassignment/swap sources stay in the same plan without named roles; swaps retain both legs. Row warnings remain visible while editing. | J |
 | ACT-13 | Save changes and apply the reviewed batch. | Server rechecks the exact draft, overlap acknowledgement, availability and sources. Preserve Applied/skipped counts, retained warnings and review history. Required-over-Free exceptions do not silently remove the other plan's assignment. | J + R |
 | ACT-14 | Relink/unlink the plan's event without losing unrelated work. | Context changes invalidate incompatible generated pending work/jobs while preserving committed assignments, manual drafts, overrides and review history according to existing controller/service rules. | J + R |
+
+**Approved Vue clarification (2026-10-20):** ACT-02/07 keep the selected tab within the currently admitted panels;
+removal of Participants or Rules selects Schedule without reopening the removed panel when data returns. ACT-12's
+new local swaps retain their explicit pair rather than matching a different participant by slot direction. Ambiguous
+saved reciprocal rows require an explicit counterpart before a paired review action changes either row. These are
+the bounded [approved frontend corrections](FRONTEND_FOUNDATION_DESIGN.md#approved-activity-review-pairing-and-available-tab-correction-2026-10-20),
+not changes to the original native inventory or server application guarantees. `IMP-083` separately owns the
+source-based backend blocking concern. Execution and current source adoption belong to the paired review.
 
 ## Invoice pools, proofs and settlements
 
