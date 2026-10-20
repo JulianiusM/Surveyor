@@ -12,6 +12,7 @@ afterEach(async () => {
     for (const cleanup of cleanups.splice(0)) await cleanup();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     document.body.innerHTML = '';
 });
 
@@ -22,6 +23,28 @@ async function enterDates(wrapper: Awaited<ReturnType<typeof mountFrontendEvent>
 }
 
 describe('Event participant registration', () => {
+    it('retranslates saved attendance without replacing the independent date draft', async () => {
+        vi.stubEnv('TZ', 'America/Los_Angeles');
+        const event = createFrontendEventView({registration: {id: '17', arrivalDate: '2027-06-01',
+            departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''}});
+        const mounted = await mountFrontendEvent(EventRegistration, async () => json({changed: true}),
+            {event, refresh: async () => {}});
+        cleanups.push(mounted.dispose);
+        const departure = mounted.wrapper.get<HTMLInputElement>('[name="departureDate"]');
+        await departure.setValue('2027-06-02');
+        expect(mounted.wrapper.get('#arrival').text()).toBe('Tuesday, June 1, 2027');
+        expect(mounted.wrapper.get('#departure').text()).toBe('Thursday, June 3, 2027');
+
+        mounted.context.locale.value = 'de';
+        await flushPromises();
+        expect(mounted.wrapper.get('#arrival').text()).toBe('Dienstag, 1. Juni 2027');
+        expect(mounted.wrapper.get('#departure').text()).toBe('Donnerstag, 3. Juni 2027');
+        expect(mounted.wrapper.get('[name="departureDate"]').element).toBe(departure.element);
+        expect(departure.element.value).toBe('2027-06-02');
+        expect(event.registration?.departureDate).toBe('2027-06-03');
+        expect(mounted.request).not.toHaveBeenCalled();
+    });
+
     it.each([false, true])('preserves the native dietary-requirements icon for registered=%s', async registered => {
         const event = createFrontendEventView({registration: registered ? {id: '17', arrivalDate: '2027-06-01',
             departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''} : null});

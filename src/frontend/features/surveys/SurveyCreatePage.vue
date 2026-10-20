@@ -131,7 +131,7 @@ function collectCreation() {
 </script>
 
 <template>
-    <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" :inline="false" />
+    <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" />
     <PageMessage v-if="entry.outcome.value?.kind === 'denied'" kind="error" :message="messages.t('common.notAllowed')"
         :renewal="entry.outcome.value" />
     <section v-else class="card bg-dark text-white mb-3">

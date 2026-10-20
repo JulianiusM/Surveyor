@@ -119,7 +119,7 @@ async function archive(card: Card, restore: boolean): Promise<void> {
     const lifecycle = createChildLifecycle(card);
     if (!lifecycle) return;
     // The shared owner retains the native scheduled-restore warning for this card.
-    await lifecycle.archive(card.id, restore, card.inheritedArchived, undefined,
+    await lifecycle.archive(card.id, restore, card.inheritedArchived,
         restore && card.automation ? 'event.organizer.confirmRestoreScheduled' : undefined);
 }
 
@@ -157,7 +157,7 @@ function createChildLifecycle(card: Card) {
 /** The Event organizer owns deletion through its parent-scoped child operation.
  * Shared removal approves sibling drafts before writing and retains the existing
  * dashboard destination as client navigation after its confirmed JSON receipt. */
-async function deleteChild(card: Card, initiator: Event): Promise<void> {
+async function deleteChild(card: Card): Promise<void> {
     if (!available.isAvailable()) return;
     const type = childType(card);
     if (!type) return;
@@ -166,7 +166,7 @@ async function deleteChild(card: Card, initiator: Event): Promise<void> {
     const childId = card.id;
     const success = type === 'packing' ? 'packing.deleted'
         : type === 'activity' ? 'event.organizer.activityDeleted' : 'event.organizer.driversDeleted';
-    await removal.remove({operation: removeChild, confirmation: 'event.organizer.deleteChildConfirm', success, initiator});
+    await removal.remove({operation: removeChild, confirmation: 'event.organizer.deleteChildConfirm', success});
 
     function removeChild(scope: PilotRequestScope) {
         return api.deleteChild(eventId, type!, childId, scope, admin);
@@ -182,12 +182,11 @@ async function refresh(): Promise<void> {
     <!-- The same admitted related projection has native participant cards or
          organizer list groups. Local filtering never changes membership/authority. -->
     <section data-entity-section>
-        <div data-command-feedback>
-            <CommandFeedback :feedback="command.feedback" :target="null" :part="command.uncertain.value ? 'error' : 'all'" />
+        <div>
+            <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
             <CommandFeedback
                 :feedback="command.feedback"
                 part="uncertain"
-                :target="null"
                 :action="{state: refreshAction, label: messages.t('common.refresh')}"
                 @action="refresh"
             />
@@ -288,7 +287,7 @@ async function refresh(): Promise<void> {
                                                 variant="outline-danger"
                                                 :state="available"
                                                 :disabled="available.disabled.value"
-                                                @click="deleteChild(card, $event)"
+                                                @click="deleteChild(card)"
                                             >
                                                 <i class="bi bi-trash me-1" aria-hidden="true"></i>{{ messages.t('overview.delete') }}
                                             </ActionButton>

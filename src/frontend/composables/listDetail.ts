@@ -150,14 +150,13 @@ export function useListCommands(source: FrontendListCommandSource, draft: PilotC
         if (reconciled && !source.error() && window.confirm(context.messages.value.t(confirmation))) command.acknowledge();
     }
 
-    /** Preserve the native list editor's local denial without admitting a write.
+    /** Explain the list editor's local denial without admitting a write.
      * A visible title/capacity affordance is distinct from current write authority;
-     * the shared command feedback owner retains the initiating section and expiry. */
-    function denyInlineEdit(initiator?: Event): void {
+     * shared feedback retains the receipt and expiry without moving the viewport. */
+    function denyInlineEdit(): void {
         // No operation, status lease or HTTP request is created for this local
         // guard. Server authorization still protects every actual field save.
-        command.captureFeedback(initiator);
-        command.setError('packing.inlineMetadataDenied', 'transient', 'inline');
+        command.setError('packing.inlineMetadataDenied', 'transient');
     }
 
     return {command, blocked, readAction, retryAt, refresh, retireSettingsAccess, reviewUnknownCreation, denyInlineEdit};

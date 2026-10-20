@@ -13,12 +13,11 @@ const {messages} = usePilot();
 </script>
 
 <template>
-    <!-- Retain the native section/feedback host and file node while background reads run. -->
+    <!-- Background reads retain the selected file node and its reviewed baseline. -->
     <section class="mb-4" data-entity-section="image" :aria-busy="reading">
         <details class="entity-property-group" :open="expanded">
             <summary class="fw-semibold">{{ labels.title }}</summary>
             <div class="pt-3">
-                <div data-command-feedback aria-live="polite"></div>
                 <FileField :id="inputId" :label="labels.choose" :selected-file="selectedFile" :disabled="disabled"
                     :dark="false" @choose="emit('choose', $event)" />
                 <p class="form-text">{{ labels.hint }}</p>

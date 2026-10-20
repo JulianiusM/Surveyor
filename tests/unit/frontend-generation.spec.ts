@@ -616,6 +616,32 @@ describe('contract and catalog generation', () => {
         }
     }, 20_000);
 
+    it('validates authored node names in every translated and plural variant', async () => {
+        const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-rich-'));
+        try {
+            const source = path.join(temporary, 'locales');
+            const destination = path.join(temporary, 'output');
+            await fs.cp(path.join(root, 'src/locales'), source, {recursive: true});
+            generate('generate-locales.mjs', ['--source', source, '--output-root', destination]);
+            const manifest = JSON.parse(await fs.readFile(path.join(destination, 'src/modules/localization/generated/manifest.json'), 'utf8'));
+            expect(manifest.messages['activity.progressFree']).toMatchObject({nodes: ['assigned'], plural: true});
+            const germanPath = path.join(source, 'de.json');
+            const original = await fs.readFile(germanPath, 'utf8');
+            for (const text of ['Ohne Platzhalter', 'Mit {unknown}', 'Mit {add} und {add}', '<b>{add}</b>']) {
+                const german = JSON.parse(original);
+                german.resources.ui.activity.recommendations.scheduleHint = text;
+                await fs.writeFile(germanPath, JSON.stringify(german));
+                expect(() => generate('generate-locales.mjs', ['--source', source, '--output-root', destination])).toThrow();
+            }
+            // A single broken plural variant must fail even if the other
+            // variant still contains the complete declared node vocabulary.
+            const german = JSON.parse(original);
+            german.resources.ui.activity.progressFree_one = 'Ein Einsatz ohne Knoten';
+            await fs.writeFile(germanPath, JSON.stringify(german));
+            expect(() => generate('generate-locales.mjs', ['--source', source, '--output-root', destination])).toThrow('Authored node drift');
+        } finally { await removeTemporary(temporary); }
+    }, 20_000);
+
     it('compiles real consumers and required negative assertions with the installed TypeScript', () => {
         execFileSync(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--ignoreConfig',
             '--noEmit', '--strict', '--skipLibCheck', '--target', 'ES2024', '--module', 'NodeNext',

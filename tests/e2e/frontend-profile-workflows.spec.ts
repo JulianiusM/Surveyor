@@ -1,6 +1,6 @@
 import {test, expect, type Browser, type Page} from '@playwright/test';
 import {writeFile} from 'node:fs/promises';
-import {expectVisiblePresentation, loginForE2E, readProfileWorkflowFixtureForE2E,
+import {expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, readProfileWorkflowFixtureForE2E,
     readVisiblePresentation, withProfileWorkflowFixtureForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 
@@ -32,7 +32,7 @@ async function waitForWorkflowFonts(): Promise<void> { await document.fonts.read
  * another language must neither replace its DOM receipt nor replay the completed
  * transfer/deactivation/deletion operation. Timer boundaries have mounted coverage. */
 async function expectTranslatedCompletion(page: Page, english: string, german: string, commandPath: string): Promise<void> {
-    const notice = page.locator('.pilot-page-notices > .alert-success').filter({hasText: english});
+    const notice = page.locator('[data-pilot-notices] .alert-success').filter({hasText: english});
     await expect(notice).toHaveText(english);
     await notice.evaluate(element => { element.dataset.e2eCompletion = 'confirmed'; });
     const repeatedCommands: string[] = [];
@@ -340,19 +340,33 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
                 expect(await page.locator('main h1').innerText()).toBe(nativeHeading);
                 expect(browserErrors).toEqual([]);
                 expect(pilot.scrollWidth).toBeLessThanOrEqual(Math.max(viewport.width, native.scrollWidth));
-                expect(pilot.scrollY).toBe(native.scrollY);
                 expect(pilot.submitColors).toEqual(native.submitColors);
                 await expect(page.locator('footer')).toBeVisible();
-                expect(pilot.footer).toEqual(native.footer);
+                await expectUsableFrontendLayout(page.locator('main > .card'));
+                await expectUsableFrontendLayout(page.locator('footer'));
                 for (const control of ['heading', 'field', 'submit', 'token'] as const) {
                     expect(!!pilot[control], control).toBe(!!native[control]);
-                    if (pilot[control] && native[control]) {
-                        for (const dimension of ['x', 'y', 'width', 'height'] as const) {
-                            expect(Math.abs(pilot[control]![dimension] - native[control]![dimension]),
-                                control + ' ' + dimension).toBeLessThanOrEqual(1);
-                        }
+                    if (pilot[control]) {
+                        expect(pilot[control]!.width, control).toBeGreaterThan(0);
+                        expect(pilot[control]!.height, control).toBeGreaterThan(0);
                     }
                 }
+                // Refresh re-admits current authority through reads. It must not
+                // issue another bearer or repeat the private preview operation.
+                const originalDocument = await page.evaluate(() => performance.timeOrigin);
+                const retainedToken = presentation.name === 'token' ? await page.locator('main h3').innerText() : undefined;
+                const writes: string[] = [];
+                page.on('request', function observeRefreshWrite(request) {
+                    if (request.method() !== 'GET') writes.push(new URL(request.url()).pathname);
+                });
+                const refreshed = page.waitForResponse(response => response.request().method() === 'GET'
+                    && new URL(response.url()).pathname === '/api/v1/profiles/workflow-entry');
+                await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+                expect((await refreshed).status()).toBe(200);
+                if (token) await expect(page.locator('#token')).toHaveValue(token);
+                if (retainedToken !== undefined) await expect(page.locator('main h3')).toHaveText(retainedToken);
+                expect(await page.evaluate(() => performance.timeOrigin)).toBe(originalDocument);
+                expect(writes).toEqual([]);
                 const evidence = testInfo.outputPath('presentation.json');
                 await writeFile(evidence, JSON.stringify({scenario: presentation.name, viewport, native, pilot,
                     nativeCard, pilotCard, nativeFooter, pilotFooter, browserErrors}, null, 2));

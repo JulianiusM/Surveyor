@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-19
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: existing automatic document reload guidance reconciled with implemented Overview, Packing/Drivers/Survey/Activity detail and Event detail/admin routes; production reference unchanged; no runtime or cutover execution claimed
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
+verification-scope: existing automatic document reload guidance retained; directly approved R8 optional participant-payer and separate recorder wording reconciled with the shared invoice owner; production reference unchanged; no runtime or cutover execution claimed
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/UPGRADING.md; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/calculation.ts; src/frontend/; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -96,3 +96,14 @@ or upload merely because its response was lost. Reinstall the coherent release w
 ## Decommissioning
 
 <!-- /delta:amendment-07 -->
+
+## Invoice pool factors, rebates, and recalculation — amendment-08
+
+<!-- delta:amendment-08 -->
+It adds the recorder profile and name snapshot to invoice records. Organizer expenses can omit proof and enter
+accepted shared costs immediately. They may optionally identify an eligible participant who paid; that participant's
+invoice history and the pool's invoice-credit setting apply. Without participant attribution, the expense creates no
+personal invoice credit. Recorder attribution remains separate and does not itself grant personal invoice credit.
+An authorized organizer does not need to attend the event to record one. Adding an expense after
+
+<!-- /delta:amendment-08 -->

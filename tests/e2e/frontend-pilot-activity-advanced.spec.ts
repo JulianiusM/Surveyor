@@ -1,5 +1,6 @@
-import {expect, test} from '@playwright/test';
-import {closeModalForE2E, expectVisiblePresentation, openModalForE2E,
+import {expect, test, type Locator} from '@playwright/test';
+import {createTranslator} from '../../src/modules/localization/translator';
+import {closeModalForE2E, expectUsableFrontendLayout, expectVisiblePresentation, openModalForE2E,
     readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createActivityOverlapForE2E, expectActivityTabKeyboard, observeActivityCommand,
     readActivityForE2E} from '../keywords/frontendActivityE2EKeywords';
@@ -7,6 +8,22 @@ import {captureAdvancedActivityPresentation, createAdvancedActivityForE2E, openA
     readActivityRequirementsForE2E} from '../keywords/frontendActivityAdvancedE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
+
+/** Check a real control's visible hit target without dispatching its operation.
+ * Browser scrolling is allowed to reveal it; its center must remain unobscured. */
+async function expectReachableActivityControl(control: Locator): Promise<void> {
+    await expect(control).toBeVisible();
+    await control.scrollIntoViewIfNeeded();
+    await expect(control).toBeInViewport();
+    // Trial clicks run the browser's ordinary actionability and hit-target checks
+    // while leaving the current saved state and command count unchanged.
+    await control.click({trial: true});
+    expect(await control.evaluate(element => {
+        const bounds = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+        return !!hit && element.contains(hit);
+    })).toBe(true);
+}
 
 for (const width of [1280, 390]) {
     test(`compares saved Rules, coverage, recommendation review and manual moves at ${width}px`, async ({page}, info) => {
@@ -25,9 +42,9 @@ for (const width of [1280, 390]) {
         for (const pilot of [false, true]) {
             const prefix = pilot ? 'vue' : 'native';
             await openActivityRulesForE2E(page, plan, pilot);
-            // Entry maintenance must not manufacture a Saved receipt. A hidden
-            // inline receipt would steal tab focus and scroll on later disclosure.
-            if (pilot) await expect(page.locator('#recommendationPanel').getByRole('alert').filter({hasText: 'Saved'})).toHaveCount(0);
+            // Entry maintenance reads saved recommendations. A read must not
+            // claim a new save through the common page notification owner.
+            if (pilot) await expect(page.getByRole('alert').filter({hasText: /^Saved$/u})).toHaveCount(0);
             await expectActivityTabKeyboard(page);
             await (pilot ? page.getByRole('tab', {name: 'Rules & auto-assign', exact: true})
                 : page.locator('[data-bs-target="#tab-rules"]')).click();
@@ -38,6 +55,10 @@ for (const width of [1280, 390]) {
                     'input:not([type="hidden"])', 'select', 'button', '.badge']);
             const coverage = await captureAdvancedActivityPresentation(page, info, `${prefix}-advanced-coverage`,
                 page.locator('#requirement-participant-status'), ['p', 'input', 'button', '.badge', '.participant-status-cell']);
+            // Protect this known warning's rendered readiness independently of
+            // the admitted recommendation row before preserving pixels and JSON.
+            await expect(page.locator('#recommendationScheduleView [data-rec-id]')
+                .getByText('This slot is on your arrival day.', {exact: true})).toBeVisible();
             const recommendations = await captureAdvancedActivityPresentation(page, info, `${prefix}-advanced-recommendations`,
                 page.locator('#recommendationPanel'), ['.card-header', 'h5', 'p', '.status-notice', 'small', '.badge', 'th', 'button',
                     '[data-slot-id]', '[data-rec-id]', '[data-recommendation-warnings]']);
@@ -52,6 +73,10 @@ for (const width of [1280, 390]) {
                 && new URL(response.url()).pathname.endsWith('/recommendations/warnings'));
             await modal.locator('#addRecommendationSource').selectOption(plan.view.slots[0]!.id);
             expect((await preview).status()).toBe(200);
+            // A real response and its visible warning are separate assertions
+            // in this capture contract; preserve both without a timing guess.
+            await expect(modal.locator('[data-add-warning]')
+                .getByText('This slot is on your arrival day.', {exact: true})).toBeVisible();
             const move = await captureAdvancedActivityPresentation(page, info, `${prefix}-advanced-move-dialog`,
                 pilot ? modal : modal.locator('.modal-content'), ['.modal-title', 'label', 'select', '[data-add-warning]', 'button']);
             if (pilot) await modal.locator('.modal-header .btn-close').click();
@@ -68,47 +93,105 @@ for (const width of [1280, 390]) {
     });
 }
 
-test('uses German advanced Activity labels and saved requirements in the built mobile application', async ({page}, info) => {
-    await page.setViewportSize({width: 390, height: 900});
-    const plan = await createAdvancedActivityForE2E(page.request);
-    const errors: string[] = [];
-    page.on('pageerror', error => errors.push(error.message));
-    await page.goto(`/frontend-pilot${plan.path}?locale=de`, {waitUntil: 'domcontentloaded'});
-    await waitForPilotHydration(page);
-    await page.getByRole('tab', {name: 'Regeln & automatische Zuweisung', exact: true}).click();
-    await expect(page.locator('[data-requirements-dirty]')).toHaveText('Gespeichert');
-    await expect(page.getByLabel('Zuweisungsmodus', {exact: true})).toHaveValue('REQUIRED');
-    await page.locator('#assignmentMode').selectOption('FREE');
-    await expect(page.getByRole('button', {name: 'Automatisch erstellen', exact: true})).toBeDisabled();
-    await page.locator('#assignmentMode').selectOption('REQUIRED');
-    await page.locator('#requiredShifts').fill('0');
-    for (const input of await page.locator('#stayRequirementList input[data-stay-days]').all()) await input.fill('0');
-    await observeActivityCommand(page, plan.id, '/requirements', 'PUT',
-        () => page.getByRole('button', {name: 'Einstellungen speichern', exact: true}).click());
-    expect((await readActivityRequirementsForE2E(page.request, plan.id)).plan.generalRequiredShifts).toBe(0);
-    await expect(page.locator('[data-requirements-dirty]')).toHaveText('Gespeichert');
-    // Inspect the saved form after its normal success notice expires, so a live
-    // sticky flash cannot hide the heading or make its clipped actions look valid.
-    const savedNotice = page.getByRole('alert').filter({hasText: 'Anforderungseinstellungen gespeichert'});
-    await expect(savedNotice).toBeVisible();
-    await expect(savedNotice).not.toBeVisible({timeout: 15000});
-    await captureAdvancedActivityPresentation(page, info, 'vue-german-mobile-rules', page.locator('#requirementPanel'),
-        ['label', 'input:not([type="hidden"])', 'select', 'button', '.badge']);
-    await captureAdvancedActivityPresentation(page, info, 'vue-german-mobile-recommendations', page.locator('#recommendationPanel'),
-        ['.card-header', 'h5', 'p', '.status-notice', 'small', '.badge', 'button']);
+for (const locale of ['en', 'de'] as const) {
+    for (const width of [320, 390, 1280]) {
+        test(`keeps ${locale} Rules headings, actions and manual controls usable at ${width}px`, async ({page}, info) => {
+            await page.setViewportSize({width, height: 900});
+            const messages = createTranslator(locale);
+            const plan = await createAdvancedActivityForE2E(page.request, {assigned: true, recommendation: true});
+            const errors: string[] = [];
+            page.on('pageerror', error => errors.push(error.message));
+            await page.goto(`/frontend-pilot${plan.path}?locale=${locale}`, {waitUntil: 'domcontentloaded'});
+            await waitForPilotHydration(page);
+            await page.getByRole('tab', {name: messages.t('activity.rules'), exact: true}).click();
+            await expect(page.locator('#stayRequirementList input[data-stay-days]')).toHaveCount(plan.days);
+            await expect(page.locator('[data-requirements-dirty]')).toHaveText(messages.t('activity.requirements.savedBadge'));
+            const requirements = page.locator('#requirementPanel');
+            const recommendations = page.locator('#recommendationPanel');
+            await expect(recommendations.locator('[data-rec-id]')).toHaveCount(1);
 
-    await page.locator(`.slot[data-slot-id="${plan.view.slots[0]!.id}"] [data-add-recommendation]`).click();
-    const modal = page.locator('#addRecommendationModal');
-    await expect(modal.getByRole('heading', {name: 'Vorschlag hinzufügen', exact: true})).toBeVisible();
-    await modal.locator('#addRecommendationParticipant').selectOption(`profile:${plan.owner.id}`);
-    await expect(modal.getByRole('button', {name: 'Als genehmigt vormerken', exact: true})).toBeEnabled();
-    await captureAdvancedActivityPresentation(page, info, 'vue-german-mobile-manual-dialog', modal,
-        ['.modal-title', 'label', 'select', '[data-add-warning]', 'button']);
-    page.once('dialog', dialog => dialog.accept());
-    await modal.locator('.modal-header .btn-close').click();
-    await expect(modal).not.toBeVisible();
-    expect(errors).toEqual([]);
-});
+            // Domain provenance stays machine data; both saved and unsaved
+            // coverage display its catalog label without translating profile names.
+            const coverage = page.locator('#requirement-participant-status');
+            await expect(coverage.locator(`[data-participant-key="profile:${plan.owner.id}"] .text-uppercase`))
+                .toHaveText(messages.t('activity.requirementSource.override'));
+            await expect(coverage.locator(`[data-participant-key="profile:${plan.other.id}"] .text-uppercase`))
+                .toHaveText(messages.t('activity.requirementSource.general'));
+            await expect(page.getByLabel(messages.t('activity.requirements.mode'), {exact: true})).toHaveValue('REQUIRED');
+            await expect(page.getByLabel(messages.t('activity.requirements.baseline'), {exact: true})).toHaveValue('2');
+            await expect(page.getByLabel(messages.t('activity.requirements.rounding'), {exact: true})).toHaveValue('CEIL');
+            await expect(page.getByLabel(messages.t('activity.requirements.deadline'), {exact: true})).toBeVisible();
+            // Visible field labels name the actual controls in every locale;
+            // copied native missing associations are not preservation contracts.
+            await expect(requirements.getByRole('spinbutton', {name: 'Kitchen lead', exact: true})).toHaveValue('0');
+            const savedOverride = requirements.locator('.override-row').first();
+            await expect(savedOverride.getByLabel(messages.t('activity.participant'), {exact: true}))
+                .toHaveValue('profile:' + plan.owner.id);
+            await expect(savedOverride.getByLabel(messages.t('activity.requirements.optionalRole'), {exact: true})).toHaveValue('');
+            await expect(savedOverride.getByLabel(messages.t('activity.requirements.requiredShifts'), {exact: true})).toHaveValue('1');
+            await expectUsableFrontendLayout(requirements);
+            await expectUsableFrontendLayout(coverage);
+            await expectReachableActivityControl(page.locator('[data-requirements-refresh]'));
+
+            // Exercise the compact override controls themselves, including their
+            // real remove action, rather than certifying an empty form's geometry.
+            await page.locator('[data-add-override]').click();
+            const addedOverride = page.locator('.override-row').last();
+            await addedOverride.locator('[data-override-target="participant"]').selectOption(`profile:${plan.other.id}`);
+            await addedOverride.locator('[data-override-target="required"]').fill('0');
+            await expectUsableFrontendLayout(addedOverride);
+            const remove = addedOverride.getByRole('button', {name: messages.t('activity.requirements.removeOverride'), exact: true});
+            await expectReachableActivityControl(remove);
+            await remove.click();
+            await expect(page.locator('.override-row')).toHaveCount(1);
+
+            await page.locator('#assignmentMode').selectOption('FREE');
+            await expect(page.getByRole('button', {name: messages.t('activity.recommendations.auto'), exact: true})).toBeDisabled();
+            await page.locator('#assignmentMode').selectOption('REQUIRED');
+            await page.locator('#requiredShifts').fill('0');
+            for (const input of await page.locator('#stayRequirementList input[data-stay-days]').all()) await input.fill('0');
+            const save = page.getByRole('button', {name: messages.t('activity.requirements.saveSettings'), exact: true});
+            await expectReachableActivityControl(save);
+            await observeActivityCommand(page, plan.id, '/requirements', 'PUT', () => save.click());
+            expect((await readActivityRequirementsForE2E(page.request, plan.id)).plan.generalRequiredShifts).toBe(0);
+            await expect(page.locator('[data-requirements-dirty]')).toHaveText(messages.t('activity.requirements.savedBadge'));
+            // Keep the existing receipt-expiry check. Its overlay must not conceal
+            // a clipped action or heading in the stable saved layout below.
+            const savedNotice = page.getByRole('alert').filter({hasText: messages.t('activity.requirements.saved')});
+            await expect(savedNotice).toBeVisible();
+            await expect(savedNotice).not.toBeVisible({timeout: 15000});
+            await expectUsableFrontendLayout(requirements);
+            await captureAdvancedActivityPresentation(page, info, `vue-${locale}-${width}-rules`, requirements,
+                ['.card-header', 'h6', 'small', 'label', 'input:not([type="hidden"])', 'select', 'button', '.badge']);
+
+            await expectUsableFrontendLayout(recommendations);
+            for (const action of ['refresh', 'auto', 'apply'])
+                await expectReachableActivityControl(page.locator(`[data-recommendations-${action}]`));
+            await captureAdvancedActivityPresentation(page, info, `vue-${locale}-${width}-recommendations`, recommendations,
+                ['.card-header', 'h5', 'p', '.status-notice', 'small', '.badge', 'button']);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width + 1);
+
+            const add = page.locator(`.slot[data-slot-id="${plan.view.slots[1]!.id}"] [data-add-recommendation]`);
+            await expectReachableActivityControl(add);
+            await add.click();
+            const modal = page.locator('#addRecommendationModal');
+            await expect(modal.getByRole('heading', {name: messages.t('activity.recommendations.add'), exact: true})).toBeVisible();
+            await modal.locator('#addRecommendationOperation').selectOption('REASSIGN');
+            await modal.locator('#addRecommendationParticipant').selectOption(`profile:${plan.owner.id}`);
+            await modal.locator('#addRecommendationSource').selectOption(plan.view.slots[0]!.id);
+            const stage = modal.getByRole('button', {name: messages.t('activity.recommendations.stage'), exact: true});
+            await expect(stage).toBeEnabled();
+            await expectUsableFrontendLayout(modal);
+            await expectReachableActivityControl(stage);
+            await captureAdvancedActivityPresentation(page, info, `vue-${locale}-${width}-manual-dialog`, modal,
+                ['.modal-title', 'label', 'select', '[data-add-warning]', 'button']);
+            page.once('dialog', dialog => dialog.accept());
+            await modal.locator('.modal-header .btn-close').click();
+            await expect(modal).not.toBeVisible();
+            expect(errors).toEqual([]);
+        });
+    }
+}
 
 test('saves zero requirements and overrides, recovers a dirty draft, and applies a generated exact batch in one document', async ({page}) => {
     test.setTimeout(60000);

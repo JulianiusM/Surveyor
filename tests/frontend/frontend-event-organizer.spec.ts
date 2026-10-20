@@ -37,6 +37,7 @@ afterEach(async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     document.body.innerHTML = '';
 });
 
@@ -177,15 +178,39 @@ describe('Event organizer workflows', () => {
     });
 
     it('localizes dietary badges and search while retaining date totals as civil dates', async () => {
+        vi.stubEnv('TZ', 'America/Los_Angeles');
         const {wrapper, context, request} = await mounted(EventParticipants, async () => json(roster),
             {startDate: '2027-06-01', endDate: '2027-06-03'});
         await wrapper.get('.accordion-button').trigger('click');
+        const row = wrapper.get('[data-registration-id="17"]');
+        expect(row.findAll('td')[2]!.text()).toBe('6/1/2027 → 6/3/2027');
         context.locale.value = 'de';
         await flushPromises();
+        expect(wrapper.get('[data-registration-id="17"]').element).toBe(row.element);
+        expect(row.findAll('td')[2]!.text()).toBe('1.6.2027 → 3.6.2027');
         expect(wrapper.get('.js-totals').text()).toContain('ALLERGIEN: 1');
         expect(wrapper.get('.js-date-totals').text()).toContain('2027-06-01: 1');
         await wrapper.get('.js-filter').setValue('Fleisch');
         expect(wrapper.findAll('tbody tr')).toHaveLength(1);
+        expect(request).toHaveBeenCalledOnce();
+    });
+
+    it('retranslates both registration-link timestamps without changing the token or issuing a command', async () => {
+        const expiring = {...link, expiresAt: '2026-11-01T01:30:00Z'};
+        const {wrapper, context, request} = await mounted(EventBypassLinks, async () => json({items: [expiring]}));
+        await wrapper.get('.accordion-button').trigger('click');
+        const row = wrapper.get(`[data-link-id="${linkId}"]`);
+        expect(row.findAll('td')[1]!.text()).toContain('10/16/2026');
+        expect(row.findAll('td')[2]!.text()).toContain('11/1/2026');
+
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(wrapper.get(`[data-link-id="${linkId}"]`).element).toBe(row.element);
+        expect(row.findAll('td')[1]!.text()).toContain('16.10.2026');
+        expect(row.findAll('td')[2]!.text()).toContain('1.11.2026');
+        expect(row.get('code').text()).toBe(link.token);
+        expect(expiring.createdAt).toBe(link.createdAt);
+        expect(expiring.expiresAt).toBe('2026-11-01T01:30:00Z');
         expect(request).toHaveBeenCalledOnce();
     });
 

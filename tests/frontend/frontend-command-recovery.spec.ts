@@ -188,14 +188,14 @@ describe('reconcile-only commands', () => {
 
     it('presents a command receipt without inferring another caller\'s dismissal lock', async () => {
         const {context, command} = await mountedCommand();
-        command.setError('common.error', 'transient', 'inline');
+        command.setError('common.error');
         const presentation = mount(CommandFeedback, {attachTo: document.body,
             props: {feedback: command.feedback, part: 'error'}, global: {
                 plugins: [[I18NextVue, {i18next: context.i18next}]],
                 provide: {[pilotContextKey as symbol]: context},
             }});
         try {
-            // Receipt-owned inline presentation survives an omitted Boolean prop.
+            // Transient receipts use the shared notification presentation.
             // Only the feature's explicit disabled input can lock its Close action.
             expect(presentation.find('.alert-dismissible').exists()).toBe(true);
             command.pending.value = true;
@@ -288,45 +288,23 @@ describe('reconcile-only commands', () => {
         command.acknowledge();
     });
 
-    it('retains the synchronous initiating section through async confirmation and gives repeated native success a new receipt', async () => {
+    it('retains operation-specific success through async confirmation and renews repeated outcomes independently', async () => {
         const {command} = await mountedCommand();
-        const dialog = document.createElement('section');
-        dialog.setAttribute('role', 'dialog');
-        dialog.innerHTML = '<div data-dialog-feedback></div><section data-entity-section="permissions">'
-            + '<div data-command-feedback></div><button>Save</button></section>';
-        document.body.appendChild(dialog);
-        const source = dialog.querySelector('button')!;
-        const target = dialog.querySelector<HTMLElement>('[data-command-feedback]')!;
         let resolveWrite!: (value: {changed: boolean}) => void;
         const write = new Promise<{changed: boolean}>(function captureWrite(resolve) { resolveWrite = resolve; });
-        let submitted: Promise<unknown> | undefined;
-        let initiatingEvent: Event | undefined;
-        function save(event: Event): void {
-            initiatingEvent = event;
-            submitted = command.run(function submitWrite() { return write; }, true, false,
-                {initiator: event, presentation: 'inline', success: 'permissions.updated'});
-        }
-        source.addEventListener('click', save);
-        try {
-            source.click();
-            expect(initiatingEvent?.currentTarget).toBeNull();
-            expect(command.feedbackTarget.value).toBe(target);
-            resolveWrite({changed: true});
-            await submitted;
-            expect(command.feedbackTarget.value).toBe(target);
-            expect(command.notice.value).toBe('permissions.updated');
-            expect(command.noticeKind.value).toBe('success');
-            expect(command.transientNotice.value).toBe(true);
-            expect(command.noticeInline.value).toBe(true);
-            const receipt = command.noticeRenewal.value;
-            command.setNotice('permissions.updated', {initiator: source, presentation: 'inline'});
-            expect(command.noticeRenewal.value).not.toBe(receipt);
-            expect(command.feedbackTarget.value).toBe(target);
-            command.notice.value = 'state.savedRefreshFailed';
-            expect(command.noticeKind.value).toBe('warning');
-            expect(command.transientNotice.value).toBe(false);
-            expect(command.noticeInline.value).toBe(false);
-        } finally { dialog.remove(); }
+        const submitted = command.run(function submitWrite() { return write; }, true, false, {success: 'permissions.updated'});
+        expect(command.notice.value).toBeNull();
+        resolveWrite({changed: true});
+        await expect(submitted).resolves.toEqual({changed: true});
+        expect(command.notice.value).toBe('permissions.updated');
+        expect(command.noticeKind.value).toBe('success');
+        expect(command.transientNotice.value).toBe(true);
+        const receipt = command.noticeRenewal.value;
+        command.setNotice('permissions.updated');
+        expect(command.noticeRenewal.value).not.toBe(receipt);
+        command.notice.value = 'state.savedRefreshFailed';
+        expect(command.noticeKind.value).toBe('warning');
+        expect(command.transientNotice.value).toBe(false);
     });
 
     it.each(['recover', 'reconcile'] as const)('retains %s protection after editor retirement until the read settles, without acknowledging creation', async recovery => {

@@ -181,7 +181,7 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
             <!-- The entry title loads independently of the generic identity choices and
                  editable draft. Never replace those mounted fields during a title refresh. -->
             <LoadingSkeleton v-if="!guestEntry && !entry.error.value" :rows="1" />
-            <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" :inline="false" />
+            <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" />
             <StatusNotice v-if="entry.error.value && !props.entry" kind="danger"
                 :read-error="entry.error.value" :retry-at="titleRetryAt"
                 :last-updated-at="guestEntry ? entry.dataUpdatedAt.value : undefined"

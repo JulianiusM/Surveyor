@@ -1,6 +1,8 @@
-import {expect, test} from '@playwright/test';
+import {expect, test, type Page} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
+import {createTranslator} from '../../src/modules/localization/translator';
+import type {Locale} from '../../src/types/LocalizationTypes';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
 import {closeModalForE2E, expectVisiblePresentation, loginForE2E, openModalForE2E,
     readVisiblePresentation} from '../keywords/e2eCoreKeywords';
@@ -8,10 +10,34 @@ import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {expectDriversSettingsPresentation as expectSettingsPresentation,
     openDriversSettingsForE2E as openSettingsForE2E} from '../keywords/frontendDriversE2EKeywords';
-import {assignActivityThroughNative, captureActivityPresentation, createActivityForE2E, createActivityOverlapForE2E,
+import {assignActivityThroughNative, captureActivityCreationPresentation, captureActivityPresentation, captureActivitySchedulePresentation, createActivityForE2E, createActivityOverlapForE2E,
     expectActivityTabKeyboard,
     observeActivityCommand, readActivityForE2E, readActivitySettingsForE2E,
     waitForNativeActivityPane} from '../keywords/frontendActivityE2EKeywords';
+
+/** Change the real header preference through its visible controls. A narrow
+ * viewport starts with collapsed navigation; restore that original menu state
+ * before reviewing the dirty form rather than forcing a hidden select action. */
+async function selectCreationLocale(page: Page, from: Locale, to: Locale): Promise<void> {
+    const current = createTranslator(from);
+    const next = createTranslator(to);
+    const locale = page.getByLabel(current.t('app.locale'), {exact: true});
+    const openedNavigation = !await locale.isVisible();
+
+    // Desktop already exposes the preference. Mobile uses the same actual
+    // navigation disclosure a user must open before choosing another language.
+    if (openedNavigation) await page.getByRole('button', {name: current.t('app.toggleNavigation'), exact: true}).click();
+    await locale.selectOption(to);
+    await expect(page.locator('html')).toHaveAttribute('lang', to);
+
+    // Translation changes the disclosure's accessible name. Close only the
+    // navigation opened above, retaining an already-open/desktop presentation.
+    if (openedNavigation) {
+        const toggle = page.getByRole('button', {name: next.t('app.toggleNavigation'), exact: true});
+        if (await toggle.getAttribute('aria-expanded') === 'true') await toggle.click();
+        await expect(page.getByLabel(next.t('app.locale'), {exact: true})).not.toBeVisible();
+    }
+}
 
 for (const width of [1280, 390]) {
     test(`compares Activity schedule, participant status and editing dialogs at ${width}px`, async ({page}, info) => {
@@ -48,8 +74,27 @@ for (const width of [1280, 390]) {
             const creationSlot = page.locator('#slotArea .slot').first();
             await creationSlot.getByPlaceholder('Title', {exact: true}).fill('Breakfast duty');
             await creationSlot.getByPlaceholder('Description', {exact: true}).fill('Set the tables');
-            const creation = await captureActivityPresentation(page, info, `${label}-activity-create`,
-                page.locator('main form').first(), ['label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button']);
+            const creation = await captureActivityCreationPresentation(page, info, `${label}-activity-create`,
+                page.locator('main form').first());
+            if (pilot) {
+                // R4/R6 permits visible, usable initial-slot labels instead of
+                // reproducing native IMP-017. Review actual translation/fit on
+                // the same dirty controls, then restore English for comparison.
+                const initialFields = await creationSlot.evaluateHandle(slot => Array.from(slot.querySelectorAll('input')));
+                const initialValues = await initialFields.evaluate(fields => fields.map(field => field.value));
+                try {
+                    await selectCreationLocale(page, 'en', 'de');
+                    await captureActivityCreationPresentation(page, info, 'vue-de-activity-create',
+                        page.locator('main form').first(), 'de');
+                    expect(await initialFields.evaluate(fields => fields.every(field => field.isConnected
+                        && document.getElementById(field.id) === field))).toBe(true);
+                    expect(await initialFields.evaluate(fields => fields.map(field => field.value))).toEqual(initialValues);
+                    await selectCreationLocale(page, 'de', 'en');
+                    expect(await initialFields.evaluate(fields => fields.every(field => field.isConnected
+                        && document.getElementById(field.id) === field))).toBe(true);
+                    expect(await initialFields.evaluate(fields => fields.map(field => field.value))).toEqual(initialValues);
+                } finally { await initialFields.dispose(); }
+            }
 
             // This form is intentionally dirty in both renderers. The parity
             // journey discards it explicitly before inspecting persisted data.
@@ -59,8 +104,7 @@ for (const width of [1280, 390]) {
             await expect(schedule.locator('.slot')).toHaveCount(2);
             if (!pilot) await waitForNativeActivityPane(schedule);
             const surfaces = {
-                schedule: await captureActivityPresentation(page, info, `${label}-activity-schedule`, schedule,
-                    ['h4', 'th', 'small', 'strong', '.badge', '[data-count]', '[data-max]', '.slot', 'button', 'a']),
+                schedule: await captureActivitySchedulePresentation(page, info, `${label}-activity-schedule`, schedule, plan.view.slots.length),
                 notes: await captureActivityPresentation(page, info, `${label}-activity-notes`,
                     page.locator('.card').filter({has: page.getByText('Kitchen notes', {exact: true})}).last(),
                     ['strong', 'small', 'p', 'button']),
@@ -111,8 +155,11 @@ for (const width of [1280, 390]) {
 
     test(`compares native and Vue assignment warning review at ${width}px`, async ({page}, info) => {
         await page.setViewportSize({width, height: 900});
-        const {target} = await createActivityOverlapForE2E(page.request);
+        const {target, sibling} = await createActivityOverlapForE2E(page.request);
         const slot = target.view.slots[0]!;
+        const expectedWarnings = ['This slot is on your arrival day.',
+            "This arrival-day time is not eligible under the plan's arrival policy.",
+            `This slot overlaps with another assignment or recommendation: ${sibling.title}: Breakfast help on 2030-06-01 (09:00–10:00). Resolve this with the affected participant before confirming the overlap.`];
         await page.request.get('/users/profile');
         let native: Awaited<ReturnType<typeof readVisiblePresentation>> | undefined;
         for (const pilot of [false, true]) {
@@ -120,6 +167,11 @@ for (const width of [1280, 390]) {
             if (pilot) await waitForPilotHydration(page);
             await page.locator(`.slot[data-slotid="${slot.id}"] [data-action="assign"]`).click();
             const dialog = pilot ? page.getByRole('dialog', {name: 'Assignment warnings', exact: true}) : page.locator('#assignmentWarningModal');
+            // Require the complete visible warning receipt for this comparison,
+            // independently of the dialog's own admission and readiness.
+            await expect(dialog.locator('#assignmentWarningList li')).toHaveCount(expectedWarnings.length);
+            for (const warning of expectedWarnings)
+                await expect(dialog.locator('#assignmentWarningList').getByText(warning, {exact: true})).toBeVisible();
             const measured = await captureActivityPresentation(page, info, `${pilot ? 'vue' : 'native'}-activity-warnings`,
                 pilot ? dialog : dialog.locator('.modal-content'), ['.modal-title', 'p', 'strong', 'li', 'button']);
             if (pilot) expectVisiblePresentation(native!, measured);
@@ -196,9 +248,9 @@ for (const width of [1280, 390]) {
             if (pilot) await dialog.locator('.modal-header .btn-close').click();
             else await closeModalForE2E(page.locator('#entityPropertiesModal'));
 
-            // These existing shared settings helpers preserve complete measured
-            // content, constraints and one-pixel geometry. Actions retain only
-            // the already-approved native form versus SPA delete display case.
+            // Shared settings comparisons protect visible content, constraints,
+            // painted identity and usable fit. Raw geometry remains attached for
+            // inspection without prescribing native coordinates or wrappers.
             const measured = {general, image, imageChooser, actions, eventSettings, linkedActions};
             if (pilot) {
                 for (const [name, value] of Object.entries(measured))
@@ -287,20 +339,25 @@ test('retains schedule filters across assignments, edits shared text and slot de
     await page.goto(`/frontend-pilot${plan.path}?locale=en`, {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);
     await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'activity-schedule';});
+    const total = page.locator('#tab-schedule .fs-6').filter({has: page.locator('.bi-card-checklist')}).locator('.badge').first();
+    await expect(total).toHaveText(String(plan.view.slots.length));
     const navigation: string[] = [];
     page.on('request', request => {
         if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigation.push(request.url());
     });
     await page.locator('[data-slot-filter="mine"]').click();
     await expect(page.locator('#tab-schedule .slot:visible')).toHaveCount(0);
+    await expect(total).toHaveText('2');
     await page.locator('[data-slot-filter="open"]').click();
     await expect(page.locator('#tab-schedule .slot:visible')).toHaveCount(2);
+    await expect(total).toHaveText('2');
     const firstCard = page.locator(`.slot[data-slotid="${first.id}"]`);
     await observeActivityCommand(page, plan.id, `/slots/${first.id}/self-assignment`, 'PUT',
         () => firstCard.locator('[data-action="assign"]').click());
     await expect(page.locator('[data-slot-filter="open"]')).toHaveClass(/active/u);
     await page.locator('[data-slot-filter="mine"]').click();
     await expect(page.locator('#tab-schedule .slot:visible')).toHaveCount(1);
+    await expect(total).toHaveText('2');
     await page.getByRole('tab', {name: 'Participants', exact: true}).click();
     await expect(page.locator('[data-participant-row]')).toHaveCount(1);
     await page.locator('[data-participant-filter="unassigned"]').click();
@@ -356,6 +413,7 @@ test('retains schedule filters across assignments, edits shared text and slot de
         () => firstCard.locator('[data-action="unassign"]').click());
     expect((await readActivityForE2E(page.request, plan.id)).slots[0]!.assignedCount).toBe(0);
     await expect(page.locator('#tab-schedule .slot:visible')).toHaveCount(0);
+    await expect(total).toHaveText('2');
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('activity-schedule');
     expect(navigation).toEqual([]);
 });
@@ -413,6 +471,8 @@ test('keeps named roles distinct from slot membership and persists organizer rol
     await page.goto(`/frontend-pilot${plan.path}?locale=en`, {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);
     const card = page.locator(`.slot[data-slotid="${first.id}"]`);
+    const total = page.locator('#tab-schedule .bi-card-checklist + .badge');
+    await expect(total).toHaveText('2');
     await observeActivityCommand(page, plan.id, `/slots/${first.id}/self-assignment`, 'PUT',
         () => card.locator('[data-action="take-role"][data-role="Kitchen lead"]').click());
     const assigned = await readActivityForE2E(page.request, plan.id);
@@ -475,15 +535,30 @@ test('keeps named roles distinct from slot membership and persists organizer rol
         () => editor.getByRole('button', {name: 'Save', exact: true}).click());
     const added = (await readActivityForE2E(page.request, plan.id)).slots.find(slot => slot.title === 'Cleanup duty')!;
     expect(added).toMatchObject({day: '2030-06-01', description: 'Clean the tables', maxAssignees: 4, assignedCount: 0});
+    await expect(total).toHaveText('3');
     expect(added.roles).toEqual([expect.objectContaining({name: 'Cleanup lead', maxQty: 1, assignedQty: 0})]);
     await observeActivityCommand(page, plan.id, `/slots/${added.id}`, 'DELETE',
         () => page.locator(`.slot[data-slotid="${added.id}"] [data-delete-slot]`).click());
     expect((await readActivityForE2E(page.request, plan.id)).slots.map(slot => slot.id)).toEqual([second.id, first.id]);
+    await expect(total).toHaveText('2');
     await observeActivityCommand(page, plan.id, `/assignments/${withoutRole.slots[0]!.assignees[0]!.assignmentId}`, 'DELETE',
         () => card.locator('[data-owner-remove]').click());
     expect((await readActivityForE2E(page.request, plan.id)).slots.find(slot => slot.id === first.id)).toMatchObject({
         assignedCount: 0, selfAssigned: false, selfRoles: [],
     });
+
+    // R9's total follows actual saved-slot receipts through the empty plan,
+    // independently of assignment totals or whichever filter is selected.
+    for (const slot of [second, first]) {
+        await observeActivityCommand(page, plan.id, `/slots/${slot.id}`, 'DELETE',
+            () => page.locator(`.slot[data-slotid="${slot.id}"] [data-delete-slot]`).click());
+    }
+    expect((await readActivityForE2E(page.request, plan.id)).slots).toEqual([]);
+    await expect(total).toHaveText('0');
+    for (const filter of ['mine', 'open', 'all']) {
+        await page.locator(`[data-slot-filter="${filter}"]`).click();
+        await expect(total).toHaveText('0');
+    }
 });
 
 test('redacts the unauthorized participant projection and never offers a printable schedule without its grant', async ({page, browser, baseURL}) => {

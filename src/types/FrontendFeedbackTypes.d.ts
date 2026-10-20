@@ -16,13 +16,10 @@ export interface PilotCommandPresentation {
     error: Readonly<Ref<string | null>>;
     transientError: Readonly<Ref<boolean>>;
     errorRenewal: Readonly<Ref<unknown>>;
-    errorPresentation: Readonly<Ref<'flash' | 'inline'>>;
     feedbackKind: Readonly<Ref<'danger' | 'info' | 'success'>>;
-    feedbackTarget: Readonly<Ref<HTMLElement | null>>;
     notice: Readonly<Ref<PilotPlainMessageKey | null>>;
     noticeKind: Readonly<Ref<'success' | 'warning'>>;
     transientNotice: Readonly<Ref<boolean>>;
-    noticeInline: Readonly<Ref<boolean>>;
     noticeRenewal: Readonly<Ref<unknown>>;
     uncertain: Readonly<Ref<boolean>>;
     dismissError(): void;
@@ -39,13 +36,10 @@ export interface PilotCreationReviewPresentation {
     paragraphClass?: string;
 }
 
-/** The same receipt can occupy separate native locations without changing its owner or lifetime. */
+/** Shared presentation keeps transient notifications and durable recovery with one receipt owner. */
 export interface CommandFeedbackProps {
     feedback: PilotCommandPresentation;
     part?: 'all' | 'error' | 'notice' | 'uncertain';
-    inline?: boolean;
-    /** Null retains the caller's local host; omission uses the captured receipt target. */
-    target?: HTMLElement | null;
     disabled?: boolean;
     noMargin?: boolean;
     errorKind?: 'danger' | 'info' | 'success';

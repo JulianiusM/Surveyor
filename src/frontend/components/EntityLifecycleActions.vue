@@ -15,7 +15,6 @@ const {messages} = usePilot();
     <!-- Inherited archival explains the existing parent action without deleting any data. -->
     <section v-if="manageArchive" class="mb-4" data-entity-section="archival">
         <h3 class="fs-5">{{ messages.t('common.archival') }}</h3>
-        <div data-command-feedback aria-live="polite"></div>
         <p>{{ inherited || direct ? labels.archivedHint : labels.activeHint }}</p>
         <!-- The native gap comes from ms-1 alone; adjacent text/link avoids another collapsed space. -->
         <p v-if="inherited">

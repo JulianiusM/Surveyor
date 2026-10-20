@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {writeFile} from 'node:fs/promises';
 import type {components} from '../../src/types/api/v1';
 import {createE2EDriversList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectVisiblePresentation, openModalForE2E, readVisiblePresentation} from './e2eCoreKeywords';
+import {createResourceViaForm, expectVisiblePresentation, openModalForE2E, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from './frontendEventE2EKeywords';
 import {waitForPilotHydration} from './frontendDynamicKeywords';
 
@@ -82,6 +82,7 @@ export async function selectDriversSettingsSurface(dialog: Locator, page: Page, 
     if (surface === 'Actions') await expect(dialog.getByRole('button', {name: 'Archive for everyone', exact: true})).toBeVisible();
 
     // Settle fonts and focus without modifying application data or styles.
+    if (new URL(page.url()).pathname.startsWith('/frontend-pilot')) await expectUsableFrontendLayout(dialog);
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(function releaseFocus() {
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -103,35 +104,10 @@ export async function captureDriversSettingsPresentation(page: Page, info: TestI
     return result;
 }
 
-/** Preserve the approved ordinary SPA deletion control: native wraps its button
- * in a document form; Vue's directly placed flex item computes as block instead
- * of inline-block. Assert that exact difference only, then compare every other
- * field, style and measured box with the unchanged common comparator. */
-export function expectDriversSettingsPresentation(native: Presentation, pilot: Presentation, actions = false): void {
-    if (!actions) {
-        expectVisiblePresentation(native, pilot);
-        return;
-    }
-
-    const nativeDeletion = native.content.elements.filter(isPermanentDeletion);
-    const pilotDeletion = pilot.content.elements.filter(isPermanentDeletion);
-    expect(nativeDeletion).toHaveLength(1);
-    expect(pilotDeletion).toHaveLength(1);
-    expect(nativeDeletion[0]!.style.display).toBe('inline-block');
-    expect(pilotDeletion[0]!.style.display).toBe('block');
-
-    // Adapt the expectation for this single already-asserted semantic control.
-    // The original evidence and every remaining style/geometry entry stay intact.
-    const expected = {...native, content: {...native.content, elements: native.content.elements.map(compareDeletion)}};
-    expectVisiblePresentation(expected, pilot);
-
-    function compareDeletion(element: Presentation['content']['elements'][number]) {
-        return element === nativeDeletion[0] ? {...element, style: {...element.style, display: 'block'}} : element;
-    }
-}
-
-function isPermanentDeletion(element: Presentation['content']['elements'][number]): boolean {
-    return element.text === 'Delete permanently' && element.field !== null;
+/** Settings preserve visible actions and command constraints across semantic DOM.
+ * A direct SPA button and a native submit wrapper need no compatibility adapter. */
+export function expectDriversSettingsPresentation(native: Presentation, pilot: Presentation, _actions = false): void {
+    expectVisiblePresentation(native, pilot);
 }
 
 /** Read admitted settings through the real versioned boundary for persistence

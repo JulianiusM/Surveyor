@@ -132,8 +132,9 @@ Shared archival, personal hiding, hard deletion and file retention remain separa
 
 Native no-op actions remain available and use their operation-specific receipt without an empty write.
 Known server validation clears passwords where native forms do; local validation or unusable delivery retains them.
-Pristine metadata Save retains its informational outcome. Inline feedback preserves native placement, Close/focus and
-fallback behavior; ordinary full flashes keep their own presentation.
+Pristine metadata Save retains its informational outcome. The October 19 shared-SPA decision supersedes the original
+native inline placement/focus rule: transient outcomes use common page/dialog notifications without moving focus or
+scroll. Durable validation, review and recovery remain with their existing contextual state owners.
 
 ## Drivers behavior
 
@@ -151,7 +152,7 @@ Feature slots retain Packing's editable title and Drivers' readonly actor name; 
 decisions remain feature-owned. The shared capacity control retains installed Vue's numeric coercion and DOM updates,
 including leading-zero normalization on change/rerender. `EntityDescription` supplies escaped lines for both lists,
 Surveys and Event, with explicit paragraph/divider inputs preserving their different surrounding layout.
-`EntityListCounters` presents admitted Packing/Drivers counts. Packing, Drivers and Survey share `EntityListToolbar`,
+`EntityListCounters` presents admitted Packing/Drivers counts. Packing, Drivers, Survey and Activity share `EntityListToolbar`,
 `EntityDetailReadState` and the existing `CommandFeedback` creation-review presentation, retaining list scrolling,
 Survey's Refresh placement, feature wording/timestamps and the existing read/command owners. Local inline denial
 uses `useListCommands` without dispatch; generic presentation supplies no feature authority.
@@ -177,10 +178,14 @@ Generated operations reuse the existing Activity controller, assignment/warning 
 child ownership and private projections are server-enforced; native client admission remains distinct from method
 permission. No new Rules, requirement editor or recommendation workflow belongs to this phase.
 
-The native server detail calendar and browser creation calendar have different timezone behavior. Detail projects
-the former's week/day grouping; creation copies the latter independently. Native date-display and label-activation
-defects remain preserved and recorded, alongside the existing slot-label, role-update and native participant-privacy
-dispositions. The new adapter redacts unauthorized participants and sibling details. Role quotas retain the existing
+The original P5 choice copied different native server-detail and browser-creation calendar algorithms. The
+[October 20 approval](FRONTEND_FOUNDATION_DESIGN.md#approved-operations-slot-total-and-calendar-day-corrections-2026-10-20)
+supersedes that choice for Vue: one pure civil-date owner supplies creation and versioned detail weeks, and matching
+Event/Activity date-only labels preserve the saved day in the selected language. Deadlines and link timestamps remain
+instants. The existing Slots badge counts all saved slots independently of All/My/Open, including zero when empty.
+Native date-display, blank-total and label-activation defects remain recorded. Vue initial-slot controls have shared visible, associated labels under the R4/R6 usability
+requirements; IMP-017 remains open for the unchanged native comparator. Existing role-update and native participant-privacy
+dispositions also remain. The new adapter redacts unauthorized participants and sibling details. Role quotas retain the existing
 engine and native creation quantity of one; no new quantity editor is inferred. The
 [P5 source map](TEST_COVERAGE.md#p5-basic-activity-source-map-2026-10-18) owns assertion mappings, and the paired review
 owns actual execution and inspected visual evidence.
@@ -345,7 +350,8 @@ unmet prerequisites; hosted CI, deployment replay and live providers/mail are se
 Follow the [migration contribution handoff](FRONTEND_FOUNDATION_DESIGN.md#migration-contribution-handoff) for each next
 slice, the [Testing amendments](staged/TESTING_GUIDE.md#risk-and-test-cost) and unchanged
 [canonical assertion guidance](../TESTING_GUIDE.md#assertions-and-isolation) for unique detection value.
-Preserve baseline IDs, native comparison and feature exceptions. Default-route cutover requires complete feature
+Preserve behavior-inventory IDs for contract traceability, native comparison and feature exceptions; native DOM
+identifiers are not a parity obligation. Default-route cutover requires complete feature
 parity and direct authorization. Reconcile the amendments and independently review complete temporary output before
 verbatim cutover under the
 [current staging amendment](FRONTEND_FOUNDATION_DESIGN.md#authorized-amendment-staging-and-risk-mitigation-2026-10-14);

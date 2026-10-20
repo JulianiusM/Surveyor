@@ -68,7 +68,7 @@ const source: FrontendListCreationSource<components['schemas']['PackingDuplicate
                     >{{ messages.t('packing.itemsToPack') }}</label
                 >
                 <div class="table-responsive">
-                    <table class="table table-dark table-striped table-bordered align-middle">
+                    <table class="table table-dark table-striped table-bordered align-middle packing-creation-items">
                         <thead>
                             <tr>
                                 <th class="text-center w-25">{{ messages.t('packing.item') }}</th>

@@ -3,23 +3,77 @@
 /* Paused enhanced reads retain their real href for modified/new-tab navigation.
    Ordinary clicks use the same action admission as the visible disabled state. */
 .pilot-app a.btn[aria-disabled="true"]:not(.disabled) { opacity: var(--bs-btn-disabled-opacity, .65); }
-/* Full message pages move native alerts into their card. Ordinary pages retain
-   the separate mt-1 live-alert host after any initial, non-sticky flash messages. */
-/* This unsemantic wrapper groups notices for rendering/empty-host rules only.
-   Without its own layout box, the sticky live-alert host uses the full main
-   content boundary instead of being trapped inside a message-height parent. */
+/* Contextual page notices remain in the document. Transient notifications use
+   the separate shared overlay, so this grouping adds no containing layout box. */
 .pilot-page-notices { display: contents; }
-#pilot-main:has(> .pilot-page-message) > .pilot-page-notices:has(> #liveAlerts:only-child:empty) { display: none; }
-/* A mounted form's rejected POST owns its ordinary flash above the card. The
-   empty inline host precedes that component in Vue, so it contributes no extra
-   pre-flash gap; disclosed inline messages still retain their native mt-1. */
-#pilot-main > .pilot-page-notices:has(> #liveAlerts:only-child:empty):has(+ .alert) { display: none; }
 .pilot-nav-dropdown > summary { list-style: none; cursor: pointer; }
 .pilot-nav-dropdown > summary::-webkit-details-marker { display: none; }
 .pilot-nav-dropdown > .dropdown-menu { top: 100%; left: 0; margin-top: var(--bs-dropdown-spacer); }
 .pilot-nav-dropdown[open] > .dropdown-menu { display: block; }
 .pilot-nav-dropdown .dropdown-menu-end { right: 0; left: auto; }
+.pilot-app .dropdown-menu { max-width: calc(100vw - 2rem); }
+.pilot-app .dropdown-item { white-space: normal; overflow-wrap: anywhere; }
 .pilot-locale { width: auto; }
+/* Shared layout responds to available room rather than a selected language.
+   Allow actual labels and user titles to shrink/wrap without changing table
+   tracks, hidden-column policy or the feature-owned scrolling containers. */
+.pilot-app :is(.card, .card-header, .card-body, .card-footer, .row > *, .d-flex > *),
+.pilot-dialog :is(.card, .card-header, .card-body, .card-footer, .row > *, .d-flex > *) { min-width: 0; }
+.pilot-app .d-flex > .bi, .pilot-dialog .d-flex > .bi { flex-shrink: 0; }
+.pilot-app :is(h1, h2, h3, h4, h5, h6, .form-label, .form-check-label, .form-text, .accordion-button),
+.pilot-dialog :is(h1, h2, h3, h4, h5, h6, .form-label, .form-check-label, .form-text, .accordion-button) { overflow-wrap: anywhere; }
+.pilot-app .list-group-item, .pilot-dialog .list-group-item { overflow-wrap: anywhere; }
+.pilot-app :is(.btn, .badge), .pilot-dialog :is(.btn, .badge) {
+    max-width: 100%; white-space: normal; overflow-wrap: anywhere;
+}
+/* Wide semantic tables keep complete words and their existing scroll owner.
+   Compact flex actions must not squeeze a label into separate letter fragments. */
+.pilot-app table :is(.btn, .badge), .pilot-dialog table :is(.btn, .badge) {
+    min-width: min-content; max-width: none; overflow-wrap: normal;
+}
+/* Bootstrap clips absolute radio controls inside tables. Give their existing
+   scrollport a containing block so offscreen controls cannot widen the document;
+   table scrolling and sticky cells retain the same overflow/position owners. */
+.pilot-app .table-responsive, .pilot-dialog .table-responsive { position: relative; }
+/* Initial Packing rows need actual editing room. Their existing table viewport
+   scrolls to the remaining fields/actions instead of squeezing out input text. */
+.pilot-app .packing-creation-items .form-control { min-width: 10rem; }
+.pilot-app .packing-creation-items .form-control[type="number"] { min-width: 5rem; }
+.pilot-app :is(.form-control, .form-select), .pilot-dialog :is(.form-control, .form-select) {
+    min-width: 0; max-width: 100%;
+}
+.pilot-app .card-header.d-flex, .pilot-dialog .card-header.d-flex {
+    flex-wrap: wrap; gap: .5rem 1rem;
+}
+.pilot-app .card-header.d-flex > *, .pilot-dialog .card-header.d-flex > * { max-width: 100%; }
+.pilot-app .card-header.d-flex > :first-child:not(:only-child):not(.bi),
+.pilot-dialog .card-header.d-flex > :first-child:not(:only-child):not(.bi) { flex: 1 1 14rem; }
+.pilot-app .card-header > .d-flex, .pilot-dialog .card-header > .d-flex { flex-wrap: wrap; }
+/* Settings, Rules and future matching sections share these two compositions.
+   Headings and hints can take separate lines; actions retain their DOM order. */
+.pilot-section-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem 1rem; }
+.pilot-section-heading > * { min-width: 0; max-width: 100%; }
+.pilot-action-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; max-width: 100%; }
+.card-header > .pilot-action-row { justify-content: flex-end; margin-inline-start: auto; }
+/* Short authored choices reflow as whole checkbox/label units. Available room,
+   rather than a locale or fixed column count, determines the number per row. */
+.pilot-choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); gap: .5rem; }
+.pilot-choice-grid .form-check-label { overflow-wrap: normal; }
+/* Notifications overlay the nearest page/dialog scope. The zero-height sticky
+   anchor never changes a draft's position, and gaps do not intercept its input.
+   A bounded stack keeps dismissal reachable without moving page focus/scroll. */
+.pilot-notice-region { position: sticky; top: 0; z-index: 1035; height: 0; min-height: 0; flex: 0 0 0; pointer-events: none; }
+.pilot-notice-stack { position: absolute; inset: 0 0 auto; display: grid; gap: .5rem;
+    max-height: min(65dvh, 32rem); overflow-y: auto; overscroll-behavior: contain; pointer-events: none; }
+.pilot-notification { min-width: 0; max-width: 100%; margin: 0 !important; overflow-wrap: anywhere; pointer-events: auto; }
+.pilot-dialog .pilot-notice-region { z-index: 3; }
+/* SSR has no mounted injection target yet. Its local origin uses the same
+   zero-height overlay before hydration relocates the unchanged receipt. */
+.pilot-notice-origin { display: contents; }
+.pilot-notice-origin.pilot-notice-region { display: block; }
+.pilot-notice-origin.pilot-notice-region > .pilot-notification {
+    position: absolute; inset: 0 0 auto; max-height: min(65dvh, 32rem); overflow-y: auto;
+}
 .pilot-dialog-backdrop { position: fixed; inset: 0; z-index: 1050; background: rgb(0 0 0 / 50%); }
 .pilot-dialog { position: fixed; z-index: 1055; inset: 1.75rem auto auto 50%; transform: translateX(-50%);
     --bs-modal-header-padding-x: 1rem; --bs-modal-header-padding-y: 1rem; --bs-modal-title-line-height: 1.5;
@@ -43,9 +97,8 @@
     border-radius: var(--bs-border-radius); }
 .pilot-dialog .entity-property-group > summary { cursor: pointer; }
 .pilot-dialog .entity-settings-panel { min-width: 0; }
-/* Localized pilot help can contain long compound labels. Keep that adaptation
-   inside the new renderer; the native help corpus and CSS retain their baseline. */
-.pilot-app .card-header > h1.card-title { min-width: 0; overflow-wrap: anywhere; }
+/* Article tables keep their distinct reading/scrolling boundary. Other shared
+   text controls above already handle long labels without a locale exception. */
 .pilot-app .help-content th, .pilot-app .help-content td { overflow-wrap: anywhere; }
 .pilot-app .help-content table:has(td:first-child > strong) td:first-child { min-width: 9rem; overflow-wrap: normal; }
 .pilot-conflict-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
@@ -61,6 +114,14 @@
     .pilot-dialog.pilot-dialog-fullscreen { inset: 0; transform: none; width: 100%; height: 100dvh; max-height: 100dvh; border: 0; border-radius: 0; }
 }
 @media (max-width: 767.98px) {
+    /* Compact summary/action rows wrap as a unit instead of forcing the page
+       wider. Tables keep their existing display and horizontal scroll owner. */
+    .pilot-app .d-flex:is(.justify-content-between, .justify-content-end):not(.flex-column),
+    .pilot-dialog .d-flex:is(.justify-content-between, .justify-content-end):not(.flex-column) { flex-wrap: wrap; row-gap: .5rem; column-gap: .75rem; }
+    .pilot-app .btn-group, .pilot-dialog .btn-group { max-width: 100%; flex-wrap: wrap; }
+    /* Table answer groups remain one coherent row. Their existing table
+       viewport reveals wide choices without changing label or radio order. */
+    .pilot-app table .btn-group, .pilot-dialog table .btn-group { max-width: none; flex-wrap: nowrap; }
     .pilot-app .help-content table:has(code), .pilot-app .help-content table:has(td:first-child > strong) {
         display: block; overflow-x: auto;
     }

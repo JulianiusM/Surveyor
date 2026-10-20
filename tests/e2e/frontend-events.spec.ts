@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import type {components} from '../../src/types/api/v1';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
-import {loginForE2E} from '../keywords/e2eCoreKeywords';
+import {expectUsableFrontendLayout, loginForE2E} from '../keywords/e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {PERM} from '../../src/modules/lib/permissions';
@@ -53,7 +53,7 @@ async function measureEventRegistration(surface: Locator) {
         function visible(node: HTMLElement): boolean { return node.checkVisibility(); }
         function text(node: HTMLElement): string { return node.innerText.replace(/\s+/gu, ' ').trim(); }
 
-        /** Preserve actual browser fractions; comparison owns its one-pixel tolerance. */
+        /** Preserve actual browser fractions as diagnostic evidence. */
         function bounds(node: Element) {
             const box = node.getBoundingClientRect();
             return {x: box.x - origin.x, y: box.y - origin.y, width: box.width, height: box.height};
@@ -99,14 +99,12 @@ async function measureEventRegistration(surface: Locator) {
     });
 }
 
-/** Compare each visible responsibility, retaining readable element-level failures.
- * Geometry allows the existing one-pixel tolerance; text, styles, values and
- * browser constraints must match exactly against the native comparator. */
+/** Protect visible information, painted hierarchy and successful-control meaning.
+ * Raw geometry remains evidence; responsive layout and internal names may differ. */
 function compareEventRegistration(native: Awaited<ReturnType<typeof measureEventRegistration>>,
                                   migrated: Awaited<ReturnType<typeof measureEventRegistration>>): void {
     expect(migrated.text).toBe(native.text);
     expect(migrated.style).toEqual(native.style);
-    compareRegistrationBounds(native.bounds, migrated.bounds, 'registration card');
 
     // Compare ordered labels/icons as well as controls: matching field rectangles
     // alone cannot detect missing helper text, the wrong icon or changed wording.
@@ -116,32 +114,57 @@ function compareEventRegistration(native: Awaited<ReturnType<typeof measureEvent
         const actual = migrated.labels[index]!;
         expect(actual.text).toBe(expected.text);
         expect(actual.style).toEqual(expected.style);
-        compareRegistrationBounds(expected.bounds, actual.bounds, `label ${index}: ${expected.text}`);
     }
     expect(migrated.icons).toHaveLength(native.icons.length);
     for (let index = 0; index < native.icons.length; index++) {
         const expected = native.icons[index]!;
         const actual = migrated.icons[index]!;
-        expect(actual.name).toBe(expected.name);
         expect(actual.style).toEqual(expected.style);
-        expect(actual.marginRight).toBe(expected.marginRight);
-        compareRegistrationBounds(expected.bounds, actual.bounds, `icon ${index}: ${expected.name}`);
     }
     expect(migrated.controls).toHaveLength(native.controls.length);
     for (let index = 0; index < native.controls.length; index++) {
         const expected = native.controls[index]!;
         const actual = migrated.controls[index]!;
-        expect(actual.state).toEqual(expected.state);
+        const {tag: nativeTag, name: nativeName, ...nativeState} = expected.state;
+        const {tag: pilotTag, name: pilotName, ...pilotState} = actual.state;
+        expect(pilotState).toEqual(nativeState);
         expect(actual.style).toEqual(expected.style);
-        compareRegistrationBounds(expected.bounds, actual.bounds, `control ${index}: ${expected.state.name || expected.state.text}`);
     }
 }
 
-function compareRegistrationBounds(native: {x: number; y: number; width: number; height: number},
-                                   migrated: typeof native, label: string): void {
-    for (const dimension of ['x', 'y', 'width', 'height'] as const) {
-        expect(Math.abs(native[dimension] - migrated[dimension]), `${label} ${dimension}`).toBeLessThanOrEqual(1);
-    }
+/** Ordinary dietary words must remain readable as a unit at phone width.
+ * Browser ranges inspect the painted text rather than assuming a grid layout. */
+async function expectReadableDietaryChoices(surface: Locator): Promise<void> {
+    const choices = await surface.locator('.form-check-label').evaluateAll(function inspectChoiceWords(labels) {
+        return labels.map(label => {
+            const fragmentedWords: string[] = [];
+            // A label may wrap between words. Splitting a short authored word
+            // across lines instead indicates that its choice column is squeezed.
+            const walker = document.createTreeWalker(label, NodeFilter.SHOW_TEXT);
+            let node: Node | null;
+            while ((node = walker.nextNode())) {
+                for (const match of node.textContent!.matchAll(/\S+/gu)) {
+                    const range = document.createRange();
+                    range.setStart(node, match.index!);
+                    range.setEnd(node, match.index! + match[0].length);
+                    const lines = new Set([...range.getClientRects()].map(rect => Math.round(rect.top)));
+                    if (lines.size > 1) fragmentedWords.push(match[0]);
+                }
+            }
+            return {label: label.textContent?.trim(), fragmentedWords};
+        });
+    });
+    expect(choices.length).toBeGreaterThan(0);
+    for (const choice of choices) expect(choice.fragmentedWords, choice.label).toEqual([]);
+
+    // Exercise the label association and real hit target without submitting a
+    // registration. Restore the initial unchecked value for the later Refresh.
+    const vegetarian = surface.getByRole('checkbox', {name: 'Vegetarian', exact: true});
+    await expect(vegetarian).not.toBeChecked();
+    await surface.getByText('Vegetarian', {exact: true}).click();
+    await expect(vegetarian).toBeChecked();
+    await vegetarian.uncheck();
+    await expect(vegetarian).not.toBeChecked();
 }
 
 test('creates and duplicates an Event through multipart SPA commands with native field, image and timezone meaning', async ({page}) => {
@@ -402,11 +425,21 @@ for (const width of [1280, 390]) {
         await expect(migratedCard).toContainText('Register for this event');
         await page.evaluate(() => document.fonts.ready);
         const migrated = await measureEventRegistration(migratedCard);
+        await expectUsableFrontendLayout(migratedCard);
         await page.screenshot({path: testInfo.outputPath('pilot-event.png'), fullPage: true});
         await testInfo.attach('native-pilot-registration-metrics', {
             body: JSON.stringify({native, migrated}, null, 2), contentType: 'application/json',
         });
         compareEventRegistration(native, migrated);
+        if (width === 390) await expectReadableDietaryChoices(migratedCard);
+        const documentOrigin = await page.evaluate(() => performance.timeOrigin);
+        const arrival = await page.locator('#arrivalDate').inputValue();
+        const refreshed = page.waitForResponse(response => response.request().method() === 'GET'
+            && new URL(response.url()).pathname === `/api/v1/events/${event.id}`);
+        await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+        expect((await refreshed).status()).toBe(200);
+        await expect(page.locator('#arrivalDate')).toHaveValue(arrival);
+        expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentOrigin);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
         expect(errors).toEqual([]);
     });

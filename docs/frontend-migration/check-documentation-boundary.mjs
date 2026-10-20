@@ -26,6 +26,15 @@ const transientReference = /frontend-migration\/|canonical-merge-target:|product
 // Exact reviewed public owners may be copied before a normal commit makes them
 // tracked. This does not admit an unlisted test, a directory or ignored private state.
 const publicPreviewOwners = new Set([
+    // Approved R10 adds one shared civil-date implementation and its exact
+    // declaration/regression owners; no broader library or test tree is admitted.
+    'src/modules/lib/civilDate.ts',
+    'src/types/CivilDateTypes.d.ts',
+    'tests/unit/civil-date.spec.ts',
+    'tests/e2e/frontend-calendar.spec.ts',
+    'src/frontend/components/RichMessage.vue',
+    'tests/frontend/frontend-rich-messages.spec.ts',
+    'tests/fixtures/RichMessageHint.vue',
     'src/frontend/components/AppAccordionButton.vue',
     'src/frontend/features/activity/ActivityRecommendationEditor.vue',
     'src/frontend/features/activity/ActivityRecommendationSchedule.vue',

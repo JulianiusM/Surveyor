@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import {DialogRoot, DialogPortal, DialogOverlay, DialogContent, DialogTitle, DialogClose} from 'reka-ui';
-import {watch} from 'vue';
+import {provide, ref, watch} from 'vue';
 import {usePilot} from '../app/context';
+import {noticeTargetKey} from '../composables/feedback';
 
 const props = withDefaults(
     defineProps<{
@@ -26,6 +27,10 @@ const props = withDefaults(
 );
 const emit = defineEmits<{close: []}>();
 const {messages} = usePilot();
+// A modal owns a presentation host above its body, using the same notice renderer
+// and receipts as the page. Its overlay never obscures its own command result.
+const noticeTarget = ref<HTMLElement | null>(null);
+provide(noticeTargetKey, noticeTarget);
 // Features may open a modal from several buttons instead of one Reka DialogTrigger.
 // Remember the actual invoker so Escape/cancel returns keyboard focus to the right control.
 let opener: HTMLElement | null = null;
@@ -93,6 +98,9 @@ function restoreFocus(event: Event): void {
                     />
                 </header>
                 <slot name="navigation" />
+                <div class="pilot-notice-region">
+                    <div ref="noticeTarget" class="pilot-notice-stack" data-pilot-notices></div>
+                </div>
                 <div class="modal-body"><slot /></div>
                 <footer v-if="$slots.footer" class="modal-footer" :class="footerClass"><slot name="footer" /></footer>
             </DialogContent>

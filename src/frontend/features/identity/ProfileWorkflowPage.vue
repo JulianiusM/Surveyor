@@ -19,6 +19,7 @@ import FormField from '../../components/FormField.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
+import EntityListToolbar from '../../components/EntityListToolbar.vue';
 import CommonPage from '../common/CommonPage.vue';
 
 type WorkflowKind = operations['getProfileWorkflowEntry']['parameters']['query']['kind'];
@@ -223,7 +224,9 @@ async function refreshAdmission(): Promise<void> {
     if (admission.error.value) throw admission.error.value;
     if (admission.outcome.value?.kind !== 'render' || admission.admittedAt.value === undefined) throw new ObsoleteRequestError();
 }
-async function reviewUnknown(): Promise<void> {
+/** Healthy Refresh and unknown-result recovery recheck current authority only.
+ * The shared read lease never replaces an issued token, private preview or draft. */
+async function refreshWorkflowAuthority(): Promise<void> {
     // Reading cannot prove that an irreversible legacy operation failed. Keep
     // uncertainty until deliberate guarded departure; never reopen submission here.
     await command.recover();
@@ -276,9 +279,9 @@ function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, 
             :action="{state: previewAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="requestPreview">
             {{ messages.t('state.loadFailed') }}
         </StatusNotice>
-        <CommandFeedback :feedback="command.feedback" part="error" :inline="false" />
+        <CommandFeedback :feedback="command.feedback" part="error" />
         <CommandFeedback :feedback="command.feedback" part="uncertain"
-            :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="reviewUnknown">
+            :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refreshWorkflowAuthority">
             <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
         </CommandFeedback>
         <StatusNotice v-if="completion.target.value" kind="success"
@@ -286,6 +289,8 @@ function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, 
         <section class="card bg-dark text-white mb-3">
             <h1 class="card-header text-center"><i class="bi me-2" :class="destructive ? 'bi-trash-fill' : 'bi-archive-fill'" aria-hidden="true"></i>{{ heading }}</h1>
             <div class="card-body">
+                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="command.recoveryAction"
+                    @refresh="refreshWorkflowAuthority" />
                 <template v-if="workflow.kind === 'token'">
                     <div class="text-center mb-4">
                         <p class="lead">{{ messages.t('profile.tokenIntro', {name: context.session.value?.activeProfile?.name ?? ''}) }}</p>

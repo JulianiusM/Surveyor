@@ -19,7 +19,6 @@ function chooseEvent(value: string | null): void {
 
 <template>
     <h3 class="fs-5">{{ title }}</h3>
-    <div data-command-feedback aria-live="polite"></div>
     <form @submit.prevent="emit('save', $event)">
         <EventPicker :model-value="modelValue" :source="source" :current="current"
             :prefix="prefix" inline :active="active" :disabled="disabled" @update:model-value="chooseEvent" />

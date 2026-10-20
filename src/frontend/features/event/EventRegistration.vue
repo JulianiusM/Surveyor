@@ -95,7 +95,7 @@ function selectDiet(choice: Dietary, event: Event): void {
 /** Submit once through the existing registration operation. Admission carries
  * the route token without spending it; only this deliberate attendance write
  * supplies it to the consumption owner, never a background detail refresh. */
-async function save(event: Event): Promise<void> {
+async function save(): Promise<void> {
     if (!saveAction.isAvailable()) return;
     validation.value = props.event.requireDietaryInfo && !fields.dietary.some(value => meals.includes(value));
     if (validation.value) return;
@@ -111,7 +111,7 @@ async function save(event: Event): Promise<void> {
     // fails. Only a fresh read can supply a changed registration or current grants.
     const submitted = {...fields, dietary: [...fields.dietary]};
     const result = await command.run(writeRegistration, true, false,
-        {initiator: event, presentation: 'inline', success: 'event.registration.saved'});
+        {success: 'event.registration.saved'});
     if (result) {
         Object.assign(fields, submitted);
         baseline.value = snapshot();
@@ -121,11 +121,11 @@ async function save(event: Event): Promise<void> {
 }
 
 /** Native cancellation has its own confirmation and deadline policy on the server. */
-async function cancel(event: Event): Promise<void> {
+async function cancel(): Promise<void> {
     if (!cancelAction.isAvailable() || !window.confirm(messages.value.t('event.registration.cancelConfirm'))) return;
     const eventId = props.event.id;
     const result = await command.run(removeRegistration, true, false,
-        {initiator: event, presentation: 'inline', success: 'event.registration.cancelled'});
+        {success: 'event.registration.cancelled'});
     if (result) resetFields(null);
     function removeRegistration(scope: PilotRequestScope) { return api.cancelRegistration(eventId, scope); }
 }
@@ -149,11 +149,11 @@ async function cancel(event: Event): Promise<void> {
             <div v-if="event.registration" class="row g-3">
                 <div class="col-md-6">
                     <label class="form-label">{{ messages.t('event.registration.currentArrival') }}</label>
-                    <p id="arrival">{{ formatEventCivilDate(event.registration.arrivalDate) }}</p>
+                    <p id="arrival">{{ formatEventCivilDate(event.registration.arrivalDate, messages.locale) }}</p>
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">{{ messages.t('event.registration.currentDeparture') }}</label>
-                    <p id="departure">{{ formatEventCivilDate(event.registration.departureDate) }}</p>
+                    <p id="departure">{{ formatEventCivilDate(event.registration.departureDate, messages.locale) }}</p>
                 </div>
             </div>
             <hr v-if="event.registration" />
@@ -174,8 +174,8 @@ async function cancel(event: Event): Promise<void> {
                      Their selections remain local until one deliberate save. -->
                 <div v-if="event.requireDietaryInfo" class="col-12">
                     <label class="form-label"><i class="bi bi-egg-fried me-1" aria-hidden="true"></i>{{ messages.t('event.registration.meals') }}</label>
-                    <div class="row row-cols-3 row-cols-md-4 g-2">
-                        <div v-for="choice in meals" :key="choice" class="col">
+                    <div class="pilot-choice-grid">
+                        <div v-for="choice in meals" :key="choice">
                             <div class="form-check">
                                 <input :id="'diet-' + choice.toLowerCase()" class="form-check-input" type="checkbox"
                                     name="dietary" :value="choice.toLowerCase()"
@@ -191,8 +191,8 @@ async function cancel(event: Event): Promise<void> {
                     <!-- Native uses a different requirements icon before the first
                          registration; retain that visible distinction on updates. -->
                     <label class="form-label"><i class="bi me-1" :class="event.registration ? 'bi-exclamation-circle' : 'bi-egg-fried'" aria-hidden="true"></i>{{ messages.t('event.registration.requirements') }}</label>
-                    <div class="row row-cols-3 row-cols-md-4 g-2">
-                        <div v-for="choice in requirements" :key="choice" class="col">
+                    <div class="pilot-choice-grid">
+                        <div v-for="choice in requirements" :key="choice">
                             <div class="form-check">
                                 <input :id="'diet-' + choice.toLowerCase()" class="form-check-input" type="checkbox"
                                     name="dietary" :value="choice.toLowerCase()"
@@ -211,8 +211,8 @@ async function cancel(event: Event): Promise<void> {
                     <template v-if="event.allowDietComment">
                         <hr />
                         <label class="form-label"><i class="bi bi-chat-dots me-1" aria-hidden="true"></i>{{ messages.t('event.registration.comments') }}</label>
-                        <div class="row row-cols-3 row-cols-md-4 g-2">
-                            <div class="col">
+                        <div class="pilot-choice-grid">
+                            <div>
                                 <div class="form-check">
                                     <input id="diet-comment" class="form-check-input" type="checkbox" name="dietary"
                                         value="comment" :checked="fields.dietary.includes('COMMENT')"

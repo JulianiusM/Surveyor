@@ -1,13 +1,73 @@
 // @vitest-environment happy-dom
 import {describe, expect, it, vi} from 'vitest';
 import {flushPromises} from '@vue/test-utils';
-import {defineComponent} from 'vue';
+import {computed, defineComponent, ref} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
-import {observePageNavigation} from '../../src/frontend/composables/pageNavigation';
+import {createPageReadiness, observePageNavigation} from '../../src/frontend/composables/pageNavigation';
 
 const page = defineComponent({template: '<p>Admitted page</p>'});
 
 describe('shared pending page navigation', () => {
+    it('waits for the mounted current render and reads its existing readiness directly', async () => {
+        const router = createRouter({history: createMemoryHistory(), routes: [{path: '/', component: page}]});
+        await router.push('/');
+        const readiness = createPageReadiness(router);
+        const readable = ref(false);
+        const release = readiness.register({destination: computed(() => router.currentRoute.value.fullPath), ready: readable});
+        const completed = vi.fn();
+        const pending = readiness.wait(router.currentRoute.value).then(completed);
+        try {
+            await flushPromises();
+            expect(completed).not.toHaveBeenCalled();
+            readable.value = true;
+            await pending;
+            expect(completed).toHaveBeenCalledExactlyOnceWith(true);
+            expect(await readiness.wait(router.currentRoute.value)).toBe(true);
+        } finally { release(); readiness.dispose(); router.options.history.destroy(); }
+    });
+
+    it('cancels an older visit and an application retirement without inheriting its scroll intent', async () => {
+        const router = createRouter({history: createMemoryHistory(), routes: [
+            {path: '/', component: page}, {path: '/other', component: page},
+        ]});
+        await router.push('/');
+        const readiness = createPageReadiness(router);
+        try {
+            const pending = readiness.wait(router.currentRoute.value);
+            await router.push('/other');
+            expect(await pending).toBe(false);
+            const retired = readiness.wait(router.currentRoute.value);
+            readiness.dispose();
+            expect(await retired).toBe(false);
+            expect(await readiness.wait(router.currentRoute.value)).toBe(false);
+        } finally { readiness.dispose(); router.options.history.destroy(); }
+    });
+
+    it('releases an unready render on unmount even while its route remains current', async () => {
+        const router = createRouter({history: createMemoryHistory(), routes: [{path: '/', component: page}]});
+        await router.push('/');
+        const readiness = createPageReadiness(router);
+        const release = readiness.register({destination: computed(() => router.currentRoute.value.fullPath), ready: ref(false)});
+        try {
+            const pending = readiness.wait(router.currentRoute.value);
+            release();
+            expect(await pending).toBe(false);
+        } finally { readiness.dispose(); router.options.history.destroy(); }
+    });
+
+    it('does not let a retiring page unregister its replacement render', async () => {
+        const router = createRouter({history: createMemoryHistory(), routes: [{path: '/', component: page}]});
+        await router.push('/');
+        const readiness = createPageReadiness(router);
+        const destination = computed(() => router.currentRoute.value.fullPath);
+        const releaseOld = readiness.register({destination, ready: ref(false)});
+        const releaseCurrent = readiness.register({destination, ready: ref(true)});
+        try {
+            releaseOld();
+            expect(await readiness.wait(router.currentRoute.value)).toBe(true);
+        } finally { releaseCurrent(); readiness.dispose(); router.options.history.destroy(); }
+    });
+
     it('keeps a newer lazy destination pending when an older import is cancelled', async () => {
         let finishFirst!: (value: typeof page) => void;
         let finishSecond!: (value: typeof page) => void;

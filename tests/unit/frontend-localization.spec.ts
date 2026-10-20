@@ -1,7 +1,18 @@
 import {describe, expect, it} from 'vitest';
-import {catalogVersion, createTranslator, localeManifest, resolveLocale} from '../../src/modules/localization/translator';
+import {assertRichMessageNodes, catalogVersion, createTranslator, isPlainMessageKey, localeManifest, resolveLocale} from '../../src/modules/localization/translator';
 
 describe('shared request-bound localization', () => {
+    it('requires declared nodes and prevents node messages from becoming plain notices', () => {
+        expect(isPlainMessageKey('common.save')).toBe(true);
+        expect(isPlainMessageKey('activity.recommendations.scheduleHint')).toBe(false);
+        expect(() => assertRichMessageNodes('activity.recommendations.scheduleHint', ['add'])).not.toThrow();
+        expect(() => assertRichMessageNodes('activity.recommendations.scheduleHint', [])).toThrow('nodes differ');
+        expect(() => assertRichMessageNodes('activity.recommendations.scheduleHint', ['add', 'other'])).toThrow('nodes differ');
+        expect(() => assertRichMessageNodes('activity.progressIncomplete', ['assigned', 'assigned'])).toThrow('nodes differ');
+        const rich = createTranslator('en').rich as (key: string, parameters: Record<string, unknown>) => unknown;
+        expect(() => rich('common.save', {})).toThrow('no authored nodes');
+        expect(() => rich('activity.progressComplete', {assigned: '{done}', required: 2})).toThrow('Invalid translation parameter');
+    });
     it('discovers the same pilot languages for browser and server and resolves regional fallback', () => {
         expect(localeManifest.map(locale => locale.locale)).toEqual(expect.arrayContaining(['de', 'en']));
         expect(catalogVersion).toMatch(/^[a-f\d]{64}$/);

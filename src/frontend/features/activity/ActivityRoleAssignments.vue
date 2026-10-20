@@ -58,7 +58,7 @@ async function save(): Promise<void> {
     // Empty choices mean unassigned roles, not removal of the slot membership.
     const assignments = props.slot.roles.map(role => ({role: role.name, assignmentId: selected[role.name] || null}));
     const result = await command.run(scope => api.saveRoleAssignments(props.planId, props.slot.id, {assignments}, scope), true, false,
-        {presentation: 'inline', success: 'common.updated'});
+        {success: 'common.updated'});
     if (result) emit('close');
 }
 </script>

@@ -1,9 +1,10 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {randomUUID} from 'node:crypto';
+import type {Request} from 'express';
 import nativeActivity, * as activity from '../../src/controller/activityController';
 import {AppDataSource} from '../../src/modules/database/dataSource';
 import {ActivityPlan} from '../../src/modules/database/entities/activity/ActivityPlan';
-import type {Profile} from '../../src/modules/database/entities/user/Profile';
+import {Profile} from '../../src/modules/database/entities/user/Profile';
 import * as activityService from '../../src/modules/database/services/ActivityService';
 import * as adminService from '../../src/modules/database/services/EntityAdminService';
 import * as eventService from '../../src/modules/database/services/EventService';
@@ -44,6 +45,34 @@ beforeAll(async function prepareDatabase() {
 afterAll(closeIntegrationDatabase);
 
 describe('versioned Activity production operations', () => {
+    it('projects civil weeks without changing the saved dates, assignments or native view', async () => {
+        const input = creation();
+        input.startDate = '2027-03-27';
+        input.endDate = '2027-03-30';
+        input.slots[0].day = '2027-03-28';
+        const {id} = await activity.createActivityPlan(input, undefined, actor(owner));
+        const slot = (await activityService.getActivitySlotsFlat(id))[0];
+        await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(participant));
+
+        const view = (await activity.readActivityPlan(id, actor(owner))).data;
+        const validate = contractValidator('ActivityView');
+        expect(validate(view), JSON.stringify(validate.errors)).toBe(true);
+        expect(view.weeks).toEqual([
+            {start: '2027-03-22', days: ['2027-03-27', '2027-03-28']},
+            {start: '2027-03-29', days: ['2027-03-29', '2027-03-30']},
+        ]);
+        expect(view).toMatchObject({startDate: input.startDate, endDate: input.endDate});
+        expect(view.slots[0]).toMatchObject({id: slot.id, day: '2027-03-28', assignedCount: 1});
+        const stored = (await activityService.getActivityPlanById(id))!;
+        expect(stored).toMatchObject({startDate: input.startDate, endDate: input.endDate});
+        expect((await activityService.getActivitySlotsFlat(id))[0].day).toBe('2027-03-28');
+        expect((await activityService.getActivitySlotAssignees(id))[slot.id]).toHaveLength(1);
+        const native = await nativeActivity.fetchForView(stored, {session: actor(owner)} as Request);
+        expect(native.plan).toMatchObject({startDate: input.startDate, endDate: input.endDate});
+        expect(native).not.toHaveProperty('weeks');
+        expect(native.slots['2027-03-28'][0].id).toBe(slot.id);
+    });
+
     it('projects private requirements and preserves zero overrides through the shared settings owner', async () => {
         const eventId = await createIntegrationEvent(owner.id, 'Requirement transport camp');
         await eventService.register(eventId, '2027-06-01', '2027-06-03', participant.id);
@@ -63,12 +92,62 @@ describe('versioned Activity production operations', () => {
             roleId: null, requiredShifts: 0}]);
         expect(data.participants).toContainEqual(expect.objectContaining({requiredShifts: 0, source: 'override'}));
         expect(data.calculationContext.participants).toContainEqual(expect.objectContaining({profileId: participant.id}));
+        expect(data.overrideTargets).toContainEqual(expect.objectContaining({profileId: participant.id,
+            label: participant.name, nameIsFallback: false}));
+        const nativeRequirements = await nativeActivity.getRequirements(id);
+        const nativeTarget = nativeRequirements.overrideTargets.find(target => target.profileId === participant.id);
+        expect(nativeTarget).toMatchObject({label: participant.name});
+        expect(nativeTarget).not.toHaveProperty('nameIsFallback');
         expect(JSON.stringify(data)).not.toContain('password');
         expect(data).not.toHaveProperty('owner');
         await expect(activity.readActivityRequirements(id, actor(other))).rejects.toMatchObject({status: 403});
         await adminService.addAdmin('activity', id, other.id, PERM.MANAGE_ASSIGNMENTS);
         await expect(activity.saveActivityRequirements(id, input, actor(other))).rejects.toMatchObject({status: 403});
         expect((await activity.readActivityPlan(id, actor(other))).data.capabilities.manageRecommendations).toBe(true);
+    });
+
+    it('identifies authored participant fallbacks without changing literal names or native payloads', async () => {
+        // Ordinary user creation normalizes an empty name to its username.
+        // Model the legacy stored-profile condition through real ORM persistence;
+        // literal identical text must still retain its user-authored origin.
+        const unnamed = await persistIntegrationProfile();
+        await AppDataSource.getRepository(Profile).update(unnamed.id, {name: ''});
+        const literalParticipant = await persistIntegrationProfile({name: 'Participant'});
+        const literalProfile = await persistIntegrationProfile({name: 'Profile #' + unnamed.id});
+        const {id, slot} = await fixture();
+        await activityService.updateActivitySlot(slot.id, {maxAssignees: 3});
+        for (const profile of [unnamed, literalParticipant, literalProfile])
+            await activity.setActivityAssignment(id, slot.id, {assigned: true}, actor(profile));
+
+        const view = (await activity.readActivityPlan(id, actor(owner))).data;
+        const recommendations = await activity.readActivityRecommendations(id, actor(owner));
+        const requirements = await activity.readActivityRequirements(id, actor(owner));
+        expect(contractValidator('ActivityView')(view)).toBe(true);
+        expect(contractValidator('ActivityRecommendations')(recommendations)).toBe(true);
+        expect(contractValidator('ActivityRequirements')(requirements)).toBe(true);
+        expect(view.participants).toContainEqual(expect.objectContaining({participantKey: 'profile:' + unnamed.id,
+            name: 'Participant', nameIsFallback: true}));
+        expect(recommendations.participantOptions).toContainEqual(expect.objectContaining({profileId: unnamed.id,
+            label: 'Profile #' + unnamed.id, nameIsFallback: true}));
+        for (const profile of [literalParticipant, literalProfile]) {
+            expect(view.participants).toContainEqual(expect.objectContaining({participantKey: 'profile:' + profile.id,
+                name: profile.name, nameIsFallback: false}));
+            expect(recommendations.participantOptions).toContainEqual(expect.objectContaining({profileId: profile.id,
+                label: profile.name, nameIsFallback: false}));
+        }
+        // Live coverage retains the raw value; its shared presentation helper
+        // can localize an absent name without guessing from an English string.
+        expect(requirements.participants).toContainEqual(expect.objectContaining({participantKey: 'profile:' + unnamed.id, name: ''}));
+        expect(requirements.calculationContext.participants).toContainEqual(expect.objectContaining({profileId: unnamed.id, name: ''}));
+
+        const plan = (await activityService.getActivityPlanById(id))!;
+        const nativeView = await nativeActivity.fetchForView(plan, {session: actor(owner)} as Request);
+        const nativeRecommendations = await nativeActivity.getRecommendations(id, actor(owner));
+        expect(nativeView.participantList).toContainEqual(expect.objectContaining({participantKey: 'profile:' + unnamed.id, name: 'Participant'}));
+        expect(nativeRecommendations.participantOptions).toContainEqual(expect.objectContaining({profileId: unnamed.id, label: 'Profile #' + unnamed.id}));
+        for (const row of [...nativeView.participantList, ...nativeRecommendations.participantOptions])
+            expect(row).not.toHaveProperty('nameIsFallback');
+        expect((await activityService.getActivitySlotAssignees(id))[slot.id]).toHaveLength(3);
     });
 
     it('keeps recovery snapshots read-only while explicit entry retains native recommendation maintenance', async () => {

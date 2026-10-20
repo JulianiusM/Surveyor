@@ -4,7 +4,7 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-14
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: current migration/general-defect boundary and temporary comparator retirement routing reconciled; historical approved D1–D5 review, step-one source inventory, second-pass edge cases and first-pass build/capture scopes retained without renewed execution claims; current execution evidence belongs to the paired review
 source-anchors: src/app.ts; src/routes/; src/controller/; src/views/; src/public/js/; src/types/; src/modules/invoice/; src/modules/activity/; tests/; scripts/capture-frontend-baseline.cjs; package.json; esbuild.client.js; playwright.config.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md
@@ -19,6 +19,16 @@ new API, synchronization protocol, or localization system.
 The user requires feature parity, largely preserved appearance, reusable components, periodic shared-data refresh
 with conflict resolution, a versioned API with one definition of its contract shapes, and shared frontend/backend
 localization. Preserve those requirements when turning this inventory into implementation slices.
+
+The [October 19 clarification](FRONTEND_FOUNDATION_DESIGN.md#direct-interface-and-shared-spa-decisions-2026-10-19)
+defines current interface parity as equivalent information and user steps, not exact pixels, DOM IDs or naming.
+Explicit requirements and approvals are exceptions by default. Historical markup, fixed overflowing rows and native
+submission/refresh jumps are evidence to inspect, not constraints to copy into shared SPA owners. The original
+baseline remains intact; use it together with the dated amendments and current implementation review.
+The [October 20 approvals](FRONTEND_FOUNDATION_DESIGN.md#approved-operations-slot-total-and-calendar-day-corrections-2026-10-20)
+also permit the bounded staged expense wording, saved-slot total and consistent Vue civil-date/week presentation.
+The historical blank native total and browser/server date differences remain baseline evidence, with unchanged
+native sources; they are no longer preservation requirements for these approved Vue corrections.
 
 ## Baseline records
 

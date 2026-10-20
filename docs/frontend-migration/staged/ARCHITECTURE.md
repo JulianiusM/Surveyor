@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-19
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P6 common recovery, Settings retirement, Event disclosure and upload transport reconciled alongside advanced Activity and approved automatic job observation; SPA/native/backend boundaries retained; execution separate; no publication
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
+verification-scope: P0-P6 shared notifications, integrated Refresh, controlled localization, locale-neutral presentation and approved shared civil-date ownership reconciled with original boundaries; approved staged first-install summary linked to Database; execution separate; no publication
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -65,8 +65,9 @@ owners. The [Development guidance](DEVELOPMENT.md#backend-and-method-policy-cont
 
 The [Development contract guidance](DEVELOPMENT.md#contract-authoring-and-generated-consumers) owns supported
 schema/transport styles, strict generated validation and released-version compatibility. The shared translator and
-catalogs currently serve UI/API text and reviewed Help; language preference is a browser cookie and grammar supports
-plain text/cardinal plurals. Principal-language persistence and full email/PDF/invoice localization remain intended
+catalogs currently serve UI/API text and reviewed Help; language preference is a browser cookie. Grammar supports
+plain text/cardinal plurals and declared, validated component placeholders through the shared RichMessage owner;
+scalar values stay escaped text and catalogs cannot supply HTML. Principal-language persistence and full email/PDF/invoice localization remain intended
 future decisions in [DEC-006](decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets),
 without an implemented production capability.
 
@@ -96,10 +97,14 @@ delivery only. The frontend feedback owner manages transient notice scheduling/c
 remain visible.
 `observePageNavigation` shares router subscriptions, latest pending destination and disposal across App, Header,
 Overview and page-entry/confirmed-transition consumers, retaining each caller's URL boundary and callbacks.
+The same navigation module coordinates Router scrolling with a mounted page's reactive render readiness. Help
+exposes its existing admitted read/error and destination; Router remains the only anchor/history scroll owner.
+This registration holds no article payload, query state or saved-position copy and cannot trigger a read.
 Controls and feature drafts share an explicit value lifetime, including file release after confirmation.
 `CommandFeedback` shares command receipt presentation across actual identity, Packing, Event, Drivers, Survey, Activity and Overview consumers;
 `StatusNotice` presents actions with optional injected state and emits actions. Omitting state retains shared
-`ActionButton` initialization and caller-handler guards. Features retain placement, wording and recovery operations.
+`ActionButton` initialization and caller-handler guards. Features retain wording and recovery operations; durable
+conditions remain in their meaningful context and transient notifications use the common page/dialog scope below.
 These controls introduce no second receipt, query or draft owner.
 `command.reconcileSafely` is the deliberate UI recovery boundary; causal command dependencies retain rejecting
 fresh reads. `useSettingsAccessRetirement` shares selected editor-cache retirement and scoped recovery across all
@@ -108,14 +113,15 @@ independent method grants and the producing observer's error/recovery state. Exi
 upload completion, multipart decoding and confined stored-binary delivery across the five feature adapters; feature
 admission, parser policy, cleanup and business operations remain with their existing owners.
 
-Page command confirmations preserve viewport context in the shared sticky live-alert host without programmatically
-changing focus or scrolling the document; normal browser scroll anchoring remains available.
-Its grouping wrapper is layout-transparent, leaving the full main content as the sticky boundary. Local section
-and dialog messages retain their own reveal behavior and the same receipt/dismissal/expiry owners.
+Transient command notifications share page/dialog hosts supplied by `App` and `AppDialog`. Their sticky zero-height
+anchor and bounded overlay stack preserve content position without focusing a notice or scrolling the document.
+The injected `noticeTargetKey` is a read-only presentation reference, not query, draft or authority state.
+`CommandFeedback` chooses shared notification presentation; `StatusNotice` owns rendering, expiry, renewal,
+dismissal and diagnostics. Durable validation/recovery stays contextual. Features do not recreate notice placement.
 `composables/entityLifecycle.ts` supplies `createEntityLifecycle` to Settings, Overview and Event Things to do through
 their existing API, command and current translator. It shares archive/restore confirmation, desired-state dispatch and
-inline success policy. Settings and Event child cards also share its pause/resume operation: only resume asks for the
-existing elapsed-schedule confirmation. Callers retain eligibility, wording, initiator and refresh lifetimes; the
+success wording. Settings and Event child cards also share its pause/resume operation: only resume asks for the
+existing elapsed-schedule confirmation. Callers retain eligibility, wording and refresh lifetimes; the
 helper adds no state or backend business policy.
 
 Event, Packing, Drivers, Survey and Activity detail adopt one displayed `EntityHeader`. Features supply the admitted title/icon, optional parent
@@ -168,20 +174,25 @@ command/consent/confirmed-navigation lifetimes, while features retain their fiel
 generated operations. Packing/Drivers/Survey/Activity compose `useListCommands` from the existing detail-read owner for
 cooldowns, explicit stale recovery, guarded post-command refresh and deliberate unknown-creation review. Features
 inject their actual fresh read and dirty policy, including Survey's ballot merge; Packing/Drivers/Activity opt into their
-common permission wording and local inline-denial feedback. The composition keeps no second snapshot/draft and never repeats a mutation.
-`EntityListCounters` shares Packing/Drivers' admitted counter panel; `EntityListToolbar` shares all four details'
-Refresh control with an optional list hint and Survey's original end alignment. The original scroll/interstitial
-parents remain unchanged. `EntityDetailReadState` shares their denied/stale/cold fragment and skeleton through explicit
+common permission wording and shared denial notifications. The composition keeps no second snapshot/draft and never repeats a mutation.
+`EntityListCounters` shares Packing/Drivers' admitted counter panel; `EntityListToolbar` supplies integrated Refresh
+to list/Activity details, Event detail/admin, Help, profile administration and profile workflows through each existing read owner.
+Features retain admitted projections, cooldown and dirty-value policy; creation/static content invents no read.
+`EntityDetailReadState` shares the list details' denied/stale/cold fragment and skeleton through explicit
 state/timestamp props and a Survey Refresh slot; it owns no query or authority. `CommandFeedback`'s optional creation
 review descriptor shares the unknown-creation paragraph/button while features retain eligibility, wording, margins
 and the existing review operation.
 
-Activity's P5 components own dated slot drafts, local filters and warning-review intent. Existing `InlineCell`
+Activity's basic components own dated slot drafts, local filters and warning-review intent. Existing `InlineCell`
 owns inline values, comparison and conflict recovery; optional tag/multiline inputs change presentation only.
 Active description flags retain that same editor through a remote empty value, and slot modals retain opening fields
 while current permission loss disables submission. Native client admission remains separate from server method grants.
-Detail weeks project the native server calendar; creation copies its distinct browser algorithm. Neither calendar
-normalizes the inherited timezone defects or introduces a second persistence owner.
+The schedule badge derives the complete saved-slot total independently of local filters. One pure browser-safe
+`civilDate.ts` owner supplies Activity creation and versioned detail weeks, plus matching Event/Activity date-only
+display. Its structural declaration lives under `src/types/`; UTC calendar stepping and explicit UTC formatting
+preserve the saved day while the selected locale controls wording. This approved presentation correction replaces
+the original separate native browser/server algorithms without changing persistence, business calculations, native
+rendering, printable output or instant/deadline ownership.
 
 `ActivityRequirements` owns its lexical settings draft and saved calculation context. It composes the existing
 `ActivityParticipants` presentation with unsaved results from the shared pure requirements engine; ordinary reads
@@ -236,7 +247,8 @@ cascade once: base `style.sass`, `help.sass`, then `pilot.css`. `style.sass` own
 including the installed Bootstrap layer. Vite emits separate client/SSR artifacts; the existing renderer uses that
 source stylesheet link in development and the client manifest in installed releases, including styled
 server-rendered/static content before JavaScript initialization. Preserve the
-effective stylesheet order, CDN/compiled Bootstrap layers and geometry; generated output is never an authored source.
+effective stylesheet order, CDN/compiled Bootstrap layers and styled pre-JavaScript content. Responsive overrides
+belong in the shared authored presentation owner; generated output is never an authored source.
 
 The frontend feedback owner supplies notice lifetime; existing backend/domain/catalog owners remain shared.
 Logo/favicon image assets and third-party Bootstrap/icons retain their real consumers independently of application
@@ -460,3 +472,13 @@ source fails rather than hiding behind fallback. This trusted-content boundary i
 Changing the source model requires reopening DEC-004.
 
 <!-- /delta:amendment-26 -->
+
+## Entities, migrations, and subscribers — amendment-27
+
+<!-- delta:amendment-27 -->
+The production datasource always uses `synchronize: false`. Empty disposable development databases and guarded
+test/E2E setup retain their schema-synchronization workflows. For a confirmed empty production database that has
+never held Surveyor data, follow the one-time [Database initialization procedure](DATABASE.md#initialize-a-new-empty-database).
+Existing production schema evolution uses reviewed migrations; synchronization is not an upgrade tool.
+
+<!-- /delta:amendment-27 -->

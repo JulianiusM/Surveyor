@@ -105,7 +105,7 @@ describe('shared skeleton accessibility', () => {
     it('gates contextual retry and dismiss controls until initialization while keeping standalone controls usable', async () => {
         const context = createPilotContext({session}, false);
         const view = defineComponent({components: {ActionButton, StatusNotice}, template:
-            '<ActionButton>Retry</ActionButton><StatusNotice inline transient>Notice</StatusNotice>'});
+            '<ActionButton>Retry</ActionButton><StatusNotice placement="notification" transient>Notice</StatusNotice>'});
         const wrapper = mount(view, {global: {
             plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context},
         }});
@@ -263,6 +263,33 @@ describe('shared skeleton accessibility', () => {
 });
 
 describe('lazy route delivery', () => {
+    it('preserves local SPA positions while retaining real Help visits, anchors and browser restoration', async () => {
+        const {router, context} = createPilotApp({session}, false);
+        cleanups.push(() => { router.options.history.destroy(); context.queryClient.clear(); });
+        const behavior = router.options.scrollBehavior!;
+        const help = resolveDestination('/frontend-pilot/help?doc=activity_plans&locale=en#rules');
+        const translated = resolveDestination('/frontend-pilot/help?doc=activity_plans&locale=de#rules');
+        const otherArticle = resolveDestination('/frontend-pilot/help?doc=events&locale=de');
+        const entry = resolveDestination('/frontend-pilot/users/profile/migrate/show');
+        const preview = resolveDestination('/frontend-pilot/users/profile/migrate/show#migration-preview');
+
+        // Exercise the real Router policy with resolved public URLs. A local
+        // preview/translation is distinct from selecting another article or Back.
+        expect(await behavior(translated, help, null)).toBe(false);
+        expect(await behavior(otherArticle, translated, null)).toEqual({top: 0});
+        expect(await behavior(preview, entry, null)).toBe(false);
+        expect(await behavior(entry, preview, null)).toBe(false);
+        expect(await behavior(entry, preview, {left: 0, top: 640})).toEqual({left: 0, top: 640});
+        expect(await behavior(resolveDestination('/frontend-pilot/imprint#contact'), entry, null)).toEqual({el: '#contact'});
+
+        // Router's scroll callback receives normalized routes: an unnamed route
+        // has undefined rather than resolve()'s additional nullable-name option.
+        function resolveDestination(url: string) {
+            const destination = router.resolve(url);
+            return {...destination, name: destination.name ?? undefined};
+        }
+    });
+
     it.each(['setup', 'mounted'] as const)('rejects actual initial Vue %s failure before enabling controls or retiring protection', async phase => {
         const url = '/frontend-pilot/users/login';
         const rendered = await render(url, {session});

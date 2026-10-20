@@ -387,6 +387,9 @@ schemas:
         type: "string"
       name:
         type: "string"
+      nameIsFallback:
+        type: boolean
+        description: True only when the shared owner supplied its generic participant label instead of a raw name.
       count:
         type: "integer"
         minimum: 0
@@ -638,14 +641,14 @@ schemas:
           remove:
             type: "boolean"
   ActivityWeek:
-    description: Native server-rendered week start and visible day keys, preserving its local Date iteration.
+    description: Monday-based civil weeks with visible stored day keys clipped to the plan date range, independent of timezone and daylight saving time.
     type: object
     additionalProperties: false
     required: [start, days]
     properties:
       start:
         type: string
-        description: Native heading key; an earliest supported year may place its preceding Monday in year 999.
+        description: ISO civil date of the week's Monday; the preceding Monday can fall before the plan's start date or year.
         pattern: '^[0-9]{3,4}-[0-9]{2}-[0-9]{2}$'
       days:
         type: array
@@ -1771,6 +1774,9 @@ schemas:
           - "null"
       label:
         type: string
+      nameIsFallback:
+        type: boolean
+        description: True only when the shared owner supplied its profile or participant fallback instead of a raw name.
       arrivalDate:
         type:
           - string

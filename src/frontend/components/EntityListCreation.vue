@@ -252,9 +252,9 @@ function collectCreation() {
          their browser input behavior; the generated command contract and persistence
          retain their independent structural/storage bounds. Metadata editing has
          different native limits and must not lend them to this creation form. -->
-    <!-- Native rejected creation POSTs render their ordinary flash above the card.
-         Admission denials remain the separate full Error/Home outcome below. -->
-    <CommandFeedback v-if="!admissionError" :feedback="command.feedback" part="error" error-kind="danger" :inline="false" />
+    <!-- Shared feedback presents rejected creation through the common notification
+         scope. Admission denials retain their separate full Error/Home outcome. -->
+    <CommandFeedback v-if="!admissionError" :feedback="command.feedback" part="error" error-kind="danger" />
     <!-- Use the shared error card/Home action for initial route denials. These
          denials mount no form, issue no resource queries and disclose no copy. -->
     <PageMessage v-if="admissionError" kind="error" :message="admissionError" :renewal="admissionMessage" />

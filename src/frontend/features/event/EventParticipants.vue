@@ -160,18 +160,18 @@ async function saveDates(event: Event): Promise<void> {
     const registrationId = edit.id;
     const dates = {arrivalDate: edit.arrivalDate, departureDate: edit.departureDate};
     const result = await command.run(scope => api.updateRegistrationDates(props.eventId, registrationId, dates, scope),
-        true, false, {presentation: 'inline', success: 'event.organizer.attendanceUpdated', initiator: event});
+        true, false, {success: 'event.organizer.attendanceUpdated'});
     if (result) resetDates();
 }
 
 /** Removal is deliberate and Event-scoped; refreshed roster delivery cannot turn
  * a confirmed deletion into a second DELETE or consume another participant row. */
-async function removeRegistration(row: Participant, event: MouseEvent): Promise<void> {
+async function removeRegistration(row: Participant): Promise<void> {
     if (!management.isAvailable()) return;
     if (!window.confirm(messages.value.t('event.organizer.deleteRegistrationConfirm'))) return;
     // Freeze this row's identity before I/O, independently of later query updates.
     await command.run(scope => api.removeRegistration(props.eventId, row.id, scope), true, false,
-        {presentation: 'inline', success: 'event.organizer.registrationDeleted', initiator: event});
+        {success: 'event.organizer.registrationDeleted'});
 }
 
 /** Clipboard delivery never submits a registration command or changes its row. */
@@ -193,10 +193,10 @@ async function refresh(): Promise<void> {
         data-entity-section>
         <!-- The page host retains command status when the date editor closes.
              While it is open, the dialog below owns the same receipt presentation. -->
-        <div v-if="!edit.id" data-command-feedback>
-            <CommandFeedback :feedback="command.feedback" :target="null"
+        <div v-if="!edit.id">
+            <CommandFeedback :feedback="command.feedback"
                 :part="command.uncertain.value ? 'error' : 'all'" />
-            <CommandFeedback :feedback="command.feedback" part="uncertain" :target="null"
+            <CommandFeedback :feedback="command.feedback" part="uncertain"
                 :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refresh" />
         </div>
 
@@ -236,7 +236,7 @@ async function refresh(): Promise<void> {
                                         :disabled="available.disabled.value" />
                                 </div>
                             </div>
-                            <div class="d-flex align-items-center mb-2">
+                            <div class="pilot-action-row mb-2">
                                 <div class="js-totals small text-secondary">
                                     <EventTotals :entries="section.data.value.totals" />
                                 </div>
@@ -267,7 +267,7 @@ async function refresh(): Promise<void> {
                                                 <span v-else class="text-secondary d-none d-md-inline">—</span>
                                             </td>
                                             <td>
-                                                <div>{{ formatEventDate(row.arrivalDate) }} → {{ formatEventDate(row.departureDate) }}</div>
+                                                <div>{{ formatEventDate(row.arrivalDate, messages.locale) }} → {{ formatEventDate(row.departureDate, messages.locale) }}</div>
                                             </td>
                                             <td>
                                                 <span v-for="choice in row.dietary" :key="choice.choice"
@@ -285,7 +285,7 @@ async function refresh(): Promise<void> {
                                                         :state="available" :disabled="clipboard.pending.has(row.id)"
                                                         @click="copyEmail(row)"><i class="bi bi-clipboard" aria-hidden="true"></i> {{ messages.t('event.organizer.copyEmail') }}</ActionButton>
                                                     <ActionButton v-if="manageRegistrations" variant="outline-danger"
-                                                        :state="management" @click="removeRegistration(row, $event)"><i class="bi bi-trash" aria-hidden="true"></i> {{ messages.t('event.organizer.deleteRegistration') }}</ActionButton>
+                                                        :state="management" @click="removeRegistration(row)"><i class="bi bi-trash" aria-hidden="true"></i> {{ messages.t('event.organizer.deleteRegistration') }}</ActionButton>
                                                 </div>
                                             </td>
                                         </tr>
@@ -328,10 +328,10 @@ async function refresh(): Promise<void> {
             content-class="text-light border border-secondary" footer-class="justify-content-between"
             :pending="command.pending.value || command.recovering.value" :fullscreen-on-small="false"
             @close="closeDates">
-            <div data-dialog-feedback>
-                <CommandFeedback :feedback="command.feedback" :target="null"
+            <div>
+                <CommandFeedback :feedback="command.feedback"
                     :part="command.uncertain.value ? 'error' : 'all'" />
-                <CommandFeedback :feedback="command.feedback" part="uncertain" :target="null"
+                <CommandFeedback :feedback="command.feedback" part="uncertain"
                     :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refresh" />
             </div>
             <form :id="`${id}-date-form`" @submit.prevent="saveDates">

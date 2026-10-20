@@ -459,8 +459,7 @@ describe('mounted Packing lifecycle actions', () => {
         {restore: false, inherited: false, confirmation: 'packing.confirmArchive', success: 'overview.archived'},
         {restore: false, inherited: true, confirmation: 'packing.confirmArchiveIndependent', success: 'overview.archived'},
         {restore: true, inherited: true, confirmation: 'packing.confirmRestore', success: 'overview.restored'},
-    ] as const)('preserves Settings confirmation, cancellation and initiating host for $confirmation', async action => {
-        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
+    ] as const)('preserves Settings confirmation, cancellation and common dialog feedback for $confirmation', async action => {
         const confirmation = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
         vi.stubGlobal('confirm', confirmation);
         const globalAlerts = document.createElement('div');
@@ -494,14 +493,17 @@ describe('mounted Packing lifecycle actions', () => {
             await flushPromises();
             expect(confirmation).toHaveBeenLastCalledWith(mounted.context.messages.value.t(action.confirmation));
             expect(writes).toBe(0);
-            expect(section.querySelector('[data-command-feedback]')!.textContent).toBe('');
+            const dialog = section.closest('[role="dialog"]')!;
+            expect(dialog.querySelector('[data-pilot-notices]')!.textContent).toBe('');
 
-            // The actual click supplies its live initiator. Success remains in
-            // this archival section rather than the modal/global fallback host.
+            // The common modal region presents the receipt without moving
+            // focus from the still-mounted initiating control.
+            button.focus();
             button.click();
             await flushPromises();
             expect(writes).toBe(1);
-            expect(section.querySelector('[data-command-feedback]')!.textContent).toContain(mounted.context.messages.value.t(action.success));
+            expect(dialog.querySelector('[data-pilot-notices]')!.textContent).toContain(mounted.context.messages.value.t(action.success));
+            expect(document.activeElement).toBe(button);
             expect(globalAlerts.textContent).toBe('');
         } finally { await mounted.dispose(); }
     });
@@ -1013,9 +1015,8 @@ describe('mounted Packing checklist persistence', () => {
 });
 
 describe('packing presentation compatibility', () => {
-    it('keeps actual metadata no-op and rejected-save feedback in Properties when global alerts exist', async () => {
-        // A captured fallback target is intentionally available and visible. The
-        // local metadata contract must still keep its own inline feedback host.
+    it('uses shared dialog feedback for metadata no-op and rejected-save results without moving focus', async () => {
+        // A global host cannot obscure the active modal's shared notices.
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
         const globalAlerts = document.createElement('div');
         globalAlerts.id = 'liveAlerts';
@@ -1033,18 +1034,23 @@ describe('packing presentation compatibility', () => {
             await mounted.wrapper.findAll('button').find(button => button.text() === 'Entity settings')!.trigger('click');
             await flushPromises();
             const fields = mounted.wrapper.findComponent(MetadataFields);
-            const local = fields.get('[data-command-feedback]');
+            const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+            const notices = dialog.querySelector<HTMLElement>('[data-pilot-notices]')!;
+            const input = fields.get<HTMLInputElement>('input[name="title"]').element;
+            input.focus();
 
-            // Pristine Save and the rejected PATCH both capture the ordinary
-            // fallback without a DOM initiator; neither may teleport out of Properties.
+            // Both outcomes use the common region while the field, rejected
+            // value and focus remain with their original editor.
             await fields.get('#packing-metadata-form').trigger('submit');
             await flushPromises();
-            expect(local.text()).toContain(mounted.context.messages.value.t('metadata.noChanges'));
+            expect(notices.textContent).toContain(mounted.context.messages.value.t('metadata.noChanges'));
+            expect(document.activeElement).toBe(input);
             expect(globalAlerts.textContent).toBe('');
             await fields.get('input[name="title"]').setValue('Rejected metadata title');
             await fields.get('#packing-metadata-form').trigger('submit');
             await flushPromises();
-            expect(local.text()).toContain(mounted.context.messages.value.t('api:errors.VALIDATION_FAILED'));
+            expect(notices.textContent).toContain(mounted.context.messages.value.t('api:errors.VALIDATION_FAILED'));
+            expect(document.activeElement).toBe(input);
             expect(globalAlerts.textContent).toBe('');
             expect(fields.get<HTMLInputElement>('input[name="title"]').element.value).toBe('Rejected metadata title');
         } finally { await mounted.dispose(); }

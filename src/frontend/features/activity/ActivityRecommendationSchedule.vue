@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import {TranslationComponent as I18next} from 'i18next-vue';
+import RichMessage from '../../components/RichMessage.vue';
 import type {components} from '../../../types/api/v1';
 import type {ActivityRecommendationDraftRow} from '../../../types/FrontendActivityRecommendationTypes';
 import {usePilot} from '../../app/context';
-import {activityDateLabel, activityDayLabel, activityWarningLabel} from './presentation';
+import {activityDateLabel, activityDayLabel, activityParticipantName, activityWarningLabel} from './presentation';
 import {recommendationPartners, recommendationWarnings} from './recommendationDraft';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -34,7 +34,8 @@ function rowIcon(row: ActivityRecommendationDraftRow): string {
 /** Describe the admitted operation without reconstructing private source information. */
 function rowName(row: ActivityRecommendationDraftRow): string {
     // User names/source titles remain data inside catalog-owned complete labels.
-    const name = row.value.profile?.name || messages.value.t('activity.recommendations.unknown');
+    const name = activityParticipantName(row.value.profile?.name, messages.value.t, row.value.profile?.nameIsFallback, row.value.profile?.id)
+        || messages.value.t('activity.recommendations.unknown');
     if (row.value.operation === 'ASSIGN') return name;
     if (row.value.operation === 'UNASSIGN') return messages.value.t('activity.recommendations.unassignName', {name});
     return messages.value.t(isSwap(row) ? 'activity.recommendations.swapName' : 'activity.recommendations.moveName',
@@ -50,17 +51,17 @@ function statusLabel(status: string): string {
     <div id="recommendationScheduleView">
         <h5 class="mb-3"><i class="bi bi-calendar-plus me-2" aria-hidden="true"></i>{{ messages.t('activity.recommendations.scheduleTitle') }}</h5>
         <p class="small text-secondary mb-3">
-            <I18next :translation="messages.t('activity.recommendations.scheduleHint')">
+            <RichMessage message="activity.recommendations.scheduleHint" :parameters="{}">
                 <template #add><span class="badge bg-info">{{ messages.t('activity.recommendations.addShort') }}</span></template>
-            </I18next>
+            </RichMessage>
         </p>
         <div class="d-flex gap-3 mb-3 flex-wrap">
             <div v-for="item in legend" :key="item.label" class="d-flex align-items-center gap-2">
-                <span class="badge" :class="item.color">{{ messages.t(`activity.recommendations.${item.label}`) }}</span>
+                <span class="badge flex-shrink-0" :class="item.color">{{ messages.t(`activity.recommendations.${item.label}`) }}</span>
                 <span class="small text-secondary">{{ messages.t(`activity.recommendations.${item.detail}`) }}</span>
             </div>
         </div>
-        <!-- Reuse the server's native calendar grouping. Slots and commitments
+        <!-- Reuse the shared civil calendar's versioned grouping. Slots and commitments
         are safe projections; no sibling discovery is performed in the browser. -->
         <template v-for="week in view.weeks" :key="week.start">
             <h5 class="mt-4 mb-2">{{ messages.t('activity.weekOf', {date: week.start}) }}</h5>
@@ -163,7 +164,7 @@ function statusLabel(status: string): string {
                                                     class="btn-xs" variant="outline-danger"
                                                     :disabled="disabled"
                                                     :title="messages.t(row.value.operation === 'UNASSIGN' ? 'activity.recommendations.cancelUnassign' : 'activity.recommendations.remove')"
-                                                    :aria-label="messages.t(row.value.operation === 'UNASSIGN' ? 'activity.recommendations.cancelUnassignFor' : 'activity.recommendations.removeFor', {name: row.value.profile.name})"
+                                                    :aria-label="messages.t(row.value.operation === 'UNASSIGN' ? 'activity.recommendations.cancelUnassignFor' : 'activity.recommendations.removeFor', {name: activityParticipantName(row.value.profile.name, messages.t, row.value.profile.nameIsFallback, row.value.profile.id)})"
                                                     @click="emit('remove', row)"><i class="bi bi-trash" aria-hidden="true"></i></ActionButton>
                                                 <StatusNotice
                                                     v-if="recommendationWarnings(row.value, warnings).length"

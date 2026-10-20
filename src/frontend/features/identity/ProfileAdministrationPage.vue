@@ -21,6 +21,7 @@ import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
+import EntityListToolbar from '../../components/EntityListToolbar.vue';
 
 type Profile = components['schemas']['ProfileSettings'];
 type Projection = Profile | components['schemas']['ProfileManagement'];
@@ -205,12 +206,12 @@ function reloadProfile(): void {
 }
 
 /** Confirmed commands release their fields once, then recover session display and navigation separately. */
-async function submit(event: Event): Promise<void> {
+async function submit(): Promise<void> {
     if (blocked.value || !data.value || mode.value === 'manage') return;
     const origin = route.fullPath;
     const scope = context.capture();
     const editing = mode.value === 'edit';
-    const result = await command.run(saveProfile, false, true, {initiator: event});
+    const result = await command.run(saveProfile, false, true);
     if (!result) return;
 
     // Confirmation belongs to the unchanged native operation. Retire affected
@@ -286,7 +287,7 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
                 :action="{state: resourceRecovery, label: messages.t('common.retry'), class: 'ms-2'}" @action="recover">
                 {{ messages.t(data ? 'state.stale' : 'state.loadFailed') }}
             </StatusNotice>
-            <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" :inline="false" />
+            <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" />
             <CommandFeedback :feedback="command.feedback" part="uncertain"
                 :action="{state: resourceRecovery, label: messages.t('common.refresh'), class: 'ms-2'}" @action="recover">
                 <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
@@ -297,6 +298,8 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
             </StatusNotice>
             <LoadingSkeleton v-if="!data && !projection.error.value" v-bind="route.meta.loadingSkeleton" />
             <template v-if="data">
+                <EntityListToolbar v-if="mode !== 'create'" :refresh-label="messages.t('common.refresh')"
+                    :state="resourceRecovery" @refresh="recover" />
                 <!-- The account roster is projected explicitly; each action adopts the existing switch command. -->
                 <ul v-if="mode === 'manage'" class="list-group">
                     <li v-for="owned in profiles" :key="owned.id" class="list-group-item d-flex justify-content-between align-items-start">

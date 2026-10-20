@@ -146,23 +146,23 @@ function openEditor(day: string, id?: string): void { if (!blocked.value) editor
  * field so sibling draft values never become incidental updates. */
 async function patch(slot: components['schemas']['ActivitySlotView'], field: 'title' | 'description' | 'maxAssignees', value: string, token: string): Promise<boolean> {
     return !!await command.run(scope => api.updateSlot(planId.value, slot.id, {[field]: value}, token, scope), true, false,
-        {presentation: 'inline', success: 'common.updated'});
+        {success: 'common.updated'});
 }
 /** Submit one captured day-order gesture without optimistic DOM persistence. */
 async function reorder(order: components['schemas']['ActivityOrderInput']['order'], token: string): Promise<unknown> {
     return command.run(scope => api.reorder(planId.value, order, token, scope), true, false,
-        {presentation: 'inline', success: 'common.orderSaved'});
+        {success: 'common.orderSaved'});
 }
 /** Confirm the native destructive slot action before its independent server check. */
 async function removeSlot(slot: components['schemas']['ActivitySlotView']): Promise<void> {
     // Existing controller deletion retains its own assignment cleanup semantics.
     if (!blocked.value && slot.capabilities.remove && window.confirm(messages.value.t('activity.deleteSlot')))
-        await command.run(scope => api.deleteSlot(planId.value, slot.id, scope), true, false, {presentation: 'inline', success: 'common.removed'});
+        await command.run(scope => api.deleteSlot(planId.value, slot.id, scope), true, false, {success: 'common.removed'});
 }
 /** Organizer removal remains immediate and operates on an admitted assignment ID. */
 async function removeAssignment(id: string): Promise<void> {
     if (!blocked.value) await command.run(scope => api.removeAssignment(planId.value, id, scope), true, false,
-        {presentation: 'inline', success: 'common.removed'});
+        {success: 'common.removed'});
 }
 
 /** Read fresh warnings before Join or an available named role. Native role review
@@ -171,7 +171,7 @@ async function assign(slot: components['schemas']['ActivitySlotView'], assigned:
     if (blocked.value) return;
     if (!assigned) {
         await command.run(scope => api.assign(planId.value, slot.id, {assigned, ...(role ? {role} : {})}, scope), true, false,
-            {presentation: 'inline', success: 'common.updated'});
+            {success: 'common.updated'});
         return;
     }
     const scope = context.capture();
@@ -208,7 +208,7 @@ async function confirmAssignment(): Promise<void> {
     const input = {assigned: intent.assigned, ...(intent.role ? {role: intent.role} : {}),
         ...(intent.preview.overlapConfirmation ? {overlapConfirmation: intent.preview.overlapConfirmation} : {})};
     await command.run(scope => api.assign(planId.value, intent.slotId, input, scope), true, false,
-        {presentation: 'inline', success: 'common.updated'});
+        {success: 'common.updated'});
 }
 </script>
 

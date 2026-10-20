@@ -16,6 +16,15 @@ Use it with the [behavior inventory](BEHAVIOR_INVENTORY.md), [route inventory](R
 [test coverage map](TEST_COVERAGE.md). Screenshots show appearance at selected states; they do not establish complete
 feature, permission, interaction or accessibility coverage.
 
+These captures remain historical evidence. Under the
+[October 19 direct clarification](FRONTEND_FOUNDATION_DESIGN.md#direct-interface-and-shared-spa-decisions-2026-10-19),
+current acceptance protects equivalent visible information, reachable controls and user steps with approved changes,
+not identical pixels or inherited DOM identifiers. Localized reflow, required Refresh and common non-jumping SPA
+notifications need their own meaningful current assertions; historical native overflow is not a layout requirement.
+The [October 20 approvals](FRONTEND_FOUNDATION_DESIGN.md#approved-operations-slot-total-and-calendar-day-corrections-2026-10-20)
+also replace the native blank Activity total and shifted civil-day/week presentation in Vue. Keep these captures as
+original evidence; current slot totals and calendar labels require their approved behavior and current browser checks.
+
 ## Evidence and environment
 
 The reviewed run is `test-results/frontend-baseline/2026-10-04T13-03-59-615Z/`, completed at

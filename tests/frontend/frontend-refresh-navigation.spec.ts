@@ -187,9 +187,6 @@ describe('Overview Packing lifecycle actions', () => {
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
         const confirmation = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
         vi.stubGlobal('confirm', confirmation);
-        const globalAlerts = document.createElement('div');
-        globalAlerts.id = 'liveAlerts';
-        document.body.append(globalAlerts);
         let writes = 0;
         const packingCard: components['schemas']['OverviewCard'] = {...card, type: 'packing',
             url: `/frontend-pilot/packing/${card.id}`, inheritedArchived: action.inherited,
@@ -215,17 +212,17 @@ describe('Overview Packing lifecycle actions', () => {
         await flushPromises();
         expect(confirmation).toHaveBeenLastCalledWith(context.messages.value.t(action.confirmation));
         expect(writes).toBe(0);
-        expect(globalAlerts.textContent).toBe('');
+        expect(wrapper.find('.pilot-notification').exists()).toBe(false);
         const readsBeforeConfirmation = request.mock.calls.length;
 
-        // Overview deliberately supplies no initiating section. Its inline receipt
-        // uses the existing global host and its existing post-command region read.
+        // The same command refreshes its region and publishes through shared
+        // notification presentation without capturing a native section target.
         (button.element.closest('details') as HTMLDetailsElement).open = true;
         await button.trigger('click');
         await flushPromises();
         expect(writes).toBe(1);
         expect(request.mock.calls.length).toBeGreaterThan(readsBeforeConfirmation + 1);
-        expect(globalAlerts.textContent).toContain(context.messages.value.t(action.success));
+        expect(wrapper.get('.pilot-notification').text()).toBe(context.messages.value.t(action.success));
     });
 });
 
@@ -1494,6 +1491,8 @@ describe('native overview search and history', () => {
             return json(region(request));
         });
         const original = router.currentRoute.value.fullPath;
+        const headingFocus = vi.spyOn(wrapper.get<HTMLElement>('.js-overview-heading').element, 'focus');
+        const scroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
         const next = wrapper.findAll('a').find(link => link.text() === 'Next')!;
         (next.element as HTMLElement).focus();
         await next.trigger('click');
@@ -1519,6 +1518,10 @@ describe('native overview search and history', () => {
         expect(nextReads).toBe(2);
         expect(router.currentRoute.value.query.owner_main_page).toBe('2');
         expect(document.activeElement).toBe(wrapper.get('.js-overview-heading').element);
+        // The completed region is announced without the old submit/reload scroll.
+        // Deliberate event Back restoration has its own separate journey below.
+        expect(headingFocus).toHaveBeenLastCalledWith({preventScroll: true});
+        expect(scroll).not.toHaveBeenCalled();
         expect(wrapper.text()).not.toContain(context.messages.value.t('state.stale'));
         router.back();
         await flushPromises();

@@ -2,13 +2,15 @@ import {spawnSync} from 'node:child_process';
 import {resolve} from 'node:path';
 import {describe, expect, it} from 'vitest';
 
-/** Run the actual controller projection and immutable native Pug oracle in an
+/** Run the shared Vue calendar, actual versioned projection and immutable native Pug oracle in an
  * isolated Node process. Its timezone changes never modify Vitest's workers,
  * disposable database setup or another suite's established UTC contract. */
 function nativeCalendarComparisons() {
     const script = `
         const pug = require('pug');
         const {projectActivityScheduleWeeks} = require('./src/controller/activityController');
+        const {activityCreationWeeks, activityDateLabel, activityDayLabel} = require('./src/frontend/features/activity/presentation');
+        const {formatEventCivilDate, formatEventDate, formatEventTimestamp} = require('./src/frontend/features/event/presentation');
         const render = pug.compileFile('src/views/activity/activity-view.pug');
         const results = [];
         for (const zone of ['UTC', 'Europe/Berlin', 'America/Los_Angeles', 'Asia/Tokyo']) {
@@ -34,7 +36,11 @@ function nativeCalendarComparisons() {
                 const nativeWeeks = [...html.matchAll(/<h4 class="mt-4 mb-2">Week of ([0-9-]+)<\\/h4>[\\s\\S]*?<table[^>]*activity-table[^>]*>([\\s\\S]*?)<\\/table>/g)]
                     .map(match => ({start: match[1], days: [...match[2].matchAll(/<th[^>]*data-date="([^"]+)"/g)].map(day => day[1])}));
                 results.push({zone, startDate, endDate, offset: new Date('2027-03-31T00:00:00Z').getTimezoneOffset(),
-                    nativeWeeks, projection: projectActivityScheduleWeeks(startDate, endDate)});
+                    nativeWeeks, projection: projectActivityScheduleWeeks(startDate, endDate),
+                    creation: activityCreationWeeks(startDate, endDate),
+                    activityDate: activityDateLabel('2030-06-01', 'en'), activityDay: activityDayLabel('2030-06-01', 'en'),
+                    eventFull: formatEventCivilDate('2030-06-01', 'en'), eventDate: formatEventDate('2030-06-01', 'de'),
+                    timestamp: formatEventTimestamp('2030-06-01T00:00:00Z', 'en')});
             }
         }
         process.stdout.write(JSON.stringify(results));
@@ -48,19 +54,34 @@ function nativeCalendarComparisons() {
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error(result.stderr || 'Native calendar comparison process failed.');
     return JSON.parse(result.stdout) as Array<{zone: string; startDate: string; endDate: string; offset: number;
-        nativeWeeks: Array<{start: string; days: string[]}>; projection: Array<{start: string; days: string[]}>}>;
+        nativeWeeks: Array<{start: string; days: string[]}>; projection: Array<{start: string; days: string[]}>;
+        creation: string[][]; activityDate: string; activityDay: string; eventFull: string; eventDate: string; timestamp: string}>;
 }
 
-describe('Activity native calendar presentation', () => {
-    it('matches actual native template week/day keys through spring and autumn timezone transitions', () => {
+describe('approved Vue calendar and unchanged native reference', () => {
+    it('keeps Vue creation and versioned weeks identical across real timezone/DST transitions while retaining native evidence', () => {
         const results = nativeCalendarComparisons();
         expect(results).toHaveLength(16);
         for (const result of results) {
             expect(result.nativeWeeks.length, result.zone + ' ' + result.startDate).toBeGreaterThan(0);
-            expect(result.projection, result.zone + ' ' + result.startDate + ' ' + result.endDate).toEqual(result.nativeWeeks);
+            const utc = results.find(candidate => candidate.zone === 'UTC' && candidate.startDate === result.startDate)!;
+            expect(result.projection, result.zone + ' ' + result.startDate + ' ' + result.endDate).toEqual(utc.projection);
+            expect(result.creation).toEqual(result.projection.map(week => week.days));
+            expect(result.activityDate).toBe('6/1/2030');
+            expect(result.activityDay).toBe('Sat');
+            expect(result.eventFull).toBe('Saturday, June 1, 2030');
+            expect(result.eventDate).toBe('1.6.2030');
         }
         // Distinct effective offsets establish that this compares real local
         // Date behavior, rather than repeated executions in one UTC zone.
         expect(new Set(results.map(result => result.offset)).size).toBe(4);
+        // Native remains an actual rendered oracle, including its known Tuesday
+        // heading in this negative offset. R10 changes only the Vue projection.
+        const negative = results.find(result => result.zone === 'America/Los_Angeles' && result.startDate === '2030-06-01')!;
+        expect(negative.nativeWeeks).toEqual([{start: '2030-05-28', days: ['2030-06-01', '2030-06-02']}]);
+        expect(negative.projection).toEqual([{start: '2030-05-27', days: ['2030-06-01', '2030-06-02']}]);
+        // Timestamp presentation remains an instant in the viewer's real zone.
+        expect(negative.timestamp).toContain('5/31/2030');
+        expect(results.find(result => result.zone === 'Asia/Tokyo')!.timestamp).toContain('6/1/2030');
     }, 40_000);
 });

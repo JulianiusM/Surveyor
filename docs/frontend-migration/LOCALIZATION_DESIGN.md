@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; documentation contributors
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-19
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: typed catalog grammar and existing Activity named-slot deviation inspected against the deferred ADR choice; specific adoption approval remains pending; superseded inherited-prose exception and Help/fallback/query-locale boundaries retained
-source-anchors: src/locales/; scripts/generate-locales.mjs; src/modules/localization/; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/controller/helpController.ts; docs/user-guide/en/; docs/user-guide/de/; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
+verification-scope: direct R2 complete interface localization and R3 controlled component-message approval reconciled with original deferral, shared catalogs, Event date-wording consumers, approved shared civil-day presentation and retained Help/fallback/query-locale boundaries; execution separate
+source-anchors: src/locales/; scripts/generate-locales.mjs; src/modules/localization/; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/frontend/features/event/; src/controller/helpController.ts; docs/user-guide/en/; docs/user-guide/de/; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: frontend-production-cutover
 -->
 
@@ -42,15 +42,22 @@ i18next instance. Vue uses the shared provider/i18next-vue binding; API Problems
 The typed translator supports plain text/cardinal plurals and a shared explicit-UTC formatter for read receipts/Retry
 instants. Entity civil dates/deadlines retain their existing meaning.
 
-The full-pilot source review found that Activity progress emphasis and the recommendation hint badge already use
-i18next-vue's `TranslationComponent` with named slots. This conflicts with the
-[ADR's deferred status](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets);
-no specific approval for these consumers was found. They supply explicit application nodes rather than catalog HTML,
-but that implementation does not authorize a supported extension. A separate direct decision is pending.
+The full-pilot review found that Activity progress emphasis and the recommendation hint badge used component
+placeholders before their specific approval, conflicting with the original ADR deferral. The maintainer's direct
+October 19 R3 decision now authorizes a controlled shared owner: catalogs declare permitted placeholders,
+generation validates each translation, and application code supplies only explicitly authored Vue elements through
+the selected i18next-vue binding. Arbitrary catalog HTML remains forbidden. The
+[dated ADR amendment](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#approved-interface-and-shared-spa-amendments-2026-10-19)
+preserves the original deferral as history; existing unvalidated source did not supply its own authority.
+
+R2 requires localization of **all non-user-generated UI text across migrated modules**, including source/status
+labels, actions, validation and accessibility text. Entity names, role titles and other user records stay data.
+R4 requires the same responsive usability in every language; longer translations do not justify a German-only
+layout or preservation of clipped native actions. Actual implementation and verification belong to the paired review.
 
 The preference currently lives in a server-issued browser cookie. PUT /api/v1/locale returns resolved session
 presentation without persisting User/Guest preference or changing active profile.
-Principal persistence, full Pug/email/PDF/invoice catalog integration, rich slots/context/ordinal grammar, full
+Principal persistence, full Pug/email/PDF/invoice catalog integration, context/ordinal grammar, full
 regional formatting and additional scripts/fonts remain future work.
 
 The runtime Help source now selects catalog `help.directory` under fixed `docs/user-guide/`.
@@ -88,7 +95,7 @@ duplicated call-site interfaces. Reject duplicate keys, malformed metadata, miss
 The [Development catalog guidance](staged/DEVELOPMENT.md#localization-and-runtime-help) owns the current plain-text/
 cardinal-plural grammar and browser-cookie preference scope. The
 [active decision record](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets)
-preserves original unsupported extensions as intended future choices. Fallback uses the shared resolver/default
+preserves original unsupported extensions and the approved controlled-component amendment. Fallback uses the shared resolver/default
 catalog; call sites do not carry independent English defaultValue text or raw validator messages.
 
 To add a supported language:
@@ -139,13 +146,21 @@ Reuse them directly instead of copying financial wording/presentation into Vue.
 ## Safe text, rich content and value formatting
 
 Plain interpolation is escaped at Vue/server boundaries. Do not concatenate HTML or translate user input as keys.
-Future rich content has named approved slots/components, not executable HTML from catalogs.
+Controlled component messages use declared, validated placeholders filled by authored Vue nodes, never executable
+HTML from catalogs. Scalar interpolation and component placeholders retain distinct declarations and escaping.
 Help remains trusted reviewed Markdown under DEC-004 with fixed source/URI/image validation, not arbitrary content.
 
 Preserve canonical numeric/date values independently of localized display.
 Money/factors retain current exact arithmetic; language cannot round stored numbers again.
-Machine civil dates/local deadlines retain their field-owned timezone/parsing meaning.
+Stored civil-date strings and local-minute deadline inputs retain their values. Under the
+[October 20 approval](FRONTEND_FOUNDATION_DESIGN.md#approved-operations-slot-total-and-calendar-day-corrections-2026-10-20),
+formatted Vue Event/Activity date-only displays use the shared pure civil-date owner with explicit UTC calendar
+parts and the selected language; Activity creation and versioned detail share Monday-to-Sunday week grouping.
+This supersedes copied native browser/server calendar differences for Vue without changing domain or print owners.
 Successful-read/Retry receipts are instants displayed in selected language with explicit UTC across SSR/browser.
+Event's existing date/timestamp presentation helpers and summary deadline receive the selected interface locale;
+locale switches translate their wording while retaining date drafts and saved civil days. Deadlines and link timestamps
+remain instants with their explicit/browser-zone policy; existing invalid/absent display fallbacks stay feature-owned.
 
 ## Language switches and long-form Help
 

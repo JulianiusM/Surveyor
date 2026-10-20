@@ -3,7 +3,7 @@ import {createInstance} from 'i18next';
 import type {i18n, TFunction} from 'i18next';
 import resources from './generated/resources.json';
 import manifest from './generated/manifest.json';
-import type {Locale, LocaleDefinition, LocalizationContext, MessageKey, Translator} from '../../types/LocalizationTypes';
+import type {Locale, LocaleDefinition, LocalizationContext, MessageKey, RichMessageContent, RichMessageKey, RichTranslator, Translator} from '../../types/LocalizationTypes';
 
 /** Public names and available languages come from discovery, never a second manually maintained registry. */
 export const localeManifest: readonly LocaleDefinition[] = Object.freeze(manifest.locales.map(locale => Object.freeze({...locale})) as LocaleDefinition[]);
@@ -14,7 +14,19 @@ export const catalogVersion: string = manifest.version;
  * the generated manifest remains the single owner of those message contracts. */
 export function isPlainMessageKey(value: unknown): value is MessageKey {
     if (typeof value !== 'string' || !Object.hasOwn(manifest.messages, value)) return false;
-    return manifest.messages[value as MessageKey].required.length === 0;
+    const contract = manifest.messages[value as MessageKey];
+    return contract.required.length === 0 && contract.nodes.length === 0;
+}
+
+/** Authored Vue nodes must exactly match the catalog's generated declaration.
+ * Missing/extra slots cannot silently leave markers or introduce another node. */
+export function assertRichMessageNodes(key: RichMessageKey, supplied: readonly string[]): void {
+    if (!Object.hasOwn(manifest.messages, key)) throw new Error(`Unknown translation key: ${key}`);
+    const expected = manifest.messages[key].nodes;
+    if (!expected.length || expected.length !== supplied.length || new Set(supplied).size !== supplied.length
+        || supplied.some(name => !expected.includes(name))) {
+        throw new Error(`Authored translation nodes differ: ${key}`);
+    }
 }
 
 /** The same locale definition names interface messages and its fixed directory under
@@ -91,8 +103,8 @@ export function createTranslator(requestedLocale?: string | null, translation?: 
     const locale = resolveLocale(requestedLocale);
     const fixed = translation ?? createLocalizationInstance(locale).getFixedT(locale);
 
-    /** Runtime guards also protect JavaScript/Pug callers and prevent options injection through parameters. */
-    function translate(key: MessageKey, parameters: Record<string, unknown> = {}): string {
+    /** Both text and node messages retain the same scalar/option-injection guard. */
+    function checkedParameters(key: MessageKey, parameters: Record<string, unknown>): Record<string, string | number | boolean> {
         if (!Object.hasOwn(manifest.messages, key)) throw new Error(`Unknown translation key: ${key}`);
         const contract = manifest.messages[key];
         const values: Record<string, string | number | boolean> = {};
@@ -111,10 +123,35 @@ export function createTranslator(requestedLocale?: string | null, translation?: 
             }
             values[name] = value as string | number | boolean;
         }
-        // Only count has library meaning here. Other values stay inside replace, so a value named
-        // lng/defaultValue cannot override the fixed language or activate a different message.
-        const count = typeof values.count === 'number' ? values.count : undefined;
+        return values;
+    }
+
+    /** Only count selects grammar; replacement values cannot override library options. */
+    function interpolate(key: MessageKey, values: Record<string, string | number | boolean>, count?: number): string {
         return fixed(key, {replace: values, ...(count === undefined ? {} : {count})});
     }
-    return Object.freeze({locale, t: translate as Translator});
+
+    /** Plain outputs remain text for their existing escaped rendering boundary. */
+    function translate(key: MessageKey, parameters: Record<string, unknown> = {}): string {
+        const values = checkedParameters(key, parameters);
+        return interpolate(key, values, typeof values.count === 'number' ? values.count : undefined);
+    }
+
+    /** Keep scalar data outside the binding's node parser, including literal braces.
+     * The component renders these values as Vue text; only generated slot names
+     * enter i18next-vue, so user text cannot impersonate an authored placeholder. */
+    function rich(key: RichMessageKey, parameters: Record<string, unknown>): RichMessageContent {
+        const values = checkedParameters(key, parameters);
+        if (!manifest.messages[key].nodes.length) throw new Error(`Translation has no authored nodes: ${key}`);
+        const replacements: Record<string, string> = {};
+        const literalValues: Record<string, string | number | boolean> = {};
+        for (const [index, [name, value]] of Object.entries(values).entries()) {
+            const slot = `value-${index}`;
+            replacements[name] = `{${slot}}`;
+            literalValues[slot] = value;
+        }
+        return Object.freeze({text: interpolate(key, replacements, typeof values.count === 'number' ? values.count : undefined),
+            values: Object.freeze(literalValues)});
+    }
+    return Object.freeze({locale, t: translate as Translator, rich: rich as RichTranslator});
 }

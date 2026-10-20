@@ -30,7 +30,6 @@ export interface EntityRemovalRequest {
     operation(scope: PilotRequestScope): Promise<unknown>;
     confirmation: PilotPlainMessageKey;
     success: PilotPlainMessageKey;
-    initiator?: Event;
 }
 
 /** Callers may preserve feature-specific wording without copying action policy. */

@@ -274,7 +274,7 @@ const submitLabel = computed(() => messages.value.t(presentation.value.submit));
 const submitIcon = computed(() => presentation.value.submitIcon);
 
 /** Dispatch the current form through one command owner after local, native-equivalent validation. */
-async function submit(source?: Event): Promise<void> {
+async function submit(): Promise<void> {
     // A confirmed command awaiting destination delivery can only retry navigation.
     // The shared receipt survives the private view's identity-driven remount.
     if (blocked.value || finished.value) return;
@@ -286,8 +286,7 @@ async function submit(source?: Event): Promise<void> {
         // Reset has no such browser handler: its controller owns rejection and
         // native redisplay, including clearing both submitted password fields.
         showPasswordCriteria.value = !isRegistrationPasswordValid(fields.password);
-        command.captureFeedback(source);
-        command.setError('auth.invalidPassword', 'transient', 'inline');
+        command.setError('auth.invalidPassword', 'transient');
         return;
     }
     if (mode.value === 'login' || mode.value === 'guest-login') {

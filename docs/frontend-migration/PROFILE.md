@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; AI coding agents
 owner: frontend migration maintainers
 status: current
-last-verified: 2026-10-18
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: direct 2026-10-18 frontend-only and native-isolation clarification routed to preserved decision history; existing ordinary SPA, shared Vue/backend, production-guide freeze and later-phase/cutover boundaries retained
+verification-scope: direct functional interface parity, locale-neutral usability and shared SPA decisions routed to preserved history; native isolation, shared backend, staged-guide and cutover boundaries retained
 source-anchors: docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; src/frontend/; docs/user-guide/en/; docs/user-guide/de/
 next-review: next-authorized-migration-slice-or-cutover
 activation-scope: frontend framework migration, frontend pilot review/maintenance, migration documentation or associated cutover preparation
@@ -46,6 +46,19 @@ temporary and ends at authorized cutover; it never becomes a permanent policy or
 business owners for both frontends. Controllers own decisions and DBAL owns persistence; no parallel backend cleanup
 layer is permitted. General application defects remain a separately authorized effort, even when a proposed remedy
 includes a minor frontend edit. Record their evidence and disposition without implementing them through migration.
+
+The [October 19 direct decisions](FRONTEND_FOUNDATION_DESIGN.md#direct-interface-and-shared-spa-decisions-2026-10-19)
+define parity as equivalent visible information and user steps, with explicit requirements/approvals as exceptions
+by default. They require complete interface localization, controlled component messages, locale-neutral responsive
+usability, integrated Refresh and common SPA feedback without submit/refresh focus or scroll jumps. Exact native
+pixels, identifiers, naming and feature-specific notice placement are not preservation obligations. Compare the
+original baseline and dated decisions across all implemented modules; do not loosen meaningful tests indiscriminately.
+The separately approved first-install clarification changes only its staged summary and grants no database action.
+
+The [October 20 corrections](FRONTEND_FOUNDATION_DESIGN.md#approved-operations-slot-total-and-calendar-day-corrections-2026-10-20)
+separately authorize the bounded staged Operations statement, Vue Activity saved-slot total and shared Vue
+Event/Activity calendar-day presentation with minimal versioned week adaptation. They supersede only the identified
+earlier choices; native isolation, existing business ownership and separate publication/cutover authority remain.
 
 The [native-frontend isolation decision](FRONTEND_FOUNDATION_DESIGN.md#authorized-native-frontend-isolation-decision-2026-10-15)
 keeps native frontend code untouched until full migration and its separately authorized removal. The new frontend

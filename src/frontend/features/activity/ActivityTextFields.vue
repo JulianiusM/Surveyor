@@ -56,21 +56,21 @@ async function save(): Promise<void> {
     // creation receipt requires explicit collection review, never automatic replay.
     const result = id.value
         ? await command.run(scope => api.updateTextField(props.planId, id.value!, patch, editToken.value, scope), true, false,
-            {presentation: 'inline', success: 'common.updated'})
+            {success: 'common.updated'})
         : await command.run(scope => api.addTextField(props.planId, {title: title.value, text: text.value}, scope), true, true,
-            {presentation: 'inline', success: 'activity.textCreated'});
+            {success: 'activity.textCreated'});
     if (result) open.value = false;
 }
 /** Delete only the deliberately confirmed admitted shared field. */
 async function remove(field: components['schemas']['ActivityTextField']): Promise<void> {
     if (blocked.value || !field.capabilities.delete || !window.confirm(messages.value.t('activity.deleteTextField'))) return;
     await command.run(scope => api.deleteTextField(props.planId, field.id, field.editToken, scope), true, false,
-        {presentation: 'inline', success: 'common.removed'});
+        {success: 'common.removed'});
 }
 /** Reuse the same sparse shared-text operation for double-click and view-only pencil. */
 async function inline(field: components['schemas']['ActivityTextField'], value: string, token: string): Promise<boolean> {
     return !!await command.run(scope => api.updateTextField(props.planId, field.id, {text: value}, token, scope), true, false,
-        {presentation: 'inline', success: 'common.updated'});
+        {success: 'common.updated'});
 }
 async function reviewUnknown(): Promise<void> {
     if (await command.reconcileSafely() && window.confirm(messages.value.t('activity.confirmUnknownReviewed'))) command.acknowledge();
@@ -78,7 +78,7 @@ async function reviewUnknown(): Promise<void> {
 </script>
 
 <template>
-    <section data-command-feedback>
+    <section>
         <div class="d-flex justify-content-between align-items-center mt-3">
             <h5 class="mb-3">
                 <i class="bi bi-journal-text me-2" aria-hidden="true"></i>{{ messages.t('activity.sharedTextFields') }}</h5>

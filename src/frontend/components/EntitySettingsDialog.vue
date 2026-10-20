@@ -310,14 +310,13 @@ function chooseImage(file: File | null): void {
 /** Submit the selected file against the header baseline captured when it was
  * chosen. Retain that file after rejection or uncertain delivery; only a confirmed
  * command clears it, while the shared refresh owner admits subsequent authority. */
-async function upload(source?: Event): Promise<void> {
+async function upload(): Promise<void> {
     if (blocked.value || headerConflict.value) return;
 
     // Native missing-file feedback happens before a request. The chosen file's
     // retained token must still exist; a later settings read cannot replace it.
     if (!image.value) {
-        command.captureFeedback(source);
-        command.setError('metadata.chooseImage', 'transient', 'inline');
+        command.setError('metadata.chooseImage', 'transient');
         return;
     }
     if (!imageToken.value) return;
@@ -326,7 +325,7 @@ async function upload(source?: Event): Promise<void> {
     // Rejection/unknown delivery keeps the file; confirmation alone releases it.
     const result = await command.run((scope) =>
         api.uploadHeader(props.resourceId, image.value!, imageToken.value!, scope),
-        true, false, {initiator: source, presentation: 'inline', success: 'metadata.imageUpdated'},
+        true, false, {success: 'metadata.imageUpdated'},
     );
     // The shared chooser observes this explicit draft release. Clear its visible
     // FileList after confirmation as well, including a saved-but-stale read result.
@@ -336,23 +335,23 @@ async function upload(source?: Event): Promise<void> {
 /** Header removal is a separate reviewed command, not clearing the file draft.
  * The current settings token protects the stored image and the server retains
  * authority over the write and its post-commit file cleanup. */
-async function removeImage(source?: Event): Promise<void> {
+async function removeImage(): Promise<void> {
     if (data.value && window.confirm(messages.value.t('packing.confirmRemoveImage'))) {
         await command.run((scope) =>
             api.removeHeader(props.resourceId, data.value!.settingsToken, scope),
-            true, false, {initiator: source, presentation: 'inline', success: 'metadata.imageRemoved'},
+            true, false, {success: 'metadata.imageRemoved'},
         );
     }
 }
 /** Relink one explicitly reviewed event choice through the existing command owner.
  * The accepted value is presentation only; a completed settings read supplies any new
  * comparison token. Relinking can revoke access and must preserve other editor drafts. */
-async function saveEvent(source?: Event): Promise<void> {
+async function saveEvent(): Promise<void> {
     if (!event.value || blocked.value || eventConflict.value) return;
     // The native unchanged-link branch precedes confirmation and cross-form
     // discard decisions. A no-op explains itself without sending an empty write.
     if (event.value.value === event.value.original) {
-        command.setInformation('metadata.eventUnchanged', {initiator: source, presentation: 'inline'});
+        command.setInformation('metadata.eventUnchanged');
         return;
     }
     if (!window.confirm(messages.value.t('packing.confirmEvent'))) return;
@@ -374,7 +373,7 @@ async function saveEvent(source?: Event): Promise<void> {
                 submitted.token,
                 scope,
             ),
-            true, false, {initiator: source, presentation: 'inline', success: 'metadata.eventUpdated'},
+            true, false, {success: 'metadata.eventUpdated'},
         );
     } finally {
         relinkingMetadata = false;
@@ -403,31 +402,31 @@ function reviewEvent(): void {
 /** Explain direct versus inherited archival before issuing the existing lifecycle
  * command. These are shared resource actions; personal visibility and permanent
  * deletion remain separate operations with their own confirmation and authority. */
-async function archive(restore: boolean, source?: Event): Promise<void> {
+async function archive(restore: boolean): Promise<void> {
     // A dated feature supplies the native alternate wording, while the admitted
     // schedule flag decides whether this actual resource uses that schedule.
     const restoreConfirmation = data.value?.archive.hasAutomaticSchedule && props.scheduledRestoreConfirmation
         ? props.scheduledRestoreConfirmation : props.restoreConfirmation;
-    await lifecycle.archive(props.resourceId, restore, !!data.value?.archive.inherited, source,
+    await lifecycle.archive(props.resourceId, restore, !!data.value?.archive.inherited,
         restore ? restoreConfirmation : props.archiveConfirmation);
 }
 
 /** Automatic archival remains a separate shared lifecycle command. Resuming an
  * expired schedule requires the native warning before its next run can archive. */
-async function automate(paused: boolean, source?: Event): Promise<void> {
+async function automate(paused: boolean): Promise<void> {
     if (blocked.value || !api.automate || !data.value?.capabilities.manageAutomation || !props.automationLabels) return;
     // Settings and child cards share confirmation/dispatch/feedback, while this
     // dialog retains current schedule admission and its related read dependencies.
-    await lifecycle.automate(props.resourceId, paused, source, props.automationLabels);
+    await lifecycle.automate(props.resourceId, paused, props.automationLabels);
 }
 
 /** Delete only after the command owner has approved departure of every mounted draft.
  * A confirmed deletion retains its destination/consent through failed navigation;
  * recovery repeats delivery, while the controller remains the deletion policy owner. */
-async function remove(source?: Event): Promise<void> {
+async function remove(): Promise<void> {
     if (blocked.value) return;
     await removal.remove({operation: deleteResource, confirmation: 'packing.confirmDelete',
-        success: props.deletedKey, initiator: source});
+        success: props.deletedKey});
 }
 
 async function deleteResource(scope: PilotRequestScope): Promise<string> {
@@ -457,10 +456,8 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                 >{{ messages.t(panels[0]!.label) }}</span
             ></template
         >
-        <!-- Native commands resolve their initiating section's feedback host. Keep
-             one receipt owner here; only transient inline messages move to that host.
-             Commands without a section use this same native modal fallback. -->
-        <div data-dialog-feedback aria-live="polite">
+        <!-- One receipt owner supplies shared notifications and contextual recovery. -->
+        <div aria-live="polite">
             <CommandFeedback :feedback="command.feedback" :disabled="controlsPending"
                 :notice-retry-at="command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"
                 :notice-read-error="command.notice.value === 'state.savedRefreshFailed' ? settings.error.value : undefined" />

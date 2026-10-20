@@ -10,9 +10,9 @@ import {isOrdinaryNavigation} from '../../composables/pageEntry';
 import ActionButton from '../../components/ActionButton.vue';
 import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 
-// TODO (docs/frontend-migration/FRONTEND_PILOT.md): Migrate remaining feature detail/administration
-// destinations with their owners. Packing, Event and Drivers use Vue; other mixed Overview cards
-// keep working native links until their explicit migration phases are implemented.
+// Packing, Event, Drivers, Survey and Activity cards use their Vue destinations.
+// Remaining feature families keep their working native links until the explicit
+// phases in docs/frontend-migration/FRONTEND_PILOT.md migrate those owners.
 const props = withDefaults(defineProps<{
     card: components['schemas']['OverviewCard'];
     interaction: PilotOverviewCardInteraction;

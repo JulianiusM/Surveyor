@@ -7,7 +7,7 @@ import {activityKeys} from '../../app/queryKeys';
 import {retireQueryFamily} from '../../app/queryCache';
 import {useListCommands, useListDetail} from '../../composables/listDetail';
 import {useActivityApi} from './api';
-import {activityDateLabel} from './presentation';
+import {activityDateLabel, activityParticipantName} from './presentation';
 import {analyzeRequirementDraft, createRequirementDraft, requirementCoverage, requirementInput} from './requirements';
 import ActivityParticipants from './ActivityParticipants.vue';
 import ActionButton from '../../components/ActionButton.vue';
@@ -40,7 +40,10 @@ const {command, refresh, readAction, retryAt} = useListCommands({active: isActiv
 const blocked = computed(() => props.disabled || command.action.disabled.value || !draft.value);
 const analysis = computed(() => configuration.value && draft.value ? analyzeRequirementDraft(configuration.value, draft.value) : null);
 const coverage = computed(() => analysis.value && draft.value ? requirementCoverage(analysis.value.capacitySummary, draft.value, messages.value.t) : null);
-const targets = computed(() => [...(configuration.value?.overrideTargets ?? [])].sort((a, b) => a.label.localeCompare(b.label)));
+const targets = computed(() => [...(configuration.value?.overrideTargets ?? [])].sort((a, b) => targetLabel(a).localeCompare(targetLabel(b))));
+function targetLabel(target: ActivityRequirementConfiguration['overrideTargets'][number]): string {
+    return activityParticipantName(target.label, messages.value.t, target.nameIsFallback, target.profileId);
+}
 // Native live coverage also gates Auto-generate from the unsaved mode. Publish
 // that presentation input only; this form remains the sole requirement draft.
 watch(() => draft.value?.assignmentMode ?? null, mode => emit('mode', mode), {immediate: true});
@@ -126,7 +129,7 @@ function calculate(): void {
     if (blocked.value || !configuration.value || !draft.value) return;
     const input = requirementInput(draft.value);
     if (!hasValidRequirementValues(input.roleRequirements, input.overrides, [])) {
-        command.setError('activity.requirements.invalidCalculation', 'transient', 'inline');
+        command.setError('activity.requirements.invalidCalculation');
         return;
     }
     // The engine supplies both the baseline and complete duration table; copying
@@ -156,7 +159,7 @@ async function reload(): Promise<void> {
 async function save(): Promise<void> {
     if (blocked.value || !dirty.value || !draft.value) return;
     if (draft.value.overrides.some(row => !row.profileId)) {
-        command.setError('activity.requirements.invalidOverride', 'transient', 'inline');
+        command.setError('activity.requirements.invalidOverride');
         return;
     }
     const input = requirementInput(draft.value);
@@ -171,7 +174,7 @@ async function save(): Promise<void> {
             emit('changed');
         }
         return result;
-    }, true, false, {presentation: 'inline', success: 'activity.requirements.saved'});
+    }, true, false, {success: 'activity.requirements.saved'});
 }
 </script>
 
@@ -180,11 +183,11 @@ async function save(): Promise<void> {
         <span class="badge bg-light text-dark me-2">{{ messages.t('activity.requirements.stepOne') }}</span>
         <span class="fw-semibold">{{ messages.t('activity.requirements.configure') }}</span>
     </div>
-    <div id="requirementPanel" class="card text-bg-dark border border-secondary-subtle mb-4" data-command-feedback>
+    <div id="requirementPanel" class="card text-bg-dark border border-secondary-subtle mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <span class="d-flex align-items-center gap-2">
                 <i class="bi bi-gear-wide-connected" aria-hidden="true"></i><span>{{ messages.t('activity.requirements.settings') }}</span></span>
-            <div class="d-flex gap-2">
+            <div class="pilot-action-row">
                 <ActionButton type="button" class="btn-sm" variant="outline-secondary" data-requirements-refresh :disabled="readAction.disabled.value || command.pending.value || command.recovering.value" @click="reload">
                     <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>{{ messages.t('activity.requirements.reload') }}</ActionButton>
                 <ActionButton type="button" class="btn-sm" variant="success" data-requirements-save :disabled="blocked || !dirty" @click="save">
@@ -199,7 +202,7 @@ async function save(): Promise<void> {
                 <p class="text-secondary small mb-3">{{ messages.t('activity.requirements.description') }}</p>
                 <!-- Live coverage belongs to the unsaved controls. Saved badges
                 describe persistence only, never a promise of timetable feasibility. -->
-                <div id="requirementCoverageStatus" class="status-notice requirement-coverage-status py-2 px-3 mb-3" :class="'alert-' + coverage.variant"
+                <StatusNotice id="requirementCoverageStatus" class="requirement-coverage-status py-2 px-3" :kind="coverage.variant"
                     role="status" aria-live="polite" :data-coverage-state="coverage.state">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
                         <div class="d-flex align-items-start gap-2">
@@ -216,8 +219,8 @@ async function save(): Promise<void> {
                                     : messages.t('activity.requirements.modeledRoles', {count: analysis.capacitySummary.hypotheticalRoleCoverage.filledRoleCount}) }}</span>
                         </div>
                     </div>
-                </div>
-                <StatusNotice v-if="calculation" :kind="calculation.difference || calculation.reason ? 'warning' : 'info'" transient>
+                </StatusNotice>
+                <StatusNotice v-if="calculation" :kind="calculation.difference || calculation.reason ? 'warning' : 'info'" transient placement="notification">
                     {{ messages.t('activity.requirements.calculated', {baseline: calculation.baseline}) }}
                     {{ calculation.difference ? messages.t('activity.requirements.closestBaseline', {count: Math.abs(calculation.difference)}) : messages.t('activity.requirements.exactBaseline') }}
                     <template v-if="calculation.reason === 'fixed-requirements-fill-capacity'">{{ messages.t('activity.requirements.fixedBaseline') }}</template>
@@ -225,26 +228,26 @@ async function save(): Promise<void> {
                 </StatusNotice>
                 <form id="requirementForm" @input="markDirty" @change="markDirty" @submit.prevent="save">
                     <div class="row g-3">
-                        <FormField id="assignmentMode" class="col-md-3" :label="messages.t('activity.requirements.mode')" label-class="">
+                        <FormField id="assignmentMode" class="col-sm-6 col-xl-3" :label="messages.t('activity.requirements.mode')" label-class="">
                             <template #control><select id="assignmentMode" v-model="draft.assignmentMode" class="form-select form-select-sm text-bg-dark" :disabled="blocked">
                                 <option value="FREE">{{ messages.t('activity.requirements.free') }}</option><option value="REQUIRED">{{ messages.t('activity.requirements.required') }}</option>
                             </select></template>
                         </FormField>
-                        <FormField id="requiredShifts" class="col-md-3" :label="messages.t('activity.requirements.baseline')" label-class="">
+                        <FormField id="requiredShifts" class="col-sm-6 col-xl-3" :label="messages.t('activity.requirements.baseline')" label-class="">
                             <template #control><div class="input-group input-group-sm">
                                 <input id="requiredShifts" :value="draft.generalRequiredShifts" type="number" min="0" class="form-control form-control-sm text-bg-dark" :placeholder="messages.t('activity.requirements.baselinePlaceholder')" :disabled="blocked" @input="draft.generalRequiredShifts = lexicalValue($event)" />
                                 <ActionButton type="button" variant="outline-info" data-requirements-baseline-calc :disabled="blocked" @click="calculate"><i class="bi bi-calculator me-1" aria-hidden="true"></i>{{ messages.t('activity.requirements.calculate') }}</ActionButton>
                             </div></template>
                         </FormField>
-                        <FormField id="roundingMode" class="col-md-3" :label="messages.t('activity.requirements.rounding')" label-class="">
+                        <FormField id="roundingMode" class="col-sm-6 col-xl-3" :label="messages.t('activity.requirements.rounding')" label-class="">
                             <template #control><select id="roundingMode" v-model="draft.roundingMode" class="form-select form-select-sm text-bg-dark" :disabled="blocked">
                                 <option value="">{{ messages.t('common.none') }}</option><option value="CEIL">{{ messages.t('activity.requirements.ceil') }}</option><option value="ROUND">{{ messages.t('activity.requirements.round') }}</option><option value="FLOOR">{{ messages.t('activity.requirements.floor') }}</option>
                             </select></template>
                         </FormField>
-                        <FormField id="bindingDeadline" v-model="draft.bindingDeadline" :name="null" class="col-md-3" type="datetime-local" :label="messages.t('activity.requirements.deadline')" label-class="" control-class="form-control-sm" :placeholder="messages.t('activity.requirements.optional')" :disabled="blocked" />
+                        <FormField id="bindingDeadline" v-model="draft.bindingDeadline" :name="null" class="col-sm-6 col-xl-3" type="datetime-local" :label="messages.t('activity.requirements.deadline')" label-class="" control-class="form-control-sm" :placeholder="messages.t('activity.requirements.optional')" :disabled="blocked" />
                     </div>
                     <hr />
-                    <h6 class="d-flex justify-content-between align-items-center">
+                    <h6 class="pilot-section-heading">
                         <span>{{ messages.t('activity.requirements.stays') }}</span>
                         <small class="text-secondary">{{ messages.t('activity.requirements.staysHint') }}</small>
                     </h6>
@@ -289,17 +292,17 @@ async function save(): Promise<void> {
                         </div>
                     </div>
                     <hr />
-                    <h6 class="d-flex justify-content-between align-items-center">
+                    <h6 class="pilot-section-heading">
                         <span>{{ messages.t('activity.requirements.roles') }}</span>
                         <small class="text-secondary">{{ messages.t('activity.requirements.rolesHint') }}</small>
                     </h6>
                     <div id="roleRequirementList" class="row g-2">
-                        <FormField v-for="row in draft.roles" :id="'roleRequirement-' + row.roleId" :key="row.roleId" class="col-md-3 d-grid gap-1" :label="roleTitle(row.roleId)" label-for="" label-class="small mb-0">
+                        <FormField v-for="row in draft.roles" :id="'roleRequirement-' + row.roleId" :key="row.roleId" class="col-md-3 d-grid gap-1" :label="roleTitle(row.roleId)" label-class="small mb-0">
                             <template #control><input :id="'roleRequirement-' + row.roleId" :value="row.value" type="number" min="0" step="1" placeholder="0" class="form-control form-control-sm text-bg-dark" :data-role-id="row.roleId" :disabled="blocked" @input="row.value = lexicalValue($event)" /></template>
                         </FormField>
                     </div>
                     <hr />
-                    <h6 class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="pilot-section-heading mb-2">
                         <span>{{ messages.t('activity.requirements.overrides') }}</span>
                         <ActionButton type="button" class="btn-sm" variant="outline-info" data-add-override
                             :disabled="blocked || !targets.length"
@@ -312,21 +315,21 @@ async function save(): Promise<void> {
                         <div v-if="!targets.length" class="text-secondary small" data-empty-state>{{ messages.t('activity.requirements.noTargets') }}</div>
                         <div v-else-if="!draft.overrides.length" class="text-secondary small" data-empty-state>{{ messages.t('activity.requirements.noOverrides') }}</div>
                         <div v-for="row in draft.overrides" :key="row.key" class="row g-2 align-items-end override-row border border-secondary-subtle rounded p-2 mx-0" :data-override-id="row.id">
-                            <FormField :id="'overrideParticipant-' + row.key" class="col-12 col-lg-7 d-grid gap-1" :label="messages.t('activity.participant')" label-for="" label-class="small mb-0">
+                            <FormField :id="'overrideParticipant-' + row.key" class="col-12 col-lg-7 d-grid gap-1" :label="messages.t('activity.participant')" label-class="small mb-0">
                                 <template #control><select :id="'overrideParticipant-' + row.key" :value="row.profileId ? 'profile:' + row.profileId : ''" class="form-select form-select-sm text-bg-dark" data-override-target="participant" :disabled="blocked || !targets.length" @change="row.profileId = selectedProfile($event)">
                                     <option value="" disabled>{{ messages.t(targets.length ? 'activity.requirements.chooseParticipant' : 'activity.requirements.noParticipants') }}</option>
-                                    <option v-for="target in targets" :key="target.key" :value="'profile:' + target.profileId">{{ target.label }}{{ attendance(target.profileId ?? '') ? ' — ' + attendance(target.profileId ?? '') : '' }}</option>
+                                    <option v-for="target in targets" :key="target.key" :value="'profile:' + target.profileId">{{ targetLabel(target) }}{{ attendance(target.profileId ?? '') ? ' — ' + attendance(target.profileId ?? '') : '' }}</option>
                                     <option v-if="retained(row.profileId)" :value="'profile:' + row.profileId" data-retained="true">{{ row.profileName || messages.t('activity.requirements.notRegistered', {id: row.profileId}) }}</option>
                                 </select></template>
                                 <div class="form-text small override-attendance-hint mt-1" :class="retained(row.profileId) ? 'text-warning' : 'text-secondary'">{{ !row.profileId ? messages.t('activity.requirements.selectHint') : retained(row.profileId) ? messages.t('activity.requirements.retainedHint') : attendance(row.profileId) }}</div>
                             </FormField>
-                            <FormField :id="'overrideRole-' + row.key" class="col-6 col-lg-2 d-grid gap-1" :label="messages.t('activity.requirements.optionalRole')" label-for="" label-class="small mb-0">
+                            <FormField :id="'overrideRole-' + row.key" class="col-12 col-sm-5 col-lg-2 d-grid gap-1" :label="messages.t('activity.requirements.optionalRole')" label-class="small mb-0">
                                 <template #control><select :id="'overrideRole-' + row.key" v-model="row.roleId" class="form-select form-select-sm text-bg-dark" data-override-target="role" :disabled="blocked || retained(row.profileId)"><option value="">{{ messages.t('activity.requirements.anyRole') }}</option><option v-for="role in configuration.allRoles" :key="role.id" :value="String(role.id)">{{ role.title }}</option></select></template>
                             </FormField>
-                            <FormField :id="'overrideRequired-' + row.key" class="col-5 col-lg-2 d-grid gap-1" :label="messages.t('activity.requirements.requiredShifts')" label-for="" label-class="small mb-0">
+                            <FormField :id="'overrideRequired-' + row.key" class="col-9 col-sm-5 col-lg-2 d-grid gap-1" :label="messages.t('activity.requirements.requiredShifts')" label-class="small mb-0">
                                 <template #control><input :id="'overrideRequired-' + row.key" :value="row.value" type="number" min="0" step="1" class="form-control form-control-sm text-bg-dark" data-override-target="required" :disabled="blocked || retained(row.profileId)" @input="row.value = lexicalValue($event)" /></template>
                             </FormField>
-                            <div class="col-1 col-lg-1 d-grid">
+                            <div class="col-3 col-sm-2 col-lg-1 d-grid">
                                 <ActionButton type="button" class="btn-sm w-100" variant="outline-danger"
                                     :aria-label="messages.t('activity.requirements.removeOverride')"
                                     :disabled="blocked || retained(row.profileId)" @click="removeOverride(row.key)">
@@ -346,7 +349,7 @@ async function save(): Promise<void> {
     </div>
     <template v-if="draft && analysis">
         <hr />
-        <h6 class="d-flex justify-content-between align-items-center mt-3">
+        <h6 class="pilot-section-heading mt-3">
             <span><span class="badge bg-light text-dark me-2">{{ messages.t('activity.requirements.stepTwo') }}</span>{{ messages.t('activity.requirements.checkCoverage') }}</span>
             <small class="text-secondary">{{ messages.t('activity.requirements.progressHint') }}</small>
         </h6>

@@ -41,6 +41,13 @@ t('common.save');
 t('app.activeProfile', {name: 'Guest'});
 t('packing.placeCount', {count: 2});
 t('api:errors.PACKING_ITEM_FULL', {itemId: 'uuid-at-runtime'});
+const {rich} = createTranslator('de');
+rich('activity.progressFree', {count: 2});
+rich('activity.recommendations.scheduleHint', {});
+// @ts-expect-error Plain messages do not declare authored Vue nodes.
+rich('common.save', {});
+// @ts-expect-error Rich plural selection retains its numeric parameter contract.
+rich('activity.progressFree', {count: '2'});
 // @ts-expect-error Catalog keys are generated, not arbitrary strings.
 t('common.doesNotExist');
 // @ts-expect-error Required interpolation cannot be omitted.

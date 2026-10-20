@@ -288,7 +288,7 @@ async function save(): Promise<void> {
     }
 
     const result = await command.run(saveSubmittedMetadata, true, true,
-        {presentation: 'inline', success: 'metadata.updated'});
+        {success: 'metadata.updated'});
     if (result && publishConfirmation && active && resource === props.resourceId && !lostAuthority.value) {
         // Related settings refresh owns its own failure; the metadata write stays
         // confirmed and its accepted values remain visible if either read fails.
@@ -322,7 +322,7 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
 </script>
 
 <template>
-    <CommandFeedback v-if="!draft" :feedback="command.feedback" part="error" :inline="false" :target="null" />
+    <CommandFeedback v-if="!draft" :feedback="command.feedback" part="error" />
     <!-- One recovery action covers uncertainty, confirmed values awaiting authority
          and failed reads. Keep its node while an unknown command's read fails so
          the focused control is retained rather than replaced by another Refresh. -->
@@ -349,10 +349,10 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
         <!-- Metadata owns its baseline and focused draft while the settings dialog switches
                  panels. Other commands never discard or implicitly submit these fields. -->
         <h3 class="fs-5">{{ messages.t('packing.properties') }}</h3>
-        <!-- Native inline feedback belongs to Properties, before its form/disclosures.
-             It stays visible when Details closes and never disables recovery by itself. -->
-        <div data-command-feedback aria-live="polite">
-            <CommandFeedback :feedback="command.feedback" inline :target="null" :disabled="busy || pending || refreshing"
+        <!-- Shared transient notifications retain the command receipt; durable
+             recovery stays available beside this independently owned draft. -->
+        <div aria-live="polite">
+            <CommandFeedback :feedback="command.feedback" :disabled="busy || pending || refreshing"
                 :notice-last-updated-at="command.notice.value === 'state.savedRefreshFailed' && metadata.data.value && !lostAuthority
                     ? metadata.dataUpdatedAt.value : undefined"
                 :notice-retry-at="command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"

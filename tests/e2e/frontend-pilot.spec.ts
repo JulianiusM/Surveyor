@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {writeFile} from 'node:fs/promises';
 import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectVisiblePresentation, loginForE2E, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createBrowserReadGate as readGate, waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
@@ -35,6 +35,20 @@ async function captureState(page: Page, testInfo: TestInfo, name: string, target
         });
         await focused.dispose();
     }
+}
+
+/** Observe a genuine anchor's completed movement without disabling animation or
+ * moving the page on the test's behalf. This also honors the authored margin. */
+async function expectHelpAnchorSettled(page: Page, fragment: string | null): Promise<void> {
+    expect(fragment).toBeTruthy();
+    await expect.poll(() => page.evaluate(hash => {
+        const target = document.getElementById(decodeURIComponent(hash!.slice(1)));
+        if (!target) return false;
+        const top = target.getBoundingClientRect().top + window.scrollY;
+        const margin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+        const destination = Math.min(top - margin, document.documentElement.scrollHeight - window.innerHeight);
+        return Math.abs(window.scrollY - destination) <= 2;
+    }, fragment)).toBe(true);
 }
 
 async function bootstrap(request: APIRequestContext): Promise<Session> {
@@ -117,6 +131,7 @@ async function packing(page: Page, publicView = false) {
  * The shared assertion compares visible content/controls/styles and local boxes;
  * screenshots and raw measurements remain separately inspectable run evidence. */
 async function captureMatchedPresentation(page: Page, info: TestInfo, name: string, surface: Locator, selectors: string[], focus?: Locator) {
+    if (new URL(page.url()).pathname.startsWith('/frontend-pilot')) await expectUsableFrontendLayout(surface);
     await page.evaluate(() => document.fonts.ready);
     // A no-op uncheck leaves native unfocused, while clearing the shared Packed
     // key in Vue performs a real click. Establish the same deliberate focus state
@@ -140,7 +155,7 @@ async function captureMatchedPresentation(page: Page, info: TestInfo, name: stri
 async function capturePageFeedbackGeometry(page: Page, info: TestInfo, name: string, row: Locator,
     control: Locator, focusEvents: number) {
     const geometry = await row.evaluate(function readPageFeedbackGeometry(element) {
-        const host = document.getElementById('liveAlerts');
+        const host = document.querySelector<HTMLElement>('#liveAlerts, [data-pilot-notices]');
         if (!host) throw new Error('Expected the existing page feedback host.');
         const alert = host.querySelector<HTMLElement>('.alert');
         return {scrollY: window.scrollY, viewport: {width: window.innerWidth, height: window.innerHeight},
@@ -222,7 +237,7 @@ for (const width of [1280, 390]) {
                 return observation;
 
                 function captureGlobalFocus(event: FocusEvent): void {
-                    if (event.target instanceof Element && event.target.closest('#liveAlerts')) observation.count++;
+                    if (event.target instanceof Element && event.target.closest('#liveAlerts, [data-pilot-notices]')) observation.count++;
                 }
                 function stopObservation(): void { document.removeEventListener('focusin', captureGlobalFocus); }
             });
@@ -263,7 +278,7 @@ for (const width of [1280, 390]) {
                 }
 
                 const control = pilot ? row.locator('td').last().getByRole('button', {name: 'Take', exact: true}) : description;
-                const alert = page.locator('#liveAlerts > .alert-success');
+                const alert = page.locator('#liveAlerts > .alert-success, [data-pilot-notices] > .alert-success');
                 await expect(alert).toHaveText(pilot ? 'Item unassigned' : 'Updated');
                 const after = await capturePageFeedbackGeometry(page, info, `${label}-sticky-confirmed`, row, control,
                     await observedFocus.evaluate(observation => observation.count));
@@ -275,6 +290,7 @@ for (const width of [1280, 390]) {
                 expect(after.documentMarker).toBe(marker);
                 if (pilot) {
                     expect(after.globalFocusEvents).toBe(0);
+                    expect(Math.abs(after.scrollY - before.scrollY)).toBeLessThanOrEqual(2);
                     expect(after.focusedGlobalAlert).toBe(false);
                 } else expect(after.globalFocusEvents).toBeGreaterThan(0);
 
@@ -324,6 +340,56 @@ for (const width of [1280, 390]) {
                 ['label', 'input', 'textarea', 'select', 'th', 'td', 'button']);
             if (pilot) expectVisiblePresentation(native.creation!, creation);
             else native.creation = creation;
+
+            if (pilot) {
+                const table = page.locator('.packing-creation-items');
+                const viewport = table.locator('..');
+                const row = table.locator('tbody tr').first();
+                const item = row.getByRole('textbox', {name: 'Item 1', exact: true});
+                const description = row.getByRole('textbox', {name: 'Description 1', exact: true});
+                const capacity = row.getByRole('spinbutton', {name: 'Max # 1', exact: true});
+                await item.fill('Retained initial item');
+                await description.fill('Retained description');
+                await capacity.fill('12');
+
+                // Real values stay readable while the existing table viewport
+                // exposes the final action. Resize the same dirty row to cover
+                // both narrow widths without adding another registered journey.
+                for (const creationWidth of width === 390 ? [390, 320] : [width]) {
+                    await page.setViewportSize({width: creationWidth, height: 900});
+                    expect(await item.evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThanOrEqual(120);
+                    expect(await description.evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThanOrEqual(120);
+                    expect(await capacity.evaluate(element => element.getBoundingClientRect().width)).toBeGreaterThanOrEqual(70);
+                    if (creationWidth <= 390) {
+                        expect(await viewport.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+                    }
+                    const remove = row.getByRole('button', {name: 'Remove row', exact: true});
+                    await remove.scrollIntoViewIfNeeded();
+                    // Scroll offsets are integral while table/button bounds can
+                    // be fractional. Permit one CSS pixel at the viewport edge,
+                    // while retaining the whole usable action and its hit target.
+                    await expect(remove).toBeInViewport();
+                    const removeBounds = await remove.boundingBox();
+                    expect(removeBounds).not.toBeNull();
+                    expect(removeBounds!.x).toBeGreaterThanOrEqual(-1);
+                    expect(removeBounds!.y).toBeGreaterThanOrEqual(-1);
+                    expect(removeBounds!.x + removeBounds!.width).toBeLessThanOrEqual(creationWidth + 1);
+                    expect(removeBounds!.y + removeBounds!.height).toBeLessThanOrEqual(901);
+                    await remove.click({trial: true});
+                    await expect(item).toHaveValue('Retained initial item');
+                    await expect(description).toHaveValue('Retained description');
+                    await expect(capacity).toHaveValue('12');
+                    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+                    await captureMatchedPresentation(page, info, `pilot-packing-create-inputs-${creationWidth}`, viewport,
+                        ['input', 'button']);
+                }
+                // Restore the original pristine row before the existing switch
+                // keyboard checks and deliberate navigation to the saved list.
+                await item.fill('');
+                await description.fill('');
+                await capacity.fill('1');
+                await page.setViewportSize({width, height: 900});
+            }
 
             // Native uses a div/span around this switch; its text is not an
             // implicit label. Retain every form label/field comparison above and
@@ -431,6 +497,46 @@ for (const width of [1280, 390]) {
         expect(browserErrors).toEqual([]);
     });
 }
+
+test('keeps initial server notification outside flow through real hydration', async ({page}, info) => {
+    await page.setViewportSize({width: 390, height: 844});
+    const entry = readGate();
+    const started = readGate();
+    const pattern = /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u;
+
+    async function holdEntry(route: Route): Promise<void> {
+        started.release();
+        await entry.promise;
+        await route.continue();
+    }
+    await page.route(pattern, holdEntry);
+    try {
+        // The actual anonymous admission redirects with its real one-visit notice.
+        // Only delivery of the genuine built module waits; no document is replaced.
+        await page.goto('/frontend-pilot/packing/create?locale=en', {waitUntil: 'commit'});
+        await started.promise;
+        const notice = page.locator('main .pilot-notification');
+        await expect(notice).toContainText('You must be logged in as user');
+        await expect(notice.getByRole('button', {name: 'Dismiss notification'})).toBeDisabled();
+        const before = await notice.evaluate(element => ({
+            originHeight: element.parentElement!.getBoundingClientRect().height,
+            scrollY: window.scrollY, text: element.textContent,
+        }));
+        expect(before.originHeight).toBe(0);
+        await captureState(page, info, 'initial-notification-before-hydration', undefined, {viewportOnly: true});
+
+        entry.release();
+        await waitForPilotHydration(page);
+        await expect(page.locator('[data-pilot-notices] .pilot-notification')).toHaveText(before.text!);
+        await expect(page.locator('[data-pilot-notices] .btn-close')).toBeEnabled();
+        expect(await page.evaluate(() => window.scrollY)).toBe(before.scrollY);
+        expect(await page.locator('main > .pilot-notice-region').evaluate(element => element.getBoundingClientRect().height)).toBe(0);
+        await captureState(page, info, 'initial-notification-after-hydration', undefined, {viewportOnly: true});
+    } finally {
+        entry.release();
+        await page.unroute(pattern, holdEntry);
+    }
+});
 
 for (const intent of ['create', 'duplicate'] as const) {
     test(`boots the ${intent} skeleton before exposing working creation controls and upload`, async ({page}) => {
@@ -720,9 +826,8 @@ test('shared entry preserves header creation admission, exact duplicate login re
         await expect(visitor.locator('.alert-info')).toContainText('You must be logged in as user');
         expect(await visitor.evaluate(() => document.documentElement.dataset.entryDocument)).toBe('original');
 
-        // Compare the native redirect's real initial flash with the hydrated SPA
-        // admission result. An empty live-alert margin belongs after native flashes;
-        // putting the flash inside it would shift the entire form down by four pixels.
+        // Compare the real admission wording and visual identity. The SPA uses
+        // passive common notification placement rather than native reload spacing.
         const nativeLogin = await nativeAnonymous.newPage();
         // Native redirect headers can arrive before the session store finishes its
         // flash write, including in native-only navigation. Complete the real 302
@@ -755,11 +860,12 @@ test('shared entry preserves header creation admission, exact duplicate login re
         for (const {native, pilot} of presentations) {
             expect(pilot.text).toBe(native.text);
             expect(pilot.typography).toEqual(native.typography);
-            for (const dimension of ['x', 'y', 'width', 'height'] as const) {
-                expect(Math.abs(pilot.notice[dimension] - native.notice[dimension])).toBeLessThanOrEqual(1);
-                expect(Math.abs(pilot.card[dimension] - native.card[dimension])).toBeLessThanOrEqual(1);
-            }
+            expect(pilot.notice.width).toBeGreaterThan(0);
+            expect(pilot.notice.height).toBeGreaterThan(0);
+            expect(pilot.card.width).toBeGreaterThan(0);
+            expect(pilot.card.height).toBeGreaterThan(0);
         }
+        await expectUsableFrontendLayout(visitor.locator('main'));
         if (entryViewport) await visitor.setViewportSize(entryViewport);
         await nativeLogin.close();
 
@@ -797,7 +903,8 @@ test('shared entry preserves header creation admission, exact duplicate login re
         const flash = guestPage.locator('.alert-success');
         const privateLink = (await flash.innerText()).match(/^Login successful\. Use (\S+) to edit later\.$/)?.[1];
         expect(privateLink).toBeDefined();
-        await expect(flash.locator('a, button')).toHaveCount(0);
+        await expect(flash.locator('a')).toHaveCount(0);
+        await expect(flash.getByRole('button', {name: 'Dismiss notification', exact: true})).toHaveCount(1);
         await expect(flash).toHaveText(`Login successful. Use ${privateLink} to edit later.`);
         expect((await bootstrap(guestPage.request)).activeProfile?.name).toBe(name);
         expect(await guestPage.evaluate(() => document.documentElement.dataset.entryDocument)).toBe('guest');
@@ -1862,7 +1969,7 @@ test('pilot overview preserves personal visibility, shared archive state and lin
     expect(page.url()).toBe(originalUrl);
     // Previous commands left timed alerts above this region. Dismiss them through their
     // actual controls before measuring scroll, so expiry cannot remove height during Back.
-    const transientAlerts = page.locator('#liveAlerts .alert');
+    const transientAlerts = page.locator('#liveAlerts .alert, [data-pilot-notices] .alert');
     while (await transientAlerts.count()) {
         await transientAlerts.first().getByRole('button', {name: 'Dismiss notification', exact: true}).click();
     }
@@ -2070,6 +2177,121 @@ test('rejected header MIME and oversized uploads retain the existing header and 
         expect(retained.status()).toBe(200);
         expect(await retained.body()).toEqual(png);
     }
+});
+
+test('Help preserves reading position on Refresh, locale changes and history while explicit anchors remain usable', async ({page}, info) => {
+    await page.goto('/frontend-pilot/help?doc=activity_plans&locale=en');
+    await waitForPilotHydration(page);
+    const documentIdentity = await page.evaluate(() => {
+        document.documentElement.dataset.helpDocument = String(performance.timeOrigin);
+        return document.documentElement.dataset.helpDocument;
+    });
+    const link = page.locator('.help-toc a').nth(4);
+    const fragment = await link.getAttribute('href');
+    expect(fragment).toBeTruthy();
+
+    // A real anchor click can animate. Observe its final target instead of
+    // sampling the first animation frame or disabling production scrolling.
+    await link.click();
+    await expect(page).toHaveURL(url => url.hash === fragment);
+    await expectHelpAnchorSettled(page, fragment);
+    const anchored = await page.evaluate(() => window.scrollY);
+    expect(anchored).toBeGreaterThan(200);
+
+    // Keyboard activation keeps the actual reader offset independent of
+    // Playwright's pointer auto-scroll. Router must restore its own saved offset.
+    const eventsLink = page.locator('aside a[href*="doc=events"]').first();
+    await eventsLink.evaluate(element => (element as HTMLElement).focus({preventScroll: true}));
+    await page.evaluate(() => window.scrollTo({top: 200, behavior: 'instant'}));
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(url => url.searchParams.get('doc') === 'events');
+    await expect(page.locator('.help-content')).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(url => url.hash === fragment && url.searchParams.get('doc') === 'activity_plans');
+    await expect(page.locator('.help-toc')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => Math.abs(window.scrollY - 200))).toBeLessThanOrEqual(3);
+
+    // Reusing the same plain anchor must still reveal it after the reader moves.
+    await link.evaluate(element => (element as HTMLElement).focus({preventScroll: true}));
+    await page.keyboard.press('Enter');
+    await expect.poll(() => page.evaluate(top => Math.abs(window.scrollY - top), anchored)).toBeLessThanOrEqual(3);
+    const search = page.getByRole('searchbox');
+    await search.fill('retained search draft');
+    await page.evaluate(() => window.scrollTo({top: 200, behavior: 'instant'}));
+    const refresh = page.getByRole('button', {name: 'Refresh', exact: true});
+    await refresh.evaluate(element => (element as HTMLElement).focus({preventScroll: true}));
+    const read = page.waitForResponse(response => response.request().method() === 'GET'
+        && response.url().includes('/api/v1/help'));
+    await page.keyboard.press('Enter');
+    expect((await read).status()).toBe(200);
+    await expect(search).toHaveValue('retained search draft');
+    expect(await page.evaluate(() => Math.abs(window.scrollY - 200))).toBeLessThanOrEqual(3);
+
+    // Interface translation replaces the article without renewing anchor intent.
+    await page.locator('#pilot-locale').evaluate(element => {
+        element.addEventListener('change', () => {
+            document.documentElement.dataset.localeActivationScroll = String(window.scrollY);
+        }, {once: true, capture: true});
+    });
+    const translatedRead = readGate();
+    const translationRoute = '**/api/v1/help?doc=activity_plans';
+    await page.route(translationRoute, async route => {
+        await translatedRead.promise;
+        await route.continue();
+    });
+    try {
+        await page.locator('#pilot-locale').selectOption('de');
+        expect(await page.evaluate(() => Math.abs(Number(document.documentElement.dataset.localeActivationScroll) - 200))).toBeLessThanOrEqual(3);
+        await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+        await expect(page.locator('.help-content')).toHaveCount(0);
+        await expect(page.locator('[data-loading-skeleton="article"]')).toBeVisible();
+        expect(await page.evaluate(() => Math.abs(window.scrollY - 200))).toBeLessThanOrEqual(3);
+    } finally { translatedRead.release(); }
+    await expect(page).toHaveURL(url => url.searchParams.get('locale') === 'de');
+    await expect(page.locator('.help-content')).toBeVisible();
+    await page.unroute(translationRoute);
+    await expect(search).toHaveValue('retained search draft');
+    expect(await page.evaluate(() => Math.abs(window.scrollY - 200))).toBeLessThanOrEqual(3);
+    expect(await page.evaluate(() => document.documentElement.dataset.helpDocument)).toBe(documentIdentity);
+    await captureState(page, info, 'help-preserved-reading-position', undefined, {viewportOnly: true});
+});
+
+test('Help restores the reader offset after an inactive article expires and returns through a delayed real read', async ({page}, info) => {
+    // Advance the real browser timers, including Query's inactive lifetime. No
+    // cache API, application data, route result or server response is replaced.
+    await page.clock.install();
+    await page.goto('/frontend-pilot/help?doc=activity_plans&locale=en');
+    await waitForPilotHydration(page);
+    const anchor = page.locator('.help-toc a').nth(4);
+    const fragment = await anchor.getAttribute('href');
+    await anchor.click();
+    await expect(page).toHaveURL(url => url.hash === fragment);
+    await expectHelpAnchorSettled(page, fragment);
+    const eventsLink = page.locator('aside a[href*="doc=events"]').first();
+    await eventsLink.evaluate(element => (element as HTMLElement).focus({preventScroll: true}));
+    await page.evaluate(() => window.scrollTo({top: 200, behavior: 'instant'}));
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(url => url.searchParams.get('doc') === 'events');
+    await expect(page.locator('.help-content')).toBeVisible();
+    await page.clock.fastForward(61_000);
+
+    const pendingRead = readGate();
+    const started = readGate();
+    const destination = '**/api/v1/help?doc=activity_plans';
+    await page.route(destination, async route => {
+        started.release();
+        await pendingRead.promise;
+        await route.continue();
+    });
+    try {
+        await page.goBack();
+        await started.promise;
+        await expect(page.locator('[data-loading-skeleton="article"]')).toBeVisible();
+    } finally { pendingRead.release(); }
+    await expect(page.locator('.help-content')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => Math.abs(window.scrollY - 200))).toBeLessThanOrEqual(3);
+    await page.unroute(destination);
+    await captureState(page, info, 'help-delayed-history-restoration', undefined, {viewportOnly: true});
 });
 
 test('pilot help supports native search and isolates SSR locale and hostile profile text', async ({browser, baseURL}) => {

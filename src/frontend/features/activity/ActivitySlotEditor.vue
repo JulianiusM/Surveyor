@@ -67,11 +67,11 @@ async function createRole(): Promise<void> {
     const existing = props.allRoles.find(role => role.title.toLowerCase() === name.toLowerCase());
     if (existing) return chooseRole(existing.id);
     if (!props.roleCreationAdmission) {
-        command.setError('activity.roleCreationDenied', 'transient', 'inline');
+        command.setError('activity.roleCreationDenied', 'transient');
         return;
     }
     const result = await command.run(scope => api.createRole(props.planId, name, scope), true, true,
-        {presentation: 'inline', success: 'common.added'});
+        {success: 'common.added'});
     // Read delivery supplies the persisted ID. Success without that projection
     // stays visibly saved; it never invents a role ID from the search label.
     await nextTick();
@@ -94,10 +94,10 @@ async function save(): Promise<void> {
     };
     const result = draft.id
         ? await command.run(scope => api.updateSlot(props.planId, draft.id, patch, token.value, scope), true, false,
-            {presentation: 'inline', success: 'common.updated'})
+            {success: 'common.updated'})
         : await command.run(scope => api.addSlot(props.planId, {day: draft.day, title: draft.title.trim(), description: draft.description.trim(),
             startTime, endTime, maxAssignees: Number(draft.maxAssignees) || 1, roles: [...draft.roles]}, scope), true, true,
-            {presentation: 'inline', success: 'common.added'});
+            {success: 'common.added'});
     if (result) emit('close');
 }
 async function reviewUnknown(): Promise<void> {

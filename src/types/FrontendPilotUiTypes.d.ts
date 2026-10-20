@@ -3,7 +3,7 @@ import type {QueryClient} from '@tanstack/vue-query';
 import type {i18n} from 'i18next';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import type {components} from './api/v1';
-import type {LocalizationContext, Locale, MessageKey, MessageParameters} from './LocalizationTypes';
+import type {LocalizationContext, Locale, MessageKey, MessageParameters, RichMessageKey} from './LocalizationTypes';
 import type {FrontendPageCompletion, FrontendPilotBootstrap} from './FrontendPilotTypes';
 import type {PilotApi} from '../frontend/app/api';
 
@@ -169,15 +169,14 @@ export interface PilotCommandOutcome {
     refresh: 'not-requested' | 'pending' | 'succeeded' | 'failed';
 }
 
-/** Features select native command feedback without putting feature names or policies
- * in the shared owner. The initiating DOM boundary is captured before dispatch ends. */
+/** Shared notices accept complete catalog messages without required scalar values
+ * or authored nodes; features cannot leave unresolved placeholders in feedback. */
 export type PilotPlainMessageKey = {
-    [TKey in MessageKey]: {} extends MessageParameters[TKey] ? TKey : never;
+    [TKey in MessageKey]: TKey extends RichMessageKey ? never : {} extends MessageParameters[TKey] ? TKey : never;
 }[MessageKey];
 
+/** Features select successful feedback through the common notice lifecycle. */
 export interface PilotCommandFeedback {
-    initiator?: Event | Element;
-    presentation?: 'flash' | 'inline';
     /** Null keeps successful maintenance silent; omission retains the ordinary saved notice. */
     success?: PilotPlainMessageKey | null;
 }
@@ -294,5 +293,20 @@ export interface PilotPageNavigationOptions {
 export interface PilotPageNavigation {
     destination: Readonly<ShallowRef<RouteLocationNormalized | undefined>>;
     pending(): boolean;
+    dispose(): void;
+}
+
+/** A mounted page exposes only its existing presentation readiness. No query,
+ * payload, authority or saved scroll position belongs to this handoff. */
+export interface PilotPageReadinessSource {
+    destination: Readonly<Ref<string>>;
+    ready: Readonly<Ref<boolean>>;
+}
+
+/** Router waits for readable content before restoring history or an anchor.
+ * Superseded visits and application disposal release pending work without scroll. */
+export interface PilotPageReadiness {
+    register(source: PilotPageReadinessSource): () => void;
+    wait(destination: RouteLocationNormalized): Promise<boolean>;
     dispose(): void;
 }

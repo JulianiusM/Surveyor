@@ -16,6 +16,13 @@ A request/application-local context coordinates identity, locale and update stat
 The original protocol and dated amendments remain in [Foundation](FRONTEND_FOUNDATION_DESIGN.md).
 [API](API_CONTRACT_DESIGN.md) owns wire/precondition shapes; [Development](staged/DEVELOPMENT.md) owns contribution steps.
 
+The [October 19 decisions](FRONTEND_FOUNDATION_DESIGN.md#direct-interface-and-shared-spa-decisions-2026-10-19) require
+integrated healthy-view Refresh wherever an implemented module owns current readable data. Reuse that module's
+admitted read, cooldown, actor/resource fences and draft merge; never invent a second read store or replay a command.
+Static screens and creation drafts gain no speculative writes. Fresh content must not renew an anchor navigation,
+move focus/scroll through a notice, or replace intentional unsaved values. Functional interface parity protects
+these user-visible steps rather than fixed native toolbar placement or identical pixels.
+
 ## Implemented Packing boundary
 
 The pilot implements scoped reads, draft reconciliation, capacity-sensitive operations and independent metadata/

@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {defineComponent, nextTick, reactive, type Component} from 'vue';
+import {defineComponent, nextTick, provide, reactive, ref, type Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
 import {pilotRoutes} from '../../src/frontend/app/createApp';
 import App from '../../src/frontend/app/App.vue';
+import {noticeTargetKey} from '../../src/frontend/composables/feedback';
 import InlineCell from '../../src/frontend/components/InlineCell.vue';
 import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
 import PackingEntry from '../../src/frontend/features/packing/PackingEntry.vue';
@@ -96,7 +97,16 @@ async function mounted(component: Component, props: Record<string, unknown> | ((
     const root = mount(withShell ? App : defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
         provide: {[pilotContextKey as symbol]: context},
-        stubs: {AppDialog: defineComponent({template: '<section role="dialog"><slot name="navigation" /><slot /><slot name="footer" /></section>'})},
+        stubs: {AppDialog: defineComponent({
+            setup() {
+                // The isolated dialog retains its production presentation scope.
+                const noticeTarget = ref<HTMLElement | null>(null);
+                provide(noticeTargetKey, noticeTarget);
+                return {noticeTarget};
+            },
+            template: '<section role="dialog"><div ref="noticeTarget" class="pilot-notice-stack" data-pilot-notices></div>'
+                + '<slot name="navigation" /><slot /><slot name="footer" /></section>',
+        })},
     }});
     await flushPromises();
     const wrapper = root.findComponent(component);
@@ -1769,7 +1779,7 @@ describe('packing command forms', () => {
         expect(button(wrapper, 'Update permissions').attributes('disabled')).toBeUndefined();
     });
 
-    it.each(['image', 'administrator-add'] as const)('shows native %s missing-selection feedback in its initiating section without a write', async section => {
+    it.each(['image', 'administrator-add'] as const)('shows %s missing-selection feedback in the common dialog host without moving focus or writing', async section => {
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleFeedbackRects);
         const projection: components['schemas']['PackingSettings'] = {...settings,
             capabilities: {...settings.capabilities, editHeader: true, managePermissions: true},
@@ -1787,10 +1797,10 @@ describe('packing command forms', () => {
             await button(wrapper, 'Upload').trigger('click');
         }
         await flushPromises();
-        const feedback = wrapper.get('[data-entity-section="' + section + '"] [data-command-feedback]');
+        const feedback = wrapper.get('[data-pilot-notices]');
         expect(feedback.get('.alert-danger').text()).toBe(section === 'image' ? 'Choose an image to upload.' : 'Please select a user');
         expect(feedback.get('.btn-close').attributes('aria-label')).toBe('Dismiss notification');
-        expect(document.activeElement).toBe(feedback.get('.alert').element);
+        expect(feedback.element.contains(document.activeElement)).toBe(false);
         expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
     });
 
@@ -1811,9 +1821,9 @@ describe('packing command forms', () => {
         await wrapper.get('#pilot-settings-tab-event').trigger('click');
         await wrapper.get('#pilot-settings-event form').trigger('submit');
         await flushPromises();
-        const feedback = wrapper.get('[data-entity-section="event"] [data-command-feedback]');
+        const feedback = wrapper.get('[data-pilot-notices]');
         expect(feedback.get('.alert-info').text()).toBe('The linked event is unchanged.');
-        expect(document.activeElement).toBe(feedback.get('.alert-info').element);
+        expect(feedback.element.contains(document.activeElement)).toBe(false);
         expect(wrapper.get<HTMLInputElement>('[name="title"]').element.value).toBe('Retained properties draft');
         expect(confirm).not.toHaveBeenCalled();
         expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
@@ -1833,14 +1843,14 @@ describe('packing command forms', () => {
         });
         await wrapper.get('#pilot-access-admins-tab').trigger('click');
         await wrapper.get('.accordion-button').trigger('click');
-        const original = wrapper.get('[data-entity-section="administrator"] [data-command-feedback]').element;
+        const original = wrapper.get('[data-entity-section="administrator"]').element;
         await button(wrapper, 'Remove').trigger('click');
         await flushPromises();
         expect(original.isConnected).toBe(false);
         expect(wrapper.find('[data-entity-section="administrator"]').exists()).toBe(false);
-        const feedback = wrapper.get('[data-dialog-feedback]');
+        const feedback = wrapper.get('[data-pilot-notices]');
         expect(feedback.get('.alert-success').text()).toBe('Admin removed');
-        expect(document.activeElement).toBe(feedback.get('.alert-success').element);
+        expect(feedback.element.contains(document.activeElement)).toBe(false);
         expect(feedback.get('.btn-close').attributes('disabled')).toBeUndefined();
         await feedback.get('.btn-close').trigger('click');
         expect(feedback.find('.alert').exists()).toBe(false);
@@ -3073,7 +3083,7 @@ describe('packing command forms', () => {
         expect(wrapper.get('#create-event-button').text()).not.toBe(choice.title);
     });
 
-    it.each([false, true])('redisplays the native empty collection error above the retained creation form (duplicate: %s)', async duplicate => {
+    it.each([false, true])('shows the empty collection error through shared feedback while retaining the creation draft (duplicate: %s)', async duplicate => {
         const formContext = {defaults, permissions: [], presets: []};
         const path = duplicate ? `/frontend-pilot/packing/${id}/duplicate` : '/frontend-pilot/packing/create';
         const {wrapper, request} = await mounted(PackingCreatePage, {}, async function readCreation(request) {
@@ -3084,14 +3094,17 @@ describe('packing command forms', () => {
             return json({entry: {kind: 'render'}, context: formContext, selectedEvent: null});
         }, path);
         await wrapper.get('#create-title').setValue('Retained title');
+        const title = wrapper.get<HTMLInputElement>('#create-title').element;
+        title.focus();
         await wrapper.get('tbody input[aria-label="Item 1"]').setValue('   ');
         await wrapper.get('form').trigger('submit');
         await flushPromises();
         const flash = wrapper.get('.alert-danger');
         expect(flash.text()).toBe('"items" must contain at least 1 items');
-        expect(flash.element.closest('.card')).toBeNull();
-        expect(flash.element.nextElementSibling?.classList.contains('card')).toBe(true);
-        expect(flash.find('button').exists()).toBe(false);
+        expect(flash.classes()).toContain('pilot-notification');
+        expect(flash.element.closest('.pilot-notice-origin.pilot-notice-region')).not.toBeNull();
+        expect(document.activeElement).toBe(title);
+        expect(flash.get('button').attributes('aria-label')).toBe('Dismiss notification');
         expect(wrapper.get<HTMLInputElement>('#create-title').element.value).toBe('Retained title');
         expect(wrapper.get<HTMLInputElement>('tbody input[aria-label="Item 1"]').element.value).toBe('   ');
         expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);

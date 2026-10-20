@@ -73,7 +73,7 @@ async function createLink(event: Event): Promise<void> {
     const input = {maxUses: Math.max(1, Number(uses.value || 1)),
         ...(expiry.value ? {expiresAt: new Date(expiry.value).toISOString()} : {})};
     const created = await command.run(scope => api.createLink(props.eventId, input, scope), true, true,
-        {presentation: 'inline', success: 'event.organizer.linkCreated', initiator: event});
+        {success: 'event.organizer.linkCreated'});
     if (!created) return;
     creating.value = false;
     expiry.value = '';
@@ -82,12 +82,12 @@ async function createLink(event: Event): Promise<void> {
 
 /** Revoke the exact current row after confirmation. Consumption/expiry state and
  * authority are server-owned; the read only supplies presentation eligibility. */
-async function revoke(link: Link, event: MouseEvent): Promise<void> {
+async function revoke(link: Link): Promise<void> {
     if (!available.isAvailable() || link.status === 'revoked') return;
     if (!window.confirm(messages.value.t('event.organizer.revokeConfirm'))) return;
     // A desired-state revoke may reconcile through a fresh authorized list read.
     await command.run(scope => api.revokeLink(props.eventId, link.id, scope), true, false,
-        {presentation: 'inline', success: 'event.organizer.linkRevoked', initiator: event});
+        {success: 'event.organizer.linkRevoked'});
 }
 
 /** Recovery reads the current links first. A creation can have succeeded without
@@ -114,10 +114,10 @@ function statusClass(status: Link['status']): string {
 
     <section class="reg-links text-bg-dark border border-secondary rounded-2 py-1 my-2" data-entity-section>
         <!-- Page and open-dialog hosts present one shared command receipt. -->
-        <div v-if="!creating" data-command-feedback>
-            <CommandFeedback :feedback="command.feedback" :target="null"
+        <div v-if="!creating">
+            <CommandFeedback :feedback="command.feedback"
                 :part="command.uncertain.value ? 'error' : 'all'" />
-            <CommandFeedback :feedback="command.feedback" part="uncertain" :target="null"
+            <CommandFeedback :feedback="command.feedback" part="uncertain"
                 :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refresh" />
         </div>
 
@@ -163,8 +163,8 @@ function statusClass(status: Link['status']): string {
                                         <td>
                                             <code class="text-wrap">{{ link.token }}</code>
                                         </td>
-                                        <td>{{ formatEventTimestamp(link.createdAt) }}</td>
-                                        <td>{{ formatEventTimestamp(link.expiresAt) }}</td>
+                                        <td>{{ formatEventTimestamp(link.createdAt, messages.locale) }}</td>
+                                        <td>{{ formatEventTimestamp(link.expiresAt, messages.locale) }}</td>
                                         <td>
                                             <span class="badge text-uppercase" :class="statusClass(link.status)">{{ messages.t(`event.organizer.${link.status}`) }}</span>
                                         </td>
@@ -175,7 +175,7 @@ function statusClass(status: Link['status']): string {
                                                     @click="copyLink(link)"><i class="bi bi-clipboard me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.copy') }}</ActionButton>
                                                 <ActionButton variant="outline-danger" :state="available"
                                                     :disabled="link.status === 'revoked'"
-                                                    @click="revoke(link, $event)"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.revoke') }}</ActionButton>
+                                                    @click="revoke(link)"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.revoke') }}</ActionButton>
                                             </div>
                                         </td>
                                     </tr>
@@ -198,10 +198,10 @@ function statusClass(status: Link['status']): string {
             content-class="text-light border border-secondary"
             :pending="command.pending.value || command.recovering.value" :fullscreen-on-small="false"
             @close="closeCreate">
-            <div data-dialog-feedback>
-                <CommandFeedback :feedback="command.feedback" :target="null"
+            <div>
+                <CommandFeedback :feedback="command.feedback"
                     :part="command.uncertain.value ? 'error' : 'all'" />
-                <CommandFeedback :feedback="command.feedback" part="uncertain" :target="null"
+                <CommandFeedback :feedback="command.feedback" part="uncertain"
                     :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refresh" />
             </div>
             <form :id="`${id}-create-form`" @submit.prevent="createLink">

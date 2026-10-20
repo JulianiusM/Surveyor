@@ -2,12 +2,10 @@ import {test, expect} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
-import {loginForE2E} from '../keywords/e2eCoreKeywords';
+import {expectUsableFrontendLayout, loginForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 
-/** Compare the actual form and footer, including their text, control states,
- * typography and relative layout. The approved shell can navigate to Vue paths;
- * it must not change the geometry or appearance of these migrated surfaces. */
+/** Record actual form/footer content, state, paint and raw responsive geometry. */
 function profilePresentation() {
     const form = document.querySelector<HTMLFormElement>('form:has(#name)')!;
     const footer = document.querySelector('footer')!;
@@ -57,6 +55,24 @@ function profilePresentation() {
             width: bounds.width, height: bounds.height, font: style.fontSize, weight: style.fontWeight,
             lineHeight: style.lineHeight, color: style.color, background: style.backgroundColor,
             border: style.borderColor, display: style.display, visibility: style.visibility, opacity: style.opacity};
+    }
+}
+
+/** Match fields, explanations, onward actions and painted hierarchy. Raw layout
+ * remains evidence; equivalent responsive interfaces need not share rectangles. */
+function compareProfilePresentation(native: ReturnType<typeof profilePresentation>, pilot: typeof native): void {
+    const {width: nativeWidth, height: nativeHeight, controls: nativeControls, ...nativeFields} = native.form;
+    const {width: pilotWidth, height: pilotHeight, controls: pilotControls, ...pilotFields} = pilot.form;
+    expect(pilotFields).toEqual(nativeFields);
+    expect(pilotControls.map(visibleMeaning)).toEqual(nativeControls.map(visibleMeaning));
+    expect(visibleMeaning(pilot.footer)).toEqual(visibleMeaning(native.footer));
+    expect(pilot.footer.links.map(link => ({...visibleMeaning(link), href: link.href})))
+        .toEqual(native.footer.links.map(link => ({...visibleMeaning(link), href: link.href})));
+
+    function visibleMeaning(element: typeof nativeControls[number]) {
+        return {text: element.text, font: element.font, weight: element.weight,
+            color: element.color, background: element.background, border: element.border,
+            visibility: element.visibility, opacity: element.opacity};
     }
 }
 
@@ -130,7 +146,14 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
         await testInfo.attach('profile-presentation', {
             body: JSON.stringify({native, pilot, browserErrors}, null, 2), contentType: 'application/json',
         });
-        expect(pilot).toEqual(native);
+        compareProfilePresentation(native, pilot);
+        await expectUsableFrontendLayout(page.locator('form:has(#name)'));
+        await expectUsableFrontendLayout(page.locator('footer'));
+        const refreshed = page.waitForResponse(response => response.request().method() === 'GET'
+            && new URL(response.url()).pathname === '/api/v1/profiles/current');
+        await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+        expect((await refreshed).status()).toBe(200);
+        await expect(page.locator('#name')).toHaveValue(nativeName);
         await page.screenshot({path: testInfo.outputPath('pilot-profile.png'), fullPage: true});
         expect(browserErrors).toEqual([]);
     });

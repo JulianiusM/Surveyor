@@ -265,6 +265,38 @@ describe('SPA profile workflows', () => {
         expect(input.value).toBe('Incorrect confirmation');
     });
 
+    it.each(['token', 'entry', 'preview'] as const)('refreshes workflow authority while retaining its %s without replaying secret commands', async kind => {
+        const workflow: FrontendProfileWorkflow = kind === 'token' ? {kind: 'token', token} : {kind: 'entry'};
+        const path = kind === 'token' ? '/frontend-pilot/users/profile/migrate/request' : '/frontend-pilot/users/profile/migrate/show';
+        const {host, context, request} = await mounted(workflow, path, async input => {
+            const received = input as Request;
+            if (new URL(received.url).pathname === '/api/v1/session') return json(session);
+            expect(new URL(received.url).pathname).toBe('/api/v1/profiles/migration/preview');
+            return previewResponse(preview);
+        });
+        if (kind === 'preview') await enterPreview(host);
+        const input = host.querySelector<HTMLInputElement>('input[name="token"]');
+        if (kind === 'entry') {
+            input!.value = 'Keep unsubmitted token';
+            input!.dispatchEvent(new Event('input', {bubbles: true}));
+            await nextTick();
+        }
+        const before = request.mock.calls.length;
+        host.querySelector<HTMLButtonElement>('button[aria-label="Refresh"]')!.click();
+        await flushPromises();
+
+        const refreshed = request.mock.calls.slice(before).map(([input]) => input as Request);
+        expect(refreshed.map(input => new URL(input.url).pathname)).toEqual(['/api/v1/session', '/api/v1/profiles/workflow-entry']);
+        expect(refreshed.every(input => input.method === 'GET')).toBe(true);
+        if (kind === 'token') expect(host.querySelector('h3')?.textContent).toBe(token);
+        else {
+            expect(host.querySelector('input[name="token"]')).toBe(input);
+            expect(input!.value).toBe(kind === 'entry' ? 'Keep unsubmitted token' : token);
+            if (kind === 'preview') expect(host.textContent).toContain(preview.profile.name);
+        }
+        expectPrivateCache(context);
+    });
+
     it('keeps entry text through secret-free preview Back/Forward and uses only the validated token for execution', async function retainsPreviewHistory() {
         let executedToken: string | undefined;
         const path = '/frontend-pilot/users/profile/migrate/show?locale=en&keep=hello%20world';

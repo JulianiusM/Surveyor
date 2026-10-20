@@ -255,12 +255,12 @@ function reviewDefaults(): void {
 
 /** Save the sparse changed audience masks, retaining accepted presentation after a
  * failed follow-up read. A confirmed mask never manufactures a replacement write token. */
-async function saveDefaults(source?: Event): Promise<void> {
+async function saveDefaults(): Promise<void> {
     if (!defaults.value || blocked.value || defaultsConflict.value) return;
     if (!Object.keys(defaultsPatch.value).length) {
         // Sparse conditional commands preserve the no-empty-PATCH boundary.
         // A pristine save retains native permission feedback and renews its receipt.
-        command.setNotice('permissions.updated', {initiator: source, presentation: 'inline'});
+        command.setNotice('permissions.updated');
         return;
     }
 
@@ -272,7 +272,7 @@ async function saveDefaults(source?: Event): Promise<void> {
     const previousRead = completedSettingsReads;
     const result = await command.run((scope) =>
         api.setDefaults(props.resourceId, patch, token, scope),
-        true, false, {initiator: source, presentation: 'inline', success: 'permissions.updated'},
+        true, false, {success: 'permissions.updated'},
     );
 
     // Show the confirmed choice even when refresh failed. If a newer settings read
@@ -303,7 +303,7 @@ function reviewAdmin(id: string): void {
 
 /** Save an existing named grant, or deliberately recreate a removed grant after Review.
  * Confirmation updates its local mask; only the newer settings projection admits later writes. */
-async function saveAdmin(id: string, source?: Event): Promise<void> {
+async function saveAdmin(id: string): Promise<void> {
     const draft = admins.value[id];
     if (!draft || blocked.value || adminConflict(id)) return;
 
@@ -315,7 +315,7 @@ async function saveAdmin(id: string, source?: Event): Promise<void> {
         adminRemoved(id)
             ? api.addAdmin(props.resourceId, {profileId: id, mask: submitted}, draft.token, scope)
             : api.updateAdmin(props.resourceId, id, submitted, draft.token, scope),
-        true, false, {initiator: source, presentation: 'inline', success: 'permissions.updated'},
+        true, false, {success: 'permissions.updated'},
     );
 
     // Preserve the accepted mask independently of refresh, then reconcile a completed
@@ -331,7 +331,7 @@ async function saveAdmin(id: string, source?: Event): Promise<void> {
 /** A grant already removed remotely needs only local draft dismissal. Otherwise
  * confirm the server removal against that row's latest admitted mask token;
  * this does not silently acknowledge or recreate a conflicting permission draft. */
-async function removeAdmin(id: string, source?: Event): Promise<void> {
+async function removeAdmin(id: string): Promise<void> {
     // Remote removal has already happened. Closing this retained local draft
     // issues no DELETE and must not accidentally recreate its reviewed mask.
     if (adminRemoved(id)) {
@@ -345,7 +345,7 @@ async function removeAdmin(id: string, source?: Event): Promise<void> {
     if (data.value && window.confirm(messages.value.t('packing.confirmRemoveAdmin'))) {
         await command.run((scope) =>
             api.removeAdmin(props.resourceId, id, data.value!.access!.admins.find(admin => admin.profileId === id)!.editToken, scope),
-            true, false, {initiator: source, presentation: 'inline', success: 'permissions.adminRemoved'},
+            true, false, {success: 'permissions.adminRemoved'},
         );
     }
 }
@@ -353,14 +353,13 @@ async function removeAdmin(id: string, source?: Event): Promise<void> {
 /** Resolve the selected discovery result to its profile ID before granting a
  * preset. A rejected or unknown command keeps the selection for review; success
  * alone closes this form, without inferring authority from its display label. */
-async function addAdmin(source?: Event): Promise<void> {
+async function addAdmin(): Promise<void> {
     if (!data.value?.access || blocked.value) return;
 
     // Discovery supplies the target ID; typed display text cannot select a grant.
     // Explain a missing choice locally before collecting a preset or issuing a write.
     if (!selectedProfile.value) {
-        command.captureFeedback(source);
-        command.setError('permissions.selectUser', 'transient', 'inline');
+        command.setError('permissions.selectUser', 'transient');
         return;
     }
 
@@ -375,7 +374,7 @@ async function addAdmin(source?: Event): Promise<void> {
                 data.value!.settingsToken,
                 scope,
             ),
-            true, false, {initiator: source, presentation: 'inline', success: 'permissions.adminAdded'},
+            true, false, {success: 'permissions.adminAdded'},
         )
     ) {
         cancelAddAdmin();
@@ -441,7 +440,6 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                     data-entity-section="permissions"
                     @submit.prevent="saveDefaults"
                 >
-                    <div data-command-feedback aria-live="polite"></div>
                     <AudiencePermissions
                         v-model="defaults.values"
                         :permissions="data.access.permissions"
@@ -523,7 +521,6 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                 </AppAccordionButton>
                             </h2>
                             <div v-show="openAdmin === admin.profileId" class="accordion-body bg-dark pt-2">
-                                <div data-command-feedback aria-live="polite"></div>
                                 <template v-if="admins[admin.profileId]">
                                     <PermissionFields
                                         v-model="admins[admin.profileId]!.value"
@@ -558,7 +555,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                             class="btn-sm"
                                             variant="outline-danger"
                                             :disabled="blocked"
-                                            @click="removeAdmin(admin.profileId, $event)"
+                                            @click="removeAdmin(admin.profileId)"
                                             ><i class="bi bi-trash me-1" aria-hidden="true"></i
                                             >{{ messages.t(adminRemoved(admin.profileId) ? 'packing.discardAdminDraft' : 'packing.removeAssignment') }}</ActionButton
                                         ><ActionButton
@@ -567,7 +564,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                                 blocked ||
                                                 adminConflict(admin.profileId)
                                             "
-                                            @click="saveAdmin(admin.profileId, $event)"
+                                            @click="saveAdmin(admin.profileId)"
                                             >{{ messages.t('common.save') }}</ActionButton
                                         >
                                     </div>
@@ -585,7 +582,6 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                         <div class="mb-2">
                             <h5 class="modal-title">{{ messages.t('packing.addAdministrator') }}</h5>
                         </div>
-                        <div data-command-feedback aria-live="polite"></div>
                         <StatusNotice v-if="profiles.error.value" kind="warning"
                             :last-updated-at="profiles.data.value ? profiles.dataUpdatedAt.value : undefined"
                             :retry-at="profileRetryAt" :read-error="profiles.error.value"

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-19
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented P0-P6 routing and approved automatic-job observation reconciled with the original decision ledger; native isolation, backend exclusions and separate later-phase/cutover boundaries retained; execution belongs to paired review
+verification-scope: direct R2-R10 interface, staged documentation and civil-date decisions recorded against original choices; source adoption and execution belong to paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -732,6 +732,9 @@ focusing it or scrolling the document. Normal browser scroll anchoring may compe
 Local dialog/section feedback retains its scoped reveal behavior, and receipt renewal, dismissal, expiry and durable
 uncertainty retain their existing owners. The host's containing block must span the actual page content.
 
+The direct October 19 shared-SPA decision below supersedes this local reveal rule: submission and refresh feedback
+must not move focus or scroll, and matching consumers use common notification presentation.
+
 Route metadata selects reusable page-family skeleton compositions for initial rendering; scoped missing-data
 regions use the same decorative primitives without duplicating an existing header or card. Shared presentation owns
 responsive geometry, accessibility and reduced motion. Placeholder shape never grants authority, invents record
@@ -826,6 +829,53 @@ until the native-to-Vue cutover has actually happened; Vue implementation or pas
 The subsequent full-pilot review is directly requested against the original baseline and approved amendments,
 including complete P5/P6, meaningful common ownership, human maintainability, staged guidance and running-app parity.
 Potentially unintended changes still require advance direct conversational approval.
+
+### Direct interface and shared SPA decisions (2026-10-19)
+
+After the full baseline review, the maintainer directly resolves R2–R7 and requires implementation plus another
+review of **all implemented modules against the original baseline and explicit amendments**. These decisions are
+current requirements, not pending proposals or permission inferred from source. Earlier approval gaps remain part
+of their historical receipts; this reply supplies the authority for the changes below.
+
+| Decision | Current requirement and owner |
+|---|---|
+| R2: complete interface localization | Localize every non-user-generated interface string in migrated modules through the existing shared catalogs. User-authored names, descriptions and other record values remain data, not translation keys. The three Activity source badges are one actual consumer, not the scope limit. |
+| R3: controlled component messages | Support explicitly authored Vue elements in declared, validated catalog placeholders through the selected i18next-vue/shared translation owner. Preserve escaping and reject arbitrary catalog HTML. The dated DEC-006 amendment supersedes only the original rich-slot deferral. |
+| R4: locale-neutral usability | The maintainer rejects the German-only proposal and directs responsive improvements for every supported language, including English. Shared presentation may replace overflowing fixed native rows; controls, labels and actions must remain readable and reachable. Native authored sources stay untouched and IMP-080 remains open until actual cutover. |
+| R5: first-install summary | Despite its separate subject, explicitly reconcile staged Architecture with Database's established confirmed-empty first-install exception. Database remains the procedure owner; runtime synchronization stays disabled and existing production upgrades use migrations. This grants no database action or publication. |
+| R6: integrated Refresh and functional parity | Required Refresh controls use each implemented module's existing admitted read/recovery owner. Visual parity means an equivalent interface: users see the same meaningful information and can complete the same steps. Exact pixels, DOM identifiers and internal names are not requirements; explicit requirements and approvals are exceptions by default. |
+| R7: common SPA feedback | Reject inherited submit/refresh scrolling and jumping, plus feature-specific recreation or placement of notices. Shared page/dialog notification and feedback owners serve all migrated modules without moving the user's focus or scroll. Preserve meaningful wording, receipt lifetime, errors, uncertainty, drafts and the actual operation result. |
+
+Functional parity still protects actions, information, ordering where meaningful, keyboard access, value lifetimes,
+authorization and exact reviewed business inputs. It does not justify hiding controls, removing journeys or weakening
+assertions indiscriminately. Review native artifacts as evidence, not immutable frontend design constraints. Retain
+useful shared owners and identify hidden restrictions, duplicated presentation and debt across the implemented pilot.
+
+The same R7 decision applies to the router: read Refresh, locale-only query replacement and the profile's local
+preview transition retain the viewport. Real page/anchor navigation and browser history keep their deliberate
+navigation meaning. Router honors a requested Help anchor after the admitted article renders, while browser history
+restores the reader's saved position. Translating or refreshing that visit does not renew anchor navigation.
+
+These are frontend corrections with at most minimal transport adaptation. Existing controller/domain/DBAL business
+owners, the approved R1 job-observation scope and IMP-030's cutover condition remain intact. P7–P11, backend business
+redesign, native removal, default-route cutover, publication and deployment remain separately authorized work.
+The paired review distinguishes actual adoption and executed checks from this decision record.
+
+### Approved Operations, slot-total and calendar-day corrections (2026-10-20)
+
+After the three requests were independently reviewed and fully reissued in the conversation, the maintainer
+explicitly approved R8, and approved R9/R10 as frontend changes with at most minimal backend adjustments. These
+answers resolve the earlier pending decisions individually; they do not erase the original P5/native choices.
+
+| Decision | Approved scope and preserved boundary |
+|---|---|
+| R8: Operations expense guidance | Correct the one staged statement to describe optional participant-payer attribution, its existing invoice-history/credit behavior and the separately recorded organizer. Reuse the existing invoice owner and Upgrading guidance; no calculation, payment, schema, runtime or frozen production-guide change is authorized. |
+| R9: Activity saved-slot total | Show the number of all admitted saved slots in the existing Vue schedule badge, independently of All/My/Open; show zero for an empty plan. Use the existing slot collection without another state owner, endpoint or draft. Native retains IMP-076. |
+| R10: consistent calendar days | All formatted Vue Event/Activity date-only displays identify the saved calendar day. Activity creation, schedule and recommendation weeks use one shared Monday-to-Sunday civil-date presentation owner, also adopted by its versioned week projection. This supersedes the deliberate native date-presentation parity and separate browser/server algorithms. Stored values, business calculations, deadlines, assignments and printable output retain their existing meaning; native sources remain unchanged. |
+
+The implementation review records actual adoption and checks separately from these approvals. Native IMP-077
+remains recorded; native repair, default-route cutover, guide publication, deployment, P7–P11 and unrelated backend
+redesign are not authorized. IMP-030 and IMP-080 retain their actual-cutover resolution conditions.
 
 ## Cutover retirement inventory
 

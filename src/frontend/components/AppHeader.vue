@@ -336,7 +336,7 @@ async function retryCompletion(): Promise<void> {
             </div>
             <!-- A rejected logout owns one feedback receipt. Translating its body must
                  keep the original expiry; a repeated rejection supplies a new receipt. -->
-            <CommandFeedback :feedback="logoutCommand.feedback" part="error" error-kind="danger" :inline="false" no-margin />
+            <CommandFeedback :feedback="logoutCommand.feedback" part="error" error-kind="danger" no-margin />
             <CommandFeedback :feedback="logoutCommand.feedback" part="uncertain" no-margin
                 :action="{state: logoutCommand.recoveryAction, label: messages.t('common.refresh'), class: 'ms-2'}"
                 @action="refreshLogoutState" />

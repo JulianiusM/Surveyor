@@ -9,12 +9,18 @@ import {waitForPilotHydration} from './frontendDynamicKeywords';
 /** Create shared persisted inputs through the established HTTP owners. Both
  * renderers use these same registered profiles, saved rules and recommendation. */
 export async function createAdvancedActivityForE2E(request: APIRequestContext,
-    options: {assigned?: boolean; secondAssigned?: boolean; recommendation?: boolean} = {}) {
+    options: {assigned?: boolean; secondAssigned?: boolean; recommendation?: boolean;
+        period?: Pick<components['schemas']['ActivityCreateInput'], 'startDate' | 'endDate'>} = {}) {
     const event = await createFrontendEventFixture(request);
+    const attendance = options.period ?? {startDate: '2030-06-01', endDate: '2030-06-04'};
+    // Calendar scenarios reuse the existing Event operation before either real
+    // registration. Ordinary fixtures retain their original four-day Event and
+    // two-day plan; no business or attendance rule is bypassed for the test.
+    if (options.period) expect((await request.post(`/api/event/${event.id}/update`, {data: options.period})).status()).toBe(200);
     expect((await request.post(`/api/event/${event.id}/register`, {
-        data: {arrivalDate: '2030-06-01', departureDate: '2030-06-04', dietary: ['MEAT']},
+        data: {arrivalDate: attendance.startDate, departureDate: attendance.endDate, dietary: ['MEAT']},
     })).status()).toBe(200);
-    const plan = await createActivityForE2E(request, event.id);
+    const plan = await createActivityForE2E(request, event.id, options.period);
 
     // The native fixture's breakfast occurs on arrival morning. Advanced
     // recommendation application intentionally blocks that time, so choose two
@@ -37,7 +43,7 @@ export async function createAdvancedActivityForE2E(request: APIRequestContext,
     expect(other).toBeTruthy();
     expect((await request.get(`/users/profile/change/${other.id}`, {maxRedirects: 0})).status()).toBe(302);
     expect((await request.post(`/api/event/${event.id}/register`, {
-        data: {arrivalDate: '2030-06-01', departureDate: '2030-06-04', dietary: ['MEAT']},
+        data: {arrivalDate: attendance.startDate, departureDate: attendance.endDate, dietary: ['MEAT']},
     })).status()).toBe(200);
     if (options.secondAssigned) await assignActivityThroughNative(request, plan.id, plan.view.slots[1]!.id);
     expect((await request.get(`/users/profile/change/${owner.id}`, {maxRedirects: 0})).status()).toBe(302);

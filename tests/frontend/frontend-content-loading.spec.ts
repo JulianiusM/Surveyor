@@ -92,7 +92,7 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
         context.start()();
     });
     await flushPromises();
-    return {wrapper, context, request};
+    return {wrapper, context, request, router};
 }
 
 /** Geometry stays decorative without mounting feature reads or synthetic controls. */
@@ -123,6 +123,45 @@ describe('help and overview progressive content', () => {
             import('../../src/frontend/features/identity/ProfileAdministrationPage.vue'),
             import('../../src/frontend/features/identity/ProfileWorkflowPage.vue'),
         ]);
+    });
+
+    it('refreshes and translates healthy Help without owning scroll or releasing the search draft', async () => {
+        const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+        let current = {...article(), content: '<h2 id="task">Original task</h2><h2 id="next">Next task</h2>'};
+        const {wrapper, router, request, context} = await mounted('/frontend-pilot/help#task', async () => json(current));
+        expect(scroll).not.toHaveBeenCalled();
+        const search = wrapper.get<HTMLInputElement>('input[name="q"]');
+        await search.setValue('Unsubmitted search');
+        current = {...current, title: 'Updated guide', content: '<h2 id="task">Updated task</h2><h2 id="next">Next task</h2>'};
+        const before = request.mock.calls.length;
+        await wrapper.get('button[aria-label="Refresh"]').trigger('click');
+        await flushPromises();
+
+        expect(request.mock.calls).toHaveLength(before + 1);
+        expect(wrapper.get('h1').text()).toContain('Updated guide');
+        expect(wrapper.get('#task').text()).toBe('Updated task');
+        expect(wrapper.get('input[name="q"]').element).toBe(search.element);
+        expect(search.element.value).toBe('Unsubmitted search');
+        expect(scroll).not.toHaveBeenCalled();
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+
+        // The shared header retains the same anchor when changing the locale
+        // query. New translated article authority must not repeat its reveal.
+        current = {...current, locale: 'de', title: 'Aktualisierte Anleitung',
+            content: '<h2 id="task">Übersetzte Aufgabe</h2><h2 id="next">Nächste Aufgabe</h2>'};
+        context.locale.value = 'de';
+        await router.replace('/frontend-pilot/help?locale=de#task');
+        await flushPromises();
+        expect(wrapper.get('#task').text()).toBe('Übersetzte Aufgabe');
+        expect(wrapper.get('h1').text()).toContain('Aktualisierte Anleitung');
+        expect(scroll).not.toHaveBeenCalled();
+
+        // This page signals readiness; the application's Router owns the actual
+        // anchor/history decision, covered by the integrated browser journey.
+        await router.push('/frontend-pilot/help?locale=de#next');
+        await flushPromises();
+        expect(wrapper.get('#next').text()).toBe('Nächste Aufgabe');
+        expect(scroll).not.toHaveBeenCalled();
     });
 
     it.each([429, 503])('shows Help read timing and recovers the retained article without navigation or draft loss (%s)', async status => {

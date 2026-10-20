@@ -6,7 +6,7 @@ import {expectVisiblePresentation, loginForE2E, openModalForE2E,
     readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
-import {captureSurveyPresentation, createFrontendSurveyFixture, expectSurveyActionsPresentation, expectSurveyCardLayout, observeSurveyCommand,
+import {captureSurveyPresentation, createFrontendSurveyFixture, expectSurveyActionsPresentation, expectSurveyCardLayout, expectSurveyPageContained, observeSurveyCommand,
     readSurveyCardLayout, readSurveyForE2E, readSurveyPageOverflow, scrollSurveyTable} from '../keywords/frontendSurveyE2EKeywords';
 
 for (const width of [1280, 390]) {
@@ -47,7 +47,7 @@ for (const width of [1280, 390]) {
             const card = page.locator('main .card').first();
             const header = await captureSurveyPresentation(page, info, `${label}-survey-header`, card.locator(':scope > .card-header'),
                 ['h1', 'button']);
-            const layout = await readSurveyCardLayout(card, pilot);
+            const layout = await readSurveyCardLayout(card);
             if (pilot) {
                 expectVisiblePresentation(native.header!, header);
                 expectSurveyCardLayout(nativeLayout!, layout);
@@ -116,9 +116,6 @@ for (const width of [1280, 390]) {
             await expect(dialog.getByRole('link', {name: 'Duplicate', exact: true})).toHaveAttribute('href', `${prefix}${survey.path}/duplicate`);
             const remove = dialog.getByRole('button', {name: 'Delete permanently', exact: true});
             await expect(remove).toBeEnabled();
-            // Verify the precise existing wrapper behind computed blockification;
-            // the scoped comparison never normalizes unrelated display changes.
-            expect(await remove.evaluate(element => element.parentElement!.tagName)).toBe(pilot ? 'DIV' : 'FORM');
             await actions.focus();
             await page.keyboard.press('Escape');
             await expect(dialog).not.toBeVisible();
@@ -145,7 +142,7 @@ for (const width of [1280, 390]) {
             const notice = body.locator('.status-notice').filter({hasText: 'No answers yet…'});
             await expect(notice).toBeVisible();
             const presentation = await captureSurveyPresentation(page, info, `${label}-survey-empty-results`, notice, []);
-            const layout = await readSurveyCardLayout(card, pilot);
+            const layout = await readSurveyCardLayout(card);
             if (pilot) {
                 expectVisiblePresentation(nativeNotice!, presentation);
                 expectSurveyCardLayout(nativeLayout!, layout);
@@ -154,7 +151,7 @@ for (const width of [1280, 390]) {
                 nativeLayout = layout;
             }
             // Keep the whole surrounding card available for human inspection;
-            // the normalized layout above asserts every inter-section gap.
+            // the layout check above retains all corresponding sections.
             await captureSurveyPresentation(page, info, `${label}-survey-empty-card`, card,
                 ['h1', 'h2', 'th', 'td', 'input', 'label', 'select', 'button']);
         }
@@ -171,13 +168,12 @@ for (const width of [1280, 390]) {
         })).status()).toBe(302);
         await page.request.get('/users/profile');
         const native: Record<string, Awaited<ReturnType<typeof readVisiblePresentation>>> = {};
-        const nativeScroll: Record<string, Awaited<ReturnType<typeof scrollSurveyTable>>> = {};
-        let nativeOverflow: Awaited<ReturnType<typeof readSurveyPageOverflow>>;
 
         for (const pilot of [false, true]) {
             const label = pilot ? 'vue' : 'native';
             await page.goto(`${pilot ? '/frontend-pilot' : ''}${survey.path}?locale=en`, {waitUntil: 'domcontentloaded'});
             if (pilot) await waitForPilotHydration(page);
+            if (pilot) await expectSurveyPageContained(page, info, 'vue-survey-page-before-scroll');
             for (const [index, kind] of ['ballot', 'results'].entries()) {
                 const table = page.locator('main table').nth(index);
                 await expect(table.locator('thead th')).toHaveCount(initial.combinations.length + 1);
@@ -186,31 +182,56 @@ for (const width of [1280, 390]) {
                     ['th', 'td', 'input', 'label']);
                 if (pilot) {
                     expectVisiblePresentation(native[kind]!, presentation);
-                    for (const dimension of ['width', 'overflow', 'scroll'] as const) {
-                        expect(Math.abs(movement[dimension] - nativeScroll[kind]![dimension])).toBeLessThanOrEqual(1);
-                    }
-                } else {
-                    native[kind] = presentation;
-                    nativeScroll[kind] = movement;
-                }
+                    // Real table scrolling must remain possible; wrapping may
+                    // improve the required width without reproducing native pixels.
+                    expect(movement.width).toBeGreaterThan(0);
+                    expect(movement.overflow).toBeGreaterThan(0);
+                    expect(movement.scroll).toBeGreaterThan(0);
+                    await expectSurveyPageContained(page, info, `vue-survey-page-after-${kind}`);
+                } else native[kind] = presentation;
             }
-            // The original wide page itself reports larger document scroll
-            // bounds. Preserve and compare that actual horizontal behavior
-            // boundary instead of inventing a native no-overflow guarantee.
+            // Retain the unchanged native document movement as evidence. Direct
+            // R4/R6 requires Vue's complete tables to scroll locally instead of
+            // reproducing that inherited whole-page usability defect (IMP-075).
             const overflow = await readSurveyPageOverflow(page);
             await info.attach(`${label}-survey-page-overflow`, {body: JSON.stringify(overflow, null, 2), contentType: 'application/json'});
-            if (pilot) {
-                expect(overflow.htmlOverflowX).toBe(nativeOverflow!.htmlOverflowX);
-                expect(overflow.bodyOverflowX).toBe(nativeOverflow!.bodyOverflowX);
-                for (const dimension of ['clientWidth', 'scrollWidth', 'reachableScrollX'] as const) {
-                    expect(Math.abs(overflow[dimension] - nativeOverflow![dimension])).toBeLessThanOrEqual(1);
-                }
-                for (const surface of ['body', 'main'] as const) {
-                    expect(Math.abs(overflow[surface].x - nativeOverflow![surface].x)).toBeLessThanOrEqual(1);
-                    expect(Math.abs(overflow[surface].width - nativeOverflow![surface].width)).toBeLessThanOrEqual(1);
-                }
-            } else nativeOverflow = overflow;
         }
+
+        // A fresh German visit exercises the same shared containment owner with
+        // longer labels. This remains a real built route, not a substituted DOM.
+        await page.goto(`/frontend-pilot${survey.path}?locale=de`, {waitUntil: 'domcontentloaded'});
+        await waitForPilotHydration(page);
+        await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+        await expectSurveyPageContained(page, info, 'vue-de-survey-page-before-scroll');
+        for (const [index, kind] of ['ballot', 'results'].entries()) {
+            const table = page.locator('main table').nth(index);
+            await expect(table.locator('thead th')).toHaveCount(initial.combinations.length + 1);
+            await scrollSurveyTable(table);
+            await captureSurveyPresentation(page, info, `vue-de-survey-scrolled-${kind}`, table.locator('..'),
+                ['th', 'td', 'input', 'label']);
+            await expectSurveyPageContained(page, info, `vue-de-survey-page-after-${kind}`);
+        }
+
+        // The final choice still uses its real radio/label and browser arrow
+        // navigation. Changing the local draft neither pans the document nor
+        // submits a ballot implicitly, and persistence keeps the prior answer.
+        const last = initial.combinations.at(-1)!;
+        const ballot = page.locator('#survey-ballot');
+        const no = ballot.locator(`input[name="${last.id}"][value="no"]`);
+        const yes = ballot.locator(`input[name="${last.id}"][value="yes"]`);
+        let ballotWrites = 0;
+        page.on('request', request => {
+            if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/v1/surveys/${survey.id}/ballot`) ballotWrites++;
+        });
+        await ballot.locator(`label[for="no-${last.id}"]`).click();
+        await expect(no).toBeFocused();
+        await page.keyboard.press('ArrowRight');
+        await expect(yes).toBeFocused();
+        await expect(yes).toBeChecked();
+        await expectSurveyPageContained(page, info, 'vue-de-survey-page-after-keyboard');
+        const saved = await readSurveyForE2E(page.request, survey.id);
+        expect(saved.ownAnswers[last.id] ?? 'no').toBe('no');
+        expect(ballotWrites).toBe(0);
     });
 
     test(`renders saved Survey instructions as escaped single and multiline text at ${width}px`, async ({page}, info) => {
@@ -246,7 +267,7 @@ for (const width of [1280, 390]) {
                     const headingBox = await page.getByRole('heading', {name: 'Your response', exact: true}).boundingBox();
                     expect(descriptionBox).not.toBeNull();
                     expect(headingBox).not.toBeNull();
-                    expect(Math.abs(headingBox!.y - descriptionBox!.y - descriptionBox!.height)).toBeLessThanOrEqual(1);
+                    expect(headingBox!.y).toBeGreaterThanOrEqual(descriptionBox!.y + descriptionBox!.height - 1);
                 } else {
                     expect(await paragraph.textContent()).toBe('');
                 }

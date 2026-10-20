@@ -54,6 +54,7 @@ afterEach(async () => {
     for (const cleanup of cleanups.splice(0)) await cleanup();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     document.body.innerHTML = '';
 });
 
@@ -88,6 +89,64 @@ function button(root: ReturnType<typeof mount>, title: string) {
 }
 
 describe('Activity recommendation review production frontend', () => {
+    it('shows stored civil days in both locales without replacing a pending recommendation', async () => {
+        vi.stubEnv('TZ', 'America/Los_Angeles');
+        const {root, context, requests} = await mounted(async request => path(request).endsWith('/warnings') ? json({warnings: []}) : json(workspace()));
+        const header = root.get('[data-recommendations-schedule] th[data-date="2030-06-01"]');
+        expect(header.get('.day').text()).toBe('Sat');
+        expect(header.get('.date').text()).toBe('6/1/2030');
+        await button(root, 'Approve').trigger('click');
+        await flushPromises();
+        const recommendation = root.get('[data-rec-id]');
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(root.get('[data-recommendations-schedule] th[data-date="2030-06-01"]').element).toBe(header.element);
+        expect(header.get('.day').text()).toBe('Sa');
+        expect(header.get('.date').text()).toBe('1.6.2030');
+        expect(root.get('[data-rec-id]').element).toBe(recommendation.element);
+        expect(recommendation.get('.badge').text()).toBe('Genehmigt');
+        expect(requests.some(request => path(request).endsWith('/apply'))).toBe(false);
+    });
+
+    it('retains fallback provenance through manual staging and later translation without changing literal names', async () => {
+        const saved = workspace();
+        saved.participantOptions = [
+            {...saved.participantOptions[0], label: 'Profile #' + profileId, nameIsFallback: true},
+            {key: 'profile:' + otherId, profileId: otherId, label: 'Participant', nameIsFallback: false,
+                arrivalDate: null, departureDate: null},
+        ];
+        const {root, context, requests} = await mounted(async request => path(request).endsWith('/warnings') ? json({warnings: []}) : json(saved));
+        await root.get(`[data-add-recommendation][data-slot-id="${otherId}"]`).trigger('click');
+        await flushPromises();
+        const select = document.querySelector<HTMLSelectElement>('#addRecommendationParticipant')!;
+        expect(Array.from(select.options, option => option.text)).toContain('Profile #' + profileId);
+        select.value = 'profile:' + profileId;
+        select.dispatchEvent(new Event('change', {bubbles: true}));
+        await flushPromises();
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(document.querySelector('#addRecommendationParticipant')).toBe(select);
+        expect(select.value).toBe('profile:' + profileId);
+        expect(Array.from(select.options, option => option.text)).toEqual(expect.arrayContaining(['Profil #' + profileId, 'Participant']));
+        document.querySelector<HTMLButtonElement>('#addRecommendationConfirm')!.click();
+        await flushPromises();
+        const staged = root.get('[data-rec-id=""]');
+        expect(staged.text()).toContain('Profil #' + profileId);
+        context.locale.value = 'en';
+        await flushPromises();
+        expect(root.get('[data-rec-id=""]').element).toBe(staged.element);
+        expect(staged.text()).toContain('Profile #' + profileId);
+        expect(staged.findAll('button').some(control => control.attributes('aria-label')?.includes('Profile #' + profileId))).toBe(true);
+        expect(requests.some(request => path(request).endsWith('/apply'))).toBe(false);
+
+        const values = manualRecommendationRows(saved, [], {targetSlotId: otherId, operation: 'ASSIGN', profileId,
+            sourceItemId: '', swapProfileId: ''});
+        expect(values[0].profile.nameIsFallback).toBe(true);
+        const payload = recommendationReview(values.map((value, index) => ({key: String(index), value})));
+        expect(JSON.stringify(payload)).not.toMatch(/nameIsFallback|Profile #|Participant/u);
+        expect(payload.recommendations[0].profileId).toBe(profileId);
+    });
+
     it('runs maintenance once on entry and uses pure reads without replacing dirty review', async () => {
         const saved = workspace();
         const {root, context, requests} = await mounted(async request => path(request).endsWith('/warnings') ? json({warnings: []}) : json(saved));
@@ -210,6 +269,8 @@ describe('Activity recommendation review production frontend', () => {
         await flushPromises();
         await vi.waitFor(() => expect(root.get('[data-rec-id]').attributes('data-rec-id')).toBe(nextId));
         expect(requests.filter(request => path(request).endsWith('/entry'))).toHaveLength(2);
+        expect(root.text()).toContain(context.messages.value.t('activity.recommendations.jobComplete'));
+        expect(root.text()).not.toMatch(/\bSaved\b/u);
     });
 
     it('keeps edits made after dispatch when a completed job returns newer proposals', async () => {
@@ -345,6 +406,7 @@ describe('Activity recommendation review production frontend', () => {
         await flushPromises();
         expect(applications).toEqual([{...previews.at(-1), overlapConfirmation: 'reviewed-overlap'}]);
         expect(root.text()).toContain('Applied 1; skipped 0');
+        expect(root.text()).not.toMatch(/\bSaved\b/u);
     });
 
     it('constructs reciprocal roleless swaps and preserves manual/generated rejection provenance', () => {

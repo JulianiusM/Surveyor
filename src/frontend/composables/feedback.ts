@@ -1,5 +1,5 @@
-import {computed, onBeforeUnmount, onMounted, onUpdated, ref, shallowRef, watch} from 'vue';
-import type {ComputedRef, Ref} from 'vue';
+import {computed, onBeforeUnmount, onMounted, ref, shallowRef, watch} from 'vue';
+import type {ComputedRef, InjectionKey, Ref} from 'vue';
 import {usePilot, canRetryRead} from '../app/context';
 import {ApiFailure} from '../app/transport';
 import type {LocalizationContext, MessageKey} from '../../types/LocalizationTypes';
@@ -10,6 +10,10 @@ import {validateProblem} from '../../../.generated/api/v1/browser/validateProble
 // Preserve the existing transient-feedback interval in this frontend's owner.
 // Native browser code remains an independent comparison implementation.
 const transientNoticeLifetimeMs = 10_000;
+
+/** Presentation scope supplied by the shell and overridden by the shared dialog.
+ * It contains no command state: every receipt stays with its existing owner. */
+export const noticeTargetKey: InjectionKey<Readonly<Ref<HTMLElement | null>>> = Symbol('pilot.notice-target');
 
 /** Make the shared server cooldown reactive even when a failed read has no polling observer.
  * The wakeup changes availability only; the caller owns explicit retry and request scope. */
@@ -56,9 +60,7 @@ export function useReadRetryAt(error: () => Error | null, available: Readonly<Re
     });
 }
 
-/** Actual geometry covers hidden ancestors and CSS disclosure. The pilot's
- * reactive notices and section targets share this check without changing the
- * native alert observer or its DOM-owned lifecycle. */
+/** Actual geometry covers hidden ancestors and CSS disclosure before expiry starts. */
 export function isElementVisible(element: HTMLElement): boolean {
     return element.isConnected
         && !element.closest('[hidden], .d-none, [aria-hidden="true"]') && !!element.getClientRects().length;
@@ -68,14 +70,13 @@ export function isElementVisible(element: HTMLElement): boolean {
  * Hidden messages wait for disclosure, renewed receipts get a fresh interval, and
  * page-cache restoration restarts observation without accumulating timers/listeners. */
 export function useTransientNotice(element: Ref<HTMLElement | null>, transient: () => boolean,
-                                   renewal: () => unknown, dismiss: () => void, inline?: () => boolean): void {
+                                   renewal: () => unknown, dismiss: () => void): void {
     let mounted = false;
     let paused = false;
     let listening = false;
     let observer: MutationObserver | undefined;
     type NoticeLifetime = {element: HTMLElement; renewal: unknown; timer?: ReturnType<typeof setTimeout>};
     let lifetime: NoticeLifetime | undefined;
-    let presented: {element: HTMLElement; renewal: unknown} | undefined;
 
     function stopObservation(): void {
         observer?.disconnect();
@@ -90,7 +91,7 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
     }
 
     /** Bind DOM observation only to a mounted transient receipt. Re-rendering or
-     * moving the same outcome must preserve its existing timer/focus lifetime;
+     * moving the same outcome must preserve its existing timer lifetime;
      * durable warnings and SSR never acquire a dismissal scheduler. */
     function observeNotice(): void {
         stopObservation();
@@ -101,9 +102,8 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
             return;
         }
 
-        // Reactive translation and moving between a retired section and its live
-        // fallback belong to the same outcome. Only the semantic receipt watcher
-        // may renew its deadline or inline focus; explicit lifecycle cleanup stops it.
+        // Reactive translation and movement into the shared host belong to the
+        // same outcome. Only a new semantic receipt may renew its deadline.
         if (lifetime && (lifetime.element !== element.value || !Object.is(lifetime.renewal, renewal()))) cancelLifetime();
         // Vue owns this node and its ancestors, including disclosure, relocation
         // and the receipt's timer. No other frontend can remove or renew it.
@@ -133,28 +133,6 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
                     && Object.is(started.renewal, renewal())) dismiss();
             }
         }
-        presentInlineNotice(target);
-    }
-
-    /** Page confirmations stay visible in their sticky host without moving the
-     * user's focus or scroll position. Local section/dialog feedback retains its
-     * deliberate once-per-receipt reveal; disclosure can present it later, while
-     * translation, relocation and page-cache restoration never repeat that reveal. */
-    function presentInlineNotice(target: HTMLElement): void {
-        if (!mounted || paused || !transient() || !inline?.() || !isElementVisible(target)) return;
-        const receipt = renewal();
-        const host = target.closest<HTMLElement>('[data-command-feedback], [data-dialog-feedback], #liveAlerts')
-            ?? target.parentElement ?? target;
-        if (presented?.element === target && Object.is(presented.renewal, receipt)) return;
-        presented = {element: target, renewal: receipt};
-        // The shared page host brings feedback into view through layout. Focusing
-        // or scrolling it would jump away from the action or an active form draft.
-        if (host.id === 'liveAlerts') return;
-
-        // Keep the initiating local host's reveal authoritative. Browser-default
-        // focus scrolling must not add a second, unrelated document movement.
-        target.focus({preventScroll: true});
-        host.scrollIntoView(true);
     }
 
     /** Own one page-cache pause/resume subscription while transient feedback is
@@ -186,16 +164,10 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
 
     // A repeated outcome can have identical text. Its owning receipt still renews
     // feedback, independently of unrelated changes or another component's message.
-    watch(() => [element.value, transient(), renewal(), inline?.()], observeNotice, {flush: 'post'});
+    watch(() => [element.value, transient(), renewal()], observeNotice, {flush: 'post'});
     onMounted(() => {
         mounted = true;
         observeNotice();
-    });
-    // A receipt can move from a removed section to its still-mounted fallback.
-    // Relocation keeps an already presented receipt's focus/lifetime. A receipt
-    // whose first target retired before it rendered still presents once in fallback.
-    onUpdated(function presentMovedInlineNotice(): void {
-        if (element.value) presentInlineNotice(element.value);
     });
     onBeforeUnmount(() => {
         mounted = false;
@@ -203,23 +175,6 @@ export function useTransientNotice(element: Ref<HTMLElement | null>, transient: 
         cancelLifetime();
         setLifecycleListeners(false);
     });
-}
-
-/** Capture the native inline feedback host before an event's currentTarget expires.
- * Section commands stay beside their own controls; commands without a section use
- * the containing modal's fallback, then the established page-level live-alert host. */
-export function inlineFeedbackTarget(initiator?: Event | Element): HTMLElement | null {
-    if (typeof document === 'undefined') return null;
-    const source = initiator instanceof Event ? initiator.currentTarget : initiator;
-    if (source instanceof Element) {
-        const section = source.closest('[data-entity-section]');
-        const feedback = section?.querySelector<HTMLElement>('[data-command-feedback]');
-        if (feedback) return feedback;
-        const dialog = source.closest('[role="dialog"], .modal');
-        const fallback = dialog?.querySelector<HTMLElement>('[data-dialog-feedback]');
-        if (fallback) return fallback;
-    }
-    return document.getElementById('liveAlerts');
 }
 
 /** Known contract Problems retain message identity across language changes. A safe detail
@@ -249,7 +204,6 @@ export function useFeedbackError(presentation?: PilotProblemPresentation) {
     const descriptor = shallowRef<MessageKey | ApiFailure | null>(null);
     const transientError = ref(true);
     const errorRenewal = ref(0);
-    const errorPresentation = ref<'flash' | 'inline'>('flash');
     const feedbackKind = ref<'danger' | 'info' | 'success'>('danger');
 
     // Translate the retained semantic descriptor at render time. Locale changes
@@ -262,31 +216,27 @@ export function useFeedbackError(presentation?: PilotProblemPresentation) {
         return value.problem ? problemMessage(messages.value, value.problem, presentation) : value.message;
     });
     /** The operation owns error lifetime; read/uncertainty failures are durable,
-     * while known command rejection follows the native transient flash behavior. */
-    function setError(value: MessageKey | ApiFailure | null, lifetime: 'transient' | 'durable' = 'transient',
-                      presentation: 'flash' | 'inline' = 'flash'): void {
+     * while known command rejection remains transient. Placement belongs to the renderer. */
+    function setError(value: MessageKey | ApiFailure | null, lifetime: 'transient' | 'durable' = 'transient'): void {
         descriptor.value = value;
         // Repeated validation/no-op feedback can have identical text. Its new
         // receipt still starts a complete native dismissal interval.
         errorRenewal.value++;
         transientError.value = lifetime === 'transient';
-        // Client inline validation and server POST flashes share message state but
-        // retain their native presentation. Durable failures never become dismissible.
-        errorPresentation.value = presentation;
         feedbackKind.value = 'danger';
     }
 
     /** Native form no-ops are information, with the same localized identity and
      * transient lifetime as other confirmed form feedback. They never imply a write. */
-    function setInformation(value: PilotPlainMessageKey, presentation: 'flash' | 'inline' = 'flash'): void {
-        setError(value, 'transient', presentation);
+    function setInformation(value: PilotPlainMessageKey): void {
+        setError(value);
         feedbackKind.value = 'info';
     }
 
     /** Confirmed inline property saves share the native transient receipt contract.
      * Confirmation is supplied by the operation; this helper never infers a saved write. */
-    function setSuccess(value: PilotPlainMessageKey, presentation: 'flash' | 'inline' = 'inline'): void {
-        setError(value, 'transient', presentation);
+    function setSuccess(value: PilotPlainMessageKey): void {
+        setError(value);
         feedbackKind.value = 'success';
     }
 
@@ -294,5 +244,5 @@ export function useFeedbackError(presentation?: PilotProblemPresentation) {
         // A successful read must not erase another operation's validation or conflict.
         if (descriptor.value === value) setError(null);
     }
-    return {error, transientError, errorRenewal, errorPresentation, feedbackKind, setError, setInformation, setSuccess, clearRecoveredError};
+    return {error, transientError, errorRenewal, feedbackKind, setError, setInformation, setSuccess, clearRecoveredError};
 }

@@ -28,6 +28,7 @@ import {safeFrontendReturn} from '../modules/lib/frontendIdentity';
 import {getInitialPerms} from '../modules/lib/permissions';
 import * as adminService from '../modules/database/services/EntityAdminService';
 import {getHeaderImageVersion} from '../modules/lib/util';
+import {civilDateWeeks} from '../modules/lib/civilDate';
 import type {components} from '../types/api/v1';
 import type {ActivityCommandPreparation, ActivityPropertyTransportContext, ActivitySlotAdmission} from '../types/ActivityV1Types';
 // Business logic for the Activity routes
@@ -354,10 +355,14 @@ const afterCreateItems = async (id: string, data: any) => {
 };
 
 /**
- * Assemble data for the view.
+ * Assemble the shared saved schedule and participant analysis. Versioned callers
+ * may request presentation provenance; native rendering and JSON keep their
+ * established fields and English fallbacks without additional reads or effects.
  */
 
-async function fetchForView(plan: ActivityPlan, req: Request) {
+async function fetchForView(plan: ActivityPlan, req: Request, includeNameProvenance = false) {
+    // Load the same schedule and independent participant/configuration inputs for
+    // both renderers; name provenance never changes authority or membership.
     const slotsByDate = await activityService.getActivitySlots(plan.id);
     const session = req.session;
 
@@ -430,6 +435,7 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
         participantKey: string;
         profileId?: string;
         name: string;
+        nameIsFallback: boolean;
         arrivalDate?: string | null;
         departureDate?: string | null;
         assignedShifts: number;
@@ -437,7 +443,11 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
         roles: Set<string>;
     }
 
+    // Record whether a display name was manufactured before its origin is lost.
+    // A later genuine assignee name replaces both the text and that provenance.
     const participantStatusMap = new Map<string, ParticipantStatusAccumulator>();
+    /** Reuse one accumulator across registration and assignment sources. A real
+     * later name replaces a fallback without losing the collected status. */
     const ensureParticipantStatus = (
         participantKey: string,
         profileId: string | null | undefined,
@@ -445,13 +455,20 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
     ): ParticipantStatusAccumulator => {
         const existing = participantStatusMap.get(participantKey);
         if (existing) {
-            if (name) existing.name = name;
+            // Empty source values cannot erase an already known person's name.
+            if (name) {
+                existing.name = name;
+                existing.nameIsFallback = false;
+            }
             return existing;
         }
+
+        // Preserve native wording while retaining its origin for the Vue DTO.
         const created: ParticipantStatusAccumulator = {
             participantKey,
             profileId: profileId ?? undefined,
             name: name || 'Participant',
+            nameIsFallback: !name,
             assignedShifts: 0,
             roleIds: new Set<number>(),
             roles: new Set<string>(),
@@ -507,6 +524,9 @@ async function fetchForView(plan: ActivityPlan, req: Request) {
             return {
                 participantKey: status.participantKey,
                 name: status.name,
+                // Only the new transport needs the origin of this presentation.
+                // Native rendering/JSON retain their exact established shape.
+                ...(includeNameProvenance ? {nameIsFallback: status.nameIsFallback} : {}),
                 count: status.assignedShifts,
                 assignedShifts: status.assignedShifts,
                 roles: [...status.roles].sort((a, b) => a.localeCompare(b)),
@@ -926,7 +946,11 @@ async function updateSettings(id: string, body: any) {
     return 'Settings saved';
 }
 
-async function getRequirements(planId: string) {
+/** Analyze the existing saved requirements and return their shared presentation.
+ * The versioned projection may retain missing-name origin for reactive client
+ * localization; native callers keep the exact existing response shape. */
+async function getRequirements(planId: string, includeNameProvenance = false) {
+    // Reuse the admitted plan's existing configuration, participants and slots.
     const [plan, requirementConfig, assignments, slots, allRoles, slotRoles] = await Promise.all([
         activityService.getActivityPlanById(planId),
         requireRequirementConfiguration(planId),
@@ -965,6 +989,8 @@ async function getRequirements(planId: string) {
     const assignedShiftCounts = Object.fromEntries(
         Object.entries(assignments).map(([participantKey, participantAssignments]) => [participantKey, participantAssignments.length]),
     );
+    // The pure engine remains the sole owner of requirement arithmetic. Optional
+    // label provenance below changes neither its inputs nor its saved results.
     const analysis = calculateRequirementAnalysis({
         plan,
         participants: Object.values(attendance),
@@ -987,6 +1013,7 @@ async function getRequirements(planId: string) {
         key: toParticipantKey(participant),
         profileId: participant.profileId ?? null,
         label: toParticipantName(participant),
+        ...(includeNameProvenance ? {nameIsFallback: !participant.name} : {}),
         arrivalDate: participant.arrivalDate ?? null,
         departureDate: participant.departureDate ?? null,
     }));
@@ -1848,8 +1875,9 @@ async function authorizeSelfAssignment(
 }
 
 /** Native workspace entry maintains saved proposals; the versioned recovery read
- * explicitly disables those effects while sharing the same safe presentation inputs. */
-async function getRecommendations(planId: string, session?: SessionLike, maintain = true) {
+ * explicitly disables those effects while sharing the same safe presentation inputs.
+ * Optional name provenance belongs only to versioned presentation, not native JSON. */
+async function getRecommendations(planId: string, session?: SessionLike, maintain = true, includeNameProvenance = false) {
     // Both entry and recovery use existing feature reads rather than a second domain model.
     const [plan, requirementConfig, initialRecommendations, slots, assignments, assignees] = await Promise.all([
         activityService.getActivityPlanById(planId),
@@ -1947,6 +1975,7 @@ async function getRecommendations(planId: string, session?: SessionLike, maintai
         key: toParticipantKey(participant),
         profileId: participant.profileId ?? null,
         label: toParticipantName(participant),
+        ...(includeNameProvenance ? {nameIsFallback: !participant.name} : {}),
         arrivalDate: participant.arrivalDate ?? null,
         departureDate: participant.departureDate ?? null,
     }));
@@ -2864,38 +2893,11 @@ function activitySlotValues(slot: ActivitySlot, roles: number[], permissions: Pe
         ...(capabilities.editRoles ? {roles} : {})};
 }
 
-/** Preserve the native detail template's server-local calendar iteration exactly.
- * Stored dates begin at UTC midnight; Monday adjustment and day/week increments
- * deliberately retain local Date operations before their UTC parts become keys.
- * This is presentation evidence, not a new date rule or persistence operation. */
+/** Project the approved Vue civil calendar through the same pure owner used by
+ * creation. This versioned presentation adapter performs no reads or writes;
+ * native rendering, domain calculations and printable output keep their owners. */
 export function projectActivityScheduleWeeks(startDate: string, endDate: string): components['schemas']['ActivityWeek'][] {
-    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
-    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
-    const start = new Date(Date.UTC(startYear, startMonth - 1, startDay));
-    const end = new Date(Date.UTC(endYear, endMonth - 1, endDay));
-    const weeks: components['schemas']['ActivityWeek'][] = [];
-
-    // Match activity-view.pug's Monday selection in the server's actual zone.
-    const monday = new Date(start);
-    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
-    while (monday <= end) {
-        const week = new Date(monday);
-        const days: string[] = [];
-        for (let index = 0; index < 7; index++) {
-            const current = new Date(week);
-            current.setDate(current.getDate() + index);
-            if (current < start || current > end) continue;
-            days.push(nativeDayKey(current));
-        }
-        weeks.push({start: nativeDayKey(week), days});
-        monday.setDate(monday.getDate() + 7);
-    }
-    return weeks;
-
-    /** The native template formats UTC calendar parts after its local steps. */
-    function nativeDayKey(date: Date): string {
-        return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
-    }
+    return civilDateWeeks(startDate, endDate);
 }
 
 /** Assemble ACT-01–07 through the existing view/requirements owners, then explicitly redact the wire projection. */
@@ -2906,7 +2908,7 @@ export async function readActivityPlan(id: string, session: SessionLike) {
     if (await getEntityViewAdmission('activity', plan, session, undefined, permissions) !== 'render') throw new ApiProblem('FORBIDDEN');
     // Existing production owners calculate counts, attendance and saved requirement progress.
     // The transport never spreads an ORM root, assignment, profile or event into its response.
-    const source = await fetchForView(plan, {session} as Request);
+    const source = await fetchForView(plan, {session} as Request, true);
     const bundle = await activityPermissionBundle(plan, session);
     const slots: components['schemas']['ActivitySlotView'][] = [];
     for (const slot of Object.values(source.slots).flat()) {
@@ -2937,7 +2939,8 @@ export async function readActivityPlan(id: string, session: SessionLike) {
         for (const participant of source.participantList) {
             // Whitelist the existing status fields; attendance is bounded rather
             // than exposing a registration/profile row or future source fields.
-            participants.push({participantKey: participant.participantKey, name: participant.name, count: participant.count,
+            participants.push({participantKey: participant.participantKey, name: participant.name,
+                nameIsFallback: participant.nameIsFallback === true, count: participant.count,
                 assignedShifts: participant.assignedShifts, roles: participant.roles, roleIds: participant.roleIds,
                 requiredShifts: participant.requiredShifts, remainingShifts: participant.remainingShifts,
                 source: participant.source, attendanceDays: participant.attendanceDays, assignmentMode: participant.assignmentMode,
@@ -3346,7 +3349,7 @@ export async function removeActivityTextField(id: string, fieldId: string, sessi
 export async function readActivityRequirements(id: string, session: SessionLike): Promise<components['schemas']['ActivityRequirements']> {
     // Requirement management has its own native grant, separate from page admission.
     await requireActivityMethod(id, 'MANAGE_REQUIREMENTS', session);
-    const [data, allRoles] = await Promise.all([getRequirements(id), activityService.getAllRoles(id)]);
+    const [data, allRoles] = await Promise.all([getRequirements(id, true), activityService.getAllRoles(id)]);
     const plan = data.plan;
 
     // Select scalars from each persistence result before it crosses the versioned boundary.
@@ -3376,7 +3379,8 @@ export async function readActivityRequirements(id: string, session: SessionLike)
                 startTime: slot.startTime ?? null, endTime: slot.endTime ?? null, maxAssignees: slot.maxAssignees ?? null,
                 roles: slot.roles})),
         },
-        overrideTargets: data.overrideTargets,
+        overrideTargets: data.overrideTargets.map(row => ({key: row.key, profileId: row.profileId, label: row.label,
+            nameIsFallback: row.nameIsFallback === true, arrivalDate: row.arrivalDate, departureDate: row.departureDate})),
         allRoles: allRoles.map(role => ({id: Number(role.id), title: role.title, description: role.description ?? null})),
     };
 }
@@ -3416,14 +3420,15 @@ function activityRecommendationWarnings(results: RecommendationWarningResult[]):
 export async function readActivityRecommendations(id: string, session: SessionLike, enter = false): Promise<components['schemas']['ActivityRecommendations']> {
     // Independently authorize the private recommendation workspace on every invocation.
     await requireActivityMethod(id, 'MANAGE_ASSIGNMENTS', session);
-    const data = await getRecommendations(id, session, enter);
+    const data = await getRecommendations(id, session, enter, true);
 
     // Reuse the existing presentation inputs but exclude ORM timestamps, ownership and relations.
     return {
         recommendations: data.recommendations.map(row => ({id: row.id, item: activityRecommendationSlot(row.item),
             profile: {id: row.profile.id, name: row.profile.name}, sourceItem: row.sourceItem ? activityRecommendationSlot(row.sourceItem) : null,
             status: row.status, operation: row.operation, manual: row.manual})),
-        participantOptions: data.participantOptions,
+        participantOptions: data.participantOptions.map(row => ({key: row.key, profileId: row.profileId, label: row.label,
+            nameIsFallback: row.nameIsFallback === true, arrivalDate: row.arrivalDate, departureDate: row.departureDate})),
         slots: data.slots.map(activityRecommendationSlot),
         existingAssignments: data.existingAssignments.map(row => ({item: activityRecommendationSlot(row.item),
             profile: row.profile, roles: row.roles})),

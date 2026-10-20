@@ -19,6 +19,7 @@ import ActionButton from '../../components/ActionButton.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import EntityHeader from '../../components/EntityHeader.vue';
+import EntityListToolbar from '../../components/EntityListToolbar.vue';
 
 const context = usePilot();
 const {messages} = context;
@@ -77,26 +78,31 @@ function settingsAccessLost(): void {
 
 /** UI events leave failed-read presentation with its query. Causal command
  * follow-ups still call the rejecting refresh below to preserve saved/stale outcomes. */
-async function refreshPresentation(): Promise<void> {
+async function refreshPresentation(mode: 'dependencies' | 'page' = 'dependencies'): Promise<void> {
     try {
-        await refresh();
+        await refresh(mode);
     } catch {
         // The affected query retains its durable failure and recovery action.
     }
 }
 
-/** The own Event GET is required authority after a command. Mounted sibling
- * projections refresh independently; absent or retired observers grant nothing. */
-async function refresh(): Promise<void> {
+/** The own Event GET is required authority before dependent reads. Explicit page
+ * Refresh includes every admitted subsection; command callbacks retain only
+ * their existing participant/Overview dependencies and rejection semantics. */
+async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<void> {
     const scope = context.capture();
+    const resource = eventId.value;
+    const intent = admin.value;
+    const families: (readonly unknown[])[] = [eventKeys.participants(scope.context, resource), overviewKeys.all(scope.context)];
+    if (mode === 'page') families.push(eventKeys.links(scope.context, resource), eventKeys.things(scope.context, resource, intent));
+
     await section.refresh();
-    // Confirmed registration/settings changes also affect mounted authorized
-    // participant and Overview consumers. Refresh only their admitted observers.
+    // Each subsection keeps its own read, admission and draft owner. Captured
+    // keys cannot turn a late completion into reads for another Event or intent.
     await refetchFreshQueries(context.queryClient, {
         type: 'active',
-        predicate: query => belongsToQueryFamily(query, eventKeys.participants(scope.context, eventId.value))
-            || belongsToQueryFamily(query, overviewKeys.all(scope.context)),
-    }, () => context.mayRead(scope), {allowEmpty: true});
+        predicate: query => families.some(family => belongsToQueryFamily(query, family)),
+    }, () => context.mayRead(scope) && resource === eventId.value && intent === admin.value, {allowEmpty: true});
 }
 </script>
 
@@ -125,13 +131,15 @@ async function refresh(): Promise<void> {
                 :retry-at="section.retryAt.value"
                 :last-updated-at="event ? section.query.dataUpdatedAt.value : undefined"
                 :action="{state: section.readAction, label: messages.t('common.refresh')}"
-                @action="refreshPresentation"
+                @action="refreshPresentation('page')"
             >
                 {{ section.failure.value }}
             </StatusNotice>
             <LoadingSkeleton v-if="section.loading.value" v-bind="route.meta.loadingSkeleton" />
 
             <template v-if="event">
+                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="section.readAction"
+                    @refresh="refreshPresentation('page')" />
                 <!-- One bounded projection drives both page intents. Registration,
                      roster, management and export remain independent capabilities. -->
                 <div v-if="admin" class="d-flex justify-content-end mb-3">
@@ -187,7 +195,7 @@ async function refresh(): Promise<void> {
                     :event-id="event.id"
                     :event-title="event.title"
                     @close="editorOpen = false"
-                    @saved="refreshPresentation"
+                    @saved="refreshPresentation()"
                     @access-lost="settingsAccessLost"
                 />
             </template>

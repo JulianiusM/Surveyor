@@ -47,8 +47,8 @@ async function command(page: Page, id: string, suffix: string, method: string,
     expect((await response).status()).toBe(status);
 }
 
-/** Preserve screenshots and measured controls, then enforce every measurement
- * with the existing complete-content and one-pixel geometry comparator. */
+/** Preserve original screenshots and raw measurements while asserting complete
+ * visible content, constraints, painted identity and usable control fit. */
 async function presentation(page: Page, info: TestInfo, name: string, surface: Locator,
     selectors: string[], focus?: Locator) {
     await page.evaluate(() => document.fonts.ready);
@@ -60,7 +60,7 @@ async function presentation(page: Page, info: TestInfo, name: string, surface: L
     const path = info.outputPath(name + '.png');
     // Focusing Take can horizontally scroll a native overflow table. Capture
     // that fixed visible viewport; measuring the full table below still protects
-    // every original control/style/relative box without changing its assertions.
+    // every original control, style and relative box for separate inspection.
     const captureSurface = focus ? page.locator('main .table-responsive').first() : surface;
     await captureSurface.screenshot({path, animations: 'disabled'});
     await info.attach(name, {path, contentType: 'image/png'});

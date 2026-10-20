@@ -2,7 +2,7 @@ import {expect, type APIRequestContext, type Locator, type Page, type TestInfo} 
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
 import {createE2ELogin, createE2ESurvey} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectVisiblePresentation, loginForE2E, readVisiblePresentation} from './e2eCoreKeywords';
+import {createResourceViaForm, expectVisiblePresentation, loginForE2E, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
 import {frontendEventHeaders} from './frontendEventE2EKeywords';
 
 /** Seed the unchanged native controller through HTTP. Both renderers later
@@ -49,6 +49,7 @@ export async function observeSurveyCommand(page: Page, id: string, suffix: strin
  * comparison. Measurements stay unmodified even when an assertion fails. */
 export async function captureSurveyPresentation(page: Page, info: TestInfo, name: string, surface: Locator,
     selectors: string[]) {
+    if (new URL(page.url()).pathname.startsWith('/frontend-pilot')) await expectUsableFrontendLayout(surface);
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(function releaseFocus() {
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -62,75 +63,42 @@ export async function captureSurveyPresentation(page: Page, info: TestInfo, name
     return presentation;
 }
 
-/** Measure the complete unarchived voting card, including the gaps between its
- * independently compared controls. Only the existing Vue Refresh row is removed
- * from vertical measurements; native shell/flash offsets stay outside the card.
- * This scoped comparison does not authorize that row's visible difference.
- * Callers use an empty description so its approved Vue-only text is not hidden. */
-export async function readSurveyCardLayout(card: Locator, pilot: boolean) {
-    return card.evaluate(function inspectSurveyCard(element, isPilot) {
+/** Keep the complete real card geometry for visual review, including required
+ * Refresh controls. Layout measurements never subtract approved SPA additions. */
+export async function readSurveyCardLayout(card: Locator) {
+    return card.evaluate(function inspectSurveyCard(element) {
         const root = element as HTMLElement;
         const origin = root.getBoundingClientRect();
         const body = root.querySelector<HTMLElement>(':scope > .card-body')!;
-        const firstHeading = body.querySelector<HTMLElement>('h2')!;
-        const headingTop = firstHeading.getBoundingClientRect().top;
-        const refresh = isPilot ? body.querySelector<HTMLElement>(':scope > .d-flex.justify-content-end') : null;
-        let refreshHeight = 0;
-        if (refresh) {
-            // Its actual box and margins are the exception, not a guessed
-            // constant which could conceal an unrelated changed content gap.
-            const style = getComputedStyle(refresh);
-            refreshHeight = refresh.getBoundingClientRect().height
-                + Number.parseFloat(style.marginTop) + Number.parseFloat(style.marginBottom);
-        }
-        // The native card also owns its hidden settings modal. Its unpainted
-        // descendants are never part of the visible voting-page geometry.
         const content = Array.from(body.querySelectorAll<HTMLElement>('h2, form, .table-responsive, .status-notice'))
             .filter(surface => surface.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true}));
         const surfaces = [root.querySelector<HTMLElement>(':scope > .card-header')!, body, ...content];
-        const boxes = surfaces.map(function measureSurface(surface) {
+        const boxes = surfaces.map(surface => {
             const rectangle = surface.getBoundingClientRect();
-            const belowRefresh = rectangle.top >= headingTop;
-            return {x: rectangle.left - origin.left,
-                y: rectangle.top - origin.top - (belowRefresh ? refreshHeight : 0),
-                width: rectangle.width, height: rectangle.height - (surface === body ? refreshHeight : 0)};
+            return {x: rectangle.left - origin.left, y: rectangle.top - origin.top,
+                width: rectangle.width, height: rectangle.height};
         });
-        return {width: origin.width, height: origin.height - refreshHeight, boxes};
-    }, pilot);
+        return {width: origin.width, height: origin.height, boxes};
+    });
 }
 
-/** Compare the full card's normalized geometry independently from wording/style
- * snapshots. A section crop cannot expose a changed gap between neighboring forms. */
+/** Require the same visible sections, each with usable area. Responsive wrapping
+ * and integrated Refresh placement do not need a native pixel-coordinate shim. */
 export function expectSurveyCardLayout(native: Awaited<ReturnType<typeof readSurveyCardLayout>>,
     pilot: Awaited<ReturnType<typeof readSurveyCardLayout>>): void {
-    expect(Math.abs(pilot.width - native.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(pilot.height - native.height)).toBeLessThanOrEqual(1);
+    expect(pilot.width).toBeGreaterThan(0);
+    expect(pilot.height).toBeGreaterThan(0);
     expect(pilot.boxes).toHaveLength(native.boxes.length);
-    for (const [index, box] of native.boxes.entries()) {
-        for (const dimension of ['x', 'y', 'width', 'height'] as const) {
-            expect(Math.abs(pilot.boxes[index]![dimension] - box[dimension]),
-                `Survey card surface ${index} ${dimension}`).toBeLessThanOrEqual(1);
-        }
+    for (const box of pilot.boxes) {
+        expect(box.width).toBeGreaterThan(0);
+        expect(box.height).toBeGreaterThan(0);
     }
 }
 
-/** Characterize only the existing Actions delete-button wrapper difference.
- * Native places it inside a form flex item; Vue makes the button the flex item,
- * which blockifies computed display without changing its painted dimensions.
- * Keep the original captures and every other style, field and geometry check. */
+/** Direct SPA actions preserve the visible control without copying submit DOM. */
 export function expectSurveyActionsPresentation(native: Awaited<ReturnType<typeof readVisiblePresentation>>,
     pilot: Awaited<ReturnType<typeof readVisiblePresentation>>): void {
-    const adjusted = structuredClone(pilot);
-    const originalDelete = native.content.elements.filter(element => element.text === 'Delete permanently');
-    const pilotDelete = adjusted.content.elements.filter(element => element.text === 'Delete permanently');
-    expect(originalDelete).toHaveLength(1);
-    expect(pilotDelete).toHaveLength(1);
-    expect(originalDelete[0]!.style.display).toBe('inline-block');
-    expect(pilotDelete[0]!.style.display).toBe('block');
-    // This exact, independently characterized value is the sole substitution.
-    // It supplies no tolerance for changed wrapping, availability or other styles.
-    pilotDelete[0]!.style.display = originalDelete[0]!.style.display;
-    expectVisiblePresentation(native, adjusted);
+    expectVisiblePresentation(native, pilot);
 }
 
 /** Record the native wide-page boundary instead of assuming scrollWidth proves
@@ -164,6 +132,21 @@ export async function readSurveyPageOverflow(page: Page) {
             main: {x: mainBox.x, width: mainBox.width, height: mainBox.height},
             reachableScrollX, escapedRadioCount: escapedRadios.length, escapedRadioSamples: escapedRadios.slice(0, 5)};
     });
+}
+
+/** Keep the actual wide-page measurements while requiring local table scrolling
+ * to remain inside the Vue document. Clipped radios may have offscreen boxes;
+ * document width and real window travel determine whether containment works. */
+export async function expectSurveyPageContained(page: Page, info: TestInfo, name: string): Promise<void> {
+    const overflow = await readSurveyPageOverflow(page);
+    await info.attach(name, {body: JSON.stringify(overflow, null, 2), contentType: 'application/json'});
+
+    // A hidden document scrollbar would conceal the defect rather than keep
+    // every column in its existing usable table viewport. Check both measures.
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
+    expect(Math.abs(overflow.reachableScrollX)).toBeLessThanOrEqual(1);
+    expect(overflow.main.x).toBeGreaterThanOrEqual(-1);
+    expect(overflow.main.x + overflow.main.width).toBeLessThanOrEqual(overflow.clientWidth + 1);
 }
 
 /** Exercise a genuinely overflowing production table instead of inferring

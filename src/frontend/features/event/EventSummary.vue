@@ -22,8 +22,9 @@ function tick(): void { now.value = Date.now(); }
  * This presentation never changes stored values or registration eligibility. */
 function deadline(zone?: string): string {
     if (!props.event.bindingDeadline) return '';
-    // An omitted zone intentionally follows the browser's existing locale/zone.
-    return new Date(props.event.bindingDeadline).toLocaleString(undefined, {dateStyle: 'full', timeStyle: 'full', ...(zone ? {timeZone: zone} : {})});
+    // The selected language changes wording; an omitted zone still follows the
+    // browser's existing zone rather than changing the represented instant.
+    return new Date(props.event.bindingDeadline).toLocaleString(messages.value.locale, {dateStyle: 'full', timeStyle: 'full', ...(zone ? {timeZone: zone} : {})});
 }
 
 /** Match native minute-resolution countdown geometry with localized whole wording. */
@@ -46,7 +47,7 @@ function deadlineCountdown(): string {
                 <div class="col-md-6">
                     <dl class="row mb-0">
                         <dt class="col-sm-4">{{ messages.t('event.dates') }}</dt>
-                        <dd class="col-sm-8"><span class="me-1">{{ formatEventCivilDate(event.startDate) }}</span>→<span class="ms-1">{{ formatEventCivilDate(event.endDate) }}</span></dd>
+                        <dd class="col-sm-8"><span class="me-1">{{ formatEventCivilDate(event.startDate, messages.locale) }}</span>→<span class="ms-1">{{ formatEventCivilDate(event.endDate, messages.locale) }}</span></dd>
                         <template v-if="event.location">
                             <dt class="col-sm-4">{{ messages.t('event.locationLabel') }}</dt>
                             <dd class="col-sm-8">{{ event.location }}</dd>

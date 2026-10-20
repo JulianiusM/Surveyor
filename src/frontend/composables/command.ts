@@ -5,7 +5,7 @@ import {useActionState, usePilot} from '../app/context';
 import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../app/transport';
 import type {PilotCommandDraft, PilotCommandFeedback, PilotCommandOutcome, PilotDraftState, PilotPlainMessageKey,
     PilotRecoveryRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
-import {inlineFeedbackTarget, useFeedbackError} from './feedback';
+import {useFeedbackError} from './feedback';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import type {PilotCommandPresentation} from '../../types/FrontendFeedbackTypes';
 
@@ -34,7 +34,6 @@ interface CommandNotice {
     key: PilotPlainMessageKey;
     kind: 'success' | 'warning';
     transient: boolean;
-    presentation: 'flash' | 'inline';
 }
 
 /**
@@ -247,24 +246,22 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     const pending = ref(false);
     const recovering = ref(false);
     const uncertain = ref(false);
-    const {error, transientError, errorRenewal, errorPresentation, feedbackKind, setError,
+    const {error, transientError, errorRenewal, feedbackKind, setError,
         setInformation: setFeedbackInformation, clearRecoveredError} = useFeedbackError(draft?.problemKey);
     const noticeReceipt = shallowRef<CommandNotice | null>(null);
     // Keep the existing writable notice contract for durable recovery callers.
     // Feature success uses setNotice; assigning a warning never inherits an old
-    // success receipt's lifetime, inline presentation, or dismissal renewal.
+    // success receipt's lifetime or dismissal renewal.
     const notice = computed({
         get: () => noticeReceipt.value?.key ?? null,
         set: (key: PilotPlainMessageKey | null) => {
             noticeReceipt.value = key === null ? null : {key, kind: key === 'state.saved' ? 'success' : 'warning',
-                transient: key === 'state.saved', presentation: 'flash'};
+                transient: key === 'state.saved'};
         },
     });
     const noticeKind = computed(() => noticeReceipt.value?.kind ?? 'warning');
     const transientNotice = computed(() => noticeReceipt.value?.transient ?? false);
-    const noticeInline = computed(() => noticeReceipt.value?.presentation === 'inline');
     const noticeRenewal = computed(() => noticeReceipt.value);
-    const feedbackTarget = shallowRef<HTMLElement | null>(null);
     const outcome = shallowRef<PilotCommandOutcome | null>(null);
     const needsUnknownReview = ref(requireUnknownReview);
     // Consumers may explain the current command's manual review without
@@ -423,35 +420,24 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         setError(null);
         notice.value = null;
         outcome.value = null;
-        feedbackTarget.value = null;
         releaseProtection();
     }
 
-    /** Local native inline validation/no-ops use the same receipt placement as writes.
-     * Capture only presentation, never draft values or authority, before dispatch ends. */
-    function captureFeedback(initiator?: Event | Element): void {
-        feedbackTarget.value = inlineFeedbackTarget(initiator);
-    }
-
-    /** Confirmed native no-ops explain their result without opening a write lease.
-     * They still create a fresh localized receipt and retain the initiating host. */
-    function setInformation(key: PilotPlainMessageKey, feedback?: PilotCommandFeedback): void {
-        captureFeedback(feedback?.initiator);
+    /** Confirmed no-ops create a fresh localized receipt without opening a write lease. */
+    function setInformation(key: PilotPlainMessageKey): void {
         notice.value = null;
-        setFeedbackInformation(key, feedback?.presentation ?? 'flash');
+        setFeedbackInformation(key);
     }
 
     /** Success wording belongs to the operation, while lifetime and repeat renewal
      * remain generic. A confirmed result uses this same path after its follow-up read. */
-    function setNotice(key: PilotPlainMessageKey, feedback?: PilotCommandFeedback): void {
-        captureFeedback(feedback?.initiator);
-        publishNotice(key, feedback?.presentation);
+    function setNotice(key: PilotPlainMessageKey): void {
+        publishNotice(key);
     }
 
-    /** Publication retains a command's already captured section. Its asynchronous
-     * confirmation must never resolve an event whose currentTarget has expired. */
-    function publishNotice(key: PilotPlainMessageKey, presentation: 'flash' | 'inline' = 'flash'): void {
-        noticeReceipt.value = {key, kind: 'success', transient: true, presentation};
+    /** Only the operation confirms success. Shared presentation owns its visible host. */
+    function publishNotice(key: PilotPlainMessageKey): void {
+        noticeReceipt.value = {key, kind: 'success', transient: true};
     }
 
     /** Execute once in the captured identity scope, protecting its status through
@@ -465,12 +451,6 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         // that new submission before capturing authority or retaining a status lease.
         // Work admitted before unmount keeps its existing deferred steps and settlement.
         if (!action.isAvailable()) return;
-
-        // Capture the DOM presentation boundary synchronously. Event currentTarget
-        // expires after dispatch, while feedback can arrive after the write and its
-        // follow-up read. Recovery retains this same host instead of moving it to a
-        // different section's controls or creating another message state owner.
-        captureFeedback(feedback?.initiator);
 
         // Capture authority before submission; a later identity change retires this result.
         const scope = context.capture();
@@ -503,11 +483,9 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
                 outcome.value = {confirmation: 'obsolete', refresh: outcome.value.refresh};
                 return;
             }
-            // The DOM target was captured before dispatch ended. Do not resolve
-            // that expired event again when confirmation arrives asynchronously.
-            // Successful maintenance can deliberately have no native success notice.
+            // Successful maintenance can deliberately have no success notice.
             // This presentation choice leaves confirmation and every failure path intact.
-            if (feedback?.success !== null) publishNotice(feedback?.success ?? 'state.saved', feedback?.presentation);
+            if (feedback?.success !== null) publishNotice(feedback?.success ?? 'state.saved');
         } catch (failure) {
             // Actual actor retirement still closes every result. Before confirmation,
             // intentional disposal also keeps its existing obsolete outcome.
@@ -523,10 +501,10 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
                 notice.value = 'state.savedRefreshFailed';
             } else if (failure instanceof InvalidInputError) {
                 outcome.value = {confirmation: 'rejected', refresh: 'not-requested'};
-                setError('api:errors.VALIDATION_FAILED', 'transient', feedback?.presentation);
+                setError('api:errors.VALIDATION_FAILED');
             } else if (failure instanceof ApiFailure && failure.confirmedRejection) {
                 outcome.value = {confirmation: 'rejected', refresh: 'not-requested'};
-                setError(failure, 'transient', feedback?.presentation);
+                setError(failure);
                 // A stale inline edit stays a draft. Refresh only the remote representation;
                 // its component still requires explicit review before adopting a new token.
                 if (failure.status === 412) {
@@ -544,7 +522,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
                 // proving rejection or permitting replay. Keep that diagnostic
                 // durable; proxy/HTML/network exception text stays generic.
                 if (failure instanceof ApiFailure && failure.safeDetail !== null) {
-                    setError(failure, 'durable', feedback?.presentation);
+                    setError(failure, 'durable');
                 }
             }
         } finally {
@@ -570,11 +548,11 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
 
     // Share the actual refs rather than copying their current values into another
     // reactive store. Components receive no operation, draft or recovery callback.
-    const feedback: PilotCommandPresentation = {error, transientError, errorRenewal, errorPresentation, feedbackKind, feedbackTarget,
-        notice, noticeKind, transientNotice, noticeInline, noticeRenewal, uncertain, dismissError, dismissNotice};
+    const feedback: PilotCommandPresentation = {error, transientError, errorRenewal, feedbackKind,
+        notice, noticeKind, transientNotice, noticeRenewal, uncertain, dismissError, dismissNotice};
 
-    return {action, recoveryAction, pending, recovering, uncertain, reviewRequired, feedback, error, transientError, errorRenewal, errorPresentation, feedbackKind, feedbackTarget,
-        notice, noticeKind, transientNotice, noticeInline, noticeRenewal, outcome, setError, setInformation, setNotice,
-        clearRecoveredError, captureFeedback, run, reconcile, reconcileSafely, recover, acknowledge,
+    return {action, recoveryAction, pending, recovering, uncertain, reviewRequired, feedback, error, transientError, errorRenewal, feedbackKind,
+        notice, noticeKind, transientNotice, noticeRenewal, outcome, setError, setInformation, setNotice,
+        clearRecoveredError, run, reconcile, reconcileSafely, recover, acknowledge,
         mayLeave: protection.mayLeave, prepareDeparture: protection.prepareDeparture};
 }

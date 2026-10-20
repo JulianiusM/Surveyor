@@ -16,7 +16,8 @@ export interface CreatedResource {
 
 /** Read corresponding visible controls rather than framework-specific wrappers.
  * Callers select the surface and semantic elements whose presentation they own;
- * generated bearer text may differ, but its box, typography and wrapping may not. */
+ * generated bearer text may differ. Raw styling and geometry remain visual review
+ * evidence rather than a requirement to reproduce native DOM or pixel positions. */
 export async function readVisiblePresentation(surface: Locator, selectors: string[], generatedToken = false) {
     return surface.evaluate(function inspectVisibleSurface(element, selection) {
         const root = element as HTMLElement;
@@ -34,7 +35,9 @@ export async function readVisiblePresentation(surface: Locator, selectors: strin
             // visibility algorithm includes that boundary and still admits all
             // the same menu controls when the actual disclosure is opened.
             if (!element.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true})) continue;
-            content.push({text: visibleText(element), style: appearance(element), field: field(element)});
+            content.push({text: visibleText(element), style: appearance(element), field: field(element),
+                refresh: element instanceof HTMLButtonElement && !!element.querySelector('.bi-arrow-clockwise')
+                    && ['Refresh', 'Aktualisieren'].includes(element.getAttribute('aria-label') ?? '')});
             geometry.push(bounds(element));
         }
         return {content: {text: visibleText(root), style: appearance(root), elements: content},
@@ -86,18 +89,73 @@ export async function readVisiblePresentation(surface: Locator, selectors: strin
     }, {selectors, generatedToken});
 }
 
-/** Assert the entire selected presentation, allowing only one CSS pixel of
- * browser rounding in corresponding boxes. Screenshots remain inspection evidence. */
+/** Assert the same visible content, control values/constraints and visual identity.
+ * Responsive wrapping, spacing and semantic DOM may improve under R4/R6. Exact
+ * geometry remains in the artifacts for human inspection, never a design owner. */
 export function expectVisiblePresentation(native: Awaited<ReturnType<typeof readVisiblePresentation>>,
     pilot: Awaited<ReturnType<typeof readVisiblePresentation>>): void {
-    expect(pilot.content).toEqual(native.content);
-    expect(pilot.geometry).toHaveLength(native.geometry.length);
-    for (const [index, original] of native.geometry.entries()) {
-        for (const dimension of ['x', 'y', 'width', 'height'] as const) {
-            expect(Math.abs(pilot.geometry[index]![dimension] - original[dimension]),
-                `surface element ${index} ${dimension}`).toBeLessThanOrEqual(1);
-        }
+    expect(visibleMeaning(pilot)).toEqual(visibleMeaning(native));
+    for (const [index, rectangle] of pilot.geometry.entries()) {
+        expect(rectangle.width, `visible surface ${index} width`).toBeGreaterThan(0);
+        expect(rectangle.height, `visible surface ${index} height`).toBeGreaterThan(0);
     }
+
+    /** Refresh is an explicitly required SPA addition. Check its real workflow
+     * separately; it must not force a native reload layout into the comparator. */
+    function visibleMeaning(presentation: typeof native) {
+        const elements = presentation.content.elements.filter(element => !element.refresh);
+        return {text: presentation.content.text,
+            style: visualIdentity(presentation.content.style),
+            elements: elements.map(element => ({text: element.text, style: visualIdentity(element.style), field: element.field}))};
+    }
+
+    function visualIdentity(style: typeof native.content.style) {
+        return {font: style.font, size: style.size, weight: style.weight, color: style.color,
+            background: style.background, textAlign: style.textAlign};
+    }
+}
+
+/** Inspect actual usability in the built application. Tables may scroll inside
+ * their own region; ordinary headings/forms/actions must fit their container.
+ * Hidden alternate controls are represented by their visible associated labels. */
+export async function expectUsableFrontendLayout(surface: Locator): Promise<void> {
+    const failures = await surface.evaluate(function inspectClipping(root) {
+        const failures: string[] = [];
+        const rootBox = root.getBoundingClientRect();
+        if (rootBox.width <= 0 || rootBox.height <= 0) failures.push('Surface has no visible area');
+        for (const element of root.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6,label,button,input,select,textarea')) {
+            if (!element.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true})) continue;
+            const style = getComputedStyle(element);
+            if (style.clip !== 'auto' || style.clipPath !== 'none') continue;
+            const box = element.getBoundingClientRect();
+            if (box.width <= 0 || box.height <= 0) continue;
+            if (element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement) {
+                // Native mismatched/empty for attributes are not a migration
+                // requirement. Check actual accessible naming in the new renderer,
+                // including slotted controls and explicit ARIA references.
+                const labelledBy = (element.getAttribute('aria-labelledby') ?? '').split(/\s+/u)
+                    .some(id => !!document.getElementById(id)?.textContent?.trim());
+                const named = !!element.getAttribute('aria-label')?.trim() || labelledBy
+                    || Array.from(element.labels ?? []).some(label => !!label.textContent?.trim())
+                    || !!element.getAttribute('title')?.trim();
+                if (!named) failures.push(`Unnamed ${element.tagName}: ${element.id || element.getAttribute('name') || element.type}`);
+            }
+            // A semantic table's intentionally wide cells remain reachable through
+            // its scroll owner. This check targets clipped ordinary controls.
+            if (element.closest('.table-responsive, table')) continue;
+            for (let parent = element.parentElement; parent && root.contains(parent); parent = parent.parentElement) {
+                const overflow = getComputedStyle(parent).overflowX;
+                if (overflow !== 'hidden' && overflow !== 'clip') continue;
+                const boundary = parent.getBoundingClientRect();
+                if (box.left < boundary.left - 2 || box.right > boundary.right + 2) {
+                    failures.push(`${element.tagName}: ${element.innerText || element.getAttribute('aria-label') || element.id}`);
+                    break;
+                }
+            }
+        }
+        return failures;
+    });
+    expect(failures, 'Visible headings, labels and actions must remain reachable').toEqual([]);
 }
 
 /** Complete the native opening transition before assertions can lead to another modal command. */

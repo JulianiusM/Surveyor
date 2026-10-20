@@ -141,7 +141,7 @@ function flattenResources(resources) {
     return result;
 }
 
-/** Accept plain interpolation only and derive its unique required parameter names. */
+/** Derive scalar and authored-node placeholders without admitting catalog HTML. */
 function placeholders(text, key) {
     if (!text.trim() || /<[^>]*>|\$t\(|{{\s*-/.test(text)) throw new Error(`Unsafe or empty catalog text: ${key}`);
 
@@ -151,8 +151,13 @@ function placeholders(text, key) {
     const interpolation = /{{\s*([A-Za-z]\w*)\s*}}/g;
     for (const match of text.matchAll(interpolation)) parameters.add(match[1]);
     const remaining = text.replace(interpolation, '');
-    if (/{{|}}/.test(remaining)) throw new Error(`Unsupported interpolation in ${key}`);
-    return [...parameters].sort();
+    const nodes = [...remaining.matchAll(/{([a-z][a-z0-9-]*)}/g)].map(match => match[1]);
+    // Fixed node names belong to the catalog contract. Interpolated names,
+    // unmatched braces and repeated nodes cannot change the authored Vue tree.
+    if (/[{}]/.test(remaining.replace(/{([a-z][a-z0-9-]*)}/g, '')) || new Set(nodes).size !== nodes.length) {
+        throw new Error(`Unsupported interpolation or node placeholder in ${key}`);
+    }
+    return {parameters: [...parameters].sort(), nodes: nodes.sort()};
 }
 
 /** Resolve message parameter references inside the already generated API contract. */
@@ -194,7 +199,7 @@ for (const file of files) {
     for (const [key, text] of Object.entries(messages)) {
         const suffix = key.match(pluralSuffix)?.[1];
         const logical = suffix ? key.replace(pluralSuffix, '') : key;
-        (groups[logical] ??= []).push({key, text, suffix, parameters: placeholders(text, key)});
+        (groups[logical] ??= []).push({key, text, suffix, ...placeholders(text, key)});
     }
     catalogs.push({...catalog, messages, groups});
 }
@@ -211,12 +216,19 @@ for (const key of Object.keys(english.uiContracts ?? {})) {
 
 const messageContracts = {};
 const typeEntries = [];
+const nodeTypeEntries = [];
 for (const key of keys) {
     const variants = english.groups[key];
     const isPlural = variants.some(variant => variant.suffix);
     const used = [...new Set(variants.flatMap(variant => variant.parameters))].sort();
     const problem = problemByKey.get(key);
     const ui = english.uiContracts?.[key];
+    const nodes = ui?.nodes ?? [];
+    if (!Array.isArray(nodes) || new Set(nodes).size !== nodes.length
+        || nodes.some(name => typeof name !== 'string' || !/^[a-z][a-z0-9-]*$/.test(name) || name.startsWith('value-'))) {
+        throw new Error(`Invalid authored node declaration: ${key}`);
+    }
+    if (nodes.length && problem) throw new Error(`API messages cannot contain authored nodes: ${key}`);
     // API messages inherit their parameter vocabulary from the wire contract;
     // only ordinary UI messages use the English catalog's explicit declarations.
     let properties = ui?.parameters ?? {};
@@ -231,11 +243,13 @@ for (const key of keys) {
     if (Object.values(properties).some(type => !['string', 'number', 'integer', 'boolean'].includes(type))) {
         throw new Error(`Unsupported message parameter type: ${key}`);
     }
-    if (used.some(parameter => !Object.hasOwn(properties, parameter)) || (!problem && used.join() !== Object.keys(properties).sort().join())) {
+    const declared = Object.keys(properties).filter(name => name !== 'count' || !ui?.plural || used.includes(name));
+    if (used.some(parameter => !Object.hasOwn(properties, parameter)) || (!problem && used.join() !== declared.sort().join())) {
         throw new Error(`Message parameter declaration differs from placeholders: ${key}`);
     }
     if (isPlural && (properties.count !== 'number' || !ui?.plural)) throw new Error(`Plural requires numeric count contract: ${key}`);
-    messageContracts[key] = {parameters: properties, required, plural: isPlural};
+    messageContracts[key] = {parameters: properties, required, plural: isPlural, nodes};
+    if (nodes.length) nodeTypeEntries.push(`    ${JSON.stringify(key)}: ${nodes.map(name => JSON.stringify(name)).join(' | ')};`);
     const shape = problem
         ? `Extract<components['schemas']['Problem'], {code: '${problem.code}'}>['params']`
         : messageParameterShape(properties);
@@ -245,6 +259,9 @@ for (const key of keys) {
         if (!translated) throw new Error(`Missing ${catalog.locale} message: ${key}`);
         const translatedUsed = [...new Set(translated.flatMap(variant => variant.parameters))].sort();
         if (translatedUsed.join() !== used.join()) throw new Error(`Placeholder drift in ${catalog.locale}: ${key}`);
+        for (const variant of translated) {
+            if (variant.nodes.join() !== [...nodes].sort().join()) throw new Error(`Authored node drift in ${catalog.locale}: ${variant.key}`);
+        }
         if (isPlural) {
             const categories = new Intl.PluralRules(catalog.locale).resolvedOptions().pluralCategories;
             const translatedCategories = new Set();
@@ -297,8 +314,14 @@ export interface MessageParameters {
 ${typeEntries.join('\n')}
 }
 export type MessageKey = keyof MessageParameters;
+export interface MessageNodes {
+${nodeTypeEntries.join('\n')}
+}
+export type RichMessageKey = keyof MessageNodes;
+export interface RichMessageContent { readonly text: string; readonly values: Readonly<Record<string, string | number | boolean>>; }
 export type Translator = <K extends MessageKey>(key: K, ...arguments_: {} extends MessageParameters[K] ? [parameters?: MessageParameters[K]] : [parameters: MessageParameters[K]]) => string;
-export interface LocalizationContext { readonly locale: Locale; readonly t: Translator; }
+export type RichTranslator = <K extends RichMessageKey>(key: K, parameters: MessageParameters[K]) => RichMessageContent;
+export interface LocalizationContext { readonly locale: Locale; readonly t: Translator; readonly rich: RichTranslator; }
 `;
 const output = new Map([
     ['src/types/LocalizationTypes.d.ts', declarations],

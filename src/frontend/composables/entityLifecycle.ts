@@ -22,9 +22,9 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
                                       command: Pick<ReturnType<typeof useCommand>, 'run'>,
                                       messages: Readonly<Ref<LocalizationContext>>) {
     /** Confirm the same direct/inherited lifecycle choice in every presentation.
-     * The caller supplies its current resource state and optional initiating event;
+     * The caller supplies its current resource state;
      * personal visibility and permanent deletion remain separate operations. */
-    async function archive(listId: string, restore: boolean, inherited: boolean, initiator?: Event,
+    async function archive(listId: string, restore: boolean, inherited: boolean,
                            confirmationKey?: PilotPlainMessageKey): Promise<void> {
         // Restore takes precedence over inherited archival, matching both existing
         // journeys. Read wording from the current locale at the user action boundary.
@@ -32,10 +32,8 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
             : inherited ? 'packing.confirmArchiveIndependent' : 'packing.confirmArchive');
         if (!window.confirm(messages.value.t(confirmation))) return;
 
-        // Use this consumer's existing command lifetime and refresh callback. The
-        // synchronous initiator capture keeps Settings feedback in its native section;
-        // Overview deliberately retains the existing global inline fallback.
-        await command.run(changeArchive, true, false, {initiator, presentation: 'inline',
+        // Keep this consumer's existing command lifetime and refresh callback.
+        await command.run(changeArchive, true, false, {
             success: restore ? 'overview.restored' : 'overview.archived'});
 
         function changeArchive(scope: PilotRequestScope) {
@@ -46,7 +44,7 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
     /** Pause immediately, or confirm before resuming an elapsed schedule. Feature
      * callers retain capability checks and the command's refresh dependencies;
      * the existing server operation remains the schedule's sole policy owner. */
-    async function automate(id: string, paused: boolean, initiator?: Event,
+    async function automate(id: string, paused: boolean,
                             labels: EntityAutomationMessages = automationMessages): Promise<void> {
         const operation = api.automate;
         if (!operation) return;
@@ -59,8 +57,6 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
         // Use the caller's existing command/feedback lifetime. A lost response
         // stays uncertain and recovery reads authority without replaying this write.
         await command.run(changeSchedule, true, false, {
-            initiator,
-            presentation: 'inline',
             success: paused ? labels.pausedSuccess : labels.resumedSuccess,
         });
 
@@ -99,7 +95,7 @@ export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'r
         const origin = router.currentRoute.value.fullPath;
         try {
             const confirmed = await command.run(deleteResource, false, false,
-                {initiator: request.initiator, success: request.success});
+                {success: request.success});
             if (confirmed) await destination.navigate('/frontend-pilot', scope, origin,
                 {kind: 'success', messageKey: request.success});
         } finally {

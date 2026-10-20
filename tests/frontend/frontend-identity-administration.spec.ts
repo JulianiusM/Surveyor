@@ -81,6 +81,27 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 }
 
 describe('profile administration consumers', () => {
+    it.each(['edit', 'manage'] as const)('refreshes healthy profile %s data while retaining an unsaved name', async mode => {
+        let current = {...profile};
+        const path = mode === 'edit' ? '/frontend-pilot/users/profile' : '/frontend-pilot/users/profile/manage';
+        const {wrapper, request} = await mounted(path, async () => json(mode === 'edit'
+            ? current : {profiles: [current], activeProfileId: profileId}));
+        const field = mode === 'edit' ? wrapper.get<HTMLInputElement>('#name') : null;
+        if (field) await field.setValue('Keep my unsaved name');
+        current = {...current, name: 'Remotely updated name'};
+        const before = request.mock.calls.length;
+        await wrapper.get('button[aria-label="Refresh"]').trigger('click');
+        await flushPromises();
+
+        expect(request.mock.calls).toHaveLength(before + 1);
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+        if (field) {
+            expect(wrapper.get('#name').element).toBe(field.element);
+            expect(field.element.value).toBe('Keep my unsaved name');
+            expect(wrapper.text()).toContain('changed');
+        } else expect(wrapper.text()).toContain(current.name);
+    });
+
     it('confirms native fields before refreshing the same-route editor into a clean usable baseline', async () => {
         let current = {...profile};
         let currentSession = {...session};

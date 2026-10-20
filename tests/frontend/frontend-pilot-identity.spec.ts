@@ -1349,7 +1349,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(router.currentRoute.value.query.next).toBe(next);
         expect(wrapper.get('.alert-success').text()).toBe('Account successfully activated');
         expect(wrapper.get('.alert-success').element.closest('.card')).toBeNull();
-        expect(wrapper.get('.alert-success').element.closest('.pilot-page-notices')).not.toBeNull();
+        expect(wrapper.get('[data-pilot-notices]').element.contains(wrapper.get('.alert-success').element)).toBe(true);
         expect(wrapper.get('h1').text()).toBe('Login');
         expect(wrapper.find('#username').exists()).toBe(true);
         expect(wrapper.find('#password').exists()).toBe(true);

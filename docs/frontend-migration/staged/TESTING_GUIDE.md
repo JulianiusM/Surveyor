@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-19
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P5/P6 Activity assertion, domain-job observation and visual-capture boundaries source-reconciled alongside retained P0-P4, deterministic fixtures and runner contracts; execution and failures belong to paired review; no publication
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
+verification-scope: P0-P6 functional interface assertions, integrated Refresh, shared notification lifetimes, locale-neutral usability, shared civil-date/instant semantics and domain-job boundaries reconciled with deterministic fixtures and runner safety; execution belongs to paired review; no publication
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts; tests/unit/civil-date.spec.ts; tests/e2e/frontend-calendar.spec.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -131,7 +131,7 @@ Use actual Query/cache/transport consumers where they uniquely detect:
 - Actual fresh authority after a confirmed write; canceled retained data, idle flags and manual cache aliases are not receipts.
 - Saved operations with failed follow-up reads and unknown outcomes without replay or false rollback assumptions.
 - Confirmed destination/feedback retention through failed navigation, including retired command editors.
-- Receipt-owned transient expiry, repeated renewal, locale reactivity and detached initiating hosts.
+- Receipt-owned transient expiry, repeated renewal, locale reactivity, retired editors and nearest page/dialog hosting.
 - Session/bootstrap dispatch admission, visibility/disclosure pause, terminal rejection and Retry-After deadlines.
 - Eligible observer selection when shared-key consumers have different visibility or lifecycle.
 - Required owning reads with no optional dependent observers, and inactive cached dependencies remaining inactive.
@@ -184,8 +184,9 @@ visible completion and persisted effect through the integrated backend. The exis
 than introducing another runner, scanner or test framework. A matching final URL, API status or screenshot alone
 cannot distinguish Router navigation from a document replacement.
 
-Compare each visible card/form/table/action/footer in the declared scene, including values, constraints, styles,
-relative geometry, destination and collected browser errors. The current profile-workflow matrix covers all five
+Compare each visible card/form/table/action/footer in the declared scene, including values, constraints, painted
+hierarchy, usable fit, destination and collected browser errors; retain raw relative geometry for inspection.
+The current profile-workflow matrix covers all five
 token/entry/preview/deactivation/account-deletion scenes at 1280px/390px; only independently generated token content
 is masked. Packing compares creation, persisted table, Quick Add and Packed restoration. Overview distinguishes a
 fresh empty region, populated owner cards and a search with no matches at those same sizes. Matched screenshots
@@ -195,11 +196,13 @@ Drivers extends its existing built suite with General, expanded image controls, 
 and Actions comparisons at both sizes. Its actual settings journey submits metadata/defaults, adds/zeros/removes an
 administrator, uploads/removes an image, changes the event, archives/restores and deletes through the generated
 operations without document replacement. Restricted actions, description-only settings and inherited Event archival
-are separate scenes. The feature helper asserts the exact computed display difference for its native form-wrapped
-versus Vue direct flex-item deletion button before comparison; every other style, field and box remains checked.
+are separate scenes. Native form wrappers and Vue direct actions may have different display or dimensions.
+Current comparisons protect visible content, field constraints and selected visual identity, with nonzero painted
+areas and independent clipping/interaction checks. Complete raw style and geometry remain attached for review;
+they are not all exact comparison assertions.
 Shared-component reuse alone cannot establish a feature's injected operation or restricted-control behavior.
 
-Basic Activity adds strict desktop/mobile comparisons for dated creation, schedule/progress, participant status,
+Basic Activity adds desktop/mobile functional-interface comparisons for dated creation, schedule/progress, participant status,
 shared notes, slot/role/text dialogs, warning review and settings. Wait for the native tab's completed fade before
 measuring; an empty transition capture proves no participant parity. Expanded image controls need their own matching
 scrolled capture when the modal viewport clips them. Preserve complete measured JSON beside original screenshots.
@@ -207,7 +210,14 @@ Real built workflows assert same-document creation/copy, self/organizer assignme
 fresh explicit confirmation, shared-text edits, settings/image/lifecycle/automation, private projections and separate
 print documents. The genuine ORM suite retains native engine/transaction checks; the isolated calendar comparison
 renders actual native Pug/controller output in an isolated child process across four timezones, without mutating its parent
-worker. Source mappings and executed acceptance remain distinct in the migration review.
+worker. Retain that native oracle while asserting the approved Vue divergence: one civil-date owner preserves stored
+days and Monday weeks across offsets, DST, leap days, year boundaries and the year-1000 preceding Monday. Pure
+calendar tests protect invalid inputs and fresh return values; mounted consumers protect selected-language wording,
+unchanged dirty nodes and pending review. A genuine ORM read validates the week schema and unchanged saved dates,
+assignments and native inputs. Built calendar journeys exercise actual creation, schedules, recommendations and
+Event attendance in configured timezone/locale/viewport scenes. Deadline/link timestamps retain their instant
+meaning. The Slots total remains the complete saved collection through All/My/Open, fresh receipts and an empty
+plan. Source mappings and executed acceptance remain distinct in the migration review.
 
 Advanced Activity adds focused requirement/recommendation component cases and a built Rules workflow. Protect
 zero and override precedence through the existing pure requirements engine, unsaved coverage, canceled Reload,
@@ -216,8 +226,8 @@ domain job identity: status polling and automatic-job completion read saved data
 explicit generation retains its separate completion trigger. Assert terminal and unavailable jobs, uncertain
 dispatch without replay, manual/generated provenance, both reciprocal swap legs and the identical previewed/applied
 batch. A changed overlap acknowledgement must reject before saving review or assignments. Compare complete Rules,
-coverage, recommendation and manual-dialog surfaces at desktop/mobile sizes, retaining strict content/control/style
-and geometry assertions beside individually inspected originals. Existing Activity engines and persistence suites
+coverage, recommendation and manual-dialog surfaces at desktop/mobile sizes, retaining meaningful content/control,
+painted hierarchy, fit and accessibility assertions beside individually inspected originals. Existing Activity engines and persistence suites
 retain the transactional rules; the Vue rewrite does not duplicate those algorithms in browser tests.
 
 Apply [assertion and isolation guidance](#assertions-and-isolation) to actual actor-owned records too. Administrator
@@ -252,9 +262,23 @@ Exercise initial and cold scoped placeholders for each page family using the act
 client browser selection verifies the real SSR/CSS silhouette, one accessible loading status, one animation,
 responsive layout and absent dead controls; it does not certify backend admission. Include major structural
 differences such as Packing/Drivers columns, Packing's initial-items table, Overview collections and login recovery.
-System workflows still use the built application and prepared database. Page-confirmation checks use a real long
-page and command, assert retained viewport context and sticky geometry after further user scrolling, and preserve
-local dialog reveal and receipt-lifetime checks at their existing client boundary.
+System workflows still use the built application and prepared database. Notification checks use real page/dialog
+consumers and commands, assert retained viewport/focus through submission and refresh, and verify shared scope,
+renewal, dismissal and expiry. Deliberate dialog entry/return and actual anchor navigation retain their own focus
+contracts; they do not authorize notice-induced jumps.
+
+Compare the original baseline with explicit current requirements and approvals. Functional interface parity means
+equivalent visible information, available actions and user steps, not exact pixels, DOM identifiers or internal
+naming. Keep raw screenshots and measurements for review. Assert meaningful content, control values/constraints,
+painted hierarchy, readable labels, reachability, keyboard behavior and usable fit. Responsive wrapping and new
+Refresh controls are required behavior; assert their presence and actual fresh reads instead of subtracting them
+from geometry to claim whole-image equality. Inventory each admitted data region and assert its page-level or own
+healthy Refresh GET, including retained drafts and filters; a successful root read alone does not prove subsection
+coverage. Separately protect deliberately narrow post-command reads and private outputs from replay.
+Deliberately scrolling tables keep a distinct overflow boundary.
+Retain exact business inputs, privacy, no-replay and draft-lifetime assertions. A presentation change justifies
+changing only the obsolete assertion it supersedes, never indiscriminate tolerance increases or silently dropping
+controls and journeys. Required additions are asserted independently when the native comparator lacks them.
 
 Hydration confirms that client owners mounted; it does not admit a feature's independent reads. Before keyboard or
 layout assertions, wait for the current admitted fields and enabled top-level controls of the actual feature or
@@ -279,9 +303,10 @@ card and assert placement separately from cropped form/table controls. A full-ca
 not an assertion of every dimension. Explicitly approved frontend exceptions retain their own expected results;
 do not hide them by normalizing away native differences. Survey duplicate checks include every saved description,
 weekday and occurrence, plus independent exclusion of answers and the source image.
-Survey comparisons additionally measure voting-card and inter-section geometry, separately identifying the existing
-Vue Refresh row's effect. A comparison adjusted for that row does not establish complete native parity or approval
-for the visible difference; verify the actual decision before accepting an exception. Empty results retain their
+Survey comparisons additionally inspect complete voting cards and inter-section layout. Integrated Refresh is an
+explicit current requirement: assert its usable presentation and read-only operation while preserving ballot drafts.
+Earlier comparisons adjusted for its extra row; that historical normalization does not establish current whole-card
+acceptance. Empty results retain their
 own notice and layout. Wide ballot/result tables exercise
 real horizontal overflow, sticky participant headings/cells and the reachable final column at desktop/mobile sizes.
 Compare each frontend's delivered page overflow too; a responsive table class alone does not establish its actual
@@ -321,14 +346,16 @@ screenshots cannot show lower controls. Label bounded scenes and source scope; d
 or deployment acceptance from selected checks.
 
 Compare affected surfaces completely: visible wording, control values/states/constraints, labels/help/icons,
-typography, wrapping, spacing and relative geometry. Include common form actions/footer when the workflow renders
-them. Turn measured expectations and recorded browser errors into assertions; a JSON attachment is evidence for
-inspection, not an assertion. Hold actor, persisted data, locale, viewport and loaded fonts equal. Explicitly identify
+typography, readable wrapping and usable action spacing. Include common form actions/footer when the workflow renders
+them. Assert meaningful user contracts and recorded browser errors; raw geometry and a JSON attachment remain evidence
+for inspection rather than an exact native coordinate contract. Hold actor, persisted data, locale, viewport and loaded fonts equal. Explicitly identify
 approved navigation-shell differences instead of hiding real component differences with broad tolerances.
 
 Event organizer dietary comparisons observe each frontend's ordinary application response without replacing it.
 Assert that its rendered badges and derived dietary totals preserve that response's complete values and delivered
-order. Compare corresponding dietary entries/counts/appearance/component layout by choice when the two responses
+order. Register the matching response observer before Refresh, then await its actual subsequent read and rendered
+values; the earlier navigation/preload response cannot establish the current rendered order. Compare corresponding dietary
+entries/counts/appearance/component layout by choice when the two responses
 deliver different sequences; retain all remaining exact text/control assertions and deadlines. This approved
 comparison boundary concerns dietary badges/totals only. It does not authorize normalizing other collections,
 sorting runtime data or changing shared queries. Raw screenshots and evidence retain the actual rendered order.

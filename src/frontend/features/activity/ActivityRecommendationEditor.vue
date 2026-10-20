@@ -9,7 +9,7 @@ import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import FormField from '../../components/FormField.vue';
-import {activityDateLabel, activityWarningLabel} from './presentation';
+import {activityDateLabel, activityParticipantName, activityWarningLabel} from './presentation';
 import {manualRecommendationRows, RecommendationDraftError, rolelessRecommendationAssignments} from './recommendationDraft';
 
 // A manual dialog retains its own selections. Preview never persists either leg;
@@ -105,7 +105,8 @@ function participantLabel(person: components['schemas']['ActivityRecommendations
     // stays separate from this purely presentational label.
     const arrival = person.arrivalDate ? activityDateLabel(person.arrivalDate, messages.value.locale) : '';
     const departure = person.departureDate ? activityDateLabel(person.departureDate, messages.value.locale) : '';
-    return person.label + (arrival || departure ? ` (${arrival || messages.value.t('activity.attendanceStart')} – ${departure || messages.value.t('activity.attendanceEnd')})` : '');
+    return activityParticipantName(person.label, messages.value.t, person.nameIsFallback, person.profileId)
+        + (arrival || departure ? ` (${arrival || messages.value.t('activity.attendanceStart')} – ${departure || messages.value.t('activity.attendanceEnd')})` : '');
 }
 </script>
 

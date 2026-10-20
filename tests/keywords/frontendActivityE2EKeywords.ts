@@ -2,22 +2,25 @@ import {expect, type APIRequestContext, type Locator, type Page, type TestInfo} 
 import {randomUUID} from 'node:crypto';
 import {writeFile} from 'node:fs/promises';
 import type {components} from '../../src/types/api/v1';
+import type {Locale} from '../../src/types/LocalizationTypes';
+import {createTranslator} from '../../src/modules/localization/translator';
 import {createE2EActivityPlan, createE2ELogin} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E, readVisiblePresentation} from './e2eCoreKeywords';
+import {createResourceViaForm, loginForE2E, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from './frontendEventE2EKeywords';
 
 /** Create production records through the unchanged native form. The resulting
  * actor and records are shared by the native comparator and built Vue routes. */
-export async function createActivityForE2E(request: APIRequestContext, eventId?: string) {
+export async function createActivityForE2E(request: APIRequestContext, eventId?: string,
+    period: Pick<components['schemas']['ActivityCreateInput'], 'startDate' | 'endDate'> = {startDate: '2030-06-01', endDate: '2030-06-02'}) {
     await loginForE2E(request, createE2ELogin());
     const input = createE2EActivityPlan();
     input.title = input.form.title = `P5 duties ${randomUUID().slice(0, 8)}`;
-    Object.assign(input.form, {startDate: '2030-06-01', endDate: '2030-06-02',
+    Object.assign(input.form, {startDate: period.startDate, endDate: period.endDate,
         'defaultPerms[public][0]': 'ACCESS_VIEW',
-        slots: JSON.stringify({'2030-06-01': [
-            {id: randomUUID(), day: '2030-06-01', pos: 0, title: 'Breakfast help', description: 'Serve breakfast',
+        slots: JSON.stringify({[period.startDate]: [
+            {id: randomUUID(), day: period.startDate, pos: 0, title: 'Breakfast help', description: 'Serve breakfast',
                 startTime: '09:00', endTime: '10:00', maxAssignees: 2},
-            {id: randomUUID(), day: '2030-06-01', pos: 1, title: 'Lunch help', description: 'Prepare lunch',
+            {id: randomUUID(), day: period.startDate, pos: 1, title: 'Lunch help', description: 'Prepare lunch',
                 startTime: '12:00', endTime: '13:00', maxAssignees: 1},
         ]}), ...(eventId ? {event_id: eventId} : {})});
     if (eventId) input.createPath += `?eventId=${eventId}`;
@@ -64,9 +67,10 @@ export async function expectActivityTabKeyboard(page: Page): Promise<void> {
     const tabs = page.locator('main .nav-tabs [role="tab"]');
     const count = await tabs.count();
     expect(count).toBeGreaterThan(1);
-    // Establish keyboard focus without starting Bootstrap's smooth page scroll;
-    // only the actual keys below should determine the measured scroll behavior.
-    await tabs.first().evaluate(element => (element as HTMLElement).focus({preventScroll: true}));
+    // Keyboard entry starts at the selected roving tab. Focusing an inactive
+    // native tab before its load-time initializer runs can bypass its real owner;
+    // the selected Rules tab was already activated through the actual click.
+    await page.locator('main .nav-tabs [role="tab"][aria-selected="true"]').evaluate(element => (element as HTMLElement).focus({preventScroll: true}));
     // Opening Rules may already have started Bootstrap's smooth scrolling, and
     // Vue renders its focus-selected panel asynchronously. Observe the actual
     // browser position until that setup settles, without canceling its motion.
@@ -114,6 +118,7 @@ export async function expectActivityTabKeyboard(page: Page): Promise<void> {
  * The caller compares corresponding same-actor native and Vue surfaces. */
 export async function captureActivityPresentation(page: Page, info: TestInfo, name: string, surface: Locator,
     selectors: string[]) {
+    if (new URL(page.url()).pathname.startsWith('/frontend-pilot')) await expectUsableFrontendLayout(surface);
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(function releaseFocus() {
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -127,6 +132,121 @@ export async function captureActivityPresentation(page: Page, info: TestInfo, na
     await writeFile(info.outputPath(`${name}-presentation.json`), evidence);
     await info.attach(`${name}-presentation`, {body: evidence, contentType: 'application/json'});
     return measured;
+}
+
+/** Preserve raw schedule evidence and verify R9's approved total separately.
+ * Bootstrap hides native's empty badge. After asserting the real visible Vue
+ * total, omit only that added node from the comparison value. The live DOM and
+ * artifacts stay untouched; all other text, controls and styles stay covered. */
+export async function captureActivitySchedulePresentation(page: Page, info: TestInfo, name: string,
+    surface: Locator, total: number) {
+    const selectors = ['h4', 'th', 'small', 'strong', '.badge', '[data-count]', '[data-max]', '.slot', 'button', 'a'];
+    const measured = await captureActivityPresentation(page, info, name, surface, selectors);
+    const badge = surface.locator('.fs-6').filter({has: page.locator('.bi-card-checklist')}).locator('.badge').first();
+    const pilot = new URL(page.url()).pathname.startsWith('/frontend-pilot');
+    await expect(badge).toHaveText(pilot ? String(total) : '');
+    if (!pilot) return measured;
+    await expect(badge).toBeVisible();
+
+    // Find this exact visible node in the measured selector order. No other
+    // empty badge, number or feature text becomes a comparator exception.
+    const index = await surface.evaluate(function totalBadgeIndex(root, selectors) {
+        const badge = root.querySelector('.bi-card-checklist')?.closest('span')?.querySelector('.badge');
+        return Array.from(root.querySelectorAll<HTMLElement>(selectors.join(',')))
+            .filter(node => node.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true}))
+            .indexOf(badge as HTMLElement);
+    }, selectors);
+    expect(index).toBeGreaterThanOrEqual(0);
+    expect(measured.content.elements[index]!.text).toBe(String(total));
+    const label = createTranslator('en').t('activity.slots') + total;
+    expect(measured.content.text.split(label)).toHaveLength(2);
+
+    return {...measured, content: {...measured.content,
+        text: measured.content.text.replace(label, createTranslator('en').t('activity.slots')),
+        elements: measured.content.elements.filter((_element, current) => current !== index)},
+        geometry: measured.geometry.filter((_rectangle, current) => current !== index + 1)};
+}
+
+/** Keep raw creation evidence while comparing the approved R4/R6 label addition.
+ * Native IMP-017 remains open: only Vue's five validated initial-slot label nodes
+ * are projected out of the comparator. Controls, constraints, paint and all other
+ * text remain covered; the live document and saved evidence are never rewritten. */
+export async function captureActivityCreationPresentation(page: Page, info: TestInfo, name: string, surface: Locator,
+    locale: Locale = 'en') {
+    const selectors = ['label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button'];
+    const measured = await captureActivityPresentation(page, info, name, surface, selectors);
+    if (!new URL(page.url()).pathname.startsWith('/frontend-pilot')) return measured;
+
+    const messages = createTranslator(locale);
+    const labels = [messages.t('packing.title') + ' *', messages.t('packing.description'),
+        messages.t('activity.startTime'), messages.t('activity.endTime'), messages.t('activity.maxParticipants')];
+    const projection = await surface.evaluate(function compareInitialSlotLabels(element, expected) {
+        const root = element as HTMLElement;
+        const failures: string[] = [];
+        const omitted = new Set<HTMLElement>();
+        const slots = root.querySelectorAll<HTMLElement>('#slotArea .slot');
+        if (!slots.length) failures.push('No initial slot to review');
+
+        // Admit only the exact added field set. An extra, hidden or incorrectly
+        // associated label is a failure, never another comparator exception.
+        for (const slot of slots) {
+            const controls = slot.querySelectorAll<HTMLInputElement>('input');
+            if (controls.length !== 5 || slot.querySelectorAll('label').length !== 5) {
+                failures.push('Initial slot must contain exactly five labelled controls');
+                continue;
+            }
+            for (const [index, control] of Array.from(controls).entries()) {
+                const label = control.labels?.[0];
+                if (control.labels?.length !== 1 || !label || label.control !== control
+                    || !control.id || document.getElementById(control.id) !== control || !slot.contains(label)
+                    || label.innerText.replace(/\s+/gu, ' ').trim() !== expected.labels[index]) {
+                    failures.push(`Incorrect initial-slot label ${index + 1}`);
+                    continue;
+                }
+                const box = label.getBoundingClientRect();
+                const boundary = slot.getBoundingClientRect();
+                if (!label.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true})
+                    || label.classList.contains('visually-hidden') || box.width <= 0 || box.height <= 0
+                    || box.left < boundary.left - 1 || box.right > boundary.right + 1
+                    || label.scrollWidth > label.clientWidth + 1) failures.push(`Unreadable initial-slot label ${index + 1}`);
+                omitted.add(label);
+            }
+            const remove = slot.querySelectorAll('button');
+            if (remove.length !== 1 || remove[0]!.getAttribute('aria-label') !== expected.removeLabel)
+                failures.push('Initial slot removal must keep its localized accessible name');
+        }
+
+        /** Read complete unaffected subtrees through their original innerText.
+         * Descend only around the exact admitted label nodes, retaining every
+         * other text subtree and block separation without matching label words. */
+        function comparisonText(current: HTMLElement): string {
+            if (omitted.has(current)) return '';
+            if (!Array.from(omitted).some(label => current.contains(label))) return current.innerText;
+            // Only a containing ancestor needs decomposition. Unaffected child
+            // subtrees keep the browser's original rendered text as one piece.
+            const parts: string[] = [];
+            for (const child of current.childNodes) {
+                if (child instanceof HTMLElement) parts.push(comparisonText(child));
+                else if (child.nodeType === Node.TEXT_NODE) parts.push(child.textContent ?? '');
+            }
+            return parts.join(' ');
+        }
+
+        const elements = Array.from(root.querySelectorAll<HTMLElement>(expected.selectors.join(',')))
+            .filter(node => node.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true}));
+        return {failures, text: comparisonText(root).replace(/\s+/gu, ' ').trim(),
+            elements: elements.map((node, index) => ({index, omitted: omitted.has(node),
+                text: comparisonText(node).replace(/\s+/gu, ' ').trim()}))};
+    }, {selectors, labels, removeLabel: messages.t('packing.removeRow')});
+    expect(projection.failures, 'Approved initial-slot labels must remain visible and associated').toEqual([]);
+    expect(projection.elements).toHaveLength(measured.content.elements.length);
+
+    // Return a separate comparison value. The screenshot and raw measured JSON
+    // above still include every new label, position and original field property.
+    const retained = projection.elements.filter(element => !element.omitted);
+    return {content: {...measured.content, text: projection.text,
+        elements: retained.map(element => ({...measured.content.elements[element.index]!, text: element.text}))},
+        geometry: [measured.geometry[0]!, ...retained.map(element => measured.geometry[element.index + 1]!)]};
 }
 
 /** Preview and join through native HTTP to prepare a real sibling commitment.

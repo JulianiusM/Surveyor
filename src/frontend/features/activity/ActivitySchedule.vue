@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue';
-import {TranslationComponent as I18next} from 'i18next-vue';
+import RichMessage from '../../components/RichMessage.vue';
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
 import {useListReorder} from '../../composables/listReorder';
@@ -61,37 +61,46 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
 </script>
 
 <template>
-    <template v-if="view.requirementProgress">
-        <div
-            id="my-requirement-progress"
-            class="status-notice d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3"
-            :class="view.requirementProgress.requiredShifts === 0 ? 'alert-info' : view.requirementProgress.complete ? 'alert-success' : 'alert-warning'">
-            <span>
-                <i
-                    class="bi me-2"
-                    :class="view.requirementProgress.requiredShifts === 0 ? 'bi-info-circle' : view.requirementProgress.complete ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'"
-                    aria-hidden="true"></i>
-                <i18next
-                    :translation="view.requirementProgress.requiredShifts === 0 ? messages.t('activity.progressFree', {count: view.requirementProgress.assignedShifts})
-                    : view.requirementProgress.complete ? messages.t('activity.progressComplete', {assigned: view.requirementProgress.assignedShifts, required: view.requirementProgress.requiredShifts})
-                    : messages.t('activity.progressIncomplete', {assigned: view.requirementProgress.assignedShifts, required: view.requirementProgress.requiredShifts, remaining: view.requirementProgress.remainingShifts})">
-                    <template #[`assigned-${view.requirementProgress.assignedShifts}`]>
-                        <strong class="mx-1">{{ view.requirementProgress.assignedShifts }}</strong>
-                    </template>
-                    <template #done>
-                        <strong>{{ messages.t('activity.progressDone') }}</strong>
-                    </template>
-                    <template #[`assigned-${view.requirementProgress.assignedShifts}-${view.requirementProgress.requiredShifts}`]>
-                        <strong class="mx-1">{{ messages.t('activity.progressAssignedRequired', {assigned: view.requirementProgress.assignedShifts, required: view.requirementProgress.requiredShifts}) }}</strong>
-                    </template>
-                    <template #[`remaining-${view.requirementProgress.remainingShifts}`]>
-                        <strong class="ms-1">{{ messages.t('activity.progressTakeMore', {remaining: view.requirementProgress.remainingShifts}) }}</strong>
-                    </template>
-                </i18next>
-            </span>
-            <small class="d-none d-md-inline">{{ messages.t('activity.progressHint') }}</small>
-        </div>
-    </template>
+    <!-- Requirement progress is persistent content. The shared notice owns its
+         visual shell without adding transient feedback, dismissal or a live role. -->
+    <StatusNotice
+        v-if="view.requirementProgress"
+        id="my-requirement-progress"
+        class="d-flex flex-wrap justify-content-between align-items-center gap-2"
+        :kind="view.requirementProgress.requiredShifts === 0 ? 'info' : view.requirementProgress.complete ? 'success' : 'warning'"
+        :role="null">
+        <span>
+            <i
+                class="bi me-2"
+                :class="view.requirementProgress.requiredShifts === 0 ? 'bi-info-circle' : view.requirementProgress.complete ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'"
+                aria-hidden="true"></i>
+            <RichMessage
+                v-if="view.requirementProgress.requiredShifts === 0"
+                message="activity.progressFree"
+                :parameters="{count: view.requirementProgress.assignedShifts}">
+                <template #assigned>
+                    <strong class="mx-1">{{ view.requirementProgress.assignedShifts }}</strong>
+                </template>
+            </RichMessage>
+            <RichMessage
+                v-else-if="view.requirementProgress.complete"
+                message="activity.progressComplete"
+                :parameters="{assigned: view.requirementProgress.assignedShifts, required: view.requirementProgress.requiredShifts}">
+                <template #done>
+                    <strong>{{ messages.t('activity.progressDone') }}</strong>
+                </template>
+            </RichMessage>
+            <RichMessage v-else message="activity.progressIncomplete" :parameters="{}">
+                <template #assigned>
+                    <strong class="mx-1">{{ messages.t('activity.progressAssignedRequired', {assigned: view.requirementProgress.assignedShifts, required: view.requirementProgress.requiredShifts}) }}</strong>
+                </template>
+                <template #remaining>
+                    <strong class="ms-1">{{ messages.t('activity.progressTakeMore', {remaining: view.requirementProgress.remainingShifts}) }}</strong>
+                </template>
+            </RichMessage>
+        </span>
+        <small class="d-none d-md-inline">{{ messages.t('activity.progressHint') }}</small>
+    </StatusNotice>
     <StatusNotice v-if="!view.canSelfAssign" kind="info" class="py-2 px-3" :role="null">
         <i class="bi bi-info-circle me-2" aria-hidden="true"></i>{{ messages.t('activity.registrationHint') }}</StatusNotice>
     <div id="schedule-filter-bar" class="d-flex flex-wrap justify-content-between align-items-center mb-3">
@@ -115,10 +124,9 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
         <span class="fs-6 fw-semibold">
             <i class="bi bi-people-fill me-1" aria-hidden="true"></i>{{ messages.t('activity.participantsLabel') }}<span class="badge bg-light text-dark ms-1">{{ view.counters.participants }}</span>
         </span>
-        <!-- Preserve the native grouped-record length badge and text adjacency.
-        Its blank total is a comparator defect, not P5 redesign authority. -->
+        <!-- Count every admitted saved slot; All/My/Open only change visibility. -->
         <span class="fs-6 fw-semibold">
-            <i class="bi bi-card-checklist me-1" aria-hidden="true"></i>{{ messages.t('activity.slots') }}<span class="badge bg-light text-dark ms-1"></span>
+            <i class="bi bi-card-checklist me-1" aria-hidden="true"></i>{{ messages.t('activity.slots') }}<span class="badge bg-light text-dark ms-1">{{ view.slots.length }}</span>
             <span class="badge bg-secondary text-white ms-1">
                 <i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>{{ messages.t('activity.counterOpen', {count: view.counters.open}) }}</span>
             <span class="badge bg-danger text-white ms-1">

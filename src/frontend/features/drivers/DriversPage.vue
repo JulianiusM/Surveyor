@@ -115,7 +115,7 @@ async function patch(
             : {description: value || null};
     return !!(await command.run((scope) =>
         api.updateItem(listId.value, item.id, patch, token, scope),
-        true, false, {presentation: 'inline', success: 'common.updated'},
+        true, false, {success: 'common.updated'},
     ));
 }
 
@@ -124,20 +124,20 @@ async function patch(
  * the shared command owner instead of automatically toggled or retried. */
 async function assign(item: Item): Promise<void> {
     await command.run((scope) => api.assign(listId.value, item.id, !item.selfAssigned, scope), true, false,
-        {presentation: 'inline', success: item.selfAssigned ? 'drivers.itemUnassigned' : 'drivers.itemAssigned'});
+        {success: item.selfAssigned ? 'drivers.itemUnassigned' : 'drivers.itemAssigned'});
 }
 /** Native item deletion needs deliberate confirmation before its independently authorized command. */
 async function removeItem(item: Item): Promise<void> {
     if (window.confirm(messages.value.t('drivers.confirmDeleteItem'))) {
         await command.run((scope) => api.deleteItem(listId.value, item.id, scope), true, false,
-            {presentation: 'inline', success: 'drivers.itemDeleted'});
+            {success: 'drivers.itemDeleted'});
     }
 }
 async function removeAssignment(assignmentId: string): Promise<void> {
     // Native manager removal submits immediately; its server permission/ownership
     // checks remain authoritative and the shared command still prevents replay.
     await command.run((scope) => api.removeAssignment(listId.value, assignmentId, scope), true, false,
-        {presentation: 'inline', success: 'common.removed'});
+        {success: 'common.removed'});
 }
 /** Submit the native Quick Add draft once through the shared creation command.
  * Only a confirmed result clears the entered fields; a missing response retains
@@ -157,7 +157,7 @@ async function addItem(): Promise<void> {
         ),
         true,
         true,
-        {presentation: 'inline', success: 'common.added'},
+        {success: 'common.added'},
     );
 
     // Confirmation still counts when the follow-up read fails. Unknown delivery
@@ -169,7 +169,7 @@ const reorder = useListReorder({
     available: () => !!data.value?.capabilities.reorder && !blocked.value && !editing.value,
     ids: () => items.value.map(item => item.id), token: () => data.value?.orderToken,
     submit: (ids, token) => command.run(scope => api.reorder(listId.value, ids, token, scope), true, false,
-        {presentation: 'inline', success: 'common.orderSaved'}),
+        {success: 'common.orderSaved'}),
 });
 </script>
 

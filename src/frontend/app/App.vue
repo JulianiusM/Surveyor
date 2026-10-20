@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, ref} from 'vue';
+import {computed, onBeforeUnmount, onMounted, provide, ref} from 'vue';
 import {RouterLink, RouterView, useRoute, useRouter} from 'vue-router';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {useActionState, usePilot} from './context';
@@ -12,10 +12,12 @@ import AppFooter from '../components/AppFooter.vue';
 import LoadingSkeleton from '../components/LoadingSkeleton.vue';
 import CommonPage from '../features/common/CommonPage.vue';
 import {useDraftProtection} from '../composables/command';
-import {useReadRetry, useReadRetryAt} from '../composables/feedback';
+import {noticeTargetKey, useReadRetry, useReadRetryAt} from '../composables/feedback';
 import {observePageNavigation} from '../composables/pageNavigation';
 
 const context = usePilot();
+const noticeTarget = ref<HTMLElement | null>(null);
+provide(noticeTargetKey, noticeTarget);
 const {messages, session, epoch, ready, notice} = context;
 // The bootstrap owner supplies both failure and receipt. The shared cooldown
 // wakeup presents availability without another session request or timer policy.
@@ -128,24 +130,30 @@ function dismissPersonalLink(): void {
         <AppHeader @locale-error="localeError = true" @locale-recovered="localeError = false" />
         <main id="pilot-main" class="container-fluid flex-grow-1 py-3" tabindex="-1"
             :data-pilot-interactive="interactiveContent ? '' : undefined">
-            <!-- Initial native flashes precede the sticky inline-alert destination.
-                 Keep both in the existing shell owner with their distinct spacing. -->
+            <!-- The shared overlay keeps command results visible without changing
+                 document height, the current form focus or the scroll position. -->
+            <div class="pilot-notice-region">
+                <div ref="noticeTarget" class="pilot-notice-stack" data-pilot-notices>
+                    <!-- Guest registration delivers the native one-visit transient flash.
+                         The matching identity receipt can restore it after failed bootstrap. -->
+                    <StatusNotice v-if="context.personalLink.value && personalLinkText" kind="success"
+                        transient placement="hosted" :renewal="context.personalLink.value" @dismiss="dismissPersonalLink">
+                        <!-- Native guest feedback is an escaped plain-text sentence.
+                             Its private URL shares the flash's expiry and visit lifetime. -->
+                        {{ personalLinkText }}
+                    </StatusNotice>
+                    <StatusNotice v-if="pageNoticeText" :kind="context.pageNotice.value?.kind === 'error'
+                        ? 'danger' : context.pageNotice.value?.kind ?? 'info'"
+                        transient placement="hosted" :renewal="context.pageNotice.value" @dismiss="dismissPageNotice">
+                        {{ pageNoticeText }}
+                    </StatusNotice>
+                    <StatusNotice v-if="notice === 'auth.logoutDone'" kind="success" transient placement="hosted"
+                        :renewal="notice" @dismiss="dismissNotice">{{ messages.t(notice) }}</StatusNotice>
+                </div>
+            </div>
             <div class="pilot-page-notices">
-                <!-- Guest registration delivers the native one-visit transient flash.
-                     The matching identity receipt can restore it after failed bootstrap. -->
-                <StatusNotice v-if="context.personalLink.value && personalLinkText" kind="success"
-                    transient :renewal="context.personalLink.value" @dismiss="dismissPersonalLink">
-                    <!-- Native guest feedback is an escaped plain-text sentence.
-                         Its private URL shares the flash's expiry and visit lifetime. -->
-                    {{ personalLinkText }}
-                </StatusNotice>
-                <StatusNotice v-if="pageNoticeText" :kind="context.pageNotice.value?.kind === 'error'
-                    ? 'danger' : context.pageNotice.value?.kind ?? 'info'"
-                    transient :renewal="context.pageNotice.value" @dismiss="dismissPageNotice">
-                    {{ pageNoticeText }}
-                </StatusNotice>
-                <StatusNotice v-if="notice" :kind="notice === 'auth.logoutDone' ? 'success' : 'warning'"
-                    :transient="notice === 'auth.logoutDone'" :renewal="notice"
+                <StatusNotice v-if="notice && notice !== 'auth.logoutDone'" kind="warning"
+                    :renewal="notice"
                     :last-updated-at="notice === 'state.stale' && ready ? context.sessionRead.value.updatedAt : undefined"
                     :retry-at="notice === 'state.stale' ? sessionRetryAt : undefined"
                     :read-error="notice === 'state.stale' ? context.sessionRead.value.error : undefined"
@@ -161,7 +169,6 @@ function dismissPersonalLink(): void {
                     :action="{label: messages.t('state.refreshPage')}" @action="context.updates.requestRecoveryReload">
                     {{ messages.t('state.updateAvailable') }}
                 </StatusNotice>
-                <div id="liveAlerts" class="sticky-top mt-1"></div>
             </div>
             <!-- Delivery progress supplements the current route. Replacing RouterView here
                  would discard mounted edits and turn navigation latency into input loss. -->

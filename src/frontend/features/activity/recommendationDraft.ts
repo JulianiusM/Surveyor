@@ -50,7 +50,7 @@ export function manualRecommendationRows(workspace: Workspace, rows: ActivityRec
     if (!target || !participant) throw new RecommendationDraftError('activity.recommendations.selectParticipant');
     // Match the native duplicate guard before constructing any new draft row.
     if (hasPlacement(target.id, input.profileId)) throw new RecommendationDraftError('activity.recommendations.duplicate');
-    const result: Row[] = [makeRow(target, input.profileId, participant.label)];
+    const result: Row[] = [makeRow(target, input.profileId, participant.label, participant.nameIsFallback)];
     if (input.operation === 'ASSIGN') return result;
 
     const source = rolelessRecommendationAssignments(workspace, input.profileId).find(assignment => assignment.item.id === input.sourceItemId
@@ -79,8 +79,9 @@ export function manualRecommendationRows(workspace: Workspace, rows: ActivityRec
             || workspace.existingAssignments.some(assignment => assignment.item.id === itemId && assignment.profile.id === profileId);
     }
 
-    function makeRow(item: Row['item'], id: string, name: string): Row {
-        return {item, profile: {id, name}, sourceItem: null, status: 'APPROVED', operation: 'ASSIGN', manual: true};
+    function makeRow(item: Row['item'], id: string, name: string, nameIsFallback?: boolean): Row {
+        return {item, profile: {id, name, ...(nameIsFallback === undefined ? {} : {nameIsFallback})},
+            sourceItem: null, status: 'APPROVED', operation: 'ASSIGN', manual: true};
     }
 }
 

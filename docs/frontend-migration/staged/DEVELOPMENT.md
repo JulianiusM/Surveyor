@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-19
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P6 contribution owners reconciled with shared safe UI recovery, Settings retirement, upload transport, advanced Activity composition and approved automatic job observation; execution separate; no publication
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts
+verification-scope: P0-P6 contribution owners reconciled with integrated Refresh, common non-jumping notifications, controlled component messages, locale-neutral usability, saved-slot totals and shared civil-date ownership with retained authority/draft lifetimes; execution separate; no publication
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -49,8 +49,6 @@ cannot comfortably hold its responsibility. Do not add another router, HTTP wrap
 validator or service simply to make this table symmetrical. Application presentation helpers and styles belong to
 their existing owners under `src/frontend/`, with one implementation for matching consumers. Shared logo/favicon,
 third-party dependencies and browser-safe backend/domain/catalog owners retain their actual shared ownership.
-During native coexistence, required native frontend behavior has separately mutable Vue copies. Native application
-presentation/frontend logic remains isolated; new Vue consumers share Vue owners rather than depend on native code.
 
 `CreationAdmissionNotices` shares read and submission-admission warning presentation across Survey, Event and list
 creation. Callers pass errors, timestamps, retry actions and stale/cold classification; reads, drafts and commands
@@ -127,7 +125,7 @@ operation-specific meaning. Private localized representations carry `Content-Lan
 For a released API version, additive response fields and optional operations can remain compatible. Removing or
 renaming fields, changing their type/meaning, adding mandatory input or changing an existing operation's authorization
 or outcome is breaking: obtain an explicit version/migration decision and retain the supported released contract
-until consumer retirement is authorized. The unreleased-v1 correction does not authorize another pilot version.
+until consumer retirement is authorized.
 
 #### Adding or changing a feature view
 
@@ -151,7 +149,10 @@ readonly/class inputs and the label slot preserve existing control presentation 
 field constraints and normalization remain with the feature.
 Existing Event numeric/date fields and timezone pickers use the control slot where retaining the original native
 directive or picker preserves coercion, lexical drafts or focus targets. Keep the feature's actual node and constraints;
-the slot does not create another input model. Matching Bootstrap command/filter buttons use `ActionButton` with their
+the slot does not create another input model. Activity initial-slot text/time/number fields use that same slot so
+every control has an associated visible localized label while its existing model, lexical capacity input and constraints
+stay feature-owned. A placeholder is not an adequate label, particularly for native time and number inputs.
+Matching Bootstrap command/filter buttons use `ActionButton` with their
 existing variant, size, form and disabled policy. Passing only `disabled` retains a native no-spinner workflow; do not
 add pending presentation merely because the shared component supports it. Durable feature warnings use `StatusNotice`,
 with feature-owned content, visibility and warning intent rather than a new timer or command owner.
@@ -168,6 +169,22 @@ remove controls may use the existing list's slot without copying list markup or 
 Overview and administrator disclosures. Features retain which panel is open, panel markup, contents and reads; pass
 their existing disabled condition and control target. A visual trigger never owns query admission or a draft.
 
+Judge migration parity by the information, actions and steps users experience. Explicit requirements and approved
+changes are exceptions by default: integrated Refresh, complete localization, usable responsive layout and common
+non-jumping SPA notifications supersede incompatible native details. Native IDs, field names used only by an old
+document POST, exact margins and copied overflow are not contracts. Keep meaningful label/control associations,
+keyboard order, value parsing, focus return, disclosure state and reviewed inputs; do not weaken these to simplify
+a test. Shared styles own locale-neutral wrapping, while feature tables retain intentional horizontal scrolling.
+The shared Vue `table-responsive` viewport also provides a positioning boundary for clipped absolute controls;
+their offscreen boxes must stay inside that scroll owner. Keep complete columns and real label/keyboard activation,
+and verify document width and actual window movement before and after local table scrolling. Hiding overflow on
+the whole page would conceal the defect rather than preserve usable content.
+Reuse the module's current admitted read for Refresh and preserve dirty values, server cooldowns and actor/resource
+fences. A page-level Refresh covers every currently admitted data region unless that region has its own healthy
+Refresh control. Keep that deliberate user read separate from narrow post-command dependencies: select the existing
+eligible observers with the captured actor, resource and intent, without resetting their drafts or creating another
+read owner. Workflow Refresh rechecks authority without reissuing tokens or replaying private preview commands.
+
 Activity creation supplies its title/date row and initial dated slots to `EntityListCreation`; that shared owner
 retains admission, root drafts, files, Event selection, permissions and confirmed navigation. Optional submit wording,
 layout and resource parameter inputs preserve existing Packing/Drivers defaults. `InlineCell` supplies Activity's
@@ -177,9 +194,18 @@ the server's current preview and exact overlap acknowledgement remain authoritat
 in the basic Activity phase, and printable schedules retain their authorized document destination.
 Settings receive optional linked-Event/archive hints and export links through the existing settings/lifecycle owners;
 defaults preserve other consumers. `FormField` accepts an explicit label target separately from its input ID/name
-when a native comparator requires it. Neither optional presentation inputs nor native client guards grant method
-authority. Detail calendar grouping comes from the shared controller's projection of the native server loop, while
-creation retains its separate native browser algorithm; do not normalize their inherited timezone differences.
+when the visible label targets a separate actual control, such as a timezone button. Neither presentation inputs nor client guards grant method
+authority. The Activity Slots badge counts every admitted saved slot; All/My/Open only change visibility, and an
+empty collection displays zero. Derive the total from that collection rather than DOM rows or another store.
+
+Under the approved calendar-day policy, `src/modules/lib/civilDate.ts` is the pure shared owner of strict ISO civil
+date parsing, selected-locale display and Monday-to-Sunday week grouping. Activity creation adapts its clipped day
+arrays, and the versioned detail projection returns its structural `CivilDateWeek` values without another calendar
+loop. UTC calendar stepping preserves saved days across timezone and daylight-saving changes, including a preceding
+Monday in year 0999 for an admitted year-1000 plan. Event and Activity date-only presentation use this same owner;
+feature adapters retain their existing invalid/absent fallbacks. Stored dates, domain calculations, native rendering
+and printable output retain their existing owners. The original separate native browser/server algorithms remain
+historical baseline evidence, superseded for Vue by the October 20 approval.
 
 For advanced Activity, compose `ActivityRequirements` and `ActivityRecommendations` inside the admitted Rules tab;
 changing tabs preserves their independent drafts. Requirements keep lexical form values and the saved calculation
@@ -187,6 +213,12 @@ context separate from refreshed snapshots. `requirements.ts` calls the existing 
 coverage and baseline calculation, and `ActivityParticipants` renders both saved and unsaved progress. Structural
 engine inputs and the shared `RoundingMode` declaration under `src/types/` keep ORM entity imports out of browser
 compilation; this type boundary changes no calculation or database behavior.
+Authored fallback names require explicit provenance before a presentation owner replaces missing raw text. Activity's
+versioned callers opt into optional name-origin fields from the existing shared controller reads; native defaults
+keep their established payloads. `activityParticipantName` translates only identified fallbacks or locally identified
+absent names, never English-looking user text. Matching saved/live progress, search, override labels/sorting and
+manual/staged recommendations adopt that helper. A staged row retains origin in its local declaration, while the
+review serializer excludes both names and origin. Locale changes update presentation without rewriting those rows.
 The form emits only its current mode for native-equivalent Auto control; it remains the sole requirement draft and
 generation still uses saved server settings. Slot-role and manual recommendation editors retain valid selections
 while clearing fields and IDs released by fresh admitted options. Dictionary keys from role titles remain data.
@@ -278,8 +310,8 @@ only explicit permitted scalar projections. Inherited postcommit regeneration fa
 
 7. **Compose presentation through shared contracts.** Reuse fields, inline editors, dialogs/tabs, action buttons,
    permission matrix, pickers, skeletons, notices and images where behavior is shared. A feature supplies values,
-   capabilities, events and operations; controls own visual/accessibility interaction. Preserve labels, attributes,
-   no-op behavior, ordering, spacing, disclosure, focus and responsive geometry. Keep feature composites separate
+   capabilities, events and operations; controls own visual/accessibility interaction. Preserve meaningful labels,
+   constraints, no-op behavior, ordering, disclosure and focus; keep spacing and responsive layout usable. Keep feature composites separate
    where their semantics differ.
 
 8. **Verify the changed boundary.** Apply [risk and test cost](TESTING_GUIDE.md#risk-and-test-cost), preserve unique
@@ -296,9 +328,10 @@ only explicit permitted scalar projections. Inherited postcommit regeneration fa
    SPA delivery; synthetic documents cannot supply application E2E evidence. This is contribution review and
    existing application coverage, not a new infrastructure scanner, test framework or CI gate.
 
-   Compare every affected visible control's wording, value/state, constraints, typography and relative geometry,
-   including surrounding form actions and common footer where relevant. Assert recorded browser errors and layout
-   measurements: collecting JSON or screenshots alone does not protect their result. Separate approved shell
+   Compare every affected visible control's wording, value/state, constraints, painted hierarchy and usable fit,
+   including surrounding form actions and common footer where relevant. Assert recorded browser errors and
+   meaningful layout/interaction contracts; retain raw geometry for inspection rather than prescribing native pixels.
+   Collecting JSON or screenshots alone does not protect the result. Separate explicitly required additions and approved shell
    differences from the compared component instead of weakening assertions until they pass. Record the actual
    database version and SQL mode before interpreting persistence-dependent outcomes; preserve the shared native
    behavior and diagnose environment differences without introducing validation solely to satisfy a local fixture.
@@ -307,9 +340,9 @@ only explicit permitted scalar projections. Inherited postcommit regeneration fa
 
    Characterize incidental computed-style differences before changing a comparator. In Actions, the native button
    sits inside a form which is a flex item; the Vue button is itself a flex item, so the browser blockifies its
-   computed display. Any comparison adjustment stays specific to that established structure and preserves the
-   button's wording, availability, focus, painted styles and geometry. Keep semantic links/actions, destinations and
-   command-effect assertions intact; this case does not permit global display normalization.
+   computed display. Inspect the button's wording, availability, focus, painted hierarchy and reachable fit without
+   turning that incidental computed value into a native DOM contract. Keep raw diagnostics, semantic links/actions,
+   destinations and command-effect assertions; a layout improvement does not authorize silently dropping controls.
 
 Readable source is part of every step. Keep template controls and render branches in logical groups with purposeful
 blank lines, explain inputs and non-obvious lifecycle steps, and prefer named operations to nested anonymous flows.
@@ -342,22 +375,23 @@ Adding an editable field follows one coherent path:
 A read-only view stops before editor/command work but still owns admission, privacy, cancellation, retry,
 localization and visual behavior. No universal CRUD engine or wrapper per HTML element is needed.
 
-#### Worked composition: Event, Packing, Drivers and Surveys
+#### Worked composition: Event, Packing, Drivers, Surveys and Activity
 
 The implemented consumers illustrate the migration handoff without another controller or state store:
 
 | Feature supplies | Shared owner actually adopted |
 |---|---|
 | Exact entry operation and actor/resource-dependent denial families | `EntityEntryPage` presents admission and dispatches scoped retirement through `app/queryCache.ts`. |
-| Title/icon, permitted parent URL, image operation/version/detail key and current settings state | `EntityHeader` renders the native layout and composes the existing authorized-image lifetime. |
-| Generated settings/metadata operations, query keys, field grants and controls; complete access operations where applicable | `EntitySettingsDialog` and `EntityMetadataEditor` retain independent drafts and command boundaries; Packing/Event/Drivers additionally adopt `EntityAccessEditor`, while standalone Surveys supply no Access operations. |
+| Title/icon, permitted parent URL, image operation/version/detail key and current settings state | `EntityHeader` renders the shared title/image/parent actions and composes the existing authorized-image lifetime. |
+| Generated settings/metadata operations, query keys, field grants and controls; complete access operations where applicable | `EntitySettingsDialog` and `EntityMetadataEditor` retain independent drafts and command boundaries; Packing/Event/Drivers/Activity additionally adopt `EntityAccessEditor`, while standalone Surveys supply no Access operations. |
 | Current mounted metadata editor and field normalization | `useMetadataEditorHandle` exposes the same public workflow; nullable text uses `normalizeNullableMetadataText` in `metadataDraft.ts`. |
 | Root or captured Event-child operation, current capability, native wording and refresh dependencies | `createEntityLifecycle` shares archive/restore and pause/resume behavior through the caller's existing command. |
 
 Event keeps schedule/capacity rules, registration and actual date drafts in their feature owners. Packing keeps item
 commands and its browser-local checklist. Drivers keeps ride/passenger semantics. Surveys keep personal ballots,
 collaborative recurring choices and representation-only comparison tokens; their owner settings add neither Access
-nor event association. Packing and Drivers inject their event-association operations; Event has no parent association editor.
+nor event association. Activity retains its slot/role/requirement/recommendation workflows. Packing, Drivers and Activity
+inject their event-association operations; Event has no parent association editor.
 Shared presentation neither constructs endpoints
 nor grants authority; matching current consumers adopt the shared owner together while feature differences remain explicit.
 
@@ -392,14 +426,16 @@ Each feature injects its active/denied/read state, actual fresh read and dirty p
 cooldown/action state, guarded post-command reads, explicit reconciliation/stale feedback and acknowledged review of
 an uncertain creation; no recovery repeats a mutation. Survey supplies its existing ballot merge after a fresh read. Packing and
 Drivers additionally select `listProblemKey` for their common permission wording; Survey retains its own Problem
-presentation. Its `denyInlineEdit` supplies Packing/Drivers' existing local transient inline feedback without creating
+presentation. Its `denyInlineEdit` supplies Packing/Drivers' shared transient notification without creating
 an operation, status lease or HTTP request. These are shared lifetimes, not another query/draft store or feature policy.
 
 Deliberate UI retries use `command.reconcileSafely`; a failed read returns false. Query retains diagnostics and
 cooldown. Command success normally publishes its saved notice; an explicit `success: null` preserves a native
-operation that completes quietly, as with recommendation entry and Reload. Select silence before publication;
-clearing a manufactured receipt afterward may already have triggered its shared inline focus/scroll reveal.
-This input changes no confirmation, uncertainty, protection or failure handling. Other callers retain their defaults.
+operation that completes quietly, as with recommendation entry, Reload and the maintenance reads following
+generation/application. Select silence before publication rather than briefly manufacturing a saved result.
+All transient notices use the shared non-jumping page/dialog presentation; none focuses or scrolls its caller.
+This input changes no confirmation, uncertainty, protection or failure handling. Other operations retain their
+actual progress/results and default success where meaningful.
 Feature drafts and unknown-command status stay with their existing owners. Causal post-command reads retain their rejecting contract so confirmed
 save plus failed refresh remains distinguishable. `useSettingsAccessRetirement` in the same list-detail owner shares
 editor-family cancellation/removal and actor/resource/lifetime fences across all five detail Settings consumers.
@@ -543,7 +579,7 @@ journey uses its full error presentation rather than an empty form. Confirmed re
 canonical destination; inline success on the old form is not equivalent. Pending/unknown states retain input and
 explicit review.
 
-Packing, Event, Drivers and Survey use the same `features/identity/GuestEntryPage.vue` for the name/email draft, advisory existing-email
+Packing, Event, Drivers, Survey and Activity use the same `features/identity/GuestEntryPage.vue` for the name/email draft, advisory existing-email
 choice, confirmed identity completion and uncertain-delivery recovery. Each entry supplies its bounded title read,
 guest-registration operation, query key and exact destination. Event retains `regToken` through identity navigation;
 only a deliberate registration command spends that capability. `EntityEntryPage.vue` shares resource admission
@@ -554,7 +590,7 @@ reads supply bounded creation/duplicate context without creating an Event; the d
 command uses existing native preprocessing, image assignment, creation and default-permission initialization in
 their existing order. Preserve raw optional capacity, audience masks, shared permission initialization and duplicate
 exclusions rather than inferring new rules from the transport. `useCreationCommand` in `src/frontend/composables/creation.ts`
-is adopted by Event creation and the shared `EntityListCreation` used by Packing and Drivers. Survey creation also
+is adopted by Event creation and the shared `EntityListCreation` used by Packing, Drivers and Activity. Survey creation also
 composes that owner with its standalone recurring-choice draft and no event/audience inputs. It composes the existing
 command, feedback and confirmed-navigation owners. Event and Survey own their fields/File; the shared list form owns each
 mounted feature's root fields/File, and Packing retains its collection draft and collector. Rejection or uncertainty
@@ -592,7 +628,7 @@ identity/update and whole-page destructive departures resolve every affected des
 state may outlive an editor; retiring a component does not certify delivery.
 
 Admit a new `useCommand.run` only while its owning component remains mounted. Reject a retained callback after
-unmount before capturing presentation/actor scope, retaining a status lease or invoking the operation. Retained
+unmount before capturing actor scope, retaining a status lease or invoking the operation. Retained
 completion state protects an admitted command; it cannot grant another submission from a retired owner. Preserve
 legitimate deferrals: a child chooser can close while its command owner stays mounted, and an operation admitted
 before unmount can defer its request or finish settlement, follow-up reads and confirmed navigation under its
@@ -854,9 +890,9 @@ validation and financial semantics outside generic form/inline/action components
 Bootstrap-compatible geometry and suitable Reka dialog/tab primitives remain the shared presentation strategy.
 
 Extract a settings composite only when repeated interaction shares its data, events and injected operations.
-`EntitySettingsDialog` owns Packing, Event, Drivers and Survey's matching settings reads, independent panel/file drafts, close locks,
+`EntitySettingsDialog` owns Packing, Event, Drivers, Survey and Activity's matching settings reads, independent panel/file drafts, close locks,
 refresh and command composition. `EntityMetadataEditor` owns their shared original/local/current reconciliation and
-metadata command recovery; `EntityAccessEditor` owns Packing/Event/Drivers audience/administrator drafts, discovery and
+metadata command recovery; `EntityAccessEditor` owns Packing/Event/Drivers/Activity audience/administrator drafts, discovery and
 reviewed commands. Standalone Surveys supply no Access operations, and their metadata tokens remain representation
 comparison evidence without adding write preconditions.
 Features inject generated operations, query dependencies, normalization, field controls, authorization inputs and
@@ -867,15 +903,21 @@ normalization is shared by explicit field opt-in; it does not apply Event capaci
 Preserve independent drafts and layout; file size alone is not a module boundary or justification for a universal CRUD
 engine, forwarding controller or backend service. `EntityHeaderEditor`, `EntityEventEditor` and `EntityLifecycleActions`
 remain explicit lower controls. Their settings, dialog, metadata and access contracts live in the corresponding
-`src/types/FrontendEntity*.d.ts` declarations. Packing and Drivers supply their optional event-association operations.
+`src/types/FrontendEntity*.d.ts` declarations. Packing, Drivers and Activity supply their optional event-association operations.
 
 `TimezonePicker` and `TimezoneOptions` share Event creation/property timezone selection, search, common zones, browser
 detection, aliases and offsets. Feature metadata normalization coordinates a changed zone with its displayed local
 deadline; an unrelated sparse save omits both fields and preserves the stored instant.
+Pass the reactive selected interface locale to date/timestamp formatters rather than relying on browser-language
+defaults. Event summary, saved attendance, roster and registration-link consumers share their existing feature
+presentation helpers. Their date-only values use the shared civil-day policy above; deadlines and registration-link
+timestamps remain instants, and the summary deadline keeps its explicit Event zone or omitted browser-zone option.
+Translation changes wording without rewriting stored values, feature drafts or local-minute input policy.
 
-`EntityHeader` is the displayed header used by Event, Packing, Drivers and Survey detail; `EntityHeaderEditor` handles the separate
+`EntityHeader` is the displayed header used by Event, Packing, Drivers, Survey and Activity detail; `EntityHeaderEditor` handles the separate
 upload draft. Pass the admitted title/icon, parent URL, image read/version/exact query key and settings state to the
-displayed owner. It preserves the native 250px cover image, empty desktop parent track and mobile parent placement.
+displayed owner. Cover-image presentation and parent navigation live in this shared owner; responsive styles may
+reflow its tracks while retaining the admitted image, title and visible parent action.
 Event's dashboard heading remains distinct. Its successful-read subscription includes equal-version responses;
 recovery waits until new props render and rechecks resource/key before the existing image owner reads. This prevents
 an admitted absence from retrying a retired image while preserving a healthy URL. Parent URLs are used as supplied.
@@ -894,18 +936,19 @@ header URL, token or translated filename, recreate the input or emit another sel
 
 `feedback.ts` binds notices to semantic receipts and owns their ten-second scheduling/cancellation lifetime.
 Repeated outcomes renew; locale/render changes neither renew expiry nor revive dismissed notices. Persistent
-conditions use status semantics and remain visible. Capture
-initiating elements before awaits. Inline notices own Close and a live modal/page fallback when their initiator
-detaches/hides, without restoring revoked controls. Page-level confirmations use the shared sticky live-alert host
-without programmatic focus or document scrolling; normal browser anchoring may preserve viewport context as the
-notice appears. Its unsemantic grouping wrapper has no layout box, so stickiness follows
-the full main content boundary. Local dialog/section notices retain their once-per-receipt reveal behavior; focus
-prevents implicit scrolling before the existing scoped reveal. Full flashes retain their presentation.
+conditions use status semantics and remain visible. `App` and `AppDialog` supply common page/dialog notification
+hosts through the read-only `noticeTargetKey` presentation reference. A zero-height sticky anchor and bounded
+overlay preserve document layout, focus and scroll; gaps do not intercept input. Notifications never call focus or
+scroll to reproduce native submission/refresh jumps. This shared rule supersedes the historical local reveal behavior.
 Confirmed destinations/receipts survive failed delivery; warnings clear only through their own successful recovery.
 Dispose timers/listeners and preserve page-cache restoration behavior.
 
 `CommandFeedback` presents the existing command owner's read-only error, notice and uncertainty refs across identity,
-Packing, Event, Drivers, Survey and Overview consumers. Features retain native placement, custom wording, commands, drafts and recovery.
+Packing, Event, Drivers, Survey, Activity and Overview consumers. Features retain outcome wording, commands, drafts and recovery;
+the shared renderer chooses notification placement. `StatusNotice` uses `placement="notification"` only for transient
+receipts; durable review, validation and read failures remain contextual rather than disappearing on a timer.
+Activity's registration hint and requirement-progress summary adopt that same renderer as persistent content;
+the progress summary adds no live role, dismissal or expiry to its existing informational presentation.
 `StatusNotice` receives an action label and optional existing action state, then emits the user's action. When state
 is omitted, its `ActionButton` still applies shared initialization and the caller's handler retains its own guards.
 The notice does not choose read eligibility or perform recovery. Their contracts live in
@@ -917,11 +960,12 @@ unknown-creation paragraph/button. Features retain the required flag, catalog wo
 margin (`mb-2` for the lists). `reviewCreation` emits to the existing `reviewUnknownCreation` owner; feedback itself
 does not read, acknowledge or replay a command. Custom notice slots and callers omitting that descriptor retain
 their existing behavior. The descriptor remains a read-only declaration in the same feedback contract owner.
-Pass existing dismissal locks and margin choices explicitly; the shared presentation must not infer them from pending
-status. Omitted inline/target overrides defer to the receipt; an explicit null target retains a caller's local host.
+Pass existing dismissal locks and contextual margin choices explicitly; presentation must not infer them from pending
+status. Do not capture command initiators or add per-feature feedback targets, placement or reveal behavior.
 Use `StatusNotice`'s `no-margin` input for a zero-margin consumer; adding `mb-0` beside its default `mb-3`
 leaves conflicting owners and can retain the default spacing.
-Check feedback inside real local/global alert hosts so extraction cannot silently move an inline result elsewhere.
+Check feedback inside the actual page/dialog hosts, including initial hosted SSR receipts and injected descendant
+notifications. One renderer and scope host must retain each receipt rather than recreate it inside feature markup.
 Use a real long page to verify sticky placement and retained viewport context after an actual command; DOM-only
 focus/scroll spies cannot establish CSS containing-block behavior.
 
@@ -933,7 +977,7 @@ established native key policy.
 Authorized images use the shared injected read/lifetime owner with cancellation, generation checks and object-URL
 cleanup. A missing optional image does not fail the resource. Equal successful reads can restore a failed image;
 access denial cannot be repaired by a retained URL or foreign-scope result.
-`app/transport.ts` shares bounded binary response validation through `headerImage`; Packing, Event, Drivers and Survey APIs retain their
+`app/transport.ts` shares bounded binary response validation through `headerImage`; Packing, Event, Drivers, Survey and Activity APIs retain their
 generated operation selection. Its `requireComparison` also shares strong comparison-header checks without choosing
 feature field policy.
 
@@ -944,8 +988,11 @@ Use the shared typed translator and request/application-local i18next-vue bindin
 Plain interpolation stays escaped; locale changes preserve drafts, focus and machine-value parsing. User-authored
 titles and other content remain data rather than translation keys.
 
-The implemented catalog grammar is plain text and cardinal plurals. Generation checks complete keys, parameters and
-plural variants; raw markup or unsupported rich/context/ordinal forms are not executable message extensions.
+Catalogs own plain text, cardinal plurals and explicitly declared component placeholders. Generation validates
+complete keys, scalar parameters, plural variants and permitted component names in every language. The shared
+i18next-vue binding receives only authored application nodes; raw catalog HTML and undeclared elements are rejected.
+All non-user-generated interface wording uses these catalogs, including accessible names and validation. Context/
+ordinal extensions remain outside the approved grammar; user records remain data rather than translation keys.
 The current preference is a server-issued browser cookie, not a User/Guest or participation-profile database field.
 The [framework decision](decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets)
 retains the original intended persistence and output-localization choices with their unimplemented status.
@@ -954,6 +1001,16 @@ After confirmed locale change, cancel/invalidate only named translated query fam
 owner. Machine values, user titles, event options and edit authority retain language-independent keys/in-flight
 reads. Avoid tuple-position matching or another family registry. Translation cannot cancel the fresh post-command
 read restoring metadata/settings authority. `belongsToLocalizedQueryFamily` selects existing Help/Overview families.
+
+Help treats the normalized article/search and fragment as its reading visit; locale-only URL changes and Refresh
+do not renew anchor navigation. Router owns both deliberate anchors and saved browser history, waiting for Help's
+existing admitted read or terminal error through the navigation module's mounted readiness registration. Help must
+not scroll independently after a late read. While a translation temporarily hides the former-language body, the existing Help
+section may retain only its last readable visit's measured minimum height so removing content cannot clamp the
+reader's position. Release that presentation space on a different visit, readable replacement or terminal error;
+do not copy article/request data or restore focus/scroll in response to Refresh or translation. The built Help history/Refresh/locale journey in
+`tests/e2e/frontend-pilot.spec.ts` exercises actual anchors, Back, retained search input and a delayed real translated
+read. Its execution receipt is separate from this source contract.
 
 One fixed `docs/user-guide/` tree contains reviewed catalog-selected corpora and adjacent assets packaged with the
 application. Only the trusted reviewed Help source is searched/read/served. Runtime source/security tests use
@@ -1189,11 +1246,11 @@ Overview injects
 controller/service duplicates grants, root/parent policy or visibility eligibility.
 
 `createEntityLifecycle` in `src/frontend/composables/entityLifecycle.ts` shares archive/restore confirmation,
-desired-state dispatch and inline success policy across Settings, Overview and Event Things to do. It composes each
+desired-state dispatch and success wording across Settings, Overview and Event Things to do. It composes each
 consumer's existing API, command and current translator without retaining state. Callers supply direct/inherited
-state, the optional initiator and any native confirmation-key override, retaining eligibility and refresh dependencies.
+state and any required confirmation-key override, retaining eligibility and refresh dependencies.
 This includes Event/Activity scheduled-restore wording. Settings and Event child cards also adopt its pause/resume
-confirmation, dispatch and inline result wording. Pause remains immediate; resume retains the native elapsed-schedule
+confirmation, dispatch and result wording. Pause remains immediate; resume retains the native elapsed-schedule
 warning. The caller still owns current capability checks and root/parent-scoped operations, and the same command
 retains uncertain-result/read recovery. Personal visibility and permanent deletion stay separate.
 

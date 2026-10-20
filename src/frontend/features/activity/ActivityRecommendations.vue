@@ -198,8 +198,8 @@ async function advancedCommand<T>(operation: Promise<T>, scope: PilotRequestScop
 async function enterWorkspace(): Promise<void> {
     if (!active || entered || !context.mayRead() || !command.action.isAvailable()) return;
     entered = true;
-    // Native successful workspace loading is silent. Manufacturing a Saved
-    // receipt here would reveal/focus it when a previously hidden tab opens.
+    // Successful workspace loading is quiet. The shared notification host must
+    // not announce a saved change when this entry only prepares the workspace.
     const value = await command.run(scope => advancedCommand(api.recommendationWorkspace(props.planId, scope), scope),
         false, true, {success: null});
     if (value) publishWorkspace(value, true);
@@ -266,7 +266,8 @@ async function finishObservedJob(): Promise<void> {
         }
         return;
     }
-    const refreshed = await command.run(scope => advancedCommand(api.recommendationWorkspace(props.planId, scope), scope), false, true);
+    const refreshed = await command.run(scope => advancedCommand(api.recommendationWorkspace(props.planId, scope), scope),
+        false, true, {success: null});
     if (refreshed) publishWorkspace(refreshed);
 }
 watch([job.data, command.pending, command.uncertain], finishObservedJob);
@@ -326,7 +327,7 @@ function remove(row: ActivityRecommendationDraftRow): void {
     // Filter by draft identity so no unrelated saved row is incidentally removed.
     const partners = recommendationPartners(rows.value, row);
     rows.value = rows.value.filter(candidate => !partners.includes(candidate));
-    command.setNotice('activity.recommendations.removed', {presentation: 'inline'});
+    command.setNotice('activity.recommendations.removed');
     void updateWarnings();
 }
 /** Publish the already constructed manual rows together into the local draft. */
@@ -406,7 +407,8 @@ async function applyFrozen(): Promise<void> {
     emit('changed');
     // Native reloads its document after a confirmed apply, performing one page
     // entry maintenance. Keep that invocation while staying in this document.
-    const refreshed = await command.run(scope => advancedCommand(api.recommendationWorkspace(props.planId, scope), scope), false, true);
+    const refreshed = await command.run(scope => advancedCommand(api.recommendationWorkspace(props.planId, scope), scope),
+        false, true, {success: null});
     if (refreshed) publishWorkspace(refreshed);
 }
 
@@ -436,7 +438,7 @@ function statusLabel(status: typeof statuses[number]): string {
             <span class="d-flex align-items-center gap-2">
                 <i class="bi bi-magic me-1" aria-hidden="true"></i><span>{{ messages.t('activity.recommendations.title') }}</span>
             </span>
-            <div class="d-flex gap-2">
+            <div class="pilot-action-row">
                 <ActionButton
                     type="button"
                     class="btn-sm" variant="outline-secondary"
@@ -461,7 +463,7 @@ function statusLabel(status: typeof statuses[number]): string {
         <div class="card-body">
             <p class="text-secondary small">{{ messages.t('activity.recommendations.description') }}</p>
             <StatusNotice kind="warning" class="small">{{ messages.t('activity.recommendations.linkedWarning') }}</StatusNotice>
-            <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="pilot-section-heading mb-2">
                 <p class="text-secondary small mb-0">{{ messages.t('activity.recommendations.reviewHint') }}</p>
                 <small id="recommendationSummaryStats" class="text-secondary">
                     <span v-if="!rows.length" class="text-secondary">{{ messages.t('activity.recommendations.empty') }}</span>
@@ -474,7 +476,7 @@ function statusLabel(status: typeof statuses[number]): string {
                     </template>
                 </small>
             </div>
-            <CommandFeedback :feedback="command.feedback" inline :target="null" />
+            <CommandFeedback :feedback="command.feedback" />
             <StatusNotice
                 v-if="command.uncertain.value"
                 kind="warning"

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers
 owner: frontend maintainers
 status: current
-last-verified: 2026-10-16
+last-verified: 2026-10-19
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: direct original-SPA reinforcement and production-coexistence exclusion recorded with bounded current P0-P2 implementation scope; original selected transport, approved runtime narrowing and reload amendments retained; no full-application or cutover acceptance
+verification-scope: direct controlled Vue message elements and functional interface/shared SPA decisions recorded with original deferrals and prior amendments retained; no full-application or cutover acceptance
 source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
 next-review: frontend-technology-or-rendering-boundary-change
 -->
@@ -235,6 +235,25 @@ Future financial frontend integration preserves explicit reviewed preview/refres
 rebasing of reviewed values. Recommendation/job consumers retain their established backoff/expiry/terminal protocol.
 These intended frontend integrations leave existing financial revisions, signed evidence and activity fingerprints
 with their domain owners; the 30-second shared-read policy is not a replacement for those contracts.
+
+## Approved interface and shared SPA amendments (2026-10-19)
+
+The maintainer directly approves controlled Vue elements in translated messages (R3). This supersedes the rich
+named-slot deferral recorded above for explicitly declared, validated placeholders filled by authored application
+components through the selected shared i18next-vue owner. Catalogs remain non-executable: arbitrary HTML, undeclared
+slots, grammatical context/ordinal extensions, principal-language persistence and new output-localization slices
+are not authorized by this amendment. The original deferral remains visible as history.
+
+The same direct reply requires all non-user-generated migrated UI text to use the shared catalogs (R2),
+locale-neutral responsive usability rather than a German-only layout change (R4), and integrated Refresh through
+existing read owners (R6). Functional visual parity preserves the information and steps available to users rather
+than exact pixels, DOM IDs or internal naming; explicit requirements and approved changes are exceptions by default.
+
+R7 supersedes inherited local feedback reveal and feature-specific notice placement. Shared SPA notifications
+serve page/dialog consumers without submission- or refresh-induced focus/scroll changes. Meaningful status,
+receipt renewal/expiry, uncertainty, drafts, accessibility and controller-owned business behavior retain their owners.
+These approvals cover implemented migrated modules; they grant no later feature phase, native-source change,
+cutover, backend business redesign, publication or deployment. Implementation and verification are separate evidence.
 
 ## Build and development integration
 

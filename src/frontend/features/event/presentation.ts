@@ -1,23 +1,29 @@
 import type {LocalizationContext} from '../../../types/LocalizationTypes';
+import {formatCivilDate} from '../../../modules/lib/civilDate';
 
-/** Summary and current attendance use the native full browser-local date. */
-export function formatEventCivilDate(value: string): string {
-    return new Date(value).toLocaleString(undefined, {dateStyle: 'full'});
+/** Summary and saved attendance display their stored civil day in the selected
+ * language. The existing invalid-value fallback remains feature-owned. */
+export function formatEventCivilDate(value: string, locale: string): string {
+    return formatCivilDate(value, locale, {dateStyle: 'full'})
+        ?? new Date(value).toLocaleString(locale, {dateStyle: 'full'});
 }
 
-/** Keep native roster date presentation without importing its frontend. */
-export function formatEventDate(value: string | null | undefined): string {
+/** The roster shares civil-day formatting while retaining absent/raw fallbacks. */
+export function formatEventDate(value: string | null | undefined, locale: string): string {
     if (!value) return '—';
+    const civilDate = formatCivilDate(value, locale);
+    if (civilDate !== null) return civilDate;
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(locale);
 }
 
 /** Registration-link timestamps are instants; absent/invalid expiry has no display value. */
-export function formatEventTimestamp(value: string | null | undefined): string {
+export function formatEventTimestamp(value: string | null | undefined, locale: string): string {
     if (!value) return '—';
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
+    return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString(locale);
 }
+
 const dietaryMessages = {
     MEAT: 'event.dietBadge.MEAT', FISH: 'event.dietBadge.FISH', VEGETARIAN: 'event.dietBadge.VEGETARIAN',
     VEGAN: 'event.dietBadge.VEGAN', HALAL: 'event.dietBadge.HALAL', KOSHER: 'event.dietBadge.KOSHER',

@@ -140,7 +140,7 @@ function collectCreation() {
     <section class="card bg-dark text-white mb-3">
         <h1 class="card-header text-center"><i class="bi bi-calendar2-plus me-2" aria-hidden="true"></i>{{ messages.t('event.create') }}</h1>
         <div class="card-body">
-            <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" :inline="false" />
+            <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" />
             <CommandFeedback :feedback="command.feedback" part="uncertain" unknown-message="event.creationUnknown" />
             <StatusNotice v-if="destination.target.value" kind="success"
                 :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">

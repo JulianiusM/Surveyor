@@ -4,7 +4,6 @@ import {flushPromises, mount} from '@vue/test-utils';
 import {createSSRApp, defineComponent, h, ref} from 'vue';
 import type {Component} from 'vue';
 import {renderToString} from 'vue/server-renderer';
-import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import * as pug from 'pug';
 import {createMemoryHistory, createRouter} from 'vue-router';
@@ -16,10 +15,12 @@ import HelpPage from '../../src/frontend/features/help/HelpPage.vue';
 import FormField from '../../src/frontend/components/FormField.vue';
 import PageMessage from '../../src/frontend/components/PageMessage.vue';
 import StatusNotice from '../../src/frontend/components/StatusNotice.vue';
-import {cancelAlertDismissal, initAlertDismissal, showInlineAlert} from '../../src/public/js/shared/alerts';
+import AppDialog from '../../src/frontend/components/AppDialog.vue';
+import {initAlertDismissal} from '../../src/public/js/shared/alerts';
 import {setCurrentNavLocation} from '../../src/public/js/core/navigation';
 import {resolveContextualHelpUrl} from '../../src/modules/lib/helpNavigation';
-import {useFeedbackError} from '../../src/frontend/composables/feedback';
+import {createTranslator} from '../../src/modules/localization/translator';
+import {noticeTargetKey, useFeedbackError} from '../../src/frontend/composables/feedback';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
@@ -176,22 +177,22 @@ describe('native shell and help presentation contract', () => {
         }
     });
 
-    it.each([false, true])('preserves caller alert attributes and listeners through the shared root (inline=%s)', async inline => {
+    it.each([false, true])('preserves caller alert attributes and listeners through the shared root (notification=%s)', async notification => {
         const click = vi.fn();
-        const wrapper = mount(StatusNotice, {props: {inline, transient: inline},
+        const wrapper = mount(StatusNotice, {props: {placement: notification ? 'notification' : 'content', transient: notification},
             attrs: {id: 'native-feedback-fixture', class: 'text-center border-warning mb-0', 'aria-live': 'polite', onClick: click},
             slots: {default: 'Caller-owned feedback'}});
         try {
             const alert = wrapper.get('#native-feedback-fixture');
             expect(alert.classes()).toEqual(expect.arrayContaining(['text-center', 'border-warning', 'mb-0']));
             expect(alert.attributes('aria-live')).toBe('polite');
-            expect(alert.attributes('role')).toBe(inline ? 'alert' : 'status');
+            expect(alert.attributes('role')).toBe(notification ? 'alert' : 'status');
             await alert.trigger('click');
             expect(click).toHaveBeenCalledOnce();
         } finally { wrapper.unmount(); }
     });
 
-    it('renders the guest private-return sentence like the plain native flash', async () => {
+    it('renders the native guest private-return sentence in the shared notification host', async () => {
         const link = 'https://example.test/guest/login/fixture/one-visit-token';
         const native = document.createElement('div');
         native.innerHTML = renderNativeAlert({
@@ -200,67 +201,81 @@ describe('native shell and help presentation contract', () => {
         const {wrapper, context} = await renderHelp(help, '/frontend-pilot/help?doc=fixture', undefined,
             {personalLink: link});
         try {
-            const flash = wrapper.get('.pilot-page-notices > .alert-success');
+            const flash = wrapper.get('[data-pilot-notices] .pilot-notification.alert-success');
             const nativeFlash = native.querySelector<HTMLElement>('.alert-success')!;
             expect(flash.text()).toBe(nativeFlash.textContent);
-            expect(flash.classes()).toEqual(Array.from(nativeFlash.classList).concat('mb-3'));
-            expect(flash.find('a, button').exists()).toBe(false);
-            expect(flash.element.nextElementSibling).toBe(wrapper.get('#liveAlerts').element);
+            expect(flash.classes()).toEqual(expect.arrayContaining(['alert', 'alert-success', 'pilot-notification']));
+            expect(flash.find('a').exists()).toBe(false);
+            expect(flash.get('button').attributes('aria-label')).toBe('Dismiss notification');
+            expect(wrapper.get('.pilot-page-notices').element.contains(flash.element)).toBe(false);
         } finally { wrapper.unmount(); context.queryClient.clear(); }
     });
 
-    it('renews repeated native no-change feedback for a complete interval without inventing a write', async () => {
+    it('server-renders coexisting initial receipts inside one shared notification stack', async () => {
+        const personalLink = 'https://example.test/guest/login/fixture/private-return';
+        const profile = {id: '22222222-2222-4222-8222-222222222222', name: 'Guest'};
+        const guest: components['schemas']['SessionView'] = {...session, kind: 'guest',
+            activeProfile: profile, profiles: [profile], logoutUrl: '/users/logout'};
+        const result = await render('/frontend-pilot/help?doc=fixture', {session: guest, help, personalLink,
+            pageNotice: {kind: 'info', messageKey: 'auth.accountRequired'}});
+        const rendered = document.createElement('div');
+        rendered.innerHTML = result.html;
+
+        // Both actual SSR receipt bodies must already occupy the one zero-height
+        // host. There is no later teleport required to establish their stacking.
+        const hosts = rendered.querySelectorAll('main > .pilot-notice-region > [data-pilot-notices]');
+        expect(hosts).toHaveLength(1);
+        const notices = hosts[0]!.querySelectorAll('.pilot-notification');
+        expect(notices).toHaveLength(2);
+        expect(notices[0]!.textContent).toContain(personalLink);
+        expect(notices[1]!.textContent?.trim()).toBe(createTranslator('en').t('auth.accountRequired'));
+        expect(rendered.querySelectorAll('.pilot-notice-origin.pilot-notice-region')).toHaveLength(0);
+        expect(rendered.querySelector('.pilot-page-notices .pilot-notification')).toBeNull();
+        for (const notice of notices) expect(notice.closest('[data-pilot-notices]')).toBe(hosts[0]);
+        // Markup proves placement; the built-browser fixture owns the actual
+        // nonoverlap and SSR-to-hydration viewport/layout assertions.
+    });
+
+    it('renews no-change notifications for a complete interval without moving the active draft', async () => {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
-        const focus = vi.spyOn(HTMLElement.prototype, 'focus');
-        const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
         const context = createPilotContext({session}, true);
+        context.hydrated.value = true;
         const host = defineComponent({
             components: {StatusNotice},
             setup: function bindFeedback() { return useFeedbackError(); },
-            template: '<button @click="setInformation(\'metadata.noChanges\')">Save</button>'
-                + '<div data-command-feedback><StatusNotice v-if="error" inline :kind="feedbackKind"'
+            template: '<input value="Unsaved draft"><button @click="setInformation(\'metadata.noChanges\')">Save</button>'
+                + '<StatusNotice v-if="error" placement="notification" :kind="feedbackKind"'
                 + ' :transient="transientError" :renewal="errorRenewal"'
-                + ' @dismiss="setError(null)">{{ error }}</StatusNotice></div>',
+                + ' @dismiss="setError(null)">{{ error }}</StatusNotice>',
         });
         const wrapper = mount(host, {attachTo: document.body, global: {
             plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context},
         }});
         try {
+            const input = wrapper.get<HTMLInputElement>('input').element;
+            input.focus();
+            const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+            const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
             await wrapper.get('button').trigger('click');
             await flushPromises();
             expect(wrapper.get('.alert-info').text()).toBe('There are no property changes to save.');
             const alert = wrapper.get<HTMLElement>('.alert-info').element;
-            const feedback = wrapper.get<HTMLElement>('[data-command-feedback]').element;
-            expect(document.activeElement).toBe(alert);
-            expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
-            expect(scroll).toHaveBeenCalledExactlyOnceWith(true);
-            expect(scroll.mock.contexts[0]).toBe(feedback);
-
-            // Use the actual native helper as an independent presentation oracle.
-            // Its Bootstrap DOM removal belongs to native only; Vue must clear state.
-            const nativeHost = document.createElement('div');
-            document.body.appendChild(nativeHost);
-            showInlineAlert('info', 'There are no property changes to save.', nativeHost);
-            const nativeAlert = nativeHost.querySelector<HTMLElement>('.alert')!;
-            for (const name of nativeAlert.classList) expect(alert.classList.contains(name)).toBe(true);
-            expect(alert.role).toBe(nativeAlert.role);
-            expect(alert.tabIndex).toBe(nativeAlert.tabIndex);
+            expect(document.activeElement).toBe(input);
+            expect(input.value).toBe('Unsaved draft');
+            expect(focus).not.toHaveBeenCalled();
+            expect(scroll).not.toHaveBeenCalled();
+            expect(alert.role).toBe('alert');
+            expect(alert.hasAttribute('tabindex')).toBe(false);
             expect(wrapper.get('.btn-close').attributes('aria-label')).toBe('Dismiss notification');
-            expect(wrapper.get('.btn-close').attributes('aria-label'))
-                .toBe(nativeAlert.querySelector('button')!.getAttribute('aria-label'));
             expect(wrapper.get('.btn-close').attributes('data-bs-dismiss')).toBeUndefined();
-            cancelAlertDismissal(nativeAlert);
-            nativeHost.remove();
-            focus.mockClear();
-            scroll.mockClear();
 
             await vi.advanceTimersByTimeAsync(9000);
             await wrapper.get('button').trigger('click');
             await flushPromises();
-            expect(scroll).toHaveBeenCalledExactlyOnceWith(true);
-            expect(document.activeElement).toBe(alert);
-            expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+            expect(scroll).not.toHaveBeenCalled();
+            expect(document.activeElement).toBe(input);
+            expect(focus).not.toHaveBeenCalled();
             await vi.advanceTimersByTimeAsync(9999);
             expect(wrapper.find('.alert-info').exists()).toBe(true);
             await vi.advanceTimersByTimeAsync(1);
@@ -270,7 +285,7 @@ describe('native shell and help presentation contract', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
-    it('discloses an inline receipt once, locks its Close while pending and leaves ordinary flashes unchanged', async () => {
+    it('starts a hidden notification on disclosure and retains its explicit dismissal lock without jumping', async () => {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
         const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
@@ -278,38 +293,42 @@ describe('native shell and help presentation contract', () => {
         context.hydrated.value = true;
         const disclosed = ref(false);
         const pending = ref(true);
-        const message = ref('Inline feedback');
+        const message = ref('Section feedback');
         const wrapper = mount(defineComponent({components: {StatusNotice},
             setup: function bindInlineReceipt() { return {disclosed, pending, message}; },
-            template: '<section v-show="disclosed" data-entity-section="properties"><div data-command-feedback>'
-                + '<StatusNotice v-if="message" inline transient :disabled="pending" :renewal="message"'
-                + ' @dismiss="message = \'\'">{{ message }}</StatusNotice></div></section>',
+            template: '<input value="Retained draft"><section v-show="disclosed">'
+                + '<StatusNotice v-if="message" placement="notification" transient :disabled="pending" :renewal="message"'
+                + ' @dismiss="message = \'\'">{{ message }}</StatusNotice></section>',
         }), {attachTo: document.body, global: {
             plugins: [[I18NextVue, {i18next: context.i18next}]], provide: {[pilotContextKey as symbol]: context},
         }});
         const ordinary = mount(StatusNotice, {props: {transient: true}, slots: {default: 'Native POST flash'}, attachTo: document.body});
         try {
             await flushPromises();
+            const input = wrapper.get<HTMLInputElement>('input').element;
+            input.focus();
+            const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+            await vi.advanceTimersByTimeAsync(11_000);
+            expect(message.value).toBe('Section feedback');
             expect(scroll).not.toHaveBeenCalled();
             expect(ordinary.find('.btn-close').exists()).toBe(false);
             expect(ordinary.get('.alert').attributes('tabindex')).toBeUndefined();
             disclosed.value = true;
             await flushPromises();
-            const alert = wrapper.get<HTMLElement>('.alert').element;
-            expect(document.activeElement).toBe(alert);
-            expect(scroll).toHaveBeenCalledExactlyOnceWith(true);
+            expect(document.activeElement).toBe(input);
+            expect(scroll).not.toHaveBeenCalled();
             expect(wrapper.get('.btn-close').attributes('disabled')).toBeDefined();
             await wrapper.get('.btn-close').trigger('click');
-            expect(message.value).toBe('Inline feedback');
+            expect(message.value).toBe('Section feedback');
 
-            // Mutations and a second disclosure retain the same receipt's focus.
-            wrapper.get('[data-command-feedback]').element.appendChild(document.createTextNode(''));
+            // A second disclosure is not another result and never owns focus.
             disclosed.value = false;
             await flushPromises();
             disclosed.value = true;
             pending.value = false;
             await flushPromises();
-            expect(scroll).toHaveBeenCalledTimes(1);
+            expect(scroll).not.toHaveBeenCalled();
+            expect(focus).not.toHaveBeenCalled();
             await wrapper.get('.btn-close').trigger('click');
             await flushPromises();
             expect(message.value).toBe('');
@@ -322,10 +341,10 @@ describe('native shell and help presentation contract', () => {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
         const page = document.createElement('main');
-        page.innerHTML = '<input aria-label="Retained draft" value="Unsaved input"><div id="liveAlerts"></div>';
+        page.innerHTML = '<input aria-label="Retained draft" value="Unsaved input"><div data-pilot-notices></div>';
         document.body.appendChild(page);
         const input = page.querySelector<HTMLInputElement>('input')!;
-        const target = page.querySelector<HTMLElement>('#liveAlerts')!;
+        const target = page.querySelector<HTMLElement>('[data-pilot-notices]')!;
         input.focus();
         const focus = vi.spyOn(HTMLElement.prototype, 'focus');
         const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
@@ -334,10 +353,10 @@ describe('native shell and help presentation contract', () => {
         const pending = ref(true);
         const dismiss = vi.fn(function clearPageConfirmation() { shown.value = false; });
         const wrapper = mount(defineComponent({components: {StatusNotice},
-            setup: function bindPageConfirmation() { return {shown, receipt, pending, target, dismiss}; },
-            template: '<StatusNotice v-if="shown" inline transient :target="target" :renewal="receipt"'
+            setup: function bindPageConfirmation() { return {shown, receipt, pending, dismiss}; },
+            template: '<StatusNotice v-if="shown" placement="notification" transient :renewal="receipt"'
                 + ' :disabled="pending" kind="success" @dismiss="dismiss">Page action saved</StatusNotice>',
-        }), {attachTo: page});
+        }), {attachTo: page, global: {provide: {[noticeTargetKey as symbol]: ref(target)}}});
         try {
             await flushPromises();
             const alert = target.querySelector<HTMLElement>('.alert')!;
@@ -394,21 +413,21 @@ describe('native shell and help presentation contract', () => {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
         const page = document.createElement('main');
-        page.innerHTML = '<input aria-label="Review draft"><div id="liveAlerts"></div>';
+        page.innerHTML = '<input aria-label="Review draft"><div data-pilot-notices></div>';
         document.body.appendChild(page);
         const input = page.querySelector<HTMLInputElement>('input')!;
-        const target = page.querySelector<HTMLElement>('#liveAlerts')!;
+        const target = page.querySelector<HTMLElement>('[data-pilot-notices]')!;
         input.focus();
         const focus = vi.spyOn(HTMLElement.prototype, 'focus');
         const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
         const confirmed = ref(true);
         const wrapper = mount(defineComponent({components: {StatusNotice},
-            setup: function bindIndependentOutcomes() { return {confirmed, target}; },
-            template: '<section><StatusNotice v-if="confirmed" inline transient :target="target"'
+            setup: function bindIndependentOutcomes() { return {confirmed}; },
+            template: '<section><StatusNotice v-if="confirmed" placement="notification" transient'
                 + ' kind="success" @dismiss="confirmed = false">Confirmed action</StatusNotice>'
-                + '<StatusNotice inline notice="state.unknownOutcome" :target="target" kind="warning">'
+                + '<StatusNotice placement="notification" notice="state.unknownOutcome" kind="warning">'
                 + 'Review the uncertain action before continuing.</StatusNotice></section>',
-        }), {attachTo: page});
+        }), {attachTo: page, global: {provide: {[noticeTargetKey as symbol]: ref(target)}}});
         try {
             await flushPromises();
             expect(target.querySelector('.alert')?.textContent).toBe('Confirmed action');
@@ -427,42 +446,50 @@ describe('native shell and help presentation contract', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
-    it('keeps an old inline receipt visible without refocusing when its initiating host hides and reopens', async () => {
-        vi.useFakeTimers();
-        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
-        const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
-        const host = document.createElement('section');
-        host.innerHTML = '<button>Reopen Add</button><div data-dialog-feedback></div>'
-            + '<section data-entity-section="administrator-add"><div data-command-feedback></div></section>';
-        document.body.appendChild(host);
-        const section = host.querySelector<HTMLElement>('[data-entity-section]')!;
-        const target = section.querySelector<HTMLElement>('[data-command-feedback]')!;
-        const opener = host.querySelector('button')!;
-        const dismiss = vi.fn();
-        const wrapper = mount(StatusNotice, {attachTo: host.querySelector('[data-dialog-feedback]')!,
-            props: {inline: true, transient: true, target, renewal: 'confirmed-admin-add', onDismiss: dismiss},
-            slots: {default: 'Admin added'}});
+    it('uses the nearest shared dialog host while section disclosure leaves the receipt and active draft unchanged', async () => {
+        const context = createPilotContext({session}, true);
+        context.hydrated.value = true;
+        const pageHost = document.createElement('div');
+        document.body.appendChild(pageHost);
+        const shown = ref(false);
+        const disclosed = ref(true);
+        const wrapper = mount(defineComponent({components: {AppDialog, StatusNotice},
+            setup: function bindDialogReceipt() { return {shown, disclosed}; },
+            template: '<AppDialog :open="true" title="Settings"><input data-dialog-draft value="Unsaved input">'
+                + '<section v-show="disclosed"><StatusNotice v-if="shown" placement="notification" transient'
+                + ' @dismiss="shown = false">Admin added</StatusNotice></section></AppDialog>',
+        }), {attachTo: document.body, global: {
+            plugins: [[I18NextVue, {i18next: context.i18next}]],
+            provide: {[pilotContextKey as symbol]: context, [noticeTargetKey as symbol]: ref(pageHost)},
+        }});
         try {
             await flushPromises();
-            expect(target.querySelector('.alert')?.textContent).toBe('Admin added');
-            expect(document.activeElement).toBe(target.querySelector('.alert'));
-            expect(scroll).toHaveBeenCalledTimes(1);
-            await vi.advanceTimersByTimeAsync(9000);
-            opener.focus();
-            section.style.display = 'none';
+            const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!;
+            const input = dialog.querySelector<HTMLInputElement>('[data-dialog-draft]')!;
+            input.focus();
+            const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+            const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView');
+            shown.value = true;
             await flushPromises();
-            expect(host.querySelector('[data-dialog-feedback] .alert')?.textContent).toBe('Admin added');
-            expect(document.activeElement).toBe(opener);
-            section.style.display = '';
+            const target = dialog.querySelector<HTMLElement>('[data-pilot-notices]')!;
+            const alert = target.querySelector<HTMLElement>('.alert')!;
+            expect(alert.textContent).toBe('Admin added');
+            expect(pageHost.children).toHaveLength(0);
+            expect(alert.closest('.modal-body')).toBeNull();
+            disclosed.value = false;
             await flushPromises();
-            expect(target.querySelector('.alert')?.textContent).toBe('Admin added');
-            expect(document.activeElement).toBe(opener);
-            expect(scroll).toHaveBeenCalledTimes(1);
-            // Moving the same receipt neither refocuses nor starts another lifetime.
-            await vi.advanceTimersByTimeAsync(1000);
-            expect(dismiss).toHaveBeenCalledOnce();
-        } finally { wrapper.unmount(); host.remove(); }
-        expect(vi.getTimerCount()).toBe(0);
+            disclosed.value = true;
+            await flushPromises();
+            expect(target.querySelector('.alert')).toBe(alert);
+            expect(document.activeElement).toBe(input);
+            expect(input.value).toBe('Unsaved input');
+            expect(focus).not.toHaveBeenCalled();
+            expect(scroll).not.toHaveBeenCalled();
+            alert.querySelector<HTMLButtonElement>('.btn-close')!.click();
+            await flushPromises();
+            expect(shown.value).toBe(false);
+            expect(target.querySelector('.alert')).toBeNull();
+        } finally { wrapper.unmount(); context.start()(); pageHost.remove(); }
     });
 
     it.each([
@@ -561,34 +588,34 @@ describe('native shell and help presentation contract', () => {
         } finally { wrapper.unmount(); context.queryClient.clear(); }
     });
 
-    it('preserves native outer alert spacing for ordinary pages and actual notices, while empty message pages reserve none', async () => {
-        const stylesheet = document.createElement('style');
-        stylesheet.textContent = readFileSync(resolve('src/frontend/styles/pilot.css'), 'utf8');
-        document.body.append(stylesheet);
+    it('keeps the shared notification host separate from page content on ordinary and full-message routes', async () => {
         const {wrapper, context, router} = await renderHelp();
         router.addRoute({path: '/frontend-pilot/message-fixture', component: defineComponent({
             render: () => h(PageMessage, {kind: 'success', message: 'Confirmed fixture message'}),
         })});
         try {
-            // Native ordinary pages retain an empty mt-1 live-alert region above their card.
+            // The shell owns one persistent presentation scope. Empty or disclosed
+            // notices never create a feature-specific destination inside the page.
             const region = wrapper.get<HTMLElement>('.pilot-page-notices');
-            expect(region.element.children).toHaveLength(1);
-            expect(region.get('#liveAlerts').classes()).toEqual(['sticky-top', 'mt-1']);
+            const notifications = wrapper.get<HTMLElement>('main > .pilot-notice-region');
+            const stack = notifications.get<HTMLElement>('[data-pilot-notices]');
+            expect(region.element.children).toHaveLength(0);
+            expect(stack.element.children).toHaveLength(0);
+            expect(region.element.contains(stack.element)).toBe(false);
             expect(region.classes()).not.toContain('sticky-top');
-            expect(getComputedStyle(region.element).display).not.toBe('none');
 
             await router.push('/frontend-pilot/message-fixture');
             await flushPromises();
             expect(wrapper.get('.pilot-page-message').text()).toContain('Confirmed fixture message');
-            expect(getComputedStyle(region.element).display).toBe('none');
+            expect(stack.element.children).toHaveLength(0);
 
             context.pageNotice.value = {kind: 'info', messageKey: 'auth.accountRequired'};
             await flushPromises();
-            expect(region.text()).toContain(context.messages.value.t('auth.accountRequired'));
-            expect(getComputedStyle(region.element).display).not.toBe('none');
-            expect(region.get('.alert').element.nextElementSibling).toBe(region.get('#liveAlerts').element);
-            expect(getComputedStyle(region.element).marginTop).not.toBe('4px');
-        } finally { wrapper.unmount(); context.queryClient.clear(); stylesheet.remove(); }
+            expect(stack.text()).toContain(context.messages.value.t('auth.accountRequired'));
+            expect(wrapper.get('.pilot-page-message').element.contains(stack.element)).toBe(false);
+            expect(region.find('.alert').exists()).toBe(false);
+            expect(region.text()).toBe('');
+        } finally { wrapper.unmount(); context.queryClient.clear(); }
     });
 
     it('translates an ordinary flash without extending its original receipt deadline', async () => {
@@ -601,12 +628,12 @@ describe('native shell and help presentation contract', () => {
             await vi.advanceTimersByTimeAsync(9000);
             context.locale.value = 'de';
             await flushPromises();
-            expect(wrapper.get('.pilot-page-notices > .alert-info').text())
+            expect(wrapper.get('[data-pilot-notices] .pilot-notification.alert-info').text())
                 .toBe(context.messages.value.t('auth.accountRequired'));
             await vi.advanceTimersByTimeAsync(1000);
             await flushPromises();
             expect(context.pageNotice.value).toBeNull();
-            expect(wrapper.find('.pilot-page-notices > .alert-info').exists()).toBe(false);
+            expect(wrapper.find('[data-pilot-notices] .pilot-notification.alert-info').exists()).toBe(false);
         } finally { wrapper.unmount(); context.queryClient.clear(); }
         expect(vi.getTimerCount()).toBe(0);
     });

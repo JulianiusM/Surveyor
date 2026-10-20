@@ -63,8 +63,8 @@ const router = useRouter();
 // Visible/hidden regions coexist, including across collections. Keep confirmed
 // delivery scoped to this logical region through any actor-driven remount.
 const destination = useConfirmedNavigation(props.collection + ':' + props.region);
-// TODO (docs/frontend-migration/FRONTEND_PILOT.md): Complete the remaining Overview migration before its
-// default-route cutover; unmigrated feature administration stays with its native owner meanwhile.
+// Remaining feature families retain native administration destinations until
+// their explicit migration phases; this region already shares Vue navigation.
 let readGeneration = 0;
 let mounted = true;
 const element = ref<HTMLElement | null>(null);
@@ -554,8 +554,9 @@ async function restoreCommittedFocus(): Promise<void> {
         }
     }
 
-    // Ordinary page/filter delivery, or a removed origin, announces this region.
-    element.value?.querySelector<HTMLElement>('.js-overview-heading')?.focus();
+    // Ordinary page/filter delivery, or a removed origin, announces this region
+    // without imitating the old document-submit jump to its heading.
+    element.value?.querySelector<HTMLElement>('.js-overview-heading')?.focus({preventScroll: true});
 }
 // GET search submits this region's controls, preserves other regions and the selected
 // event, and drops both old pagers. Navigation needs no server-held per-tab state.
@@ -584,7 +585,7 @@ async function setVisibility(
     const success = value === 'hidden' ? 'overview.visibilityHidden'
         : value === 'shown' ? 'overview.visibilityShown' : 'overview.visibilityDefault';
     await command.run((scope) => api.visibility(card.type, card.id, value, scope), true, false,
-        {presentation: 'inline', success});
+        {success});
 }
 
 /** Confirm the shared lifecycle action using the card's inherited-state wording.
@@ -594,7 +595,7 @@ async function archive(card: components['schemas']['OverviewCard'], restore: boo
     if (actionsBlocked.value) return;
     const lifecycle = card.type === 'event' ? eventLifecycle : card.type === 'drivers' ? driversLifecycle
         : card.type === 'survey' ? surveyLifecycle : card.type === 'activity' ? activityLifecycle : packingLifecycle;
-    await lifecycle.archive(card.id, restore, card.inheritedArchived, undefined,
+    await lifecycle.archive(card.id, restore, card.inheritedArchived,
         card.type === 'event' ? restore ? 'event.confirmRestore' : 'event.confirmArchive' : undefined);
 }
 
@@ -629,7 +630,7 @@ function page(next: number): void {
             :action="{state: destination.retryAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="destination.retry">
             {{ messages.t('packing.deleted') }}
         </StatusNotice>
-        <!-- Lifecycle/visibility commands use native global inline feedback. Read
+        <!-- Lifecycle/visibility results use common notifications. Read
              failures and unknown outcomes retain this region's recovery surface. -->
         <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value" />
         <StatusNotice v-if="readError || failedRead" kind="warning" :last-updated-at="lastUpdatedAt" :retry-at="retryAt"

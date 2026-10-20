@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import {computed, nextTick, ref, watch} from 'vue';
+import {computed, inject, onBeforeUnmount, ref, watch} from 'vue';
 import {RouterLink, useRoute, useRouter} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import {useActionState, usePilot} from '../../app/context';
 import {useHelpApi} from './api';
 import {usePageTitle} from '../../composables/pageTitle';
 import {isOrdinaryNavigation} from '../../composables/pageEntry';
+import {pageReadinessKey} from '../../composables/pageNavigation';
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {helpKeys} from '../../app/queryKeys';
 import {useQueryAdmission} from '../../app/queryCache';
@@ -16,6 +17,7 @@ import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
+import EntityListToolbar from '../../components/EntityListToolbar.vue';
 
 const context = usePilot();
 const api = useHelpApi(context);
@@ -81,8 +83,8 @@ function submitSearch(): void {
         q: search.value, locale: locale.value,
     }});
 }
-/** Static help does not poll. A failed read therefore always offers a deliberate
- * read-only recovery using the same server cooldown and current article/locale key.
+/** Static help does not poll. Deliberate Refresh and failed-read recovery use
+ * the same server cooldown and current article/locale key.
  * Refetch retains the mounted search draft and never navigates or replays a command. */
 const retryAction = useActionState({eligible: () => context.mayRead() && retryAvailable.value,
     pending: () => help.isFetching.value});
@@ -106,17 +108,43 @@ function followContentLink(event: MouseEvent): void {
     void router.push(target);
 }
 
-// Wait for the admitted article's DOM before honoring its fragment. SSR stays
-// independent of browser globals, and an invalid fragment cannot hide the guide
-// or turn readable Help into a failed navigation.
-watch(() => [pageTitle.value, route.hash], async () => {
-    if (!context.browser) return;
-    await nextTick();
-    if (route.hash) {
-        try { document.getElementById(decodeURIComponent(route.hash.slice(1)))?.scrollIntoView(); }
-        catch { /* An invalid fragment must not interrupt otherwise readable help. */ }
+// The locale query and ignored native parameters do not identify another article
+// visit. Only the resolved article/search, actual path and requested fragment do.
+const anchorVisit = computed(() => JSON.stringify([route.path, query.value, route.hash]));
+// Router alone owns anchors and browser restoration. A late read signals its
+// rendered readiness instead of replaying the fragment over a saved position.
+const pageReadiness = inject(pageReadinessKey, undefined);
+const releaseReadiness = pageReadiness?.register({destination: computed(() => route.fullPath),
+    ready: computed(() => !!page.value || !!help.error.value)});
+onBeforeUnmount(() => releaseReadiness?.());
+
+const articleRegion = ref<HTMLElement | null>(null);
+const retainedReadingHeight = ref<number>();
+let readableVisit: string | undefined;
+watch(() => [page.value, anchorVisit.value, help.error.value], retainReadingSpace, {immediate: true});
+
+/** Reserve only the last readable visit's space while its translation loads.
+ * Hiding old-language content must not shorten the document and clamp the
+ * browser's scroll position. This measures presentation only, with no saved
+ * scroll, copied article data or request state; new visits and terminal reads
+ * release it. The pre-render watcher measures the still-mounted old content. */
+function retainReadingSpace(): void {
+    if (page.value) {
+        readableVisit = anchorVisit.value;
+        retainedReadingHeight.value = undefined;
+        return;
     }
-}, {immediate: true});
+    // A different article/search owns fresh navigation. Failed reads also release
+    // the temporary placeholder rather than leaving a large empty document.
+    if (readableVisit !== anchorVisit.value || help.error.value) {
+        retainedReadingHeight.value = undefined;
+        return;
+    }
+    if (retainedReadingHeight.value === undefined && articleRegion.value) {
+        retainedReadingHeight.value = articleRegion.value.getBoundingClientRect().height;
+    }
+}
+
 </script>
 
 <template>
@@ -126,7 +154,8 @@ watch(() => [pageTitle.value, route.hash], async () => {
         <ActionButton variant="outline-light" :state="retryAction"
             @click="retryHelp">{{ messages.t('common.retry') }}</ActionButton>
     </PageMessage>
-    <section v-else class="card bg-dark text-white mb-3">
+    <section v-else ref="articleRegion" class="card bg-dark text-white mb-3"
+        :style="{minHeight: retainedReadingHeight === undefined ? undefined : `${retainedReadingHeight}px`}">
         <div class="card-header d-flex justify-content-between align-items-center gap-2">
             <h1 class="card-title mb-0" :lang="contentLocale"><i class="bi bi-question-circle me-2" aria-hidden="true"></i>{{ pageTitle }}</h1>
             <RouterLink :to="helpRoute('/help')" class="btn btn-sm btn-outline-light">
@@ -134,6 +163,8 @@ watch(() => [pageTitle.value, route.hash], async () => {
             </RouterLink>
         </div>
         <div class="card-body">
+            <EntityListToolbar v-if="page" :refresh-label="messages.t('common.refresh')" :state="retryAction"
+                @refresh="retryHelp" />
             <StatusNotice v-if="page?.fallbackToEnglish" class="help-language-fallback">{{
                 messages.t('help.englishFallbackNotice')
             }}</StatusNotice>

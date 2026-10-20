@@ -10,7 +10,8 @@ import {createPilotContext, observeInitialDocument, pilotContextKey} from '../..
 import {activityKeys} from '../../src/frontend/app/queryKeys';
 import ActivityPage from '../../src/frontend/features/activity/ActivityPage.vue';
 import ActivityCreatePage from '../../src/frontend/features/activity/ActivityCreatePage.vue';
-import {activityDateLabel, activityDayLabel, activityCreationWeeks} from '../../src/frontend/features/activity/presentation';
+import {activityDateLabel, activityDayLabel, activityCreationWeeks, activityParticipantName} from '../../src/frontend/features/activity/presentation';
+import {createTranslator} from '../../src/modules/localization/translator';
 
 const planId = '11111111-1111-4111-8111-111111111111';
 const slotId = '22222222-2222-4222-8222-222222222222';
@@ -84,15 +85,40 @@ async function mounted(component: Component, handler: (request: Request) => Prom
 }
 
 describe('Activity production frontend consumers', () => {
-    it('keeps schedule filters through refreshed data and uses the Activity document title', async () => {
-        const {wrapper, context} = await mounted(ActivityPage, async () => json(view));
+    it('counts all saved slots independently of schedule filters through refreshed and empty data', async () => {
+        let current: components['schemas']['ActivityView'] = {...view,
+            slots: [slot, {...view.slots[1]!, maxAssignees: 1}], counters: {participants: 1, open: 1, empty: 1}};
+        const {wrapper, context, request} = await mounted(ActivityPage, async () => json(current));
         expect(context.pageTitle.value).toBe('Camp duties | Activity planner');
-        await wrapper.get('[data-slot-filter="mine"]').trigger('click');
-        expect(wrapper.get(`[data-slotid="${slotId}"]`).classes()).toContain('d-none');
-        expect(wrapper.get(`[data-slotid="${otherId}"]`).classes()).not.toContain('d-none');
+
+        // The second slot is mine and full, so each filter selects a genuinely
+        // different set while the total still describes the complete saved plan.
+        for (const [filter, visible] of [['all', [slotId, otherId]], ['mine', [otherId]], ['open', [slotId]]] as const) {
+            await wrapper.get(`[data-slot-filter="${filter}"]`).trigger('click');
+            expect(wrapper.findAll('.slot:not(.d-none)').map(node => node.attributes('data-slotid'))).toEqual(visible);
+            expect(wrapper.get('.bi-card-checklist + .badge').text()).toBe('2');
+        }
+
+        current = {...current, slots: [...current.slots, {...slot, id: planId, title: 'Dinner help', day: '2030-06-02'}],
+            counters: {participants: 1, open: 2, empty: 2}};
         await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
         await flushPromises();
-        expect(wrapper.get('[data-slot-filter="mine"]').classes()).toContain('active');
+        expect(wrapper.get('[data-slot-filter="open"]').classes()).toContain('active');
+        expect(wrapper.findAll('.slot:not(.d-none)')).toHaveLength(2);
+        expect(wrapper.get('.bi-card-checklist + .badge').text()).toBe('3');
+
+        // A newly admitted empty plan displays zero rather than retaining the
+        // previous total or deriving it from a filtered DOM collection.
+        current = {...current, slots: [], counters: {participants: 0, open: 0, empty: 0}};
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+        await flushPromises();
+        expect(wrapper.get('[data-slot-filter="open"]').classes()).toContain('active');
+        for (const filter of ['all', 'mine', 'open']) {
+            await wrapper.get(`[data-slot-filter="${filter}"]`).trigger('click');
+            expect(wrapper.findAll('.slot')).toHaveLength(0);
+            expect(wrapper.get('.bi-card-checklist + .badge').text()).toBe('0');
+        }
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
     });
 
     it('cancels warning review without writing and submits only the newly reviewed digest', async () => {
@@ -358,7 +384,7 @@ describe('Activity production frontend consumers', () => {
     });
 
     it('defaults a one-day calendar and retains outside-range slot drafts during date recovery', async () => {
-        const {wrapper} = await mounted(ActivityCreatePage, async request => {
+        const {wrapper, context, request} = await mounted(ActivityCreatePage, async request => {
             return new URL(request.url).pathname.endsWith('/events') ? json({items: [], nextCursor: null, previousCursor: null})
                 : json({entry: {kind: 'render'}, context: definitions, selectedEvent: null});
         }, '/frontend-pilot/activity/create');
@@ -369,17 +395,45 @@ describe('Activity production frontend consumers', () => {
         await wrapper.get('#endDate').setValue('2030-06-02');
         await flushPromises();
         await wrapper.findAll('.add-slot')[1]!.trigger('click');
-        await wrapper.get('.slot input').setValue('Retained Sunday draft');
+        const fields = wrapper.findAll<HTMLInputElement>('.slot input');
+        const values = ['Retained Sunday draft', 'Bring a lantern', '19:30', '20:45', '3'];
+        const labels = ['packing.title', 'packing.description', 'activity.startTime', 'activity.endTime', 'activity.maxParticipants'] as const;
+        for (const [index, field] of fields.entries()) await field.setValue(values[index]);
+
+        // Visible shared labels identify every control, including time/number
+        // inputs whose placeholders cannot explain their purpose to a reader.
+        // Translation changes those labels without remounting or reinterpreting
+        // the same local text/time/lexical-number values.
+        for (const locale of ['en', 'de'] as const) {
+            context.locale.value = locale;
+            await flushPromises();
+            const current = wrapper.findAll<HTMLInputElement>('.slot input');
+            expect(current).toHaveLength(labels.length);
+            for (const [index, field] of current.entries()) {
+                expect(field.element).toBe(fields[index]!.element);
+                expect(field.element.value).toBe(values[index]);
+                expect(field.element.labels).toHaveLength(1);
+                const label = field.element.labels![0]!;
+                expect(label.control).toBe(field.element);
+                expect(label.textContent?.trim()).toBe(context.messages.value.t(labels[index]!) + (index === 0 ? ' *' : ''));
+                expect(label.classList.contains('visually-hidden')).toBe(false);
+            }
+            expect(wrapper.get('.slot button').attributes('aria-label')).toBe(context.messages.value.t('packing.removeRow'));
+        }
+        expect(fields[0]!.element.required).toBe(true);
+        expect(fields.slice(2, 4).map(field => field.element.type)).toEqual(['time', 'time']);
+        expect(fields[4]!.element.min).toBe('1');
         await wrapper.get('#endDate').setValue('2030-06-01');
         await flushPromises();
         expect(wrapper.find('.slot').exists()).toBe(false);
         await wrapper.get('#endDate').setValue('2030-06-02');
         await flushPromises();
-        expect(wrapper.get<HTMLInputElement>('.slot input').element.value).toBe('Retained Sunday draft');
+        expect(wrapper.findAll<HTMLInputElement>('.slot input').map(field => field.element.value)).toEqual(values);
         await wrapper.get('#endDate').setValue('2030-05-31');
         await flushPromises();
         expect(wrapper.get<HTMLInputElement>('#endDate').element.validity.customError).toBe(true);
         expect(wrapper.findAll('.add-slot')).toHaveLength(2);
+        expect(request.mock.calls.every(([value]) => (value as Request).method === 'GET')).toBe(true);
     });
 
     it('freezes injected root fields while the shared creation command is pending', async () => {
@@ -396,7 +450,14 @@ describe('Activity production frontend consumers', () => {
         await flushPromises();
         expect(settle).toBeDefined();
         for (const id of ['title', 'startDate', 'endDate']) expect(wrapper.get('#' + id).attributes('disabled')).toBeDefined();
-        expect(wrapper.get('label[for="start"]').text()).toBe('Start date *');
+        // Pending presentation keeps each date input's real visible label;
+        // the copied document POST names never identify these Vue controls.
+        for (const [id, label] of [['startDate', 'Start date *'], ['endDate', 'End date *']]) {
+            const control = wrapper.get<HTMLInputElement>('#' + id).element;
+            expect(control.labels).toHaveLength(1);
+            expect(control.labels![0]!.textContent?.trim()).toBe(label);
+            expect(control.labels![0]!.control).toBe(control);
+        }
         expect(wrapper.get('#create-description').attributes('name')).toBe('description');
         expect(wrapper.get('#create-header').attributes('name')).toBe('headerImg');
         settle!(json({id: otherId}, 201));
@@ -414,6 +475,13 @@ describe('Activity production frontend consumers', () => {
         // in these text nodes; preserve both emphasis and measured presentation.
         expect(wrapper.get('#my-requirement-progress').text()).toContain('You participate in1 of 2required slots.Take 1 more.');
         expect(wrapper.get('#my-requirement-progress').findAll('strong').map(element => element.text())).toEqual(['1 of 2', 'Take 1 more.']);
+        // Read-only progress stays in content with its original warning styling;
+        // sharing the notice shell must not turn it into dismissible feedback.
+        const progress = wrapper.get('#my-requirement-progress');
+        expect(progress.classes()).toEqual(expect.arrayContaining(['status-notice', 'alert-warning', 'mb-3']));
+        expect(progress.attributes('role')).toBeUndefined();
+        expect(progress.find('.btn-close').exists()).toBe(false);
+        expect(progress.classes()).not.toContain('pilot-notification');
         await wrapper.findAll('[role="tab"]').find(button => button.text() === 'Participants')!.trigger('click');
         expect(wrapper.get('#participant-status-overview').text()).toContain('2030-06-01 – 2030-06-02');
         await wrapper.get('[data-participant-filter="needs-more"]').trigger('click');
@@ -421,6 +489,57 @@ describe('Activity production frontend consumers', () => {
         await wrapper.get('[data-participant-search]').setValue('Sam');
         expect(wrapper.text()).toContain('No participants match the current search and filter.');
         expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it('localizes requirement provenance without changing admitted names or machine states', async () => {
+        const participants = ['general', 'role', 'override'].map((source, index) => ({participantKey: `${otherId}-${index}`,
+            name: `Person ${index}`, count: 1, assignedShifts: 0, requiredShifts: 2, remainingShifts: 2, source, roles: ['Kitchen lead'],
+            roleIds: [1], attendanceDays: 2, attendance: null, assignmentMode: 'REQUIRED' as const}));
+        const {wrapper, context} = await mounted(ActivityPage, async () => json({...view, assignmentMode: 'REQUIRED', participants}));
+        await wrapper.findAll('[role="tab"]').find(button => button.text() === 'Participants')!.trigger('click');
+        const search = wrapper.get<HTMLInputElement>('[data-participant-search]');
+        expect(search.attributes('aria-label')).toBe(context.messages.value.t('activity.participantSearch'));
+        await search.setValue('Person');
+        expect(wrapper.findAll('.badge.text-uppercase').map(node => node.text())).toEqual(['general', 'role', 'override']);
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(search.attributes('aria-label')).toBe(context.messages.value.t('activity.participantSearch'));
+        expect(wrapper.get('[data-participant-search]').element).toBe(search.element);
+        expect(search.element.value).toBe('Person');
+        expect(wrapper.findAll('.badge.text-uppercase').map(node => node.text())).toEqual(['allgemein', 'Rolle', 'individuell']);
+        expect(wrapper.get('[data-participant-row]').attributes('data-participant-state')).toBe('unstarted');
+        expect(wrapper.text()).toContain('Kitchen lead');
+        expect(wrapper.text()).toContain('Person 0');
+    });
+
+    it('localizes explicit participant fallbacks and searches the displayed name while preserving literal names', async () => {
+        const person: components['schemas']['ActivityParticipant'] = {participantKey: otherId, name: 'Participant', nameIsFallback: true,
+            count: 0, assignedShifts: 0, requiredShifts: 0, remainingShifts: 0, source: 'none', roles: [], roleIds: [],
+            attendanceDays: 2, attendance: null, assignmentMode: 'FREE'};
+        const {wrapper, context, request} = await mounted(ActivityPage, async () => json({...view, participants: [person,
+            {...person, participantKey: planId, nameIsFallback: false},
+            {...person, participantKey: slotId, name: 'Profile #' + otherId, nameIsFallback: false}]}));
+        await wrapper.findAll('[role="tab"]').find(button => button.text() === 'Participants')!.trigger('click');
+        expect(wrapper.findAll('.participant-status-person strong').map(node => node.text()))
+            .toEqual(['Participant', 'Participant', 'Profile #' + otherId]);
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(wrapper.findAll('.participant-status-person strong').map(node => node.text()))
+            .toEqual(['Person', 'Participant', 'Profile #' + otherId]);
+        await wrapper.get('[data-participant-search]').setValue('Person');
+        expect(wrapper.findAll('[data-participant-row]')).toHaveLength(1);
+        expect(wrapper.get('[data-participant-row]').attributes('data-participant-key')).toBe(otherId);
+        expect(request.mock.calls.every(([value]) => (value as Request).method === 'GET')).toBe(true);
+    });
+
+    it('keeps raw names and caller-specific fallback identities separate from translated presentation', () => {
+        const {t} = createTranslator('de');
+        expect(activityParticipantName('Participant', t, false)).toBe('Participant');
+        expect(activityParticipantName('Profile #' + otherId, t, false, otherId)).toBe('Profile #' + otherId);
+        expect(activityParticipantName('', t, false, otherId)).toBe('');
+        expect(activityParticipantName('', t, undefined, otherId)).toBe('');
+        expect(activityParticipantName('Participant', t, true)).toBe('Person');
+        expect(activityParticipantName('Profile #' + otherId, t, true, otherId)).toBe('Profil #' + otherId);
     });
 
     it('delegates a view-only shared text pencil to the inline textarea and preserves its token', async () => {
@@ -474,10 +593,34 @@ describe('Activity production frontend consumers', () => {
         expect(activityCreationWeeks('2032-03-02', '2032-03-01')).toEqual([]);
     });
 
-    it('retains native browser-zone date labels and creation stepping in a negative offset', () => {
+    it('keeps Vue civil-date labels and Monday creation weeks independent of a negative offset', async () => {
         vi.stubEnv('TZ', 'America/Los_Angeles');
-        expect(activityDateLabel('2030-06-01', 'en')).toBe('5/31/2030');
-        expect(activityDayLabel('2030-06-01', 'en')).toBe('Fri');
-        expect(activityCreationWeeks('2030-06-03', '2030-06-04')).toEqual([['2030-06-03'], ['2030-06-04']]);
+        expect(activityDateLabel('2030-06-01', 'en')).toBe('6/1/2030');
+        expect(activityDayLabel('2030-06-01', 'en')).toBe('Sat');
+        expect(activityCreationWeeks('2030-06-03', '2030-06-04')).toEqual([['2030-06-03', '2030-06-04']]);
+
+        const saved = await mounted(ActivityPage, async () => json(view));
+        const header = saved.wrapper.get('th[data-date="2030-06-01"]');
+        expect(header.get('.day').text()).toBe('Sat');
+        expect(header.get('.date').text()).toBe('6/1/2030');
+        saved.context.locale.value = 'de';
+        await flushPromises();
+        expect(saved.wrapper.get('th[data-date="2030-06-01"]').element).toBe(header.element);
+        expect(header.get('.day').text()).toBe('Sa');
+        expect(header.get('.date').text()).toBe('1.6.2030');
+
+        const creating = await mounted(ActivityCreatePage, async request => new URL(request.url).pathname.endsWith('/events')
+            ? json({items: [], nextCursor: null, previousCursor: null})
+            : json({entry: {kind: 'render'}, context: definitions, selectedEvent: null}), '/frontend-pilot/activity/create');
+        await vi.waitFor(() => expect(creating.wrapper.find('#startDate').exists()).toBe(true));
+        await creating.wrapper.get('#startDate').setValue('2027-03-27');
+        await creating.wrapper.get('#endDate').setValue('2027-03-30');
+        const tables = creating.wrapper.findAll('#slotArea table');
+        expect(tables).toHaveLength(2);
+        expect(tables[0].findAll('th').map(cell => cell.text())).toEqual(['Sat3/27/2027', 'Sun3/28/2027']);
+        expect(tables[1].findAll('th').map(cell => cell.text())).toEqual(['Mon3/29/2027', 'Tue3/30/2027']);
+        expect(creating.wrapper.get<HTMLInputElement>('#startDate').element.value).toBe('2027-03-27');
+        expect(creating.wrapper.get<HTMLInputElement>('#endDate').element.value).toBe('2027-03-30');
+        expect(creating.request.mock.calls.some(([input]) => (input as Request).method !== 'GET')).toBe(false);
     });
 });

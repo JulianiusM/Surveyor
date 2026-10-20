@@ -3,7 +3,7 @@ import {computed, ref} from 'vue';
 import type {components} from '../../../types/api/v1';
 import type {PilotPlainMessageKey} from '../../../types/FrontendPilotUiTypes';
 import {usePilot} from '../../app/context';
-import {activityDateLabel} from './presentation';
+import {activityDateLabel, activityParticipantName} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
 
 // Search/filter are local presentation only. The server has already admitted
@@ -29,9 +29,21 @@ function countState(value: string): number {
     return props.participants.filter(person => state(person) === value).length;
 }
 const assigned = computed(() => props.participants.filter(person => person.assignedShifts > 0).length);
+// Requirement provenance is a machine value. Its label belongs to the same
+// catalog as the surrounding progress in both saved and unsaved consumers.
+const sourceLabels = {
+    general: 'activity.requirementSource.general', role: 'activity.requirementSource.role', override: 'activity.requirementSource.override',
+    none: 'activity.noMinimum', unconfigured: 'activity.missingDurationRule',
+} as const;
+/** The older participant DTO admits strings; unknown provenance must not become
+ * an untranslated UI label or an object-property lookup outside this map. */
+function sourceLabel(source: string): string {
+    return messages.value.t(Object.hasOwn(sourceLabels, source) ? sourceLabels[source as keyof typeof sourceLabels] : 'activity.requirement');
+}
 const visible = computed(() => props.participants.filter(person => {
     // Names remain unmodified data; normalization affects matching only.
-    if (!person.name.toLowerCase().includes(search.value.trim().toLowerCase())) return false;
+    if (!activityParticipantName(person.name, messages.value.t, person.nameIsFallback ?? !person.name).toLowerCase()
+        .includes(search.value.trim().toLowerCase())) return false;
     return filter.value === 'all' || filter.value === 'assigned' && person.assignedShifts > 0
         || filter.value === 'unassigned' && person.assignedShifts === 0 || state(person) === filter.value;
 }));
@@ -70,6 +82,7 @@ function attendance(person: components['schemas']['ActivityParticipant']): strin
                         v-model="search"
                         type="search"
                         class="form-control form-control-sm text-bg-dark"
+                        :aria-label="messages.t('activity.participantSearch')"
                         :placeholder="messages.t('activity.participantSearch')"
                         autocomplete="off"
                         data-participant-search
@@ -123,7 +136,7 @@ function attendance(person: components['schemas']['ActivityParticipant']): strin
                     :data-participant-state="state(person)">
                     <div class="participant-status-cell participant-status-person">
                         <span class="participant-status-label">{{ messages.t('activity.participant') }}</span>
-                        <strong>{{ person.name || person.participantKey }}</strong>
+                        <strong>{{ activityParticipantName(person.name, messages.t, person.nameIsFallback ?? !person.name) }}</strong>
                     </div>
                     <div class="participant-status-cell">
                         <span class="participant-status-label">{{ messages.t('activity.assignments') }}</span>
@@ -145,7 +158,7 @@ function attendance(person: components['schemas']['ActivityParticipant']): strin
                                 <span
                                     class="badge"
                                     :class="person.remainingShifts > 0 ? state(person) === 'unstarted' ? 'bg-danger text-white' : 'bg-warning text-dark' : 'bg-success text-white'">{{ person.remainingShifts > 0 ? messages.t('activity.countRemaining', {count: person.remainingShifts}) : messages.t('activity.complete') }}</span>
-                                <span v-if="person.source !== 'none'" class="badge bg-info text-white text-uppercase">{{ person.source }}</span>
+                                <span v-if="person.source !== 'none'" class="badge bg-info text-white text-uppercase">{{ sourceLabel(person.source) }}</span>
                             </template>
                         </div>
                         <div v-else class="d-flex flex-wrap align-items-center gap-1">

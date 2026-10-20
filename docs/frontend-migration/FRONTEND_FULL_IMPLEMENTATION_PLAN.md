@@ -4,14 +4,22 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers; AI agents
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-19
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P6 adoption and full-pilot review qualifications reconciled alongside retained P0-P5 evidence; unresolved localization, feedback, Refresh and guide decisions explicit; P7-P11, backend exclusions and cutover boundaries preserved
+verification-scope: direct R2-R10 decisions and renewed original-baseline review scope reconciled with P0-P6 implementation history; P7-P11, backend exclusions and cutover boundaries preserved; current verification belongs to paired review
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
 
-## Current disposition (2026-10-18)
+## Current disposition (2026-10-20)
+
+P0–P6 are implemented against their phase contracts and direct amendments. The
+[current review](PILOT_PARITY_REVIEW.md#current-approved-interface-implementation-review-2026-10-20) records final
+source adoption, scoped execution and remaining limits. The directly approved October 20 R8–R10 corrections extend
+the staged Operations wording, saved-slot total and shared civil-day policy. Their actual implementation, scoped
+verification and unchanged native/cutover boundaries are recorded in that review; no task-owned correction is deferred.
+P7–P11 and cutover still require their own authorization. The historical receipts below preserve the scope and
+decisions that governed each earlier phase rather than supplying permission to start the next one.
 
 P0 readiness and P1A–D identity/common presentation have recorded implementation and scoped verification in the
 [P0 receipt](PILOT_PARITY_REVIEW.md#p0-foundation-verification-2026-10-14) and
@@ -100,12 +108,15 @@ actual consumers and assertions. The [P6 receipt](PILOT_PARITY_REVIEW.md#p6-adva
 records passing build, mounted, persistence and built-browser selections plus original visual review and finite limits.
 The declared P6 journeys implement the native workflows with the directly approved Vue job-observation exception. That fix
 uses the existing read operations without backend changes; IMP-030 remains open until native-to-Vue cutover.
-The subsequent [full review](PILOT_PARITY_REVIEW.md#full-implemented-pilot-review-2026-10-19) qualifies readiness:
-the existing Activity named-element translations conflict with the deferred design choice, German badges remain
-untranslated, and German Rules rows crowd at narrow widths. Healthy Refresh presentation, the inherited first-install
-guide contradiction and recommendation follow-up feedback also retain explicit unresolved decisions. These findings
-prevent an unconditional P5/P6 compliance or rapid-migration-readiness claim; they are not approved future work.
-P7–P11 and cutover remain separately scoped.
+The subsequent [full review](PILOT_PARITY_REVIEW.md#full-implemented-pilot-review-2026-10-19) records the then-unresolved
+localization, component-message, layout, Refresh, first-install and feedback findings. The maintainer's later
+[direct R2–R7 decisions](FRONTEND_FOUNDATION_DESIGN.md#direct-interface-and-shared-spa-decisions-2026-10-19) resolve their
+authority and require implementation plus another original-baseline review across every migrated module. Functional
+interface parity protects visible information and user steps; it imposes no exact-pixel, DOM-ID or internal-name
+contract, and explicit requirements/approvals are exceptions by default. Locale-neutral usability, integrated Refresh
+and shared SPA notifications are current obligations, not later-phase work. Actual source adoption and renewed
+execution belong to the current paired review; approval alone does not establish completion. P7–P11 and cutover
+remain separately scoped, and IMP-030/IMP-080 remain open until actual native-to-Vue cutover.
 
 ## Phase contracts
 
@@ -188,7 +199,9 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
 
    **Completion:** repeated registration updates rather than duplicates; page, roster, and management permissions remain
    distinct; token entry is preserved without consumption during prefetch; date/timezone behavior matches native
-   behavior.
+   behavior. The October 20 R10 amendment supersedes this original date-only presentation requirement for Vue:
+   preserve saved civil days through the shared calendar owner while deadlines and other instants retain their
+   existing meaning. Native remains the unchanged historical comparator.
 
    Invoice controls may retain working native destinations until their phases finish.
 
@@ -255,7 +268,8 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
    permit visible Vue descriptions and complete duplicate prefill. The native defects remain open until cutover;
    neither frontend correction closes its legacy record. No task-owned P4 workflow is deferred to P5.
 
-6. **P5 — Migrate basic Activity planning and participation**  
+6. **P5 — Migrate basic Activity planning and participation (implemented)**
+
    **Complexity:** High. **Prerequisites:** stable Event admission/attendance contracts from P2; completed Event UI is
    not inherently required.
 
@@ -275,7 +289,8 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
    cancellation preserves the draft; changed warnings require fresh review. The printable schedule remains an authorized
    standalone document.
 
-7. **P6 — Migrate advanced Activity workflows**  
+7. **P6 — Migrate advanced Activity workflows (implemented)**
+
    **Complexity:** Very high. **Prerequisites:** P5 and stable Event context.
 
    Implement three sequential packages:

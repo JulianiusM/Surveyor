@@ -5,12 +5,14 @@ import I18NextVue from 'i18next-vue';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import type {PilotLoadingSkeleton} from '../../types/FrontendPilotUiTypes';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import {resolvePilotHelpQuery} from '../../modules/lib/helpNavigation';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from './context';
 import App from './App.vue';
 // The shell also renders admitted common outcomes, so this shared view is
 // already part of the entry bundle rather than an independent route chunk.
 import CommonPage from '../features/common/CommonPage.vue';
 import {mountPreservingDrafts} from './mountPreservingDrafts';
+import {createPageReadiness, pageReadinessKey} from '../composables/pageNavigation';
 
 // Route chunks own their feature validators and views. The initial shell remains
 // small, and a later feature migration does not enlarge every visitor's entry bundle.
@@ -137,24 +139,49 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
     const router = createRouter({
         history: browser ? createWebHistory() : createMemoryHistory(),
         routes: pilotRoutes,
-        /** Browser history owns saved positions; independently loaded Overview
-         * regions own query-transition focus/scroll. Ordinary fragments and new
-         * documents retain Router's explicit target/top behavior. */
-        scrollBehavior(to, from, saved) {
+        /** Browser history owns saved positions. Local query/preview changes
+         * preserve the viewport; deliberate anchors and new pages retain navigation. */
+        async scrollBehavior(to, from, saved) {
+            // Only the admitted renderer can say when a delayed article exists.
+            // Restore history after that render; a feature must not re-anchor
+            // after Router has restored the reader's actual saved offset.
+            if (to.path.startsWith('/frontend-pilot/help') && (saved || to.hash)
+                && (saved || to.path !== from.path || to.hash !== from.hash
+                    || JSON.stringify(resolvePilotHelpQuery(to.params.doc, to.query))
+                        !== JSON.stringify(resolvePilotHelpQuery(from.params.doc, from.query)))) {
+                if (!await pageReadiness.wait(to)) return false;
+                await nextTick();
+                if (router.currentRoute.value !== to) return false;
+                if (saved) return saved;
+                // Invalid or missing authored headings are harmless. Select by
+                // actual ID rather than allowing a fragment to become CSS syntax.
+                try {
+                    const target = document.getElementById(decodeURIComponent(to.hash.slice(1)));
+                    return target ? {el: target, top: Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0} : false;
+                } catch { return false; }
+            }
             if (saved) return saved;
+            // Help's query identifies a real article/search visit as well as its
+            // selected locale. Only a different normalized document starts at top;
+            // a locale-only URL synchronization must retain the reader's position.
+            if (to.path === from.path && to.path.startsWith('/frontend-pilot/help')
+                && JSON.stringify(resolvePilotHelpQuery(to.params.doc, to.query))
+                    !== JSON.stringify(resolvePilotHelpQuery(from.params.doc, from.query))) {
+                return to.hash ? false : {top: 0};
+            }
+            // Locale synchronization, filters and read results are SPA state,
+            // not new documents that need the native submit/reload jump.
+            if (to.path === from.path && to.hash === from.hash) return false;
             // This fragment records a local preview visit, not a DOM anchor.
-            // Match native document navigation's top while keeping browser-owned
-            // saved positions for Back/Forward ahead of this presentation rule.
+            // Loading or retiring a receipt must not imitate native POST scrolling.
             const previewHash = to.meta.profilePreviewHash;
-            if (typeof previewHash === 'string' && (to.hash === previewHash || from.hash === previewHash)) return {top: 0};
-            // Overview's independent regions restore focus/scroll after their authorized
-            // read renders. A query transition must not jump to the top before that result.
-            if (to.path === '/frontend-pilot' && from.path === to.path
-                && frontendDocumentUrl(to.fullPath) !== frontendDocumentUrl(from.fullPath)) return false;
+            if (to.path === from.path && typeof previewHash === 'string'
+                && (to.hash === previewHash || from.hash === previewHash)) return false;
             if (to.hash) return {el: to.hash};
             return {top: 0};
         },
     });
+    const pageReadiness = createPageReadiness(router);
 
     /** Resolve startup and mounted eligibility from the same route declarations.
      * This callback is installed before app.use(router) can load a failing chunk;
@@ -179,6 +206,8 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
 
     observeInitialDocument(context, router);
     app.provide(pilotContextKey, context);
+    app.provide(pageReadinessKey, pageReadiness);
+    app.onUnmount(pageReadiness.dispose);
     app.use(I18NextVue, {i18next: context.i18next});
     app.use(VueQueryPlugin, {queryClient: context.queryClient});
     app.use(router);

@@ -43,8 +43,8 @@ function dismissMessage(): void { messageVisible.value = false; }
 </script>
 
 <template>
-    <!-- The shared marker preserves native message-page alert placement in the shell;
-         no feature route or message kind needs its own spacing rule. -->
+    <!-- Admitted full-page outcomes share the heading, message and Home layout.
+         Their content notice uses the common renderer and receipt lifetime. -->
     <section class="pilot-page-message card bg-dark text-white mb-3">
         <h1 class="card-header text-center bg-dark text-light">
             <i class="bi me-2" :class="kind === 'error' ? 'bi-exclamation-triangle-fill'

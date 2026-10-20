@@ -417,6 +417,10 @@ implementation_defects:
       the plan.
     documentation_contract: D07 names the intended fields Title, Description, Start time, End time, and Max participants
       without documenting the labeling defect.
+    migration_disposition: The R4/R6 frontend review on 2026-10-20 corrects the Vue initial-slot fields through shared
+      FormField visible labels associated with the existing text, time and number controls, plus a localized Remove
+      accessible name. Field models and constraints remain unchanged. The native comparator is untouched, so this
+      defect remains open; current mounted and built-browser verification is recorded in the pilot review.
     closes_when:
       - every dynamically generated initial-slot control has an associated visible label and accessible name
       - creation UI tests verify the labels for keyboard and assistive-technology use
@@ -1794,19 +1798,19 @@ implementation_defects:
       - App.vue nests the sticky live-alert host in a short grouping wrapper; feedback.ts focuses the notice and
         scrolls its host, including the page fallback. Native places that host within the full main content.
     impact: An ordinary action can move the visitor away from the controls and confirmed result being reviewed.
-    authorization: The maintainer directly requests the frontend correction while retaining native isolation and
-      shared Vue ownership. Local dialog/section reveal and existing receipt lifetimes remain in scope for preservation.
+    authorization: The original page-confirmation correction retained local dialog/section reveal. The direct R7
+      decision on 2026-10-19 supersedes that presentation rule with common SPA notices that never move focus or scroll;
+      native isolation, shared Vue ownership and meaningful receipt lifetimes remain.
     documentation_contract: Page confirmations stay sticky and preserve viewport context without programmatic focus
-      or document scrolling; browser anchoring remains available. Local feedback retains scoped reveal, and renewal,
-      dismissal, expiry and durable uncertainty remain shared.
+      or document scrolling; browser anchoring remains available. Current local feedback uses the same non-jumping
+      notification owner; renewal, dismissal, expiry and durable uncertainty remain shared.
     closes_when:
       - Real built-app desktop/mobile commands retain viewport context and show the live confirmation at the screen top.
-      - Client checks retain local reveal, renewal, dismissal, expiry and durable outcome behavior.
-    disposition: The shared feedback owner skips programmatic focus/scroll for page confirmations, and the
-      layout-transparent wrapper gives their sticky host the full main boundary. The 61-case mounted shell selection
-      and five selected built workflows pass, including both desktop/mobile native/Vue sticky comparisons. Raw geometry
-      and 12 inspected originals retain the row's viewport position and the alert at the top through user scrolling.
-      Browser anchoring may change the numeric document offset; receipt lifetimes, local reveal and native code remain.
+      - Client checks protect common non-jumping feedback, renewal, dismissal, expiry and durable outcome behavior.
+    disposition: The original closure repaired page confirmations through the shared feedback owner and a
+      layout-transparent sticky-host boundary. Its then-preserved local reveal behavior is historical and is
+      superseded by R7. Current page/dialog notification adoption and scoped mounted/browser evidence belong to the
+      pilot review; native code stays unchanged and ordinary browser anchoring may affect numeric offsets.
   - id: IMP-073
     status: closed
     closed_on: 2026-10-18
@@ -1871,15 +1875,23 @@ implementation_defects:
         1111px; at clientWidth 390px, it reaches 2001px. HTML and body overflowX are visible, while body/main boxes
         start at x=0 and retain their viewport widths. These are actual document movements, not scrollWidth alone.
       - Internal ballot/results scrolling, stationary sticky headings and participant cells, and reachability of the
-        last answer column all pass in the same real browser workflows. The exact root-overflow cause is not established.
+        last answer column all pass in the same real browser workflows. The original comparison did not establish the cause.
+      - The 2026-10-20 source review traces clipped absolute controls escaping their unpositioned table viewport.
+        Giving the existing shared Vue viewport a containing block removes actual document travel in both rebuilt
+        focused comparisons: all 16 English/German samples fit 1280px/390px and reach window.scrollX 0, with visible
+        HTML/body overflow. All 29 columns, local scrolling, sticky cells, final-label/keyboard choice and draft-only
+        interaction remain verified; 12 original captures were individually inspected.
     impact: A visitor can pan the whole wide Survey document horizontally in addition to using its local table scrollbars.
-    authorization: The existing native-isolation and parity-only decisions retain the unchanged native comparator.
-      This record authorizes no native or Vue layout remedy and supplies no pending approval request.
+    authorization: The original P4 review inferred no remedy authority from the then-parity-only scope. It recorded
+      no separate maintainer exclusion for this defect. The direct R4/R6 decisions on 2026-10-19 require locale-neutral
+      usability across migrated modules rather than reproducing defective native geometry; the 2026-10-20 review
+      applies that frontend-only authority while preserving native isolation.
     documentation_contract: SRV-03 preserves internal results-table scrolling and access to every choice. The original
       two-choice visual baseline did not exercise this wide state or establish a document-width guarantee for it.
-    disposition: Recorded once as inherited native layout evidence; the Vue comparison retains the measured native
-      behavior. No runtime repair is made and no task-owned P4 workflow is deferred by this finding. Any remedy remains
-      outside the current correction and requires its own explicit scope.
+    disposition: The original comparator allowed improvement but required only no worsening. The authorized shared
+      Vue containing-block correction passes both focused built comparisons without hiding overflow or changing
+      widths, columns, sticky cells, native source or backend behavior. The renewed full-system selection also passes
+      this boundary; exact execution and image scope remain in the pilot review. The unchanged native defect remains open.
   - id: IMP-076
     status: open
     discovered_on: 2026-10-18
@@ -1894,11 +1906,17 @@ implementation_defects:
       - P5 source review finds no length member on that grouped record; the native total badge is therefore blank.
         The open and unassigned counters have independent calculated values.
     impact: The schedule shows no total slot count beside its open and unassigned counts.
-    authorization: The direct P5 request retains visual and behavioral parity and excludes existing native repairs.
-      This finding grants no native or Vue correction approval.
+    authorization: The original P5 request retained visual and behavioral parity without approving this defect's
+      correction. On 2026-10-20 the maintainer directly approved R9 for the Vue total, as a frontend change with at most
+      minimal backend adjustment. Native repair remains outside that approval.
     documentation_contract: The schedule total should count saved slots independently of date grouping and local filters.
-    disposition: The Vue schedule preserves the native blank total during P5. A correction remains separate work;
-      no basic Activity workflow is deferred by this cosmetic inherited defect.
+    disposition: P5 copied the native blank total; that historical parity disposition was not a separate defect-specific
+      maintainer exclusion. The approved Vue correction now counts its existing admitted saved-slot collection,
+      independently of All/My/Open, and displays zero for an empty plan. Independent source review and the focused
+      mounted regression verify distinct visible sets, fresh three-slot data with Open retained, empty reads and
+      GET-only delivery. The focused selection passes one case with 24 filtered cases; both repaired desktop/mobile
+      built comparisons also pass and their original images show the total. Native retains its unchanged defect,
+      so this ID stays open.
   - id: IMP-077
     status: open
     discovered_on: 2026-10-18
@@ -1913,11 +1931,22 @@ implementation_defects:
       - Native creation adjusts week boundaries with browser-local calendar arithmetic but adds day cells by fixed
         milliseconds. src/views/activity/activity-view.pug instead performs week/day arithmetic in the server timezone.
         These algorithms can differ across timezone offsets and daylight-saving boundaries.
+      - The 2026-10-20 Vue review also finds the matching previous-day shift in Event summary, saved attendance and
+        roster formatting before the approved correction: src/frontend/features/event/presentation.ts then formatted
+        raw date-only values in the browser timezone. Its original R2 locale adoption changed the language while
+        deliberately leaving that policy intact; R10 separately supersedes it.
     impact: Displayed dates or week grouping can depend on browser/server timezone rather than only the saved civil date.
-    authorization: P5 preserves the native comparator; no calendar timezone correction is authorized by the phase trigger.
+    authorization: The original P5 phase trigger preserved native calendar behavior without authorizing a correction.
+      On 2026-10-20 the maintainer directly approved R10 for consistent Vue Event/Activity calendar-day presentation
+      and shared Activity week projection, as frontend work with at most minimal backend adjustment. Native sources,
+      stored values, business calculations, deadlines, assignments and printable output remain outside the change.
     documentation_contract: Calendar dates should identify their saved civil days consistently across supported timezones.
-    disposition: The Vue creation copy retains native browser arithmetic and formatting. The detail adapter projects
-      the native server calendar before rendering; no timezone remedy or exhaustive timezone certification is claimed.
+    disposition: The original Vue creation copy retained native browser arithmetic and formatting, while its detail
+      adapter projected the native server calendar. Direct R10 supersedes that deliberate presentation parity; the
+      approved correction now uses one pure owner for matching Vue date-only labels and Activity creation/versioned
+      weeks. Independent production adoption review, 111 focused cases, 21 genuine ORM cases and four built calendar
+      journeys verify the bounded correction, including real DST/offset scenes and unchanged instant semantics.
+      This open native defect is not resolved by Vue checks, and no exhaustive timezone certification is claimed.
   - id: IMP-078
     status: open
     discovered_on: 2026-10-18
@@ -1930,10 +1959,13 @@ implementation_defects:
       - src/views/activity/activity-create.pug renders date labels for start/end but inputs with IDs startDate/endDate.
         Standard label activation therefore does not focus the corresponding date input.
     impact: Clicking a creation date label does not activate its date control.
-    authorization: P5 preserves native visual and behavioral parity; no label-activation exception was requested or approved.
+    authorization: Original P5 preserved native label activation. The direct R4/R6 decisions on 2026-10-19 require
+      usable associated controls rather than retention of defective native identifiers; the 2026-10-20 Vue correction
+      applies those requirements without changing the native comparator.
     documentation_contract: Date labels should identify their corresponding date controls.
-    disposition: Activity supplies the native label targets to the shared Vue field owner; other consumers retain
-      their existing default targets. A correction remains separately authorized work.
+    disposition: The initial Vue implementation supplied the native label targets to the shared field owner. Its
+      corrected date fields now use the actual startDate/endDate targets. The native label defect remains open;
+      source and scoped execution evidence are recorded in the pilot review.
   - id: IMP-079
     status: open
     discovered_on: 2026-10-18
@@ -1970,19 +2002,22 @@ implementation_defects:
     evidence:
       - src/views/activity/parts/assignments.pug renders a non-wrapping recommendation title and three action buttons
         together in its flex card header.
-      - Same-actor English Chromium comparisons at 390px show the Save changes action extending beyond the 332px
-        recommendation card in both the native comparator and the parity-preserving Vue presentation.
+      - Pre-decision same-actor English Chromium comparisons at 390px show the Save changes action extending beyond
+        the 332px recommendation card in both the native comparator and the then-parity-preserving Vue presentation.
     impact: The rightmost recommendation header action can be clipped on a narrow screen.
-    authorization: P6 preserves native visual and behavioral parity; no mobile-header presentation exception has been
-      requested or approved.
+    authorization: On 2026-10-19 the maintainer rejected the German-only R4 proposal and approved locale-neutral
+      responsive usability, including English, through shared frontend owners with at most minimal backend adaptation.
     documentation_contract: Organizer actions should remain visible and usable at supported narrow viewport sizes.
-    disposition: Preserve this inherited rendering during P6. A responsive header correction remains separately
-      authorized work; the parity comparison does not certify the inherited layout as ideal.
+    disposition: The Vue responsive correction is now authorized; native authored sources remain unchanged.
+      The same direct decision requires IMP-080 to stay open until actual native-to-Vue cutover. Source adoption
+      or passing Vue checks cannot close this native defect earlier.
     closes_when:
       - A separately approved presentation change keeps the title and all actions usable at narrow viewport sizes.
       - Built desktop and mobile comparisons verify the approved layout without changing command authority or drafts.
+      - Actual native-to-Vue cutover has occurred, as directly required by the maintainer on 2026-10-19.
   - id: IMP-081
-    status: open
+    status: closed
+    closed_on: 2026-10-20
     discovered_on: 2026-10-19
     severity: low
     owner: frontend migration maintainers
@@ -1990,16 +2025,19 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: German Activity progress retains untranslated requirement-source badges
     evidence:
-      - ActivityParticipants displays GENERAL, ROLE and OVERRIDE directly from the admitted source value.
+      - At discovery, ActivityParticipants displayed GENERAL, ROLE and OVERRIDE directly from the admitted source value.
       - Both saved Participants and live Rules coverage consume this shared component under German UI language.
     impact: German organizers see English source labels beside translated participant progress.
-    authorization: A direct conversational R2 decision is required; no approval is recorded. Automatic approval
-      review rejected the proposed visible correction for lack of specific authorization; no patch was applied.
+    authorization: The maintainer directly approved R2 on 2026-10-19 and requires localization of all non-user-generated
+      migrated UI text through shared catalogs. The earlier automatic rejection preceded that approval and authorized no patch.
     documentation_contract: Supported UI languages should use shared catalogs while retaining admitted data values.
-    disposition: Recorded as a current review gap, not approved future work. Native parity and advance approval
-      still govern any visible badge change; this entry supplies no implementation authority.
+    disposition: Shared participant/catalog presentation now translates source badges for saved and live coverage.
+      Independent source review, mounted English/German consumers and the built Rules matrix verify actual adoption.
+      The final R2 sweep also preserves explicit provenance for authored fallback names without changing literal names,
+      native payload defaults or shared business behavior; scoped execution is recorded in the pilot review.
   - id: IMP-082
-    status: open
+    status: closed
+    closed_on: 2026-10-20
     discovered_on: 2026-10-19
     severity: medium
     owner: frontend migration maintainers
@@ -2007,46 +2045,62 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: German Activity Rules headings and actions crowd at narrow widths
     evidence:
-      - Built German Chromium captures at 390px show requirement subsection headings crowding their hints and
-        card-header actions extending beyond the card. Both advanced workspaces retain fixed native flex rows.
+      - Pre-decision built German Chromium captures at 390px show requirement subsection headings crowding their hints
+        and card-header actions extending beyond the card. Both advanced workspaces then retained fixed native flex rows.
     impact: Longer translated headings and organizer actions are difficult to read or reach on narrow screens.
-    authorization: A direct conversational R4 decision is required for a bounded German presentation exception;
-      no approval is recorded. English native clipping IMP-080 retains its independent disposition.
+    authorization: On 2026-10-19 the maintainer rejected the German-only R4 proposal and required locale-neutral
+      frontend usability improvements for all supported languages, including English. IMP-080 stays open until cutover.
     documentation_contract: Supported localized controls should remain readable and reachable at narrow widths.
-    disposition: Current review gap, not approved future work or permission to change the native comparator.
+    disposition: Shared locale-neutral heading/action/field owners keep the actual Rules consumers usable in the
+      English/German 320/390/1280 built matrix. Independent source and original-image review accepts those scoped
+      results. Native authored frontend sources remain unchanged; IMP-080 stays open until actual cutover.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
-    status: open
+    status: closed
+    closed_on: 2026-10-20
     discovered_on: 2026-10-19
     severity: medium
     category: design-provenance
     owner: frontend migration maintainers
     package: frontend-pilot-readiness
     title: Recommendation follow-up maintenance briefly publishes then clears a generic success receipt
-    evidence: Initial entry and Reload now suppress a nonexistent native Saved receipt before publication. The
-      follow-up maintenance after explicit generation and confirmed application retains the same publish-then-clear
-      pattern. Its analogous reveal risk is source-based; no corresponding E2E failure is claimed for those two calls.
-    authorization: Automatic approval review rejected extending the narrow correction to these two follow-up calls
-      without specific authorization. Direct conversational R7 remains required; no expanded patch was applied.
-    disposition: Current review decision, not approved future work. Progress, application results, errors, uncertainty
-      and the approved shared local-feedback reveal contract remain intact.
+    evidence: Before direct R7 approval, initial entry and Reload suppressed a nonexistent native Saved receipt, while
+      follow-up maintenance after explicit generation and confirmed application retained the publish-then-clear
+      pattern. Its analogous reveal risk was source-based; no corresponding E2E failure was claimed for those two calls.
+    authorization: The earlier automatic review rejected the broader patch before approval and no patch followed it.
+      The maintainer's later direct R7 decision on 2026-10-19 requires common SPA feedback across all migrated modules,
+      rejecting inherited submit/refresh jumps and feature-specific notice recreation or placement.
+    disposition: The two follow-up calls now adopt the existing silent-success option; shared notification ownership
+      supersedes the former local reveal rule. Actual operation progress/results, errors, uncertainty and draft lifetimes
+      retain their owners. Independent source review, mounted lifecycle cases and built generation/application and
+      common-notification journeys verify the adopted behavior without feature-owned scrolling or notice focus.
   - id: DESIGN-HEALTHY-REFRESH-CONTROLS
-    status: open
+    status: closed
+    closed_on: 2026-10-20
     discovered_on: 2026-10-19
     severity: medium
     category: design-provenance
     owner: frontend migration maintainers
     package: frontend-pilot-readiness
     title: Healthy-view Refresh controls lack identified approval for their native visual difference
-    evidence: Existing migrated detail pages and sections display read-only Refresh controls absent from some
-      native counterparts. Survey card captures expose an added 35px row; Drivers captures expose an extra control
-      outside the measured table. Earlier receipts call this approved, but no specific conversational approval was found.
-    authorization: Functional refresh and recovery are approved; those choices do not independently authorize the
-      additional healthy-view controls and row geometry. A direct conversational R6 decision is required.
-    disposition: Earlier visual-approval assertions are withdrawn for this difference. Scoped table/card comparisons
-      and passing tests do not establish full native-image parity or supply the missing approval.
+    evidence: Migrated detail pages and sections displayed read-only Refresh controls absent from some native
+      counterparts. Pre-decision Survey captures exposed an added 35px row; Drivers captures exposed an extra control
+      outside the measured table. Earlier receipts called this approved, but no specific conversational approval was found
+      before the later direct R6 decision.
+    authorization: On 2026-10-19 the maintainer directly required integrated Refresh throughout implemented modules
+      and clarified functional visual parity rather than exact pixels, identifiers or naming. Explicit requirements
+      and approvals are exceptions by default; this is current authority, not approval inferred from old receipts.
+    disposition: Earlier unsupported approval assertions remain withdrawn as historical provenance; direct R6 resolves
+      this approval finding. Shared toolbars/read owners supply integrated controls, including Event, Help and profile
+      pages. Final source review also found Event's explicit page Refresh omitted admitted links and Things to do.
+      The existing page read owner now includes those admitted families for explicit Refresh while preserving narrow
+      post-command dependencies. The final 14-case mounted selection and both repaired built public/admin comparisons
+      verify actual GETs, retained drafts/filter nodes, same-document behavior and no Event writes. Workflow Refresh
+      verifies admission without regenerating tokens or replaying commands. The paired pilot review owns complete
+      current evidence and its failed-run/finite-image limits.
   - id: DOC-FIRST-INSTALL-SYNCHRONIZATION
-    status: open
+    status: closed
+    closed_on: 2026-10-19
     discovered_on: 2026-10-19
     severity: medium
     category: conflicting-guidance
@@ -2056,25 +2110,55 @@ findings:
     evidence: Architecture reserves synchronization for disposable development/tests, while Database and Operations
       prescribe synchronization when bootstrapping a confirmed empty production database. Both statements predate
       this frontend review; runtime synchronization is disabled and existing-production upgrades use migrations.
-    authorization: A direct conversational R5 resolution is required before reconciling the staged summary. No
-      database action, production-guide edit, publication or relaxation of agent database safety is authorized.
-    disposition: The original statements remain intact. Assembled-guide review identifies this inherited limit
-      rather than silently choosing a procedure or declaring complete semantic readiness.
+    authorization: On 2026-10-19 the maintainer explicitly approved R5's small staged first-install reconciliation
+      despite its separate subject. No database action, production-guide edit, publication or agent safety change is authorized.
+    disposition: Staged Architecture amendment-27 and its exact manifest operation now refer to Database's established
+      confirmed-empty first-install procedure, retaining disabled runtime synchronization and migrations for existing
+      production upgrades. Independent source review accepts the bounded reconciliation; production originals and
+      their protected digests remain untouched until separately authorized publication.
   - id: DESIGN-ACTIVITY-COMPONENT-MESSAGES
-    status: open
+    status: closed
+    closed_on: 2026-10-20
     discovered_on: 2026-10-19
     severity: medium
     category: design-provenance
     owner: frontend migration maintainers
     package: frontend-pilot-readiness
     title: Activity translations use named Vue elements despite the deferred design choice
-    evidence: ActivitySchedule count emphasis and ActivityRecommendationSchedule hint badge use i18next-vue
-      TranslationComponent placeholders. DEC-006 defers that capability, and the locale generator validates scalar
-      parameters without declaring these component placeholders. No specific implementation approval was found.
-    authorization: Full pilot review authorizes identifying this conflict, not silently amending the ADR or declaring
-      the existing extension approved. A direct conversational R3 decision is required; no approval is recorded.
-    disposition: The original design remains authoritative. Current code and the missing validation are explicitly
-      unresolved; the pilot cannot claim complete design compliance while this decision is pending.
+    evidence: At discovery, ActivitySchedule count emphasis and ActivityRecommendationSchedule hint badge used
+      i18next-vue TranslationComponent placeholders. Original DEC-006 deferred that capability, and the generator
+      validated scalar parameters without declaring component placeholders. No specific approval was found before
+      the later direct R3 decision.
+    authorization: The maintainer directly approved R3 on 2026-10-19: controlled declared/validated Vue component
+      placeholders through the selected shared catalog and i18next-vue owners. This explicitly supersedes the original
+      rich-slot deferral; the prior unvalidated implementation did not authorize itself.
+    disposition: The dated ADR amendment preserves the original choice and scopes the approved extension. Shared
+      declarations and generation checks validate named components across supported locale/plural variants. Independent
+      review and executed mounted/built Activity cases verify actual progress and hint consumers. Arbitrary catalog HTML
+      and undeclared component placeholders remain forbidden.
+  - id: DOC-ORGANIZER-EXPENSE-PAYER-SUMMARY
+    status: closed
+    closed_on: 2026-10-20
+    discovered_on: 2026-10-19
+    severity: medium
+    category: conflicting-guidance
+    owner: operations and invoice documentation maintainers
+    package: frontend-pilot-readiness
+    title: Operations excludes an optional participant payer supported by the existing invoice workflow
+    evidence: Complete assembled-guide review finds that Operations says organizer expenses have no participant
+      registration and never create personal invoice credit. The existing invoice owner and Upgrading guide permit
+      optional participant attribution while keeping recording-organizer attribution separate.
+    authorization: R5 approved only the separate first-install summary. On 2026-10-20 the maintainer directly approved
+      the independently reviewed R8 documentation-only correction to the staged Operations statement, retaining the
+      existing shared invoice behavior and production-guide freeze.
+    disposition: Staged Operations amendment-08 and its exact original-fragment manifest mapping now describe optional
+      eligible participant-payer attribution, existing history/credit behavior and the separately recorded organizer.
+      Independent review accepts the exact source, staged amendment and manifest adoption; the complete assembled
+      Operations guide retains its inherited procedures with the corrected paragraph. Invoice calculations, payments,
+      schema, runtime and production guide bytes are unchanged. Independent nonauthor and root review accept all
+      eight assembled guides, their changed hunks and retained inherited procedures, including complete Operations.
+      Preparation identity validation and any future publication remain separate documentation operations,
+      not an application-delivery gate.
   - id: DESIGN-EVENT-CREATION-TRANSPORT
     status: closed
     closed_on: 2026-10-16

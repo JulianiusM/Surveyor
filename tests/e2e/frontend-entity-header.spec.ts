@@ -3,7 +3,7 @@ import type {APIRequestContext, Locator, Page, Request, TestInfo} from '@playwri
 import {readFileSync} from 'node:fs';
 import type {components} from '../../src/types/api/v1';
 import {createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, expectUsableFrontendLayout} from '../keywords/e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 
@@ -70,12 +70,13 @@ async function compareHeader(page: Page, info: TestInfo, path: string, name: str
         await surface.screenshot({path: imagePath, animations: 'disabled'});
         await info.attach(`${name}-${pilot ? 'pilot' : 'native'}`, {path: imagePath, contentType: 'image/png'});
         if (pilot) {
-            // Normalize only the separately asserted parent route for this
-            // native comparison; every visible/style/geometry property stays exact.
+            await expectUsableFrontendLayout(surface);
+            // Normalize the separately asserted parent route. Compare visible
+            // information/actions and paint, retaining raw layout as evidence.
             const compared = parentPath ? {...measurement, controls: measurement.controls.map(function compareParent(control) {
                 return control.href === '/frontend-pilot' + parentPath ? {...control, href: parentPath} : control;
             })} : measurement;
-            expect(compared).toEqual(native);
+            expect(headerMeaning(compared)).toEqual(headerMeaning(native!));
             if (parent) {
                 await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'entity-header-parent';});
                 const documentRequests: string[] = [];
@@ -95,6 +96,18 @@ async function compareHeader(page: Page, info: TestInfo, path: string, name: str
             }
         } else native = measurement;
     }
+}
+
+/** Preserve the heading hierarchy, action meaning and image identity without
+ * prescribing native rectangles, icon class names or framework wrappers. */
+function headerMeaning(header: Awaited<ReturnType<typeof measureHeader>>) {
+    return {title: header.title, font: header.font, weight: header.weight, color: header.color,
+        iconCount: header.icons.length,
+        controls: header.controls.map(control => ({text: control.text, color: control.color,
+            background: control.background, border: control.border, font: control.font,
+            href: control.href, disabled: control.disabled})),
+        image: header.image ? {naturalWidth: header.image.naturalWidth, naturalHeight: header.image.naturalHeight,
+            alt: header.image.alt, fit: header.image.fit} : null};
 }
 
 /** Existing upload admission/token owners prepare a real image for both readers. */
@@ -128,8 +141,8 @@ async function expectReachable(control: Locator, page: Page): Promise<void> {
 }
 
 /** Exercise the common header/settings keyboard owner through each real feature.
- * German labels intentionally have no English native comparator; the separate
- * English comparisons above protect the unchanged native presentation contract. */
+ * German labels have no English wording comparator; both locales must retain
+ * the same visible capabilities and usable responsive interaction contracts. */
 async function inspectGermanSettings(page: Page, info: TestInfo, path: string, kind: 'event' | 'packing'): Promise<void> {
     await page.goto(`/frontend-pilot${path}?locale=de`, {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);

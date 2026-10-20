@@ -71,6 +71,60 @@ async function mounted(handler: (request: Request) => Promise<Response>) {
 }
 
 describe('Activity requirements production frontend', () => {
+    it('associates role and override controls with their visible labels across languages without releasing drafts', async () => {
+        const {wrapper, context, request} = await mounted(async () => json(configuration()));
+        await wrapper.get('[data-add-override]').trigger('click');
+        const role = wrapper.get<HTMLInputElement>('#roleRequirement-7');
+        const participant = wrapper.get<HTMLSelectElement>('[data-override-target="participant"]');
+        const overrideRole = wrapper.get<HTMLSelectElement>('[data-override-target="role"]');
+        const required = wrapper.get<HTMLInputElement>('[data-override-target="required"]');
+        await role.setValue('3');
+        await participant.setValue('profile:' + profileId);
+        await overrideRole.setValue('7');
+        await required.setValue('0');
+
+        // Exercise the browser's real label/control associations, including the
+        // slotted controls. Translation updates wording on the same dirty nodes.
+        for (const locale of ['en', 'de'] as const) {
+            context.locale.value = locale;
+            await flushPromises();
+            const labels = [
+                [role.element, 'Kitchen lead'],
+                [participant.element, context.messages.value.t('activity.participant')],
+                [overrideRole.element, context.messages.value.t('activity.requirements.optionalRole')],
+                [required.element, context.messages.value.t('activity.requirements.requiredShifts')],
+            ] as const;
+            for (const [control, text] of labels) {
+                expect(control.labels).toHaveLength(1);
+                const label = control.labels![0]!;
+                expect(label.textContent?.trim()).toBe(text);
+                expect(label.control).toBe(control);
+            }
+            expect(wrapper.get('#roleRequirement-7').element).toBe(role.element);
+            expect(wrapper.get('[data-override-target="participant"]').element).toBe(participant.element);
+            expect([role.element.value, participant.element.value, overrideRole.element.value, required.element.value])
+                .toEqual(['3', 'profile:' + profileId, '7', '0']);
+        }
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+    });
+
+    it('uses localized provenance in the live Rules coverage consumer', async () => {
+        const config = configuration();
+        config.calculationContext.participants[0].name = null;
+        config.participants[0].name = null;
+        config.overrideTargets[0].label = 'Participant';
+        config.overrideTargets[0].nameIsFallback = false;
+        const {wrapper, context} = await mounted(async () => json(config));
+        expect(wrapper.get('#requirement-participant-status .badge.text-uppercase').text()).toBe('general');
+        expect(wrapper.get('#requirement-participant-status .participant-status-person strong').text()).toBe('Participant');
+        await wrapper.get('[data-add-override]').trigger('click');
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(wrapper.get('#requirement-participant-status .badge.text-uppercase').text()).toBe('allgemein');
+        expect(wrapper.get('#requirement-participant-status .participant-status-person strong').text()).toBe('Person');
+        expect(wrapper.get('[data-override-target="participant"] option[value="profile:' + profileId + '"]').text()).toContain('Participant');
+        expect(wrapper.get('[data-participant-row]').attributes('data-participant-key')).toBe('profile:' + profileId);
+    });
     it('keeps zero duration, role and personal overrides in precedence order', () => {
         const config = configuration();
         config.stayRequirements[1].requiredShifts = 0;
