@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; API developers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-19
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented P5/P6 Activity contracts, pure recommendation reads and reviewed application boundaries reconciled alongside retained P0-P4 method-policy/transport provenance and native backend boundaries; execution belongs to paired review
+verification-scope: P7 private finance projections and participant multipart/lifecycle contracts reconciled alongside retained P0-P6 method-policy/transport provenance and native backend boundaries; execution belongs to paired review
 source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/controller/activityController.ts; src/modules/activity/; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: next-contract-migration-or-authorized-cutover
 -->
@@ -40,6 +40,14 @@ projections retain independent method admission. Deliberate recommendation maint
 snapshot and known-job reads cannot maintain rows or enqueue work. Reviewed application retains the exact batch,
 current overlap acknowledgement and existing server provenance/application decisions, without stronger inherited
 completion guarantees.
+
+P7 finance contracts expose separate participant/organizer saved projections and lazy saved-share breakdowns.
+Personal metadata is limited to eligible pools and own invoice/share contexts; unrelated pools, other invoices,
+contacts and financial aggregates remain private. Applied coverage is distinct from pending organizer inputs.
+Proof delivery reuses existing authorization independently of review state. Multipart submission, retraction and
+participant closing adapt the existing invoice operations with prepared acknowledgements; stale retraction and
+lock-time submission rejection are definite conflicts. Upload progress shares the browser transport's generated response/actor checks and cannot
+confirm persistence. These contracts neither expose P8 mutations nor repair inherited backend defects.
 
 Help has one canonical release-owned tree: native English at `docs/user-guide/`, with pilot language corpora in its
 catalog-selected directories such as `en/` and `de/`. Staged maintainer documents are never runtime sources.

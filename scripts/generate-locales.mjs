@@ -18,6 +18,7 @@ const contract = JSON.parse(await fs.readFile(path.join(apiRoot, '.generated/api
 const catalogs = [];
 const sourceHash = createHash('sha256').update(api.sourceHash);
 const pluralSuffix = /_(zero|one|two|few|many|other)$/;
+let invoiceCatalog;
 
 /** Prefer freshly generated contracts in a detached output tree; ordinary catalog-only
  * invocations retain the existing repository contract fallback. */
@@ -113,6 +114,96 @@ function unwrapRegistryExpression(node) {
     return node;
 }
 
+/** Read the maintained invoice catalog as static data, never import or execute its module. */
+async function sharedInvoiceCatalog() {
+    if (invoiceCatalog) return invoiceCatalog;
+    const relative = 'src/modules/invoice/locales/en.ts';
+    const source = await fs.readFile(path.join(root, relative), 'utf8');
+    const tree = ts.createSourceFile(relative, source, ts.ScriptTarget.Latest, true);
+    if (tree.parseDiagnostics.length) throw new Error('Invalid invoice catalog syntax');
+
+    // Only the existing named literal is a wording source. Hash its actual bytes
+    // so wording edits invalidate the same browser/server preparation receipt.
+    const declarations = tree.statements.filter(ts.isVariableStatement).flatMap(statement =>
+        [...statement.declarationList.declarations].filter(declaration => ts.isIdentifier(declaration.name)
+            && declaration.name.text === 'englishInvoiceCatalog'));
+    if (declarations.length !== 1 || !declarations[0].initializer) throw new Error('Missing invoice catalog literal');
+    invoiceCatalog = invoiceLiteral(declarations[0].initializer);
+    if (typeof invoiceCatalog !== 'object') throw new Error('Invalid invoice catalog literal');
+    sourceHash.update(relative).update('\0').update(source).update('\0');
+    return invoiceCatalog;
+}
+
+/** Admit string/object literal data only; getters, spreads and executable initializers are rejected. */
+function invoiceLiteral(expression) {
+    const node = unwrapRegistryExpression(expression);
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+    if (!ts.isObjectLiteralExpression(node)) throw new Error('Unsupported invoice catalog literal');
+
+    // A null prototype keeps even an unexpected authored name from interpreting
+    // assignment as prototype mutation. Duplicate keys must fail rather than win.
+    const result = Object.create(null);
+    for (const property of node.properties) {
+        if (!ts.isPropertyAssignment(property) || !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))) {
+            throw new Error('Unsupported invoice catalog property');
+        }
+        const name = property.name.text;
+        if (Object.hasOwn(result, name)) throw new Error(`Duplicate invoice catalog key: ${name}`);
+        result[name] = invoiceLiteral(property.initializer);
+    }
+    return result;
+}
+
+/** Insert one generated text leaf without replacing authored text or traversing a non-object parent. */
+function insertInvoiceMessage(resources, target, text) {
+    const segments = target.split('.');
+    let parent = resources.ui;
+    if (!parent || typeof parent !== 'object' || Array.isArray(parent)) throw new Error('Invoice messages require UI resources');
+    for (const segment of segments.slice(0, -1)) {
+        if (!Object.hasOwn(parent, segment)) parent[segment] = {};
+        parent = parent[segment];
+        if (!parent || typeof parent !== 'object' || Array.isArray(parent)) throw new Error(`Duplicate invoice message target: ${target}`);
+    }
+    const name = segments.at(-1);
+    if (Object.hasOwn(parent, name)) throw new Error(`Duplicate invoice message target: ${target}`);
+    // The native formatter's named placeholders are the same scalar values;
+    // ordinary catalog validation below still rejects unsupported brace syntax.
+    parent[name] = text.replace(/\{([A-Za-z]\w*)\}/g, '{{$1}}');
+}
+
+/** Resolve explicitly selected English invoice wording before ordinary catalog validation and flattening. */
+async function resolveInvoiceMessages(catalog) {
+    const references = catalog.invoiceMessages;
+    if (references === undefined) return;
+    if (catalog.locale !== 'en') throw new Error('Only English selects shared invoice messages');
+    if (!references || typeof references !== 'object' || Array.isArray(references)) throw new Error('Invalid invoice message references');
+    if (!Object.keys(references).length) return;
+    const shared = await sharedInvoiceCatalog();
+    const existing = new Set(Object.keys(flattenResources(catalog.resources)).map(name => name.replace(pluralSuffix, '')));
+
+    // References name logical UI messages. Plural category suffixes are derived
+    // from the native source and cannot collide with an authored bare/variant key.
+    for (const [target, key] of Object.entries(references)) {
+        if (!target.split('.').every(segment => /^[A-Za-z][A-Za-z0-9_]*$/.test(segment)) || pluralSuffix.test(target)) {
+            throw new Error(`Invalid invoice message target: ${target}`);
+        }
+        if (existing.has(target)) throw new Error(`Duplicate invoice message target: ${target}`);
+        if (typeof key !== 'string' || !Object.hasOwn(shared, key)) throw new Error(`Unknown invoice message reference: ${target}`);
+        const value = shared[key];
+        if (typeof value === 'string') insertInvoiceMessage(catalog.resources, target, value);
+        else {
+            if (!Object.hasOwn(value, 'other')) throw new Error(`Missing invoice plural fallback: ${key}`);
+            for (const [category, message] of Object.entries(value)) {
+                if (!/^(zero|one|two|few|many|other)$/.test(category) || typeof message !== 'string') {
+                    throw new Error(`Unsupported invoice plural: ${key}`);
+                }
+                insertInvoiceMessage(catalog.resources, `${target}_${category}`, message);
+            }
+        }
+        existing.add(target);
+    }
+}
+
 /** Flatten one namespace without accepting arrays, unsafe names or non-text leaves. */
 function flattenNamespace(value, key, nested, namespace) {
     // Leaf values are literal text. An object extends the same dotted logical key;
@@ -194,6 +285,7 @@ for (const file of files) {
         // Catalog metadata itself may never redirect to another corpus or filesystem root.
         throw new Error(`Invalid fixed help source: ${file}`);
     }
+    await resolveInvoiceMessages(catalog);
     const messages = flattenResources(catalog.resources);
     const groups = {};
     for (const [key, text] of Object.entries(messages)) {

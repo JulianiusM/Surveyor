@@ -26,15 +26,15 @@ export function decodeApiMultipartImage(body: unknown, file?: Express.Multer.Fil
 
 /** Decode the shared multipart data part before generated closed-shape validation.
  * A submitted filename cannot substitute for uploaded bytes or hide unknown fields. */
-export function decodeApiMultipartData(body: unknown, file?: Express.Multer.File): unknown {
+export function decodeApiMultipartData(body: unknown, file?: Express.Multer.File, field = 'image'): unknown {
     const form = body as Record<string, unknown>;
-    if (Object.hasOwn(form, 'image') && !file) throw new ApiProblem('UPLOAD_INVALID');
+    if (Object.hasOwn(form, field) && !file) throw new ApiProblem('UPLOAD_INVALID');
 
     // Keep already decoded values and absent/malformed JSON distinctions intact.
     let data: unknown;
     try { data = typeof form.data === 'string' ? JSON.parse(form.data) : form.data; }
     catch { throw new ApiProblem('VALIDATION_FAILED'); }
-    return decodeApiMultipartImage({...form, data}, file);
+    return {...form, data, ...(file ? {[field]: file.originalname} : {})};
 }
 
 /** Decode only the serialization subset declared in the contract; JSON request bodies stay untouched. */

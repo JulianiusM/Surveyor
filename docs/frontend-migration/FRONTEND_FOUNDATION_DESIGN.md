@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: direct R2-R10 interface, staged documentation and civil-date decisions recorded against original choices; source adoption and execution belong to paired review
+verification-scope: explicit P7 trigger recorded alongside direct R2-R10 interface, staged documentation and civil-date decisions against original choices; source adoption and execution belong to paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -898,6 +898,19 @@ The maintainer separately requests the backend ambiguity finding in the central 
 source-based `includeBlockedSwapLegs` concern at P2 priority; no real backend reproduction or remedy is claimed.
 Original P5/P6 choices and earlier verification remain historical evidence. Actual current source adoption and
 executed checks belong to the paired review; P7–P11, cutover and publication remain separately authorized.
+
+### Explicit P7 implementation trigger (2026-10-20)
+
+The maintainer directly requests full P7 implementation and reiterates approval, visual/behavioral parity and
+modularization/DRY. This starts finance read models and participant invoice submission, progress/recovery,
+history, retraction and closing under the existing phase contract. Separate participant and organizer saved-data
+projections reuse the EventPool controller, invoice presentation, proof and persistence owners. Request-local
+interface wording preserves their default English output and financial calculations; upload progress uses the
+existing browser transport's response and actor checks. Native frontend sources remain the comparison reference.
+
+P8 organizer mutations, P9–P11, unrelated backend remedies, default-route cutover, native removal, guide
+publication and deployment remain separately authorized. The paired review records actual source adoption,
+executed checks and remaining limits; this trigger alone does not establish completion.
 
 ## Cutover retirement inventory
 

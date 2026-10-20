@@ -8,9 +8,12 @@ import {asyncHandler} from '../../../modules/lib/asyncHandler';
 import {prepareFileUploader, removeImage} from '../../../modules/lib/fileCommons';
 import {searchLimiter} from '../../../middleware/adminApiFactory';
 import settings from '../../../modules/settings';
+import financeRouter from './finance';
 
 const router = Router();
 const uploadHeader = prepareFileUploader(settings.value.headerImgDir).single('image');
+
+router.use('/:eventId/finance', financeRouter);
 
 /** Decode one generated multipart command without adding a second Event parser. */
 router.post('/', asyncHandler(async function createEvent(req, res) {

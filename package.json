@@ -8,7 +8,7 @@
     "pretest:integration": "npm run generate",
     "pretest:ci": "npm run generate",
     "run": "node dist/server.js",
-    "server:dev": "cross-env NODE_ENV=development SURVEYOR_FRONTEND_DEV=1 nodemon --watch src --watch .generated/frontend-ready.json --ignore src/frontend --ignore src/public --ignore src/types --ignore src/locales --ignore src/modules/localization/generated --ignore src/modules/lib/permissions.ts --ext ts,js,json --delay 500ms --exec \"ts-node --project tsconfig.server.json src/server.ts\"",
+    "server:dev": "cross-env NODE_ENV=development SURVEYOR_FRONTEND_DEV=1 nodemon --watch src --watch .generated/frontend-ready.json --ignore src/frontend --ignore src/public --ignore src/types --ignore src/locales --ignore src/modules/localization/generated --ignore src/modules/lib/permissions.ts --ignore src/modules/invoice/locales/en.ts --ext ts,js,json --delay 500ms --exec \"ts-node --project tsconfig.server.json src/server.ts\"",
     "server:client": "cross-env NODE_ENV=development node esbuild.client.js --watch",
     "server": "npm run build && concurrently \"npm run server:dev\" \"npm run server:client\" \"npm run server:frontend\"",
     "typeorm": "ts-node --project tsconfig.server.json scripts/runMigration.ts",

@@ -4,7 +4,7 @@
  */
 
 import {englishInvoiceCatalog} from './locales/en';
-import type {InvoiceCatalog, InvoiceTextKey, InvoiceTextParameters} from '../../types/InvoicePoolTypes';
+import type {InvoiceCatalog, InvoiceTextKey, InvoiceTextParameters, InvoiceTextFormatter} from '../../types/InvoicePoolTypes';
 
 const invoiceCatalogs: Readonly<Record<string, InvoiceCatalog>> = {en: englishInvoiceCatalog};
 
@@ -42,44 +42,47 @@ export function invoiceText(key: InvoiceTextKey, parameters: InvoiceTextParamete
 }
 
 /** Keep label access readable while all wording remains owned by the selected catalog. */
-export function getInvoiceLabels(locale = 'en') {
+export function getInvoiceLabels(locale = 'en', text?: InvoiceTextFormatter) {
+    /** Keep the existing catalog default while permitting an explicitly supplied interface translator. */
+    function localizedText(key: InvoiceTextKey): string { return invoiceText(key, {}, locale); }
+    text ??= localizedText;
     // This stable presentation contract selects catalog keys once; views and clients do not supply fallback labels.
     return {
-        payer: invoiceText('payer', {}, locale),
-        base: invoiceText('base', {}, locale),
-        adjustments: invoiceText('adjustments', {}, locale),
-        invoiceCredit: invoiceText('invoiceCredit', {}, locale),
-        calculated: invoiceText('calculated', {}, locale),
-        previous: invoiceText('previous', {}, locale),
-        original: invoiceText('original', {}, locale),
-        settled: invoiceText('settled', {}, locale),
-        remaining: invoiceText('remaining', {}, locale),
-        due: invoiceText('due', {}, locale),
-        refund: invoiceText('refund', {}, locale),
-        settledStatus: invoiceText('settledStatus', {}, locale),
-        paymentCompleted: invoiceText('paymentCompleted', {}, locale),
-        refundCompleted: invoiceText('refundCompleted', {}, locale),
-        settledFilter: invoiceText('settledFilter', {}, locale),
-        recordPayment: invoiceText('recordPayment', {}, locale),
-        recordRefund: invoiceText('recordRefund', {}, locale),
-        reversePayment: invoiceText('reversePayment', {}, locale),
-        reverseRefund: invoiceText('reverseRefund', {}, locale),
-        paymentsDue: invoiceText('paymentsDue', {}, locale),
-        refundsDue: invoiceText('refundsDue', {}, locale),
-        netRemaining: invoiceText('netRemaining', {}, locale),
-        invoiceCosts: invoiceText('invoiceCosts', {}, locale),
-        redistributedAdjustments: invoiceText('redistributedAdjustments', {}, locale),
-        additionalAdjustments: invoiceText('additionalAdjustments', {}, locale),
-        distributable: invoiceText('distributable', {}, locale),
-        baseCalculation: invoiceText('baseCalculation', {}, locale),
-        calculationNotes: invoiceText('calculationNotes', {}, locale),
-        recordSettlement: invoiceText('recordSettlement', {}, locale),
-        reverseSettlement: invoiceText('reverseSettlement', {}, locale),
-        awaitingReview: invoiceText('awaitingReview', {}, locale),
-        accepted: invoiceText('accepted', {}, locale),
-        rejected: invoiceText('rejected', {}, locale),
-        retracted: invoiceText('retracted', {}, locale),
-        closed: invoiceText('closed', {}, locale),
+        payer: text('payer'),
+        base: text('base'),
+        adjustments: text('adjustments'),
+        invoiceCredit: text('invoiceCredit'),
+        calculated: text('calculated'),
+        previous: text('previous'),
+        original: text('original'),
+        settled: text('settled'),
+        remaining: text('remaining'),
+        due: text('due'),
+        refund: text('refund'),
+        settledStatus: text('settledStatus'),
+        paymentCompleted: text('paymentCompleted'),
+        refundCompleted: text('refundCompleted'),
+        settledFilter: text('settledFilter'),
+        recordPayment: text('recordPayment'),
+        recordRefund: text('recordRefund'),
+        reversePayment: text('reversePayment'),
+        reverseRefund: text('reverseRefund'),
+        paymentsDue: text('paymentsDue'),
+        refundsDue: text('refundsDue'),
+        netRemaining: text('netRemaining'),
+        invoiceCosts: text('invoiceCosts'),
+        redistributedAdjustments: text('redistributedAdjustments'),
+        additionalAdjustments: text('additionalAdjustments'),
+        distributable: text('distributable'),
+        baseCalculation: text('baseCalculation'),
+        calculationNotes: text('calculationNotes'),
+        recordSettlement: text('recordSettlement'),
+        reverseSettlement: text('reverseSettlement'),
+        awaitingReview: text('awaitingReview'),
+        accepted: text('accepted'),
+        rejected: text('rejected'),
+        retracted: text('retracted'),
+        closed: text('closed'),
     };
 }
 

@@ -34,6 +34,8 @@ async function prepareGenerationTree(directory: string): Promise<void> {
     await fs.cp(path.join(root, 'src/locales'), path.join(directory, 'src/locales'), {recursive: true});
     await fs.mkdir(path.join(directory, 'src/modules/lib'), {recursive: true});
     await fs.copyFile(path.join(root, 'src/modules/lib/permissions.ts'), path.join(directory, 'src/modules/lib/permissions.ts'));
+    await fs.mkdir(path.join(directory, 'src/modules/invoice/locales'), {recursive: true});
+    await fs.copyFile(path.join(root, 'src/modules/invoice/locales/en.ts'), path.join(directory, 'src/modules/invoice/locales/en.ts'));
     await fs.symlink(path.join(root, 'node_modules'), path.join(directory, 'node_modules'),
         process.platform === 'win32' ? 'junction' : 'dir');
 }
@@ -230,7 +232,7 @@ process.once('SIGINT', stopGate);
 }
 
 describe('contract and catalog generation', () => {
-    it('watches atomically replaced permission declarations and publishes readiness only after successful dependent generation', async function watchesPermissionDependency(test) {
+    it('watches atomically replaced shared declarations and publishes readiness only after successful dependent generation', async function watchesPermissionDependency(test) {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         const started = Date.now();
         const trace: {elapsedMs: number; event: string}[] = [];
@@ -259,6 +261,12 @@ describe('contract and catalog generation', () => {
 
         test.onTestFailed(reportWatcherFailure);
         try {
+            // The actual Express watcher must wait for the completion marker;
+            // observing this same source directly would restart before derived
+            // interface messages and their version had finished regenerating.
+            const scripts = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8')).scripts;
+            expect(scripts['server:dev']).toContain('--ignore src/modules/invoice/locales/en.ts');
+            expect(scripts['server:dev']).toContain('--watch .generated/frontend-ready.json');
             // Run copies of the actual watcher/generators against a detached authored
             // tree. Installed dependencies are read through one junction; no maintained
             // source, application server, environment or database is changed.
@@ -369,6 +377,24 @@ describe('contract and catalog generation', () => {
             expect(recoveredPermissions).not.toContain('"WATCHER_PERMISSION":');
             const recoveredManifest = JSON.parse(await fs.readFile(path.join(generatedDirectory, 'manifest.json'), 'utf8'));
             expect(recoveredManifest.version).not.toBe(firstManifest.version);
+
+            // The original invoice catalog is a real preparation input too.
+            // An atomic source save must update its derived interface wording
+            // and version before publishing the next Express readiness marker.
+            const recoveredMarker = await fs.readFile(markerPath, 'utf8');
+            const invoicePath = path.join(temporary, 'src/modules/invoice/locales/en.ts');
+            const invoiceSource = await fs.readFile(invoicePath, 'utf8');
+            const invoiceReplacement = invoiceSource.replace('base: "Base share"', 'base: "Watched shared invoice base"');
+            expect(invoiceReplacement).not.toBe(invoiceSource);
+            await fs.writeFile(`${invoicePath}.next`, invoiceReplacement);
+            await fs.rename(`${invoicePath}.next`, invoicePath);
+            enterPhase('regenerate selected invoice wording after atomic source replacement');
+            await expect.poll(async function invoiceReadyMarker() { return readOptionalFile(markerPath); }, {timeout: 30_000})
+                .not.toBe(recoveredMarker);
+            const invoiceResources = JSON.parse(await fs.readFile(path.join(generatedDirectory, 'resources.json'), 'utf8'));
+            expect(invoiceResources.en.ui.finance.base).toBe('Watched shared invoice base');
+            const invoiceManifest = JSON.parse(await fs.readFile(path.join(generatedDirectory, 'manifest.json'), 'utf8'));
+            expect(invoiceManifest.version).not.toBe(recoveredManifest.version);
         } catch (error) {
             failedPhase = phase;
             assertionFailed = true;
@@ -583,6 +609,83 @@ describe('contract and catalog generation', () => {
         }
     }, 60_000);
 
+    it('derives selected invoice text from its literal owner and tracks source changes without executing catalog code', async () => {
+        const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-invoice-'));
+        try {
+            await prepareGenerationTree(temporary);
+            // Locale generation consumes the actual existing API metadata. This
+            // fixture changes neither the contract compiler nor its wire shapes.
+            const apiDirectory = path.join(temporary, '.generated/api/v1');
+            await fs.mkdir(apiDirectory, {recursive: true});
+            for (const filename of ['operations.json', 'openapi.json']) {
+                await fs.copyFile(path.join(root, '.generated/api/v1', filename), path.join(apiDirectory, filename));
+            }
+            const destination = path.join(temporary, 'output');
+            const localePath = path.join(temporary, 'src/locales/en.json');
+            const english = JSON.parse(await fs.readFile(localePath, 'utf8'));
+            const invoicePath = path.join(temporary, 'src/modules/invoice/locales/en.ts');
+            const originalInvoice = await fs.readFile(invoicePath, 'utf8');
+            const resourcesPath = path.join(destination, 'src/modules/localization/generated/resources.json');
+            const manifestPath = path.join(destination, 'src/modules/localization/generated/manifest.json');
+            generate('generate-locales.mjs', ['--output-root', destination], temporary);
+            const resources = JSON.parse(await fs.readFile(resourcesPath, 'utf8'));
+            const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+            expect(english.invoiceMessages['finance.base']).toBe('base');
+            expect(english.resources.ui.finance).not.toHaveProperty('base');
+            expect(resources.en.ui.finance).toMatchObject({base: 'Base share', participantsCoveredBy: 'Participants covered by {{name}}',
+                otherParticipantsCovered_one: 'Covers {{count}} other participant', otherParticipantsCovered_other: 'Covers {{count}} other participants'});
+            expect(manifest.messages['finance.otherParticipantsCovered']).toMatchObject({parameters: {count: 'number'}, plural: true});
+
+            // Changing only the authoritative wording must invalidate --check,
+            // the emitted text and its shared catalog version together.
+            const changedInvoice = originalInvoice.replace('base: "Base share"', 'base: "Source-owned base"');
+            expect(changedInvoice).not.toBe(originalInvoice);
+            await fs.writeFile(invoicePath, changedInvoice);
+            expect(() => generate('generate-locales.mjs', ['--output-root', destination, '--check'], temporary))
+                .toThrow('Generated catalog is stale');
+            generate('generate-locales.mjs', ['--output-root', destination], temporary);
+            expect(JSON.parse(await fs.readFile(resourcesPath, 'utf8')).en.ui.finance.base).toBe('Source-owned base');
+            expect(JSON.parse(await fs.readFile(manifestPath, 'utf8')).version).not.toBe(manifest.version);
+            await fs.writeFile(invoicePath, originalInvoice);
+
+            // Source selection cannot overwrite explicit authored text, name an
+            // absent native entry or bypass the existing safe-key vocabulary.
+            const duplicate = structuredClone(english);
+            duplicate.resources.ui.finance.base = 'Copied wording';
+            const missing = structuredClone(english);
+            missing.invoiceMessages['finance.base'] = 'missingInvoiceMessage';
+            const unsafe = structuredClone(english);
+            unsafe.invoiceMessages['finance.__proto__'] = 'base';
+            for (const [catalog, message] of [[duplicate, 'Duplicate invoice message target'],
+                [missing, 'Unknown invoice message reference'], [unsafe, 'Invalid invoice message target']] as const) {
+                await fs.writeFile(localePath, JSON.stringify(catalog));
+                expect(() => generate('generate-locales.mjs', ['--output-root', destination], temporary)).toThrow(message);
+            }
+            await fs.writeFile(localePath, JSON.stringify(english));
+            for (const [source, message] of [
+                [originalInvoice.replace('base: "Base share"', 'base: (() => "must not run")()'), 'Unsupported invoice catalog literal'],
+                [originalInvoice.replace('base: "Base share"', 'base: "First", base: "Second"'), 'Duplicate invoice catalog key'],
+                [originalInvoice.replace('base: "Base share"', 'base: "{{#label}}"'), 'Unsupported interpolation'],
+            ] as const) {
+                await fs.writeFile(invoicePath, source);
+                expect(() => generate('generate-locales.mjs', ['--output-root', destination], temporary)).toThrow(message);
+            }
+
+            // Catalogs with no shared references retain their existing standalone
+            // input boundary; they need no invoice file merely because it exists
+            // in the application repository.
+            const standalone = {...english, resources: resources.en};
+            delete standalone.invoiceMessages;
+            await fs.writeFile(localePath, JSON.stringify(standalone));
+            await fs.unlink(invoicePath);
+            generate('generate-locales.mjs', ['--output-root', destination], temporary);
+            expect(JSON.parse(await fs.readFile(resourcesPath, 'utf8')).en.ui.finance.base).toBe('Base share');
+        } finally {
+            await removeDependencyLink(temporary);
+            await removeTemporary(temporary);
+        }
+    }, 30_000);
+
     it('discovers one added locale file and rejects missing text, placeholder drift and active markup', async () => {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {
@@ -591,8 +694,11 @@ describe('contract and catalog generation', () => {
             await fs.cp(path.join(root, 'src/locales'), source, {recursive: true});
             const english = JSON.parse(await fs.readFile(path.join(source, 'en.json'), 'utf8'));
             // Synthetic fixture: tests discovery and applicable plural categories, not translation quality.
-            const added = {...english, locale: 'nl', nativeName: 'Nederlands', help: {directory: 'nl'}};
+            generate('generate-locales.mjs', ['--source', source, '--output-root', destination]);
+            const resolved = JSON.parse(await fs.readFile(path.join(destination, 'src/modules/localization/generated/resources.json'), 'utf8'));
+            const added = {...english, resources: resolved.en, locale: 'nl', nativeName: 'Nederlands', help: {directory: 'nl'}};
             delete added.uiContracts;
+            delete added.invoiceMessages;
             await fs.writeFile(path.join(source, 'nl.json'), JSON.stringify(added));
             generate('generate-locales.mjs', ['--source', source, '--output-root', destination]);
             const manifest = JSON.parse(await fs.readFile(path.join(destination, 'src/modules/localization/generated/manifest.json'), 'utf8'));

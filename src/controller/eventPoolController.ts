@@ -40,13 +40,231 @@ import {
 import {getInvoiceProofPath} from '../modules/invoice/proofs';
 import {assertInvoiceSharesExportable} from '../modules/invoice/validation';
 import {invoiceText} from '../modules/invoice/wording';
-import {invoiceSettledShareNotice} from '../modules/invoice/presentation';
-import type {InvoiceSharesPdfData} from '../types/InvoicePoolTypes';
-import type {PermBundle} from '../types/PermissionTypes';
+import {
+    invoiceSettledShareNotice, invoiceBalanceCaption, invoicePoolSummary, invoiceShareComponents,
+    invoicePayerCalculation, invoicePoolCalculationBreakdown, invoicePoolCalculation, isOrganizerInvoice, presentInvoiceShare,
+} from '../modules/invoice/presentation';
+import {invoiceAppliedTakeovers, invoiceHasAppliedTakeoverEvidence, invoiceHasPendingTakeovers} from '../modules/invoice/coverage';
+import {evaluateSubject} from '../modules/permissionEngine';
+import {ApiProblem} from '../modules/api/problem';
+import {createTranslator} from '../modules/localization/translator';
+import type {EventInvoicePool} from '../modules/database/entities/event/EventInvoicePool';
+import type {EventInvoice} from '../modules/database/entities/event/EventInvoice';
+import type {EventInvoiceShare} from '../modules/database/entities/event/EventInvoiceShare';
+import type {components} from '../types/api/v1';
+import type {ParticipantRow} from '../types/EventTypes';
+import type {InvoiceSharesPdfData, InvoiceTextFormatter, InvoiceAppliedTakeover} from '../types/InvoicePoolTypes';
+import type {MessageKey, MessageParameters} from '../types/LocalizationTypes';
+import type {PermBundle, SessionLike} from '../types/PermissionTypes';
+
+/** Bind the shared financial presentation to this request without changing the native English default. */
+function financeFormatter(locale?: string): InvoiceTextFormatter {
+    if (!locale) return invoiceText;
+    const translator = createTranslator(locale);
+    // The presenter selects native catalog keys dynamically; the translator checks their exact runtime parameters.
+    return (key, parameters = {}) => translator.t(`finance.${key}` as MessageKey, parameters as MessageParameters[MessageKey]);
+}
+
+/** Admit one finance audience before loading any invoice or settlement collections. */
+async function admitFinance(eventId: string, session: SessionLike, audience?: components['schemas']['FinanceView']['audience']) {
+    if (!session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
+    const event = await eventService.getEventById(eventId);
+    if (!event) throw new ApiProblem('NOT_FOUND');
+
+    // Page admission does not grant access to organizer finance or someone else's proof.
+    const permissions = await evaluateSubject({kind: 'entity', entity: {
+        entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
+    }}, session);
+    const registration = await eventService.getRegistrationFor(session.profile.id, eventId);
+    if (audience === 'organizer' && (!permissions.has('ACCESS_ADMIN') || !permissions.has('MANAGE_ASSIGNMENTS'))) {
+        throw new ApiProblem('FORBIDDEN');
+    }
+    if (audience === 'participant' && !registration) throw new ApiProblem('FORBIDDEN');
+    return {event, permissions, registration};
+}
+
+/** Keep recorder and participant attribution distinct, with contact details restricted to the organizer audience. */
+function projectFinanceInvoice(eventId: string, pool: EventInvoicePool, invoice: EventInvoice,
+    participants: readonly ParticipantRow[], audience: components['schemas']['FinanceView']['audience'],
+    registrationId?: number): components['schemas']['FinanceInvoice'] {
+    const participant = participants.find(row => row.id === invoice.registrationId);
+    const ownsInvoice = registrationId !== undefined && invoice.registrationId === registrationId;
+    // A proof link retains exactly the invoice's existing ownership, independently of its review state.
+    return {id: String(invoice.id), poolId: pool.id, poolName: pool.name, revision: pool.calculationRevision,
+        status: invoice.status, amount: Number(invoice.amount), description: invoice.description ?? null,
+        correctedAmount: invoice.correctedAmount == null ? null : Number(invoice.correctedAmount),
+        correctedDescription: invoice.correctedDescription ?? null, rejectionReason: invoice.rejectionReason ?? null,
+        createdAt: invoice.track?.createdAt?.toISOString() ?? null, organizerRecorded: isOrganizerInvoice(invoice),
+        recordedByName: invoice.recordedByName || invoice.recordedByProfile?.name || null,
+        participantName: participant?.name ?? null, participantEmail: audience === 'organizer' ? participant?.email ?? null : null,
+        proofOriginalName: invoice.proofOriginalName ?? null,
+        proofUrl: invoice.proofPath ? `/api/event/${encodeURIComponent(eventId)}/invoice-pools/${encodeURIComponent(pool.id)}/invoices/${invoice.id}/proof` : null,
+        canRetract: ownsInvoice && invoice.status === 'NEW', canClose: ownsInvoice && invoice.status === 'APPROVED'};
+}
+
+/** Project saved payer rows using the shared settlement and applied-coverage presentation owners. */
+function projectFinanceShare(pool: EventInvoicePool, share: EventInvoiceShare,
+    participants: readonly ParticipantRow[], audience: components['schemas']['FinanceView']['audience'],
+    text: InvoiceTextFormatter): components['schemas']['FinanceShare'] {
+    const payerName = participants.find(row => row.id === share.registrationId)?.name
+        || text('participant', {id: share.registrationId});
+    // Decimal persistence values are normalized before the shared pure presenter receives this saved row.
+    const values = financeShareValues(share);
+    const presentation = presentInvoiceShare(values, text);
+    const coveredNames = invoiceAppliedTakeovers(pool).filter(row => row.payerRegistrationId === share.registrationId)
+        .map(row => participants.find(person => person.id === row.beneficiaryRegistrationId)?.name
+            || text('participant', {id: row.beneficiaryRegistrationId}));
+    return {id: String(share.id), poolId: pool.id, poolName: pool.name, payerName,
+        notes: (share.note ?? '').split(' • ').filter(Boolean), needsRecalculation: Boolean(pool.needsRecalculation),
+        amount: presentation.originalBalance, status: presentation.status, statusLabel: presentation.statusLabel, isPaid: Boolean(share.isPaid),
+        caption: invoiceBalanceCaption(values, audience, text),
+        settledShareNotice: invoiceSettledShareNotice(pool, share, participants, 'organizer', text),
+        coveredNames, coverageKnown: invoiceHasAppliedTakeoverEvidence(pool)};
+}
+
+/** Normalize persisted decimal columns once for every read-only financial presenter. */
+function financeShareValues(share: EventInvoiceShare) {
+    return {registrationId: share.registrationId, baseShareAmount: Number(share.baseShareAmount),
+        extraAmount: Number(share.extraAmount), invoiceCreditAmount: Number(share.invoiceCreditAmount),
+        paymentCreditAmount: Number(share.paymentCreditAmount), shareAmount: Number(share.shareAmount), isPaid: Boolean(share.isPaid)};
+}
+
+/** Group an already selected applied or pending roster, retaining only admitted display names and registration identities. */
+function projectFinanceCoverage(takeovers: readonly InvoiceAppliedTakeover[], participants: readonly ParticipantRow[],
+    text: InvoiceTextFormatter): components['schemas']['FinanceCoverageGroup'][] {
+    const names = new Map(participants.map(participant => [participant.id, participant.name]));
+    const groups = new Map<number, components['schemas']['FinanceCoverageGroup']>();
+    // Selection of applied versus pending responsibility stays with the existing coverage owner and its caller.
+    for (const takeover of takeovers) {
+        const payerId = takeover.payerRegistrationId;
+        let group = groups.get(payerId);
+        if (!group) {
+            group = {payerId: String(payerId), payerName: names.get(payerId) || text('participant', {id: payerId}), beneficiaries: []};
+            groups.set(payerId, group);
+        }
+        const id = takeover.beneficiaryRegistrationId;
+        group.beneficiaries.push({id: String(id), name: names.get(id) || text('participant', {id})});
+    }
+    // Native coverage pages complete payer groups sorted by their visible names; presentation does not alter responsibility.
+    const result = [...groups.values()].sort((left, right) => left.payerName.localeCompare(right.payerName));
+    for (const group of result) group.beneficiaries.sort((left, right) => left.name.localeCompare(right.name));
+    return result;
+}
+
+/** Project accounting totals and distinct saved/future coverage only for the admitted pool audience. */
+function projectFinancePool(pool: EventInvoicePool, participants: readonly ParticipantRow[],
+    audience: components['schemas']['FinanceView']['audience'], canSubmit: boolean,
+    text: InvoiceTextFormatter): components['schemas']['FinancePool'] {
+    const organizer = audience === 'organizer';
+    const showCoverage = organizer || canSubmit;
+    const coverageKnown = showCoverage && invoiceHasAppliedTakeoverEvidence(pool);
+    const hasPendingTakeovers = organizer && invoiceHasPendingTakeovers(pool);
+    const hasSavedShares = organizer && pool.status === 'CLOSED' && pool.shares.length > 0;
+    const assignedCount = pool.assignAll ? participants.length : pool.assignments.length;
+    const snapshot = pool.calculationSnapshot;
+    // Native personal coverage receives only eligible OPEN pools. History/share-only pool metadata cannot widen its roster.
+    const coverageGroups = showCoverage ? projectFinanceCoverage(invoiceAppliedTakeovers(pool), participants, text) : [];
+    const pendingCoverageGroups = organizer && pool.status === 'CLOSED' && (!coverageKnown || hasPendingTakeovers)
+        ? projectFinanceCoverage(pool.takeovers, participants, text) : [];
+    return {id: pool.id, name: pool.name, description: pool.description ?? null, status: pool.status,
+        isDefault: Boolean(pool.isDefault), needsRecalculation: Boolean(pool.needsRecalculation),
+        hasPendingTakeovers, coverageKnown, coverageGroups, pendingCoverageGroups,
+        assignedCount: showCoverage ? assignedCount : 0,
+        assignAll: showCoverage && Boolean(pool.assignAll), revision: pool.calculationRevision, canSubmit,
+        // Personal rows never expose pool-wide accounting or another payer's calculation example.
+        summary: organizer ? invoicePoolSummary(pool, text) : null,
+        calculation: hasSavedShares ? invoicePoolCalculationBreakdown(snapshot?.explanation, snapshot?.surcharges, text) : null,
+        exampleCalculation: hasSavedShares ? invoicePoolCalculation(snapshot?.explanation, pool.shares, snapshot?.surcharges, text) : null};
+}
+
+/** Read saved finance only, with separate organizer and personal disclosure boundaries and no maintenance writes. */
+export async function readEventFinance(eventId: string, session: SessionLike,
+    audience: components['schemas']['FinanceView']['audience'] = 'participant', locale?: string): Promise<components['schemas']['FinanceView']> {
+    const {registration} = await admitFinance(eventId, session, audience);
+    const text = financeFormatter(locale);
+    const [pools, participants, participantPools] = await Promise.all([
+        invoiceService.listPools(eventId), eventService.getEventParticipants(eventId),
+        registration ? invoiceService.getParticipantPools(eventId, registration.id) : Promise.resolve([]),
+    ]);
+    const eligiblePoolIds = new Set(participantPools.map(pool => pool.id));
+    // Organizers receive the existing accounting view; participants receive own invoices and own payer rows only.
+    const invoices = pools.flatMap(pool => pool.invoices.filter(invoice => audience === 'organizer'
+        || invoice.registrationId === registration!.id).map(invoice => projectFinanceInvoice(eventId, pool, invoice, participants, audience, registration?.id)));
+    const shares = pools.flatMap(pool => pool.shares.filter(share => audience === 'organizer'
+        || share.registrationId === registration!.id).map(share => projectFinanceShare(pool, share, participants, audience, text)));
+    invoices.sort((left, right) => (right.createdAt ?? '').localeCompare(left.createdAt ?? '') || Number(right.id) - Number(left.id));
+    // The native participant page uses other pool metadata only to name an own invoice/share; unrelated pools stay private.
+    const visiblePools = audience === 'organizer' ? pools : pools.filter(pool => eligiblePoolIds.has(pool.id)
+        || invoices.some(invoice => invoice.poolId === pool.id) || shares.some(share => share.poolId === pool.id));
+    return {audience, registrationId: registration ? String(registration.id) : null, invoices, shares,
+        pools: visiblePools.map(pool => projectFinancePool(pool, participants, audience, eligiblePoolIds.has(pool.id), text))};
+}
+
+/** Load only the selected saved payer explanation after rechecking its audience and event/pool ownership. */
+export async function readEventFinanceBreakdown(eventId: string, poolId: string, shareId: string,
+    session: SessionLike, audience: components['schemas']['FinanceView']['audience'], locale?: string): Promise<components['schemas']['FinanceBreakdown']> {
+    const {event, registration} = await admitFinance(eventId, session, audience);
+    const text = financeFormatter(locale);
+    const pool = await ensurePool(event, poolId);
+    const share = pool.shares.find(row => String(row.id) === shareId);
+    if (!share) throw new ApiProblem('NOT_FOUND');
+    if (audience === 'participant' && share.registrationId !== registration!.id) throw new ApiProblem('FORBIDDEN');
+
+    // The existing pure presentation owner selects only this payer's frozen contributions and coverage.
+    const participants = await eventService.getEventParticipants(eventId);
+    const payerName = participants.find(row => row.id === share.registrationId)?.name;
+    const snapshot = pool.calculationSnapshot;
+    const values = financeShareValues(share);
+    return {components: invoiceShareComponents(values, snapshot?.explanation, snapshot?.surcharges, text),
+        calculation: invoicePayerCalculation(snapshot?.explanation, {...values, payerName}, snapshot?.surcharges, text),
+        notes: (share.note ?? '').split(' • ').filter(Boolean), statusLabel: presentInvoiceShare(values, text).statusLabel,
+        needsRecalculation: Boolean(pool.needsRecalculation), settledShareNotice: invoiceSettledShareNotice(pool, share, participants, 'organizer', text)};
+}
+
+/** Match native participant-route admission before accepting any uploaded proof bytes. */
+export async function admitEventInvoiceSubmission(eventId: string, session: SessionLike): Promise<Event> {
+    return (await admitFinance(eventId, session, 'participant')).event;
+}
+
+/** Bound participant-only command adapters to an own saved invoice before entering its unchanged business operation. */
+async function admitOwnFinanceInvoice(eventId: string, poolId: string, invoiceId: string, session: SessionLike): Promise<Event> {
+    const {event, registration} = await admitFinance(eventId, session, 'participant');
+    const pool = await ensurePool(event, poolId);
+    // In particular, a terminal CLOSED row must not bypass this adapter's own-invoice boundary.
+    const invoice = pool.invoices.find(row => String(row.id) === invoiceId);
+    if (!invoice) throw new ApiProblem('NOT_FOUND');
+    if (invoice.registrationId !== registration!.id) throw new ApiProblem('FORBIDDEN');
+    return event;
+}
+
+/** Adapt revision-checked retraction to the existing invoice owner without introducing another mutation. */
+export async function retractEventInvoice(eventId: string, poolId: string, invoiceId: string, body: unknown, session: SessionLike): Promise<void> {
+    const event = await admitOwnFinanceInvoice(eventId, poolId, invoiceId, session);
+    // The shared operation's explicit precommit conflict remains a definite rejection in the generated transport.
+    try {
+        await retractInvoice(event, poolId, invoiceId, body, session as Request['session']);
+    } catch (error) {
+        if (error instanceof APIError && error.status === 409) throw new ApiProblem('RESOURCE_CONFLICT');
+        throw error;
+    }
+}
+
+/** Retain native participant close admission and explicitly disable the organizer override. */
+export async function closeEventInvoice(eventId: string, poolId: string, invoiceId: string, session: SessionLike): Promise<void> {
+    const event = await admitOwnFinanceInvoice(eventId, poolId, invoiceId, session);
+    await closeInvoice(event, poolId, invoiceId, session as Request['session'], undefined, false);
+}
+
+/** Reuse proof ownership independently from page audience, invoice status and proof retention. */
+export async function readEventInvoiceProof(eventId: string, poolId: string, invoiceId: string, session: SessionLike): Promise<string> {
+    const {event, permissions} = await admitFinance(eventId, session);
+    // The proof policy admits an attributed participant or the independent manage-assignment method grant.
+    return serveInvoiceProof(event, poolId, invoiceId, session as Request['session'], {entity: permissions} as PermBundle);
+}
 
 // Resolve the registration ID for the current actor so validation stays localized.
 /** Resolve authenticated event membership for ownership-sensitive invoice operations. */
-async function getActorRegistrationId(event: Event, session: Request['session']) {
+async function getActorRegistrationId(event: Event, session: SessionLike) {
     if (!session.profile) return undefined;
 
     const registration = await eventService.getRegistrationFor(session.profile.id, event.id);
@@ -160,7 +378,7 @@ async function updateTakeovers(event: Event, poolId: string, body: any, session:
 
 // Validate and submit a new invoice with its proof file attached.
 /** Coordinate participant eligibility, proof attribution, locked submission, and a post-commit receipt. */
-async function submitInvoice(event: Event, poolId: string, body: any, session: Request['session'], file?: Express.Multer.File | undefined) {
+async function submitInvoice(event: Event, poolId: string, body: any, session: SessionLike, file?: Express.Multer.File | undefined) {
     // Resolve authenticated membership before normalizing invoice fields and checking this pool's eligibility.
     const regId = await getActorRegistrationId(event, session);
     if (!regId) throw new APIError(invoiceText('mustBeRegisteredToSubmit'), body, 401);

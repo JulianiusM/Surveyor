@@ -6,7 +6,7 @@ owner: project maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P6 source/adoption retained; October 20 dynamic-tab and explicit swap-review pairing correction mapped separately from earlier evidence; execution and original visual review belong to paired review; native/backend exclusions remain open
+verification-scope: P7 finance source and assertion boundaries mapped alongside retained P0-P6 adoption and October 20 Activity corrections; execution and original visual review belong to paired review; native/backend exclusions remain open
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -573,6 +573,29 @@ The native active schedule does not observe automatically queued post-deadline w
 [approved R1 amendment](FRONTEND_FOUNDATION_DESIGN.md#approved-automatic-recommendation-job-observation-2026-10-19)
 allows Vue to observe that existing job and read its saved results without another generation trigger. The fix is
 frontend-only; IMP-030 remains open until native-to-Vue cutover. Actual current verification belongs to the paired review.
+
+## P7 finance source and assertion map (2026-10-20)
+
+The [explicit P7 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p7-implementation-trigger-2026-10-20) activates
+finance saved reads and participant invoice workflows. `FinanceSection` composes the existing Event pages;
+`FinanceSubmission` owns the invoice draft/File; shared finance history, totals, ledger, coverage and lazy breakdown
+components consume generated operations. The EventPool controller reuses existing invoice/proof operations and
+saved presenters. No browser recalculation or P8 command implementation is introduced.
+
+| Contract | Unique assertion boundary |
+|---|---|
+| INV-03/04: upload and recovery | Mounted finance cases retain the exact pending/rejected File, distinguish transferred bytes from save, protect unknown delivery and release only completed inputs after confirmation. Built workflows hold/drop a committed response, inspect real history and verify no automatic replay. |
+| INV-05/06/20: history, lifecycle and proof | Real-persistence cases protect all five states, original/corrected values, organizer attribution, own-invoice commands, revision conflict and retained proof. Mounted search covers admitted organizer email/fallback labels. Built history search/filter/paging, captured review IDs and cancel/confirm journeys use actual middleware/session/backend and retain the document. |
+| Saved totals/shares and lazy breakdown | Mounted selection follows the current admitted row; persistence protects signed saved amounts and private contributions. Native/Vue search includes pool descriptions and applied covered names without losing the whole-pool payer count. Built comparisons retain stale-source versus saved-share distinction, payer settlement context, lazy protected GETs and responsive breakdown; mounted cases protect tied-amount ordering and contextual controls. |
+| Applied versus pending coverage | Existing coverage owners supply separate saved/applied and future groups; personal metadata is limited to eligible pools. Built comparisons exercise whole-payer paging without losing expanded names, beneficiary search beyond the six-name preview and native destinations for unmigrated editing. |
+| Localization, retirement and defaults | Real catalog/presenter tests keep user names and numbers unchanged and native English defaults isolated. Finance denials retire language aliases. English/German browser surfaces and native/Vue desktop/mobile captures support finite visual review. |
+
+Sources: [mounted finance](../../tests/frontend/frontend-finance.spec.ts),
+[persistence/adapters](../../tests/integration/finance-api.spec.ts),
+[built workflows](../../tests/e2e/frontend-finance.spec.ts),
+[shared presenter](../../tests/unit/invoice-presentation.spec.ts). The
+[paired review](PILOT_PARITY_REVIEW.md#p7-finance-implementation-and-scoped-verification-2026-10-20) owns actual
+execution and image-inspection results. This map supplies no unrun-check, external delivery, P8–P11 or cutover claim.
 
 ## Verification selection for subsequent migration slices
 

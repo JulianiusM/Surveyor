@@ -13,6 +13,20 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /events/{eventId}/finance:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance
+  /events/{eventId}/finance/organizer:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1organizer
+  /events/{eventId}/finance/pools/{poolId}/shares/{shareId}:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1shares~1{shareId}
+  /events/{eventId}/finance/pools/{poolId}/invoices:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1invoices
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/retract:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1invoices~1{invoiceId}~1retract
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/close:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1invoices~1{invoiceId}~1close
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/proof:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1invoices~1{invoiceId}~1proof
   /activity-plans/{planId}/requirements:
     $ref: ./activity.yaml#/paths/~1activity-plans~1{planId}~1requirements
   /activity-plans/{planId}/recommendations:

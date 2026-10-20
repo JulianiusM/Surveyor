@@ -114,11 +114,17 @@ function observePermissionRegistry(_event, filename) {
     if (filename && filename.toString() === 'permissions.ts') schedule();
 }
 
+/** Observe the shared invoice catalog's parent so atomic saves regenerate its selected interface messages too. */
+function observeInvoiceCatalog(_event, filename) {
+    if (filename && filename.toString() === 'en.ts') schedule();
+}
+
 const watchers = [];
 for (const directory of ['contracts/api/v1', 'src/locales']) {
     watchers.push(watch(path.join(root, directory), {recursive: true}, observeContractOrCatalog));
 }
 watchers.push(watch(path.join(root, 'src/modules/lib'), observePermissionRegistry));
+watchers.push(watch(path.join(root, 'src/modules/invoice/locales'), observeInvoiceCatalog));
 
 /** Release timers, directory handles and the active child when the development group stops. */
 function stop() {

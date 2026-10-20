@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: October 20 Activity tab/pairing correction and backend inference qualified separately from earlier R2-R10 implementation evidence; original baseline/history, shared ownership and cutover conditions retained; renewed execution remains separately scoped
+verification-scope: authorized P7 finance implementation, independent semantic review and finite running-app evidence recorded alongside retained Activity corrections and P0-P6 history; native/backend exclusions and cutover conditions retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,65 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## P7 finance implementation and scoped verification (2026-10-20)
+
+The maintainer's direct instruction to fully implement P7 activates the existing finance phase contract. Event
+detail/admin now compose separate personal/organizer saved projections, shared history/totals/signed ledgers,
+applied versus pending coverage and lazy protected payer explanations. Participant invoice/proof submission,
+revision-reviewed retraction and closing use the existing controller operations. Proof access and retention remain
+independent of review status; organizer recorder and attributed participant remain distinct. P8 organizer/allocation
+commands retain their working native destinations. No schema, migration, native frontend, default-route or publication
+change follows from this instruction.
+
+Root and independent nonauthor review traced actual Event adoption, privacy and denial retirement, generated
+contracts, controller/DBAL separation, draft lifetimes and shared presentation ownership. Request-local formatting
+extends the existing invoice presenters without changing their native English defaults or numeric decisions.
+English frontend messages derive from the existing domain catalog through validated static generation; German
+uses the same message contracts. The existing generation/watch owner tracks that source, including atomic
+replacement. Matching finance consumers share history, ledger/footer, coverage, calculation and breakdown owners.
+The final source comparison preserves searchable admitted context, unfiltered payer counts, tied-balance name
+ordering, expanded coverage across paging changes, contextual actions and captured invoice identity in reviews.
+
+Confirmed submission releases only completed fields/File; rejection retains their exact values. Transfer completion
+cannot confirm persistence. An uncertain committed response stays blocked until fresh history inspection and
+explicit human acknowledgement, with no automatic replay. A locale read retains the same cache-owned admitted
+snapshot and mounted draft/File; commands wait for current-language confirmation. Denial retires all language
+aliases of that private audience. Built testing discovered and corrected Vue's blur-time normalization of the
+invoice amount through the existing field control slot; the amount now retains `013.50` exactly. The inherited
+shared-control concern outside P7 is recorded once as `IMP-084`; inherited submission/proof cleanup limits remain
+in `IMP-013`, without a backend repair or stronger lifecycle claim.
+
+Executed checks passed: the full build and final affected server/client/SSR builds and typechecks, including the
+full test TypeScript graph; 238 invoice
+unit cases across seven files; 17 mounted finance cases; five real-persistence/HTTP finance cases; and three
+selected catalog-generation/watch regressions (six other cases were not selected). The persistence suite includes
+an actual competing pool closure under the root lock: submission returns a definite `409 RESOURCE_CONFLICT`
+without saving an invoice. The organizer destination case passed again after its final anchor correction.
+
+All four selected built Chromium workflows have passing receipts. The saved-ledger workflow is renewed on the
+final frontend build; history, upload and coverage precede the final organizer-link/dialog-subtitle changes and
+cover their unchanged behavior. Actual native organizer navigation and viewport assertions pass at both widths;
+the organizer dialog identifies pool and payer, and mobile body scrolling reveals the final saved formula without
+moving the Event page.
+These runs cover real retained proofs, five history states, exact
+draft/File retention through a held language read, transferred-versus-saved progress, dropped committed response
+without replay, signed saved balances, settlement history, lazy private reads and applied/pending coverage.
+Original native/Vue comparisons use 1280/390 widths, with selected German mobile and locale-transition states.
+Root review inspected matched original captures. Independent review opened all 43 accepted originals at their
+original resolution, including native breakdowns and the distinct upload/German surfaces, and found no remaining
+visual, information or workflow defect within this finite scope.
+
+Local execution used Node.js 24.13.0 and MariaDB 10.4.32, with database suites serialized against the verified
+disposable `cgd_e2e` schema and schema-scoped credentials. It does not renew documented Node.js 24.15.0/MariaDB
+10.11 acceptance. Engineering diagnostics and whitespace checks are clean; the production freeze/amendment guard
+has zero findings. Advisory documentation reporting retains only the existing source-baseline mismatch.
+
+These checks cover the declared P7 journeys, saved states and inspected surfaces. They do not certify exhaustive
+actor/state/browser/locale/concurrency combinations, live SMTP/inbox delivery, rendered PDF layout, hosted CI or
+deployment. P8–P11, cutover, native retirement and guide publication retain separate authorization. The
+[source/assertion map](TEST_COVERAGE.md#p7-finance-source-and-assertion-map-2026-10-20) identifies the executable
+boundaries; earlier receipts below retain their original scopes.
 
 ## Activity correction follow-up (2026-10-20)
 

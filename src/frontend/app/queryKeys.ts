@@ -11,6 +11,10 @@ export const eventKeys = {
     participants: (context: string | null | undefined, id: string) => [...eventKeys.resource(context, id), 'participants'] as const,
     links: (context: string | null | undefined, id: string) => [...eventKeys.resource(context, id), 'links'] as const,
     things: (context: string | null | undefined, id: string, admin = false) => [...eventKeys.resource(context, id), 'things', admin] as const,
+    financeFamily: (context: string | null | undefined, id: string) => [...eventKeys.resource(context, id), 'finance'] as const,
+    finance: (context: string | null | undefined, id: string, admin = false) => [...eventKeys.financeFamily(context, id), admin] as const,
+    financeBreakdown: (context: string | null | undefined, id: string, poolId: string, shareId: string, admin = false) =>
+        [...eventKeys.finance(context, id, admin), 'breakdown', poolId, shareId] as const,
     guest: (context: string | null | undefined, id: string) => [...eventKeys.resource(context, id), 'guest'] as const,
     creation: (context: string | null | undefined) => [...eventKeys.all(context), 'creation'] as const,
     duplicate: (context: string | null | undefined, id: string) => [...eventKeys.resource(context, id), 'duplicate'] as const,
@@ -170,5 +174,8 @@ export function belongsToQueryFamily(query: Parameters<typeof matchQuery>[1], fa
  * language-owned projections extend this owner rather than invalidating the whole cache. */
 export function belongsToLocalizedQueryFamily(query: Parameters<typeof matchQuery>[1], context: string | null): boolean {
     // Match complete actor families, including obsolete locale variants and inactive pages.
-    return belongsToQueryFamily(query, helpKeys.all(context)) || belongsToQueryFamily(query, overviewKeys.all(context));
+    return belongsToQueryFamily(query, helpKeys.all(context)) || belongsToQueryFamily(query, overviewKeys.all(context))
+        // Finance contains request-local presenter wording. The key owner alone
+        // identifies this resource subfamily; other Event data remains locale-free.
+        || (belongsToQueryFamily(query, eventKeys.all(context)) && query.queryKey[4] === 'finance');
 }

@@ -163,6 +163,60 @@ export class PilotTransport {
         return {data, etag: response.headers.get('ETag')};
     }
 
+    /** Send one proof upload with native transfer progress and the same generated
+     * response, actor and rejection checks as fetch. Transfer completion is never
+     * save confirmation; timeout, abort and unusable delivery remain uncertain.
+     * The feature retains its form, draft and explicit recovery decisions. */
+    async uploadJson<T>(operationId: ApiOperationId, path: string, form: FormData, validate: Validator<T>,
+                        scope: PilotRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void): Promise<T> {
+        if (!this.isCurrent(scope)) throw new ObsoleteRequestError();
+        if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) throw new InvalidInputError();
+        const headers = this.headers(scope);
+
+        // XHR supplies upload progress which fetch does not expose. Do not set
+        // Content-Type: the browser must retain its multipart boundary and bytes.
+        const request = new XMLHttpRequest();
+        request.open('POST', '/api/v1' + path);
+        request.timeout = 180000;
+        for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, value);
+
+        await new Promise<void>(function send(resolve, reject) {
+            request.upload.onprogress = reportProgress;
+            request.upload.onload = uploaded;
+            request.onload = completed;
+            request.onerror = uncertain;
+            request.ontimeout = uncertain;
+            request.onabort = uncertain;
+
+            /** Report bytes only; the feature separately waits for confirmation. */
+            function reportProgress(event: ProgressEvent): void {
+                progress(event.loaded, event.lengthComputable ? event.total : null);
+            }
+            /** Transfer end is known even when the browser could not measure its total bytes. */
+            function uploaded(event: ProgressEvent): void {
+                progress(event.loaded, event.lengthComputable ? event.total : null, true);
+            }
+            function completed(): void { resolve(); }
+            function uncertain(): void { reject(new UnconfirmedResponseError()); }
+
+            // A synchronous send failure still cannot establish server rejection.
+            request.send(form);
+        });
+
+        // Reconstruct the ordinary response boundary without trusting XHR's body.
+        // HTML redirects, malformed JSON and foreign context cannot confirm a write.
+        const responseHeaders = new Headers();
+        for (const line of request.getAllResponseHeaders().trim().split(/[\r\n]+/u)) {
+            const separator = line.indexOf(':');
+            if (separator > 0) responseHeaders.append(line.slice(0, separator), line.slice(separator + 1).trim());
+        }
+        if (request.status < 200) throw new UnconfirmedResponseError();
+        const response = new Response(request.responseText || null, {status: request.status, headers: responseHeaders});
+        let body: unknown;
+        try { body = JSON.parse(request.responseText); } catch { /* Existing read/reject owns malformed delivery. */ }
+        return this.read(operationId, {response, ...(response.ok ? {data: body} : {error: body})}, validate, scope).data;
+    }
+
     /** Admit a header image through the same captured-scope/error policy as JSON
      * reads. Features supply generated HTTP operations and retain their read key;
      * binary decoding never introduces another actor or retry owner. */

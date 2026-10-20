@@ -15,6 +15,7 @@ import EventRegistration from './EventRegistration.vue';
 import EventParticipants from './EventParticipants.vue';
 import EventBypassLinks from './EventBypassLinks.vue';
 import EventThingsToDo from './EventThingsToDo.vue';
+import FinanceSection from '../finance/FinanceSection.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -30,6 +31,8 @@ const admin = computed(() => route.path.endsWith('/admin'));
 const key = computed(() => eventKeys.detail(context.session.value?.context, eventId.value, admin.value));
 const section = useEventSection(key, readEvent, computed(() => true));
 const event = section.data;
+const financeEnabled = computed(() => !!event.value && (admin.value
+    ? event.value.capabilities.manageAssignments : !!event.value.registration && event.value.hasInvoicePools));
 const editorOpen = ref(false);
 const retireSettingsAccess = useSettingsAccessRetirement({active: () => section.readAction.isAvailable(), refresh: refreshPresentation});
 // Event supplies its admitted image/query operation to the same displayed
@@ -38,6 +41,16 @@ const readHeader = api.header.bind(api);
 usePageTitle(pageTitle, true);
 watch(section.denied, closeDeniedSettings);
 watch(section.query.error, retireDeniedProjections, {flush: 'sync'});
+watch(financeEnabled, retireUnavailableFinance, {flush: 'sync'});
+
+/** A fresh Event projection can release financial admission without denying the
+ * whole page. Retire that intent's private finance snapshots and lazy details;
+ * ordinary disclosure changes keep their admitted data and invoice draft. */
+function retireUnavailableFinance(enabled: boolean): void {
+    if (enabled) return;
+    const actor = context.session.value?.context;
+    void evictQueryFamilies(context.queryClient, [eventKeys.finance(actor, eventId.value, admin.value)], 'all');
+}
 
 /** Detail failures use the same Event-specific boundaries as page admission.
  * Preserve this observer's error/recovery while releasing affected sibling caches. */
@@ -94,7 +107,8 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
     const resource = eventId.value;
     const intent = admin.value;
     const families: (readonly unknown[])[] = [eventKeys.participants(scope.context, resource), overviewKeys.all(scope.context)];
-    if (mode === 'page') families.push(eventKeys.links(scope.context, resource), eventKeys.things(scope.context, resource, intent));
+    if (mode === 'page') families.push(eventKeys.links(scope.context, resource), eventKeys.things(scope.context, resource, intent),
+        eventKeys.finance(scope.context, resource, intent));
 
     await section.refresh();
     // Each subsection keeps its own read, admission and draft owner. Captured
@@ -167,15 +181,11 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
                     :admin="admin"
                 />
 
-                <!-- Finance retains its native authorized destination until its
-                     migration phases; this page never receives invoice aggregates. -->
-                <a
-                    v-if="event.registration && event.hasInvoicePools || (admin && event.capabilities.manageAssignments)"
-                    class="btn btn-outline-light mb-3"
-                    :href="`/event/${event.id}${admin ? '/admin' : ''}#${admin ? 'invoice-pools' : 'participantInvoiceAccordion'}`"
-                >
-                    {{ messages.t('event.invoiceLink') }}
-                </a>
+                <!-- Finance has its own role-scoped read. Participant submission
+                     and saved accounting share presentation without broadening
+                     this page's Event projection or organizer command authority. -->
+                <FinanceSection v-if="financeEnabled" :key="`${event.id}:${admin}`"
+                    :event-id="event.id" :admin="admin" :enabled="financeEnabled" />
                 <template v-if="admin && event.capabilities.exportParticipants">
                     <hr />
                     <h2 class="fs-3 mb-3">{{ messages.t('event.exports') }}</h2>

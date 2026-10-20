@@ -15,7 +15,10 @@ const props = withDefaults(defineProps<{
     disabled?: boolean;
     dark?: boolean;
     hydrationDraft?: boolean;
-}>(), {labelClass: '', dark: true});
+    accept?: string;
+    required?: boolean;
+    describedBy?: string;
+}>(), {labelClass: '', dark: true, accept: 'image/jpeg,image/png,image/gif'});
 const emit = defineEmits<{choose: [file: File | null]}>();
 const input = useFileSelectionRelease(() => props.selectedFile);
 
@@ -31,7 +34,8 @@ function chooseFile(event: Event): void {
         <template #control>
             <input ref="input" :id="id" :name="name" type="file" class="form-control"
                 :class="{'text-bg-dark': dark}" :data-hydration-draft="hydrationDraft ? '' : undefined"
-                accept="image/jpeg,image/png,image/gif" :disabled="disabled" @change="chooseFile" />
+                :accept="accept" :required="required" :aria-describedby="describedBy"
+                :disabled="disabled" @change="chooseFile" />
         </template>
         <slot />
     </FormField>

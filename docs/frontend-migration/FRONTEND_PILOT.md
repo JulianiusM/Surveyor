@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P6 advanced Activity route composition and shared engine/transport adoption source-reconciled alongside P0-P5; execution belongs to paired review; later phases and separate cutover boundaries retained
+verification-scope: P7 Event finance composition and shared invoice/presentation/transport adoption source-reconciled alongside P0-P6; execution belongs to paired review; later phases and separate cutover boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -50,6 +50,12 @@ The subsequent [P6 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p6-implem
 advanced requirements, unsaved coverage, recommendation jobs and reviewed changes. Those workflows now compose
 the admitted Activity page through generated SPA operations and the existing shared backend engines. P7–P11 and
 cutover remain separately scoped; the paired review records actual verification and its limits.
+
+The subsequent [P7 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p7-implementation-trigger-2026-10-20) adds
+finance reads and participant invoices within the existing Event detail/admin pages. The EventPool controller
+supplies distinct personal and organizer projections, saved totals/shares/coverage and lazy payer explanations;
+participant upload, history, revision-reviewed retraction and closing reuse its existing operations. P8 organizer
+and takeover commands retain working native destinations. No default-route or publication change follows.
 
 The [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
 excludes native/Vue production coexistence coordination and rejects the ordinary Event document-POST exception.

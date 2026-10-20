@@ -3,6 +3,9 @@ import {formatInvoiceMoney, invoiceAdjustmentRows, invoiceCalculationLines, invo
     invoicePoolCalculation, invoicePoolCalculationBreakdown, invoicePoolSummary, invoiceSettlementRows, invoiceShareColumns,
     invoiceShareComponents, presentInvoiceShare, sumInvoiceAdjustments, invoiceSettledShareNotice} from '../../src/modules/invoice/presentation';
 import {getInvoiceCatalog, invoiceText} from '../../src/modules/invoice/wording';
+import {createTranslator} from '../../src/modules/localization/translator';
+import type {MessageKey, MessageParameters} from '../../src/types/LocalizationTypes';
+import type {InvoiceTextFormatter} from '../../src/types/InvoicePoolTypes';
 import {invoiceAppliedTakeovers, invoiceHasPendingTakeovers, invoiceHasAppliedTakeoverEvidence} from '../../src/modules/invoice/coverage';
 import type {InvoiceAdjustmentInput, InvoiceCalculationExplanation, InvoiceCalculationShare,
     InvoicePoolSummaryInput, InvoiceAppliedTakeoversInput, InvoiceCalculationOverview} from '../../src/types/InvoicePoolTypes';
@@ -56,6 +59,32 @@ function ordinaryCalculationExplanation(): InvoiceCalculationExplanation {
 }
 
 describe('invoice presentation', () => {
+    it('localizes one saved explanation per call without changing names, amounts or default output', () => {
+        const explanation = calculationExplanation();
+        explanation.contributions[0]!.name = 'Participant A <saved name>';
+        const share = calculationShare();
+        const before = structuredClone({explanation, share});
+        const english = invoicePayerCalculation(explanation, share);
+        const messages = createTranslator('de');
+        const text: InvoiceTextFormatter = (key, parameters = {}) => messages.t(`finance.${key}` as MessageKey,
+            parameters as MessageParameters[MessageKey]);
+
+        // The request-local formatter reaches nested terms and shared settlement
+        // labels, while user-authored data remains escaped text for the renderer.
+        const german = invoicePayerCalculation(explanation, share, undefined, text);
+        expect(german.title).toBe('Berechnungserklärung');
+        expect(JSON.stringify(german)).toContain('Grundanteil für Participant A <saved name>');
+        expect(JSON.stringify(german)).toContain('Auf Cent aufgerundet.');
+        expect(german.sections.find(section => section.key === 'balance')?.formula?.result.value).toBe('75.00');
+        expect(invoiceBalanceCaption(share, 'participant', text)).toBe('Zu zahlender Betrag');
+        expect(presentInvoiceShare({baseShareAmount: 75, extraAmount: 0, invoiceCreditAmount: 0,
+            shareAmount: 75, isPaid: true}, text).statusLabel).toBe('Bezahlt');
+        expect(invoiceShareComponents(share, explanation, undefined, text).map(row => row.amount))
+            .toEqual(invoiceShareComponents(share, explanation).map(row => row.amount));
+        expect({explanation, share}).toEqual(before);
+        expect(invoicePayerCalculation(explanation, share)).toEqual(english);
+    });
+
     it.each([
         {shareAmount: 25, isPaid: false, organizer: 'Amount to collect', participant: 'Amount to pay'},
         {shareAmount: -25, isPaid: false, organizer: 'Amount to pay out', participant: 'Refund to receive'},

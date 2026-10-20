@@ -1,0 +1,286 @@
+schemas:
+  FinanceProof: {type: string, format: binary}
+  FinanceView:
+    type: object
+    additionalProperties: false
+    required: [audience, registrationId, pools, invoices, shares]
+    properties:
+      audience: {type: string, enum: [participant, organizer]}
+      registrationId: {type: [string, 'null']}
+      pools: {type: array, items: {$ref: '#/schemas/FinancePool'}}
+      invoices: {type: array, items: {$ref: '#/schemas/FinanceInvoice'}}
+      shares: {type: array, items: {$ref: '#/schemas/FinanceShare'}}
+  FinanceMetric:
+    type: object
+    additionalProperties: false
+    required: [key, label, amount]
+    properties:
+      key: {type: string}
+      label: {type: string}
+      amount: {type: number}
+  FinanceSummary:
+    type: object
+    additionalProperties: false
+    required: [primary, details, saved]
+    properties:
+      primary: {type: array, items: {$ref: '#/schemas/FinanceMetric'}}
+      details: {type: array, items: {$ref: '#/schemas/FinanceMetric'}}
+      saved: {type: array, items: {$ref: '#/schemas/FinanceMetric'}}
+  FinancePool:
+    type: object
+    additionalProperties: false
+    required: [id, name, description, status, isDefault, needsRecalculation, hasPendingTakeovers, coverageKnown, coverageGroups, pendingCoverageGroups, assignedCount, assignAll, revision, canSubmit, summary, calculation, exampleCalculation]
+    properties:
+      id: {type: string, format: uuid}
+      name: {type: string}
+      description: {type: [string, 'null']}
+      status: {type: string, enum: [OPEN, ORGANIZER_ONLY, CLOSED]}
+      isDefault: {type: boolean}
+      needsRecalculation: {type: boolean}
+      hasPendingTakeovers: {type: boolean}
+      coverageKnown: {type: boolean}
+      coverageGroups: {type: array, items: {$ref: '#/schemas/FinanceCoverageGroup'}}
+      pendingCoverageGroups: {type: array, items: {$ref: '#/schemas/FinanceCoverageGroup'}}
+      assignedCount: {type: integer, minimum: 0}
+      assignAll: {type: boolean}
+      revision: {type: integer, minimum: 0}
+      canSubmit: {type: boolean}
+      summary: {anyOf: [{$ref: '#/schemas/FinanceSummary'}, {type: 'null'}]}
+      calculation: {anyOf: [{$ref: '#/schemas/FinanceCalculation'}, {type: 'null'}]}
+      exampleCalculation: {anyOf: [{$ref: '#/schemas/FinanceCalculation'}, {type: 'null'}]}
+  FinanceCoveragePerson:
+    type: object
+    additionalProperties: false
+    required: [id, name]
+    properties:
+      id: {type: string}
+      name: {type: string}
+  FinanceCoverageGroup:
+    type: object
+    additionalProperties: false
+    required: [payerId, payerName, beneficiaries]
+    properties:
+      payerId: {type: string}
+      payerName: {type: string}
+      beneficiaries: {type: array, items: {$ref: '#/schemas/FinanceCoveragePerson'}}
+  FinanceInvoice:
+    type: object
+    additionalProperties: false
+    required: [id, poolId, poolName, revision, status, amount, description, correctedAmount, correctedDescription, rejectionReason, createdAt, organizerRecorded, recordedByName, participantName, participantEmail, proofOriginalName, proofUrl, canRetract, canClose]
+    properties:
+      id: {type: string}
+      poolId: {type: string, format: uuid}
+      poolName: {type: string}
+      revision: {type: integer, minimum: 0}
+      status: {type: string, enum: [NEW, APPROVED, REJECTED, CLOSED, RETRACTED]}
+      amount: {type: number}
+      description: {type: [string, 'null']}
+      correctedAmount: {type: [number, 'null']}
+      correctedDescription: {type: [string, 'null']}
+      rejectionReason: {type: [string, 'null']}
+      createdAt: {type: [string, 'null'], format: date-time}
+      organizerRecorded: {type: boolean}
+      recordedByName: {type: [string, 'null']}
+      participantName: {type: [string, 'null']}
+      participantEmail: {type: [string, 'null']}
+      proofOriginalName: {type: [string, 'null']}
+      proofUrl: {type: [string, 'null']}
+      canRetract: {type: boolean}
+      canClose: {type: boolean}
+  FinanceShareNotice:
+    type: object
+    additionalProperties: false
+    required: [label, description]
+    properties:
+      label: {type: string}
+      description: {type: string}
+  FinanceShare:
+    type: object
+    additionalProperties: false
+    required: [id, poolId, poolName, payerName, notes, needsRecalculation, amount, status, statusLabel, isPaid, caption, settledShareNotice, coveredNames, coverageKnown]
+    properties:
+      id: {type: string}
+      poolId: {type: string, format: uuid}
+      poolName: {type: string}
+      payerName: {type: string}
+      notes: {type: array, items: {type: string}}
+      needsRecalculation: {type: boolean}
+      amount: {type: number}
+      status: {type: string, enum: [due, refund, settled]}
+      statusLabel: {type: string}
+      isPaid: {type: boolean}
+      caption: {type: string}
+      settledShareNotice: {anyOf: [{$ref: '#/schemas/FinanceShareNotice'}, {type: 'null'}]}
+      coveredNames: {type: array, items: {type: string}}
+      coverageKnown: {type: boolean}
+  FinanceCalculationMetric:
+    type: object
+    additionalProperties: false
+    required: [label, value]
+    properties:
+      label: {type: string}
+      value: {type: string}
+  FinanceCalculationTerm:
+    type: object
+    additionalProperties: false
+    required: [label, value]
+    properties:
+      label: {type: string}
+      value: {type: string}
+      operator: {type: string, enum: ['+', '−', '×', '÷']}
+  FinanceCalculationFormula:
+    type: object
+    additionalProperties: false
+    required: [terms, result]
+    properties:
+      terms: {type: array, items: {$ref: '#/schemas/FinanceCalculationTerm'}}
+      result: {$ref: '#/schemas/FinanceCalculationMetric'}
+      note: {type: string}
+  FinanceCalculationSection:
+    type: object
+    additionalProperties: false
+    required: [key, title]
+    properties:
+      key: {type: string}
+      title: {type: string}
+      description: {type: string}
+      items: {type: array, items: {type: string}}
+      metrics: {type: array, items: {$ref: '#/schemas/FinanceCalculationMetric'}}
+      formula: {$ref: '#/schemas/FinanceCalculationFormula'}
+  FinanceCalculation:
+    type: object
+    additionalProperties: false
+    required: [title, sections]
+    properties:
+      title: {type: string}
+      description: {type: string}
+      sections: {type: array, items: {$ref: '#/schemas/FinanceCalculationSection'}}
+  FinanceBreakdown:
+    type: object
+    additionalProperties: false
+    required: [components, calculation, notes, statusLabel, needsRecalculation, settledShareNotice]
+    properties:
+      components: {type: array, items: {$ref: '#/schemas/FinanceMetric'}}
+      calculation: {$ref: '#/schemas/FinanceCalculation'}
+      notes: {type: array, items: {type: string}}
+      statusLabel: {type: string}
+      needsRecalculation: {type: boolean}
+      settledShareNotice: {anyOf: [{$ref: '#/schemas/FinanceShareNotice'}, {type: 'null'}]}
+  FinanceInvoiceInput:
+    type: object
+    additionalProperties: false
+    required: [amount]
+    properties:
+      amount: {type: number, exclusiveMinimum: 0}
+      description: {type: string}
+  FinanceInvoiceForm:
+    type: object
+    additionalProperties: false
+    required: [data, proof]
+    properties:
+      data: {$ref: '#/schemas/FinanceInvoiceInput'}
+      proof: {type: string, format: binary}
+  FinanceRetractionInput:
+    type: object
+    additionalProperties: false
+    required: [confirmed, expectedRevision]
+    properties:
+      confirmed: {type: boolean, const: true}
+      expectedRevision: {type: integer, minimum: 0}
+  FinanceMutationResult:
+    type: object
+    additionalProperties: false
+    required: [changed]
+    properties:
+      changed: {type: boolean, const: true}
+paths:
+  /events/{eventId}/finance:
+    get:
+      operationId: getEventFinance
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read only the current participant's invoice history and saved shares
+      parameters: &eventParameters
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Private saved participant finance, content: {application/json: {schema: {$ref: '#/schemas/FinanceView'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/organizer:
+    get:
+      operationId: getEventOrganizerFinance
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read saved pool totals, invoice audit history and payer ledgers for an admitted organizer
+      parameters: *eventParameters
+      responses:
+        '200': {description: Authorized saved organizer finance, content: {application/json: {schema: {$ref: '#/schemas/FinanceView'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/shares/{shareId}:
+    get:
+      operationId: getEventFinanceBreakdown
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read one authorized saved payer calculation without recalculating the pool
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: shareId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
+        - {name: audience, in: query, required: true, schema: {type: string, enum: [participant, organizer]}}
+      responses:
+        '200': {description: Selected saved breakdown, content: {application/json: {schema: {$ref: '#/schemas/FinanceBreakdown'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/invoices:
+    post:
+      operationId: submitEventInvoice
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Submit a participant invoice and required proof through the existing operation
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody: {required: true, content: {multipart/form-data: {schema: {$ref: '#/schemas/FinanceInvoiceForm'}}}}
+      responses:
+        '200': {description: Existing submission completed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/retract:
+    post:
+      operationId: retractEventInvoice
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Retract an own unreviewed invoice while retaining its proof and history
+      parameters: &invoiceCommandParameters
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: invoiceId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceRetractionInput'}}}}
+      responses:
+        '200': {description: Existing retraction completed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/close:
+    post:
+      operationId: closeEventInvoice
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Close an own accepted participant invoice through the existing operation
+      parameters: *invoiceCommandParameters
+      responses:
+        '200': {description: Existing participant close completed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/proof:
+    get:
+      operationId: getEventInvoiceProof
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Read a retained invoice proof through its existing ownership boundary
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: invoiceId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
+      responses:
+        '200': {description: Authorized retained proof bytes, content: {application/octet-stream: {schema: {$ref: '#/schemas/FinanceProof'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}

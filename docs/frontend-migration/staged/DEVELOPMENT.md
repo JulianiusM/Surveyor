@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P6 contribution owners, dynamic panel retirement and local versus saved recommendation pairing reconciled with approved frontend scope; authority, draft and backend boundaries retained; execution separate; no publication
+verification-scope: P7 finance contribution, localized shared presenters/catalog derivation and retained locale draft owners reconciled with P0-P6 guidance; authority, draft and backend boundaries retained; execution separate; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -251,6 +251,28 @@ Submit the identical previewed batch with its current overlap acknowledgement; e
 authority over generated/manual provenance, swap-leg blocking and applied/skipped decisions. Keep job diagnostics
 private and pass only explicit permitted scalar projections. Inherited postcommit regeneration failures remain
 outside this adaptation.
+
+Finance composes the admitted Event page without adding a finance page/router or another HTTP owner.
+`FinanceSection` keeps audience-specific reads, disclosure and reviewed participant actions; `FinanceSubmission`
+owns its lexical invoice draft and exact proof File. History, saved totals, share ledger, coverage groups and lazy
+breakdown compose feature presentation and existing shared controls. Matching ledger footers share one owner.
+Use the existing invoice controller/operations and saved financial presenters; never calculate a replacement share
+in a component or turn a saved read into preview, settlement or recalculation. Interface wording is an explicit
+per-call formatter with unchanged English defaults for existing native outputs. English `invoiceMessages`
+references select text/plurals from the existing invoice catalog; locale generation resolves and hashes that
+static source rather than maintaining copied English prose. The ordered development watcher observes this source
+and publishes readiness before Express restarts. German translations retain the same validated message contracts.
+Localized finance cache families
+retire together on audience denial, retaining the producing observer's explicit recovery control. A language-only
+read transition retains the same cache-owned snapshot and mounted draft through pending/transient failure, with
+commands disabled until a fresh current-language receipt. The retained Query's disabled observation prevents
+ordinary cache expiry from releasing an unfinished invoice; denial, eviction and actor/resource retirement still
+release it. No copied server snapshot or second draft owner is introduced.
+`PilotTransport.uploadJson` adds transfer progress to the existing generated response/actor checks. Upload completion
+is distinct from save confirmation. Unknown delivery locks the draft until deliberate saved-history inspection and
+human acknowledgement; it never replays automatically. Confirmed save releases only completed invoice fields and
+proof bytes, retains the applicable pool, and remains saved when the following read fails. Native proof/download
+outputs and separately unmigrated organizer/takeover actions keep their explicit destinations.
 
 1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;

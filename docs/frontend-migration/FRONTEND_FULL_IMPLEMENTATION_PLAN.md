@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: direct R2-R10 decisions and renewed original-baseline review scope reconciled with P0-P6 implementation history; P7-P11, backend exclusions and cutover boundaries preserved; current verification belongs to paired review
+verification-scope: authorized P7 finance implementation reconciled with retained P0-P6 decisions and implementation history; P8-P11, backend exclusions and cutover boundaries preserved; current verification belongs to paired review
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -23,7 +23,10 @@ inference `IMP-083` is excluded from this frontend correction rather than silent
 source adoption, scoped execution and remaining limits. The directly approved October 20 R8–R10 corrections extend
 the staged Operations wording, saved-slot total and shared civil-day policy. Their actual implementation, scoped
 verification and unchanged native/cutover boundaries are recorded in that review; no task-owned correction is deferred.
-P7–P11 and cutover still require their own authorization. The historical receipts below preserve the scope and
+The maintainer's subsequent [explicit P7 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p7-implementation-trigger-2026-10-20)
+authorizes finance read models and participant invoices under the phase contract below. P7 is implemented;
+its [scoped receipt](PILOT_PARITY_REVIEW.md#p7-finance-implementation-and-scoped-verification-2026-10-20) owns
+verification and remaining evidence limits. P8–P11 and cutover still require their own authorization. The historical receipts below preserve the scope and
 decisions that governed each earlier phase rather than supplying permission to start the next one.
 
 P0 readiness and P1A–D identity/common presentation have recorded implementation and scoped verification in the
@@ -339,6 +342,14 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
 
    **Completion:** INV-03–06/20 and the relevant read behaviors pass. Unknown uploads cannot replay automatically;
    confirmed success releases only completed inputs; recorder, attributed participant, and proof owner remain distinct.
+
+   **Current implementation:** Event detail/admin compose separate admitted finance reads. Shared history, totals,
+   signed ledgers, coverage and lazy saved explanations retain existing invoice presentation/calculation owners.
+   Participant multipart submission, revision-reviewed retraction, closing and protected proof output use the
+   existing controller operations. Upload uncertainty requires fresh history inspection and human acknowledgement;
+   current-language confirmation gates commands without releasing the exact mounted draft/File. English wording
+   derives from the existing domain catalog; German supplies the same validated message contracts. Organizer and
+   takeover commands remain native P8 destinations. No browser recomputation or backend remedy is introduced.
 
 9. **P8 — Migrate organizer finance and allocation inputs**  
    **Complexity:** High. **Prerequisites:** P7.

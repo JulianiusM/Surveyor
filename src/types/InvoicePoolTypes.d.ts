@@ -374,3 +374,6 @@ export type InvoiceTextKey = keyof typeof import('../modules/invoice/locales/en'
 export type InvoicePluralText = Readonly<{other: string} & Partial<Record<Intl.LDMLPluralRule, string>>>;
 export type InvoiceCatalog = Readonly<Record<InvoiceTextKey, string | InvoicePluralText>>;
 export type InvoiceTextParameters = Readonly<Record<string, string | number>>;
+
+/** Per-call interface wording; existing invoice outputs retain their English default. */
+export type InvoiceTextFormatter = (key: InvoiceTextKey, parameters?: InvoiceTextParameters) => string;
