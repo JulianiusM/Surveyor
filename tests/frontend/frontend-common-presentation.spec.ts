@@ -19,10 +19,11 @@ import {render} from '../../src/frontend/app/entry-server';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendCommonPage, FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 
 const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'anonymous', context: 'common-presentation-context-1234567890', csrfToken: 'common-presentation-csrf-1234567890',
-    deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, locale: 'en',
+    deployment: {buildId: 'fixture', apiCompatibility}, locale: 'en',
     activeProfile: null, profiles: [], loginUrl: '/users/login', logoutUrl: null,
     shell: {version: 'fixture', imprintUrl: 'https://example.test/imprint', privacyPolicyUrl: 'https://example.test/privacy',
         localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'},
@@ -128,6 +129,36 @@ describe('common frontend presentation', () => {
         expect(control.attributes()).toMatchObject({name: 'description', rows: '4', maxlength: '16000'});
         await control.setValue('  Retained draft\nWith spacing  ');
         expect(description.wrapper.emitted('update:modelValue')).toEqual([['  Retained draft\nWith spacing  ']]);
+    });
+
+    it('retains lexical number spelling through change, blur and a refreshed disabled state', async () => {
+        const {wrapper} = await mounted(FormField, {id: 'shared-amount', name: null, modelValue: '',
+            label: 'Amount', type: 'number', lexicalNumber: true, min: '0.01', step: '0.01', inputMode: 'decimal',
+            controlData: {'data-hydration-draft': true}, ariaLabel: 'Invoice amount'});
+        const field = wrapper.get<HTMLInputElement>('input');
+        field.element.value = '013.50';
+        await field.trigger('input');
+        await field.trigger('change');
+        await field.trigger('blur');
+
+        expect(wrapper.emitted('update:modelValue')).toEqual([['013.50']]);
+        expect(field.element.value).toBe('013.50');
+        expect(field.attributes()).toMatchObject({min: '0.01', step: '0.01', inputmode: 'decimal',
+            'aria-label': 'Invoice amount', 'data-hydration-draft': 'true'});
+        expect(field.attributes('name')).toBeUndefined();
+        await wrapper.setProps({modelValue: '013.50', disabled: true});
+        expect(wrapper.get('input').element).toBe(field.element);
+        expect(field.element.value).toBe('013.50');
+    });
+
+    it('preserves the existing native directive for numeric consumers that do not request lexical spelling', async () => {
+        const {wrapper} = await mounted(FormField, {id: 'normalized-count', modelValue: '', label: 'Count', type: 'number'});
+        const field = wrapper.get<HTMLInputElement>('input');
+        field.element.value = '005';
+        await field.trigger('input');
+        await field.trigger('change');
+
+        expect(field.element.value).toBe('5');
     });
 
     it('keeps a shared image chooser mounted until its feature explicitly releases selected bytes', async () => {

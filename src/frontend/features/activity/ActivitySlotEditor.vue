@@ -45,17 +45,17 @@ const suggestions = computed(() => search.value.trim() ? props.allRoles.filter(r
     && (role.title + ' ' + (role.description ?? '')).toLowerCase().includes(search.value.trim().toLowerCase())).slice(0, 10) : []);
 function close(): void { if (command.mayLeave()) emit('close'); }
 /** Selecting a known plan role changes only this slot's unsaved role set. */
-function chooseRole(id: number): void {
+function chooseRole(id: string): void {
     if (blocked.value) return;
     draft.roles.push(id);
     search.value = '';
 }
 /** Removing a chip does not delete the shared plan role or persist a slot edit. */
-function removeRole(id: number): void {
+function removeRole(id: string): void {
     draft.roles = draft.roles.filter(role => role !== id);
 }
 /** Resolve labels from the admitted catalog while preserving stored selected IDs. */
-function roleTitle(id: number): string {
+function roleTitle(id: string): string {
     return props.allRoles.find(role => role.id === id)?.title ?? String(id);
 }
 
@@ -159,6 +159,7 @@ async function reviewUnknown(): Promise<void> {
                 v-model="draft.maxAssignees"
                 class="mb-3"
                 type="number"
+                lexical-number
                 :min="1"
                 :label="messages.t('activity.maxParticipants')"
                 label-class=""

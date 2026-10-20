@@ -1,10 +1,11 @@
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import type {components} from '../../src/types/api/v1';
 
 export const frontendEventId = '11111111-1111-4111-8111-111111111111';
 
 /** Supply one complete generated actor shape for real mounted Event consumers. */
 export function createFrontendEventSession(): components['schemas']['SessionView'] & {context: string; csrfToken: string} {
-    return {kind: 'account', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
+    return {kind: 'account', deployment: {buildId: 'fixture', apiCompatibility},
         context: 'event-organizer-context-1234567890', csrfToken: 'event-organizer-csrf-1234567890', locale: 'en',
         activeProfile: {id: frontendEventId, name: 'Organizer'}, profiles: [{id: frontendEventId, name: 'Organizer'}],
         loginUrl: '/users/login', logoutUrl: '/users/logout',

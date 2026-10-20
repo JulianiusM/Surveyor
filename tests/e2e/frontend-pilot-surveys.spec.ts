@@ -1,13 +1,33 @@
-import {expect, test} from '@playwright/test';
+import {expect, test, type Locator} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
 import {expectVisiblePresentation, loginForE2E, openModalForE2E,
-    readVisiblePresentation} from '../keywords/e2eCoreKeywords';
+    readControlContracts, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {captureSurveyPresentation, createFrontendSurveyFixture, expectSurveyActionsPresentation, expectSurveyCardLayout, expectSurveyPageContained, observeSurveyCommand,
-    readSurveyCardLayout, readSurveyForE2E, readSurveyPageOverflow, scrollSurveyTable} from '../keywords/frontendSurveyE2EKeywords';
+    expectSurveyStickyParticipantVisible, readSurveyCardLayout, readSurveyForE2E,
+    readSurveyPageOverflow, scrollSurveyTable} from '../keywords/frontendSurveyE2EKeywords';
+
+/** This fixture saved Yes for its first choice and omitted every later choice.
+ * The shared comparator must retain the real clipped radios' checked contracts
+ * alongside their painted labels, rather than silently omitting those fields. */
+async function expectCompleteBallotContract(table: Locator, combinations: number): Promise<void> {
+    const inputs = table.locator('input[type="radio"]');
+    const controls = await readControlContracts(inputs);
+    expect(controls).toHaveLength(combinations * 3);
+    const expected: boolean[] = [];
+    const values: string[] = [];
+    for (let index = 0; index < combinations; index++) {
+        expected.push(index === 0, false, index !== 0);
+        values.push('yes', 'maybe', 'no');
+    }
+    expect(controls.map(control => control && 'checked' in control ? control.checked : undefined)).toEqual(expected);
+    expect(await inputs.evaluateAll(function readChoiceValues(elements) {
+        return elements.map(element => (element as HTMLInputElement).value);
+    })).toEqual(values);
+}
 
 for (const width of [1280, 390]) {
     test(`compares native Survey creation, ballots, named results and collaborative choices at ${width}px`, async ({page}, info) => {
@@ -182,6 +202,8 @@ for (const width of [1280, 390]) {
                     ['th', 'td', 'input', 'label']);
                 if (pilot) {
                     expectVisiblePresentation(native[kind]!, presentation);
+                    await expectSurveyStickyParticipantVisible(table);
+                    if (kind === 'ballot') await expectCompleteBallotContract(table, initial.combinations.length);
                     // Real table scrolling must remain possible; wrapping may
                     // improve the required width without reproducing native pixels.
                     expect(movement.width).toBeGreaterThan(0);
@@ -207,6 +229,8 @@ for (const width of [1280, 390]) {
             const table = page.locator('main table').nth(index);
             await expect(table.locator('thead th')).toHaveCount(initial.combinations.length + 1);
             await scrollSurveyTable(table);
+            await expectSurveyStickyParticipantVisible(table);
+            if (kind === 'ballot') await expectCompleteBallotContract(table, initial.combinations.length);
             await captureSurveyPresentation(page, info, `vue-de-survey-scrolled-${kind}`, table.locator('..'),
                 ['th', 'td', 'input', 'label']);
             await expectSurveyPageContained(page, info, `vue-de-survey-page-after-${kind}`);
@@ -228,6 +252,7 @@ for (const width of [1280, 390]) {
         await page.keyboard.press('ArrowRight');
         await expect(yes).toBeFocused();
         await expect(yes).toBeChecked();
+        await expectSurveyStickyParticipantVisible(ballot.locator('table'));
         await expectSurveyPageContained(page, info, 'vue-de-survey-page-after-keyboard');
         const saved = await readSurveyForE2E(page.request, survey.id);
         expect(saved.ownAnswers[last.id] ?? 'no').toBe('no');

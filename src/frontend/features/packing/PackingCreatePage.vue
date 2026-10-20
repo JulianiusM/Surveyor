@@ -7,13 +7,15 @@ import {packingKeys} from '../../app/queryKeys';
 import {usePackingApi} from './api';
 import EntityListCreation from '../../components/EntityListCreation.vue';
 import ActionButton from '../../components/ActionButton.vue';
+import FormField from '../../components/FormField.vue';
 
 // Packing owns the only collection draft and its native trimming/parseInt
 // collector. The shared matching list form owns root fields and admission.
 const context = usePilot();
 const {messages} = context;
 const api = usePackingApi(context);
-type Row = Omit<components['schemas']['PackingDuplicateItem'], 'maxAssignees'> & {key: number; maxAssignees: string};
+type Row = Omit<components['schemas']['PackingDuplicateItem'], 'maxAssignees' | 'description'>
+    & {key: number; maxAssignees: string; description: string};
 const nextKey = ref(0);
 const rows = ref<Row[]>([]);
 
@@ -33,11 +35,6 @@ function collectedItems(): components['schemas']['PackingNewItem'][] {
             maxAssignees: Number.parseInt(row.maxAssignees || '1'), requiredByAll: row.requiredByAll});
     }
     return items;
-}
-
-/** Numeric v-model would normalize the lexical draft before native parseInt. */
-function updateCapacity(row: Row, event: Event): void {
-    row.maxAssignees = (event.target as HTMLInputElement).value;
 }
 
 const source: FrontendListCreationSource<components['schemas']['PackingDuplicate']> = {
@@ -84,34 +81,23 @@ const source: FrontendListCreationSource<components['schemas']['PackingDuplicate
                         <tbody>
                             <tr v-for="(row, index) in rows" :key="row.key">
                                 <td>
-                                    <input
-                                        v-model="row.title"
-                                        class="form-control text-bg-dark"
-                                        required
+                                    <FormField :id="'packing-row-' + row.key + '-title'" v-model="row.title" :name="null"
+                                        :label="messages.t('packing.item') + ' ' + (index + 1)" label-class="visually-hidden" required
                                         :aria-label="messages.t('packing.item') + ' ' + (index + 1)"
                                     />
                                 </td>
                                 <td>
-                                    <input
-                                        v-model="row.description"
-                                        class="form-control text-bg-dark"
-                                        :aria-label="
-                                            messages.t('packing.description') + ' ' + (index + 1)
-                                        "
+                                    <FormField :id="'packing-row-' + row.key + '-description'" v-model="row.description" :name="null"
+                                        :label="messages.t('packing.description') + ' ' + (index + 1)" label-class="visually-hidden"
+                                        :aria-label="messages.t('packing.description') + ' ' + (index + 1)"
                                     />
                                 </td>
                                 <td style="width: 110px">
-                                    <input
-                                        :value="row.maxAssignees"
-                                        @input="updateCapacity(row, $event)"
-                                        class="form-control text-bg-dark"
-                                        type="number"
-                                        data-hydration-draft
-                                        required
-                                        min="1"
-                                        :aria-label="
-                                            messages.t('packing.maxNumber') + ' ' + (index + 1)
-                                        "
+                                    <FormField :id="'packing-row-' + row.key + '-capacity'" v-model="row.maxAssignees" :name="null"
+                                        type="number" lexical-number :min="1" required
+                                        :label="messages.t('packing.maxNumber') + ' ' + (index + 1)" label-class="visually-hidden"
+                                        :control-data="{'data-hydration-draft': true}"
+                                        :aria-label="messages.t('packing.maxNumber') + ' ' + (index + 1)"
                                     />
                                 </td>
                                 <td class="text-center">

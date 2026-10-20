@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {flushPromises} from '@vue/test-utils';
 import {createPilotApp, initializePilotApp} from '../../src/frontend/app/createApp';
@@ -6,7 +7,7 @@ import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
 
 const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {kind: 'anonymous',
-    deployment: {buildId: 'route-fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
+    deployment: {buildId: 'route-fixture', apiCompatibility},
     context: 'route-fixture-context', csrfToken: 'route-fixture-csrf', locale: 'en',
     activeProfile: null, profiles: [], loginUrl: '/users/login', logoutUrl: null,
     shell: {version: 'fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',

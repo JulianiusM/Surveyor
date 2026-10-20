@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {defineComponent, nextTick, ref} from 'vue';
 import {flushPromises, mount} from '@vue/test-utils';
@@ -19,7 +20,7 @@ const profileId = '11111111-1111-4111-8111-111111111111';
 const token = 'private-migration-token-1234567890';
 const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'account', context: 'workflow-context-12345678901234567890', csrfToken: 'workflow-csrf-12345678901234567890',
-    deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, locale: 'en',
+    deployment: {buildId: 'fixture', apiCompatibility}, locale: 'en',
     activeProfile: {id: profileId, name: 'Fixture profile'}, profiles: [{id: profileId, name: 'Fixture profile'}],
     loginUrl: '/users/login', logoutUrl: '/users/logout', shell: {version: 'fixture', imprintUrl: '/imprint',
         privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'},

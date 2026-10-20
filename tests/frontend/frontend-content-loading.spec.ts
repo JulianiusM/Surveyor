@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
 import {defineComponent} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
@@ -13,6 +13,21 @@ import OverviewPage from '../../src/frontend/features/overview/OverviewPage.vue'
 import type {components} from '../../src/types/api/v1';
 import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import type {PilotLoadingSkeleton} from '../../src/types/FrontendPilotUiTypes';
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
+
+// These real lazy-route modules are dependencies of the SSR assertions below.
+// Compile them during ordinary test collection, rather than charging unrelated
+// route compilation to one suite hook. Each assertion still resolves its actual
+// production route and renders a fresh application without private HTTP reads.
+import '../../src/frontend/features/packing/PackingEntry.vue';
+import '../../src/frontend/features/packing/PackingCreatePage.vue';
+import '../../src/frontend/features/drivers/DriversEntry.vue';
+import '../../src/frontend/features/drivers/DriversCreatePage.vue';
+import '../../src/frontend/features/event/EventEntry.vue';
+import '../../src/frontend/features/event/EventCreatePage.vue';
+import '../../src/frontend/features/identity/IdentityPage.vue';
+import '../../src/frontend/features/identity/ProfileAdministrationPage.vue';
+import '../../src/frontend/features/identity/ProfileWorkflowPage.vue';
 
 type Help = components['schemas']['HelpPageData'];
 type Region = components['schemas']['OverviewRegion'];
@@ -20,7 +35,7 @@ const profileId = '11111111-1111-4111-8111-111111111111';
 const cardId = '33333333-3333-4333-8333-333333333333';
 const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'account', context: 'content-loading-context-1234567890', csrfToken: 'content-loading-csrf-1234567890',
-    deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, locale: 'en',
+    deployment: {buildId: 'fixture', apiCompatibility}, locale: 'en',
     activeProfile: {id: profileId, name: 'Organizer'}, profiles: [{id: profileId, name: 'Organizer'}],
     loginUrl: '/users/login', logoutUrl: '/users/logout', shell: {version: 'fixture', imprintUrl: '/imprint',
         privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'},
@@ -107,24 +122,6 @@ function mountedSkeleton(props: PilotLoadingSkeleton & {page?: boolean}) {
 }
 
 describe('help and overview progressive content', () => {
-    // These assertions measure each fresh SSR tree, not Vitest's cold Vue
-    // compilation. Prepare only their actual lazy route modules under the
-    // unchanged hook budget; rendering still owns the ordinary five seconds.
-    // No app, query data or request state is prepared ahead of an assertion.
-    beforeAll(async function prepareSsrRouteModules(): Promise<void> {
-        await Promise.all([
-            import('../../src/frontend/features/packing/PackingEntry.vue'),
-            import('../../src/frontend/features/packing/PackingCreatePage.vue'),
-            import('../../src/frontend/features/drivers/DriversEntry.vue'),
-            import('../../src/frontend/features/drivers/DriversCreatePage.vue'),
-            import('../../src/frontend/features/event/EventEntry.vue'),
-            import('../../src/frontend/features/event/EventCreatePage.vue'),
-            import('../../src/frontend/features/identity/IdentityPage.vue'),
-            import('../../src/frontend/features/identity/ProfileAdministrationPage.vue'),
-            import('../../src/frontend/features/identity/ProfileWorkflowPage.vue'),
-        ]);
-    });
-
     it('refreshes and translates healthy Help without owning scroll or releasing the search draft', async () => {
         const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
         let current = {...article(), content: '<h2 id="task">Original task</h2><h2 id="next">Next task</h2>'};

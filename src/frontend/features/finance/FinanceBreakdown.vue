@@ -44,7 +44,7 @@ async function refresh(): Promise<void> {
 </script>
 
 <template>
-    <AppDialog
+    <AppDialog content-class="text-white finance-dialog"
         open
         :title="messages.t('finance.shareBreakdown')"
         :subtitle="admin ? `${share.poolName} · ${share.payerName}` : share.poolName"

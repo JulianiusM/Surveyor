@@ -152,7 +152,7 @@ function reassignNotice(personId: string): string | null {
  * calculates or rewrites saved payer balances and recorded transfers. */
 async function save(event: Event): Promise<void> {
     if (!action.isAvailable() || !(event.target as HTMLFormElement).reportValidity()) return;
-    const input = {payerId: Number(payerId.value), beneficiaries: selected.value.map(Number)};
+    const input = {payerId: payerId.value, beneficiaries: [...selected.value]};
     // Only confirmed persistence adopts this input baseline. Unknown delivery
     // remains locked until an explicit fresh read; it is never automatically replayed.
     const saved = await command.run(scope => api.takeovers(props.eventId, props.pool.id, input, props.admin, scope), true, false,
@@ -178,7 +178,7 @@ function close(): void {
 </script>
 
 <template>
-    <AppDialog :open="open" :title="messages.t('finance.manageTakeovers2')" :subtitle="pool.name" standard
+    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t('finance.manageTakeovers2')" :subtitle="pool.name" standard
                :pending="command.pending.value || command.recovering.value" @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refresh" />

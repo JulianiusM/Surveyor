@@ -43,6 +43,7 @@ import {invoiceText} from '../modules/invoice/wording';
 import {
     invoiceSettledShareNotice, invoiceBalanceCaption, invoicePoolSummary, invoiceShareComponents,
     invoicePayerCalculation, invoicePoolCalculationBreakdown, invoicePoolCalculation, isOrganizerInvoice, presentInvoiceShare,
+    formatInvoiceMoney,
 } from '../modules/invoice/presentation';
 import {invoiceAppliedTakeovers, invoiceHasAppliedTakeoverEvidence, invoiceHasPendingTakeovers} from '../modules/invoice/coverage';
 import {evaluateSubject} from '../modules/permissionEngine';
@@ -53,7 +54,7 @@ import type {EventInvoice} from '../modules/database/entities/event/EventInvoice
 import type {EventInvoiceShare} from '../modules/database/entities/event/EventInvoiceShare';
 import type {components} from '../types/api/v1';
 import type {ParticipantRow} from '../types/EventTypes';
-import type {InvoiceSharesPdfData, InvoiceTextFormatter, InvoiceAppliedTakeover} from '../types/InvoicePoolTypes';
+import type {InvoiceSharesPdfData, InvoiceTextFormatter, InvoiceAppliedTakeover, InvoiceMoneyMetric} from '../types/InvoicePoolTypes';
 import type {MessageKey, MessageParameters} from '../types/LocalizationTypes';
 import type {PermBundle, SessionLike} from '../types/PermissionTypes';
 
@@ -99,8 +100,8 @@ function projectFinanceInvoice(eventId: string, pool: EventInvoicePool, invoice:
     const ownsInvoice = registrationId !== undefined && invoice.registrationId === registrationId;
     // A proof link retains exactly the invoice's existing ownership, independently of its review state.
     return {id: String(invoice.id), poolId: pool.id, poolName: pool.name, revision: pool.calculationRevision,
-        status: invoice.status, amount: Number(invoice.amount), description: invoice.description ?? null,
-        correctedAmount: invoice.correctedAmount == null ? null : Number(invoice.correctedAmount),
+        status: invoice.status, amount: formatInvoiceMoney(invoice.amount), description: invoice.description ?? null,
+        correctedAmount: invoice.correctedAmount == null ? null : formatInvoiceMoney(invoice.correctedAmount),
         correctedDescription: invoice.correctedDescription ?? null, rejectionReason: invoice.rejectionReason ?? null,
         createdAt: invoice.track?.createdAt?.toISOString() ?? null, organizerRecorded: isOrganizerInvoice(invoice),
         recordedByName: invoice.recordedByName || invoice.recordedByProfile?.name || null,
@@ -124,7 +125,7 @@ function projectFinanceShare(pool: EventInvoicePool, share: EventInvoiceShare,
             || text('participant', {id: row.beneficiaryRegistrationId}));
     return {id: String(share.id), poolId: pool.id, poolName: pool.name, payerName,
         notes: (share.note ?? '').split(' • ').filter(Boolean), needsRecalculation: Boolean(pool.needsRecalculation),
-        amount: presentation.originalBalance, status: presentation.status, statusLabel: presentation.statusLabel, isPaid: Boolean(share.isPaid),
+        amount: formatInvoiceMoney(share.shareAmount), status: presentation.status, statusLabel: presentation.statusLabel, isPaid: Boolean(share.isPaid),
         caption: invoiceBalanceCaption(values, audience, text),
         settledShareNotice: invoiceSettledShareNotice(pool, share, participants, 'organizer', text),
         coveredNames, coverageKnown: invoiceHasAppliedTakeoverEvidence(pool)};
@@ -188,18 +189,31 @@ function projectFinancePool(pool: EventInvoicePool, participants: readonly Parti
         settings: organizer ? {distribution: pool.distributionMethod as components['schemas']['FinancePoolSettings']['distribution'],
             subtractPersonalInvoices: Boolean(pool.subtractPersonalInvoices),
             sendCalculationEmails: Boolean(pool.sendCalculationEmails), roundUpShares: Boolean(pool.roundUpShares)} : null,
-        registrationIds: organizer ? [...assignedIds] : [],
+        registrationIds: organizer ? [...assignedIds].map(String) : [],
         assignments: organizer ? pool.assignments.map(row => ({registrationId: String(row.registrationId),
-            factor: Number(row.factor), isExempt: Boolean(row.isExempt)})) : [],
+            factor: Number(row.factor).toFixed(4), isExempt: Boolean(row.isExempt)})) : [],
         surcharges: organizer ? pool.surcharges.map(row => ({id: String(row.id), registrationId: String(row.registrationId),
-            amount: Number(row.amount), note: row.note, subtractFromPool: Boolean(row.subtractFromPool)})) : [],
+            amount: formatInvoiceMoney(row.amount), note: row.note, subtractFromPool: Boolean(row.subtractFromPool)})) : [],
         // Participant contacts belong only to assigned choices in an eligible OPEN pool, never history-only pool metadata.
         coverageChoices: showCoverage ? participants.filter(row => assignedIds.has(Number(row.id))).map(projectFinanceParticipant) : [],
         currentCoverageGroups: showCoverage ? projectFinanceCoverage(pool.takeovers, participants, text) : [],
         // Personal rows never expose pool-wide accounting or another payer's calculation example.
-        summary: organizer ? invoicePoolSummary(pool, text) : null,
+        summary: organizer ? financeSummary(pool, text) : null,
         calculation: hasSavedShares ? invoicePoolCalculationBreakdown(snapshot?.explanation, snapshot?.surcharges, text) : null,
         exampleCalculation: hasSavedShares ? invoicePoolCalculation(snapshot?.explanation, pool.shares, snapshot?.surcharges, text) : null};
+}
+
+/** Adapt the existing saved summary once; its shared presenter remains the sole accounting owner. */
+function financeSummary(pool: EventInvoicePool, text: InvoiceTextFormatter): components['schemas']['FinanceSummary'] {
+    const summary = invoicePoolSummary(pool, text);
+    // Only the wire scalar changes. Labels, ordering and all accounting decisions
+    // remain those of the presenter also used by native pages, email and exports.
+    return {primary: summary.primary.map(financeMetric), details: summary.details.map(financeMetric), saved: summary.saved.map(financeMetric)};
+}
+
+/** Serialize a presenter metric without introducing another calculation or rounding rule. */
+function financeMetric(metric: InvoiceMoneyMetric): components['schemas']['FinanceMetric'] {
+    return {...metric, amount: formatInvoiceMoney(metric.amount)};
 }
 
 /** Read saved finance only, with separate organizer and personal disclosure boundaries and no maintenance writes. */
@@ -241,7 +255,7 @@ export async function readEventFinanceBreakdown(eventId: string, poolId: string,
     const payerName = participants.find(row => row.id === share.registrationId)?.name;
     const snapshot = pool.calculationSnapshot;
     const values = financeShareValues(share);
-    return {components: invoiceShareComponents(values, snapshot?.explanation, snapshot?.surcharges, text),
+    return {components: invoiceShareComponents(values, snapshot?.explanation, snapshot?.surcharges, text).map(financeMetric),
         calculation: invoicePayerCalculation(snapshot?.explanation, {...values, payerName}, snapshot?.surcharges, text),
         notes: (share.note ?? '').split(' • ').filter(Boolean), statusLabel: presentInvoiceShare(values, text).statusLabel,
         needsRecalculation: Boolean(pool.needsRecalculation), settledShareNotice: invoiceSettledShareNotice(pool, share, participants, 'organizer', text)};

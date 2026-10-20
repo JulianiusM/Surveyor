@@ -4,22 +4,22 @@ documentation-metadata
 audience: Umfrageteilnehmer; Umfrageorganisatoren
 owner: survey feature maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; German Survey diagram regenerated from catalog labels, inspected by author and independent nonauthor at full/768px/298px and by root at full/298px. Native business reference and declared anchors retained; no new application-browser execution claimed.
 heading-anchors: 1:surveys; 2:choose-your-task; 2:understand-the-recurring-monthly-model; 2:vote-in-a-survey; 3:1-open-the-survey-link; 3:2-check-the-active-profile; 3:3-choose-one-answer-for-every-combination; 3:4-select-submit; 2:change-an-answer; 2:return-as-a-guest; 2:read-the-results; 3:your-response; 3:all-answers; 3:result-visibility-and-privacy; 2:add-another-combination; 2:create-a-survey; 3:1-open-the-creation-form; 3:2-enter-the-survey-details; 3:3-add-at-least-one-combination; 3:4-select-create-survey; 2:understand-survey-access-before-sharing; 2:share-a-survey; 2:surveys-and-events; 2:manage-a-survey; 3:header-image; 3:title-and-description; 3:duplicate-a-survey; 3:delete-a-survey; 2:practical-examples; 3:primary-use-choose-a-recurring-monthly-meeting-pattern; 3:secondary-use-choose-a-day-within-one-stated-month; 3:compare-regular-volunteer-days; 2:capabilities-and-limits; 2:archive-or-restore-a-survey; 2:troubleshooting; 3:the-survey-cannot-be-created; 3:the-survey-is-missing-from-your-overview; 3:a-guest-cannot-return; 3:a-new-combination-shows-no-for-earlier-voters; 3:the-add-action-reports-an-error; 3:permission-or-event-controls-cannot-be-found; 3:entity-settings-or-an-expected-action-is-missing; 2:related-guides
-source-anchors: src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/controller/surveyController.ts; docs/user-guide/de/assets/survey-recurring-pattern.png; scripts/generate-help-visuals.mjs
+source-anchors: src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/controller/surveyController.ts; docs/user-guide/de/assets/survey-recurring-pattern.png; scripts/generate-help-visuals.mjs; src/frontend/features/surveys/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
 next-review: survey-visible-UI-or-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
 -->
 
-Umfragen dienen vor allem der Abstimmung **wiederkehrender monatlicher Termine**, etwa ob eine Gruppe sich jeden Monat am ersten Montag, zweiten Mittwoch oder letzten Freitag treffen soll. Dieses Muster ist die Stärke der Funktion: Teilnehmer beantworten jede verständliche Wochentagsposition einmal mit **Yes** (Ja), **Maybe** (Vielleicht) oder **No** (Nein).
+Umfragen dienen vor allem der Abstimmung **wiederkehrender monatlicher Termine**, etwa ob eine Gruppe sich jeden Monat am ersten Montag, zweiten Mittwoch oder letzten Freitag treffen soll. Dieses Muster ist die Stärke der Funktion: Teilnehmer beantworten jede verständliche Wochentagsposition einmal mit **Ja**, **Vielleicht** oder **Nein**.
 
 Zusätzlich kann eine Umfrage Optionen eines bestimmten Monats vergleichen. Nenne Monat und Jahr im Titel oder in der Beschreibung, denn gespeichert werden Wochentagspositionen statt konkreter Kalenderdaten. Für mehrere genaue Termine kann ein auf Einzeltermine spezialisierter Abstimmungsdienst direkter sein. Verwende Surveyor, wenn das wiederkehrende Monatsmuster im Mittelpunkt steht.
 
-![Deutsch erklärtes Diagramm: Monday im Feld Weekday und 1. day in month im Feld Day in month ergeben nach Add den ersten Montag jedes Monats; Antworten sind Yes, Maybe und No.](assets/survey-recurring-pattern.png)
+![Montag im Feld Wochentag und 1. Tag im Monat im Feld Tag im Monat ergeben nach Hinzufügen den ersten Montag jedes Monats; Antworten sind Ja, Vielleicht und Nein.](assets/survey-recurring-pattern.png)
 
-*Wähle **Monday** (Montag) und **1. day in month** (erstes Vorkommen im Monat), dann **Add**, um den ersten Montag jedes Monats vorzuschlagen. Das genaue Kalenderdatum ändert sich von Monat zu Monat.*
+*Wähle **Montag** und **1. Tag im Monat**, dann **Hinzufügen**, um den ersten Montag jedes Monats vorzuschlagen. Das genaue Kalenderdatum ändert sich von Monat zu Monat.*
 
 [Diagramm des Monatsmusters in voller Größe öffnen](/help/assets/survey-recurring-pattern.png?locale=de).
 
@@ -38,11 +38,11 @@ Jede Option verbindet einen Wochentag mit einer Position im Monat.
 
 | Kombination | Bedeutung |
 |---|---|
-| **1. Monday of the month** | Der erste Montag im besprochenen Monat. |
-| **3. Wednesday of the month** | Der dritte Mittwoch dieses Monats. |
-| **Last (4./5.) Friday of the month** | Der letzte Freitag, also je nach Monat der vierte oder fünfte. |
+| **1. Montag im Monat** | Der erste Montag im besprochenen Monat. |
+| **3. Mittwoch im Monat** | Der dritte Mittwoch dieses Monats. |
+| **Letzter (4./5.) Freitag im Monat** | Der letzte Freitag, also je nach Monat der vierte oder fünfte. |
 
-Verfügbar sind **1**, **2**, **3**, **4** und **Last**. Es gibt keine eigene fünfte Woche; für das letzte Vorkommen eines Wochentags verwendest du **Last**.
+Verfügbar sind **1**, **2**, **3**, **4** und **Letzte**. Es gibt keine eigene fünfte Woche; für das letzte Vorkommen eines Wochentags verwendest du **Letzte**.
 
 Für die wiederkehrende Hauptanwendung kann **Monatliche Ausschusssitzung** die Muster erster Dienstag, zweiter Mittwoch und letzter Donnerstag vergleichen, die sich jeden Monat wiederholen.
 
@@ -55,9 +55,9 @@ Für die zusätzliche Einmonatsanwendung kann **Planungstag Oktober 2026** erste
 Verwende den Link des Organisators.
 
 - Mit bereits aktivem Profil öffnet sich die Abstimmungsseite direkt.
-- Andernfalls bietet die Einstiegsseite **Log in**, **Recover guest account**, **Create account** und **Continue as guest**.
+- Andernfalls bietet die Einstiegsseite **Anmelden**, **Gastkonto wiederherstellen**, **Konto erstellen** und **Als Gast fortfahren**.
 
-Ein Gast gibt einen **Display name** und optional eine E-Mail-Adresse an. Die E-Mail ist sehr empfehlenswert: Surveyor schickt den privaten Gastlink dorthin und kann später mit dieser Adresse verbundene Gastkonten wiederherstellen.
+Ein Gast gibt seinen Namen im Feld **Anzeigename** ein. Eine E-Mail-Adresse ist optional, aber sehr empfehlenswert: Surveyor schickt den privaten Gastlink dorthin und kann später mit dieser Adresse verbundene Gastkonten wiederherstellen.
 
 ### 2. Das aktive Profil prüfen
 
@@ -65,25 +65,25 @@ Der Profilname im Benutzermenü bezeichnet die Identität des Stimmzettels. Wech
 
 ### 3. Für jede Kombination eine Antwort wählen
 
-Wähle unter **Your response**:
+Wähle unter **Deine Antwort**:
 
-- **Yes** — Die Option passt gut.
-- **Maybe** — Die Option könnte bei Bedarf passen.
-- **No** — Die Option passt nicht.
+- **Ja** — Die Option passt gut.
+- **Vielleicht** — Die Option könnte bei Bedarf passen.
+- **Nein** — Die Option passt nicht.
 
-Für eine vom Profil noch nicht beantwortete Option zeigt Surveyor zunächst **No**.
+Für eine vom Profil noch nicht beantwortete Option zeigt Surveyor zunächst **Nein**.
 
-### 4. **Submit** wählen
+### 4. **Absenden** wählen
 
-**Submit** speichert den gesamten angezeigten Stimmzettel. Erneutes Absenden ersetzt die bisherigen Antworten dieses Profils. Prüfe deshalb jede Spalte vor dem Speichern.
+**Absenden** speichert den gesamten angezeigten Stimmzettel. Erneutes Absenden ersetzt die bisherigen Antworten dieses Profils. Prüfe deshalb jede Spalte vor dem Speichern.
 
-Nach dem ersten Absenden erscheint die Umfrage unter **Your participation** in [Deine Übersicht](DASHBOARD.md) dieses Profils.
+Nach dem ersten Absenden erscheint die Umfrage unter **Deine Teilnahmen** in [Deine Übersicht](DASHBOARD.md) dieses Profils.
 
 ## Eine Antwort ändern
 
-1. Öffne die Umfrage über **Your participation** oder den ursprünglichen Link.
-2. Ändere die gewünschten Antworten **Yes**, **Maybe** oder **No**.
-3. Wähle erneut **Submit**.
+1. Öffne die Umfrage über **Deine Teilnahmen** oder den ursprünglichen Link.
+2. Ändere die gewünschten Antworten **Ja**, **Vielleicht** oder **Nein**.
+3. Wähle erneut **Absenden**.
 
 Die neue Abgabe ersetzt den bisherigen Stimmzettel des aktiven Profils. Es gibt keine separate Aktion, um einen Stimmzettel zu entfernen oder den Teilnehmernamen in den Ergebnissen zu verbergen.
 
@@ -93,7 +93,7 @@ Gäste können den nach dem Beitritt angezeigten privaten Link verwenden. Mit an
 
 Falls der Link fehlt:
 
-1. Wähle auf der Einstiegsseite **Recover guest account** oder bei **Anmelden** die Gastwiederherstellung.
+1. Wähle auf der Einstiegsseite **Gastkonto wiederherstellen** oder bei **Anmelden** die Gastwiederherstellung.
 2. Gib die E-Mail-Adresse des Gastprofils ein.
 3. Öffne die Wiederherstellungs-E-Mail und wähle bei mehreren Konten das richtige.
 4. Öffne nach Wiederherstellung des Gastzugangs den Umfragelink oder den Eintrag aus **Deine Übersicht**.
@@ -104,26 +104,26 @@ Den vollständigen Ablauf findest du unter [Gastzugang per E-Mail wiederherstell
 
 Die Abstimmungsseite enthält zwei Ergebnisbereiche.
 
-### **Your response** — Deine Antwort
+### **Deine Antwort** — Deine Antwort
 
-Diese Zeile zeigt die aktuell ausgewählten Antworten des aktiven Profils. Änderungen werden erst mit **Submit** gespeichert.
+Diese Zeile zeigt die aktuell ausgewählten Antworten des aktiven Profils. Änderungen werden erst mit **Absenden** gespeichert.
 
-### **All answers** — Alle Antworten
+### **Alle Antworten** — Alle Antworten
 
 Die Tabelle zeigt:
 
 - eine Zeile je Profil mit abgegebenem Stimmzettel;
 - eine Spalte je Umfragekombination;
 - den Profil- oder Gastanzeigenamen;
-- Grün für **Yes**, Gelb für **Maybe** und Rot für **No**.
+- Grün für **Ja**, Gelb für **Vielleicht** und Rot für **Nein**.
 
-Kommt nach ersten Abstimmungen eine Kombination hinzu, zeigen bestehende Ergebniszeilen in der neuen Spalte **No**, bis die Personen zurückkehren und erneut antworten.
+Kommt nach ersten Abstimmungen eine Kombination hinzu, zeigen bestehende Ergebniszeilen in der neuen Spalte **Nein**, bis die Personen zurückkehren und erneut antworten.
 
-Surveyor berechnet keinen Gewinner, Punktwert oder Rang. Vergleiche die Spalten und entscheide, was der Gruppe am besten passt. Ein hilfreicher Ansatz ist, zuerst die meisten **Yes**-Antworten zu suchen und bei ähnlichen Optionen **Maybe** zur Unterscheidung zu verwenden.
+Surveyor berechnet keinen Gewinner, Punktwert oder Rang. Vergleiche die Spalten und entscheide, was der Gruppe am besten passt. Ein hilfreicher Ansatz ist, zuerst die meisten **Ja**-Antworten zu suchen und bei ähnlichen Optionen **Vielleicht** zur Unterscheidung zu verwenden.
 
 ### Sichtbarkeit und Datenschutz der Ergebnisse
 
-Jede zugelassene Person kann **All answers** mit Anzeigenamen und Antworten sehen. Umfragen unterstützen weder anonyme Stimmen noch private Ergebnisse nur für Organisatoren.
+Jede zugelassene Person kann **Alle Antworten** mit Anzeigenamen und Antworten sehen. Umfragen unterstützen weder anonyme Stimmen noch private Ergebnisse nur für Organisatoren.
 
 Teile die Umfrage nur mit der beabsichtigten Gruppe. Empfänger können den Link an andere Personen weiterleiten.
 
@@ -137,10 +137,10 @@ Optionen werden gemeinsam ergänzt. **Jeder zur Abstimmungsseite zugelassene Tei
 
 Eine Organisator- oder Administratorrolle ist nicht nötig.
 
-1. Scrolle zu **Add new combination**.
-2. Wähle unter **Weekday:** Montag bis Sonntag.
-3. Wähle unter **Day in month:** **1. day in month**, **2. day in month**, **3. day in month**, **4. day in month** oder **Last (4./5.) day in month**.
-4. Wähle **Add**.
+1. Scrolle zu **Neue Kombination hinzufügen**.
+2. Wähle unter **Wochentag:** Montag bis Sonntag.
+3. Wähle unter **Tag im Monat:** **1. Tag im Monat**, **2. Tag im Monat**, **3. Tag im Monat**, **4. Tag im Monat** oder **Letzter (4./5.) Tag im Monat**.
+4. Wähle **Hinzufügen**.
 
 Die Option erscheint für alle als neue Spalte. Jede Kombination aus Wochentag und Monatsposition darf pro Umfrage nur einmal vorkommen.
 
@@ -159,24 +159,24 @@ Die Erstellung verlangt ein angemeldetes vollständiges Konto. Gäste dürfen te
 
 | Feld | Eingabe |
 |---|---|
-| **Survey Title \*** | Pflichtname, der die Entscheidung beschreibt. Nenne gegebenenfalls Monat oder weiteren Datumskontext. |
-| **Description** | Optionale Hinweise, Hintergrund, Antwortfrist oder Erklärung der späteren Entscheidung. |
-| **Header image (optional)** | JPEG-, PNG- oder GIF-Bild bis 10 MiB. |
+| **Titel der Umfrage \*** | Pflichtname, der die Entscheidung beschreibt. Nenne gegebenenfalls Monat oder weiteren Datumskontext. |
+| **Beschreibung** | Optionale Hinweise, Hintergrund, Antwortfrist oder Erklärung der späteren Entscheidung. |
+| **Titelbild (optional)** | JPEG-, PNG- oder GIF-Bild bis 10 MiB. |
 
 Surveyor erzwingt keine Antwortfrist für Umfragen. Ein Datum in der Beschreibung ist informativ; der Organisator muss die Frist außerhalb der Anwendung kommunizieren und durchsetzen.
 
 ### 3. Mindestens eine Kombination hinzufügen
 
-Die Tabelle **Select date combinations** beginnt mit einer Zeile.
+Die Tabelle **Terminkombinationen auswählen** beginnt mit einer Zeile.
 
-1. Wähle **Weekday**.
-2. Wähle bei **Week of month** **1**, **2**, **3**, **4** oder **Last**.
-3. Ergänze mit **Add combination** eine Zeile.
-4. Entferne nicht benötigte Zeilen über **Remove**.
+1. Wähle **Wochentag**.
+2. Wähle bei **Woche im Monat** **1**, **2**, **3**, **4** oder **Letzte**.
+3. Ergänze mit **Kombination hinzufügen** eine Zeile.
+4. Entferne nicht benötigte Zeilen über **Entfernen**.
 
 Mindestens eine gültige, eindeutige Kombination ist erforderlich.
 
-### 4. **Create Survey** wählen
+### 4. **Umfrage erstellen** wählen
 
 Die neue Umfrage öffnet ihre Abstimmungsseite. Der Eigentümer kann wie jeder andere Teilnehmer abstimmen.
 
@@ -200,13 +200,13 @@ Der Organisator muss Teilnehmer nicht im Voraus hinzufügen.
 1. Öffne die erstellte Umfrage.
 2. Kopiere ihre Adresse aus dem Browser.
 3. Sende den Link über den üblichen Kommunikationsweg der Gruppe.
-4. Erkläre, was **Yes**, **Maybe** und **No** bei dieser Entscheidung bedeuten und bis wann du Antworten brauchst.
+4. Erkläre, was **Ja**, **Vielleicht** und **Nein** bei dieser Entscheidung bedeuten und bis wann du Antworten brauchst.
 
-Wer einen Stimmzettel abgibt, findet die Umfrage später mit demselben Profil unter **Your participation**.
+Wer einen Stimmzettel abgibt, findet die Umfrage später mit demselben Profil unter **Deine Teilnahmen**.
 
 ## Umfragen und Veranstaltungen
 
-Umfragen sind eigenständig. Sie haben kein **Assign to event**, erscheinen nicht in verknüpften Veranstaltungsressourcen und erben weder Veranstaltungsanmeldungen noch Veranstaltungsberechtigungen.
+Umfragen werden eigenständig erstellt und geteilt. Veranstaltungsanmeldungen und Veranstaltungsberechtigungen gelten dort nicht.
 
 Du kannst trotzdem einen Veranstaltungstermin damit besprechen: Schreibe Monat oder Veranstaltungsname in Titel oder Beschreibung und teile den Umfragelink separat.
 
@@ -228,7 +228,7 @@ Der Eigentümer kann diese Eigenschaften ändern, ohne eine neue Umfrage anzuleg
 2. Bearbeite unter **Allgemein** → **Details** **Titel** oder **Beschreibung**.
 3. Wähle **Eigenschaften speichern**.
 
-Link, Kombinationen und Antworten bleiben erhalten. Jeder Dialogabschnitt speichert getrennt. Ein fehlgeschlagenes Speichern erhält deinen Entwurf; Schließen verwirft ungespeicherte Änderungen. Befehle, die die Seite aktualisieren, verlangen vorher eine Entscheidung zu Entwürfen anderer Abschnitte.
+Link, Kombinationen und Antworten bleiben erhalten. Jeder Abschnitt speichert separat. Das Speichern lässt die Seite geöffnet und erhält unvollständige Eingaben anderer Abschnitte. Ein fehlgeschlagenes Speichern erhält den Entwurf. Beim Schließen mit ungespeicherten Änderungen entscheidest du, ob du diese verwerfen möchtest; brich das Schließen ab, um weiterzubearbeiten.
 
 ### Eine Umfrage duplizieren
 
@@ -237,9 +237,9 @@ Erstelle mit dem Eigentümerprofil eines vollständigen Kontos eine separate Kop
 1. Öffne die Umfrage und **Entitätseinstellungen**.
 2. Wähle unter **Aktionen** **Duplizieren**.
 3. Prüfe vorausgefüllten Titel, Beschreibung und Kombinationen.
-4. Ändere bei Bedarf Werte und wähle **Create Survey**.
+4. Ändere bei Bedarf Werte und wähle **Umfrage erstellen**.
 
-Der Eigentümer kann auch **Duplicate** auf der Karte unter **Administrable entities** verwenden.
+Der Eigentümer kann auch **Duplizieren** auf der Karte unter **Verwaltbare Einträge** verwenden.
 
 Das Duplikat ist eine neue Umfrage mit eigenem Link und ohne Teilnehmerantworten. Das Kopfzeilenbild wird nicht kopiert; lade bei Bedarf eines für die neue Umfrage hoch.
 
@@ -251,7 +251,7 @@ Nur der Eigentümer kann endgültig löschen.
 2. Wähle unter **Aktionen** **Endgültig löschen**.
 3. Bestätige die Löschung.
 
-Die Eigentümerkarte in der Übersicht behält außerdem **Delete**.
+Die Eigentümerkarte in der Übersicht behält außerdem **Löschen**.
 
 Die Löschung entfernt Umfrage, alle Kombinationen, alle abgegebenen Antworten und das gespeicherte Kopfzeilenbild endgültig. Verwende Archivierung, wenn die Umfrage verfügbar bleiben soll.
 
@@ -279,14 +279,14 @@ Gespeichert wird das Wochentagsmuster; Titel und Beschreibung liefern Monat und 
 
 ### Regelmäßige Ehrenamtstermine vergleichen
 
-Erstelle **Monatliche Ausrüstungskontrolle** mit mehreren Wochentagspositionen. Bitte Freiwillige, **Maybe** nur zu wählen, wenn sie mit Vorlauf teilnehmen könnten.
+Erstelle **Monatliche Ausrüstungskontrolle** mit mehreren Wochentagspositionen. Bitte Freiwillige, **Vielleicht** nur zu wählen, wenn sie mit Vorlauf teilnehmen könnten.
 
 ## Möglichkeiten und Grenzen
 
 | Unterstützt | Nicht unterstützt |
 |---|---|
 | Wochentag plus erstes, zweites, drittes, viertes oder letztes Vorkommen im Monat | Auswahl eines konkreten Datums, Monats, Jahres oder einer Uhrzeit |
-| Antworten Yes, Maybe und No | Rangfolge, Punktzahlen oder automatische Gewinnerermittlung |
+| Antworten Ja, Vielleicht und Nein | Rangfolge, Punktzahlen oder automatische Gewinnerermittlung |
 | Vollständige Konten und Gäste | Anonyme Abstimmung oder private Antworten |
 | Ergebnistabelle mit Teilnehmernamen | Ergebnisse nur für Organisatoren |
 | Gemeinsames Ergänzen von Kombinationen | Entfernen oder Bearbeiten bestehender Kombinationen |
@@ -298,7 +298,7 @@ Erstelle **Monatliche Ausrüstungskontrolle** mit mehreren Wochentagspositionen.
 
 Der Eigentümer kann unter **Entitätseinstellungen** → **Aktionen** → **Archivierung** **Für alle archivieren** oder **Für alle wiederherstellen** wählen oder das Übersichtskartenmenü verwenden. Umfragen haben keinen automatischen Archivierungszeitplan. Archivierung erhält Kombinationen, Antworten, Bilder und den gewöhnlichen Zugang zum Abstimmen und Ergänzen; sie beendet die Abstimmung nicht. Die gewöhnliche Ansicht zeigt gegebenenfalls nur **Dieser Eintrag ist archiviert.**
 
-Archivierte Umfragen findest du unter **Archived and hidden** in [Deine Übersicht](DASHBOARD.md#find-archived-and-hidden-items). Jedes Profil, dessen Übersicht die Umfrage enthält, kann **Hide for me**, **Show for me** und **Use default visibility** für die eigene Kartenposition verwenden. Eigentümerschaft ist dafür nicht nötig; fremde Übersichten ändern sich nicht.
+Archivierte Umfragen findest du unter **Archiviert und ausgeblendet** in [Deine Übersicht](DASHBOARD.md#find-archived-and-hidden-items). Jedes Profil, dessen Übersicht die Umfrage enthält, kann **Für mich ausblenden**, **Für mich einblenden** und **Standardsichtbarkeit verwenden** für die eigene Kartenposition verwenden. Eigentümerschaft ist dafür nicht nötig; fremde Übersichten ändern sich nicht.
 
 ## Probleme lösen
 
@@ -307,7 +307,7 @@ Archivierte Umfragen findest du unter **Archived and hidden** in [Deine Übersic
 Prüfe:
 
 - Ein vollständiges Konto statt eines Gastkontos ist angemeldet.
-- **Survey Title** ist ausgefüllt.
+- **Titel der Umfrage** ist ausgefüllt.
 - Mindestens eine Kombination ist vorhanden.
 - Keine Kombination aus Wochentag und Position wiederholt sich.
 - Das Bild ist JPEG, PNG oder GIF und höchstens 10 MiB groß.
@@ -316,21 +316,21 @@ Prüfe:
 
 Prüfe zuerst das aktive Profil.
 
-Klappe in beiden Sammlungen **Archived and hidden** auf und entferne dort Filter.
+Klappe in beiden Sammlungen **Archiviert und ausgeblendet** auf und entferne dort Filter.
 
-- Eigentümer finden sie unter **Administrable entities**.
-- Teilnehmer finden sie nach einer Stimmabgabe mit diesem Profil unter **Your participation**.
+- Eigentümer finden sie unter **Verwaltbare Einträge**.
+- Teilnehmer finden sie nach einer Stimmabgabe mit diesem Profil unter **Deine Teilnahmen**.
 - Bloßes Öffnen oder Hinzufügen einer Kombination erzeugt keinen Stimmzettel.
 
 ### Ein Gast kann nicht zurückkehren
 
-Nutze **Recover guest account** auf der Einstiegsseite oder die Gastwiederherstellung bei **Anmelden** mit der Adresse der Gasterstellung. Siehe [Erste Schritte](GETTING_STARTED.md#recover-guest-access-by-email).
+Nutze **Gastkonto wiederherstellen** auf der Einstiegsseite oder die Gastwiederherstellung bei **Anmelden** mit der Adresse der Gasterstellung. Siehe [Erste Schritte](GETTING_STARTED.md#recover-guest-access-by-email).
 
-### Eine neue Kombination zeigt bei früheren Teilnehmern **No**
+### Eine neue Kombination zeigt bei früheren Teilnehmern **Nein**
 
 Dies ist die angezeigte Vorgabe, bis jede Person zurückkehrt und die neue Spalte beantwortet. Bitte die Teilnehmer, die Umfrage erneut zu öffnen.
 
-### **Add** meldet einen Fehler
+### **Hinzufügen** meldet einen Fehler
 
 Prüfe, ob dieselbe Kombination bereits existiert. Doppelte Kombinationen sind nicht erlaubt.
 
@@ -340,7 +340,7 @@ Sie gehört nicht zu Umfragen. Teile den eigenständigen Umfragelink mit der gew
 
 ### Entitätseinstellungen oder eine erwartete Aktion fehlt
 
-Prüfe das aktive Profil und öffne **Entitätseinstellungen** auf der Umfrageseite. Titel, Beschreibung, Archivierung und endgültiges Löschen verlangen das Eigentümerprofil. Eine Kopie zu erstellen verlangt zusätzlich ein vollständiges Konto. **Duplicate** und **Delete** auf Übersichtskarten erscheinen nur für den Eigentümer unter **Administrable entities**.
+Prüfe das aktive Profil und öffne **Entitätseinstellungen** auf der Umfrageseite. Titel, Beschreibung, Archivierung und endgültiges Löschen verlangen das Eigentümerprofil. Eine Kopie zu erstellen verlangt zusätzlich ein vollständiges Konto. **Duplizieren** und **Löschen** auf Übersichtskarten erscheinen nur für den Eigentümer unter **Verwaltbare Einträge**.
 
 ## Weitere Anleitungen
 

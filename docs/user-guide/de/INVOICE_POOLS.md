@@ -6,12 +6,12 @@ owner: event invoice-pool maintainers
 status: current
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Native-reference provenance retained; bounded P8 creation/settings, allocation, expense and invoice-review tasks aligned with the current German interface and catalogs. Untouched submission/history, calculation and settlement material retains its earlier reference scope.
+verification-scope: Current participant and organizer controls, exact localized labels, independent saves, history refresh and uncertain-submission acknowledgement source-reconciled. Separate calculation/settlement and English email/PDF destinations retain their original boundaries; no new browser execution claimed.
 current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/locales/de.json
-source-anchors: docs/user-guide/en/INVOICE_POOLS.md
+source-anchors: docs/user-guide/en/INVOICE_POOLS.md; src/frontend/features/finance/; src/locales/
 heading-anchors: 1:invoice-pools-and-payments; 2:choose-your-task; 3:participant; 3:organizer; 2:first-understand-the-two-kinds-of-status; 3:pool-status; 3:invoice-status; 2:who-can-use-invoice-pool-controls; 3:participants; 3:organizers; 2:participant-tasks; 3:submit-an-invoice; 4:no-open-pool-is-available; 3:check-your-invoice-history; 4:what-to-do-for-each-status; 3:retract-an-invoice-awaiting-review; 3:choose-whose-share-you-will-cover; 3:understand-your-final-share; 2:organizer-tasks; 3:create-an-invoice-pool; 4:creation-fields; 4:distribution-modes; 3:stop-or-resume-participant-submissions; 3:understand-the-pool-totals; 3:choose-participants-and-exemptions; 3:manage-takeovers-for-the-group; 3:add-a-surcharge; 3:add-an-organizer-expense; 3:review-submitted-invoices; 4:accept-without-correction; 4:accept-with-a-correction; 4:reject; 4:close-an-accepted-invoice; 4:correct-or-reject-an-accepted-or-closed-invoice; 4:notifications-and-late-review; 3:preview-a-calculation; 4:reconcile-costs-and-reimbursements; 3:close-the-pool-and-calculate-shares; 3:recalculate-a-closed-pool; 3:roll-back-pool-changes; 3:send-settlement-emails; 3:record-whether-a-share-is-settled; 3:export-saved-shares-as-a-pdf; 2:privacy-proof-access-storage-and-retention; 2:troubleshooting; 3:i-cannot-see-invoice-pools-and-payments; 3:i-can-see-invoice-history-but-cannot-submit; 3:my-invoice-is-not-included-in-the-total; 3:my-accepted-amount-or-description-changed; 3:i-cannot-select-somebody-in-manage-takeovers; 3:a-share-is-different-from-the-simple-equal-split; 3:the-pool-changed-but-the-shares-did-not; 3:a-recalculated-share-requires-payment-although-i-already-paid; 3:an-expected-email-did-not-arrive; 3:a-proof-is-unavailable
 next-review: invoice-pool-visible-UI-or-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
 -->
 
 Rechnungspools helfen einer Veranstaltungsgruppe, Belege zu sammeln, anrechenbare Kosten festzulegen und zu berechnen, wer Geld zahlen oder erhalten soll. Surveyor speichert Berechnung und Abwicklungsstatus; es zieht kein Geld ein und veranlasst keine Banküberweisungen.
@@ -52,27 +52,27 @@ Eine Rechnung und ihr Pool haben getrennte Lebenszyklen. **Abgeschlossene Rechnu
 
 | Poolstatus | Bedeutung | Verfügbare Aufgaben |
 |---|---|---|
-| **Open for invoices** | Kosten und Verteilungsregeln werden noch gesammelt. Es sind keine endgültigen Anteile festgeschrieben. | Zugeordnete Teilnehmer können Rechnungen einreichen und ihre eigenen Übernahmen verwalten. Organisatoren können Einstellungen, Zuordnungen, Faktoren, Befreiungen, Übernahmen, Zuschläge und Rabatte ändern, Teilnehmerrechnungen prüfen und Organisatorausgaben hinzufügen. |
-| **Organizer invoices only** | Teilnehmereinreichungen und das Bearbeiten eigener Übernahmen sind nicht verfügbar. Endgültige Anteile wurden noch nicht berechnet. | Organisatoren können Kosten hinzufügen und prüfen, Verteilungsgrundlagen bearbeiten, mit **Open participant invoices** Teilnehmereinreichungen zulassen oder Anteile vorab ansehen und berechnen. |
-| **Closed** | Surveyor hat aus akzeptierten Kosten und den bei der letzten Berechnung gespeicherten Verteilungsregeln einen endgültigen Anteil je Zahler erzeugt. | Teilnehmer sehen ihre Anteile, können aber keine neuen Rechnungen einreichen. Organisatoren können Zahlungen erfassen, Einstellungen korrigieren und Organisatorausgaben hinzufügen. Gespeicherte Kosten- oder Verteilungsänderungen wirken erst nach **Recalculate pool** auf die Anteile. |
+| **Offen für Rechnungen** | Kosten und Verteilungsregeln werden noch gesammelt. Es sind keine endgültigen Anteile festgeschrieben. | Zugeordnete Teilnehmer können Rechnungen einreichen und ihre eigenen Übernahmen verwalten. Organisatoren können Einstellungen, Zuordnungen, Faktoren, Befreiungen, Übernahmen, Zuschläge und Rabatte ändern, Teilnehmerrechnungen prüfen und Organisatorausgaben hinzufügen. |
+| **Nur Rechnungen der Organisation** | Teilnehmereinreichungen und das Bearbeiten eigener Übernahmen sind nicht verfügbar. Endgültige Anteile wurden noch nicht berechnet. | Organisatoren können Kosten hinzufügen und prüfen, Verteilungsgrundlagen bearbeiten, mit **Teilnehmerrechnungen öffnen** Teilnehmereinreichungen zulassen oder Anteile vorab ansehen und berechnen. |
+| **Abgeschlossen** | Surveyor hat aus akzeptierten Kosten und den bei der letzten Berechnung gespeicherten Verteilungsregeln einen endgültigen Anteil je Zahler erzeugt. | Teilnehmer sehen ihre Anteile, können aber keine neuen Rechnungen einreichen. Organisatoren können Zahlungen erfassen, Einstellungen korrigieren und Organisatorausgaben hinzufügen. Gespeicherte Kosten- oder Verteilungsänderungen wirken erst nach **Recalculate pool** auf die Anteile. |
 
 Das Schließen löscht den Pool nicht. Es gibt keine gewöhnliche Funktion **Reopen pool** oder **Delete pool**. **Recalculate pool** ersetzt die Anteile, während der Pool geschlossen bleibt.
-**Open for invoices** und **Organizer invoices only** sind unabhängige Auswahlmöglichkeiten beim Erstellen. Beide können direkt mit **Close pool & calculate** geschlossen werden; vorher ist kein weiterer Poolzustand nötig.
-**Close participant invoices** ist eine eigene Aktion vor der Berechnung: Sie stoppt Teilnehmereinreichungen ohne Anteilsberechnung und kann mit **Open participant invoices** rückgängig gemacht werden. Ein finanziell geschlossener Pool kann Teilnehmereinreichungen nicht wieder öffnen.
+**Offen für Rechnungen** und **Nur Rechnungen der Organisation** sind unabhängige Auswahlmöglichkeiten beim Erstellen. Beide können direkt mit **Close pool & calculate** geschlossen werden; vorher ist kein weiterer Poolzustand nötig.
+**Teilnehmerrechnungen schließen** ist eine eigene Aktion vor der Berechnung: Sie stoppt Teilnehmereinreichungen ohne Anteilsberechnung und kann mit **Teilnehmerrechnungen öffnen** rückgängig gemacht werden. Ein finanziell geschlossener Pool kann Teilnehmereinreichungen nicht wieder öffnen.
 
-**Recalculation required** bedeutet, dass gespeicherte Berechnungsgrundlagen seit der letzten Berechnung geändert wurden. Bisherige Anteile bleiben sichtbar, und Organisatoren können weiterhin Zahlungen auf diese Beträge erfassen. Prüfen Sie die neue Berechnung und wenden Sie sie an oder nehmen Sie ausstehende Pooländerungen zurück. Erfasste Zahlungen werden bei einer Neuberechnung übernommen.
+**Neuberechnung erforderlich** bedeutet, dass gespeicherte Berechnungsgrundlagen seit der letzten Berechnung geändert wurden. Bisherige Anteile bleiben sichtbar, und Organisatoren können weiterhin Zahlungen auf diese Beträge erfassen. Prüfen Sie die neue Berechnung und wenden Sie sie an oder nehmen Sie ausstehende Pooländerungen zurück. Erfasste Zahlungen werden bei einer Neuberechnung übernommen.
 
 ### Rechnungsstatus
 
 | Sichtbarer Status | Wie er entsteht | Nächster Schritt | In den Poolkosten enthalten? |
 |---|---|---|---|
-| **Awaiting review** | Ein zugeordneter Teilnehmer reicht Rechnung und Beleg in einem offenen Pool ein. | Ein Organisator kann **Accept** oder **Reject** wählen. Der Einreicher kann sie vor der Prüfung mit **Retract** zurückziehen. | Nein. |
-| **Accepted** | Ein Organisator akzeptiert eine ungeprüfte Teilnehmerrechnung oder fügt eine Organisatorausgabe hinzu. | Der zugeordnete Teilnehmer oder ein Organisator kann die Rechnung mit **Close** abschließen. Organisatoren können außerdem nach Bestätigung **Correct** oder **Reject from pool** verwenden. | Ja, gegebenenfalls mit dem akzeptierten korrigierten Betrag. |
-| **Rejected** | Ein Organisator lehnt eine ungeprüfte Rechnung ab oder entfernt eine akzeptierte beziehungsweise abgeschlossene Rechnung aus dem Pool. | Datensatz und Beleg bleiben in der Historie. Bei Bedarf kann während des offenen Pools eine Ersatzrechnung eingereicht werden. | Nein. |
-| **Closed** | Der zugeordnete Teilnehmer oder ein Organisator schließt eine akzeptierte Rechnung ab. | Der Datensatz bleibt in der Historie. Organisatoren können weiterhin nach Bestätigung **Correct** oder **Reject from pool** verwenden. | Ja. |
-| **Retracted** | Der Einreicher zieht eine noch ungeprüfte Rechnung zurück. | Angaben und Beleg bleiben ohne weitere Prüfaktion in der Historie. Bei Bedarf kann während des offenen Pools Ersatz eingereicht werden. | Nein. |
+| **Prüfung ausstehend** | Ein zugeordneter Teilnehmer reicht Rechnung und Beleg in einem offenen Pool ein. | Ein Organisator kann **Annehmen** oder **Ablehnen** wählen. Der Einreicher kann sie vor der Prüfung mit **Zurückziehen** zurückziehen. | Nein. |
+| **Angenommen** | Ein Organisator akzeptiert eine ungeprüfte Teilnehmerrechnung oder fügt eine Organisatorausgabe hinzu. | Der zugeordnete Teilnehmer oder ein Organisator kann die Rechnung mit **Schließen** abschließen. Organisatoren können außerdem nach Bestätigung **Korrigieren** oder **Aus Pool ablehnen** verwenden. | Ja, gegebenenfalls mit dem akzeptierten korrigierten Betrag. |
+| **Abgelehnt** | Ein Organisator lehnt eine ungeprüfte Rechnung ab oder entfernt eine akzeptierte beziehungsweise abgeschlossene Rechnung aus dem Pool. | Datensatz und Beleg bleiben in der Historie. Bei Bedarf kann während des offenen Pools eine Ersatzrechnung eingereicht werden. | Nein. |
+| **Abgeschlossen** | Der zugeordnete Teilnehmer oder ein Organisator schließt eine akzeptierte Rechnung ab. | Der Datensatz bleibt in der Historie. Organisatoren können weiterhin nach Bestätigung **Korrigieren** oder **Aus Pool ablehnen** verwenden. | Ja. |
+| **Zurückgezogen** | Der Einreicher zieht eine noch ungeprüfte Rechnung zurück. | Angaben und Beleg bleiben ohne weitere Prüfaktion in der Historie. Bei Bedarf kann während des offenen Pools Ersatz eingereicht werden. | Nein. |
 
-Der Abschluss einer akzeptierten Rechnung vermerkt das Ende ihrer gewöhnlichen Prüfung. Organisatoren können später weiterhin eine Korrektur oder Ablehnung bestätigen. Der Abschluss entfernt **keine** Kosten, markiert keinen Anteil als bezahlt und schließt nicht den Pool. Sowohl Accepted als auch Closed bleiben in den Poolkosten enthalten.
+Der Abschluss einer akzeptierten Rechnung vermerkt das Ende ihrer gewöhnlichen Prüfung. Organisatoren können später weiterhin eine Korrektur oder Ablehnung bestätigen. Der Abschluss entfernt **keine** Kosten, markiert keinen Anteil als bezahlt und schließt nicht den Pool. Sowohl angenommene als auch abgeschlossene Rechnungen bleiben in den Poolkosten enthalten.
 
 ## Wer Rechnungspool-Funktionen verwenden darf
 
@@ -90,12 +90,12 @@ Ein Teilnehmer darf nur eigene Rechnungen einreichen, nur eigene ungeprüfte Rec
 
 Der Veranstaltungseigentümer erhält alle Veranstaltungsberechtigungen. Ein anderer Organisator benötigt:
 
-- **Access Admin**, um das **Event administration dashboard** zu öffnen.
-- **Manage Assignments**, um **Invoice pools** einschließlich aller Rechnungen, Belege, Zuordnungen, Übernahmen, Zuschläge, Anteile und Zahlungsfunktionen zu sehen und zu bedienen.
+- **Zugriff auf Verwaltung**, um die **Veranstaltungsverwaltung** zu öffnen.
+- **Zuweisungen verwalten**, um **Rechnungspools** einschließlich aller Rechnungen, Belege, Zuordnungen, Übernahmen, Zuschläge, Anteile und Zahlungsfunktionen zu sehen und zu bedienen.
 
 Ein Organisator mit diesen Rechten kann gemeinsame Poolausgaben hinzufügen, ohne als Veranstaltungsteilnehmer angemeldet zu sein.
 
-Geben Sie **Manage Assignments** nur vertrauenswürdigen Organisatoren. Rechnungsbeschreibungen und Belege können Namen, Adressen, Kontodaten, Kaufangaben und andere sensible Informationen enthalten. Lesen Sie vor der Delegation [Berechtigungen und Freigaben](PERMISSIONS.md#delegate-a-limited-organizer).
+Geben Sie **Zuweisungen verwalten** nur vertrauenswürdigen Organisatoren. Rechnungsbeschreibungen und Belege können Namen, Adressen, Kontodaten, Kaufangaben und andere sensible Informationen enthalten. Lesen Sie vor der Delegation [Berechtigungen und Freigaben](PERMISSIONS.md#delegate-a-limited-organizer).
 
 ## Aufgaben für Teilnehmer
 
@@ -104,38 +104,38 @@ Geben Sie **Manage Assignments** nur vertrauenswürdigen Organisatoren. Rechnung
 Verwenden Sie diesen Ablauf, wenn Sie eine Ausgabe bezahlt haben, die in einem Veranstaltungskostenpool berücksichtigt werden soll.
 
 1. Öffnen Sie die Veranstaltung mit dem dafür angemeldeten Profil.
-2. Öffnen Sie **Invoice pools & payments**.
-3. Öffnen Sie **Submit an invoice & history**.
-4. Wählen Sie unter **Choose pool** den offenen Pool für diese Ausgabe.
-5. Geben Sie einen positiven **Amount** ein. Der kleinste vom Formular akzeptierte Wert ist `0.01`.
-6. Geben Sie optional eine **Description** ein, mit der der Organisator die Ausgabe zuordnen kann.
-7. Wählen Sie unter **Proof (image or PDF)** eine Belegdatei.
-8. Wählen Sie **Submit invoice**.
+2. Öffnen Sie **Rechnungspools und Zahlungen**.
+3. Öffnen Sie **Rechnung einreichen und Verlauf**.
+4. Wählen Sie unter **Pool auswählen** den offenen Pool für diese Ausgabe.
+5. Geben Sie einen positiven **Betrag** ein. Der kleinste vom Formular akzeptierte Wert ist `0.01`.
+6. Geben Sie optional eine **Beschreibung** ein, mit der der Organisator die Ausgabe zuordnen kann.
+7. Wählen Sie unter **Beleg (Bild oder PDF)** eine Belegdatei.
+8. Wählen Sie **Rechnung einreichen**.
 
 Das Formular zeigt sofort den Übermittlungsstatus und verhindert eine weitere Einreichung während des laufenden Vorgangs. Wenn Uploadfortschritt verfügbar ist, bezeichnet die Prozentzahl die Belegübertragung. Sie bedeutet noch nicht, dass die Rechnung gespeichert wurde. Warten Sie nach der Übertragung auf die Speicherbestätigung. Bei längeren Anfragen erscheinen weitere Statusmeldungen.
 
-Lassen Sie die Seite geöffnet, bis der Erfolg bestätigt ist. Bricht die Verbindung ab und kann Surveyor das Ergebnis nicht bestätigen, verwenden Sie vor einem erneuten Versuch **Check invoice history**. Ihre Rechnung könnte bereits gespeichert sein. Ist ein Feld ungültig, korrigieren Sie das Formular und senden Sie es erneut ab. Die Uploadbestätigung kann eintreffen, bevor die E-Mail ankommt.
+Lassen Sie die Seite geöffnet, bis der Erfolg bestätigt ist. Bricht die Verbindung ab und kann Surveyor das Ergebnis nicht bestätigen, wählen Sie **Rechnungsverlauf prüfen** und prüfen Sie die gespeicherten Einträge. Ihre Rechnung könnte bereits gespeichert sein. Wählen Sie danach **Ich habe den Rechnungsverlauf geprüft**, bevor Sie eine weitere Rechnung beginnen. Dies leert den festgehaltenen Betrag, die Beschreibung und den Beleg; es wiederholt die ungeklärte Rechnung nicht. Ist ein Feld ungültig, korrigieren Sie das Formular und senden Sie es erneut ab. Die Uploadbestätigung kann eintreffen, bevor die E-Mail ankommt.
 
 Ein Beleg ist erforderlich. Surveyor akzeptiert JPEG-, PNG-, GIF- und PDF-Dateien bis 10 MiB. Verwenden Sie einen gut lesbaren Kassenbon, eine Rechnung oder einen Zahlungsnachweis, der nur die für die Prüfung erforderlichen persönlichen und finanziellen Angaben enthält.
 
-Nach **Invoice submitted successfully** zeigt Surveyor kurz den Erfolg und lädt die Seite automatisch neu. **Invoice pools & payments** und **Submit an invoice & history** öffnen sich wieder mit der gespeicherten Rechnung in der Historie. Im nächsten Einreichungsformular sind Betrag, Beschreibung und Beleg leer. Der gewählte Pool bleibt ausgewählt, sofern er noch verfügbar ist. Warten Sie mit der nächsten Rechnung auf das Neuladen. **View invoice history** öffnet die aktualisierte Historie früher.
+Nach bestätigter Einreichung erscheint die gespeicherte Rechnung im Verlauf, ohne die Seite zu verlassen. Die abgeschlossenen Felder für Betrag, Beschreibung und Beleg werden geleert; ein weiterhin verfügbarer Pool bleibt ausgewählt. Andere unvollständige Formulare bleiben erhalten. Schlägt das anschließende Laden fehl, gilt die Speicherbestätigung weiterhin. Laden Sie mit **Aktualisieren** den aktuellen Verlauf, bevor Sie entscheiden, ob eine weitere Rechnung nötig ist.
 
 Nach einer erfolgreichen Einreichung:
 
-- Die gespeicherte Rechnung erscheint in der aktualisierten **Your invoice history** als **Awaiting review**.
+- Die gespeicherte Rechnung erscheint in der aktualisierten **Dein Rechnungsverlauf** als **Prüfung ausstehend**.
 - Surveyor weist ihr eine Rechnungsnummer zu.
 - Der Organisator sieht eingereichten Betrag, Beschreibung und Beleg.
 - Surveyor sendet **Invoice submitted** an die E-Mail-Adresse Ihres Kontos oder Gastprofils, sofern eine Adresse vorhanden und E-Mail-Versand eingerichtet ist.
 
-Surveyor benachrichtigt Organisatoren nicht über jede neue Einreichung per E-Mail. Sie prüfen neue Einträge unter **Invoice administration**.
+Surveyor benachrichtigt Organisatoren nicht über jede neue Einreichung per E-Mail. Sie prüfen neue Einträge unter **Rechnungsverwaltung**.
 
 #### Es steht kein offener Pool zur Verfügung
 
-**No open pools for submissions right now.** bedeutet, dass Sie keinem offenen Pool zugeordnet sind. Prüfen Sie, ob Sie das angemeldete Profil verwenden. Fragen Sie dann einen Organisator, ob Teilnehmereinreichungen gestoppt wurden, der Pool bereits berechnet und geschlossen wurde oder Ihre Anmeldung noch zugeordnet werden muss.
+**Derzeit sind keine Pools für Einreichungen geöffnet.** bedeutet, dass Sie keinem offenen Pool zugeordnet sind. Prüfen Sie, ob Sie das angemeldete Profil verwenden. Fragen Sie dann einen Organisator, ob Teilnehmereinreichungen gestoppt wurden, der Pool bereits berechnet und geschlossen wurde oder Ihre Anmeldung noch zugeordnet werden muss.
 
 ### Ihre Rechnungshistorie prüfen
 
-Öffnen Sie **Invoice pools & payments** → **Submit an invoice & history**. **Your invoice history** zeigt alle von der aktiven Anmeldung eingereichten Rechnungen, auch aus inzwischen geschlossenen Pools.
+Öffnen Sie **Rechnungspools und Zahlungen** → **Rechnung einreichen und Verlauf**. **Dein Rechnungsverlauf** zeigt alle von der aktiven Anmeldung eingereichten Rechnungen, auch aus inzwischen geschlossenen Pools.
 
 Bei jeder Rechnung sehen Sie:
 
@@ -144,33 +144,33 @@ Bei jeder Rechnung sehen Sie:
 - Aktuellen oder korrigierten Betrag.
 - Aktuelle oder korrigierte Beschreibung.
 - Status und gegebenenfalls Ablehnungsgrund.
-- **View proof**.
-- **Close**, nur bei Accepted.
-- **Retract**, nur bei Awaiting review.
+- **Beleg ansehen**.
+- **Schließen**, nur bei **Angenommen**.
+- **Zurückziehen**, nur bei **Prüfung ausstehend**.
 
-Ursprünglicher Betrag und ursprüngliche Beschreibung bleiben nach einer Organisatorkorrektur sichtbar, auch bei einer späteren Korrektur einer Accepted- oder Closed-Rechnung.
+Ursprünglicher Betrag und ursprüngliche Beschreibung bleiben nach einer Organisatorkorrektur sichtbar, auch bei einer späteren Korrektur einer angenommenen oder abgeschlossenen Rechnung.
 
-Mit **Search invoices** suchen Sie nach Rechnungsnummer, Pool, Betrag, Beschreibung, Korrektur oder Ablehnungsgrund. **All statuses** filtert Awaiting review, Accepted, Rejected, Closed und Retracted. Wählen Sie 25, 50 oder 100 Zeilen pro Seite und verwenden Sie bei längerer Historie **Previous** oder **Next**.
+Mit **Rechnungen suchen** suchen Sie nach Rechnungsnummer, Pool, Betrag, Beschreibung, Korrektur oder Ablehnungsgrund. **Alle Status** filtert **Prüfung ausstehend**, **Angenommen**, **Abgelehnt**, **Abgeschlossen** und **Zurückgezogen**. Wählen Sie 25, 50 oder 100 Zeilen pro Seite und verwenden Sie bei längerer Historie **Zurück** oder **Weiter**.
 
 #### Was bei welchem Status zu tun ist
 
-- **Awaiting review:** Warten Sie auf einen Organisator, oder wählen Sie bei falscher Einreichung **Retract**. Die ursprünglichen Angaben und die Historie können Sie nicht bearbeiten oder löschen.
-- **Accepted:** Prüfen Sie mögliche Korrekturen. Wählen Sie **Close**, wenn keine weitere Besprechung zur Prüfung nötig ist.
-- **Rejected:** Lesen Sie den Grund. Fragen Sie bei Unklarheiten einen Organisator und reichen Sie während des offenen Pools Ersatz ein. Abgelehnter Datensatz und Beleg bleiben in der Historie.
-- **Closed:** Es ist keine weitere Rechnungsaktion nötig. Die Kosten bleiben in den Poolsummen enthalten.
-- **Retracted:** Die Rechnung ist von Prüfung und Kosten ausgeschlossen. Reichen Sie bei Bedarf eine neue Rechnung ein, sofern der Pool noch offen ist.
+- **Prüfung ausstehend:** Warten Sie auf einen Organisator, oder wählen Sie bei falscher Einreichung **Zurückziehen**. Die ursprünglichen Angaben und die Historie können Sie nicht bearbeiten oder löschen.
+- **Angenommen:** Prüfen Sie mögliche Korrekturen. Wählen Sie **Schließen**, wenn keine weitere Besprechung zur Prüfung nötig ist.
+- **Abgelehnt:** Lesen Sie den Grund. Fragen Sie bei Unklarheiten einen Organisator und reichen Sie während des offenen Pools Ersatz ein. Abgelehnter Datensatz und Beleg bleiben in der Historie.
+- **Abgeschlossen:** Es ist keine weitere Rechnungsaktion nötig. Die Kosten bleiben in den Poolsummen enthalten.
+- **Zurückgezogen:** Die Rechnung ist von Prüfung und Kosten ausgeschlossen. Reichen Sie bei Bedarf eine neue Rechnung ein, sofern der Pool noch offen ist.
 
 Hat Ihr Profil eine E-Mail-Adresse, sendet Surveyor nach Annahme, Korrektur, Ablehnung, Abschluss oder eigener Rücknahme eine Nachricht. Die Annahme-E-Mail nennt den wirksamen akzeptierten Betrag und eventuelle Organisatorkorrekturen. Die Ablehnungs-E-Mail enthält den Grund.
 
 ### Eine noch ungeprüfte Rechnung zurückziehen
 
-1. Suchen Sie Ihre Rechnung in **Your invoice history**.
-2. Wählen Sie bei einer Rechnung mit **Awaiting review** die Aktion **Retract**.
-3. Prüfen Sie die Rechnung unter **Retract invoice** und wählen Sie **Confirm retraction**.
+1. Suchen Sie Ihre Rechnung in **Dein Rechnungsverlauf**.
+2. Wählen Sie bei einer Rechnung mit **Prüfung ausstehend** die Aktion **Zurückziehen**.
+3. Prüfen Sie die Rechnung unter **Rechnung zurückziehen** und wählen Sie **Zurückziehen bestätigen**.
 
-Die Rechnung erhält **Retracted** und behält Angaben und Beleg in der Historie. Sie wartet nicht mehr auf eine Organisatorentscheidung. Sie können eine eigene ungeprüfte Rechnung auch nach Schließung des Pools zurückziehen. Sie war nie in berechneten Kosten enthalten; die Rücknahme ändert daher gespeicherte Anteile und Zahlungen nicht. Sie öffnet den Pool nicht für einen Ersatz-Upload.
+Die Rechnung erhält **Zurückgezogen** und behält Angaben und Beleg in der Historie. Sie wartet nicht mehr auf eine Organisatorentscheidung. Sie können eine eigene ungeprüfte Rechnung auch nach Schließung des Pools zurückziehen. Sie war nie in berechneten Kosten enthalten; die Rücknahme ändert daher gespeicherte Anteile und Zahlungen nicht. Sie öffnet den Pool nicht für einen Ersatz-Upload.
 
-Hat ein Organisator die Rechnung bereits geprüft oder änderte sich der Pool während des Dialogs, laden Sie die Seite neu und prüfen Sie den aktuellen Status. Accepted- und Closed-Rechnungen benötigen stattdessen eine Korrektur oder Ablehnung durch einen Organisator.
+Hat ein Organisator die Rechnung bereits geprüft oder änderte sich der Pool während des Dialogs, brechen Sie die Prüfung ab und wählen Sie **Aktualisieren** in **Rechnungspools und Zahlungen**. Prüfen Sie den aktuellen Status, bevor Sie die Rechnung erneut öffnen. Angenommene und abgeschlossene Rechnungen benötigen stattdessen eine Korrektur oder Ablehnung durch einen Organisator.
 
 ### Festlegen, wessen Anteil Sie übernehmen
 
@@ -199,35 +199,35 @@ Eine Übernahme ist eine Berechnungsanweisung, keine Zahlung. Sie wird wirksam, 
 
 ### Ihren endgültigen Anteil verstehen
 
-Nachdem der Organisator einen Pool geschlossen hat, zeigt **Your pool shares** Ihre gespeicherten Anteile über alle Pools. Jede Zeile zeigt Pool, vorzeichenbehafteten **Calculated balance** und Zahlungsstatus. Auf Telefonen und Tablets erscheinen dieselben Angaben als Karten. Der Betrag bleibt nach Zahlung oder Erstattung sichtbar. Der Status zeigt Ihren Handlungsbedarf:
+Nachdem der Organisator einen Pool geschlossen hat, zeigt **Deine Poolanteile** Ihre gespeicherten Anteile über alle Pools. Jede Zeile zeigt Pool, vorzeichenbehafteten **Berechneter Saldo** und Zahlungsstatus. Auf Telefonen und Tablets erscheinen dieselben Angaben als Karten. Der Betrag bleibt nach Zahlung oder Erstattung sichtbar. Der Status zeigt Ihren Handlungsbedarf:
 
-- **Payment due:** Sie müssen den positiven berechneten Saldo zahlen.
-- **Refund due:** Sie sollen den negativen berechneten Saldo als Erstattung erhalten.
-- **Paid:** Der Organisator hat Ihre Zahlung erfasst.
-- **Refunded:** Der Organisator hat Ihre Erstattung erfasst; der Betrag bleibt negativ.
-- **No payment:** Der berechnete Saldo beträgt null.
+- **Zahlung ausstehend:** Sie müssen den positiven berechneten Saldo zahlen.
+- **Erstattung ausstehend:** Sie sollen den negativen berechneten Saldo als Erstattung erhalten.
+- **Bezahlt:** Der Organisator hat Ihre Zahlung erfasst.
+- **Erstattet:** Der Organisator hat Ihre Erstattung erfasst; der Betrag bleibt negativ.
+- **Keine Zahlung:** Der berechnete Saldo beträgt null.
 
-Mit **Search pools or calculation notes**, **Filter share status**, **Sort pools**, **Shares per page**, **Previous** und **Next** finden Sie auch bei vielen Pools den gesuchten Anteil. **View breakdown** in einer Zeile öffnet einen schreibgeschützten Dialog. Er zeigt zutreffende Bestandteile, Ihre tatsächliche **Calculation explanation** und getrennt die ursprünglichen **Saved calculation notes**. Nicht verwendete Anpassungen oder Gutschriften und wiederholte abgeleitete Beträge werden weggelassen.
+Mit **Pools oder Berechnungsnotizen suchen**, **Anteilsstatus filtern**, **Pools sortieren**, **Anteile pro Seite**, **Zurück** und **Weiter** finden Sie auch bei vielen Pools den gesuchten Anteil. **Aufschlüsselung ansehen** in einer Zeile öffnet einen schreibgeschützten Dialog. Er zeigt zutreffende Bestandteile, Ihre tatsächliche **Berechnungserklärung** und getrennt die ursprünglichen **Gespeicherte Berechnungsnotizen**. Nicht verwendete Anpassungen oder Gutschriften und wiederholte abgeleitete Beträge werden weggelassen.
 
 | Feld | Bedeutung |
 |---|---|
-| **Base share** | Ihr automatisch nach Anwesenheit und poolspezifischem Faktor gewichteter Anteil an der Verteilungsbasis, zuzüglich der Anteile übernommener Personen. |
-| **Adjustments** | Vorzeichenbehaftete Zuschläge oder Rabatte für Sie oder übernommene Personen. Negative Beträge senken den Anteil. |
-| **Invoice credit** | Angerechnete Rechnungen für Sie oder übernommene Personen, wenn **Deduct submitter invoices from their share** aktiviert ist, einschließlich Organisatorrechnungen mit Zuordnung zum zahlenden Teilnehmer. |
-| **Previously settled** | Übernommene Transfers früherer Berechnungen: positiv für empfangene Zahlungen des Zahlers, negativ für ausgezahlte Erstattungen an ihn. |
-| **Calculated balance** | Grundanteil plus zutreffende Anpassungen minus Rechnungsgutschrift und bereits abgewickelte Beträge. Dies ist der Hauptbetrag und bleibt nach Abwicklung sichtbar. |
-| **Calculation explanation** | Formatierte Rechnung für Ihren eigenen Anteil und jede übernommene Person mit benannten Eingaben und endgültigem gespeichertem Saldo. |
-| **Saved calculation notes** | Bei der Berechnung gespeicherte tatsächliche Anwesenheit, Faktoren, Befreiungen, Übernahmen, Anpassungen und Rechnungsgutschriften. Diese Fakten sind von der Rechenerklärung getrennt. |
+| **Grundanteil** | Ihr automatisch nach Anwesenheit und poolspezifischem Faktor gewichteter Anteil an der Verteilungsbasis, zuzüglich der Anteile übernommener Personen. |
+| **Anpassungen** | Vorzeichenbehaftete Zuschläge oder Rabatte für Sie oder übernommene Personen. Negative Beträge senken den Anteil. |
+| **Rechnungsgutschrift** | Angerechnete Rechnungen für Sie oder übernommene Personen, wenn **Eingereichte Rechnungen vom eigenen Anteil abziehen** aktiviert ist, einschließlich Organisatorrechnungen mit Zuordnung zum zahlenden Teilnehmer. |
+| **Bisher beglichen** | Übernommene Transfers früherer Berechnungen: positiv für empfangene Zahlungen des Zahlers, negativ für ausgezahlte Erstattungen an ihn. |
+| **Berechneter Saldo** | Grundanteil plus zutreffende Anpassungen minus Rechnungsgutschrift und bereits abgewickelte Beträge. Dies ist der Hauptbetrag und bleibt nach Abwicklung sichtbar. |
+| **Berechnungserklärung** | Formatierte Rechnung für Ihren eigenen Anteil und jede übernommene Person mit benannten Eingaben und endgültigem gespeichertem Saldo. |
+| **Gespeicherte Berechnungsnotizen** | Bei der Berechnung gespeicherte tatsächliche Anwesenheit, Faktoren, Befreiungen, Übernahmen, Anpassungen und Rechnungsgutschriften. Diese Fakten sind von der Rechenerklärung getrennt. |
 
-Ein berechneter Saldo von `-25.00` zeigt beispielsweise vor Erfassung **Refund due** und danach **Refunded**. Der Hauptbetrag bleibt `-25.00`.
+Ein berechneter Saldo von `-25.00` zeigt beispielsweise vor Erfassung **Erstattung ausstehend** und danach **Erstattet**. Der Hauptbetrag bleibt `-25.00`.
 
-Ihre **Calculation explanation** verwendet Ihren Namen und die Namen übernommener Teilnehmer. Bei Übernahmen erscheinen zuerst deren Anzahl und Namen, danach die einzelnen Rechnungen. Die Erklärung zeigt jeden tatsächlichen Grundanteil und benennt Anwesenheit in Nächten, einschließlich gerechneten Tagen oder Teilnehmern sowie den jeweiligen **Share factor** ausdrücklich. Anschließend kombiniert sie übernommene Grundanteile und berücksichtigt zutreffende Anpassungen, Rechnungsgutschriften und bereits abgewickelte Beträge. Das Ergebnis ist Ihr gespeicherter berechneter Saldo. Begünstigte behalten ihren eigenen Faktor und ihre eigene Rundung, bevor ihre Anteile zusammengeführt werden. Berechnungen unbeteiligter Zahler erscheinen nicht.
+Ihre **Berechnungserklärung** verwendet Ihren Namen und die Namen übernommener Teilnehmer. Bei Übernahmen erscheinen zuerst deren Anzahl und Namen, danach die einzelnen Rechnungen. Die Erklärung zeigt jeden tatsächlichen Grundanteil und benennt Anwesenheit in Nächten, einschließlich gerechneten Tagen oder Teilnehmern sowie den jeweiligen **Anteilsfaktor** ausdrücklich. Anschließend kombiniert sie übernommene Grundanteile und berücksichtigt zutreffende Anpassungen, Rechnungsgutschriften und bereits abgewickelte Beträge. Das Ergebnis ist Ihr gespeicherter berechneter Saldo. Begünstigte behalten ihren eigenen Faktor und ihre eigene Rundung, bevor ihre Anteile zusammengeführt werden. Berechnungen unbeteiligter Zahler erscheinen nicht.
 
 Sind Sie befreit oder haben Sie kein automatisches Verteilungsgewicht und hat auch niemand, den Sie übernehmen, positives automatisches Gewicht, bleibt die Erklärung kurz: Sie zeigt Befreiung oder Nullgewicht, feste Anpassungen und Gutschriften sowie Ihren gespeicherten Saldo. Gemeinsame Kosten und Divisor bleiben enthalten, wenn sie einen berechtigten übernommenen Teilnehmer erklären.
 
 Die Erklärung enthält nur Funktionen, die dieser Pool verwendet. Umverteilte Zuschläge senken die Verteilungsbasis, umverteilte Rabatte erhöhen sie. Aufgeschlagene Zuschläge oder Rabatte lassen die Basis unverändert und ändern Gesamtsumme sowie Ergebnis des betroffenen Zahlers. Verwendete Zuschlags- und Rabattsummen bleiben getrennt, selbst wenn sie einander aufheben. Diese Angaben gehören zur gespeicherten Berechnung, auch wenn aktuelle Einstellungen oder Anwesenheiten später geändert wurden. Ältere Berechnungen behalten Beträge und Notizen. Fehlende gespeicherte Eingaben werden kenntlich gemacht und nicht aus aktuellen Änderungen rekonstruiert.
 
-**Record payment** und **Record refund** erfassen Transfers, die bereits außerhalb von Surveyor stattgefunden haben. Surveyor belastet keine Karte, sendet keine Überweisung und beweist keinen Geldfluss. Organisatoren prüfen den vorzeichenbehafteten berechneten Saldo und bestätigen. Abbrechen oder Schließen der Prüfung lässt den gespeicherten Zustand unverändert.
+**Zahlung erfassen** und **Erstattung erfassen** erfassen Transfers, die bereits außerhalb von Surveyor stattgefunden haben. Surveyor belastet keine Karte, sendet keine Überweisung und beweist keinen Geldfluss. Organisatoren prüfen den vorzeichenbehafteten berechneten Saldo und bestätigen. Abbrechen oder Schließen der Prüfung lässt den gespeicherten Zustand unverändert.
 
 Berechnungs-E-Mails und PDFs verwenden dieselben Bezeichnungen, denselben vorzeichenbehafteten berechneten Saldo und den ausdrücklichen Zahlungs- beziehungsweise Erstattungsstatus. Das Erfassen oder Rückgängigmachen eines Transfers erzeugt bei vorhandener Adresse ebenfalls eine Status-E-Mail. E-Mails nennen den Empfänger in Anrede und Empfängerfeld mit Namen.
 
@@ -289,29 +289,29 @@ Um Teilnehmereinreichungen vor der Berechnung zuzulassen, wählen Sie **Teilnehm
 
 ### Die Poolsummen verstehen
 
-Im Kopf geschlossener Pools bleiben **Full pool total**, **Payments due** und vorzeichenbehaftete **Refunds due** sichtbar. Klappen Sie den Pool für weitere Angaben auf, einschließlich **Base to distribute**, wenn umverteilte Anpassungen verwendet werden. **Calculation breakdown** trennt verwendete Zuschläge und Rabatte nach ihrem Umverteilungsmodus, auch wenn sie sich zu null aufheben, und zeigt relevante Rechnungs- und Abwicklungssummen als beschriftete Zahlen. Hinzu kommen die Anzahl zugeordneter Teilnehmer und zutreffende Gesamttage oder -nächte, berechtigte Einheiten, Befreiungen und das mit Faktoren gewichtete Gesamtgewicht. Dieser Bereich enthält nur Zahlen; Erklärung und Rechenschritte stehen unter **Example calculation**. Die Zahlen beschreiben den gesamten Pool, nicht nur einen Beispielteilnehmer. Beide fälligen Summen bleiben mit null sichtbar, wenn alle gespeicherten Anteile abgewickelt sind. Verteilungseinstellungen befinden sich unter **Pool settings** und **Participants & factors**. Klappen Sie separat **Example calculation** auf, um zuerst Poolsummen und Verteilungsbasis und gegebenenfalls danach die Berechnung eines anonymen Teilnehmers zu sehen. **View breakdown** erklärt den konkreten gespeicherten Anteil jedes Zahlers.
+Im Kopf geschlossener Pools bleiben **Gesamtkosten des Pools**, **Ausstehende Zahlungen** und vorzeichenbehaftete **Ausstehende Erstattungen** sichtbar. Klappen Sie den Pool für weitere Angaben auf, einschließlich **Zu verteilender Grundbetrag**, wenn umverteilte Anpassungen verwendet werden. **Berechnungsübersicht** trennt verwendete Zuschläge und Rabatte nach ihrem Umverteilungsmodus, auch wenn sie sich zu null aufheben, und zeigt relevante Rechnungs- und Abwicklungssummen als beschriftete Zahlen. Hinzu kommen die Anzahl zugeordneter Teilnehmer und zutreffende Gesamttage oder -nächte, berechtigte Einheiten, Befreiungen und das mit Faktoren gewichtete Gesamtgewicht. Dieser Bereich enthält nur Zahlen; Erklärung und Rechenschritte stehen unter **Beispielrechnung**. Die Zahlen beschreiben den gesamten Pool, nicht nur einen Beispielteilnehmer. Beide fälligen Summen bleiben mit null sichtbar, wenn alle gespeicherten Anteile abgewickelt sind. Verteilungseinstellungen befinden sich unter **Pooleinstellungen** und **Teilnehmende und Faktoren**. Klappen Sie separat **Beispielrechnung** auf, um zuerst Poolsummen und Verteilungsbasis und gegebenenfalls danach die Berechnung eines anonymen Teilnehmers zu sehen. **Aufschlüsselung ansehen** erklärt den konkreten gespeicherten Anteil jedes Zahlers.
 
 | Anzeige | Inhalt |
 |---|---|
-| **Invoice costs** | Wirksame Beträge von Accepted- und Closed-Rechnungen, die als gemeinsame Kosten zählen. |
-| **Accepted invoice costs** | Angerechnete Rechnungen, die noch Accepted statt Closed sind. Ungeprüfte Einreichungen sind ausgeschlossen. Der Abschluss einer Rechnung bezahlt keinen Anteil. |
-| **Base to distribute** | Rechnungskosten minus vorzeichenbehaftete umverteilte Anpassungen, vor Rundung und persönlichen Anpassungen oder Gutschriften. |
-| **Redistributed surcharges** | Bestimmten Teilnehmern zugeordnete positive Beträge, die von der gemeinsamen Basis abgezogen werden. Sie ändern die Gesamtsumme nicht. |
-| **Redistributed rebates** | Bestimmten Teilnehmern zugeordnete negative Beträge. Ihr Abzug erhöht die gemeinsame Basis, ohne die Gesamtsumme zu ändern. |
-| **On-top surcharges** | Nach der Grundverteilung aufgeschlagene positive Beträge. Sie erhöhen die Gesamtsumme, ohne andere Grundanteile zu ändern. |
-| **On-top rebates** | Nach der Grundverteilung angewendete negative Beträge. Sie senken die Gesamtsumme, ohne andere Grundanteile zu ändern. |
-| **Full pool total** | Wirksame Beträge von Accepted- und Closed-Rechnungen plus aufgeschlagene Anpassungen. Awaiting review, Rejected und Retracted sind ausgeschlossen. Umverteilte Anpassungen ändern diese Summe nicht. |
-| **Payments due** | Positive verbleibende Salden. |
-| **Refunds due** | Negative verbleibende Salden mit negativem Vorzeichen. |
-| **Invoice credit** | Angerechnete, einer Anmeldung zugeordnete Rechnungen, die von gespeicherten Zahleranteilen abgezogen werden, einschließlich Organisatorrechnungen für den zahlenden Teilnehmer. |
-| **Previously settled** | Vorzeichenbehaftete Gutschriften aus früheren Berechnungen. |
-| **Payments received** | Positive berechnete Salden, die in dieser gespeicherten Berechnung als bezahlt erfasst wurden. |
-| **Refunds paid** | Negative berechnete Salden, die in dieser gespeicherten Berechnung als erstattet erfasst wurden. |
-| **Rounding difference** | Ein durch Rundung jedes Teilnehmergrundanteils verursachter Überschuss oder Fehlbetrag ungleich null. |
+| **Rechnungskosten** | Wirksame Beträge von Rechnungen mit Status **Angenommen** oder **Abgeschlossen**, die als gemeinsame Kosten zählen. |
+| **Angenommene Rechnungskosten** | Angerechnete Rechnungen, die noch **Angenommen** statt **Abgeschlossen** sind. Ungeprüfte Einreichungen sind ausgeschlossen. Der Abschluss einer Rechnung bezahlt keinen Anteil. |
+| **Zu verteilender Grundbetrag** | Rechnungskosten minus vorzeichenbehaftete umverteilte Anpassungen, vor Rundung und persönlichen Anpassungen oder Gutschriften. |
+| **Umverteilte Zuschläge** | Bestimmten Teilnehmern zugeordnete positive Beträge, die von der gemeinsamen Basis abgezogen werden. Sie ändern die Gesamtsumme nicht. |
+| **Umverteilte Nachlässe** | Bestimmten Teilnehmern zugeordnete negative Beträge. Ihr Abzug erhöht die gemeinsame Basis, ohne die Gesamtsumme zu ändern. |
+| **Zusätzliche Zuschläge** | Nach der Grundverteilung aufgeschlagene positive Beträge. Sie erhöhen die Gesamtsumme, ohne andere Grundanteile zu ändern. |
+| **Zusätzliche Nachlässe** | Nach der Grundverteilung angewendete negative Beträge. Sie senken die Gesamtsumme, ohne andere Grundanteile zu ändern. |
+| **Gesamtkosten des Pools** | Wirksame Beträge von Rechnungen mit Status **Angenommen** oder **Abgeschlossen** plus aufgeschlagene Anpassungen. **Prüfung ausstehend**, **Abgelehnt** und **Zurückgezogen** sind ausgeschlossen. Umverteilte Anpassungen ändern diese Summe nicht. |
+| **Ausstehende Zahlungen** | Positive verbleibende Salden. |
+| **Ausstehende Erstattungen** | Negative verbleibende Salden mit negativem Vorzeichen. |
+| **Rechnungsgutschrift** | Angerechnete, einer Anmeldung zugeordnete Rechnungen, die von gespeicherten Zahleranteilen abgezogen werden, einschließlich Organisatorrechnungen für den zahlenden Teilnehmer. |
+| **Bisher beglichen** | Vorzeichenbehaftete Gutschriften aus früheren Berechnungen. |
+| **Erhaltene Zahlungen** | Positive berechnete Salden, die in dieser gespeicherten Berechnung als bezahlt erfasst wurden. |
+| **Ausgezahlte Erstattungen** | Negative berechnete Salden, die in dieser gespeicherten Berechnung als erstattet erfasst wurden. |
+| **Rundungsdifferenz** | Ein durch Rundung jedes Teilnehmergrundanteils verursachter Überschuss oder Fehlbetrag ungleich null. |
 
-Nicht verwendete Kontextsummen werden weggelassen. Eine aktuelle geschlossene Berechnung wiederholt keine Kosten, die bereits in ihrer gespeicherten Aufschlüsselung stehen; zutreffende **Accepted invoice costs** und Abwicklungssummen bleiben erhalten. Offene Pools, veraltete Berechnungen und ältere Berechnungen ohne gespeicherte Kosteneingaben behalten die relevanten aktuellen Kostenangaben. Sind Rechnungskosten, Verteilungsbasis und Gesamtsumme in einem gewöhnlichen Pool ohne Anpassungen identisch, erscheint eine Kostenkennzahl; **Example calculation** erklärt die Gleichheit. Bei verwendeten Anpassungen bleiben die relevanten Kostenebenen auch bei gleichen Beträgen getrennt. Eine ältere Berechnung ohne gespeicherte numerische Eingaben zeigt **Saved calculation inputs: Not saved**. Bekannte historische Beträge bleiben verfügbar, während eine nicht belegbare **Full pool total** als **Unavailable** gekennzeichnet wird.
+Nicht verwendete Kontextsummen werden weggelassen. Eine aktuelle geschlossene Berechnung wiederholt keine Kosten, die bereits in ihrer gespeicherten Aufschlüsselung stehen; zutreffende **Angenommene Rechnungskosten** und Abwicklungssummen bleiben erhalten. Offene Pools, veraltete Berechnungen und ältere Berechnungen ohne gespeicherte Kosteneingaben behalten die relevanten aktuellen Kostenangaben. Sind Rechnungskosten, Verteilungsbasis und Gesamtsumme in einem gewöhnlichen Pool ohne Anpassungen identisch, erscheint eine Kostenkennzahl; **Beispielrechnung** erklärt die Gleichheit. Bei verwendeten Anpassungen bleiben die relevanten Kostenebenen auch bei gleichen Beträgen getrennt. Eine ältere Berechnung ohne gespeicherte numerische Eingaben zeigt **Gespeicherte Berechnungsgrundlagen: Nicht gespeichert**. Bekannte historische Beträge bleiben verfügbar, während eine nicht belegbare **Gesamtkosten des Pools** als **Nicht verfügbar** gekennzeichnet wird.
 
-Poolsummen aktualisieren sich durch Rechnungsprüfungen, geänderte Anpassungen und geänderte Zahlungsmarkierungen. In einem veralteten geschlossenen Pool unterscheiden **Current pool costs** und **Saved settlement totals** neuere Eingaben von der gespeicherten Berechnung. **Recalculation required** kennzeichnet gespeicherte Berechnungsänderungen. Prüfen Sie sie vor Neuberechnung oder Rücknahme. Fällige Zahlungen und Erstattungen beruhen bis zur Neuberechnung auf gespeicherten Anteilen und ihrem aktuellen Zahlungsstatus. Empfangene und erstattete Summen beschreiben nur diese Berechnung; **Previously settled** hält übertragene Gutschriften getrennt, auch mit null, wenn positive und negative Überträge einander aufheben. Diese Summen sind keine vollständige chronologische Transferhistorie. Für automatische Aufbewahrungsbereinigung gilt eine unten beschriebene gesonderte Ausnahme.
+Poolsummen aktualisieren sich durch Rechnungsprüfungen, geänderte Anpassungen und geänderte Zahlungsmarkierungen. In einem veralteten geschlossenen Pool unterscheiden **Aktuelle Poolkosten** und **Gespeicherte Ausgleichssummen** neuere Eingaben von der gespeicherten Berechnung. **Neuberechnung erforderlich** kennzeichnet gespeicherte Berechnungsänderungen. Prüfen Sie sie vor Neuberechnung oder Rücknahme. Fällige Zahlungen und Erstattungen beruhen bis zur Neuberechnung auf gespeicherten Anteilen und ihrem aktuellen Zahlungsstatus. Empfangene und erstattete Summen beschreiben nur diese Berechnung; **Bisher beglichen** hält übertragene Gutschriften getrennt, auch mit null, wenn positive und negative Überträge einander aufheben. Diese Summen sind keine vollständige chronologische Transferhistorie. Für automatische Aufbewahrungsbereinigung gilt eine unten beschriebene gesonderte Ausnahme.
 
 ### Teilnehmer und Befreiungen auswählen
 

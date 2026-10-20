@@ -18,14 +18,14 @@ const pool: components['schemas']['FinancePool'] = {id: poolId, name: '<Saved po
     isDefault: true, needsRecalculation: false, hasPendingTakeovers: false, revision: 7, canSubmit: true, summary: null,
     calculation: null, exampleCalculation: null, coverageKnown: true, coverageGroups: [], pendingCoverageGroups: [], assignedCount: 1, assignAll: true};
 const invoice: components['schemas']['FinanceInvoice'] = {id: '12', poolId, poolName: pool.name, revision: 7, status: 'NEW',
-    amount: 10, description: '<Original evidence>', correctedAmount: null, correctedDescription: null, rejectionReason: null,
+    amount: '10.00', description: '<Original evidence>', correctedAmount: null, correctedDescription: null, rejectionReason: null,
     createdAt: '2026-10-20T10:00:00Z', organizerRecorded: false, recordedByName: null, participantName: 'Payer',
     participantEmail: null, proofOriginalName: 'proof.pdf', proofUrl: '/api/proof-output', canRetract: true, canClose: false};
 const share: components['schemas']['FinanceShare'] = {id: '2', poolId, poolName: pool.name, payerName: 'Payer', notes: ['<Saved note>'],
-    needsRecalculation: true, amount: -4, status: 'refund', statusLabel: 'Refund due', isPaid: false, caption: 'Refund to receive',
+    needsRecalculation: true, amount: '-4.00', status: 'refund', statusLabel: 'Refund due', isPaid: false, caption: 'Refund to receive',
     settledShareNotice: null, coveredNames: [], coverageKnown: true};
 const snapshot: components['schemas']['FinanceView'] = {audience: 'participant', registrationId: '7', pools: [pool], invoices: [invoice], shares: [share]};
-const breakdown: components['schemas']['FinanceBreakdown'] = {components: [{key: 'shareAmount', label: 'Calculated balance', amount: -4}],
+const breakdown: components['schemas']['FinanceBreakdown'] = {components: [{key: 'shareAmount', label: 'Calculated balance', amount: '-4.00'}],
     calculation: {title: 'Your saved calculation', sections: [{key: 'own', title: '<Saved participant>', metrics: [{label: 'Attendance', value: '2'}]}]},
     notes: ['<Saved note>'], statusLabel: 'Refund due', needsRecalculation: true, settledShareNotice: null};
 const cleanups: Array<() => Promise<void>> = [];
@@ -105,7 +105,7 @@ describe('P7 finance saved reads and participant invoices', () => {
                 closed = true;
                 return json({changed: true});
             }
-            return json({...snapshot, invoices: [{...invoice, correctedAmount: 11.25,
+            return json({...snapshot, invoices: [{...invoice, correctedAmount: '11.25',
                 status: closed ? 'CLOSED' : 'APPROVED', canRetract: false, canClose: !closed}]});
         });
         await button(mounted.wrapper, 'Invoice pools & payments').trigger('click');
@@ -159,7 +159,7 @@ describe('P7 finance saved reads and participant invoices', () => {
         });
         cleanups.push(mounted.dispose);
         const upload = vi.spyOn(mounted.context.api, 'uploadJson').mockImplementation(async (_operation, _path, form) => {
-            expect(JSON.parse(form.get('data') as string)).toEqual({amount: 13.5, description: 'Changed before submission'});
+            expect(JSON.parse(form.get('data') as string)).toEqual({amount: '13.5', description: 'Changed before submission'});
             throw new ApiFailure(400, null, null, 'Rejected proof', true);
         });
         const {file, chooser} = await fillInvoice(mounted.wrapper);
@@ -325,7 +325,7 @@ describe('P7 finance saved reads and participant invoices', () => {
     it('uses a distinct organizer projection with source totals and no participant submission or lifecycle commands', async () => {
         const organizer = {...snapshot, audience: 'organizer', registrationId: null,
             pools: [{...pool, status: 'CLOSED', canSubmit: false,
-                summary: {primary: [{key: 'totalAmount', label: 'Invoice costs', amount: 20}], details: [], saved: []}}],
+                summary: {primary: [{key: 'totalAmount', label: 'Invoice costs', amount: '20.00'}], details: [], saved: []}}],
             invoices: [{...invoice, organizerRecorded: true, participantName: null, recordedByName: 'Recorder', proofUrl: null, proofOriginalName: null}]} as components['schemas']['FinanceView'];
         const {wrapper, request} = await mountFinance(async () => json(organizer), true);
         expect(new URL((request.mock.calls[0]![0] as Request).url).pathname).toBe(`/api/v1/events/${eventId}/finance/organizer`);

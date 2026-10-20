@@ -27,12 +27,14 @@ const propertyInputs = [
 
 <template>
     <!-- Native properties use independent disclosure families, compact generic
-         labels and a stricter capacity constraint than the creation form below. -->
+         labels and a stricter capacity constraint than creation. Both capacity
+         consumers retain their lexical draft until the existing save operation. -->
 
     <div v-if="fields" class="row g-3 pt-3">
         <FormField v-for="input in propertyInputs.filter(input => fields?.includes(input.field))" :key="input.field"
             :id="prefix + '-' + input.field" class="col-md-6" :name="input.field" :type="input.type"
             :model-value="String(values[input.field] ?? '')" :label="messages.t(input.label)" label-class=""
+            :lexical-number="input.type === 'number'"
             :max-length="'max' in input ? input.max : undefined" :required="input.required" :required-marker="false"
             :min="input.type === 'number' ? 1 : undefined" :step="input.type === 'datetime-local' ? 1 : undefined"
             @update:model-value="values[input.field] = $event" />
@@ -81,8 +83,10 @@ const propertyInputs = [
                 :model-value="String(values.location ?? '')" :label="messages.t('event.location')" label-icon="bi-geo-alt" label-class=""
                 :max-length="255" :placeholder="messages.t('event.locationPlaceholder')" @update:model-value="values.location = $event" />
             <!-- Keep raw capacity spelling, zero and the absence of constraints.
-                 FormField emits lexical input; only the existing server coerces it. -->
+                 Explicit lexical handling avoids Vue's number-input blur rewrite;
+                 only the existing server coerces the submitted capacity. -->
             <FormField :id="prefix + '-capacity'" class="col-md-4" name="maxParticipants" type="number"
+                lexical-number
                 :model-value="String(values.maxParticipants ?? '')" :label="messages.t('event.maxParticipants')"
                 label-icon="bi-people" label-class="" @update:model-value="values.maxParticipants = $event" />
         </div>

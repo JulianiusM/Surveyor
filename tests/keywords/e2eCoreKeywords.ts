@@ -14,79 +14,240 @@ export interface CreatedResource {
     id: string;
 }
 
+/** Read the browser's actual input contract for matching native/Vue controls.
+ * Names and DOM wrappers identify implementations rather than user behavior;
+ * constraints, keyboard hints, selectable values and current state do not.
+ * Callers select their meaningful control set and compare the returned order. */
+export async function readControlContracts(controls: Locator) {
+    const result = await controls.evaluateAll(inspectBrowserPresentation, {selectors: null, generatedToken: false});
+    return result.fields;
+}
+
+/** Select explicit named form fields without making native/Vue field names part
+ * of the comparison. The feature owns its meaningful field list and order. */
+export async function readNamedControlContracts(surface: Locator, names: readonly string[]) {
+    const contracts = [];
+    for (const name of names) {
+        const control = surface.locator(`[name="${name}"]`);
+        await expect(control, `Expected one field named ${name}`).toHaveCount(1);
+        // Native modal visibility starts before its fade has painted the field.
+        // Read the same real control after that lifecycle, never an absent entry.
+        await expect.poll(readPaintedField, {message: `Field ${name} must be painted before comparison`}).toHaveLength(1);
+        contracts.push((await readPaintedField())[0]);
+
+        function readPaintedField() { return readControlContracts(control); }
+    }
+    return contracts;
+}
+
+/** Read meaningful financial instructions and retained secondary evidence.
+ * A dialog portal or independently composed personal region must keep their
+ * native readability treatment. Heading layout and exact pixels stay separate. */
+export async function readSecondaryInstructionColors(surface: Locator): Promise<string[]> {
+    // A dialog's subtitle is new contextual presentation, not a native body
+    // instruction. Ordinary history/ledger callers already select their region.
+    await expect(surface).toBeVisible();
+    const body = surface.locator('.modal-body');
+    const content = await body.count() ? body : surface;
+    // Native opening can finish asynchronously after the delegated button click.
+    // Read painted instructions after that lifecycle, independent of their tag.
+    await expect.poll(readColors, {message: 'Meaningful secondary instructions must be painted before comparison'})
+        .not.toHaveLength(0);
+    return readColors();
+
+    function readColors(): Promise<string[]> {
+        return content.locator('.text-secondary').evaluateAll(function inspectInstructions(elements) {
+            return elements.filter(element => element.checkVisibility({opacityProperty: true, visibilityProperty: true})
+                && !!element.textContent?.trim()).map(element => getComputedStyle(element).color);
+        });
+    }
+}
+
+/** Use the ordinary shared dismissal when a confirmed notification covers the
+ * next control. Errors and durable reconciliation notices are never suppressed. */
+export async function dismissFrontendSuccessNotifications(page: Page): Promise<void> {
+    const notices = page.locator('[data-pilot-notices] .pilot-notification.alert-success');
+    for (const notice of await notices.all()) {
+        if (!await notice.isVisible()) continue;
+        const close = notice.getByRole('button');
+        await expect(close).toHaveAccessibleName(/\S/u);
+        await close.click();
+    }
+}
+
 /** Read corresponding visible controls rather than framework-specific wrappers.
  * Callers select the surface and semantic elements whose presentation they own;
  * generated bearer text may differ. Raw styling and geometry remain visual review
  * evidence rather than a requirement to reproduce native DOM or pixel positions. */
 export async function readVisiblePresentation(surface: Locator, selectors: string[], generatedToken = false) {
-    return surface.evaluate(function inspectVisibleSurface(element, selection) {
-        const root = element as HTMLElement;
-        const origin = root.getBoundingClientRect();
-        const token = selection.generatedToken ? root.querySelector('h3')?.textContent?.trim() : undefined;
-        const content = [];
-        const geometry = [];
+    await expect(surface).toHaveCount(1);
+    const result = await surface.evaluateAll(inspectBrowserPresentation, {selectors, generatedToken});
+    return result.presentation!;
+}
 
-        // Compare all visible wording and the selected controls independently of
-        // native/Vue DOM nesting. Hidden bearer inputs never become test output.
-        const elements = selection.selectors.length ? root.querySelectorAll<HTMLElement>(selection.selectors.join(',')) : [];
-        for (const element of elements) {
-            // Closed native details can retain descendant layout boxes and a
-            // computed visible style while suppressing their paint. The browser
-            // visibility algorithm includes that boundary and still admits all
-            // the same menu controls when the actual disclosure is opened.
-            if (!element.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true})) continue;
-            content.push({text: visibleText(element), style: appearance(element), field: field(element),
-                refresh: element instanceof HTMLButtonElement && !!element.querySelector('.bi-arrow-clockwise')
-                    && ['Refresh', 'Aktualisieren'].includes(element.getAttribute('aria-label') ?? '')});
-            geometry.push(bounds(element));
-        }
-        return {content: {text: visibleText(root), style: appearance(root), elements: content},
-            geometry: [{x: origin.x, y: 0, width: origin.width, height: origin.height}, ...geometry]};
+/** Playwright serializes this one self-contained browser inspector for both
+ * public readers. Paint filtering, control meaning and text selection therefore
+ * share one owner without importing application code or changing the document. */
+function inspectBrowserPresentation(roots: Element[], selection: {selectors: string[] | null; generatedToken: boolean}) {
+    const root = roots[0] as HTMLElement | undefined;
+    const origin = root?.getBoundingClientRect();
+    const token = selection.generatedToken ? root?.querySelector('h3')?.textContent?.trim() : undefined;
+    const elements = selection.selectors === null ? roots
+        : selection.selectors.length ? [...root!.querySelectorAll<HTMLElement>(selection.selectors.join(','))] : [];
+    const selected = elements.filter(controlExposed);
+    const fields = selected.map(contract);
+    if (selection.selectors === null) return {fields, presentation: null};
 
-        /** Preserve rendered block separation, replacing only the independently
-         * issued token's exact text. No other wording is omitted or sorted. */
-        function visibleText(element: HTMLElement): string {
-            const text = element.innerText.replace(/\s+/gu, ' ').trim();
-            return token ? text.replace(token, '[generated migration token]') : text;
-        }
+    const content = selected.map(presentationElement);
+    return {fields, presentation: {content: {text: visibleText(root!), style: appearance(root!), elements: content},
+        geometry: [{x: origin!.x, y: 0, width: origin!.width, height: origin!.height}, ...selected.map(bounds)]}};
 
-        /** Local coordinates retain wrapping/spacing while allowing the already
-         * approved surrounding shell or one-time native flash to shift the card. */
-        function bounds(element: HTMLElement) {
-            const rectangle = element.getBoundingClientRect();
-            return {x: rectangle.x - origin.x, y: rectangle.y - origin.y,
-                width: rectangle.width, height: rectangle.height};
-        }
+    /** Button-style choices expose the real clipped input through a painted
+     * associated label. Keep that input's checked/value/disabled contract; the
+     * clipping correction must not erase meaningful Survey ballot assertions. */
+    function controlExposed(element: Element): boolean {
+        if (visible(element)) return true;
+        if (element instanceof HTMLInputElement && (element.type === 'radio' || element.type === 'checkbox'))
+            return Array.from(element.labels ?? []).some(visible);
+        return false;
+    }
 
-        function appearance(element: HTMLElement) {
-            const style = getComputedStyle(element);
-            return {font: style.fontFamily, size: style.fontSize, weight: style.fontWeight,
-                lineHeight: style.lineHeight, color: style.color, background: style.backgroundColor,
-                border: style.border, radius: style.borderRadius, padding: style.padding,
-                margin: style.margin, display: style.display, opacity: style.opacity,
-                shadow: style.boxShadow, textAlign: style.textAlign, verticalAlign: style.verticalAlign};
-        }
+    /** The browser handles closed details, display/visibility and opacity.
+     * Its visibility API does not account for Bootstrap's zero-area clipping:
+     * those labels remain accessible while contributing no painted wording. */
+    function visible(element: Element): boolean {
+        if (!element.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true})) return false;
+        for (let current: Element | null = element; current; current = current.parentElement)
+            if (zeroClip(current)) return false;
+        return true;
+    }
 
-        function field(element: HTMLElement) {
-            if (element instanceof HTMLInputElement) {
-                return {type: element.type, value: element.type === 'checkbox' ? null : element.value,
-                    checked: element.checked, required: element.required, disabled: element.disabled,
-                    readOnly: element.readOnly, min: element.min, max: element.max,
-                    maxLength: element.maxLength, placeholder: element.placeholder};
+    /** Recognize actual empty CSS clip regions, not label names or class names.
+     * Ordinary scrolling and partially clipped table cells remain meaningful. */
+    function zeroClip(element: Element): boolean {
+        const style = getComputedStyle(element);
+        if (style.clipPath === 'inset(50%)') return true;
+        if (style.position !== 'absolute' && style.position !== 'fixed') return false;
+        const rectangle = /^rect\((.*)\)$/u.exec(style.clip);
+        if (!rectangle) return false;
+        const edges = rectangle[1]!.split(/[,\s]+/u).map(Number.parseFloat);
+        return edges.length === 4 && (edges[2]! <= edges[0]! || edges[1]! <= edges[3]!);
+    }
+
+    /** Keep native innerText for ordinary subtrees. Only an actual zero-area
+     * descendant needs bounded text traversal; no product node is cloned,
+     * removed or restyled, and no authored wording is stripped by substring. */
+    function visibleText(element: Element): string {
+        const clipped = [...element.querySelectorAll('*')].filter(zeroClip);
+        const text = clipped.length ? textWithoutClipped(element, clipped) : (element as HTMLElement).innerText;
+        const normalized = text.replace(/\s+/gu, ' ').trim();
+        return token ? normalized.replace(token, '[generated migration token]') : normalized;
+    }
+
+    /** Preserve inline text adjacency and the browser's rendered block order.
+     * Unaffected child subtrees still supply their exact innerText, including
+     * select wording and native whitespace, rather than a general text engine. */
+    function textWithoutClipped(element: Element, clipped: Element[]): string {
+        if (clipped.includes(element)) return '';
+        if (!clipped.some(element.contains.bind(element))) return (element as HTMLElement).innerText;
+        let text = '';
+        for (const child of element.childNodes) {
+            if (child.nodeType === Node.TEXT_NODE) text += child.textContent ?? '';
+            else if (child instanceof HTMLElement) {
+                const display = getComputedStyle(child).display;
+                // A hidden subtree's own innerText can fall back to textContent.
+                // Keep it omitted, while display:contents retains its painted children.
+                if (!visible(child) && display !== 'contents') continue;
+                if (child.tagName === 'BR') text += '\n';
+                else {
+                    const content = textWithoutClipped(child, clipped);
+                    // Inline wrappers keep punctuation/word adjacency. Real
+                    // block/table boundaries retain the separation innerText
+                    // supplies to the untouched native comparator.
+                    const boundary = display === 'block' || display === 'flex' || display === 'grid'
+                        || display.startsWith('table') || display === 'list-item';
+                    text += boundary ? '\n' + content + '\n' : content;
+                }
             }
-            if (element instanceof HTMLButtonElement) return {disabled: element.disabled};
-            // The approved shared disclosure uses a button-role summary. Compare
-            // that visible action with its native button rather than omitting it
-            // because the frameworks use different semantic DOM tags.
-            if (element.getAttribute('role') === 'button') return {disabled: element.getAttribute('aria-disabled') === 'true'};
-            if (element instanceof HTMLTextAreaElement) return {value: element.value, required: element.required,
-                disabled: element.disabled, readOnly: element.readOnly, maxLength: element.maxLength,
-                placeholder: element.placeholder, rows: element.rows};
-            if (element instanceof HTMLSelectElement) return {value: element.value, required: element.required,
-                disabled: element.disabled, options: Array.from(element.options, option => ({text: option.text, value: option.value}))};
-            return null;
         }
-    }, {selectors, generatedToken});
+        return text;
+    }
+
+    function presentationElement(element: Element, index: number) {
+        return {text: visibleText(element), style: appearance(element), field: fields[index] ?? null,
+            refresh: element instanceof HTMLButtonElement && !!element.querySelector('.bi-arrow-clockwise')
+                && ['Refresh', 'Aktualisieren'].includes(element.getAttribute('aria-label') ?? '')};
+    }
+
+    /** Local coordinates retain wrapping/spacing while allowing the already
+     * approved surrounding shell or one-time native flash to shift the card. */
+    function bounds(element: Element) {
+        const rectangle = element.getBoundingClientRect();
+        return {x: rectangle.x - origin!.x, y: rectangle.y - origin!.y,
+            width: rectangle.width, height: rectangle.height};
+    }
+
+    function appearance(element: Element) {
+        const style = getComputedStyle(element);
+        return {font: style.fontFamily, size: style.fontSize, weight: style.fontWeight,
+            lineHeight: style.lineHeight, color: style.color, background: style.backgroundColor,
+            border: style.border, radius: style.borderRadius, padding: style.padding,
+            margin: style.margin, display: style.display, opacity: style.opacity,
+            shadow: style.boxShadow, textAlign: style.textAlign, verticalAlign: style.verticalAlign};
+    }
+
+    /** Keep effective browser defaults, including omitted HTML bounds.
+     * Checkbox/radio machine values and button submit mechanics differ
+     * legitimately between document forms and explicit SPA commands. */
+    function contract(element: Element) {
+        // :disabled includes the actual fieldset/option-group boundary;
+        // a control's own disabled property cannot establish availability.
+        if (element instanceof HTMLInputElement) {
+            const toggle = element.type === 'checkbox' || element.type === 'radio';
+            return {type: element.type, value: toggle ? null : element.value,
+                checked: element.checked, required: element.required, disabled: element.matches(':disabled'),
+                readOnly: element.readOnly, min: bound(element.min, element.type), max: bound(element.max, element.type), step: step(element),
+                minLength: Math.max(0, element.minLength), maxLength: element.maxLength, pattern: element.pattern,
+                accept: element.accept, multiple: element.multiple, inputMode: element.inputMode,
+                autocomplete: autocomplete(element), placeholder: element.placeholder};
+        }
+        if (element instanceof HTMLTextAreaElement) {
+            return {value: element.value, required: element.required, disabled: element.matches(':disabled'),
+                readOnly: element.readOnly, minLength: Math.max(0, element.minLength), maxLength: element.maxLength,
+                placeholder: element.placeholder, rows: element.rows, inputMode: element.inputMode,
+                autocomplete: autocomplete(element)};
+        }
+        if (element instanceof HTMLSelectElement) {
+            return {value: element.value, required: element.required, disabled: element.matches(':disabled'),
+                multiple: element.multiple, selected: [...element.selectedOptions].map(option => option.value),
+                options: [...element.options].map(option => ({text: option.text, value: option.value, disabled: option.matches(':disabled')}))};
+        }
+        if (element instanceof HTMLButtonElement) return {disabled: element.matches(':disabled')};
+        // A shared disclosure can expose the same action through semantic
+        // summary markup; its wrapper must not erase disabled-state checks.
+        if (element.getAttribute('role') === 'button') return {disabled: element.getAttribute('aria-disabled') === 'true'};
+        return null;
+    }
+
+    /** Omitted numeric bounds stay absent; alternate decimal spellings of
+     * the same browser bound do not impose an implementation identity. */
+    function bound(value: string, type: string): string | number | null {
+        if (!value) return null;
+        return type === 'number' || type === 'range' ? Number(value) : value;
+    }
+
+    /** Compare the effective step. Missing number/date steps already mean
+     * one, and a missing time/datetime-local step already means one minute. */
+    function step(input: HTMLInputElement): string | number | null {
+        if (input.step === 'any') return 'any';
+        if (input.step) return Number(input.step);
+        if (input.type === 'time' || input.type === 'datetime-local') return 60;
+        return ['number', 'range', 'date', 'week', 'month'].includes(input.type) ? 1 : null;
+    }
+
+    function autocomplete(input: HTMLInputElement | HTMLTextAreaElement): string {
+        return input.autocomplete || input.form?.autocomplete || 'on';
+    }
 }
 
 /** Assert the same visible content, control values/constraints and visual identity.

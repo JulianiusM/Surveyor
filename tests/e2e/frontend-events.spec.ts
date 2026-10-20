@@ -3,7 +3,8 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import type {components} from '../../src/types/api/v1';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
-import {expectUsableFrontendLayout, loginForE2E} from '../keywords/e2eCoreKeywords';
+import {closeModalForE2E, expectUsableFrontendLayout, loginForE2E, openModalForE2E,
+    readControlContracts} from '../keywords/e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {PERM} from '../../src/modules/lib/permissions';
@@ -31,7 +32,7 @@ async function enterIndependentEventGuest(actor: APIRequestContext, owner: APIRe
  * Positions are relative to that card, so approved shell/flash differences do
  * not conceal differences in the form's own layout, fields or action placement. */
 async function measureEventRegistration(surface: Locator) {
-    return surface.evaluate(function inspectRegistration(element) {
+    const measured = await surface.evaluate(function inspectRegistration(element) {
         const origin = element.getBoundingClientRect();
         const controls = [...element.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLButtonElement>(
             'input:not([type="hidden"]),textarea,select,button')].filter(visible);
@@ -78,25 +79,14 @@ async function measureEventRegistration(surface: Locator) {
 
         /** Compare rendered machine values and constraints, not component models. */
         function measureControl(node: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLButtonElement) {
-            // Checkbox selection is independent of its submitted machine token.
-            // Browser defaults stay observable instead of being guessed from tags.
-            return {
-                state: {
-                    tag: node.tagName, type: node.type, name: node.name, value: node.value,
-                    text: node instanceof HTMLButtonElement ? text(node) : null,
-                    disabled: node.disabled,
-                    checked: node instanceof HTMLInputElement && node.type === 'checkbox' ? node.checked : null,
-                    required: 'required' in node ? node.required : null,
-                    readOnly: 'readOnly' in node ? node.readOnly : null,
-                    min: node.getAttribute('min'), max: node.getAttribute('max'), step: node.getAttribute('step'),
-                    minLength: node.getAttribute('minlength'), maxLength: node.getAttribute('maxlength'),
-                    placeholder: node.getAttribute('placeholder'),
-                },
-                style: style(node),
-                bounds: bounds(node),
-            };
+            return {style: style(node), bounds: bounds(node)};
         }
     });
+    // Registration and the other migrated features share the same browser
+    // constraint projection. Card-specific label/icon/layout evidence stays here.
+    const contracts = await readControlContracts(surface.locator('input:not([type="hidden"]),textarea,select,button'));
+    expect(contracts).toHaveLength(measured.controls.length);
+    return {...measured, controls: measured.controls.map((control, index) => ({...control, state: contracts[index]}))};
 }
 
 /** Protect visible information, painted hierarchy and successful-control meaning.
@@ -125,9 +115,7 @@ function compareEventRegistration(native: Awaited<ReturnType<typeof measureEvent
     for (let index = 0; index < native.controls.length; index++) {
         const expected = native.controls[index]!;
         const actual = migrated.controls[index]!;
-        const {tag: nativeTag, name: nativeName, ...nativeState} = expected.state;
-        const {tag: pilotTag, name: pilotName, ...pilotState} = actual.state;
-        expect(pilotState).toEqual(nativeState);
+        expect(actual.state).toEqual(expected.state);
         expect(actual.style).toEqual(expected.style);
     }
 }
@@ -370,6 +358,72 @@ test('keeps native and versioned Event grants independent and requires both part
     }
 });
 
+test('opens the native participant PDF from shared Event settings without granting administration', async ({request, browser, baseURL}) => {
+    const event = await createFrontendEventFixture(request);
+    const actor = await browser.newContext({baseURL, viewport: {width: 390, height: 900}});
+    const page = await actor.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    try {
+        const profileId = await enterIndependentEventGuest(actor.request, request, event.id);
+        expect((await request.post(`/api/event/${event.id}/admins`, {data: {
+            profileId, mask: PERM.DATA_EXPORT | PERM.ACCESS_PARTICIPANTS,
+        }})).status()).toBe(200);
+        const proof = await frontendEventHeaders(actor.request);
+        const view = await (await actor.request.get(`/api/v1/events/${event.id}`, {headers: proof})).json() as components['schemas']['EventView'];
+        expect(view.capabilities).toMatchObject({admin: false, settings: true, exportParticipants: true});
+        expect((await actor.request.get(`/event/${event.id}/admin`)).status()).toBe(403);
+
+        // Exercise the same independently authorized settings action in each
+        // running frontend. This actor has no general administration capability.
+        for (const pilot of [false, true]) {
+            await page.goto(`${pilot ? '/frontend-pilot' : ''}/event/${event.id}?locale=en`, {waitUntil: 'domcontentloaded'});
+            if (pilot) await waitForPilotHydration(page);
+            const origin = await page.evaluate(() => performance.timeOrigin);
+            const nativeModal = page.locator('#entityPropertiesModal');
+            const opener = page.getByRole('button', {name: 'Entity settings', exact: true});
+            if (pilot) await opener.click();
+            else await openModalForE2E(nativeModal, opener);
+            const dialog = pilot ? page.getByRole('dialog') : nativeModal;
+            const exportLink = dialog.getByRole('link', {
+                name: pilot ? 'Participants (PDF)' : 'Export participants', exact: true,
+            });
+            await expect(exportLink).toBeVisible();
+            await expect(exportLink).toHaveAttribute('href', `/event/${event.id}/export/participants`);
+            await expect(exportLink).toHaveAttribute('target', '_blank');
+            await expect(dialog.locator('input:not([type="hidden"]),textarea,select')).toHaveCount(0);
+            await expectUsableFrontendLayout(dialog);
+
+            // Follow the actual visible action, including its separate document
+            // request, rather than substituting a direct API-only export check.
+            const exported = actor.waitForEvent('response', response =>
+                new URL(response.url()).pathname === `/event/${event.id}/export/participants`);
+            await exportLink.click();
+            const document = await exported;
+            expect(document.status()).toBe(200);
+            expect(document.headers()['content-type']).toContain('application/pdf');
+            expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
+            for (const opened of actor.pages()) if (opened !== page) await opened.close();
+            if (pilot) await dialog.locator('.modal-header .btn-close').click();
+            else await closeModalForE2E(nativeModal);
+        }
+
+        // Removing either export bit must remove the action and its admission,
+        // while preserving roster access and denying the protected PDF route.
+        expect((await request.patch(`/api/event/${event.id}/admins/${profileId}`, {
+            data: {mask: PERM.ACCESS_PARTICIPANTS},
+        })).status()).toBe(200);
+        await page.reload({waitUntil: 'domcontentloaded'});
+        await waitForPilotHydration(page);
+        await expect(page.getByRole('button', {name: 'Entity settings', exact: true})).toHaveCount(0);
+        expect((await actor.request.get(`/event/${event.id}/export/participants`)).status()).toBe(403);
+        expect((await actor.request.get(`/event/${event.id}/admin`)).status()).toBe(403);
+        expect(errors).toEqual([]);
+    } finally {
+        await actor.close();
+    }
+});
+
 test('binds Event settings to shared image, metadata, archive, automation and deletion operations', async ({request}) => {
     const event = await createFrontendEventFixture(request);
     const proof = await frontendEventHeaders(request);
@@ -436,7 +490,10 @@ for (const width of [1280, 390]) {
         const arrival = await page.locator('#arrivalDate').inputValue();
         const refreshed = page.waitForResponse(response => response.request().method() === 'GET'
             && new URL(response.url()).pathname === `/api/v1/events/${event.id}`);
-        await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+        // The Event's root Refresh owns this detail read. Personal Finance can
+        // expose another independently scoped control with the same label.
+        await page.locator('main > section.card > .card-body > .d-flex.mb-1')
+            .getByRole('button', {name: 'Refresh', exact: true}).click();
         expect((await refreshed).status()).toBe(200);
         await expect(page.locator('#arrivalDate')).toHaveValue(arrival);
         expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentOrigin);

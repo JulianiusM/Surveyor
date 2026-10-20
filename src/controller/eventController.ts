@@ -929,7 +929,7 @@ export async function readEvent(id: string, session: SessionLike, view: 'detail'
                 participants: mayPerformEventMethod(permissions, 'participants'), manageRegistrations: mayPerformEventMethod(permissions, 'manageRegistrations'),
                 manageAssignments: mayPerformEventMethod(permissions, 'manageAssignments'),
                 items: mayPerformEventMethod(permissions, 'items'), settings: properties.canEditProperties || properties.canEditHeader
-                    || properties.canManagePermissions || properties.canDuplicate || properties.canDelete || archive.canManage,
+                    || properties.canManagePermissions || properties.canDuplicate || properties.canDelete || archive.canManage || Boolean(properties.exportUrl),
                 exportParticipants: mayPerformEventMethod(permissions, 'exportParticipants'),
             }, archive: {direct: archive.directArchived, inherited: Boolean(archive.inheritedFromEventId),
                 archivedAt: event.archivedAt?.toISOString() ?? null, autoArchivePaused: archive.autoArchivePaused, eventUrl: null}};
@@ -1035,8 +1035,11 @@ export async function readEventSettings(id: string, session: SessionLike): Promi
         const event = requireEvent(row);
         const properties = await getEntityPropertyPresentation('event', event, session, manager);
         const archive = await eventArchive(event, session, manager);
+        // Export has its existing combined method grant, independent of admin
+        // entry or edit rights. Admit that Actions-only dialog without disclosing
+        // metadata, audience values or administrator comparison baselines.
         if (!(properties.canEditProperties || properties.canEditHeader || properties.canManagePermissions
-            || properties.canDuplicate || properties.canDelete || archive.canManage)) throw new ApiProblem('FORBIDDEN');
+            || properties.canDuplicate || properties.canDelete || archive.canManage || properties.exportUrl)) throw new ApiProblem('FORBIDDEN');
         // Ordinary editors never receive audience/admin values or their guessable comparison hashes.
         let access: components['schemas']['PackingAccess'] | null = null;
         if (properties.canManagePermissions) {
@@ -1051,7 +1054,8 @@ export async function readEventSettings(id: string, session: SessionLike): Promi
             editableFields: properties.editableFields as components['schemas']['EventSettings']['editableFields'],
             capabilities: {editHeader: properties.canEditHeader, managePermissions: properties.canManagePermissions,
                 duplicate: properties.canDuplicate, remove: properties.canDelete, manageArchive: archive.canManage,
-                archive: archive.canArchive, restore: archive.canRestore, manageAutomation: archive.canManageAutomation},
+                archive: archive.canArchive, restore: archive.canRestore, manageAutomation: archive.canManageAutomation,
+                export: Boolean(properties.exportUrl)},
             archive: {direct: archive.directArchived, inherited: Boolean(archive.inheritedFromEventId),
                 archivedAt: event.archivedAt?.toISOString() ?? null, autoArchivePaused: archive.autoArchivePaused, eventUrl: null}, access};
     });

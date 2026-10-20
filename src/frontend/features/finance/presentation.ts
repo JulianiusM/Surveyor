@@ -1,8 +1,8 @@
 import type {LocalizationContext} from '../../../types/LocalizationTypes';
 
 /** Money formatting changes presentation only; signed balances remain server-owned. */
-export function financeMoney(amount: number, locale: string): string {
-    return new Intl.NumberFormat(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(amount);
+export function financeMoney(amount: string, locale: string): string {
+    return new Intl.NumberFormat(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(Number(amount));
 }
 
 /** Invoice timestamps are instants; missing legacy evidence remains visibly absent. */

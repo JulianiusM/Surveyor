@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
 import {createSSRApp, h} from 'vue';
@@ -10,7 +11,7 @@ import RichMessage from '../../src/frontend/components/RichMessage.vue';
 import RichMessageHint from '../fixtures/RichMessageHint.vue';
 
 const session: components['schemas']['SessionView'] = {kind: 'anonymous', context: null, csrfToken: null, locale: 'en',
-    deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, activeProfile: null, profiles: [],
+    deployment: {buildId: 'fixture', apiCompatibility}, activeProfile: null, profiles: [],
     loginUrl: '/users/login', logoutUrl: null, shell: {version: 'test', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
         localLoginEnabled: true, oidcEnabled: false, oidcName: 'SSO'}};
 const releases: Array<() => void> = [];

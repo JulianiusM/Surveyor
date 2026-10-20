@@ -4,7 +4,7 @@ import type {components} from '../../../types/api/v1';
 import {useActionState, usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
-import {protectFinanceNumberFromScroll} from './numbers';
+import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
 import {financeMoney} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
@@ -39,7 +39,6 @@ function personName(registrationId: string): string {
     return props.participants.find(person => person.id === registrationId)?.name ?? messages.value.t('finance.participant', {id: Number(registrationId)});
 }
 function reset(): void { Object.assign(draft, {registrationId: '', amount: '', note: '', subtractFromPool: true}); inspected.value = false; }
-function setAmount(event: Event): void { draft.amount = (event.target as HTMLInputElement).value; }
 function discard(): void {
     if (!action.isAvailable()) return;
     reset();
@@ -51,7 +50,7 @@ function discard(): void {
 async function save(event: Event): Promise<void> {
     if (!action.isAvailable() || !(event.target as HTMLFormElement).reportValidity()) return;
     if (Number(draft.amount) === 0) return;
-    const input = {registrationId: Number(draft.registrationId), amount: Number(draft.amount), note: draft.note, subtractFromPool: draft.subtractFromPool};
+    const input = {registrationId: draft.registrationId, amount: financeDecimal(draft.amount), note: draft.note, subtractFromPool: draft.subtractFromPool};
     inspected.value = false;
     // A new row has no safe replay identity. Unknown delivery needs an admitted
     // list inspection and human acknowledgement before another creation.
@@ -95,7 +94,7 @@ function close(): void {
 </script>
 
 <template>
-    <AppDialog :open="open" :title="messages.t('finance.surchargesRebates')" :subtitle="pool.name" standard
+    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t('finance.surchargesRebates')" :subtitle="pool.name" standard
                :pending="command.pending.value || command.recovering.value || removal.pending.value || removal.recovering.value" @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refresh">
@@ -113,14 +112,14 @@ function close(): void {
                 class="list-group-item bg-dark text-white d-flex flex-wrap justify-content-between gap-2">
                 <div>
                     <strong class="d-block">{{ personName(adjustment.registrationId) }}</strong>
-                    <span class="badge" :class="adjustment.amount < 0 ? 'bg-success' : 'bg-secondary'">
-                        {{ messages.t('finance.adjustmentSummary', {kind: messages.t(adjustment.amount < 0 ? 'finance.rebate' : 'finance.surcharge'), amount: financeMoney(adjustment.amount, locale)}) }}
+                    <span class="badge" :class="Number(adjustment.amount) < 0 ? 'bg-success' : 'bg-secondary'">
+                        {{ messages.t('finance.adjustmentSummary', {kind: messages.t(Number(adjustment.amount) < 0 ? 'finance.rebate' : 'finance.surcharge'), amount: financeMoney(adjustment.amount, locale)}) }}
                     </span>
                     <small class="d-block text-secondary mt-1">{{ messages.t(adjustment.subtractFromPool ? 'finance.redistributedWithinPool' : 'finance.additionalChargeCredit') }}</small>
                     <p class="small mb-0">{{ adjustment.note }}</p>
                 </div>
                 <ActionButton variant="outline-danger" class="btn-sm align-self-start" :state="action"
-                              :aria-label="messages.t('finance.removeFor', {kind: messages.t(adjustment.amount < 0 ? 'finance.rebate' : 'finance.surcharge'), name: personName(adjustment.registrationId)})"
+                              :aria-label="messages.t('finance.removeFor', {kind: messages.t(Number(adjustment.amount) < 0 ? 'finance.rebate' : 'finance.surcharge'), name: personName(adjustment.registrationId)})"
                               @click="remove(adjustment)">
                     {{ messages.t('finance.remove') }}
                 </ActionButton>
@@ -142,12 +141,9 @@ function close(): void {
                         </select>
                     </template>
                 </FormField>
-                <FormField :id="`${id}-amount`" class="mb-3" :label="messages.t('finance.amountNegativeForARebate')">
-                    <template #control>
-                        <input :id="`${id}-amount`" :value="draft.amount" type="number" class="form-control text-bg-dark"
-                               step="0.01" required :aria-describedby="`${id}-help`" @input="setAmount" />
-                    </template>
-                </FormField>
+                <FormField :id="`${id}-amount`" v-model="draft.amount" :name="null" type="number" lexical-number
+                    input-mode="decimal" step="0.01" class="mb-3" :label="messages.t('finance.amountNegativeForARebate')"
+                    :described-by="`${id}-help`" required :required-marker="false" />
                 <FormField :id="`${id}-note`" v-model="draft.note" class="mb-3" :label="messages.t('finance.note')" required :required-marker="false" :max-length="4000" />
                 <div class="form-check">
                     <input :id="`${id}-redistribute`" v-model="draft.subtractFromPool" class="form-check-input" type="checkbox" />

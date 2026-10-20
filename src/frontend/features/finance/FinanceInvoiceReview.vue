@@ -5,7 +5,7 @@ import type {PilotPlainMessageKey, PilotRequestScope} from '../../../types/Front
 import {useActionState, usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
-import {protectFinanceNumberFromScroll} from './numbers';
+import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
 import {financeMoney} from './presentation';
 import FinanceHistory from './FinanceHistory.vue';
 import ActionButton from '../../components/ActionButton.vue';
@@ -51,14 +51,15 @@ const recovery = useActionState({eligible: () => props.active, blocked: () => co
 const title = computed(() => reviewing.value ? 'finance.confirmInvoiceChange' : operation.value === 'revise'
     ? 'finance.correctInvoice' : operation.value === 'reject' ? 'finance.rejectInvoiceFromPool'
         : operation.value === 'approve' ? 'finance.accept' : operation.value === 'decline' ? 'finance.reject' : 'finance.close');
-const effectiveAmount = computed(() => draft.amount ? Number(draft.amount) : invoice.value.correctedAmount ?? invoice.value.amount);
+const effectiveAmount = computed(() => draft.amount ? draft.amount : invoice.value.correctedAmount ?? invoice.value.amount);
 watch([() => props.invoice.id, () => props.action], resetSelection);
 
 function initialDraft() {
-    return {amount: props.action === 'revise' ? String(props.invoice.correctedAmount ?? props.invoice.amount) : '',
+    // Saved wire precision must not change the former clean form spelling.
+    // Subsequent edits retain their exact lexical value until explicit reset.
+    return {amount: props.action === 'revise' ? financeDecimal(props.invoice.correctedAmount ?? props.invoice.amount) : '',
         description: props.action === 'revise' ? props.invoice.correctedDescription ?? props.invoice.description ?? '' : '', reason: ''};
 }
-function updateAmount(event: Event): void { draft.amount = (event.target as HTMLInputElement).value; }
 
 /** A different row or action starts a distinct review. Revalidation of the same
  * selected row preserves the original capture and all unfinished lexical input. */
@@ -90,7 +91,7 @@ async function submit(): Promise<void> {
         // Blank correction text restores the original description. Rejection
         // carries only its own required reason and cannot leak a correction.
         capturedRevision.value = {confirmed: true, expectedRevision: invoice.value.revision,
-            correctedAmount: Number(draft.amount), correctedDescription: draft.description.trim() || null};
+            correctedAmount: financeDecimal(draft.amount), correctedDescription: draft.description.trim() || null};
         capturedRejection.value = {confirmed: true, expectedRevision: invoice.value.revision, rejectionReason: draft.reason.trim()};
         reviewing.value = true;
         return;
@@ -103,7 +104,7 @@ async function submit(): Promise<void> {
 async function save(): Promise<void> {
     const row = invoice.value;
     const selected = operation.value;
-    const acceptance = {...(draft.amount ? {correctedAmount: Number(draft.amount)} : {}),
+    const acceptance = {...(draft.amount ? {correctedAmount: financeDecimal(draft.amount)} : {}),
         ...(draft.description.trim() ? {correctedDescription: draft.description.trim()} : {})};
     const decline = {rejectionReason: draft.reason.trim()};
     const revision = capturedRevision.value;
@@ -161,7 +162,7 @@ function acknowledge(): void {
 </script>
 
 <template>
-    <AppDialog :open="open" :title="messages.t(title)" :pending="command.pending.value || command.recovering.value" standard @close="close">
+    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t(title)" :pending="command.pending.value || command.recovering.value" standard @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: recovery, label: messages.t('common.refresh')}" @action="inspectSaved">
             <template #uncertain>
@@ -179,16 +180,11 @@ function acknowledge(): void {
             <fieldset v-show="!reviewing" class="border-0 p-0 m-0" :disabled="actionState.disabled.value || reviewing">
                 <template v-if="operation === 'approve' || operation === 'revise'">
                     <p v-if="operation === 'revise'" class="small text-secondary">{{ messages.t('finance.correctTheEffectiveAmountOrDescriptionTheOriginalInvoice') }}</p>
-                    <FormField :id="`${id}-amount`" class="mb-3"
+                    <FormField :id="`${id}-amount`" v-model="draft.amount" name="correctedAmount" type="number" lexical-number
+                        input-mode="decimal" min="0.01" :max="operation === 'revise' ? '99999999.99' : undefined" step="0.01" class="mb-3"
                         :label="messages.t(operation === 'approve' ? 'finance.correctedAmount2' : 'finance.amount')"
-                        :required="operation === 'revise'" :required-marker="false">
-                        <template #control>
-                            <input :id="`${id}-amount`" :value="draft.amount" name="correctedAmount" type="number" class="form-control text-bg-dark"
-                                min="0.01" :max="operation === 'revise' ? '99999999.99' : undefined" step="0.01" :required="operation === 'revise'"
-                                :placeholder="operation === 'approve' ? messages.t('finance.keep', {fmtMoney: financeMoney(invoice.amount, locale)}) : undefined"
-                                @input="updateAmount" />
-                        </template>
-                    </FormField>
+                        :required="operation === 'revise'" :required-marker="false"
+                        :placeholder="operation === 'approve' ? messages.t('finance.keep', {fmtMoney: financeMoney(invoice.amount, locale)}) : undefined" />
                     <FormField :id="`${id}-description`" v-model="draft.description" class="mb-3" name="correctedDescription" multiline :rows="3"
                         :label="messages.t(operation === 'approve' ? 'finance.correctedDescription2' : 'finance.description')" :max-length="4000"
                         :placeholder="operation === 'approve' ? messages.t('finance.leaveBlankToKeepSubmittedDescription') : undefined">

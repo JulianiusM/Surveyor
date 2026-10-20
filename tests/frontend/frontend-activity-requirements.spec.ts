@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
 import {defineComponent} from 'vue';
@@ -9,14 +10,14 @@ import type {components} from '../../src/types/api/v1';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
 import {activityKeys} from '../../src/frontend/app/queryKeys';
 import ActivityRequirements from '../../src/frontend/features/activity/ActivityRequirements.vue';
-import {analyzeRequirementDraft, createRequirementDraft, requirementInput} from '../../src/frontend/features/activity/requirements';
+import {analyzeRequirementDraft, createRequirementDraft, requirementInput, requirementAnalysisInput} from '../../src/frontend/features/activity/requirements';
 
 const planId = '11111111-1111-4111-8111-111111111111';
 const profileId = '22222222-2222-4222-8222-222222222222';
 const outsideId = '33333333-3333-4333-8333-333333333333';
 const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'account', context: 'activity-requirement-context-123456', csrfToken: 'activity-requirement-csrf-123456', locale: 'en',
-    deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, activeProfile: {id: profileId, name: 'Alex'},
+    deployment: {buildId: 'fixture', apiCompatibility}, activeProfile: {id: profileId, name: 'Alex'},
     profiles: [{id: profileId, name: 'Alex'}], loginUrl: '/users/login', logoutUrl: '/users/logout',
     shell: {version: 'test', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'SSO'},
 };
@@ -28,11 +29,11 @@ function configuration(): components['schemas']['ActivityRequirements'] {
             startDate: '2030-06-01', endDate: '2030-06-02', allowOverfillAfterFull: false, allowExternalAssignees: false,
             allowArrivalDayEvening: true, allowDepartureDayMorning: true},
         roleRequirements: [], stayRequirements: [{stayDays: 1, requiredShifts: 1}, {stayDays: 2, requiredShifts: 2}], overrides: [],
-        allRoles: [{id: 7, title: 'Kitchen lead', description: null}],
-        participants: [{participantKey: 'profile:' + profileId, name: 'Alex', roleIds: [7], roles: ['Kitchen lead'], requiredShifts: 2,
+        allRoles: [{id: '7', title: 'Kitchen lead', description: null}],
+        participants: [{participantKey: 'profile:' + profileId, name: 'Alex', roleIds: ['7'], roles: ['Kitchen lead'], requiredShifts: 2,
             assignedShifts: 0, remainingShifts: 2, source: 'general', attendanceDays: 2, attendance: {arrivalDate: null, departureDate: null}, assignmentMode: 'REQUIRED'}],
         capacitySummary: {availableSlots: 2, requiredSlots: 2, difference: 0, configurationComplete: true},
-        calculationContext: {participants: [{profileId, name: 'Alex', roleIds: [7], arrivalDate: null, departureDate: null}],
+        calculationContext: {participants: [{profileId, name: 'Alex', roleIds: ['7'], arrivalDate: null, departureDate: null}],
             assignedShiftCounts: {['profile:' + profileId]: 0}, slots: [{id: planId, day: '2030-06-01', startTime: null, endTime: null, maxAssignees: 2, roles: []}]},
         overrideTargets: [{key: 'profile:' + profileId, profileId, label: 'Alex', arrivalDate: null, departureDate: null}],
     };
@@ -139,10 +140,30 @@ describe('Activity requirements production frontend', () => {
         expect(requirementInput(draft).overrides).toEqual([{profileId, roleId: null, requiredShifts: 0}]);
     });
 
+    it('keeps wire and draft identities as strings while sharing one numeric engine boundary', () => {
+        const config = configuration();
+        config.overrides = [{id: '8', profileId, roleId: '7', requiredShifts: 0, profileName: 'Alex'}];
+        config.calculationContext.slots[0].roles = [{roleId: '7', maxQty: 1, assignedQty: 0}];
+        const original = JSON.stringify(config);
+        const draft = createRequirementDraft(config);
+        draft.roles[0].value = '1';
+
+        const wire = requirementInput(draft);
+        expect(wire.roleRequirements[0].roleId).toBe('7');
+        expect(wire.overrides[0]).toMatchObject({id: '8', roleId: '7'});
+        const engine = requirementAnalysisInput(config, draft);
+        expect(engine.roleRequirements[0].roleId).toBe(7);
+        expect(engine.overrides[0]).toMatchObject({id: 8, roleId: 7});
+        expect(engine.participants[0].roleIds).toEqual([7]);
+        expect(engine.slots[0].roles[0].roleId).toBe(7);
+        expect(analyzeRequirementDraft(config, draft).participants[0]).toMatchObject({source: 'override', requiredShifts: 0, roleIds: ['7']});
+        expect(JSON.stringify(config)).toBe(original);
+    });
+
     it('recalculates hypothetical open-role coverage from unsaved role settings', () => {
         const config = configuration();
         config.calculationContext.participants[0].roleIds = [];
-        config.calculationContext.slots[0].roles = [{roleId: 7, maxQty: 1, assignedQty: 0}];
+        config.calculationContext.slots[0].roles = [{roleId: '7', maxQty: 1, assignedQty: 0}];
         const draft = createRequirementDraft(config);
         draft.stays[1].value = '4';
         draft.roles[0].value = '1';
@@ -219,7 +240,7 @@ describe('Activity requirements production frontend', () => {
 
     it('preserves an outside-event override without silently selecting a registered profile', async () => {
         const saved = configuration();
-        saved.overrides = [{id: 8, profileId: outsideId, profileName: 'Former participant', roleId: null, requiredShifts: 0}];
+        saved.overrides = [{id: '8', profileId: outsideId, profileName: 'Former participant', roleId: null, requiredShifts: 0}];
         const writes: unknown[] = [];
         const {wrapper} = await mounted(async request => {
             if (request.method === 'GET') return json(saved);
@@ -233,7 +254,7 @@ describe('Activity requirements production frontend', () => {
         await wrapper.get('#allowExternalAssignees').setValue(true);
         await wrapper.get('[data-requirements-save]').trigger('click');
         await flushPromises();
-        expect(writes).toEqual([expect.objectContaining({overrides: [{id: 8, profileId: outsideId, roleId: null, requiredShifts: 0}]})]);
+        expect(writes).toEqual([expect.objectContaining({overrides: [{id: '8', profileId: outsideId, roleId: null, requiredShifts: 0}]})]);
     });
 
     it('retains a confirmed saved form when its following requirements read fails', async () => {

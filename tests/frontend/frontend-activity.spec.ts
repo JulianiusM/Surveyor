@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
 import {defineComponent, type Component} from 'vue';
@@ -18,7 +19,7 @@ const slotId = '22222222-2222-4222-8222-222222222222';
 const otherId = '33333333-3333-4333-8333-333333333333';
 const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'account', context: 'activity-ui-context-1234567890', csrfToken: 'activity-ui-csrf-1234567890', locale: 'en',
-    deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, activeProfile: {id: otherId, name: 'Participant'},
+    deployment: {buildId: 'fixture', apiCompatibility}, activeProfile: {id: otherId, name: 'Participant'},
     profiles: [{id: otherId, name: 'Participant'}], loginUrl: '/users/login', logoutUrl: '/users/logout',
     shell: {version: 'test', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'SSO'},
 };
@@ -36,7 +37,7 @@ const view: components['schemas']['ActivityView'] = {
     assignmentMode: 'FREE', canSelfAssign: true, allowOverfillAfterFull: false, bindingDeadline: null, requirementProgress: null,
     weeks: [{start: '2030-05-27', days: ['2030-06-01', '2030-06-02']}],
     slots: [slot, {...slot, id: otherId, title: 'Lunch help', day: '2030-06-02', selfAssigned: true, assignedCount: 1}],
-    allRoles: [{id: 1, title: 'Kitchen lead', description: null}], textFields: [], participants: [],
+    allRoles: [{id: '1', title: 'Kitchen lead', description: null}], textFields: [], participants: [],
     counters: {participants: 1, open: 2, empty: 1}, orderToken: '"order-fixture"',
     capabilities: {editTitle: true, editDescription: true, editDates: true, addSlot: true, reorderSlots: true,
         manageSettings: false, manageRequirements: true, manageRecommendations: false, exportSchedule: true, duplicate: true, remove: true, roleCreationAdmission: true, rulesWorkspace: false},
@@ -152,7 +153,7 @@ describe('Activity production frontend consumers', () => {
         let writes = 0;
         const {wrapper} = await mounted(ActivityPage, async request => {
             if (request.method === 'GET') return json({...view, slots: [{...slot, selfAssigned: true, assignedCount: 1,
-                roles: [{id: 1, name: 'Kitchen lead', maxQty: 1, assignedQty: 0, assignmentId: null, assigneeName: null, self: false}]}]});
+                roles: [{id: '1', name: 'Kitchen lead', maxQty: 1, assignedQty: 0, assignmentId: null, assigneeName: null, self: false}]}]});
             if (new URL(request.url).pathname.endsWith('/warnings')) {
                 previews += 1;
                 return json({warnings: [{type: 'over_capacity'}]});
@@ -186,7 +187,7 @@ describe('Activity production frontend consumers', () => {
 
     it('retains safe role occupancy when private assignee identities are redacted', async () => {
         const {wrapper} = await mounted(ActivityPage, async () => json({...view, slots: [{...slot,
-            roles: [{id: 1, name: 'Kitchen lead', maxQty: 1, assignedQty: 1, assignmentId: null, assigneeName: null, self: false}]}]}));
+            roles: [{id: '1', name: 'Kitchen lead', maxQty: 1, assignedQty: 1, assignmentId: null, assigneeName: null, self: false}]}]}));
         expect(wrapper.get('.role-assignment').text()).toBe('Kitchen lead: Assigned');
         expect(wrapper.find('[data-action="take-role"]').exists()).toBe(false);
     });
@@ -304,8 +305,8 @@ describe('Activity production frontend consumers', () => {
 
     it('releases removed role assignees and fields while keeping valid selections in the actual dialog', async () => {
         let current: components['schemas']['ActivityView'] = {...view, slots: [{...slot,
-            roles: [{id: 1, name: 'Kitchen lead', maxQty: 1, assignedQty: 1, assignmentId: '10', assigneeName: 'Alex', self: false},
-                {id: 2, name: 'Helper', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false}],
+            roles: [{id: '1', name: 'Kitchen lead', maxQty: 1, assignedQty: 1, assignmentId: '10', assigneeName: 'Alex', self: false},
+                {id: '2', name: 'Helper', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false}],
             assignees: [{assignmentId: '10', name: 'Alex', roles: ['Kitchen lead']},
                 {assignmentId: '11', name: 'Blair', roles: ['Helper']}]}]};
         const writes: unknown[] = [];
@@ -324,8 +325,8 @@ describe('Activity production frontend consumers', () => {
         expect(document.querySelector<HTMLSelectElement>('[data-role-name="Kitchen lead"] select')!.value).toBe('');
         expect(document.querySelector<HTMLSelectElement>('[data-role-name="Helper"] select')!.value).toBe('11');
         current = {...current, slots: [{...current.slots[0], roles: [...current.slots[0].roles,
-            {id: 3, name: 'constructor', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false},
-            {id: 4, name: '__proto__', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false}]}]};
+            {id: '3', name: 'constructor', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false},
+            {id: '4', name: '__proto__', maxQty: 1, assignedQty: 1, assignmentId: '11', assigneeName: 'Blair', self: false}]}]};
         await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
         await flushPromises();
         expect(document.querySelector<HTMLSelectElement>('[data-role-name="constructor"] select')!.value).toBe('11');
@@ -529,7 +530,7 @@ describe('Activity production frontend consumers', () => {
 
     it('renders read-only progress with native emphasis and filters admitted participant status locally', async () => {
         const person: components['schemas']['ActivityParticipant'] = {participantKey: otherId, name: 'Alex Participant', count: 1,
-            assignedShifts: 1, roles: ['default', 'Kitchen lead'], roleIds: [1], requiredShifts: 2, remainingShifts: 1,
+            assignedShifts: 1, roles: ['default', 'Kitchen lead'], roleIds: ['1'], requiredShifts: 2, remainingShifts: 1,
             source: 'duration', attendanceDays: 2, attendance: {arrivalDate: '2030-06-01', departureDate: '2030-06-02'}, assignmentMode: 'REQUIRED'};
         const {wrapper, request} = await mounted(ActivityPage, async () => json({...view, assignmentMode: 'REQUIRED',
             requirementProgress: {assignedShifts: 1, requiredShifts: 2, remainingShifts: 1, complete: false},
@@ -557,7 +558,7 @@ describe('Activity production frontend consumers', () => {
     it('localizes requirement provenance without changing admitted names or machine states', async () => {
         const participants = ['general', 'role', 'override'].map((source, index) => ({participantKey: `${otherId}-${index}`,
             name: `Person ${index}`, count: 1, assignedShifts: 0, requiredShifts: 2, remainingShifts: 2, source, roles: ['Kitchen lead'],
-            roleIds: [1], attendanceDays: 2, attendance: null, assignmentMode: 'REQUIRED' as const}));
+            roleIds: ['1'], attendanceDays: 2, attendance: null, assignmentMode: 'REQUIRED' as const}));
         const {wrapper, context} = await mounted(ActivityPage, async () => json({...view, assignmentMode: 'REQUIRED', participants}));
         await wrapper.findAll('[role="tab"]').find(button => button.text() === 'Participants')!.trigger('click');
         const search = wrapper.get<HTMLInputElement>('[data-participant-search]');

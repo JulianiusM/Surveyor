@@ -89,6 +89,9 @@
 .pilot-dialog .modal-header, .pilot-dialog .modal-footer { flex-shrink: 0; }
 .pilot-dialog .modal-footer { justify-content: flex-end; padding: .75rem; gap: 0; border-top: 1px solid var(--bs-border-color); }
 .pilot-dialog .modal-footer > * { margin: .25rem; }
+/* Finance instructions and saved history share their readable palette. Portals
+   retain that context explicitly after leaving the page's finance ancestor. */
+[data-finance-section] .text-secondary, .finance-dialog .text-secondary { color: #adb5bd !important; }
 /* The native settings stylesheet remains unchanged. Apply its existing panel
    geometry only to the Vue-owned dialog, with no global/native selector edits. */
 .pilot-dialog .entity-settings-nav .nav-item { flex: 1 1 auto; }

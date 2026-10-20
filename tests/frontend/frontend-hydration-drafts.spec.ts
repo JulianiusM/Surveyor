@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises} from '@vue/test-utils';
 import {createSSRApp, defineComponent, h, nextTick, onMounted, ref} from 'vue';
@@ -13,7 +14,7 @@ import type {components} from '../../src/types/api/v1';
 const profileId = '11111111-1111-4111-8111-111111111111';
 const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {kind: 'anonymous', context: 'hydration-context',
     csrfToken: 'hydration-csrf', locale: 'en', activeProfile: null, profiles: [], loginUrl: '/users/login',
-    logoutUrl: null, deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
+    logoutUrl: null, deployment: {buildId: 'fixture', apiCompatibility},
     shell: {version: 'fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
         localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'}};
 const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synthetic help',

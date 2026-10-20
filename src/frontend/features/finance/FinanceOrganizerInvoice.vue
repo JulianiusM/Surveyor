@@ -4,7 +4,7 @@ import type {components} from '../../../types/api/v1';
 import {useActionState, usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
-import {protectFinanceNumberFromScroll} from './numbers';
+import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
 import FinanceHistory from './FinanceHistory.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
@@ -38,13 +38,12 @@ const action = useActionState({eligible: () => props.active, blocked: () => comm
 const recovery = useActionState({eligible: () => props.active, blocked: () => command.recoveryAction.disabled.value,
     pending: () => command.recovering.value});
 const eligible = computed(() => props.participants.filter(participant => props.pool.assignAll
-    || (props.pool.registrationIds ?? []).includes(Number(participant.id))));
+    || (props.pool.registrationIds ?? []).includes(participant.id)));
 watch([() => props.eventId, () => props.pool.id, context.epoch, () => context.session.value?.context], releaseDraft);
 
 function releaseDraft(): void {
     draft.amount = ''; draft.description = ''; draft.registrationId = ''; proof.value = null; inspected.value = false;
 }
-function updateAmount(event: Event): void { draft.amount = (event.target as HTMLInputElement).value; }
 function close(): void {
     if (!command.mayLeave()) return;
     if (command.uncertain.value) command.acknowledge();
@@ -60,8 +59,8 @@ async function submit(): Promise<void> {
         command.setError('finance.enterADescriptionForThisExpense');
         return;
     }
-    const input = {amount: Number(draft.amount), description: draft.description.trim(),
-        ...(draft.registrationId ? {registrationId: Number(draft.registrationId)} : {})};
+    const input = {amount: financeDecimal(draft.amount), description: draft.description.trim(),
+        ...(draft.registrationId ? {registrationId: draft.registrationId} : {})};
     const poolId = props.pool.id;
     const file = proof.value;
     inspected.value = false;
@@ -92,7 +91,7 @@ function acknowledge(): void {
 </script>
 
 <template>
-    <AppDialog :open="open" :title="messages.t('finance.addInvoiceAmount')" :subtitle="pool.name"
+    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t('finance.addInvoiceAmount')" :subtitle="pool.name"
         :pending="command.pending.value || command.recovering.value" standard @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain"
@@ -110,14 +109,9 @@ function acknowledge(): void {
             <p class="small">{{ messages.t('finance.addASharedPoolExpenseWithoutRegisteringForThe') }}</p>
             <p v-if="pool.status === 'CLOSED'" class="text-warning small">{{ messages.t('finance.thisAddsASavedCostExistingSharesStayUnchanged') }}</p>
             <fieldset class="border-0 p-0 m-0" :disabled="action.disabled.value">
-                <FormField :id="`${id}-amount`" class="mb-3" :label="messages.t('finance.amount')" required :required-marker="false">
-                    <template #control>
-                        <!-- Keep the browser's lexical value through change and
-                             blur; numeric conversion belongs only to submit. -->
-                        <input :id="`${id}-amount`" :value="draft.amount" name="amount" type="number" class="form-control text-bg-dark"
-                            min="0.01" max="99999999.99" step="0.01" required @input="updateAmount" />
-                    </template>
-                </FormField>
+                <FormField :id="`${id}-amount`" v-model="draft.amount" name="amount" type="number" lexical-number
+                    input-mode="decimal" min="0.01" max="99999999.99" step="0.01" class="mb-3"
+                    :label="messages.t('finance.amount')" required :required-marker="false" />
                 <FormField :id="`${id}-participant`" class="mb-3" :label="messages.t('finance.paidByParticipantOptional')">
                     <template #control>
                         <select :id="`${id}-participant`" v-model="draft.registrationId" name="registrationId" class="form-select text-bg-dark"

@@ -3,9 +3,10 @@ import type {APIRequestContext, Locator, Page} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
-import {closeModalForE2E, openModalForE2E} from '../keywords/e2eCoreKeywords';
+import {closeModalForE2E, dismissFrontendSuccessNotifications, openModalForE2E, readControlContracts} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {PERM} from '../../src/modules/lib/permissions';
+import {createTranslator} from '../../src/modules/localization/translator';
 
 /** Seed attendance through the unchanged native operation, independently of the
  * Vue control being exercised. Each test owns a separately created Event. */
@@ -42,6 +43,68 @@ async function nativeSettings(request: APIRequestContext, id: string, data: Reco
  * endpoint above owns permission defaults and intentionally ignores these fields. */
 async function nativeMetadata(request: APIRequestContext, id: string, data: Record<string, unknown>): Promise<void> {
     expect((await request.post(`/api/event/${id}/update`, {data})).status()).toBe(200);
+}
+
+for (const scenario of [{locale: 'en', width: 1280}, {locale: 'de', width: 390}] as const) {
+    test(`retains native lexical Event capacity through blur and sibling edits in ${scenario.locale} at ${scenario.width}px`, async ({page}, info) => {
+        test.setTimeout(90_000);
+        const event = await createFrontendEventFixture(page.request);
+        const messages = createTranslator(scenario.locale);
+        const native = await page.context().newPage();
+        await page.setViewportSize({width: scenario.width, height: 900});
+        await native.setViewportSize({width: scenario.width, height: 900});
+        page.on('dialog', dialog => dialog.accept());
+        try {
+            await native.goto('/event/create', {waitUntil: 'domcontentloaded'});
+            const nativeCreate = native.locator('[name="maxParticipants"]');
+            await nativeCreate.fill('005');
+            await native.locator('[name="title"]').focus();
+            await expect(nativeCreate).toHaveValue('005');
+            const nativeContract = await readControlContracts(nativeCreate);
+
+            await page.goto(`/frontend-pilot/event/create?locale=${scenario.locale}`, {waitUntil: 'domcontentloaded'});
+            await waitForPilotHydration(page);
+            const creation = page.locator('[name="maxParticipants"]');
+            await creation.fill('005');
+            await page.locator('[name="title"]').fill('Sibling input retains capacity spelling');
+            await expect(creation).toHaveValue('005');
+            expect(await readControlContracts(creation)).toEqual(nativeContract);
+
+            // The real properties consumer keeps the same lexical control
+            // semantics, with its intentionally stricter native minimum of one.
+            await native.goto(`/event/${event.id}`, {waitUntil: 'domcontentloaded'});
+            const nativeModal = native.locator('#entityPropertiesModal');
+            await openModalForE2E(nativeModal, native.getByRole('button', {name: 'Entity settings', exact: true}));
+            await nativeModal.locator('summary').filter({hasText: /^Registration$/u}).click();
+            const nativeProperty = nativeModal.locator('[name="maxParticipants"]');
+            await nativeProperty.fill('005');
+            await nativeModal.locator('[name="title"]').focus();
+            await expect(nativeProperty).toHaveValue('005');
+            const nativePropertyContract = await readControlContracts(nativeProperty);
+
+            await page.goto(`/frontend-pilot/event/${event.id}?locale=${scenario.locale}`, {waitUntil: 'domcontentloaded'});
+            await waitForPilotHydration(page);
+            const documentTime = await page.evaluate(() => performance.timeOrigin);
+            await page.getByRole('button', {name: messages.t('packing.edit'), exact: true}).click();
+            const dialog = page.getByRole('dialog');
+            await dialog.locator('summary').filter({hasText: messages.t('event.propertyRegistration')}).click();
+            const property = dialog.locator('[name="maxParticipants"]');
+            await property.fill('005');
+            await dialog.locator('[name="title"]').focus();
+            await expect(property).toHaveValue('005');
+            expect(await readControlContracts(property)).toEqual(nativePropertyContract);
+            await dialog.screenshot({path: info.outputPath(`lexical-event-${scenario.locale}-${scenario.width}.png`), animations: 'disabled'});
+            const saved = page.waitForResponse(response => response.request().method() === 'PATCH'
+                && response.url().endsWith(`/events/${event.id}/metadata`));
+            await dialog.getByRole('button', {name: messages.t('packing.saveProperties'), exact: true}).click();
+            const receipt = await saved;
+            expect(receipt.status()).toBe(200);
+            expect(receipt.request().postDataJSON()).toMatchObject({maxParticipants: '005'});
+            expect((await eventView(page.request, event.id)).maxParticipants).toBe(5);
+            await dismissFrontendSuccessNotifications(page);
+            expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentTime);
+        } finally { await native.close(); }
+    });
 }
 
 test('distinguishes disabled settings from absent values when reviewing a real stale Event save', async ({page}) => {

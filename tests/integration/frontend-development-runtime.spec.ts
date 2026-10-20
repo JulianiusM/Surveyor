@@ -1,3 +1,4 @@
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import express from 'express';
 import http from 'node:http';
@@ -28,7 +29,7 @@ describe('Express-integrated frontend development', () => {
         app.use(frontendDevelopmentMiddleware);
         const bootstrap: FrontendPilotBootstrap = {session: {kind: 'anonymous', context: 'dev-context',
             csrfToken: 'dev-csrf', locale: 'en', activeProfile: null, profiles: [], loginUrl: '/users/login',
-            logoutUrl: null, deployment: {buildId: 'dev-fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
+            logoutUrl: null, deployment: {buildId: 'dev-fixture', apiCompatibility},
             shell: {version: 'fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
                 localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'}},
             help: {locale: 'en', title: 'Development guide', content: '<h2 id="task">A synthetic task</h2><img src="/frontend-pilot/help/assets/diagram.png?locale=en" alt="A task diagram">',

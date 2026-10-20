@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers
 owner: frontend maintainers
 status: current
-last-verified: 2026-10-19
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: direct controlled Vue message elements and functional interface/shared SPA decisions recorded with original deferrals and prior amendments retained; no full-application or cutover acceptance
+verification-scope: Existing framework/interface decisions retained; original finance money/factor/identifier rules, erroneous future-work provenance and maintainer-approved accepted command-precision correction recorded; implementation and execution remain separate; no cutover acceptance
 source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
 next-review: frontend-technology-or-rendering-boundary-change
 -->
@@ -213,6 +213,27 @@ must not reject them solely for those shapes or media. The existing HTTP decoder
 path/query/header values, and runtime repeated-query-array decoding and plain-text response delivery have not been
 restored. Generated contracts, metadata and validators do not by themselves implement those HTTP behaviors.
 Existing serialization/metadata mechanics and strict schema validation retain their own scope.
+
+### Approved finance wire correction (2026-10-20)
+
+The original selected API design at `2dfa2573c64178f54684cc4877b5a945f66e24c8` requires decimal-string numeric
+identifiers, fixed-two-decimal money strings and four-place decimal factors. Editorial consolidation in `e80a512`
+incorrectly described the money/factor choices as future work, without a corresponding approval. P7 (`584cd22`)
+and P8 (`3f1fba7`) followed the native numeric payload shapes instead. Investigation found no substantive reason
+requiring JSON numbers. Existing permissive positive-amount validation explains retaining accepted command input
+precision; it does not authorize a different wire format or establish a financial calculation defect.
+
+The maintainer explicitly approves R2 as correction of that mistake, including the original fixed-two-decimal
+command-input rule's amendment to retain precision already accepted by shared operations. Money command values
+are plain decimal strings without exponent notation; saved read money uses the existing shared fixed-two-decimal
+presenter. Factors retain canonical four-place strings and existing sign/range/precision rules; numeric record
+identifiers retain positive decimal strings. Browser encoding preserves meaningful entered digits without changing
+the visible lexical draft. Existing server normalization, calculations and persistence remain authoritative;
+native transport and frontend behavior stay unchanged. The existing compatibility family/update-required recovery
+protects older loaded clients and mounted drafts. Implementation and executed evidence remain separate from approval.
+The same authorized original-baseline audit restores Activity role/override identifiers and identifier arrays to
+the already selected decimal-string rule. Its existing frontend requirements argument adapter serves both local
+analysis and calculation while the shared engine retains numeric internal identifiers; no domain model changes.
 
 ## Deferred localization and domain integration targets
 

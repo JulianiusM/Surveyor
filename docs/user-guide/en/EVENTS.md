@@ -4,12 +4,12 @@ documentation-metadata
 audience: event participants; event organizers
 owner: event feature maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
-source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/modules/module_invoice_pool.pug; docs/user-guide/en/INVOICE_POOLS.md; src/routes/event.ts; src/routes/api/event.ts; src/controller/eventController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/entities/event/; src/modules/database/services/EventService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/modules/lib/permissions.ts; src/views/event/event-create.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/views/modules/module_registration_links.pug; src/views/modules/module_event_participants.pug; src/public/js/events.ts; src/public/js/modules/reg-links.ts; src/public/js/modules/event-participant.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/modules/module_invoice_pool.pug; docs/user-guide/en/INVOICE_POOLS.md; src/routes/event.ts; src/routes/api/event.ts; src/controller/eventController.ts; src/middleware/guestFlowFactory.ts; src/modules/database/entities/event/; src/modules/database/services/EventService.ts; src/modules/lib/fileCommons.ts; src/modules/lib/pdf.ts; src/modules/lib/permissions.ts; src/views/event/event-create.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/views/modules/module_registration_links.pug; src/views/modules/module_event_participants.pug; src/public/js/events.ts; src/public/js/modules/reg-links.ts; src/public/js/modules/event-participant.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/event/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
 next-review: event-visible-UI-or-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
 
 Use an event to collect attendance dates, optional dietary information, and related packing, activity, and transport plans.
@@ -193,7 +193,7 @@ In **Dates and time**, select **Time zone** to search time zone names or open **
 its UTC offset. **Use my time zone** selects the browser's zone. The chooser expands within the settings dialog and
 retains these same features when used during event creation.
 
-Dates, location, deadline, time zone, post-deadline policies, **Maximum participants**, and dietary switches use their separate permissions listed below. Each section saves separately. Errors keep your draft available; closing the dialog discards unsaved changes. Before a command refreshes the page, Surveyor asks you to resolve unsaved changes in other sections.
+Dates, location, deadline, time zone, post-deadline policies, **Maximum participants**, and dietary switches use their separate permissions listed below. Each section saves separately. Saving keeps the page open and preserves unfinished input in other sections. A failed save keeps your draft. When closing with unsaved changes, choose whether to discard them; cancel closing to keep editing.
 
 To change sharing or delegated access, open **Entity settings** → **Access**. See [Permissions and Sharing](PERMISSIONS.md#after-creation).
 
@@ -282,7 +282,7 @@ Moving a resource changes which event supplies participant access and inherited 
 
 Registered participants can access an event-linked resource through their event participation. The **Things to do** collection appears on the event page only when the event also grants them **Access Items**. A person who is not registered needs suitable direct access to the linked resource.
 
-The event dashboard does not currently expose an **Event surveys** section or a **Create new survey** action. Create and share a survey separately rather than expecting it to appear with the event’s packing, activity, and drivers lists.
+Create and share surveys separately. The event's linked resources are packing lists, activity plans and drivers lists.
 
 ### Choose an event
 
@@ -312,7 +312,7 @@ On a loading error, use **Try again**. If an expected event remains missing, res
 A profile needs both **Data Export** and **Access Participants**.
 
 1. Open the event and select **Entity settings**.
-2. Under **Actions**, select **Export participants**.
+2. Under **Actions**, select **Participants (PDF)**.
 
 The administration dashboard also offers **Exports** → **Participants (PDF)** to profiles admitted to that dashboard.
 

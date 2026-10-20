@@ -21,16 +21,16 @@
   "survey": {
     "title": "Choose a pattern that repeats monthly",
     "intro": "Surveyor surveys are designed for recurring weekday patterns.",
-    "firstHeading": "Add new combination",
+    "firstHeading": "{{surveyheading}}",
     "fields": [
-      {"label": "Weekday:", "value": "Monday", "meaning": ""},
-      {"label": "Day in month:", "value": "1. day in month", "meaning": ""}
+      {"label": "{{surveyweekday}}:", "value": "{{surveymonday}}", "meaning": ""},
+      {"label": "{{surveyday}}:", "value": "{{surveyfirst}}", "meaning": ""}
     ],
-    "instruction": "Choose the values above, then select Add.",
+    "instruction": "Choose the values above, then select {{surveyadd}}.",
     "recurrenceHeading": "First Monday of every month",
     "recurrenceBody": "The same weekday position repeats; the calendar date changes.",
     "months": ["Month 1 → First Monday", "Month 2 → First Monday", "Month 3 → First Monday"],
-    "answer": "Vote Yes, Maybe or No for each proposed pattern.",
+    "answer": "Vote {{surveyyes}}, {{surveymaybe}} or {{surveyno}} for each proposed pattern.",
     "foot": ["A single named month is a secondary use. The survey stores a pattern,", "not a specific calendar date."]
   },
   "packing": {

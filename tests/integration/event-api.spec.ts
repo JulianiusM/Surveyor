@@ -1,6 +1,7 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import * as eventApi from '../../src/controller/eventController';
 import eventController from '../../src/controller/eventController';
+import {getEntityPropertyPresentation} from '../../src/controller/entityAdminController';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as adminService from '../../src/modules/database/services/EntityAdminService';
 import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
@@ -52,6 +53,33 @@ beforeAll(async () => {
 afterAll(closeIntegrationDatabase);
 
 describe('versioned Event projections and native operation adoption', () => {
+    it('admits participant export settings through the native combined grant without granting admin or edit access', async () => {
+        const id = await createEvent('Independent participant export');
+        const session = sessionFor(editor);
+        await adminService.addAdmin('event', id, editor.id, PERM.ACCESS_VIEW | PERM.DATA_EXPORT | PERM.ACCESS_PARTICIPANTS);
+        const event = (await eventService.getEventById(id))!;
+        const native = await getEntityPropertyPresentation('event', event, session);
+        expect(native.exportUrl).toBe(`/event/${id}/export/participants`);
+
+        const view = await eventApi.readEvent(id, session);
+        expect(view.capabilities).toMatchObject({settings: true, exportParticipants: true, admin: false});
+        const settings = await eventApi.readEventSettings(id, session);
+        expect(settings.capabilities).toMatchObject({export: true, editHeader: false, managePermissions: false, duplicate: false, remove: false});
+        expect(settings.editableFields).toEqual([]);
+        expect(settings.access).toBeNull();
+        expect(contractValidator('EventSettings')(settings)).toBe(true);
+        await expect(eventApi.readEvent(id, session, 'admin')).rejects.toMatchObject({status: 403});
+
+        // Neither half of the native combined method grant admits an export or
+        // an otherwise empty settings dialog. No private ACL projection leaks.
+        for (const remaining of [PERM.DATA_EXPORT, PERM.ACCESS_PARTICIPANTS, 0]) {
+            await adminService.updateAdminPerms('event', id, editor.id, PERM.ACCESS_VIEW | remaining);
+            expect((await getEntityPropertyPresentation('event', event, session)).exportUrl).toBeUndefined();
+            expect((await eventApi.readEvent(id, session)).capabilities).toMatchObject({settings: false, exportParticipants: false, admin: false});
+            await expect(eventApi.readEventSettings(id, session)).rejects.toMatchObject({status: 403});
+        }
+    });
+
     it('creates and duplicates through the shared native validation, creator and ordered defaults owners', async () => {
         const values: components['schemas']['EventCreateInput'] = {title: 'Generated Event creator',
             startDate: '2027-06-01', endDate: '2027-06-03', maxParticipants: '24',

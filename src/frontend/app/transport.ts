@@ -58,16 +58,17 @@ export class UnconfirmedResponseError extends Error {
 /** The shared validator rejected input before any network side effect was attempted. */
 export class InvalidInputError extends Error {}
 
-/** Matching generated creation/header operations use one multipart envelope.
+/** Matching generated image/proof operations use one multipart envelope.
  * Features validate/select their own wire shape and endpoint before calling;
  * this serializer owns only JSON-part encoding and the original selected bytes. */
-export function createMultipartForm(data: object | null, image: File | null): FormData {
+export function createMultipartForm(data: object | null, file: File | null, binaryPart: 'image' | 'proof' = 'image'): FormData {
     const form = new FormData();
 
-    // A header-only operation has no metadata part. Creation serializes its
-    // already validated draft once and appends an optional image independently.
+    // Header-only operations omit metadata. Each feature retains its generated
+    // required/optional file contract; this owner preserves the selected bytes
+    // under the declared part without creating another draft or upload policy.
     if (data !== null) form.append('data', JSON.stringify(data));
-    if (image !== null) form.append('image', image);
+    if (file !== null) form.append(binaryPart, file);
     return form;
 }
 

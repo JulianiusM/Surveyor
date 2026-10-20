@@ -4,13 +4,13 @@ documentation-metadata
 audience: Packlistenteilnehmer; Packlistenorganisatoren
 owner: packing-list feature maintainers
 status: current
-last-verified: 2026-10-13
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Pilot Packed checklist warning and explicit Retry checked against mounted behavior; other article sections, declared anchors and image bytes retain their prior reviewed scope.
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
 heading-anchors: 1:packing-lists; 2:choose-your-task; 2:understand-the-three-kinds-of-state; 2:open-and-read-a-packing-list; 3:read-the-summary-counters; 3:read-the-item-table; 2:take-an-item; 3:remove-yourself; 2:understand-everyone-items; 2:use-packed-as-your-personal-checklist; 2:open-a-list-as-a-guest; 2:create-a-packing-list; 3:1-open-the-creation-form; 3:2-enter-the-list-details; 3:3-add-the-initial-items; 3:4-select-create-list; 2:manage-list-content; 3:edit-the-list-title-or-description; 3:add-another-item; 3:edit-an-existing-item; 3:reorder-items; 3:remove-another-participant; 3:delete-an-item; 2:manage-the-header-image; 2:link-a-packing-list-to-an-event; 2:configure-sharing-and-permissions; 3:privacy-before-sharing; 2:duplicate-or-delete-a-packing-list; 3:duplicate-a-list; 3:delete-a-list; 2:capabilities-and-limits; 2:practical-examples; 3:shared-camping-equipment; 3:personal-essentials; 3:event-setup; 2:archive-or-restore-a-list; 2:troubleshooting; 3:the-list-cannot-be-created; 3:take-is-missing-or-does-not-work; 3:an-event-linked-list-says-registration-is-required; 3:the-list-is-missing-from-your-overview; 3:my-packed-marks-disappeared; 3:someone-else-can-see-my-packed-marks; 3:item-editing-or-organizer-controls-are-missing; 3:an-item-stays-at-the-top-of-the-list; 2:related-guides
-source-anchors: src/views/packing/packing-view.pug; src/controller/packingController.ts; src/locales/de.json; docs/user-guide/de/assets/packing-shared-vs-local.png; scripts/generate-help-visuals.mjs; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; tests/frontend/frontend-pilot-editor.spec.ts
+source-anchors: src/views/packing/packing-view.pug; src/controller/packingController.ts; src/locales/de.json; docs/user-guide/de/assets/packing-shared-vs-local.png; scripts/generate-help-visuals.mjs; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; tests/frontend/frontend-pilot-editor.spec.ts; src/frontend/features/packing/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
 next-review: packing-visible-UI-or-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
 -->
 
 Packlisten helfen einer Gruppe, gemeinsame Ausrüstung zu verteilen und persönliche Dinge nicht zu vergessen. Teilnehmer können gewöhnliche Gegenstände übernehmen; Organisatoren können Gegenstände als Bedarf für **Alle** markieren.
@@ -98,14 +98,14 @@ Die Übernahme verlangt effektiv **Zugriff auf Ansicht**. Kann ein Teilnehmer di
 
 Das kleine **×** neben einem Namen ist eine separate Organisatoraktion zum Entfernen einer anderen Person. Gewöhnliche Teilnehmer verwenden ihre eigene Schaltfläche **Zurücknehmen**.
 
-Die Liste erscheint unter **Deine Teilnahmen** (englisch **Your participation**) in [Deine Übersicht](DASHBOARD.md), sobald das aktive Profil mindestens einen gewöhnlichen Gegenstand übernommen hat. Bloßes Öffnen, **Eingepackt?** oder das Ansehen eines Gegenstands für alle erzeugt keine gemeinsame Zusage und fügt die Liste deshalb nicht zu dieser Sammlung hinzu.
+Die Liste erscheint unter **Deine Teilnahmen** in [Deine Übersicht](DASHBOARD.md), sobald das aktive Profil mindestens einen gewöhnlichen Gegenstand übernommen hat. Bloßes Öffnen, **Eingepackt?** oder das Ansehen eines Gegenstands für alle erzeugt keine gemeinsame Zusage und fügt die Liste deshalb nicht zu dieser Sammlung hinzu.
 
 ## Gegenstände für alle verstehen
 
 Ein Gegenstand für **Alle** soll von jeder Person für sich selbst mitgebracht werden, etwa Trinkflasche, Schlafsack, Ausweis oder persönliche Medikamente.
 
-- Beim Erstellen heißt der Schalter **Alle**; die englische Ansicht verwendet **Everyone**.
-- In der bestehenden Liste steht der Bearbeitungsschalter in **Aktion**; die englische Ansicht nennt ihn **All**.
+- Beim Erstellen heißt der Schalter **Alle**.
+- In der bestehenden Liste steht der Schalter **Alle** in **Aktion**.
 - **Zusagen** zeigt **Alle** statt individueller Namen.
 - Niemand muss **Übernehmen** wählen. Die Zeile zählt nicht zu offenen Gegenständen, Gegenständen ohne Zusage oder Teilnehmern.
 - Zeilen für alle sind hervorgehoben und stehen vor gewöhnlichen Zusagezeilen.
@@ -137,7 +137,7 @@ Gäste können teilnehmen, soweit die Zugriffsregeln der Liste es erlauben.
 
 1. Öffne den Packlistenlink.
 2. Wähle ohne aktives Profil **Als Gast fortfahren**.
-3. Gib einen **Anzeigenamen** und möglichst eine E-Mail-Adresse an.
+3. Fülle **Anzeigename** aus. Gib möglichst auch eine E-Mail-Adresse an.
 4. Sichere den von Surveyor gezeigten oder verschickten privaten Gastlink.
 5. Verwende **Übernehmen**, **Zurücknehmen** und **Eingepackt?**, soweit verfügbar, wie oben beschrieben.
 
@@ -154,7 +154,7 @@ Die Erstellung verlangt ein angemeldetes vollständiges Konto. Gäste dürfen te
 1. Öffne oben **Neu**.
 2. Wähle unter **Organisieren & teilen** **Packliste**.
 
-Veranstaltungsorganisatoren können stattdessen in **Event administration dashboard** **Event packing lists** aufklappen und **Create new packing list** wählen. Dasselbe Formular öffnet sich mit vorausgewählter Veranstaltung.
+Veranstaltungsorganisatoren können stattdessen in **Veranstaltungsverwaltung** **Packlisten der Veranstaltung** aufklappen und **Neue Packliste erstellen** wählen. Dasselbe Formular öffnet sich mit vorausgewählter Veranstaltung.
 
 ### 2. Listendetails eintragen
 
@@ -202,7 +202,7 @@ Berechtigte Bearbeiter sehen **Entitätseinstellungen** in der Kopfzeile. Der Di
 2. Ändere unter **Allgemein** → **Details** den **Titel** oder die **Beschreibung**, soweit vorhanden.
 3. Wähle **Eigenschaften speichern**.
 
-Titeländerungen brauchen **Titel bearbeiten**, Beschreibungen **Beschreibung bearbeiten**. Die Beschreibung auf der gewöhnlichen Listenseite ist schreibgeschützt. Ein fehlgeschlagenes Speichern erhält deinen Entwurf; Schließen verwirft ungespeicherte Änderungen. Abschnitte speichern getrennt. Befehle, die die Seite aktualisieren, verlangen vorher eine Entscheidung über Entwürfe anderer Abschnitte.
+Titeländerungen brauchen **Titel bearbeiten**, Beschreibungen **Beschreibung bearbeiten**. Die Beschreibung auf der gewöhnlichen Listenseite ist schreibgeschützt. Jeder Abschnitt speichert separat. Das Speichern lässt die Seite geöffnet und erhält unvollständige Eingaben anderer Abschnitte. Ein fehlgeschlagenes Speichern erhält den Entwurf. Beim Schließen mit ungespeicherten Änderungen entscheidest du, ob du diese verwerfen möchtest; brich das Schließen ab, um weiterzubearbeiten.
 
 ### Einen weiteren Gegenstand hinzufügen
 
@@ -260,7 +260,7 @@ Eine verknüpfte Liste:
 - verlangt bei Nichtteilnehmern effektiv **Zugriff auf Ansicht**;
 - wird mit der Veranstaltung gelöscht, weil sie zu deren gespeicherten Daten gehört.
 
-Die Erstellung aus **Event packing lists** wählt die Veranstaltung vor. Die Auswahl enthält berechtigte vergangene, nach Anmeldeschluss liegende und archivierte Veranstaltungen. Verwende Text-, Datums- und Zustandsfilter oder **Keine Veranstaltung**; [Eine Veranstaltung auswählen](EVENTS.md#choose-an-event) erklärt die gemeinsamen Bedienelemente. Bei einer archivierten Veranstaltung erläutert die Auswahl die Archivierungswirkung.
+Die Erstellung aus **Packlisten der Veranstaltung** wählt die Veranstaltung vor. Die Auswahl enthält berechtigte vergangene, nach Anmeldeschluss liegende und archivierte Veranstaltungen. Verwende Text-, Datums- und Zustandsfilter oder **Keine Veranstaltung**; [Eine Veranstaltung auswählen](EVENTS.md#choose-an-event) erklärt die gemeinsamen Bedienelemente. Bei einer archivierten Veranstaltung erläutert die Auswahl die Archivierungswirkung.
 
 Nach der Erstellung öffnest du **Entitätseinstellungen** → **Verknüpfte Veranstaltung**, wählst ein anderes Ziel oder **Keine Veranstaltung** und dann **Veranstaltungsverknüpfung speichern** mit Bestätigung. Du brauchst **Metadaten bearbeiten** auf der Liste und **Zuweisungen verwalten** auf jedem ausgewählten Ziel. Das Aufheben benötigt kein Recht einer Zielveranstaltung.
 
@@ -309,7 +309,7 @@ Mit vollständigem Konto und **Daten duplizieren** verwendest du die **Entitäts
 4. Prüfe Veranstaltungszuordnung und Gruppenberechtigungen der neuen Liste.
 5. Wähle **Liste erstellen**.
 
-Eigentümer können außerdem **Duplizieren** (englisch **Duplicate**) auf ihrer Karte unter **Verwaltbare Einträge** (englisch **Administrable entities**) verwenden.
+Eigentümer können außerdem **Duplizieren** auf ihrer Karte unter **Verwaltbare Einträge** verwenden.
 
 Das Duplikat ist eine unabhängige Liste. Es kopiert keine Zusagen, browserlokalen Häkchen oder Kopfzeilenbilder. Eigentümer wird das aktive Profil, das die Kopie erstellt.
 
@@ -321,7 +321,7 @@ Nur der Eigentümer darf die gesamte Liste löschen.
 2. Wähle unter **Aktionen** **Endgültig löschen**.
 3. Bestätige.
 
-Die Eigentümerkarte in der Übersicht behält außerdem **Löschen** (englisch **Delete**).
+Die Eigentümerkarte in der Übersicht behält außerdem **Löschen**.
 
 Die Löschung entfernt Liste, Gegenstände, gemeinsame Zusagen und gespeichertes Kopfzeilenbild endgültig. Archivwiederherstellung kann das nicht rückgängig machen. Archiviere, wenn die Liste verfügbar bleiben soll. Eine verknüpfte Liste wird auch beim Löschen ihrer Veranstaltung entfernt.
 
@@ -355,7 +355,7 @@ Verknüpfe die Liste mit der Veranstaltung und erstelle gewöhnliche Zeilen wie 
 
 Eigentümer oder Organisatoren mit **Metadaten bearbeiten** können unter **Entitätseinstellungen** → **Aktionen** → **Archivierung** für alle archivieren oder wiederherstellen. Archivierung erhält Gegenstände, Zusagen, Bilder, bisherigen Zugriff und Aktionen. Packlisten haben kein eigenes automatisches Archivierungsdatum; verknüpfte Listen erben die Archivierung ihrer Veranstaltung. Die gewöhnliche Ansicht zeigt gegebenenfalls nur **Dieser Eintrag ist archiviert.**
 
-Bei geerbter Archivierung erläutert der Dialog, dass zuerst die Veranstaltung wiederhergestellt werden muss, und bietet gegebenenfalls **Veranstaltung öffnen**. Eine separat archivierte Liste bleibt nach Wiederherstellung der Veranstaltung archiviert. Du findest sie unter **Archiviert und ausgeblendet** (englisch **Archived and hidden**) in [Deine Übersicht](DASHBOARD.md#find-archived-and-hidden-items). **Für mich ausblenden** (englisch **Hide for me**), **Für mich einblenden** (englisch **Show for me**) und **Standardsichtbarkeit verwenden** (englisch **Use default visibility**) werden für das aktive Profil gespeichert. Diese Übersichtseinstellungen sind von browserlokalen Pack-Häkchen getrennt.
+Bei geerbter Archivierung erläutert der Dialog, dass zuerst die Veranstaltung wiederhergestellt werden muss, und bietet gegebenenfalls **Veranstaltung öffnen**. Eine separat archivierte Liste bleibt nach Wiederherstellung der Veranstaltung archiviert. Du findest sie unter **Archiviert und ausgeblendet** in [Deine Übersicht](DASHBOARD.md#find-archived-and-hidden-items). **Für mich ausblenden**, **Für mich einblenden** und **Standardsichtbarkeit verwenden** werden für das aktive Profil gespeichert. Diese Übersichtseinstellungen sind von browserlokalen Pack-Häkchen getrennt.
 
 ## Probleme lösen
 

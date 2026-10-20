@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
@@ -7,7 +8,7 @@ const profileId = '11111111-1111-4111-8111-111111111111';
 const entityId = '22222222-2222-4222-8222-222222222222';
 const session: components['schemas']['SessionView'] = {kind: 'anonymous', context: 'native-context',
     csrfToken: 'native-csrf', locale: 'en', activeProfile: null, profiles: [], loginUrl: '/users/login',
-    logoutUrl: null, deployment: {buildId: 'native-build', apiCompatibility: 'v1-pilot-2026-10-07'},
+    logoutUrl: null, deployment: {buildId: 'native-build', apiCompatibility},
     shell: {version: 'fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
         localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'}};
 

@@ -4,7 +4,7 @@ import type {components} from '../../../types/api/v1';
 import {useActionState, usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
-import {protectFinanceNumberFromScroll} from './numbers';
+import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
 import ActionButton from '../../components/ActionButton.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import FileField from '../../components/FileField.vue';
@@ -49,12 +49,6 @@ function selectEligiblePool(): void {
 }
 function releaseDraft(): void { draft.amount = ''; draft.description = ''; proof.value = null; inspected.value = false; }
 
-/** Retain the native amount spelling through input, change and blur. Conversion
- * to the existing numeric request happens only when this draft is submitted. */
-function updateAmount(event: Event): void {
-    draft.amount = (event.target as HTMLInputElement).value;
-}
-
 /** Capture fields before pending locks. Transfer completion is progress only;
  * generated application confirmation alone releases the completed draft. */
 async function submit(event: Event): Promise<void> {
@@ -62,7 +56,7 @@ async function submit(event: Event): Promise<void> {
     const form = event.target as HTMLFormElement;
     if (!form.reportValidity() || !proof.value) return;
     const poolId = draft.poolId;
-    const input = {amount: Number(draft.amount), description: draft.description};
+    const input = {amount: financeDecimal(draft.amount), description: draft.description};
     const file = proof.value;
     progress.value = null; uploaded.value = false; slow.value = false; inspected.value = false;
     // Slow delivery changes explanation, never unlocks or repeats the command.
@@ -140,30 +134,10 @@ function acknowledgeHistory(): void {
                             </select>
                         </template>
                     </FormField>
-                    <FormField
-                        :id="`${id}-amount`"
-                        class="col-md-4"
-                        :label="messages.t('finance.amount')"
-                        required
-                        :required-marker="false"
-                    >
-                        <template #control>
-                            <!-- A raw native control preserves leading zeros and
-                                 decimal spelling after blur; no number directive
-                                 rewrites the displayed draft behind its owner. -->
-                            <input
-                                :id="`${id}-amount`"
-                                :value="draft.amount"
-                                name="amount"
-                                type="number"
-                                class="form-control text-bg-dark"
-                                min="0.01"
-                                step="0.01"
-                                required
-                                @input="updateAmount"
-                            />
-                        </template>
-                    </FormField>
+                    <!-- Shared lexical number controls preserve the visible amount through blur. -->
+                    <FormField :id="`${id}-amount`" v-model="draft.amount" name="amount" type="number" lexical-number
+                        input-mode="decimal" min="0.01" step="0.01" class="col-md-4" :label="messages.t('finance.amount')"
+                        required :required-marker="false" />
                     <FormField
                         :id="`${id}-description`"
                         v-model="draft.description"

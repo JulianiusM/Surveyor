@@ -4,12 +4,12 @@ documentation-metadata
 audience: survey participants; survey organizers
 owner: survey feature maintainers
 status: current
-last-verified: 2026-10-14
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed English article content and image references retained; metadata routes to the active visual-authoring owner.
-source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/en/assets/survey-recurring-pattern.png; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/public/js/survey-create.ts; src/routes/survey.ts; src/routes/api/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/surveys/Survey.ts; src/modules/database/entities/surveys/SurveyCombination.ts; src/modules/database/entities/surveys/SurveyResponse.ts; src/modules/database/services/SurveyService.ts; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/survey-workflows.spec.ts; tests/e2e/core-workflows.spec.ts; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; src/controller/helpController.ts
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; docs/user-guide/en/assets/survey-recurring-pattern.png; docs/features/help/HELP_VISUALS.md; tests/unit/help-documentation.spec.ts; src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/public/js/survey-create.ts; src/routes/survey.ts; src/routes/api/survey.ts; src/controller/surveyController.ts; src/middleware/guestFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/surveys/Survey.ts; src/modules/database/entities/surveys/SurveyCombination.ts; src/modules/database/entities/surveys/SurveyResponse.ts; src/modules/database/services/SurveyService.ts; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/survey-workflows.spec.ts; tests/e2e/core-workflows.spec.ts; docs/decisions/DEC-001-SURVEY-COMBINATION-AUTHORIZATION.md; docs/decisions/DEC-005-SURVEY-CREATION-PERMISSIONS.md; src/controller/helpController.ts; src/frontend/features/surveys/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
 next-review: survey-visible-UI-or-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
 
 Surveys are designed primarily for organizing **recurring monthly dates**, such as choosing whether a group should meet on the first Monday, second Wednesday, or last Friday of every month. This recurring-pattern workflow is the feature’s main strength: participants answer **Yes**, **Maybe**, or **No** once for each easy-to-understand weekday position.
@@ -227,7 +227,7 @@ The owner can change these properties without creating a new survey:
 2. In **General** → **Details**, edit **Title** or **Description**.
 3. Select **Save properties**.
 
-The survey keeps its link, combinations, and participant answers. Each dialog section saves separately. A failed save keeps your draft; closing discards unsaved changes. Commands that refresh the page ask you to resolve drafts in other sections first.
+The survey keeps its link, combinations, and participant answers. Each section saves separately. Saving keeps the page open and preserves unfinished input in other sections. A failed save keeps your draft. When closing with unsaved changes, choose whether to discard them; cancel closing to keep editing.
 
 ### Duplicate a survey
 

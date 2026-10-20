@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P6 functional interface assertions, integrated Refresh, shared notification lifetimes, locale-neutral usability, shared civil-date/instant semantics and domain-job boundaries reconciled with deterministic fixtures and runner safety; execution belongs to paired review; no publication
+verification-scope: P0-P8 numeric display and wire-shape boundaries reconciled with native-preserving fixtures, existing runner layers and finite evidence requirements; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts; tests/unit/civil-date.spec.ts; tests/e2e/frontend-calendar.spec.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -141,6 +141,12 @@ Use actual Query/cache/transport consumers where they uniquely detect:
 - Aggregate totals/badges retiring with their source authority, while independently admitted siblings remain readable.
 - Locale changes canceling translated families only, leaving machine authority reads and drafts intact.
 - Explicit value lifetimes across warm/cold routes, actor changes and completion for text, select, checkbox and file inputs.
+- Lexical numeric fields through input, change, blur and a sibling render using the shared field option; separately
+  retain intentional numeric normalization. Field events alone cannot establish the displayed browser value.
+- Finance money/factor/identifier wire strings, unchanged accepted precision and controller normalization, plus
+  compatibility/update recovery for older loaded tabs without discarding mounted drafts or replaying commands.
+- Activity scalar/array identifier strings and the existing Analyze/Calculate argument adapter's numeric engine
+  boundary without mutation of admitted configuration, domain arithmetic or native inputs.
 
 Current focused source selections protect shared frontend owners at their actual layer:
 
@@ -149,7 +155,7 @@ Current focused source selections protect shared frontend owners at their actual
 | Displayed header and root/child schedule actions | `tests/frontend/frontend-entity-presentation.spec.ts` mounts actual Event/Packing and Settings/child consumers, checking settings admission, image lifetime/removal and shared pause/resume behavior. Existing Event-page and Packing-editor cases retain equal-image-read and pending/draft coverage. HTTP substitution makes these client checks. |
 | Denial-producing admission and inactive visits | `tests/frontend/frontend-entry-retirement.spec.ts` uses real Query observers to retain a paused producing denial while removing older token visits and preserving another actor. Event foundation and existing Packing entry cases cover mounted feature adoption and restored admission. |
 | Metadata public workflow and read-only notes | Existing Event foundation/Packing management cases exercise the actual metadata adapters and shared editor handle. Event organizer cases update selected participant/summary notes through fresh roster reads, independently of search, and retire missing/empty sources while retaining separate date-draft coverage. |
-| Shared fields, Quick Add and recovery | `frontend-pilot-shell` cases exercise native composition/caret/control identity and lexical number emissions; Packing editor and Drivers cases protect Quick Add numeric coercion/native rerender normalization, unnamed fields and confirmed/uncertain resets. Event foundation preserves raw creation fields and selected multipart bytes; Survey cases retain ballot-specific fresh-read reconciliation and unknown-creation review. These are mounted client assertions, not integrated HTTP/backend evidence. |
+| Shared fields, Quick Add and recovery | `frontend-pilot-shell` cases exercise native composition/caret/control identity and emitted values; actual browser change/blur and sibling-render checks establish lexical-number display. Packing editor and Drivers cases separately protect Quick Add's deliberate numeric coercion/native rerender normalization, unnamed fields and confirmed/uncertain resets. Event foundation preserves raw creation fields and selected multipart bytes; Survey cases retain ballot-specific fresh-read reconciliation and unknown-creation review. These boundaries retain their own client or built-system classification. |
 | Built visual/behavioral delivery | `tests/e2e/frontend-entity-header.spec.ts` compares native/Vue headers at desktop/mobile sizes with images, long titles and parent navigation. `frontend-event-workflows.spec.ts` exercises actual controls, sessions and persistence for attendance, links, notes, permissions, images/lifecycle, deadline/capacity outcomes, uncertain delivery and anonymous grants. Other Event E2E files retain their existing boundaries. |
 
 This is an assertion map, not a claim that a selection ran or passed. Executed inputs, results and limits belong to
@@ -350,6 +356,11 @@ typography, readable wrapping and usable action spacing. Include common form act
 them. Assert meaningful user contracts and recorded browser errors; raw geometry and a JSON attachment remain evidence
 for inspection rather than an exact native coordinate contract. Hold actor, persisted data, locale, viewport and loaded fonts equal. Explicitly identify
 approved navigation-shell differences instead of hiding real component differences with broad tolerances.
+Retain explicit browser-restoration choices such as `autocomplete="off"`; a default can let the browser restore a
+shared flag instead of its admitted application owner. Compare that behavior separately from visible wording.
+For sticky identity columns, verify actual painted text while the table scrolls past selected or focused answer
+labels. A bounding box or computed z-index alone does not prove that another control is not covering the name;
+hit-testing the rendered glyph positions protects readability without requiring identical native coordinates.
 
 Event organizer dietary comparisons observe each frontend's ordinary application response without replacing it.
 Assert that its rendered badges and derived dietary totals preserve that response's complete values and delivered

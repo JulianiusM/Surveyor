@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
 import {createSSRApp, defineComponent, h, ref} from 'vue';
@@ -26,7 +27,7 @@ import {render} from '../../src/frontend/app/entry-server';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 
-const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context: 'shell-context-1234567890',
+const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility}, context: 'shell-context-1234567890',
     csrfToken: 'shell-csrf-1234567890', locale: 'en', activeProfile: null, profiles: [],
     loginUrl: '/users/login', logoutUrl: null, shell: {version: 'fixture-version', imprintUrl: '/fixture-imprint',
         privacyPolicyUrl: '/fixture-privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Provider'}};

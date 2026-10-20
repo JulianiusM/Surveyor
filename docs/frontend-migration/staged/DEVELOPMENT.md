@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P8 organizer finance and independent allocation-form contribution source-reconciled with retained P7/P0-P6 guidance; shared numeric wheel owner, original business operations and native/later-phase exclusions retained; execution separate; no publication
+verification-scope: Full-pilot shared lexical field option, decimal wire boundaries, actual translated Finance query family and persistent decision adoption source-reconciled with existing contribution guidance; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -86,6 +86,13 @@ fields; browser response validation accepts compatible additions while error par
 Separate create/update/read semantics and permitted projections. Avoid recursive polymorphism, arbitrary maps,
 deep `allOf`, remote references and custom executable vocabulary; `readOnly`/`writeOnly` cannot enforce disclosure.
 These shape preferences require author/reviewer judgment, not generator bans on arrays, objects or unions.
+Compare scalar meanings with the original accepted contract and its explicit amendments before copying native
+payloads or a consolidated design summary. Numeric record identifiers use declared positive decimal strings;
+counts, capacities and reviewed revisions retain their own numeric contracts. Shared domain engines can keep
+numeric internal IDs behind one existing argument adapter. The
+[finance wire correction](decisions/DEC-006-FRONTEND-FRAMEWORK.md#approved-finance-wire-correction-2026-10-20)
+records why accepted precision and wire spelling are separate decisions; do not silently relabel an unimplemented
+accepted choice as future work or change business validation to make a transport schema convenient.
 Strict Ajv validation still rejects unknown schema vocabulary. Do not disable strictness or enable coercion,
 default insertion or additional-field removal. Timezone existence and cross-field business checks remain named
 controller operations.
@@ -97,17 +104,19 @@ primitive union and passes the raw scalar to the existing signed nullable SQL co
 remain authoritative; creation/new-item validation stays separate. Do not generalize either extension into coercion
 or a copied database-limit policy. Native metadata diagnostics remain owned by their native adapter.
 
-The current HTTP adapter decodes single scalar path/query/header values, JSON and Event/Packing/Drivers/Survey/Activity multipart, and
-delivers JSON or scoped binary image responses. Creation decodes the `data` JSON part once against its authored nested schema
+The current HTTP adapter decodes single scalar path/query/header values, JSON and entity/Finance multipart, and
+delivers JSON or scoped binary image/proof responses. Creation decodes the `data` JSON part once against its authored nested schema
 and handles `image` separately. Repeated query parameters, absent/empty values and malformed input stay distinct.
 On the server, `receiveApiUpload`, `decodeApiMultipartData`, `decodeApiMultipartImage` and `sendStoredApiBinary`
 in the existing transport owner share matching upload completion, multipart decoding and confined binary delivery.
-All five feature adapters use these owners. Features still select their parser, byte/type/filename limits, generated
+All five entity adapters and Finance's proof adapter use the matching owners. Features still select their parser, byte/type/filename limits, generated
 operation, authorized storage root, method admission, cleanup and controller; transport performs no domain write.
-The browser's `createMultipartForm` in the existing transport owner supplies the matching creation/header envelope
-for Packing, Drivers, Event, Survey and Activity. Features validate their own generated input and select the operation; the
-serializer only encodes an optional `data` part and appends the original optional image bytes. Header operations
-pass no metadata. It neither chooses an endpoint nor changes headers, comparison evidence or file lifetime.
+The browser's `createMultipartForm` in the existing transport owner supplies matching creation, header and invoice
+proof envelopes. Packing, Drivers, Event, Survey and Activity retain its default `image` part; Finance participant
+and organizer submissions explicitly select `proof`. Features validate generated input, require or allow absent
+files, and select their operation. The serializer only encodes an optional `data` part and appends the original
+optional file under the selected part name. Header operations pass no metadata. It neither chooses an endpoint
+nor changes headers, comparison evidence, proof policy or file lifetime.
 The maintainer's [2026-10-15 correction](decisions/DEC-006-FRONTEND-FRAMEWORK.md#maintainer-correction-2026-10-15)
 clarifies that removal of unused implementation did not authorize definition restrictions. Parameter schemas may
 use arrays, objects and unions; response definitions may declare media such as `text/plain`. Generating their
@@ -135,23 +144,30 @@ existing duplication. Distinct feature behavior stays explicit, and an imagined 
 unused abstraction or a general CRUD engine. Shared backend/domain/catalog ownership remains separate and unchanged.
 
 Matching creation/property text fields compose `FormField`, including its textarea variant; pass each existing label,
-icon, constraints, rows and required-marker policy explicitly. An omitted native field name uses `name=null`, distinct
-from the default name derived from its ID. `FileField` composes the same label/control owner and the existing file
+icon, constraints, rows, autocomplete choice and required-marker policy explicitly. An omitted native field name uses
+`name=null`, distinct from the default name derived from its ID. `FileField` composes the same label/control owner and the existing file
 release composable; the feature retains its selected File and command/draft decisions. Rejected or unknown commands
 keep that exact input mounted. Do not copy a chooser merely because its caller creates rather than edits an entity.
 Read-only Packing/Drivers/Survey/Event/Activity descriptions use `EntityDescription` for escaped lines. Lists retain their
 paragraph hook, spacing and optional divider; Event supplies an unnamed ordinary paragraph inside its own labeled
 column. The shared owner does not add wrappers or copy a feature's draft. Survey ballot and result labels share the
 answer appearance mapping while retaining their different wording.
-`FormField` uses Vue's native input directive for composition/caret behavior while emitting the control's DOM string.
-This preserves lexical Event capacity rather than silently adopting the directive's numeric conversion. Explicit
-readonly/class inputs and the label slot preserve existing control presentation and Event's inline deadline hint;
-field constraints and normalization remain with the feature.
-Existing Event numeric/date fields and timezone pickers use the control slot where retaining the original native
-directive or picker preserves coercion, lexical drafts or focus targets. Keep the feature's actual node and constraints;
-the slot does not create another input model. Activity initial-slot text/time/number fields use that same slot so
-every control has an associated visible localized label while its existing model, lexical capacity input and constraints
-stay feature-owned. A placeholder is not an adequate label, particularly for native time and number inputs.
+`FormField` keeps Vue's native input directive by default for composition/caret behavior and deliberately normalized
+numeric consumers. A numeric field with a lexical string draft explicitly opts into `lexicalNumber`: its controlled
+value and input event preserve the entered spelling through change, blur and a sibling render. Emitting a DOM string
+from the default number setter alone does not prevent Vue's separate change-time normalization. Matching lexical
+finance, Event capacity, Activity and creation controls adopt this shared option rather than copy raw inputs.
+The shared attribute owner supplies names, constraints, disabled/read-only state, classes, accessibility labels and
+explicit data hooks to the textarea, ordinary input and lexical-number input. Its input-only adapter adds type,
+minimum, maximum and step. Optional `inputMode`, `groupClass` and the append slot retain numeric hints and
+calculation actions without a second field model. Feature owners still select constraints and normalize only at
+their deliberate submission/comparison boundary; numeric Quick Add retains its separate intentional coercion.
+Use the control slot when a field needs a distinct picker or DOM lifecycle, retaining the feature's actual node,
+constraints and focus target. Standalone fields and Activity's initial text/time/number controls require visible
+localized labels; a placeholder is inadequate. Repeated table fields can take their visible context from column
+headings while retaining an explicit accessible association for each control, including the shared field's
+visually hidden label where that preserves the established row layout. Do not duplicate a visible label in every
+cell merely because the same control also serves standalone forms.
 Matching Bootstrap command/filter buttons use `ActionButton` with their
 existing variant, size, form and disabled policy. Passing only `disabled` retains a native no-spinner workflow; do not
 add pending presentation merely because the shared component supports it. Durable feature warnings use `StatusNotice`,
@@ -217,7 +233,11 @@ changing tabs preserves their independent drafts. Requirements keep lexical form
 context separate from refreshed snapshots. `requirements.ts` calls the existing pure requirements engine for local
 coverage and baseline calculation, and `ActivityParticipants` renders both saved and unsaved progress. Structural
 engine inputs and the shared `RoundingMode` declaration under `src/types/` keep ORM entity imports out of browser
-compilation; this type boundary changes no calculation or database behavior.
+compilation; this type boundary changes no calculation or database behavior. Role and override identifiers stay
+positive decimal strings in generated contracts and drafts. The same `requirementAnalysisInput` argument adapter
+in this existing helper serves both Analyze and Calculate, converting to the unchanged pure engine's numeric IDs;
+returned browser progress restores string IDs. Do not copy the engine, convert IDs in each component or change its
+native/domain declarations merely to match a transport representation.
 Authored fallback names require explicit provenance before a presentation owner replaces missing raw text. Activity's
 versioned callers opt into optional name-origin fields from the existing shared controller reads; native defaults
 keep their established payloads. `activityParticipantName` translates only identified fallbacks or locally identified
@@ -282,7 +302,17 @@ release it. No copied server snapshot or second draft owner is introduced.
 
 Finance's `numbers.ts` owns the shared wheel guard for number inputs in participant submissions, organizer expenses,
 invoice review, factors and signed adjustments. Each form installs it explicitly while keeping lexical strings,
-constraints and conversion-at-submit in its feature owner. The guard releases the focused numeric control before
+constraints and deliberate submit-time encoding in its feature owner. Matching fields use `FormField`'s explicit
+`lexicalNumber` option. `financeDecimal` in that same feature helper expands exponent and leading-zero input spelling
+with character operations before sending plain decimal strings; it retains meaningful precision and never changes
+the mounted draft. Saved money comes from the existing shared `formatInvoiceMoney` presenter, factors use canonical
+four-place strings, and numeric invoice/share identifiers use the generated positive-decimal declaration. Clean
+read-derived factor and correction fields use that same encoding helper without fixed padding to retain their
+former visible numeric spelling; transport padding never normalizes an already mounted dirty draft. Existing
+controller operations retain their Joi normalization and business validation; no parallel decoder or browser
+financial arithmetic is introduced. Changing these wire shapes uses the existing compatibility family and
+update-required recovery so older loaded clients cannot submit incompatible commands; mounted draft guards remain.
+The guard releases the focused numeric control before
 native wheel stepping without changing its value. Filtered factor rows stay mounted; validity reporting reveals an
 invalid row before focusing it. The assignment editor preserves deliberate individual selections and disabled local values;
 only selected assignments contribute factors/exemptions to the submitted body. A released eligible target must
@@ -312,7 +342,10 @@ notifications remain shared without a new backend remedy or generalized comparis
 outputs and unmigrated calculation/settlement/notification commands keep their explicit destinations. Native
 frontend sources, P9–P11, cutover and guide publication retain their separate authorization.
 
-1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
+1. **Identify its actual contract.** Trace the original accepted decision and all applicable dated amendments through
+   their actual callers before treating a requirement as unresolved. Carry existing authorization into the handoff;
+   a generic restatement or reused request identifier does not reopen a resolved choice. Follow page admission,
+   request parsing, controller decisions, DBAL and rendered
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;
    feedback; focus; and hidden/empty/archived states. Peer features are evidence to inspect, not a universal policy.
    Classify every form and link, including shell, parent/context and destructive controls: ordinary migrated
@@ -1083,7 +1116,8 @@ retains the original intended persistence and output-localization choices with t
 After confirmed locale change, cancel/invalidate only named translated query families from the existing query-key
 owner. Machine values, user titles, event options and edit authority retain language-independent keys/in-flight
 reads. Avoid tuple-position matching or another family registry. Translation cannot cancel the fresh post-command
-read restoring metadata/settings authority. `belongsToLocalizedQueryFamily` selects existing Help/Overview families.
+read restoring metadata/settings authority. `belongsToLocalizedQueryFamily` selects the existing Help, Overview and
+translated Event-finance families. Other Event projections remain language-independent.
 
 Help treats the normalized article/search and fragment as its reading visit; locale-only URL changes and Refresh
 do not renew anchor navigation. Router owns both deliberate anchors and saved browser history, waiting for Help's

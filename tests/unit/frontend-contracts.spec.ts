@@ -1,3 +1,4 @@
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {describe, expect, it} from 'vitest';
 import {mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -324,7 +325,7 @@ describe('generated v1 contract boundaries', () => {
     });
 
     it('enforces anonymous session privacy without requiring an active profile for an existing account', () => {
-        const session = {kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context: 'opaque-context', csrfToken: 'opaque-csrf', locale: 'en',
+        const session = {kind: 'anonymous', deployment: {buildId: 'fixture', apiCompatibility}, context: 'opaque-context', csrfToken: 'opaque-csrf', locale: 'en',
             activeProfile: null, profiles: [], loginUrl: '/users/login', logoutUrl: null,
             shell: {version: 'test', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy', localLoginEnabled: true,
                 oidcEnabled: false, oidcName: 'Single sign-on'}};

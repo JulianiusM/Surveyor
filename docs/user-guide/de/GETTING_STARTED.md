@@ -4,20 +4,20 @@ documentation-metadata
 audience: neue Nutzer; Gäste; registrierte Nutzer
 owner: identity feature maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
-source-anchors: src/routes/users.ts; src/controller/userController.ts; src/views/users/; src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+source-anchors: src/routes/users.ts; src/controller/userController.ts; src/views/users/; src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/identity/; src/frontend/components/CommandFeedback.vue; src/locales/
 heading-anchors: 1:getting-started-with-surveyor; 2:find-your-task; 2:choose-how-to-enter-surveyor; 2:create-and-activate-a-local-account; 3:activation-link-problems; 2:sign-in-with-an-organization-account; 2:log-in-to-a-local-account; 3:reset-a-local-password; 2:join-an-invitation-as-a-guest; 3:when-the-email-already-has-guest-accounts; 3:what-a-guest-account-can-do; 2:recover-guest-access-by-email; 2:understand-accounts-and-profiles; 2:edit-the-active-profile; 2:create-or-switch-profiles-on-a-full-account; 3:create-another-profile; 3:switch-profiles; 2:move-a-profile-to-another-full-account; 3:obtain-the-token-from-the-profile-being-moved; 3:complete-the-migration-in-the-receiving-account; 2:deactivate-a-profile-or-delete-an-account; 3:deactivate-one-profile-on-a-full-account; 3:delete-a-full-or-guest-account; 2:troubleshooting; 3:i-do-not-see-local-registration-or-password-fields; 3:local-login-says-the-account-is-not-activated; 3:i-requested-a-password-reset-but-received-no-email; 3:i-requested-guest-access-but-received-no-email; 3:my-overview-does-not-show-the-item-i-expected; 3:a-migration-token-is-rejected; 2:next-steps
 next-review: identity-or-authentication-visible-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
 -->
 
-Diese Anleitung hilft dir, Surveyor zu öffnen, deinen Zugang wiederherzustellen und das Profil zu verwalten, das dich repräsentiert. Übersetzte Ansichten verwenden die deutschen Beschriftungen. Die englische Entsprechung steht bei der ersten Verwendung dabei, wenn noch englische Ansichten dieselbe Aktion anbieten. E-Mail-Betreffzeilen und Schaltflächen noch englischer Profilformulare sind mit ihrer tatsächlichen Beschriftung angegeben.
+Diese Anleitung hilft dir, Surveyor zu öffnen, deinen Zugang wiederherzustellen und das Profil zu verwalten, das dich repräsentiert. Die Beschriftungen entsprechen der deutschen Ansicht; englische E-Mail-Betreffzeilen und Schaltflächen in E-Mails bleiben zur Wiedererkennung angegeben.
 
 Surveyor-E-Mails beginnen mit einer Anrede mit deinem Konto- oder Profilnamen. Auch im Empfängerfeld steht dieser Name neben deiner E-Mail-Adresse. Eine E-Mail zur Gastwiederherstellung kann mehrere Gastidentitäten derselben Adresse nennen.
 
-Erfolgs-, Fehler- und Informationsmeldungen verschwinden nach zehn Sekunden. Hinweise auf laufende Aktionen, notwendige Anmeldungen oder andere fortbestehende Zustände bleiben sichtbar, solange sie relevant sind. Warte auf die Speicherbestätigung, bevor du eine noch laufende Aktion wiederholst.
+Kurze Aktionsmeldungen verschwinden nach zehn Sekunden und können vorher geschlossen werden. Hinweise auf ungültige Eingaben, Prüfungen, Wiederherstellung, notwendige Anmeldungen oder laufende Aktionen bleiben sichtbar, solange sie relevant sind. Warte auf die Speicherbestätigung, bevor du eine noch laufende Aktion wiederholst.
 
 ## Deine Aufgabe finden
 
@@ -39,7 +39,7 @@ Eine Surveyor-Installation kann eine oder beide Anmeldemethoden für vollständi
 | Methode | Das verwendest du | Einrichtung beim ersten Mal |
 |---|---|---|
 | Lokales Konto | Surveyor-Benutzername oder E-Mail-Adresse und Passwort | Registrieren, Konto per E-Mail aktivieren, dann anmelden. |
-| Organisationsanmeldung | **Mit _Anbietername_ anmelden** (englisch **Login using _Anbietername_**) oder automatische Weiterleitung zum Anbieter | Beim Anbieter anmelden; Surveyor erstellt oder verknüpft ein vollständiges Konto. |
+| Organisationsanmeldung | **Mit _Anbietername_ anmelden** oder automatische Weiterleitung zum Anbieter | Beim Anbieter anmelden; Surveyor erstellt oder verknüpft ein vollständiges Konto. |
 
 Du kannst einer Einladung auch als **Gast** folgen. Gäste setzen kein Passwort und besitzen ein Gastprofil. Sie erhalten einen privaten Zugangslink und können über **Deine Übersicht** zu den Einträgen dieses Profils zurückkehren.
 
@@ -51,14 +51,14 @@ Diese Schritte gelten, wenn **Registrieren** Felder für Benutzername, E-Mail un
 
 1. Wähle **Registrieren** in der oberen Navigation.
 2. Fülle das Formular aus:
-   - **Benutzername** (englisch **Username**): eindeutiger Benutzername für die lokale Anmeldung.
-   - **Anzeigename** (englisch **Display name**): erster Name, den andere Teilnehmer sehen.
-   - **E-Mail** (englisch **E-mail**): für Aktivierung und Passwortwiederherstellung.
-   - **Passwort** (englisch **Password**) und **Passwort wiederholen** (englisch **Repeat password**): Passwort und Wiederholung.
+   - **Benutzername**: eindeutiger Benutzername für die lokale Anmeldung.
+   - **Anzeigename**: erster Name, den andere Teilnehmer sehen.
+   - **E-Mail**: für Aktivierung und Passwortwiederherstellung.
+   - **Passwort** und **Passwort wiederholen**: Passwort und Wiederholung.
 3. Verwende mindestens 8 Zeichen, mindestens einen Buchstaben und mindestens eine Ziffer.
-4. Prüfe, ob beide Passwörter übereinstimmen, und wähle **Registrieren** (englisch **Register**).
+4. Prüfe, ob beide Passwörter übereinstimmen, und wähle **Registrieren**.
 5. Öffne die E-Mail mit dem Betreff **Activate your account** und wähle innerhalb einer Stunde **Activate account**.
-6. Wenn Surveyor **Anmelden** (englisch **Login**) öffnet, gib unter **Benutzername oder E-Mail** (englisch **Username or email**) Benutzername oder E-Mail sowie das Passwort ein und wähle **Anmelden**.
+6. Wenn Surveyor **Anmelden** öffnet, gib unter **Benutzername oder E-Mail** Benutzername oder E-Mail sowie das Passwort ein und wähle **Anmelden**.
 
 Die Registrierung meldet dich nicht an. Vor der ersten lokalen Anmeldung musst du das Konto aktivieren.
 
@@ -81,7 +81,7 @@ Diese Schritte gelten, wenn Surveyor **Mit _Anbietername_ anmelden** zeigt oder 
 
 Die erste erfolgreiche Anmeldung beim Anbieter erstellt ein aktives Surveyor-Konto und Profil, falls noch keines vorhanden ist. Liefert der Anbieter eine E-Mail-Adresse, die bereits ein Surveyor-Konto verwendet, kann Surveyor die Anbieteridentität stattdessen mit diesem Konto verbinden.
 
-Die Zugangsdaten dieser Methode verwaltet der externe Anbieter. Nutze dessen Kontowiederherstellung statt **Passwort vergessen?** (englisch **Forgot password?**) in Surveyor.
+Die Zugangsdaten dieser Methode verwaltet der externe Anbieter. Nutze dessen Kontowiederherstellung statt **Passwort vergessen?** in Surveyor.
 
 ## Bei einem lokalen Konto anmelden
 
@@ -95,10 +95,10 @@ Surveyor öffnet **Deine Übersicht** und aktiviert das Standardprofil des Konto
 ### Lokales Passwort zurücksetzen
 
 1. Wähle auf **Anmelden** den Link **Passwort vergessen?**.
-2. Gib unter **Benutzername oder E-Mail** (englisch **Username or Email**) Benutzername oder E-Mail-Adresse des Kontos ein.
-3. Wähle **Link zum Zurücksetzen senden** (englisch **Send reset link**).
+2. Gib unter **Benutzername oder E-Mail** Benutzername oder E-Mail-Adresse des Kontos ein.
+3. Wähle **Link zum Zurücksetzen senden**.
 4. Öffne die E-Mail mit dem Betreff **Reset your password** und wähle innerhalb einer Stunde **Reset password**.
-5. Gib das neue Passwort zweimal ein und wähle **Passwort ändern** (englisch **Change password**).
+5. Gib das neue Passwort zweimal ein und wähle **Passwort ändern**.
 
 Das neue Passwort braucht mindestens 8 Zeichen, mindestens einen Buchstaben und mindestens eine Ziffer. Beide Eingaben müssen übereinstimmen.
 
@@ -109,14 +109,14 @@ Aus Datenschutzgründen zeigt Surveyor dieselbe Bestätigung, unabhängig davon,
 Gastzugang ist hilfreich, wenn du teilnehmen möchtest, ohne ein vollständiges Konto zu erstellen.
 
 1. Öffne den Einladungslink des Organisators.
-2. Wähle auf **Bei „…“ mitmachen** (englisch **Join «…»**) gegebenenfalls einen vorhandenen Kontoweg:
-   - **Anmelden** (englisch **Log in**) für ein vollständiges Konto;
-   - **Gastkonto wiederherstellen** (englisch **Recover guest account**) für eine bestehende Gastidentität; oder
-   - **Konto erstellen** (englisch **Create account**) für ein neues vollständiges Konto.
+2. Wähle auf **Bei „…“ mitmachen** gegebenenfalls einen vorhandenen Kontoweg:
+   - **Anmelden** für ein vollständiges Konto;
+   - **Gastkonto wiederherstellen** für eine bestehende Gastidentität; oder
+   - **Konto erstellen** für ein neues vollständiges Konto.
 3. Fahre zum Gastformular fort, wenn du eine separate Gastidentität erstellen möchtest.
-4. Gib einen **Anzeigename** ein. Diesen Namen sehen andere Teilnehmer zunächst.
+4. Gib im Feld **Anzeigename** deinen Namen ein. Diesen Namen sehen andere Teilnehmer zunächst.
 5. Gib möglichst eine E-Mail-Adresse an. Sie ist optional, ermöglicht aber die Wiederherstellung dieses Gastkontos.
-6. Wähle **Als Gast fortfahren** (englisch **Continue as guest**).
+6. Wähle **Als Gast fortfahren**.
 
 Surveyor meldet dich beim neuen Gastkonto an und öffnet den eingeladenen Eintrag. Außerdem erstellt es einen privaten Zugangslink. Wenn du eine E-Mail-Adresse angegeben hast, wird der Link auch dorthin geschickt.
 
@@ -124,10 +124,10 @@ Halte den privaten Link geheim. Wer ihn verwenden kann, kann dieses Gastkonto be
 
 ### Wenn die E-Mail-Adresse schon Gastkonten hat
 
-Erkennt Surveyor die eingegebene Adresse, kann **Gastkonto gefunden!** (englisch **Guest account found!**) erscheinen. Wähle:
+Erkennt Surveyor die eingegebene Adresse, kann **Gastkonto gefunden!** erscheinen. Wähle:
 
 - **Gastkonto wiederherstellen**, um die vorhandenen Gastlinks zu erhalten; oder
-- **Als neuer Gast fortfahren** (englisch **Continue as new guest**), um ein weiteres eigenständiges Gastkonto zu erstellen.
+- **Als neuer Gast fortfahren**, um ein weiteres eigenständiges Gastkonto zu erstellen.
 
 Eine E-Mail-Adresse kann mehreren Gastkonten zugeordnet sein. Jeder private Link öffnet genau ein bestimmtes Gastkonto und Profil.
 
@@ -148,9 +148,9 @@ Gäste können keine neuen Umfragen, Veranstaltungen, Listen oder Pläne erstell
 Die Wiederherstellung per E-Mail funktioniert nur für Gastkonten, die mit einer E-Mail-Adresse erstellt wurden.
 
 1. Wähle **Anmelden**.
-2. Suche **Suchst du dein Gastkonto?** (englisch **Looking for your guest account?**).
+2. Suche **Suchst du dein Gastkonto?**.
 3. Gib die bei der Gastregistrierung verwendete E-Mail-Adresse ein.
-4. Wähle **Zugang anfordern** (englisch **Request access**).
+4. Wähle **Zugang anfordern**.
 5. Öffne die E-Mail mit dem Betreff **Your guest accounts**.
 6. Wähle **Open _Gastname_** für das gewünschte Konto.
 
@@ -175,9 +175,9 @@ Der Benutzername eines lokalen Kontos ist nicht der Profilname. Die Umbenennung 
 
 1. Öffne das Benutzermenü mit dem aktuellen Profilnamen.
 2. Wähle **Profileinstellungen**.
-3. Ändere bei Bedarf **Profile name**.
-4. Wähle bei einem vollständigen Konto **Default profile**, wenn dieses Profil bei der Anmeldung automatisch aktiv werden soll.
-5. Wähle **Submit changes**.
+3. Ändere bei Bedarf **Profilname**.
+4. Wähle bei einem vollständigen Konto **Standardprofil**, wenn dieses Profil bei der Anmeldung automatisch aktiv werden soll.
+5. Wähle **Änderungen speichern**.
 
 Die Auswahl eines Standardprofils hebt das bisherige Standardprofil desselben Kontos auf. Ist keines markiert, wählt Surveyor bei der nächsten Anmeldung das älteste Profil.
 
@@ -188,15 +188,15 @@ Mehrere Profile sind nützlich, wenn eine Anmeldung unterschiedliche Menschen re
 ### Ein weiteres Profil erstellen
 
 1. Öffne im Benutzermenü **Deine Profile**.
-2. Wähle **Create new profile**.
-3. Gib den **Profile name** ein.
-4. Wähle **Create new profile**.
-5. Kehre zu **Deine Profile** zurück und wähle beim gewünschten Profil **Switch to profile**.
+2. Wähle **Neues Profil erstellen**.
+3. Gib im Feld **Profilname** den gewünschten Namen ein.
+4. Wähle **Neues Profil erstellen**.
+5. Kehre zu **Deine Profile** zurück und wähle beim gewünschten Profil **Zu diesem Profil wechseln**.
 
 ### Profile wechseln
 
 1. Öffne im Benutzermenü **Deine Profile**.
-2. Wähle neben der gewünschten Identität **Switch to profile**.
+2. Wähle neben der gewünschten Identität **Zu diesem Profil wechseln**.
 
 In der deutschen Navigation kannst du das Profil auch direkt unter **Deine Profile** über **Profil auswählen** wechseln. Bestätige den Wechsel und entscheide vorher, ob du noch ungespeicherte Änderungen speichern oder verwerfen möchtest.
 
@@ -211,7 +211,7 @@ Eine Profilübertragung erhält das Profil einschließlich seiner bisherigen Tei
 1. Melde dich beim Gastkonto oder vollständigen Konto an, das das Profil derzeit steuert.
 2. Aktiviere dieses Profil.
 3. Öffne **Profileinstellungen**.
-4. Wähle **Show profile migration token**.
+4. Wähle **Token zur Profilübertragung anzeigen**.
 5. Kopiere das Token und halte es geheim.
 
 Das Token gewährt Kontrolle über das Profil und gilt 24 Stunden. Ein neu erzeugtes Token ersetzt das vorherige. Teile es nur mit dem vorgesehenen Empfängerkonto.
@@ -221,11 +221,11 @@ Das Token gewährt Kontrolle über das Profil und gilt 24 Stunden. Ein neu erzeu
 1. Melde dich vom bisherigen Konto ab.
 2. Melde dich beim vollständigen Konto an, das das Profil erhalten soll.
 3. Öffne im Benutzermenü **Deine Profile**.
-4. Wähle **Migrate profile to account**.
-5. Füge das Token ein und wähle **Show migration profile**.
+4. Wähle **Profil zum Konto übertragen**.
+5. Füge das Token ein und wähle **Zu übertragendes Profil anzeigen**.
 6. Prüfe das angezeigte Profil und seinen derzeitigen Eigentümer.
-7. Wähle **Permanently migrate profile**.
-8. Wähle unter **Deine Profile** **Switch to profile**, sobald du die übertragene Identität verwenden möchtest.
+7. Wähle **Profil dauerhaft übertragen**.
+8. Wähle unter **Deine Profile** **Zu diesem Profil wechseln**, sobald du die übertragene Identität verwenden möchtest.
 
 Die Übertragung entfernt das Profil vom bisherigen Eigentümer. Surveyor schließt ein bisheriges Gastkonto nach der Übertragung seines Profils. Auch ein bisheriges vollständiges Konto wird geschlossen, wenn dies sein letztes Profil war. Ist eine E-Mail-Adresse vorhanden, verschickt Surveyor eine Übertragungsbenachrichtigung und gegebenenfalls eine Nachricht zur Kontoschließung.
 
@@ -239,9 +239,9 @@ Diese Aktionen sind endgültig. Bisherige Teilnahmen können in gemeinsamen Eint
 
 1. Aktiviere das Profil.
 2. Öffne **Profileinstellungen**.
-3. Wähle **Delete profile**.
-4. Gib den im Bestätigungsformular verlangten **Profile name** exakt ein.
-5. Wähle **Permanently deactivate profile**.
+3. Wähle **Profil löschen**.
+4. Gib den im Bestätigungsformular verlangten **Profilname** exakt ein.
+5. Wähle **Profil dauerhaft deaktivieren**.
 
 Das Profil wird vom Konto gelöst; du kannst es nicht mehr für den Zugriff auf seine Einträge verwenden. Andere Profile des vollständigen Kontos bleiben verfügbar. Die Deaktivierung des letzten Profils schließt auch das vollständige Konto. Verwende stattdessen die Übertragung, wenn ein anderes Konto das Profil und seinen Zugang behalten soll.
 
@@ -252,7 +252,7 @@ Ein Gastkonto enthält nur ein Profil und verwendet diesen Mehrprofil-Deaktivier
 1. Öffne das Benutzermenü.
 2. Wähle **Konto löschen**.
 3. Gib den im Bestätigungsformular geforderten Surveyor-**Benutzername** ein. Beim lokalen Konto ist dies der Anmeldebenutzername. Bei einem Gastkonto ist es der ursprüngliche Anzeigename bei der Gasterstellung, nicht ein später geänderter Profilname.
-4. Wähle **Permanently delete account**.
+4. Wähle **Konto dauerhaft löschen**.
 
 Das Löschen eines vollständigen Kontos schließt es und deaktiviert alle zugehörigen Profile. Das Löschen eines Gastkontos schließt diese Gastidentität und deaktiviert ihr einziges Profil. Surveyor kann dies nicht rückgängig machen. Bisherige Teilnahmen können sichtbar bleiben, soweit gemeinsame Gruppendatensätze sie benötigen.
 

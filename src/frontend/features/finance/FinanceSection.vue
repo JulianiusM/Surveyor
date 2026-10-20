@@ -446,7 +446,7 @@ function revealHistory(): void { submissionOpen.value = true; }
             :admin="admin"
             @close="selectedShareId = null"
         />
-        <AppDialog
+        <AppDialog content-class="text-white finance-dialog"
             v-if="retraction"
             open
             :title="messages.t('finance.retractInvoice')"

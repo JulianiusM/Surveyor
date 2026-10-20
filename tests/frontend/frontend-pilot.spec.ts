@@ -1,3 +1,4 @@
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {MetadataDraft} from '../../src/frontend/composables/metadataDraft';
 import {readPacked, writePacked} from '../../src/frontend/features/packing/packed';
@@ -27,7 +28,7 @@ function metadata(values: components['schemas']['PackingMetadata']['values'] = {
         currentEventId: null, archived: false, inheritedArchived: false};
 }
 function session(context = scope.context, locale = 'en'): components['schemas']['SessionView'] & {context: string; csrfToken: string} {
-    return {kind: 'account', deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, context, csrfToken: scope.csrfToken, locale,
+    return {kind: 'account', deployment: {buildId: 'fixture', apiCompatibility}, context, csrfToken: scope.csrfToken, locale,
         activeProfile: {id: itemId, name: 'A profile'}, profiles: [{id: itemId, name: 'A profile'}],
         loginUrl: '/users/login', logoutUrl: '/users/logout', shell: {version: 'fixture', imprintUrl: '/imprint',
             privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'Identity provider'}};
@@ -117,7 +118,7 @@ describe('sessionless initial frontend scope', () => {
         const request = send.mock.calls[0]?.[0] as Request | undefined;
         expect(request?.headers.has('X-Surveyor-Context')).toBe(false);
         expect(request?.headers.has('X-CSRF-Token')).toBe(false);
-        expect(request?.headers.get('X-Surveyor-Api-Compatibility')).toBe('v1-pilot-2026-10-07');
+        expect(request?.headers.get('X-Surveyor-Api-Compatibility')).toBe(apiCompatibility);
         expect(send).toHaveBeenCalledOnce();
     });
 

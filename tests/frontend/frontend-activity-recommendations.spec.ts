@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
 import {defineComponent, shallowRef} from 'vue';
@@ -23,7 +24,7 @@ const jobId = '66666666-6666-4666-8666-666666666666';
 const nextId = '77777777-7777-4777-8777-777777777777';
 const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
     kind: 'account', context: 'activity-review-context-1234567890', csrfToken: 'activity-review-csrf-1234567890', locale: 'en',
-    deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'}, activeProfile: {id: profileId, name: 'Alex'},
+    deployment: {buildId: 'fixture', apiCompatibility}, activeProfile: {id: profileId, name: 'Alex'},
     profiles: [{id: profileId, name: 'Alex'}], loginUrl: '/users/login', logoutUrl: '/users/logout',
     shell: {version: 'test', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'SSO'},
 };

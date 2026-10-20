@@ -4,13 +4,14 @@ import {readFileSync} from 'node:fs';
 import type {components} from '../../src/types/api/v1';
 import {createE2EDriversList, createE2ELogin} from '../factories/e2eCoreFactory';
 import {closeModalForE2E, createResourceViaForm, expectVisiblePresentation, loginForE2E, readVisiblePresentation,
-    withProfileWorkflowFixtureForE2E} from '../keywords/e2eCoreKeywords';
+    withProfileWorkflowFixtureForE2E, dismissFrontendSuccessNotifications, expectUsableFrontendLayout} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {createFrontendEventFixture, frontendEventHeaders as apiHeaders} from '../keywords/frontendEventE2EKeywords';
 import {captureDriversSettingsPresentation, createDriversSettingsFixture, exerciseDriversAdministratorForE2E, expectDriversSettingsPresentation,
     observeDriversSettingsCommand, openDriversSettingsForE2E, readDriversSettingsForE2E,
     selectDriversSettingsSurface} from '../keywords/frontendDriversE2EKeywords';
 import {PERM} from '../../src/modules/lib/permissions';
+import {createTranslator} from '../../src/modules/localization/translator';
 
 type DriversView = components['schemas']['DriversListView'];
 
@@ -118,6 +119,76 @@ for (const width of [1280, 390]) {
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
             expect(await table.locator('thead').innerText()).not.toMatch(/Packed|Everyone/u);
         }
+        expect(errors).toEqual([]);
+    });
+}
+
+for (const width of [320, 390, 1280]) {
+    test(`creates, joins and edits German Drivers through readable shared controls at ${width}px`, async ({page}, info) => {
+        test.setTimeout(90_000);
+        const messages = createTranslator('de');
+        const errors: string[] = [];
+        page.on('pageerror', error => errors.push(error.message));
+        await loginForE2E(page.request, createE2ELogin());
+        await page.setViewportSize({width, height: 900});
+        await page.goto('/frontend-pilot/drivers/create?locale=de', {waitUntil: 'domcontentloaded'});
+        await waitForPilotHydration(page);
+        await expect(page.getByRole('heading', {name: messages.t('drivers.create'), exact: true})).toBeVisible();
+        const creation = page.locator('main form').first();
+        await expectUsableFrontendLayout(creation);
+        const title = `Deutsche Fahrten ${randomUUID().slice(0, 8)}`;
+        await creation.locator('#create-title').fill(title);
+        await creation.locator('#create-description').fill('Gemeinsame Anreise zum See');
+        const documentTime = await page.evaluate(() => performance.timeOrigin);
+        await creation.getByRole('button', {name: messages.t('packing.createList'), exact: true}).click();
+        await expect(page).toHaveURL(/\/frontend-pilot\/drivers\/[a-f0-9-]+(?:\?.*)?$/u);
+        const listId = new URL(page.url()).pathname.split('/').at(-1)!;
+        await expect(page.getByRole('heading', {name: title, exact: true})).toBeVisible();
+        await dismissFrontendSuccessNotifications(page);
+
+        // The shared Quick Add is intentionally numeric. Its actual change
+        // lifecycle must keep normalization even after lexical fields are fixed.
+        const quick = page.locator('form:has(input[readonly])');
+        await expectUsableFrontendLayout(quick);
+        await quick.locator('#quick-description').fill('Abfahrt am Hauptbahnhof');
+        const capacity = quick.locator('#quick-max');
+        await capacity.fill('003');
+        await quick.locator('#quick-description').focus();
+        await expect(capacity).toHaveValue('3');
+        await command(page, listId, '/items', 'POST',
+            () => quick.getByRole('button', {name: messages.t('packing.add'), exact: true}).click(), 201);
+        const ride = (await readDrivers(page.request, listId)).items[0]!;
+        expect(ride).toMatchObject({description: 'Abfahrt am Hauptbahnhof', maxAssignees: 3});
+        await dismissFrontendSuccessNotifications(page);
+        const row = page.locator(`tr[data-item-id="${ride.id}"]`);
+        await command(page, listId, `/items/${ride.id}/self-assignment`, 'PUT',
+            () => row.getByRole('button', {name: messages.t('drivers.take'), exact: true}).click());
+        await expect(row.locator('td').nth(3)).toHaveText('1 / 3');
+        await dismissFrontendSuccessNotifications(page);
+        await row.locator('td').nth(1).dblclick();
+        const description = row.getByRole('textbox', {name: messages.t('packing.description'), exact: true});
+        await description.fill('Neue Abfahrt am Südeingang');
+        await command(page, listId, `/items/${ride.id}`, 'PATCH', () => description.press('Enter'));
+        await expect(row.locator('td').nth(1)).toHaveText('Neue Abfahrt am Südeingang');
+        await dismissFrontendSuccessNotifications(page);
+
+        // Settings use the same translated metadata and dialog owners as the
+        // other lists. Saving them keeps this document and its ride intact.
+        await page.getByRole('button', {name: messages.t('packing.edit'), exact: true}).click();
+        const settings = page.getByRole('dialog');
+        await expect(settings.getByRole('tab', {name: messages.t('packing.general'), exact: true})).toBeVisible();
+        await expectUsableFrontendLayout(settings);
+        await settings.locator('[name="description"]').fill('Treffpunkt vor dem Bahnhof');
+        await command(page, listId, '/metadata', 'PATCH',
+            () => settings.getByRole('button', {name: messages.t('packing.saveProperties'), exact: true}).click());
+        await dismissFrontendSuccessNotifications(page);
+        await settings.getByRole('button', {name: messages.t('common.close'), exact: true}).last().click();
+        await page.getByRole('button', {name: messages.t('common.refresh'), exact: true}).click();
+        await expect(page.locator('main')).toContainText('Treffpunkt vor dem Bahnhof');
+        expect((await readDrivers(page.request, listId)).items[0]!.selfAssigned).toBe(true);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+        expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentTime);
+        await page.screenshot({path: info.outputPath(`german-drivers-${width}.png`), fullPage: true, animations: 'disabled'});
         expect(errors).toEqual([]);
     });
 }

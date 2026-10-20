@@ -4,7 +4,7 @@ import type {components} from '../../../types/api/v1';
 import {useActionState, usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
-import {protectFinanceNumberFromScroll} from './numbers';
+import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
 import FinanceEnrollmentFields from './FinanceEnrollmentFields.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
@@ -59,9 +59,11 @@ function receiveSaved(): void {
 /** Copy one admitted participant's saved input into a lexical local row. */
 function participantDraft(person: typeof props.participants[number]) {
     // An absent explicit assignment retains the existing factor-one default.
+    // Wire precision does not add trailing zeroes to this clean native-like form;
+    // live lexical input is retained separately until this editor releases it.
     const assignment = props.pool.assignments?.find(row => row.registrationId === person.id);
     return {...person, selected: props.pool.assignAll || !!assignment,
-        factor: String(assignment?.factor ?? 1), exempt: assignment?.isExempt ?? false};
+        factor: financeDecimal(assignment?.factor ?? '1'), exempt: assignment?.isExempt ?? false};
 }
 
 /** Adopt saved fields only while clean. A sibling save, polling or locale read
@@ -92,10 +94,6 @@ function restoreSaved(): void {
     dirty.value = false;
 }
 function markDirty(): void { dirty.value = true; }
-function setFactor(row: typeof draft.rows[number], event: Event): void {
-    row.factor = (event.target as HTMLInputElement).value;
-    dirty.value = true;
-}
 /** Assign-all changes the rendered selection without replacing the remembered
  * individual draft. Switching it off restores those deliberate selections. */
 function toggleAll(value: boolean): void {
@@ -131,8 +129,8 @@ async function save(event: Event): Promise<void> {
     if (!action.isAvailable() || !(event.target as HTMLFormElement).reportValidity()) return;
     const selected = draft.rows.filter(row => draft.assignAll || row.selected);
     const input = {assignAll: draft.assignAll, isDefault: draft.isDefault, subtractPersonalInvoices: draft.subtractPersonalInvoices,
-        registrations: selected.map(row => Number(row.id)), exemptions: selected.filter(row => row.exempt).map(row => Number(row.id)),
-        participantFactors: Object.fromEntries(selected.map(row => [row.id, Number(row.factor)]))};
+        registrations: selected.map(row => row.id), exemptions: selected.filter(row => row.exempt).map(row => row.id),
+        participantFactors: Object.fromEntries(selected.map(row => [row.id, financeDecimal(row.factor, 4)]))};
     // This input save leaves a closed pool's saved shares and payments intact.
     const saved = await command.run(scope => api.assignments(props.eventId, props.pool.id, input, scope), true, false,
         {success: props.pool.status === 'CLOSED' ? 'finance.participantsAndFactorsSavedClosed' : 'finance.participantsAndFactorsSaved'});
@@ -164,7 +162,7 @@ function close(): void {
 </script>
 
 <template>
-    <AppDialog :open="open" :title="messages.t('finance.participantsFactors')" :subtitle="pool.name" standard
+    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t('finance.participantsFactors')" :subtitle="pool.name" standard
                :pending="command.pending.value || command.recovering.value" @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refresh" />
@@ -202,12 +200,11 @@ function close(): void {
                                 <small class="text-secondary">{{ row.email }}</small>
                             </label>
                         </div>
-                        <FormField :id="`${id}-factor-${row.id}`" class="pool-factor-field" label-class="small mb-1" :label="messages.t('finance.shareFactor')" :required-marker="false">
-                            <template #control>
-                                <input :id="`${id}-factor-${row.id}`" :value="row.factor" type="number" class="form-control form-control-sm text-bg-dark"
-                                       min="0" max="1000" step="0.0001" required :disabled="!draft.assignAll && !row.selected" :aria-describedby="`${id}-factor-help`" @input="setFactor(row, $event)" />
-                            </template>
-                        </FormField>
+                        <FormField :id="`${id}-factor-${row.id}`" v-model="row.factor" :name="null" type="number" lexical-number
+                            input-mode="decimal" min="0" max="1000" step="0.0001" required :disabled="!draft.assignAll && !row.selected"
+                            class="pool-factor-field" control-class="form-control-sm" label-class="small mb-1"
+                            :label="messages.t('finance.shareFactor')" :required-marker="false" :described-by="`${id}-factor-help`"
+                            @update:model-value="markDirty" />
                         <div class="form-check form-switch mb-0">
                             <input :id="`${id}-exempt-${row.id}`" v-model="row.exempt" class="form-check-input" type="checkbox" :disabled="!draft.assignAll && !row.selected" @change="markDirty" />
                             <label :for="`${id}-exempt-${row.id}`" class="form-check-label">{{ messages.t('finance.exempt') }}</label>

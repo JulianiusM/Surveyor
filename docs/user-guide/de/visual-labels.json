@@ -21,16 +21,16 @@
   "survey": {
     "title": "Ein Muster wählen, das sich monatlich wiederholt",
     "intro": "Umfragen stimmen wiederkehrende Wochentagspositionen ab.",
-    "firstHeading": "Neue Kombination hinzufügen",
+    "firstHeading": "{{surveyheading}}",
     "fields": [
-      {"label": "Wochentag — Feld „Weekday“", "value": "Monday", "meaning": "Montag"},
-      {"label": "Monatsposition — Feld „Day in month“", "value": "1. day in month", "meaning": "Erstes Vorkommen im Monat"}
+      {"label": "{{surveyweekday}}:", "value": "{{surveymonday}}", "meaning": ""},
+      {"label": "{{surveyday}}:", "value": "{{surveyfirst}}", "meaning": "Erstes Vorkommen im Monat"}
     ],
-    "instruction": "Die Werte auswählen und Add (Hinzufügen) wählen.",
+    "instruction": "Die Werte auswählen und {{surveyadd}} wählen.",
     "recurrenceHeading": "Erster Montag in jedem Monat",
     "recurrenceBody": "Die Wochentagsposition bleibt gleich; das Kalenderdatum ändert sich.",
     "months": ["Monat 1 → erster Montag", "Monat 2 → erster Montag", "Monat 3 → erster Montag"],
-    "answer": "Jedes Muster mit Yes (Ja), Maybe (Vielleicht) oder No (Nein) beantworten.",
+    "answer": "Jedes Muster mit {{surveyyes}}, {{surveymaybe}} oder {{surveyno}} beantworten.",
     "foot": ["Ein einzelner benannter Monat ist ein zusätzlicher Anwendungsfall.", "Die Umfrage speichert ein Muster, kein bestimmtes Kalenderdatum."]
   },
   "packing": {

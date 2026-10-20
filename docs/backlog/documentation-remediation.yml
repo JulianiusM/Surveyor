@@ -2096,7 +2096,8 @@ implementation_defects:
       - Focused persistence coverage protects independent moves, both true swap legs, payload ordering and repeated
         slot directions without silently broadening native or versioned behavior.
   - id: IMP-084
-    status: open
+    status: closed
+    closed_on: 2026-10-20
     discovered_on: 2026-10-20
     severity: low
     owner: frontend migration maintainers
@@ -2104,23 +2105,50 @@ implementation_defects:
     out_of_scope_for_documentation_migration: true
     title: Shared Vue number controls rewrite displayed lexical drafts on change
     evidence:
-      - FormField.vue's default number control uses Vue v-model. Its setter reads the DOM string, but the installed
+      - The original FormField.vue default number control used Vue v-model. Its setter read the DOM string, but the installed
         runtime-dom number directive separately normalizes the displayed value on change.
       - P7's real built invoice workflow reproduced 013.50 becoming 13.5 on blur while the unchanged native number
-        input retained 013.50. The P7 control now uses FormField's existing control slot and preserves that spelling.
-      - EventFields creation/properties and ActivitySlotEditor still use the default numeric control. Their similar
-        display risk is inferred from source rather than a separately executed browser reproduction.
+        input retained 013.50. At that stage, the P7 correction used FormField's existing control slot to preserve
+        that spelling; the full-pilot correction below subsequently adopts the shared lexical-number branch.
+      - At discovery, EventFields creation/properties and ActivitySlotEditor also used the default numeric control.
+        That original cross-consumer risk was inferred from source rather than a separate browser reproduction.
     impact: A visitor can see a normalized amount or count while the feature still owns its original string draft;
       a later render can restore the earlier spelling. No changed persisted numeric value is established.
     documentation_contract: Controls with a lexical draft contract retain its entered spelling until the feature's
       deliberate normalization or confirmed completion.
-    disposition: P7's participant amount is corrected and verified within its authorized implementation. Reviewing
-      and correcting other consumers is separate work; intentionally numeric controls and existing raw-control
-      adapters must retain their established behavior. No shared-control or unrelated feature change is authorized here.
-    closes_when:
-      - A focused browser reproduction establishes the affected remaining lexical consumers and blur/render behavior.
-      - A separately authorized correction is adopted through the matching shared owner and all affected consumers.
-      - Meaningful coverage protects exact lexical drafts without changing intentionally normalized numeric inputs.
+    disposition: P7 originally corrected only its participant amount. The maintainer's subsequent full-pilot
+      correction on 2026-10-20 explicitly includes the shared owner and equivalent migrated consumers. FormField now
+      supplies an explicit lexical-number path adopted by Finance, Event, Activity and Packing creation fields;
+      default/Quick Add numeric normalization retains its established behavior. Independent source review and actual
+      built workflows verify Finance spelling, Event 005 through blur and sibling/metadata changes, Activity 003 and
+      Packing retained initial input. Matching desktop/mobile Packing comparisons pass after the final browser-restoration
+      attribute correction. The current pilot review records their finite execution and original-image evidence;
+      no equivalent migrated consumer is deferred.
+  - id: IMP-085
+    status: open
+    discovered_on: 2026-10-20
+    severity: low
+    owner: native frontend maintainers
+    package: native-survey-ballot
+    out_of_scope_for_documentation_migration: true
+    title: Selected Survey answer labels paint over sticky participant names
+    evidence:
+      - Native src/public/style/style.sass gives the shared sticky column z-index 1. Checked or focused Bootstrap
+        answer labels share that paint level and can appear above the earlier participant-name cell.
+      - Fresh native scrolled ballot originals at 390px and 1280px visibly show a selected No label covering part
+        of the participant name. The initial Vue copy reproduces the same defect in English and German.
+      - This is distinct from IMP-075 whole-document horizontal movement; local table scrolling alone does not
+        establish readable sticky text.
+    impact: Horizontal ballot scrolling can obscure the profile name identifying whose answers are being edited.
+    authorization: The existing R4/R6 interface decisions and full-pilot correction authorize readable migrated
+      controls. The reaffirmed R1 native-isolation decision preserves the unchanged native frontend as a reference.
+    documentation_contract: Sticky participant identity remains readable while answer columns scroll and selected
+      or focused answer controls retain their usable labels and keyboard interaction.
+    disposition: The existing Vue shared sticky-column style now layers participant cells above answer labels in
+      both Survey consumers. Actual built 1280px/390px English/German scroll journeys pass participant-glyph hit
+      checks and final-choice keyboard interaction; independent review of all 66 final Survey originals confirms
+      the corrected Vue name remains unobscured. This entry retains only the unchanged native defect, whose
+      repair remains outside the native-isolation decision. The pilot review owns the scoped execution evidence.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed

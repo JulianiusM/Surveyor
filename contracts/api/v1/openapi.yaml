@@ -1,5 +1,5 @@
 openapi: 3.1.1
-x-surveyor-api-compatibility: v1-pilot-2026-10-07
+x-surveyor-api-compatibility: v1-pilot-2026-10-20-decimal-contracts
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Surveyor API

@@ -372,7 +372,11 @@ test('retains schedule filters across assignments, edits shared text and slot de
     const slotDialog = page.getByRole('dialog').filter({has: page.locator('#slotEditorForm')});
     await slotDialog.locator('#slotEditorTitleInput').fill('Breakfast duty updated');
     await slotDialog.locator('#slotEditorDescription').fill('Set up the buffet');
-    await slotDialog.locator('#slotEditorCapacity').fill('3');
+    await slotDialog.locator('#slotEditorCapacity').fill('003');
+    await slotDialog.locator('#slotEditorDescription').focus();
+    // Slot editing shares lexical number presentation with Event and finance;
+    // the eventual numeric persistence remains the existing Activity operation.
+    await expect(slotDialog.locator('#slotEditorCapacity')).toHaveValue('003');
     await observeActivityCommand(page, plan.id, `/slots/${first.id}`, 'PATCH',
         () => slotDialog.getByRole('button', {name: 'Save', exact: true}).click());
     expect((await readActivityForE2E(page.request, plan.id)).slots[0]).toMatchObject({
@@ -557,6 +561,7 @@ test('keeps named roles distinct from slot membership and persists organizer rol
         () => card.locator('[data-action="take-role"][data-role="Kitchen lead"]').click());
     const assigned = await readActivityForE2E(page.request, plan.id);
     expect(assigned.slots[0]).toMatchObject({assignedCount: 1, selfAssigned: true, selfRoles: ['Kitchen lead']});
+    expect(assigned.slots[0]!.roles[0]!.id).toMatch(/^[1-9][0-9]*$/u);
     await observeActivityCommand(page, plan.id, `/slots/${first.id}/self-assignment`, 'PUT',
         () => card.locator('[data-action="leave-role"][data-role="Kitchen lead"]').click());
     expect((await readActivityForE2E(page.request, plan.id)).slots[0]).toMatchObject({
@@ -611,12 +616,18 @@ test('keeps named roles distinct from slot membership and persists organizer rol
     await expect(editor.locator('#slotEditorRoleChips')).toContainText('Cleanup lead');
     await expect(editor.locator('#slotEditorTitleInput')).toHaveValue('Cleanup duty');
     await expect(editor.locator('#slotEditorDescription')).toHaveValue('Clean the tables');
+    const createdSlotReply = page.waitForResponse(response => response.request().method() === 'POST'
+        && new URL(response.url()).pathname === `/api/v1/activity-plans/${plan.id}/slots`);
     await observeActivityCommand(page, plan.id, '/slots', 'POST',
         () => editor.getByRole('button', {name: 'Save', exact: true}).click());
+    const submittedRoles = (await createdSlotReply).request().postDataJSON().roles as unknown[];
+    expect(submittedRoles).toHaveLength(1);
+    expect(submittedRoles[0]).toMatch(/^[1-9][0-9]*$/u);
     const added = (await readActivityForE2E(page.request, plan.id)).slots.find(slot => slot.title === 'Cleanup duty')!;
     expect(added).toMatchObject({day: '2030-06-01', description: 'Clean the tables', maxAssignees: 4, assignedCount: 0});
     await expect(total).toHaveText('3');
     expect(added.roles).toEqual([expect.objectContaining({name: 'Cleanup lead', maxQty: 1, assignedQty: 0})]);
+    expect(added.roles[0]!.id).toBe(submittedRoles[0]);
     await observeActivityCommand(page, plan.id, `/slots/${added.id}`, 'DELETE',
         () => page.locator(`.slot[data-slotid="${added.id}"] [data-delete-slot]`).click());
     expect((await readActivityForE2E(page.request, plan.id)).slots.map(slot => slot.id)).toEqual([second.id, first.id]);

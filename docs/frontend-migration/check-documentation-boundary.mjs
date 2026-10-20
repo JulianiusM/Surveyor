@@ -134,6 +134,10 @@ const publicPreviewOwners = new Set([
     'tests/keywords/frontendEventE2EKeywords.ts',
     'tests/keywords/frontendEventKeywords.ts',
     'tests/unit/event-api-errors.spec.ts',
+    // The authorized scalar correction adds these exact public contract tests;
+    // tracked implementation owners are already ordinary preview inputs.
+    'tests/unit/frontend-activity-contracts.spec.ts',
+    'tests/unit/frontend-finance-contracts.spec.ts',
 ]);
 const publicEnvironmentTemplates = new Set(['.env.e2e.example', 'tests/.env.test.example']);
 const loadedEngineFiles = [fileURLToPath(import.meta.url), path.resolve(toolDirectory, '../../scripts/check-documentation.mjs')];

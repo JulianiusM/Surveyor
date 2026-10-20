@@ -4,12 +4,12 @@ documentation-metadata
 audience: packing-list participants; packing-list organizers
 owner: packing-list feature maintainers
 status: current
-last-verified: 2026-10-13
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Pilot Packed checklist warning and explicit Retry checked against mounted behavior; other article sections, declared anchors and image bytes retain their prior reviewed scope.
-source-anchors: src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; src/locales/en.json; tests/frontend/frontend-pilot-editor.spec.ts; src/controller/packingController.ts; src/views/packing/packing-view.pug; docs/user-guide/en/assets/packing-shared-vs-local.png
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+source-anchors: src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; src/locales/en.json; tests/frontend/frontend-pilot-editor.spec.ts; src/controller/packingController.ts; src/views/packing/packing-view.pug; docs/user-guide/en/assets/packing-shared-vs-local.png; src/frontend/features/packing/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
 next-review: packing-visible-UI-or-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
 
 Packing lists help a group divide shared equipment and remember personal essentials. A participant can volunteer for ordinary items, while an organizer can mark an item as something **Everyone** should bring.
@@ -201,7 +201,7 @@ A permitted editor sees **Entity settings** in the list header. The dialog conta
 2. In **General** → **Details**, change **Title** or **Description**, when available.
 3. Select **Save properties**.
 
-The title requires **Edit Title** and the description requires **Edit Desc**. The description on the ordinary list page is read-only. A failed save retains your draft; closing the dialog discards unsaved changes. Each section saves separately, and commands that refresh the page ask you to resolve drafts in other sections first.
+The title requires **Edit Title** and the description requires **Edit Desc**. The description on the ordinary list page is read-only. Each section saves separately. Saving keeps the page open and preserves unfinished input in other sections. A failed save keeps your draft. When closing with unsaved changes, choose whether to discard them; cancel closing to keep editing.
 
 ### Add another item
 

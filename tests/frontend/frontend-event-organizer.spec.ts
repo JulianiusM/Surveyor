@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises} from '@vue/test-utils';
+import {DOMWrapper, flushPromises} from '@vue/test-utils';
 import {defineComponent, ref, type Component} from 'vue';
 import {useDraftProtection} from '../../src/frontend/composables/command';
 import {createFrontendEventSession, frontendEventId as eventId} from '../factories/frontendEventFactory';
@@ -9,6 +9,7 @@ import {eventKeys} from '../../src/frontend/app/queryKeys';
 import EventParticipants from '../../src/frontend/features/event/EventParticipants.vue';
 import EventBypassLinks from '../../src/frontend/features/event/EventBypassLinks.vue';
 import EventThingsToDo from '../../src/frontend/features/event/EventThingsToDo.vue';
+import EventSettings from '../../src/frontend/features/event/EventSettings.vue';
 import {copyEventText} from '../../src/frontend/features/event/clipboard';
 import AppDialog from '../../src/frontend/components/AppDialog.vue';
 import type {components} from '../../src/types/api/v1';
@@ -59,6 +60,42 @@ async function mounted(component: Component, handler: (request: Request) => Prom
 }
 
 describe('Event organizer workflows', () => {
+    it.each([true, false])('shows the localized shared settings export only with its admitted capability (%s)', async exportAllowed => {
+        const settings: components['schemas']['EventSettings'] = {id: eventId, title: 'Limited Event', settingsToken: 'settings-export-fixture',
+            headerUrl: null, headerVersion: null, editableFields: [], access: null,
+            capabilities: {editHeader: false, managePermissions: false, duplicate: !exportAllowed, remove: false,
+                manageArchive: false, archive: false, restore: false, manageAutomation: false, export: exportAllowed},
+            archive: {direct: false, inherited: false, archivedAt: null, autoArchivePaused: false, eventUrl: null}};
+        const result = await mounted(EventSettings, async request => {
+            expect(request.method).toBe('GET');
+            expect(new URL(request.url).pathname).toBe(`/api/v1/events/${eventId}/settings`);
+            return json(settings);
+        });
+        // Export-only admission has no general fields or permission editor. The
+        // real portal and common Actions panel still expose its document output.
+        const surface = new DOMWrapper(document.body);
+        const destination = `/event/${eventId}/export/participants`;
+        expect(surface.find(`[href="${destination}"]`).exists()).toBe(exportAllowed);
+        // A single admitted panel keeps its accessible label without drawing
+        // redundant tab navigation; the shared dialog owns that presentation.
+        expect(surface.findAll('[role="tab"]')).toHaveLength(0);
+        expect(surface.get('#pilot-settings-tab-actions').text()).toBe('Actions');
+        const panels = surface.findAll('[role="tabpanel"]');
+        expect(panels).toHaveLength(1);
+        expect(panels[0]!.attributes('aria-labelledby')).toBe('pilot-settings-tab-actions');
+        expect(panels[0]!.isVisible()).toBe(true);
+        if (exportAllowed) {
+            const link = surface.get(`[href="${destination}"]`);
+            expect(link.text()).toBe('Participants (PDF)');
+            expect(link.attributes('target')).toBe('_blank');
+            expect(link.attributes('rel')).toBe('noopener');
+            result.context.locale.value = 'de';
+            await flushPromises();
+            expect(surface.get(`[href="${destination}"]`).text()).toBe('Teilnehmende (PDF)');
+        }
+        expect(result.request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+    });
+
     it('approves sibling drafts before deleting a captured child and retries only confirmed navigation', async () => {
         const host = defineComponent({inheritAttrs: false, components: {EventThingsToDo}, setup() {
             const draft = ref('');

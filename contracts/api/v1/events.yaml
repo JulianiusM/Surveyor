@@ -463,6 +463,8 @@ schemas:
             type: boolean
           manageAutomation:
             type: boolean
+          export:
+            type: boolean
       archive:
         $ref: ./packing.yaml#/schemas/PackingArchive
       access:

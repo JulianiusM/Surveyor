@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: completed P8 organizer/allocation implementation, explicit R1/R2 adoption and full known-criteria source review with finite execution/visual evidence; P7 history, native/backend exclusions and cutover conditions retained
+verification-scope: Full-pilot decision adoption, shared lexical controls, original decimal transport and multilingual Help/staged guidance source reconciliation recorded; current execution separate from prior finite P0-P8 receipts; native/backend exclusions and cutover conditions retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,92 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Full-pilot correction and decision adoption (2026-10-20)
+
+The maintainer directly authorizes the full review's corrections and equivalent issues across all migrated areas
+back to the original baseline. The latest R1 question should not have reopened the repeatedly approved native
+isolation boundary; the existing decision is reaffirmed, not newly selected. The
+[dated correction](FRONTEND_FOUNDATION_DESIGN.md#reaffirmed-isolation-and-authorized-full-pilot-correction-2026-10-20)
+records the actual decision-adoption failure and authorized scope. The contribution handoff now requires tracing
+existing decisions and their adopted callers before classifying another generic requirement as unresolved.
+
+Finance money, factors and numeric record identifiers use the original decimal-string wire choices. The
+[active decision](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#approved-finance-wire-correction-2026-10-20) preserves the
+original rule, erroneous future-work account and the explicitly approved command-precision correction. Shared
+controller/Joi normalization, saved financial presenters, calculations and persistence remain the same owners.
+The existing compatibility family and update recovery protect older loaded clients; no substantive need for JSON
+numbers was found and no speculative financial-calculation defect is asserted.
+The same baseline-wide review restores Activity role/override identifier strings and arrays through existing
+versioned projections and one requirements argument adapter shared by local Analyze and Calculate. Native/Joi
+normalization, the pure engine and DBAL retain their numeric internals. Matching browser entity-image and Finance
+proof envelopes now adopt the existing `createMultipartForm` owner with an explicit binary-part name; feature
+validation, requiredness and original file lifetimes remain separate.
+
+The same full review restores participant PDF export for an actor with the native combined export/participant-read
+grant but no administration grant. The versioned full-read/settings admission now includes that existing capability,
+and `EventSettings` supplies the existing shared Actions export link. The retained native PDF route, combined
+permission check and existing localized participant-PDF label remain authoritative; no administration grant is added.
+The final matched Packing review also restores the native shared-assignment switch's explicit `autocomplete="off"`
+choice in its existing Vue owner. Browser restoration, state and command behavior keep their established boundaries.
+
+`FormField` owns explicitly lexical numeric controls while retaining its default Vue directive for deliberately
+normalized consumers. Matching Finance, Event, Activity and creation fields adopt that shared option. The staged
+guide withdraws its earlier assurance that a DOM-string setter alone preserves number spelling. It also reconciles
+Finance's translated query family and the shared region/dialog financial text palette. The earlier `IMP-084` report
+remains the single defect/history owner rather than a reason to leave equivalent migrated fields unfinished.
+
+Independent original-image review also found selected Survey answer labels painting over sticky participant names.
+The existing shared Vue sticky-column style now layers both ballot/result identity cells above those labels;
+the existing scrolled-table journeys add actual painted-glyph hit checks in English and German. This applies the
+already approved readable-interface decisions. It is separate from whole-document pan (`IMP-075`); the unchanged
+native counterpart is recorded once as `IMP-085`, with no migrated correction deferred to future work.
+
+All eleven English and eleven German runtime articles were inspected against current component/catalog owners and
+their retained business baseline. Corrected Help describes independent settings saves and close/discard consent,
+refresh without resubmission, invoice-history inspection and explicit uncertainty acknowledgement, and the actual
+German controls across identity, Overview, Events, Drivers, Surveys, Packing and Finance. The Finance guide retains
+its explicit separate **Calculation & settlement** destination; its native calculation, email and PDF instructions
+keep their actual English labels. Native flat Help, native/unaffected image bytes, declared heading anchors and
+excluded backend remedies retain their existing boundaries. Source reconciliation is not a new running-browser receipt.
+
+The bounded existing Help generator now resolves the Survey diagram's control/example labels from the same locale
+catalog as its actual controls, and its fictional SSR session supplies the current generated deployment contract.
+Only the German Survey figure is regenerated (`933dbc72ab2b11d5a8e374644e9f117da3fabac903cd3e79835c1619f84d1888`,
+1440 × 1252); all eight other native/localized PNGs retain their bytes. Author and independent nonauthor opened the
+full image and browser-scaled 768px/298px originals; root reviewed full/298px originals. They confirm correct
+first-occurrence/recurrence meaning, German labels and no clipping or overlapping text. The phone export is a small
+overview; fine prose still uses the adjacent text and existing full-size link. This is an authored-diagram inspection,
+not a new application-browser parity result.
+
+Current correction checks use official Node.js 24.15.0 and an isolated MariaDB 10.11 database where a real database
+is required. They are separate from the earlier finite receipts below.
+
+| Verification | Actual current result and limit |
+|---|---|
+| Build and engineering | Full server/native/Vue build and the final client/SSR rebuild pass. Application and test typechecks pass; the engineering review covers 439 authored sources, 11 DBAL files and 32 reviewed operations with zero errors. Native frontend, DBAL and frozen production-guide diffs remain empty. |
+| Unit and mounted coverage | The 86-file quick selection reports 1,840 passes and two new Event fixture-expectation failures. After correcting those expectations, the affected three-file selection passes all 36 cases. All 35 content-loading cases and nine generator cases run and pass within their original budgets. This is not a uniform rerun of the complete quick selection. |
+| Shared business integration | All 50 cases in the three real-ORM Finance/Activity/Event specifications pass, including decimal transport, string identifiers, existing business validation and restricted participant-PDF admission. |
+| Genuine built-application E2E | The full 243-case selection reports 239 passes, three failures and one expected disabled-authentication configuration skip in 23.4 minutes. Two failures identify the Packing autocomplete omission corrected above; one is an unexplained Windows worker exit (`3221226505`, 0ms, no assertion result). All three pass after the final rebuild in a separate 35.1-second renewal. The skipped configuration case passes separately with local login and OIDC disabled in 21.2 seconds. All 243 distinct cases therefore have a passing execution across these receipts; the broad run itself is not all green, and no worker-crash cause or repair is established. |
+| Isolated built-client browser checks | All 49 cases pass against the final rebuilt client in 44.7 seconds. Their HTTP substitution keeps this a client check rather than genuine application/database E2E. |
+| Documentation tooling | All 69 generic tooling and 26 boundary-tool cases pass. The Help report checks 32 Markdown files, 587 links and nine images with zero errors or warnings. Live-source and assembled-guide advisory results remain separate from semantic review; the existing unregistered source fingerprint is not silently rebased. |
+
+The existing browser journeys exercise the final lexical controls, deliberately normalized Quick Add, generated
+decimal contracts, localized Finance palette/history, restricted Event export, complete Packing controls and shared
+Survey sticky-name paint behavior. Independent reviewers opened originals individually at original resolution:
+243 Event/Finance/Drivers/Survey images, plus 186 Help/shell/identity/Profile/Overview/Packing and entity-header
+images, including the 23 fresh complete Packing renewal images and two earlier failure diagnostics, and all 130
+Activity/calendar images (36 calendar, 36 advanced and 58 basic/settings). These are 559 distinct current/renewal
+original files, separate from earlier capture inventories. Their actual
+scope includes desktop/mobile, English/German and the named saved/loading/stale/uncertain/draft states; it does not
+establish every theoretical actor, viewport or interaction combination. Root independently reviewed changed
+representatives and current shared-owner adoption. `IMP-084` closes by the implemented and verified shared
+correction; `IMP-085` retains only the unchanged native Survey defect under the reaffirmed isolation decision.
+
+Ignored `artifacts/frontend-correction-*` logs, XML/reports and original captures retain the executable evidence;
+the [coverage map](TEST_COVERAGE.md#full-pilot-numeric-and-documentation-correction-2026-10-20) owns source/assertion
+locations. No assertion, deadline or native business behavior was weakened to obtain these receipts. No publication,
+cutover, P9–P11, native removal or deployment follows from this correction.
 
 ## P8 organizer and allocation implementation review (2026-10-20)
 

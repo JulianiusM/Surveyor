@@ -192,3 +192,36 @@ export async function scrollSurveyTable(table: Locator) {
     expect(after.finalVisibleWidth).toBeGreaterThan(20);
     return {width: before.width, overflow: before.overflow, scroll: after.scroll};
 }
+
+/** A stationary sticky column is useful only while its participant remains
+ * readable. Hit-test actual name glyphs after scrolling so checked/focused
+ * choice labels cannot paint and intercept clicks over that identity. */
+export async function expectSurveyStickyParticipantVisible(table: Locator): Promise<void> {
+    const covered = await table.locator('tbody .sticky-col').evaluateAll(function inspectStickyNamePaint(cells) {
+        const covered: Array<{name: string; coveredBy: string}> = [];
+        for (const cell of cells) {
+            const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+            let node: Node | null;
+            while ((node = walker.nextNode())) {
+                const text = node.textContent ?? '';
+                for (let index = 0; index < text.length; index++) {
+                    if (!text[index]!.trim()) continue;
+                    const range = document.createRange();
+                    range.setStart(node, index);
+                    range.setEnd(node, index + 1);
+                    const glyph = range.getBoundingClientRect();
+                    if (!glyph.width || !glyph.height) continue;
+                    // Measure the rendered glyph, not a fixed coordinate, column
+                    // width or z-index value that could reproduce the defect.
+                    const top = document.elementFromPoint(glyph.x + glyph.width / 2, glyph.y + glyph.height / 2);
+                    if (!top || !cell.contains(top)) {
+                        covered.push({name: text.trim(), coveredBy: top?.tagName ?? 'outside viewport'});
+                        break;
+                    }
+                }
+            }
+        }
+        return covered;
+    });
+    expect(covered, 'Scrolled choices must not cover the sticky participant name').toEqual([]);
+}

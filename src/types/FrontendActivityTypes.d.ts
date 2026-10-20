@@ -9,7 +9,7 @@ export interface ActivitySlotDraft {
     startTime: string;
     endTime: string;
     maxAssignees: string;
-    roles: number[];
+    roles: string[];
 }
 
 /** A cancellation retains exactly this reviewed intent and its opaque confirmation. */

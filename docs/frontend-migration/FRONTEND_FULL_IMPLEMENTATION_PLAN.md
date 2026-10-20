@@ -6,12 +6,19 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: authorized P8 organizer finance and allocation inputs reconciled with retained P0-P7 history; P9-P11, backend exclusions and cutover boundaries preserved; current execution belongs to paired review
+verification-scope: Full-pilot correction and similar-gap authorization reconciled with retained P0-P8 phase history; P9-P11, backend exclusions and cutover boundaries preserved; current execution belongs to paired review
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
 
 ## Current disposition (2026-10-20)
+
+The maintainer's latest [full-pilot correction](FRONTEND_FOUNDATION_DESIGN.md#reaffirmed-isolation-and-authorized-full-pilot-correction-2026-10-20)
+authorizes the reported fixes and equivalent gaps across every migrated area. Native isolation is an existing,
+reaffirmed decision; decimal-string money is a correction with explicitly preserved accepted command precision.
+Current source adoption, runtime Help/staged guidance reconciliation and renewed verification belong to the
+[latest review](PILOT_PARITY_REVIEW.md#full-pilot-correction-and-decision-adoption-2026-10-20). Earlier completed
+phase statements retain their historical scope and do not defer matching task-owned corrections.
 
 P0–P6 are implemented against their phase contracts and direct amendments. The subsequent
 [Activity follow-up](PILOT_PARITY_REVIEW.md#activity-correction-follow-up-2026-10-20) qualifies the earlier completion

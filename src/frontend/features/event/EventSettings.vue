@@ -19,6 +19,10 @@ const metadataProps = computed(() => ({eventId: props.eventId, eventTitle: props
 const automationLabels = computed<EntityAutomationLabels>(() => ({pause: context.messages.value.t('event.organizer.pauseAutomation'),
     resume: context.messages.value.t('event.organizer.resumeAutomation'), pausedHint: context.messages.value.t('event.automationPausedHint'),
     confirmResume: 'event.organizer.confirmResumeAutomation', pausedSuccess: 'event.organizer.automationPaused', resumedSuccess: 'event.organizer.automationResumed'}));
+// The existing document export remains available through its independent native
+// grants. The shared dialog checks the admitted capability before showing it.
+const exportLink = computed(() => ({url: '/event/' + props.eventId + '/export/participants',
+    label: context.messages.value.t('event.participantsPdf')}));
 function profileKey(query: string) { return eventKeys.profiles(context.session.value?.context, props.eventId, query); }
 // Bind methods to the feature's existing adapter; no shared control constructs endpoints.
 const operations = {settings: api.settings.bind(api), profiles: api.profiles.bind(api),
@@ -31,7 +35,7 @@ const operations = {settings: api.settings.bind(api), profiles: api.profiles.bin
     <EntitySettingsDialog :resource-id="eventId" :resource-title="eventTitle" :metadata-available="metadataAvailable"
         :metadata-component="MetadataFields" :metadata-props="metadataProps" :operations="operations"
         :settings-key="key" :profile-key="profileKey" :profile-family="profiles"
-        :automation-labels="automationLabels"
+        :automation-labels="automationLabels" :export-link="exportLink"
         :duplicate-to="'/frontend-pilot/event/' + eventId + '/duplicate'" deleted-key="event.deleted" restore-confirmation="event.confirmRestore" archive-confirmation="event.confirmArchive"
         @close="emit('close')" @saved="emit('saved')" @access-lost="emit('accessLost')" />
 </template>

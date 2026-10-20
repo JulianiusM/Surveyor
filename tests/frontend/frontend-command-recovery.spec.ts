@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {mount, flushPromises} from '@vue/test-utils';
 import {defineComponent, nextTick, onBeforeUnmount, ref} from 'vue';
@@ -14,7 +15,7 @@ import type {PilotRequestScope} from '../../src/types/FrontendPilotUiTypes';
 
 const session: components['schemas']['SessionView'] = {
     kind: 'account', context: 'command-context-1234567890', csrfToken: 'command-csrf-1234567890', locale: 'en',
-    deployment: {buildId: 'fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
+    deployment: {buildId: 'fixture', apiCompatibility},
     activeProfile: {id: '11111111-1111-4111-8111-111111111111', name: 'Owner'}, profiles: [],
     loginUrl: '/users/login', logoutUrl: '/users/logout', shell: {version: 'test', imprintUrl: '/imprint',
         privacyPolicyUrl: '/privacy', localLoginEnabled: true, oidcEnabled: false, oidcName: 'SSO'},

@@ -6,7 +6,7 @@ owner: project maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P8 organizer finance and allocation assertion sources mapped alongside retained P7/P0-P6 history and October 20 Activity corrections; execution and visual inspection belong to paired review; native/backend and later-phase exclusions remain
+verification-scope: Current lexical numeric display, finance decimal contracts and matching source/assertion ownership reconciled with retained P0-P8 maps; test selection is not execution evidence or full parity certification
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -474,6 +474,9 @@ Wide scenes retain native root-overflow evidence while requiring Vue document fi
 window travel before and after local table movement. English/German cases retain all columns, stationary sticky
 cells and final-choice reachability; actual final-label and arrow-key interaction changes only the local ballot
 draft. The shared Vue table viewport owns absolute-control containment without body-wide overflow hiding.
+The same scrolled-table cases also hit-test rendered participant-name glyphs beneath selected/focused answer
+columns in both languages. The shared Vue sticky-column style keeps those cells above answer labels; a stationary
+bounding box alone did not detect the original paint-order defect. Native evidence remains separate as `IMP-085`.
 Mounted cases preserve temporary
 same-valued draft rows' independent DOM lifetime; persisted create/copy fixtures retain distinct combinations under
 the existing unique constraint. Empty creation collections reject before dispatch while retaining the draft.
@@ -496,7 +499,7 @@ basic packages. These are source mappings; executed results and visual inspectio
 
 | Contract | Production adoption and assertions |
 |---|---|
-| ACT-01: root and dated creation/duplication | `ActivityCreatePage` adopts `EntityListCreation`, shared root fields/files/Event picker/permissions and confirmed navigation. Its initial-slot controls compose shared FormField visible labels associated with the actual text/time/number inputs; the feature retains its five existing models, lexical capacity handler, constraints and disabled policy. Remove has a localized accessible name. Mounted date-recovery assertions cover both languages, actual associations and retained nodes/values; [built workflows](../../tests/e2e/frontend-pilot-activity.spec.ts) assert the real controls and same-document creation, image bytes and independently read copies. Generated Activity multipart operations reuse existing creation/slot/default owners. [Persistence cases](../../tests/integration/activity-v1-api.spec.ts) assert dates, content, duplicate exclusions, account/Event admission and failed precommit preparation. A distinct copied-slot read shape retains native blank titles and signed capacity for correction, with native null/zero defaults; generated and native creation guards still reject invalid copies without writes. |
+| ACT-01: root and dated creation/duplication | `ActivityCreatePage` adopts `EntityListCreation`, shared root fields/files/Event picker/permissions and confirmed navigation. Its initial-slot controls compose shared FormField visible labels associated with the actual text/time/number inputs; the feature retains its five existing models, constraints and disabled policy while shared FormField owns lexical capacity display. Remove has a localized accessible name. Mounted date-recovery assertions cover both languages, actual associations and retained nodes/values; [built workflows](../../tests/e2e/frontend-pilot-activity.spec.ts) assert the real controls and same-document creation, image bytes and independently read copies. Generated Activity multipart operations reuse existing creation/slot/default owners. [Persistence cases](../../tests/integration/activity-v1-api.spec.ts) assert dates, content, duplicate exclusions, account/Event admission and failed precommit preparation. A distinct copied-slot read shape retains native blank titles and signed capacity for correction, with native null/zero defaults; generated and native creation guards still reject invalid copies without writes. |
 | ACT-02/07: schedule, filters and participant progress | `ActivitySchedule` derives its complete saved-slot total independently of All/My/Open; mounted assertions cover distinct visible sets, fresh receipts and zero slots. Creation and the versioned detail projection share the pure `civilDate.ts` week owner; matching Activity/Event date labels share its selected-locale civil-day formatter. This approved policy supersedes P5's separate copied native algorithms. `ActivityParticipants` renders only the authorized projection of existing progress calculations. Built comparisons cover equivalent desktop/mobile schedules, participant status and creation fields; workflow assertions retain My/Open filters through commands. Requirement editing remains P6. |
 | ACT-03/04: participation and warning review | Existing assignment/warning engines retain role/whole-slot, attendance, external-signup, deadline, capacity and overlap rules. New adapters scope the actor and child and redact private sibling details. Persistence cases cover role quotas, exact warning changes and no write on stale confirmation; built cases cancel, obtain fresh review, confirm once and inspect saved membership. |
 | ACT-05: slots and organizer roles | Feature editors compose shared dialogs, fields, inline draft/conflict behavior and reorder handling. Existing controller field policy supplies native and versioned decisions. Built cases create/select a role, add/edit/reorder/delete slots, replace/remove organizer role assignments and independently inspect persistence. IMP-016 remains an excluded legacy role-update defect. |
@@ -612,7 +615,7 @@ expense, retroactive review and participant boundaries. A native-only case indep
 | Contract | Unique assertion boundary |
 |---|---|
 | INV-01/02: pool creation, settings and submission access | Real-persistence adapters distinguish management commands from organizer-page grants, reject cross-Event pools and stale access revisions, and preserve CLOSED state. Mounted forms keep creation allocation unsaved until submission, preserve independent future-default/current-enrollment flags and retain confirmed settings through a failed read. Built workflows compare native/Vue settings field values, constraints and optional-proof forms at desktop/phone widths, then create an ORGANIZER_ONLY pool through the same Vue document. |
-| INV-07/08: organizer review and retroactive changes | Persistence cases preserve original amount/description/proof through acceptance, correction, decline and closure, reject stale captured revisions and retain closed saved shares/settlements. Mounted review keeps lexical input and original revision through fresh props and Back to edit, protects cancellation and locks a completed change after failed refresh. Optional NEW-invoice acceptance retains its existing positive-number request behavior even beyond the input's suggested precision; retroactive correction retains its existing strict validation. Built acceptance/correction uses real persisted evidence, a concurrent settings change and the captured conflict, with no main-frame navigation. |
+| INV-07/08: organizer review and retroactive changes | Persistence cases preserve original amount/description/proof through acceptance, correction, decline and closure, reject stale captured revisions and retain closed saved shares/settlements. Mounted review keeps lexical input and original revision through fresh props and Back to edit, protects cancellation and locks a completed change after failed refresh. Optional NEW-invoice acceptance retains its existing positive-amount validation behavior even beyond the input's suggested precision; retroactive correction retains its existing strict validation. Built acceptance/correction uses real persisted evidence, a concurrent settings change and the captured conflict, with no main-frame navigation. |
 | INV-09/20: organizer expense, attribution and proof | The actual HTTP adapter exercises generated closed multipart shapes, CSRF and optional proof bytes. Persistence separates recorder from paid-by participant, rejects foreign attribution and creates no recorder attendance. Mounted cases retain the exact File after rejection/unknown delivery, omit absent proof/attribution and clear confirmed fields despite failed reads. Built flows verify attributed history/proof ownership and hold/drop a committed response, inspect saved history and assert one upload without replay. |
 | INV-10: enrollment, factors/exemptions and signed adjustments | Persistence protects zero/four-decimal factors, precision rejection, exemptions, positive/negative adjustments, redistribution modes and unchanged saved shares/snapshots after closed input edits. Mounted cases restore individual enrollment after assign-all, exclude disabled factors, keep filtered lexical controls mounted and require explicit review of an unknown additive adjustment. Built saves persist factors/exemptions, add/remove a signed rebate and preserve an unfinished sibling adjustment. |
 | INV-11/18: participant/organizer coverage and pending inputs | Persistence rejects a forged participant payer, one-level coverage violations and non-OPEN participant edits while retaining organizer reassignment and closed pending inputs. Mounted self-payer controls exclude the payer, disable covered people/existing payers and retain confirmed selection after failed refresh. Built organizer/participant flows save and clear the same mapping with participant payer selection absent. Applied saved coverage and current/pending inputs remain separately asserted by the existing finance projection tests. |
@@ -629,6 +632,40 @@ The built expense case also checks that the shared numeric wheel guard releases 
 amount. Its native/Vue captures and German phone settings check support finite visual/usability review, not an
 uninspected image or full-feature parity claim. P9 calculation/settlement commands, live mail/provider delivery,
 default-route cutover, native removal and guide publication remain outside this source map.
+
+## Full-pilot numeric and documentation correction (2026-10-20)
+
+The latest authorization covers the original review and matching migrated consumers, rather than only Finance.
+`FormField`'s explicit lexical-number path is adopted by Finance, Event capacity, Activity slot/creation/requirements
+and Packing creation fields. Its default native directive remains separate for deliberately normalized controls.
+Check actual browser input/change/blur and a sibling render; emitted strings alone did not detect `IMP-084`.
+
+[Finance contract cases](../../tests/unit/frontend-finance-contracts.spec.ts) consume the actual generated validators
+and feature encoding helper. They distinguish decimal-string money from rejected numeric JSON, retain arbitrary
+accepted command digits through exponent expansion, preserve four-place factors and reject numeric record IDs.
+Mounted Finance suites protect the same forms' lexical drafts and generated payloads; genuine controller/HTTP
+persistence and built workflows retain their separate responsibilities. The shared backend remains authoritative
+for sign, range, precision, saved amounts and calculations.
+
+[Activity contract cases](../../tests/unit/frontend-activity-contracts.spec.ts) cover canonical role/override
+identifier strings and numeric-ID rejection. The mounted requirement suite proves draft/wire IDs remain strings
+while the single `requirementAnalysisInput` adapter supplies numeric identifiers to the unchanged shared engine
+without mutating admitted configuration. Existing Activity persistence assertions cover saved roles, participant
+role membership and edit-baseline IDs. Matching multipart consumers use the existing shared transport serializer
+with an explicit image/proof part; feature validation and required file lifetimes remain independently exercised.
+
+[Event integration](../../tests/integration/event-api.spec.ts), `admits participant export settings through the
+native combined grant without granting admin or edit access`, protects full-read/settings admission and each
+missing permission bit. [Built Event workflows](../../tests/e2e/frontend-events.spec.ts), `opens the native
+participant PDF from shared Event settings without granting administration`, opens the actual native and Vue
+Actions link at 390px and checks the returned PDF before revoking one bit. These are separate permission and
+browser boundaries; their presence in source is not an execution receipt.
+
+Runtime Help reconciliation inspects all eleven articles in each language against actual current owners and the
+unchanged native business baseline. It corrects matching labels, independent saves, refresh and uncertainty steps;
+maintained guide text is not an application-test fixture. Staged contribution guidance includes the actual lexical
+opt-in, translated Finance query family and decision-adoption handoff. Structural reports remain advisory.
+Actual final execution, original-image review and limitations belong to the latest paired review, not this map.
 
 ## Verification selection for subsequent migration slices
 

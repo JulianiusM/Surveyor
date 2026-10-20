@@ -1,7 +1,7 @@
 import {expect, test, type APIRequestContext, type BrowserContext, type Locator, type Page} from '@playwright/test';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
-import {expectUsableFrontendLayout} from '../keywords/e2eCoreKeywords';
+import {expectUsableFrontendLayout, readSecondaryInstructionColors} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
 
@@ -190,6 +190,8 @@ test('keeps five-state personal history, attribution and retained proofs private
         await nativeHistory.getByLabel('Invoices per page', {exact: true}).selectOption('50');
         await nativeHistory.getByLabel('Search invoices', {exact: true}).fill('evidence');
         await expect(nativeHistory.locator('[data-invoice-row]:visible')).toHaveCount(3);
+        const nativeHistoryColors = await readSecondaryInstructionColors(nativeHistory);
+        expect(nativeHistoryColors.length).toBeGreaterThan(0);
         await nativeHistory.screenshot({path: info.outputPath('native-participant-history-desktop.png'), animations: 'disabled'});
         await nativeHistory.locator('.table-responsive').evaluate(node => node.scrollTo({left: node.scrollWidth, behavior: 'instant'}));
         await nativeHistory.screenshot({path: info.outputPath('native-participant-history-actions-desktop.png'), animations: 'disabled'});
@@ -211,6 +213,9 @@ test('keeps five-state personal history, attribution and retained proofs private
         await expect(history).toContainText('Original: 20.00');
         await search.fill('evidence');
         await expect(history.locator('[data-finance-invoice]')).toHaveCount(3);
+        // Original amounts/descriptions and saved dates retain their financial
+        // readability treatment outside dialogs as well as inside portals.
+        expect(new Set(await readSecondaryInstructionColors(history))).toEqual(new Set(nativeHistoryColors));
         await history.screenshot({path: info.outputPath('vue-participant-history-desktop.png'), animations: 'disabled'});
         await history.locator('.table-responsive').evaluate(node => node.scrollTo({left: node.scrollWidth, behavior: 'instant'}));
         await history.screenshot({path: info.outputPath('vue-participant-history-actions-desktop.png'), animations: 'disabled'});
@@ -253,7 +258,7 @@ test('keeps five-state personal history, attribution and retained proofs private
         expect(closeReviews[0]).toContain(`#${invoice('Corrected evidence').id}`);
         await expect(corrected).toContainText('Closed');
         const saved = await readFinance(participant.request, event.id);
-        expect(saved.invoices.find(row => row.id === invoice('Corrected evidence').id)).toMatchObject({status: 'CLOSED', amount: 20, correctedAmount: 18});
+        expect(saved.invoices.find(row => row.id === invoice('Corrected evidence').id)).toMatchObject({status: 'CLOSED', amount: '20.00', correctedAmount: '18.00'});
         expect(saved.shares).toEqual([]);
         expect(await participantPage.evaluate(() => performance.timeOrigin)).toBe(document.marker);
         expect(document.navigations).toEqual([]);
@@ -476,11 +481,11 @@ test('reads saved signed ledgers and lazy calculations independently from curren
                 registrationId: Number((await readFinance(participant.request, event.id)).registrationId)},
         })).status()).toBe(200);
         const own = await readFinance(participant.request, event.id);
-        expect(own.shares.map(share => share.amount).sort((left, right) => left - right)).toEqual([-50, 0, 40]);
+        expect(own.shares.map(share => share.amount).sort()).toEqual(['-50.00', '0.00', '40.00']);
         expect(own.shares.find(share => share.poolId === refundPool)).toMatchObject({status: 'refund', needsRecalculation: true});
         const refund = own.shares.find(share => share.poolId === refundPool)!;
         const zero = own.shares.find(share => share.poolId === zeroPool)!;
-        expect(zero).toMatchObject({amount: 0, status: 'settled'});
+        expect(zero).toMatchObject({amount: '0.00', status: 'settled'});
         const foreignShare = savedOrganizer.shares.find(share => share.poolId === refundPool && share.id !== refund.id)!;
         const deniedBreakdown = await participant.request.get(`/api/v1/events/${event.id}/finance/pools/${refundPool}/shares/${foreignShare.id}?audience=participant`, {
             headers: await frontendEventHeaders(participant.request),
@@ -527,7 +532,7 @@ test('reads saved signed ledgers and lazy calculations independently from curren
                 await lateRow.getByRole('button', {name: 'Close', exact: true}).click();
                 await expect(lateRow).toContainText('Closed');
                 const afterClose = await readFinance(participant.request, event.id);
-                expect(afterClose.shares.find(share => share.id === refund.id)).toMatchObject({amount: -50, isPaid: false, status: 'refund'});
+                expect(afterClose.shares.find(share => share.id === refund.id)).toMatchObject({amount: '-50.00', isPaid: false, status: 'refund'});
             }
             const ledger = finance.locator('[data-finance-shares]');
             await expect(ledger.locator('[data-finance-share]')).toHaveCount(3);
@@ -593,11 +598,11 @@ test('reads saved signed ledgers and lazy calculations independently from curren
             expect(document.errors).toEqual([]);
         }
         const finalOrganizer = await readFinance(page.request, event.id, true);
-        expect(finalOrganizer.shares.find(share => share.id === settled.id)).toMatchObject({amount: 50, status: 'settled', isPaid: true});
+        expect(finalOrganizer.shares.find(share => share.id === settled.id)).toMatchObject({amount: '50.00', status: 'settled', isPaid: true});
         expect(finalOrganizer.pools.find(pool => pool.id === refundPool)!.needsRecalculation).toBe(true);
-        expect(finalOrganizer.shares.find(share => share.id === refund.id)!.amount).toBe(-50);
+        expect(finalOrganizer.shares.find(share => share.id === refund.id)!.amount).toBe('-50.00');
         expect(finalOrganizer.pools.find(pool => pool.id === refundPool)!.summary!.primary
-            .find(metric => metric.key === 'totalAmount')!.amount).toBe(140);
+            .find(metric => metric.key === 'totalAmount')!.amount).toBe('140.00');
 
         for (const width of [1280, 390]) {
             await page.setViewportSize({width, height: 900});
@@ -715,7 +720,7 @@ test('keeps applied and pending coverage separate, opens personal coverage in pl
         expect(saved.coverageGroups[0]!.beneficiaries.map(person => person.name)).toEqual(originalBeneficiaries);
         expect(saved.pendingCoverageGroups[0]!.beneficiaries.map(person => person.name)).toEqual(['Pending beneficiary']);
         const savedPayerCount = organizer.shares.filter(share => share.poolId === savedPool).length;
-        expect(organizer.shares.find(share => share.poolId === savedPool && share.payerName === 'Coverage payer')!.amount).toBe(80);
+        expect(organizer.shares.find(share => share.poolId === savedPool && share.payerName === 'Coverage payer')!.amount).toBe('80.00');
         const own = await readFinance(participant.request, event.id);
         expect(own.pools.find(pool => pool.id === savedPool)).toMatchObject({coverageGroups: [], pendingCoverageGroups: [], assignedCount: 0});
         expect(own.pools.find(pool => pool.id === openPool)!.coverageGroups[0]!.beneficiaries.map(person => person.name)).toEqual(['Covered 01']);

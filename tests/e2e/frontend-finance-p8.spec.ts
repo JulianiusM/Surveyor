@@ -2,7 +2,9 @@ import {expect, test, type APIRequestContext, type Locator, type Page, type Requ
 import type {components} from '../../src/types/api/v1';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
-import {expectUsableFrontendLayout} from '../keywords/e2eCoreKeywords';
+import {dismissFrontendSuccessNotifications, expectUsableFrontendLayout, readNamedControlContracts as formContract,
+    readSecondaryInstructionColors} from '../keywords/e2eCoreKeywords';
+import {createTranslator} from '../../src/modules/localization/translator';
 
 test.use({actionTimeout: 10_000});
 
@@ -35,20 +37,6 @@ async function openPool(page: Page, eventId: string, poolId: string, pilot: bool
     await expect(toggle).toBeVisible();
     if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
     return pool;
-}
-
-/** Compare actual control contracts while allowing the approved presentation
- * layout, generated IDs and localized text to have their own frontend owners. */
-async function formContract(form: Locator, names: string[]) {
-    return form.evaluate((element, selected) => selected.map(name => {
-        const control = element.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[name="${name}"]`);
-        if (!control) throw new Error(`Missing expected finance field: ${name}`);
-        return {name, tag: control.tagName, type: control.type, required: control.required,
-            min: control.getAttribute('min'), max: control.getAttribute('max'), step: control.getAttribute('step'),
-            maxLength: control.getAttribute('maxlength'), accept: control.getAttribute('accept'),
-            value: control instanceof HTMLInputElement && control.type === 'checkbox' ? control.checked : control.value,
-            options: control instanceof HTMLSelectElement ? [...control.options].map(option => ({value: option.value, label: option.label})) : null};
-    }), names);
 }
 
 /** Native selects do not wrap their selected option. Check the actual font and
@@ -109,6 +97,8 @@ test('preserves native organizer form information and completes pool creation, a
             const nativeExpense = page.locator(`#pool-${poolId}-expense`);
             const expenseFields = ['amount', 'description', 'registrationId', 'proof'];
             const expense = await formContract(nativeExpense, expenseFields);
+            const expenseInstructionColors = await readSecondaryInstructionColors(nativeExpense);
+            expect(expenseInstructionColors.length).toBeGreaterThan(0);
             await nativeExpense.screenshot({path: info.outputPath(`native-p8-expense-${width}.png`), animations: 'disabled'});
             await nativeExpense.getByRole('button', {name: 'Cancel', exact: true}).click();
 
@@ -123,6 +113,7 @@ test('preserves native organizer form information and completes pool creation, a
             await vue.getByRole('button', {name: 'Add invoice / amount', exact: true}).click();
             const expenseDialog = page.getByRole('dialog');
             expect(await formContract(expenseDialog, expenseFields)).toEqual(expense);
+            expect(new Set(await readSecondaryInstructionColors(expenseDialog))).toEqual(new Set(expenseInstructionColors));
             await expectUsableFrontendLayout(expenseDialog);
             await expenseDialog.screenshot({path: info.outputPath(`vue-p8-expense-${width}.png`), animations: 'disabled'});
             await expenseDialog.getByRole('button', {name: 'Cancel', exact: true}).click();
@@ -163,7 +154,7 @@ test('preserves native organizer form information and completes pool creation, a
         await expect(expense.locator('[name="proof"]')).toHaveValue('');
         await expense.getByRole('button', {name: 'Cancel', exact: true}).click();
         const attributed = (await readFinance(participant.request, event.id, false)).invoices.find(row => row.description === 'P8 attributed organizer expense')!;
-        expect(attributed).toMatchObject({organizerRecorded: true, participantName: 'P8 paid-by participant', amount: 13.5, canClose: true});
+        expect(attributed).toMatchObject({organizerRecorded: true, participantName: 'P8 paid-by participant', amount: '13.50', canClose: true});
         expect((await other.request.get(attributed.proofUrl!)).status()).toBe(403);
         expect((await participant.request.get(attributed.proofUrl!)).status()).toBe(200);
 
@@ -190,7 +181,7 @@ test('preserves native organizer form information and completes pool creation, a
         expect((await page.request.post(nativeEndpoint, {data: {distribution: 'EQUAL', description: 'Concurrent pool settings'}})).status()).toBe(200);
         await correction.getByRole('button', {name: 'Confirm correction', exact: true}).click();
         await expect(correction).toContainText(/changed|conflict|review/i);
-        expect((await readFinance(page.request, event.id)).invoices.find(invoice => invoice.id === pending.id)?.correctedAmount).toBe(35);
+        expect((await readFinance(page.request, event.id)).invoices.find(invoice => invoice.id === pending.id)?.correctedAmount).toBe('35.00');
         await correction.getByRole('button', {name: 'Back to edit', exact: true}).click();
         await expect(correction.locator('[name="correctedDescription"]')).toHaveValue('P8 cancelled source draft');
         page.once('dialog', dialog => dialog.accept());
@@ -230,12 +221,15 @@ test('saves allocation forms separately, retains an additive draft during remova
             const native = await openPool(page, event.id, poolId, false);
             await native.getByRole('button', {name: 'Participants & factors', exact: true}).click();
             const nativeAssignments = page.locator(`#pool-${poolId}-participants`);
+            const allocationInstructionColors = await readSecondaryInstructionColors(nativeAssignments);
+            expect(allocationInstructionColors.length).toBeGreaterThan(0);
             await expect(nativeAssignments.locator('[data-participant-factor]').first()).toHaveAttribute('step', '0.0001');
             await nativeAssignments.screenshot({path: info.outputPath(`native-p8-allocation-${width}.png`), animations: 'disabled'});
             await nativeAssignments.getByRole('button', {name: 'Close', exact: true}).last().click();
             const vue = await openPool(page, event.id, poolId, true);
             await vue.getByRole('button', {name: 'Participants & factors', exact: true}).click();
             const allocation = page.getByRole('dialog');
+            expect(new Set(await readSecondaryInstructionColors(allocation))).toEqual(new Set(allocationInstructionColors));
             await expect(allocation.getByLabel('Share factor', {exact: true}).first()).toHaveAttribute('step', '0.0001');
             await expectUsableFrontendLayout(allocation);
             await allocation.screenshot({path: info.outputPath(`vue-p8-allocation-${width}.png`), animations: 'disabled'});
@@ -252,9 +246,9 @@ test('saves allocation forms separately, retains an additive draft during remova
         await beneficiary.getByLabel('Share factor', {exact: true}).fill('1.2500');
         await beneficiary.getByLabel('Exempt', {exact: true}).check();
         await allocation.getByRole('button', {name: 'Save participants & factors', exact: true}).click();
-        await expect.poll(async () => (await readFinance(page.request, event.id)).pools.find(row => row.id === poolId)?.assignments?.find(row => row.registrationId === ownId)?.factor).toBe(0);
+        await expect.poll(async () => (await readFinance(page.request, event.id)).pools.find(row => row.id === poolId)?.assignments?.find(row => row.registrationId === ownId)?.factor).toBe('0.0000');
         expect((await readFinance(page.request, event.id)).pools.find(row => row.id === poolId)?.assignments?.find(row => row.registrationId === otherId))
-            .toMatchObject({factor: 1.25, isExempt: true});
+            .toMatchObject({factor: '1.2500', isExempt: true});
         await allocation.getByRole('button', {name: 'Close', exact: true}).last().click();
 
         await pool.getByRole('button', {name: 'Surcharges & rebates', exact: true}).click();
@@ -337,6 +331,186 @@ test('saves allocation forms separately, retains an additive draft during remova
         await other.close();
     }
 });
+
+for (const width of [320, 390]) {
+    test(`completes German finance input, review and participant journeys with readable instructions at ${width}px`, async ({page, browser, baseURL}, info) => {
+        test.setTimeout(150_000);
+        const messages = createTranslator('de');
+        const participant = await browser.newContext({baseURL, viewport: {width, height: 900}});
+        const other = await browser.newContext({baseURL});
+        const errors: string[] = [];
+        page.on('pageerror', error => errors.push(error.message));
+        try {
+            const event = await createFrontendEventFixture(page.request);
+            await registerParticipant(participant.request, event.id, 'Zahlende Person am See');
+            await registerParticipant(other.request, event.id, 'Mitreisende Person am See');
+            await page.setViewportSize({width, height: 900});
+            await page.goto(`/frontend-pilot/event/${event.id}/admin?locale=de`, {waitUntil: 'domcontentloaded'});
+            await waitForPilotHydration(page);
+            const documentTime = await page.evaluate(() => performance.timeOrigin);
+            const finance = page.locator('[data-finance-section]');
+            await finance.getByRole('button', {name: messages.t('finance.createPool'), exact: true}).click();
+            const creation = page.getByRole('dialog');
+            const poolName = `Reisekosten ${width}`;
+            await creation.locator('[name="name"]').fill(poolName);
+            await creation.locator('[name="distribution"]').selectOption('EQUAL');
+            await creation.locator('[name="assignAll"]').check();
+            await expectUsableFrontendLayout(creation);
+            const creationColors = await readSecondaryInstructionColors(creation);
+            expect(creationColors.length).toBeGreaterThan(0);
+            expect(new Set(creationColors)).toEqual(new Set(['rgb(173, 181, 189)']));
+            await creation.getByRole('button', {name: messages.t('finance.addPool'), exact: true}).click();
+            await expect.poll(async () => (await readFinance(page.request, event.id)).pools.some(pool => pool.name === poolName)).toBe(true);
+            const poolId = (await readFinance(page.request, event.id)).pools.find(pool => pool.name === poolName)!.id;
+            const ownId = (await readFinance(participant.request, event.id, false)).registrationId!;
+            const otherId = (await readFinance(other.request, event.id, false)).registrationId!;
+            await dismissFrontendSuccessNotifications(page);
+            // Creation deliberately remains open for another pool after saving;
+            // complete that interaction before opening a saved pool's actions.
+            await creation.getByRole('button', {name: messages.t('common.cancel'), exact: true}).click();
+            const pool = finance.locator(`[data-finance-pool="${poolId}"]`);
+            const toggle = pool.locator('.accordion-button').first();
+            if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+
+            // Every dialog remains inside one Event document. Its explicit
+            // finance theme survives the portal independently of the opener.
+            await pool.getByRole('button', {name: messages.t('finance.poolSettings'), exact: true}).click();
+            const settings = page.getByRole('dialog');
+            await expectUsableFrontendLayout(settings);
+            await expectReadableSelection(settings.locator('[name="distribution"]'));
+            expect(new Set(await readSecondaryInstructionColors(settings))).toEqual(new Set(['rgb(173, 181, 189)']));
+            await settings.locator('[name="description"]').fill('Gemeinsam gespeicherte Reisekosten');
+            await settings.locator('[name="sendCalculationEmails"]').uncheck();
+            await settings.getByRole('button', {name: messages.t('finance.savePoolSettings'), exact: true}).click();
+            await expect.poll(async () => (await readFinance(page.request, event.id)).pools.find(pool => pool.id === poolId)?.description)
+                .toBe('Gemeinsam gespeicherte Reisekosten');
+            await dismissFrontendSuccessNotifications(page);
+            await settings.getByRole('button', {name: messages.t('common.close'), exact: true}).last().click();
+
+            await pool.getByRole('button', {name: messages.t('finance.addInvoiceAmount'), exact: true}).click();
+            const expense = page.getByRole('dialog');
+            await expectUsableFrontendLayout(expense);
+            expect(new Set(await readSecondaryInstructionColors(expense))).toEqual(new Set(['rgb(173, 181, 189)']));
+            await expect(expense.locator('[name="amount"]')).toHaveAttribute('inputmode', 'decimal');
+            await expense.locator('[name="amount"]').fill('013.50');
+            await expense.locator('[name="description"]').fill('Beleg der zahlenden Person');
+            await expense.locator('[name="registrationId"]').selectOption(ownId);
+            await expect(expense.locator('[name="amount"]')).toHaveValue('013.50');
+            await expense.screenshot({path: info.outputPath(`german-finance-expense-${width}.png`), animations: 'disabled'});
+            await expense.getByRole('button', {name: messages.t('finance.addInvoiceAmount'), exact: true}).click();
+            await expect(expense.locator('[name="amount"]')).toHaveValue('');
+            const attributed = (await readFinance(participant.request, event.id, false)).invoices.find(invoice => invoice.description === 'Beleg der zahlenden Person')!;
+            expect(attributed).toMatchObject({amount: '13.50', organizerRecorded: true, participantName: 'Zahlende Person am See'});
+            await dismissFrontendSuccessNotifications(page);
+            await expense.getByRole('button', {name: messages.t('common.cancel'), exact: true}).click();
+            await expect(pool.locator(`[data-finance-invoice="${attributed.id}"]`)).toContainText('13,50');
+
+            // Seed only the independent source invoice through the unchanged
+            // native route; acceptance itself uses the actual German browser UI.
+            const endpoint = `/api/event/${event.id}/invoice-pools/${poolId}`;
+            expect((await participant.request.post(`${endpoint}/submit`, {multipart: {
+                amount: '22.50', description: 'Zu prüfender Teilnehmerbeleg', proof: proof(`german-${width}.pdf`),
+            }})).status()).toBe(200);
+            await finance.getByRole('button', {name: messages.t('common.refresh'), exact: true}).first().click();
+            const pending = (await readFinance(page.request, event.id)).invoices.find(invoice => invoice.description === 'Zu prüfender Teilnehmerbeleg')!;
+            const row = pool.locator(`[data-finance-invoice="${pending.id}"]`);
+            await row.getByRole('button', {name: messages.t('finance.accept'), exact: true}).click();
+            const review = page.getByRole('dialog');
+            await expectUsableFrontendLayout(review);
+            // Optional NEW-invoice correction deliberately preserves the native
+            // accepted precision instead of applying retroactive step validation.
+            await review.locator('[name="correctedAmount"]').fill('22.333');
+            const approved = page.waitForResponse(response => response.request().method() === 'POST'
+                && response.url().endsWith(`/finance/pools/${poolId}/invoices/${pending.id}/approve`));
+            await review.getByRole('button', {name: messages.t('finance.confirm'), exact: true}).click();
+            const approval = await approved;
+            expect(approval.status()).toBe(200);
+            expect(approval.request().postDataJSON()).toMatchObject({correctedAmount: '22.333'});
+            await expect.poll(async () => (await readFinance(page.request, event.id)).invoices.find(invoice => invoice.id === pending.id)?.status).toBe('APPROVED');
+            await dismissFrontendSuccessNotifications(page);
+
+            await pool.getByRole('button', {name: messages.t('finance.participantsFactors'), exact: true}).click();
+            const allocation = page.getByRole('dialog');
+            await expectUsableFrontendLayout(allocation);
+            expect(new Set(await readSecondaryInstructionColors(allocation))).toEqual(new Set(['rgb(173, 181, 189)']));
+            const payer = allocation.locator(`[data-finance-assignment="${ownId}"]`);
+            await payer.getByLabel(messages.t('finance.shareFactor'), {exact: true}).fill('002.5000');
+            await allocation.getByLabel(messages.t('finance.searchParticipants'), {exact: true}).fill('not a match');
+            await allocation.getByLabel(messages.t('finance.searchParticipants'), {exact: true}).fill('');
+            await expect(payer.getByLabel(messages.t('finance.shareFactor'), {exact: true})).toHaveValue('002.5000');
+            await allocation.screenshot({path: info.outputPath(`german-finance-allocation-${width}.png`), animations: 'disabled'});
+            await allocation.getByRole('button', {name: messages.t('finance.saveParticipantsFactors'), exact: true}).click();
+            await expect.poll(async () => (await readFinance(page.request, event.id)).pools.find(pool => pool.id === poolId)?.assignments?.find(person => person.registrationId === ownId)?.factor).toBe('2.5000');
+            await dismissFrontendSuccessNotifications(page);
+            await allocation.getByRole('button', {name: messages.t('common.close'), exact: true}).last().click();
+
+            await pool.getByRole('button', {name: messages.t('finance.surchargesRebates'), exact: true}).click();
+            const adjustment = page.getByRole('dialog');
+            await adjustment.getByLabel(messages.t('finance.participant5'), {exact: true}).selectOption(ownId);
+            await adjustment.getByLabel(messages.t('finance.amountNegativeForARebate'), {exact: true}).fill('-003.25');
+            await adjustment.getByLabel(messages.t('finance.note'), {exact: true}).fill('Gemeinsamer Fahrtrabatt');
+            await expectUsableFrontendLayout(adjustment);
+            expect(new Set(await readSecondaryInstructionColors(adjustment))).toEqual(new Set(['rgb(173, 181, 189)']));
+            await adjustment.getByRole('button', {name: messages.t('finance.addSurchargeOrRebate'), exact: true}).click();
+            await expect(adjustment.locator('[data-finance-adjustment]')).toHaveCount(1);
+            expect((await readFinance(page.request, event.id)).pools.find(pool => pool.id === poolId)?.surcharges)
+                .toContainEqual(expect.objectContaining({registrationId: ownId, amount: '-3.25', note: 'Gemeinsamer Fahrtrabatt'}));
+            await expect(adjustment).toContainText('3,25');
+            await dismissFrontendSuccessNotifications(page);
+            await adjustment.getByRole('button', {name: messages.t('common.close'), exact: true}).last().click();
+
+            await pool.getByRole('button', {name: messages.t('finance.manageTakeovers2'), exact: true}).click();
+            const coverage = page.getByRole('dialog');
+            await coverage.getByLabel(messages.t('finance.payer'), {exact: true}).selectOption(ownId);
+            await coverage.locator(`[data-finance-beneficiary="${otherId}"]`).getByRole('checkbox').check();
+            await expectUsableFrontendLayout(coverage);
+            expect(new Set(await readSecondaryInstructionColors(coverage))).toEqual(new Set(['rgb(173, 181, 189)']));
+            await coverage.getByRole('button', {name: messages.t('finance.saveChanges'), exact: true}).click();
+            await expect.poll(async () => (await readFinance(page.request, event.id)).pools.find(pool => pool.id === poolId)?.currentCoverageGroups?.[0]?.payerId).toBe(ownId);
+            await dismissFrontendSuccessNotifications(page);
+            await coverage.getByRole('button', {name: messages.t('common.close'), exact: true}).last().click();
+
+            const personal = await participant.newPage();
+            personal.on('pageerror', error => errors.push(error.message));
+            await personal.goto(`/frontend-pilot/event/${event.id}?locale=de`, {waitUntil: 'domcontentloaded'});
+            await waitForPilotHydration(personal);
+            const personalTime = await personal.evaluate(() => performance.timeOrigin);
+            const ownFinance = personal.locator('[data-finance-section]');
+            const ownToggle = ownFinance.locator('.accordion-button').first();
+            if (await ownToggle.getAttribute('aria-expanded') !== 'true') await ownToggle.click();
+            const personalPool = ownFinance.locator(`[data-finance-participant-pool="${poolId}"]`);
+            await personalPool.getByRole('button', {name: messages.t('finance.manageTakeovers2'), exact: true}).click();
+            const personalCoverage = personal.getByRole('dialog');
+            await expect(personalCoverage.getByLabel(messages.t('finance.payer'), {exact: true})).toHaveCount(0);
+            await expect(personalCoverage.locator(`[data-finance-beneficiary="${otherId}"]`).getByRole('checkbox')).toBeChecked();
+            await expectUsableFrontendLayout(personalCoverage);
+            await personalCoverage.getByRole('button', {name: messages.t('common.close'), exact: true}).last().click();
+            await ownFinance.getByRole('button', {name: messages.t('finance.submitAnInvoiceHistory'), exact: true}).click();
+            const submission = ownFinance.locator('[data-finance-submission]');
+            await submission.getByLabel(messages.t('finance.choosePool'), {exact: true}).selectOption(poolId);
+            await submission.getByLabel(messages.t('finance.amount'), {exact: true}).fill('007.50');
+            await submission.getByLabel(messages.t('finance.description'), {exact: true}).fill('Deutscher Beleg vom Telefon');
+            await submission.getByLabel(messages.t('finance.proofImageOrPDF'), {exact: true}).setInputFiles(proof(`phone-${width}.pdf`));
+            await expectUsableFrontendLayout(submission);
+            await expect(submission.getByLabel(messages.t('finance.amount'), {exact: true})).toHaveValue('007.50');
+            await submission.getByRole('button', {name: messages.t('finance.submitInvoice'), exact: true}).click();
+            await expect.poll(async () => (await readFinance(participant.request, event.id, false)).invoices.find(invoice => invoice.description === 'Deutscher Beleg vom Telefon')?.amount).toBe('7.50');
+            await expect(submission.getByLabel(messages.t('finance.amount'), {exact: true})).toHaveValue('');
+            await expect(submission.getByLabel(messages.t('finance.proofImageOrPDF'), {exact: true})).toHaveValue('');
+            const personalHistoryColors = await readSecondaryInstructionColors(ownFinance.locator('[data-finance-history]'));
+            expect(personalHistoryColors.length).toBeGreaterThan(0);
+            expect(new Set(personalHistoryColors)).toEqual(new Set(['rgb(173, 181, 189)']));
+            expect(await personal.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+            expect(await personal.evaluate(() => performance.timeOrigin)).toBe(personalTime);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+            expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentTime);
+            expect(errors).toEqual([]);
+        } finally {
+            await participant.close();
+            await other.close();
+        }
+    });
+}
 
 test('protects a committed organizer expense after response loss until deliberate history inspection without resubmission', async ({page, context}) => {
     test.setTimeout(90_000);

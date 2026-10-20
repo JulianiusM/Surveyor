@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit P7/P8 triggers and separate P8 R1/R2 public-method approvals recorded alongside retained interface, staged documentation and civil-date decisions; source adoption and execution belong to paired review
+verification-scope: Latest full-pilot correction authorization and repeated native-isolation reaffirmation recorded without reopening prior decisions; original finance contract provenance routed to active DEC-006; source adoption and execution remain distinct
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -495,6 +495,11 @@ unchanged canonical guide and active policies. Put baseline-specific
 assertions in the [coverage map](TEST_COVERAGE.md). The [review](PILOT_PARITY_REVIEW.md) owns executed results and limits.
 Handoffs name actual shared adoption, authorization, file ownership, retained drafts, privacy, chosen checks and any
 general-defect disposition. Native source/UI/Help stay the temporary visual/behavioral reference during coexistence.
+Carry each governing decision through to its actual callers and later amendments before classifying a new request
+as a conflict. In particular, the repeatedly confirmed native-isolation boundary already resolves how the shared
+frontend requirement applies. Reusing a request identifier or restating a generic principle does not reopen that
+decision. Apply the existing policy's persistent-authorization and conflict rules; do not substitute another approval
+question for reading and adopting the recorded decision.
 Historic D2 schema/reset decisions apply only to inspected disposable targets; no production reset or default-route
 replacement follows from a successful local run.
 
@@ -941,6 +946,33 @@ their existing identity requirements. This resolves the two previously blocked a
 original October 12 per-method choice, P8 trigger, native isolation and P9/cutover/backend exclusions remain intact.
 The prior automatic-review rejections and incomplete verification retain their historical scope in the paired
 review; approval itself does not establish implementation or passing checks.
+
+### Reaffirmed isolation and authorized full-pilot correction (2026-10-20)
+
+After the full implemented-pilot review, the maintainer authorizes all reported corrections and the same issue
+classes across every migrated area back to the original baseline. The latest R1 question incorrectly reopened the
+October 15 native-isolation decision despite its explicit October 16 and October 18 reaffirmations. The agent
+treated broader sharing wording as an unresolved choice without applying those existing decisions. The maintainer
+expressly rejects that repeated question and reaffirms the established boundary: unchanged native frontend,
+separately mutable Vue presentation shared among matching Vue consumers, and shared backend/domain/controller/DBAL
+and catalog owners. This is correction of decision adoption, not a newly selected architecture or permission to
+reopen the same choice in another migration slice.
+
+The same reply approves R2 decimal-string money transport as correction of a mistake. The original API design
+selected fixed-two-decimal money strings and four-place decimal factors. Editorial consolidation in `e80a512`
+incorrectly relabeled those rules as future work; P7/P8 subsequently followed native numeric payload shapes without
+a recorded format amendment. Review found no substantive reason requiring JSON numbers. Existing positive-amount
+operations accept more than two decimal places, which explains preserving their command-input precision rather
+than introducing a new restriction; it does not justify numeric wire values. The approved correction restores
+decimal-string transport and explicitly amends the original fixed-two-decimal command-input rule to preserve
+currently accepted precision. Existing calculations, native inputs and persistence semantics stay with their
+accepted owners. Matching factor/identifier contracts follow their original accepted rules.
+
+This authorization includes shared lexical controls and their matching migrated consumers, localized runtime Help,
+current staged contribution guidance, and verification/review corrections. Older loaded clients use the existing
+compatibility/update recovery, retaining mounted draft guards rather than replaying commands. It does not trigger
+P9–P11, default routes, native removal, production-guide publication, deployment or excluded general backend remedies.
+Actual production adoption and executed evidence belong to the paired review; authorization supplies neither.
 
 ## Cutover retirement inventory
 

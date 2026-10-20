@@ -8,7 +8,7 @@ import {retireQueryFamily} from '../../app/queryCache';
 import {useListCommands, useListDetail} from '../../composables/listDetail';
 import {useActivityApi} from './api';
 import {activityDateLabel, activityParticipantName} from './presentation';
-import {analyzeRequirementDraft, createRequirementDraft, requirementCoverage, requirementInput} from './requirements';
+import {analyzeRequirementDraft, createRequirementDraft, requirementCoverage, requirementInput, requirementAnalysisInput} from './requirements';
 import ActivityParticipants from './ActivityParticipants.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import FormField from '../../components/FormField.vue';
@@ -86,7 +86,7 @@ watch([planId, context.epoch], () => {
 });
 function markDirty(): void { dirty.value = true; calculation.value = null; }
 /** Resolve only names from this form's admitted role catalog. */
-function roleTitle(id: number): string {
+function roleTitle(id: string): string {
     // A removed catalog entry retains its opaque saved identity for display;
     // the label does not create or authorize a role relationship.
     return configuration.value?.allRoles.find(role => role.id === id)?.title ?? String(id);
@@ -97,9 +97,6 @@ function retained(profileId: string): boolean {
     return !!profileId && !targets.value.some(target => target.profileId === profileId);
 }
 function selectedProfile(event: Event): string { return (event.target as HTMLSelectElement).value.replace(/^profile:/, ''); }
-// Native number controls retain their lexical string. Vue's automatic numeric
-// v-model conversion would erase that draft contract before collection.
-function lexicalValue(event: Event): string { return (event.target as HTMLInputElement).value; }
 
 /** Attendance labels use the native civil-date presentation without changing IDs. */
 function attendance(profileId: string): string {
@@ -127,15 +124,15 @@ function removeOverride(key: number): void {
  * participate in the shared engine before it selects the closest integer baseline. */
 function calculate(): void {
     if (blocked.value || !configuration.value || !draft.value) return;
-    const input = requirementInput(draft.value);
+    const input = requirementAnalysisInput(configuration.value, draft.value);
     if (!hasValidRequirementValues(input.roleRequirements, input.overrides, [])) {
         command.setError('activity.requirements.invalidCalculation');
         return;
     }
     // The engine supplies both the baseline and complete duration table; copying
     // a rounded formula here would diverge from role/override precedence.
-    const result = calculateBaselineRequirementForPlan({plan: {...configuration.value.plan, roundingMode: input.roundingMode},
-        participants: configuration.value.calculationContext.participants, slots: configuration.value.calculationContext.slots,
+    const result = calculateBaselineRequirementForPlan({plan: {...configuration.value.plan, roundingMode: input.plan.roundingMode},
+        participants: input.participants, slots: input.slots,
         roleRequirements: input.roleRequirements, overrides: input.overrides});
     draft.value.generalRequiredShifts = String(result.baseline);
     const values = new Map(result.stayRequirements.map(row => [row.stayDays, row.requiredShifts]));
@@ -233,11 +230,14 @@ async function save(): Promise<void> {
                                 <option value="FREE">{{ messages.t('activity.requirements.free') }}</option><option value="REQUIRED">{{ messages.t('activity.requirements.required') }}</option>
                             </select></template>
                         </FormField>
-                        <FormField id="requiredShifts" class="col-sm-6 col-xl-3" :label="messages.t('activity.requirements.baseline')" label-class="">
-                            <template #control><div class="input-group input-group-sm">
-                                <input id="requiredShifts" :value="draft.generalRequiredShifts" type="number" min="0" class="form-control form-control-sm text-bg-dark" :placeholder="messages.t('activity.requirements.baselinePlaceholder')" :disabled="blocked" @input="draft.generalRequiredShifts = lexicalValue($event)" />
+                        <FormField id="requiredShifts" v-model="draft.generalRequiredShifts" :name="null"
+                            class="col-sm-6 col-xl-3" type="number" lexical-number :min="0"
+                            :label="messages.t('activity.requirements.baseline')" label-class=""
+                            control-class="form-control-sm" group-class="input-group-sm"
+                            :placeholder="messages.t('activity.requirements.baselinePlaceholder')" :disabled="blocked">
+                            <template #append>
                                 <ActionButton type="button" variant="outline-info" data-requirements-baseline-calc :disabled="blocked" @click="calculate"><i class="bi bi-calculator me-1" aria-hidden="true"></i>{{ messages.t('activity.requirements.calculate') }}</ActionButton>
-                            </div></template>
+                            </template>
                         </FormField>
                         <FormField id="roundingMode" class="col-sm-6 col-xl-3" :label="messages.t('activity.requirements.rounding')" label-class="">
                             <template #control><select id="roundingMode" v-model="draft.roundingMode" class="form-select form-select-sm text-bg-dark" :disabled="blocked">
@@ -254,10 +254,11 @@ async function save(): Promise<void> {
                     <p class="text-secondary small mb-2">{{ messages.t('activity.requirements.staysDescription') }}</p>
                     <div class="stay-requirement-scroll border border-secondary-subtle rounded p-2">
                         <div id="stayRequirementList" class="stay-requirement-grid">
-                            <FormField v-for="row in draft.stays" :id="'stayRequirement-' + row.stayDays" :key="row.stayDays" v-model="row.value" :name="null" class="stay-requirement-item d-grid gap-1" type="number" :min="0" :step="1"
-                                :label="messages.t('activity.dayCount', {count: row.stayDays})" label-class="small mb-0 text-nowrap" control-class="form-control-sm" :disabled="blocked">
-                                <template #control><input :id="'stayRequirement-' + row.stayDays" :value="row.value" type="number" min="0" step="1" class="form-control form-control-sm text-bg-dark" :data-stay-days="row.stayDays" :aria-label="messages.t('activity.requirements.stayLabel', {count: row.stayDays})" :disabled="blocked" @input="row.value = lexicalValue($event)" /></template>
-                            </FormField>
+                            <FormField v-for="row in draft.stays" :id="'stayRequirement-' + row.stayDays" :key="row.stayDays"
+                                v-model="row.value" :name="null" class="stay-requirement-item d-grid gap-1" type="number" lexical-number :min="0" :step="1"
+                                :label="messages.t('activity.dayCount', {count: row.stayDays})" label-class="small mb-0 text-nowrap"
+                                control-class="form-control-sm" :control-data="{'data-stay-days': row.stayDays}"
+                                :aria-label="messages.t('activity.requirements.stayLabel', {count: row.stayDays})" :disabled="blocked" />
                             <span v-if="!draft.stays.length" class="text-secondary small">{{ messages.t('activity.requirements.noStays') }}</span>
                         </div>
                     </div>
@@ -297,9 +298,10 @@ async function save(): Promise<void> {
                         <small class="text-secondary">{{ messages.t('activity.requirements.rolesHint') }}</small>
                     </h6>
                     <div id="roleRequirementList" class="row g-2">
-                        <FormField v-for="row in draft.roles" :id="'roleRequirement-' + row.roleId" :key="row.roleId" class="col-md-3 d-grid gap-1" :label="roleTitle(row.roleId)" label-class="small mb-0">
-                            <template #control><input :id="'roleRequirement-' + row.roleId" :value="row.value" type="number" min="0" step="1" placeholder="0" class="form-control form-control-sm text-bg-dark" :data-role-id="row.roleId" :disabled="blocked" @input="row.value = lexicalValue($event)" /></template>
-                        </FormField>
+                        <FormField v-for="row in draft.roles" :id="'roleRequirement-' + row.roleId" :key="row.roleId"
+                            v-model="row.value" :name="null" class="col-md-3 d-grid gap-1" type="number" lexical-number :min="0" :step="1" placeholder="0"
+                            :label="roleTitle(row.roleId)" label-class="small mb-0" control-class="form-control-sm"
+                            :control-data="{'data-role-id': row.roleId}" :disabled="blocked" />
                     </div>
                     <hr />
                     <h6 class="pilot-section-heading mb-2">
@@ -326,9 +328,10 @@ async function save(): Promise<void> {
                             <FormField :id="'overrideRole-' + row.key" class="col-12 col-sm-5 col-lg-2 d-grid gap-1" :label="messages.t('activity.requirements.optionalRole')" label-class="small mb-0">
                                 <template #control><select :id="'overrideRole-' + row.key" v-model="row.roleId" class="form-select form-select-sm text-bg-dark" data-override-target="role" :disabled="blocked || retained(row.profileId)"><option value="">{{ messages.t('activity.requirements.anyRole') }}</option><option v-for="role in configuration.allRoles" :key="role.id" :value="String(role.id)">{{ role.title }}</option></select></template>
                             </FormField>
-                            <FormField :id="'overrideRequired-' + row.key" class="col-9 col-sm-5 col-lg-2 d-grid gap-1" :label="messages.t('activity.requirements.requiredShifts')" label-class="small mb-0">
-                                <template #control><input :id="'overrideRequired-' + row.key" :value="row.value" type="number" min="0" step="1" class="form-control form-control-sm text-bg-dark" data-override-target="required" :disabled="blocked || retained(row.profileId)" @input="row.value = lexicalValue($event)" /></template>
-                            </FormField>
+                            <FormField :id="'overrideRequired-' + row.key" v-model="row.value" :name="null"
+                                class="col-9 col-sm-5 col-lg-2 d-grid gap-1" type="number" lexical-number :min="0" :step="1"
+                                :label="messages.t('activity.requirements.requiredShifts')" label-class="small mb-0" control-class="form-control-sm"
+                                :control-data="{'data-override-target': 'required'}" :disabled="blocked || retained(row.profileId)" />
                             <div class="col-3 col-sm-2 col-lg-1 d-grid">
                                 <ActionButton type="button" class="btn-sm w-100" variant="outline-danger"
                                     :aria-label="messages.t('activity.requirements.removeOverride')"

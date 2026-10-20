@@ -1,3 +1,4 @@
+import {apiCompatibility} from '../../../.generated/api/v1/policy.mjs';
 import {expect, test, type Dialog, type Page, type Route} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
@@ -24,7 +25,7 @@ test.afterEach(async ({page}) => {
 function startupSession(locale: Session['locale'] = 'en'): Session {
     return {kind: 'anonymous', context: null, csrfToken: null,
         locale, activeProfile: null, profiles: [], loginUrl: '/users/login', logoutUrl: null,
-        deployment: {buildId: 'startup-browser-fixture', apiCompatibility: 'v1-pilot-2026-10-07'},
+        deployment: {buildId: 'startup-browser-fixture', apiCompatibility},
         shell: {version: 'startup-fixture', imprintUrl: '/imprint', privacyPolicyUrl: '/privacy',
             localLoginEnabled: true, oidcEnabled: false, oidcName: 'Fixture provider'}};
 }

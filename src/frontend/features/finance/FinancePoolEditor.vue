@@ -49,7 +49,7 @@ function initialDraft() {
     return {name: '', status: 'OPEN' as 'OPEN' | 'ORGANIZER_ONLY', description: props.pool?.description ?? '',
         distribution: settings?.distribution ?? 'TIME_BASED', roundUpShares: settings?.roundUpShares ?? true,
         sendCalculationEmails: settings?.sendCalculationEmails ?? true, assignAll: true, isDefault: false,
-        subtractPersonalInvoices: true, registrations: props.participants.map(participant => Number(participant.id))};
+        subtractPersonalInvoices: true, registrations: props.participants.map(participant => participant.id)};
 }
 
 /** Refresh may update an untouched form; a real local draft retains its values
@@ -80,7 +80,7 @@ function restoreDraft(): void {
  * refreshed chooser must not appear to exclude a person the server will enroll. */
 function synchronizeAllParticipants(): void {
     if (props.pool || !draft.assignAll || command.pending.value || command.uncertain.value) return;
-    const registrations = props.participants.map(participant => Number(participant.id));
+    const registrations = props.participants.map(participant => participant.id);
     // This updates only the automatic checkbox projection. Independent text and
     // explicit enrollment drafts retain their values and dirty comparison.
     draft.registrations = registrations;
@@ -97,7 +97,7 @@ function updateAssignAll(value: boolean): void {
     draft.assignAll = value;
     // Checking All restores the current participant selection without saving
     // anything or changing the independent future-enrollment default.
-    if (draft.assignAll) draft.registrations = props.participants.map(participant => Number(participant.id));
+    if (draft.assignAll) draft.registrations = props.participants.map(participant => participant.id);
 }
 function close(): void {
     if (!command.mayLeave()) return;
@@ -140,7 +140,7 @@ function acknowledge(): void {
 </script>
 
 <template>
-    <AppDialog :open="open" :title="messages.t(pool ? 'finance.poolSettings' : 'finance.createANewPool')" :subtitle="pool?.name"
+    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t(pool ? 'finance.poolSettings' : 'finance.createANewPool')" :subtitle="pool?.name"
         :pending="command.pending.value || command.recovering.value" standard @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain"
@@ -233,7 +233,7 @@ function acknowledge(): void {
                             <p class="form-label">{{ messages.t('finance.limitToParticipantsDisabledWhenAssignedToAll') }}</p>
                             <div class="assignments-list border border-secondary-subtle rounded-3 p-2 bg-black text-white">
                                 <div v-for="participant in participants" :key="participant.id" class="form-check">
-                                    <input :id="`${id}-participant-${participant.id}`" v-model="draft.registrations" :value="Number(participant.id)"
+                                    <input :id="`${id}-participant-${participant.id}`" v-model="draft.registrations" :value="participant.id"
                                         type="checkbox" name="registrations" class="form-check-input" :disabled="draft.assignAll" />
                                     <label class="form-check-label" :for="`${id}-participant-${participant.id}`">
                                         {{ messages.t('finance.nameAndEmail', {name: participant.name, email: participant.email ?? ''}) }}

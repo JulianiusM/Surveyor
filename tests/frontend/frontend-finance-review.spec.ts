@@ -13,12 +13,12 @@ import {frontendEventButton as button, frontendEventJson as json, mountFrontendE
 
 const poolId = '22222222-2222-4222-8222-222222222222';
 const pool: components['schemas']['FinancePool'] = {id: poolId, name: 'Saved pool', description: 'Saved description', status: 'CLOSED',
-    isDefault: false, assignAll: false, assignedCount: 1, registrationIds: [7], revision: 7, canSubmit: false,
+    isDefault: false, assignAll: false, assignedCount: 1, registrationIds: ['7'], revision: 7, canSubmit: false,
     needsRecalculation: false, hasPendingTakeovers: false, coverageKnown: true, coverageGroups: [], pendingCoverageGroups: [],
     calculation: null, exampleCalculation: null, summary: null,
     settings: {distribution: 'TIME_BASED', roundUpShares: true, sendCalculationEmails: true, subtractPersonalInvoices: true}};
 const invoice: components['schemas']['FinanceInvoice'] = {id: '12', poolId, poolName: pool.name, revision: 7, status: 'APPROVED',
-    amount: 10, description: '<Original evidence>', correctedAmount: null, correctedDescription: null, rejectionReason: null,
+    amount: '10.00', description: '<Original evidence>', correctedAmount: null, correctedDescription: null, rejectionReason: null,
     organizerRecorded: false, recordedByName: null, participantName: 'Alice', participantEmail: 'alice@example.test',
     createdAt: '2026-10-20T10:00:00Z', proofOriginalName: 'saved.pdf', proofUrl: '/proof-output', canRetract: false, canClose: true};
 const participants = [{id: '7', name: 'Alice', email: 'alice@example.test'}, {id: '8', name: 'Bob', email: null}];
@@ -55,13 +55,14 @@ describe('P8A organizer finance forms', () => {
     it('retains the source draft and captured revision through Back, fresh saved props and the final retroactive confirmation', async () => {
         const mounted = await mountForm(FinanceInvoiceReview, {invoice, action: 'revise'});
         const amount = mounted.dialog.get<HTMLInputElement>('input[name="correctedAmount"]');
+        expect(amount.element.value).toBe('10');
         await amount.setValue('013.50'); await amount.trigger('change'); await amount.trigger('blur');
         await mounted.dialog.get('textarea[name="correctedDescription"]').setValue('<Proposed correction>');
         await mounted.dialog.get('form').trigger('submit'); await flushPromises();
         expect(mounted.request).not.toHaveBeenCalled();
         expect(mounted.dialog.text()).toContain('Existing shares and payments stay unchanged.');
         expect(mounted.dialog.find('Proposed').exists()).toBe(false);
-        await mounted.wrapper.setProps({invoice: {...invoice, revision: 99, amount: 30}, pool: {...pool, revision: 99}});
+        await mounted.wrapper.setProps({invoice: {...invoice, revision: 99, amount: '30.00'}, pool: {...pool, revision: 99}});
         await button(mounted.dialog, 'Back to edit').trigger('click');
         expect(amount.element.value).toBe('013.50');
         expect(mounted.dialog.get<HTMLTextAreaElement>('textarea[name="correctedDescription"]').element.value).toBe('<Proposed correction>');
@@ -69,7 +70,7 @@ describe('P8A organizer finance forms', () => {
         await mounted.dialog.get('form').trigger('submit'); await flushPromises();
         const request = mounted.request.mock.calls[0]![0] as Request;
         expect(new URL(request.url).pathname).toContain('/invoices/12/revise');
-        expect(await request.json()).toEqual({confirmed: true, expectedRevision: 7, correctedAmount: 13.5, correctedDescription: '<Proposed correction>'});
+        expect(await request.json()).toEqual({confirmed: true, expectedRevision: 7, correctedAmount: '13.5', correctedDescription: '<Proposed correction>'});
         expect(mounted.wrapper.emitted('close')).toHaveLength(1);
     });
 
@@ -94,7 +95,7 @@ describe('P8A organizer finance forms', () => {
         await mounted.dialog.get('input[name="correctedAmount"]').setValue('0.00123');
         await mounted.dialog.get('form').trigger('submit'); await flushPromises();
         expect(new URL((mounted.request.mock.calls[0]![0] as Request).url).pathname).toContain('/invoices/12/approve');
-        expect(await (mounted.request.mock.calls[0]![0] as Request).json()).toEqual({correctedAmount: 0.00123});
+        expect(await (mounted.request.mock.calls[0]![0] as Request).json()).toEqual({correctedAmount: '0.00123'});
         expect(form.reportValidity).not.toHaveBeenCalled();
         expect(mounted.wrapper.emitted('close')).toHaveLength(1);
     });
@@ -129,7 +130,7 @@ describe('P8A organizer finance forms', () => {
         expect(amount.element.value).toBe('013.50');
         expect(chooser.files?.[0]).toBe(file);
         expect(mounted.dialog.get<HTMLInputElement>('input[name="proof"]').element).toBe(chooser);
-        expect(JSON.parse(upload.mock.calls[0]![2].get('data') as string)).toEqual({amount: 13.5, description: 'Organizer expense', registrationId: 7});
+        expect(JSON.parse(upload.mock.calls[0]![2].get('data') as string)).toEqual({amount: '13.5', description: 'Organizer expense', registrationId: '7'});
         // FormData may wrap the same bytes in its own File object. Draft/DOM
         // identity is asserted above; transport must preserve name/type/content.
         const sent = upload.mock.calls[0]![2].get('proof') as File;
@@ -156,7 +157,7 @@ describe('P8A organizer finance forms', () => {
         await mounted.dialog.get('textarea[name="description"]').setValue('Shared organizer cost');
         await mounted.dialog.get('form').trigger('submit'); await flushPromises();
         const form = upload.mock.calls[0]![2];
-        expect(JSON.parse(form.get('data') as string)).toEqual({amount: 15.2, description: 'Shared organizer cost'});
+        expect(JSON.parse(form.get('data') as string)).toEqual({amount: '15.2', description: 'Shared organizer cost'});
         expect(form.has('proof')).toBe(false);
         expect(mounted.dialog.get<HTMLInputElement>('input[name="amount"]').element.value).toBe('');
         expect(mounted.dialog.get<HTMLTextAreaElement>('textarea[name="description"]').element.value).toBe('');
@@ -214,7 +215,7 @@ describe('P8A organizer finance forms', () => {
         await mounted.dialog.get('form').trigger('submit'); await flushPromises();
         expect(await (mounted.request.mock.calls[0]![0] as Request).json()).toEqual({name: 'Organizer pool', status: 'ORGANIZER_ONLY',
             distribution: 'TIME_BASED', description: '', roundUpShares: true, sendCalculationEmails: true,
-            assignAll: false, isDefault: true, subtractPersonalInvoices: true, registrations: [7, 9]});
+            assignAll: false, isDefault: true, subtractPersonalInvoices: true, registrations: ['7', '9']});
         expect(mounted.request).toHaveBeenCalledTimes(1);
     });
 

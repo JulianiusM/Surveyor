@@ -4,16 +4,16 @@ documentation-metadata
 audience: Organisatoren; erfahrene Administratoren
 owner: permission-system maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
-source-anchors: src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+source-anchors: src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/components/EntityAccessEditor.vue; src/frontend/components/permissions/AudiencePermissions.vue; src/locales/
 heading-anchors: 1:permissions-and-sharing; 2:choose-a-common-setup; 2:four-rules-to-remember; 3:example-of-cumulative-grants; 2:who-receives-each-grant; 2:open-the-permission-controls; 3:while-creating-an-item; 3:after-creation; 2:configure-group-permissions; 2:add-or-change-a-named-administrator; 2:sharing-recipes; 3:normal-open-collaboration; 3:full-account-profiles-only; 3:registered-event-participants-only; 3:read-only-participation; 3:let-participants-add-entries-without-managing-everybody; 3:delegate-a-limited-organizer; 3:delegate-property-or-event-link-editing; 3:delegate-complete-control; 2:permission-label-reference; 2:preset-reference; 3:initial-selections; 2:parent-and-child-permissions; 2:page-access-is-not-the-same-as-an-action-permission; 2:troubleshooting; 3:a-permission-remains-after-i-cleared-it; 3:a-full-account-user-receives-a-guest-permission; 3:a-participant-cannot-use-an-action-on-a-linked-list-or-plan; 3:an-event-organizer-cannot-open-the-administration-dashboard; 3:an-administrator-appears-but-cannot-do-anything; 3:i-cannot-find-a-guest-in-add-administrator
 next-review: permission-or-entity-settings-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
 -->
 
-Mit Berechtigungen legst du fest, welche Aktionen Personen in einer **Veranstaltung**, einem **Aktivitätenplan**, einer **Packliste** oder einer **Fahrtenliste** ausführen dürfen. Beginne mit einer typischen Freigabe, teste sie mit einem Profil ohne Eigentümerrechte und nutze die Referenzabschnitte für feinere Einstellungen. Die Referenztabelle nennt auch die englischen Beschriftungen bisheriger Ansichten.
+Mit Berechtigungen legst du fest, welche Aktionen Personen in einer **Veranstaltung**, einem **Aktivitätenplan**, einer **Packliste** oder einer **Fahrtenliste** ausführen dürfen. Beginne mit einer typischen Freigabe, teste sie mit einem Profil ohne Eigentümerrechte und nutze die Referenzabschnitte für feinere Einstellungen.
 
 > **Umfragen sind anders.** Sie verwenden dieses Berechtigungssystem absichtlich nicht. Einladung, Gastzugang, Abstimmung und zusätzliche Kombinationen beschreibt [Umfragen](SURVEYS.md).
 
@@ -35,7 +35,7 @@ Die folgenden Abschnitte erklären Wirkung und Anwendung dieser Einstellungen.
 1. **Freigaben werden addiert.** Öffentlich, Gast, Angemeldet, Teilnehmer und individuelle Administratorrechte wirken gemeinsam. Eine speziellere Freigabe ersetzt keine allgemeinere.
 2. **Ein Profil kann mehreren Gruppen entsprechen.** Ein für eine Veranstaltung angemeldetes Profil eines vollständigen Kontos kann gleichzeitig Öffentlich, Gast, Angemeldet, Teilnehmer und eine individuelle Freigabe erhalten.
 3. **Der Eigentümer hat immer alle Rechte.** Gruppen- und Einzelzuweisungen können seinen Zugriff nicht einschränken.
-4. **Eine Voreinstellung ersetzt die aktuelle Auswahl einer Gruppe oder eines Administrators.** Wähle zuerst die Voreinstellung und passe danach einzelne Kontrollkästchen an. **Alle** (Hinweis **Alle auswählen**, englisch **All**) wählt jedes Recht; **Keine** (Hinweis **Auswahl aufheben**, englisch **None**) entfernt alle Rechte dieses Abschnitts.
+4. **Eine Voreinstellung ersetzt die aktuelle Auswahl einer Gruppe oder eines Administrators.** Wähle zuerst die Voreinstellung und passe danach einzelne Kontrollkästchen an. **Alle** (Hinweis **Alle auswählen**) wählt jedes Recht; **Keine** (Hinweis **Auswahl aufheben**) entfernt alle Rechte dieses Abschnitts.
 
 ### Beispiel addierter Freigaben
 
@@ -60,7 +60,7 @@ Entscheidend ist das **aktive Profil**. Nach einem Profilwechsel können sich di
 
 **Metadaten bearbeiten** erlaubt auch **Für alle archivieren**, **Für alle wiederherstellen** und die Archivierungsautomatik von Veranstaltungen und eigenständigen Aktivitätenplänen. Dasselbe Recht erlaubt manuelle Archivierung und Wiederherstellung von Aktivitätenplänen, Pack- und Fahrtenlisten. **Zugriff auf Verwaltung** oder eine Administratorzuweisung allein reichen nicht. Wer nur einen Untereintrag organisiert, kann eine archivierte Veranstaltung nicht überstimmen oder ohne Veranstaltungsrechte wiederherstellen. Bei Umfragen bleibt gemeinsame Archivierung dem Eigentümer vorbehalten.
 
-Persönliches **Für mich ausblenden** (englisch **Hide for me**), **Für mich einblenden** (englisch **Show for me**) und **Standardsichtbarkeit verwenden** (englisch **Use default visibility**) setzt Teilnahme oder Verwaltungszuordnung in der Übersicht des aktiven Profils voraus. Es ändert keine Rechte und keinen fremden Archivierungszustand. Siehe [Deine Übersicht](DASHBOARD.md#hide-or-show-an-item-only-for-yourself).
+Persönliches **Für mich ausblenden**, **Für mich einblenden** und **Standardsichtbarkeit verwenden** setzt Teilnahme oder Verwaltungszuordnung in der Übersicht des aktiven Profils voraus. Es ändert keine Rechte und keinen fremden Archivierungszustand. Siehe [Deine Übersicht](DASHBOARD.md#hide-or-show-an-item-only-for-yourself).
 
 ### Beim Erstellen eines Eintrags
 
@@ -72,7 +72,7 @@ Umfragen zeigen diese Matrix nicht.
 
 Zum Anzeigen und Verwenden brauchst du **Berechtigungen verwalten**. Öffne den Eintrag, wähle in der Kopfzeile **Entitätseinstellungen** und anschließend **Zugriff**.
 
-Bei Veranstaltungen stehen diese Bedienelemente auf der normalen Veranstaltungsseite ohne **Zugriff auf Verwaltung** bereit. Die Verwaltungsübersicht bietet denselben Dialog, benötigt zum Betreten jedoch weiterhin dieses Zugriffsrecht. Regeln für Aktivitätenzuweisungen bleiben unter **Rules & auto-assign**.
+Bei Veranstaltungen stehen diese Bedienelemente auf der normalen Veranstaltungsseite ohne **Zugriff auf Verwaltung** bereit. Die Verwaltungsübersicht bietet denselben Dialog, benötigt zum Betreten jedoch weiterhin dieses Zugriffsrecht. Regeln für Aktivitätenzuweisungen bleiben unter **Regeln & automatische Zuweisung**.
 
 Unter **Zugriff**:
 
@@ -101,7 +101,7 @@ Beim Zielgruppenwechsel bleibt jede ungespeicherte Auswahl erhalten. **Berechtig
 
 **Entfernen** löscht die individuelle Administratorzuweisung. Rechte aus Öffentlich, Gast, Angemeldet oder Teilnehmer bleiben bestehen.
 
-Die anfängliche Einstellung **Keine** erzeugt eine Administratorzuweisung ohne eigene Fähigkeiten. Der Eintrag kann trotzdem unter **Verwaltbare Einträge** (englisch **Administrable entities**) dieses Profils erscheinen, weil die Zuordnung existiert. Aktionen bleiben gesperrt, bis eine andere passende Freigabe sie erlaubt.
+Die anfängliche Einstellung **Keine** erzeugt eine Administratorzuweisung ohne eigene Fähigkeiten. Der Eintrag kann trotzdem unter **Verwaltbare Einträge** dieses Profils erscheinen, weil die Zuordnung existiert. Aktionen bleiben gesperrt, bis eine andere passende Freigabe sie erlaubt.
 
 ## Beispiele für Freigaben
 
@@ -164,7 +164,7 @@ Ein Berechtigungsverwalter einer Veranstaltung braucht **Berechtigungen verwalte
 
 ### Eigenschaften oder Veranstaltungsverknüpfungen delegieren
 
-**Entitätseinstellungen** zeigt nur erlaubte Felder und Aktionen. Gib einem reinen Titelbearbeiter **Titel bearbeiten**, einem Beschreibungsbearbeiter **Beschreibung bearbeiten**. Ein Veranstaltungsbearbeiter mit ausschließlich **Anforderungen verwalten** sieht die Ernährungseinstellungen. Diese Profile brauchen für den Dialog allein kein **Zugriff auf Verwaltung**.
+**Entitätseinstellungen** zeigt nur erlaubte Felder und Aktionen. Gib einem reinen Titelbearbeiter **Titel bearbeiten**, einem Beschreibungsbearbeiter **Beschreibung bearbeiten**. Ein Veranstaltungsbearbeiter mit ausschließlich **Anforderungen verwalten** sieht die Ernährungseinstellungen. Die Berechtigung **Zugriff auf Verwaltung** ist für den Dialog allein nicht erforderlich.
 
 Das Ändern oder Entfernen der Veranstaltung eines Aktivitätenplans, einer Pack- oder Fahrtenliste verlangt **Metadaten bearbeiten** auf dieser Ressource. Für ein neues Ziel brauchst du zusätzlich **Zuweisungen verwalten** auf der Zielveranstaltung. Vergangene, nach Anmeldeschluss liegende und archivierte Veranstaltungen bleiben unter denselben Rechten auswählbar. Eine bloße Administratorzuweisung ohne benötigtes Recht reicht nicht.
 
@@ -176,31 +176,31 @@ Wähle für den benannten Administrator **Administrator**. Dies gewährt alle ve
 
 ## Referenz der Berechtigungsbezeichnungen
 
-Wähle mit diesen Beschriftungen die Aktionen aus, die eine Person ausführen darf. Die Funktionsanleitungen zeigen, wo die Aktionen erscheinen. Englische Bezeichnungen in Klammern helfen in bisherigen Ansichten.
+Wähle mit diesen Beschriftungen die Aktionen aus, die eine Person ausführen darf. Die Funktionsanleitungen zeigen, wo die Aktionen erscheinen.
 
 | Beschriftung | Erlaubt |
 |---|---|
-| **Titel bearbeiten** (Edit Title) | Titel einer Veranstaltung, eines Plans oder einer Liste ändern. |
-| **Beschreibung bearbeiten** (Edit Desc) | Beschreibung einer Veranstaltung, eines Plans oder einer Liste ändern. |
-| **Kapazität bearbeiten** (Edit Capacity) | Veranstaltungskapazität oder unterstützte Gegenstandskapazität ändern. |
-| **Metadaten bearbeiten** (Edit Meta) | Weitere Einstellungen wie Daten, Ort, Kopfzeilenbild oder Veranstaltungsverknüpfung ändern. Die Zielauswahl verlangt dort zusätzlich Zuweisungen verwalten. |
-| **Gegenstände hinzufügen** (Item Add) | Aktivitätenzeitfenster, Packgegenstände oder Fahrerzeilen hinzufügen. |
-| **Gegenstände bearbeiten** (Item Edit) | Zeitfenster oder Listeneinträge sortieren und deren unterstützte Bearbeitungen erlauben. |
-| **Gegenstandsbeschreibung bearbeiten** (Item Edit Desc) | Beschreibungen von Zeitfenstern oder Listeneinträgen ohne umfassendes Bearbeitungsrecht ändern. |
-| **Gegenstandsmetadaten bearbeiten** (Item Edit Meta) | Unterstützte Einstellungen einzelner Einträge, derzeit Aktivitätenzeitfenster, ohne umfassendes Bearbeitungsrecht ändern. |
-| **Gegenstände löschen** (Item Delete) | Zeitfenster oder Listeneinträge löschen. |
-| **Zuweisungen verwalten** (Manage Assignments) | Fremde Zuweisungen oder Rollen verwalten. Eigene Teilnahmeaktionen benötigen gegebenenfalls nur Zugriff auf Ansicht. |
-| **Anforderungen verwalten** (Manage Requirements) | Veranstaltungsanforderungen sowie Anforderungen, Regeln und gemeinsame Felddefinitionen von Aktivitätenplänen verwalten. |
-| **Anmeldungen verwalten** (Manage Registrations) | Veranstaltungsanmeldelinks und Teilnehmeranmeldungen verwalten. |
-| **Berechtigungen verwalten** (Manage Permissions) | Gruppenberechtigungen und Administratoren öffnen und ändern. |
-| **Daten exportieren** (Data Export) | Unterstützte Daten exportieren. Teilnehmerexport von Veranstaltungen verlangt zusätzlich Zugriff auf Teilnehmer. |
-| **Daten duplizieren** (Data Duplicate) | Das Duplizierungsformular öffnen. Die Erstellung abzuschließen erfordert weiterhin ein vollständiges Konto. |
-| **Zugriff auf Anmeldung** (Access Registration) | Für eine Veranstaltung anmelden. |
-| **Zugriff auf Ansicht** (Access View) | Als Nichtteilnehmer einen verknüpften Plan oder eine Liste betreten und die durch deren Freigaben erlaubten gemeinsamen Aktionen verwenden. |
-| **Zugriff auf Erstellung** (Access Create) | Bestandteil der Standard-Zugriffsvoreinstellungen. Neue Veranstaltungen, Pläne oder Listen erfordern weiterhin ein vollständiges Konto und die in ihrer Anleitung genannten Rechte. |
-| **Zugriff auf Verwaltung** (Access Admin) | Die Verwaltungsübersicht einer Veranstaltung öffnen. Gewährt nicht alle Verwaltungsrechte. |
-| **Zugriff auf Teilnehmer** (Access Participants) | Teilnehmer- oder Zusagennamen und Listen sehen, soweit verfügbar. |
-| **Zugriff auf Gegenstände** (Access Items) | Die verknüpften Aktivitätenpläne, Pack- und Fahrtenlisten einer Veranstaltung sehen. |
+| **Titel bearbeiten** | Titel einer Veranstaltung, eines Plans oder einer Liste ändern. |
+| **Beschreibung bearbeiten** | Beschreibung einer Veranstaltung, eines Plans oder einer Liste ändern. |
+| **Kapazität bearbeiten** | Veranstaltungskapazität oder unterstützte Gegenstandskapazität ändern. |
+| **Metadaten bearbeiten** | Weitere Einstellungen wie Daten, Ort, Kopfzeilenbild oder Veranstaltungsverknüpfung ändern. Die Zielauswahl verlangt dort zusätzlich Zuweisungen verwalten. |
+| **Gegenstände hinzufügen** | Aktivitätenzeitfenster, Packgegenstände oder Fahrerzeilen hinzufügen. |
+| **Gegenstände bearbeiten** | Zeitfenster oder Listeneinträge sortieren und deren unterstützte Bearbeitungen erlauben. |
+| **Gegenstandsbeschreibung bearbeiten** | Beschreibungen von Zeitfenstern oder Listeneinträgen ohne umfassendes Bearbeitungsrecht ändern. |
+| **Gegenstandsmetadaten bearbeiten** | Unterstützte Einstellungen einzelner Einträge, derzeit Aktivitätenzeitfenster, ohne umfassendes Bearbeitungsrecht ändern. |
+| **Gegenstände löschen** | Zeitfenster oder Listeneinträge löschen. |
+| **Zuweisungen verwalten** | Fremde Zuweisungen oder Rollen verwalten. Eigene Teilnahmeaktionen benötigen gegebenenfalls nur Zugriff auf Ansicht. |
+| **Anforderungen verwalten** | Veranstaltungsanforderungen sowie Anforderungen, Regeln und gemeinsame Felddefinitionen von Aktivitätenplänen verwalten. |
+| **Anmeldungen verwalten** | Veranstaltungsanmeldelinks und Teilnehmeranmeldungen verwalten. |
+| **Berechtigungen verwalten** | Gruppenberechtigungen und Administratoren öffnen und ändern. |
+| **Daten exportieren** | Unterstützte Daten exportieren. Teilnehmerexport von Veranstaltungen verlangt zusätzlich Zugriff auf Teilnehmer. |
+| **Daten duplizieren** | Das Duplizierungsformular öffnen. Die Erstellung abzuschließen erfordert weiterhin ein vollständiges Konto. |
+| **Zugriff auf Anmeldung** | Für eine Veranstaltung anmelden. |
+| **Zugriff auf Ansicht** | Als Nichtteilnehmer einen verknüpften Plan oder eine Liste betreten und die durch deren Freigaben erlaubten gemeinsamen Aktionen verwenden. |
+| **Zugriff auf Erstellung** | Bestandteil der Standard-Zugriffsvoreinstellungen. Neue Veranstaltungen, Pläne oder Listen erfordern weiterhin ein vollständiges Konto und die in ihrer Anleitung genannten Rechte. |
+| **Zugriff auf Verwaltung** | Die Verwaltungsübersicht einer Veranstaltung öffnen. Gewährt nicht alle Verwaltungsrechte. |
+| **Zugriff auf Teilnehmer** | Teilnehmer- oder Zusagennamen und Listen sehen, soweit verfügbar. |
+| **Zugriff auf Gegenstände** | Die verknüpften Aktivitätenpläne, Pack- und Fahrtenlisten einer Veranstaltung sehen. |
 
 Wenn du dich beim Absenden einer Kopie anmelden musst, kehrst du nach der Anmeldung zum selben
 Duplizierungsformular zurück. Prüfe dessen Werte, bevor du es erneut absendest.
@@ -211,13 +211,13 @@ Eine Voreinstellung ersetzt die aktuellen Kontrollkästchen genau dieser Zielgru
 
 | Voreinstellung | Ausgewählte Rechte |
 |---|---|
-| **Alle Bearbeitungsrechte** (Full Edit) | Titel, Beschreibung, Kapazität und Metadaten bearbeiten |
-| **Alle Gegenstandsrechte** (Full Item) | Gegenstände hinzufügen, bearbeiten, beschreiben, Metadaten bearbeiten und löschen |
-| **Alle Verwaltungsrechte** (Full Manage) | Zuweisungen, Anforderungen, Anmeldungen und Berechtigungen verwalten |
-| **Alle Datenrechte** (Full Data) | Daten exportieren und duplizieren |
-| **Alle Zugriffsrechte** (Full Access) | Zugriff auf Anmeldung, Erstellung, Ansicht, Verwaltung, Teilnehmer und Gegenstände |
-| **Administrator** (Admin) | Titel, Beschreibung, Kapazität und Metadaten bearbeiten; Gegenstände hinzufügen, bearbeiten, beschreiben, Metadaten bearbeiten und löschen; Zuweisungen, Anforderungen, Anmeldungen und Berechtigungen verwalten; Daten exportieren und duplizieren; Zugriff auf Anmeldung, Erstellung, Ansicht, Verwaltung, Teilnehmer und Gegenstände |
-| **Standardfreigabe** (Default Entity) | Zugriff auf Anmeldung, Ansicht, Erstellung und Gegenstände |
+| **Alle Bearbeitungsrechte** | Titel, Beschreibung, Kapazität und Metadaten bearbeiten |
+| **Alle Gegenstandsrechte** | Gegenstände hinzufügen, bearbeiten, beschreiben, Metadaten bearbeiten und löschen |
+| **Alle Verwaltungsrechte** | Zuweisungen, Anforderungen, Anmeldungen und Berechtigungen verwalten |
+| **Alle Datenrechte** | Daten exportieren und duplizieren |
+| **Alle Zugriffsrechte** | Zugriff auf Anmeldung, Erstellung, Ansicht, Verwaltung, Teilnehmer und Gegenstände |
+| **Administrator** | Titel, Beschreibung, Kapazität und Metadaten bearbeiten; Gegenstände hinzufügen, bearbeiten, beschreiben, Metadaten bearbeiten und löschen; Zuweisungen, Anforderungen, Anmeldungen und Berechtigungen verwalten; Daten exportieren und duplizieren; Zugriff auf Anmeldung, Erstellung, Ansicht, Verwaltung, Teilnehmer und Gegenstände |
+| **Standardfreigabe** | Zugriff auf Anmeldung, Ansicht, Erstellung und Gegenstände |
 
 ### Anfängliche Auswahl
 

@@ -5,10 +5,10 @@ documentation-metadata
 audience: documentation contributors; feature maintainers
 owner: product documentation maintainers
 status: current
-last-verified: 2026-10-14
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: per-corpus authoring ownership, complete localized article fallback and current reproduction source reviewed; no new image generation or pixel acceptance claimed
-source-anchors: docs/user-guide/assets/; docs/user-guide/README.md; docs/user-guide/SURVEYS.md; docs/user-guide/PACKING_LISTS.md; docs/user-guide/en/; docs/user-guide/de/; src/views/layout.pug; src/views/surveyor/survey-vote.pug; src/views/packing/packing-view.pug; src/frontend/components/AppHeader.vue; src/frontend/features/packing/; src/locales/; scripts/generate-help-visuals.mjs; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
+verification-scope: Existing per-corpus authoring rules retained; current Survey control/catalog ownership and bounded generator bindings reconciled; German survey output inspection recorded separately in current pilot evidence
+source-anchors: docs/user-guide/assets/; docs/user-guide/README.md; docs/user-guide/SURVEYS.md; docs/user-guide/PACKING_LISTS.md; docs/user-guide/en/; docs/user-guide/de/; src/views/layout.pug; src/views/surveyor/survey-vote.pug; src/views/packing/packing-view.pug; src/frontend/components/AppHeader.vue; src/frontend/features/packing/; src/frontend/features/surveys/; src/locales/; scripts/generate-help-visuals.mjs; .github/workflows/release.yml; tests/unit/help-documentation.spec.ts
 next-review: help-visual-or-visible-UI-change
 -->
 
@@ -17,7 +17,10 @@ The navigation image combines a **source-rendered screenshot of the actual appli
 explanations placed outside that screenshot. Use the actual logo, navigation, Help link and account/profile area for
 the article's corpus. The example profile is fictional; this is not a capture of a live production account.
 
-The other two images are explicitly captioned explanatory diagrams, not screenshots. Their labels and state distinctions must match the application. The survey example uses the visible option **1. day in month**, rather than inventing a replacement label.
+The other two images are explicitly captioned explanatory diagrams, not screenshots. Their labels and state
+distinctions must match the application in the article's selected language. The survey example takes its first
+weekday occurrence and answer labels from the same catalog as the visible add-combination controls, rather than
+copying an English label into another language or inventing a replacement label.
 
 Assets retain their existing filenames. Each displayed image's adjacent caption includes a full-size image link through the existing help-asset route. Small previews do not replace the written procedures or the ability to inspect the full-size image.
 
@@ -28,7 +31,7 @@ The product documentation maintainers own the asset set. A feature maintainer id
 | Asset | Used by | Implementation sources to compare |
 |---|---|---|
 | `navigation-at-a-glance.png` | User-guide home | The article's actual rendered header; current template owners are `src/views/layout.pug`/`src/views/users/dashboard.pug`, and the localized component owner is `src/frontend/components/AppHeader.vue`. |
-| `survey-recurring-pattern.png` | Surveys | `src/views/surveyor/survey-create.pug`, `src/views/surveyor/survey-vote.pug` |
+| `survey-recurring-pattern.png` | Surveys | The article's actual combination/answer controls: native `src/views/surveyor/` and localized `src/frontend/features/surveys/CombinationFields.vue`, `src/frontend/features/surveys/SurveyPage.vue` and `src/locales/`. |
 | `packing-shared-vs-local.png` | Packing Lists | The article's actual shared-assignment and browser-local Packed controls; current owners are `src/views/packing/`, `src/public/js/packing.ts` and `src/frontend/features/packing/`. |
 
 ## Authoring rules
@@ -47,6 +50,8 @@ The product documentation maintainers own the asset set. A feature maintainer id
 ## Language-owned images
 
 Each available `visual-labels.json` supplies its diagram copy; actual localized UI text comes from the shared catalog.
+The maintained generator's bounded Survey aliases bind the real add-combination heading, weekday, first occurrence,
+action and answer labels. Language-owned files contain explanatory copy and sample choices, not a second UI catalog.
 Review equivalent localized captions, non-empty alt descriptions and full-size links with each image. Asset URLs
 identify the article's actual language, and authored local references stay within that article's corpus.
 

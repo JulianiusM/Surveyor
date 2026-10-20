@@ -4,19 +4,19 @@ documentation-metadata
 audience: novice users; guests; registered users
 owner: identity feature maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
-source-anchors: src/public/js/shared/alerts.ts; src/public/js/notifications.ts; tests/unit/email-rendering.spec.ts; tests/frontend/alerts.spec.ts; src/routes/users.ts; src/routes/guests.ts; src/controller/userController.ts; src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/modules/database/services/UserService.ts; src/modules/database/entities/user/; src/modules/oidc.ts; src/modules/settings.ts; src/modules/email.ts; src/modules/lib/guestRegistrationNags.ts; src/public/js/core/password-validation.ts; src/views/users/; src/views/layout.pug; tests/integration/authentication-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+source-anchors: src/public/js/shared/alerts.ts; src/public/js/notifications.ts; tests/unit/email-rendering.spec.ts; tests/frontend/alerts.spec.ts; src/routes/users.ts; src/routes/guests.ts; src/controller/userController.ts; src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/modules/database/services/UserService.ts; src/modules/database/entities/user/; src/modules/oidc.ts; src/modules/settings.ts; src/modules/email.ts; src/modules/lib/guestRegistrationNags.ts; src/public/js/core/password-validation.ts; src/views/users/; src/views/layout.pug; tests/integration/authentication-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/identity/; src/frontend/components/CommandFeedback.vue; src/locales/
 next-review: identity-or-authentication-visible-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
 
 Use this guide to enter Surveyor, recover access, and manage the profile that represents you.
 
 Surveyor emails begin with a greeting using your account or profile name, and the To field includes that name beside your email address. A guest-recovery email can name several guest identities connected to the same address.
 
-Success, error, and information notices disappear after ten seconds. Messages showing an action still in progress, registration requirements, or other ongoing conditions remain visible while relevant. Wait for a saved confirmation before repeating an action that is still working.
+Brief action notices disappear after ten seconds and can be dismissed sooner. Validation, review, recovery, registration requirements and ongoing-action messages remain while relevant. Wait for a saved confirmation before repeating an action that is still working.
 
 ## Find your task
 

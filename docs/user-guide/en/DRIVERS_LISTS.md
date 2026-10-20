@@ -4,12 +4,12 @@ documentation-metadata
 audience: drivers; passengers; transport organizers
 owner: drivers-list feature maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
-source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/drivers/drivers-create.pug; src/views/drivers/drivers-view.pug; src/public/js/drivers.ts; src/routes/drivers.ts; src/routes/api/drivers.ts; src/controller/driversController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/drivers/DriversList.ts; src/modules/database/entities/drivers/DriversItem.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/services/DriverService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/drivers-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/decisions/DEC-003-DRIVER-LIST-PARTICIPANT-COUNT.md; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/drivers/drivers-create.pug; src/views/drivers/drivers-view.pug; src/public/js/drivers.ts; src/routes/drivers.ts; src/routes/api/drivers.ts; src/controller/driversController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/drivers/DriversList.ts; src/modules/database/entities/drivers/DriversItem.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/services/DriverService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/drivers-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/decisions/DEC-003-DRIVER-LIST-PARTICIPANT-COUNT.md; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/drivers/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
 next-review: drivers-visible-UI-or-behavior-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
 
 Drivers lists coordinate ride offers and passenger seats. Each row is one ride offered by the active profile that created it. Other participants can take an available passenger place.
@@ -203,7 +203,7 @@ A permitted editor sees **Entity settings** in the list header. The dialog conta
 2. In **General** → **Details**, change **Title** or **Description**, when available.
 3. Select **Save properties**.
 
-Title editing requires **Edit Title**; description editing requires **Edit Desc**. The description on the ordinary page is read-only. A failed save retains your draft; closing discards unsaved changes. Each section saves separately, and commands that refresh the page ask you to resolve drafts in other sections first.
+Title editing requires **Edit Title**; description editing requires **Edit Desc**. The description on the ordinary page is read-only. Each section saves separately. Saving keeps the page open and preserves unfinished input in other sections. A failed save keeps your draft. When closing with unsaved changes, choose whether to discard them; cancel closing to keep editing.
 
 ## Manage ride offers
 

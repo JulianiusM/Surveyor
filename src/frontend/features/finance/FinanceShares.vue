@@ -39,7 +39,7 @@ function filteredShares(): Share[] {
 /** Native amount ordering uses the displayed name as its stable tie-breaker;
  * case differences alone do not reorder otherwise equivalent names. */
 function compareShares(left: Share, right: Share): number {
-    const difference = left.amount - right.amount;
+    const difference = Number(left.amount) - Number(right.amount);
     // Sort balances only when they differ, then retain the native name rule for
     // both equal balances and the explicit alphabetical ordering option.
     if (difference && sort.value === 'amount-desc') return -difference;

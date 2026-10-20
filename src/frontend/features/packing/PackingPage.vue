@@ -458,10 +458,13 @@ const reorder = useListReorder({
                                         v-if="item.capabilities.editRequired"
                                         class="form-check form-switch d-flex align-items-center justify-content-center me-2"
                                     >
+                                        <!-- Match native browser-restoration policy;
+                                             the admitted shared flag owns this switch. -->
                                         <input
                                             class="form-check-input"
                                             type="checkbox"
                                             role="switch"
+                                            autocomplete="off"
                                             :checked="item.requiredByAll"
                                             :disabled="blocked"
                                             :aria-label="messages.t('common.all')"

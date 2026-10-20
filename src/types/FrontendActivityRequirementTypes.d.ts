@@ -10,9 +10,9 @@ export interface ActivityRequirementDraft {
     allowExternalAssignees: boolean;
     allowArrivalDayEvening: boolean;
     allowDepartureDayMorning: boolean;
-    roles: {roleId: number; value: string}[];
+    roles: {roleId: string; value: string}[];
     stays: {stayDays: number; value: string}[];
-    overrides: {key: number; id?: number; profileId: string; profileName?: string | null; roleId: string; value: string}[];
+    overrides: {key: number; id?: string; profileId: string; profileName?: string | null; roleId: string; value: string}[];
 }
 
 /** Coverage wording is presentation; the shared domain engine supplies all figures. */

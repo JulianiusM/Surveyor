@@ -88,13 +88,14 @@ describe('versioned Activity production operations', () => {
         const data = await activity.readActivityRequirements(id, actor(owner));
         const validateRequirements = contractValidator('ActivityRequirements');
         expect(validateRequirements(data), JSON.stringify(validateRequirements.errors)).toBe(true);
-        expect(data.overrides).toEqual([{id: expect.any(Number), profileId: participant.id, profileName: participant.name,
+        expect(data.overrides).toEqual([{id: expect.stringMatching(/^[1-9]\d*$/u), profileId: participant.id, profileName: participant.name,
             roleId: null, requiredShifts: 0}]);
         expect(data.participants).toContainEqual(expect.objectContaining({requiredShifts: 0, source: 'override'}));
         expect(data.calculationContext.participants).toContainEqual(expect.objectContaining({profileId: participant.id}));
         expect(data.overrideTargets).toContainEqual(expect.objectContaining({profileId: participant.id,
             label: participant.name, nameIsFallback: false}));
         const nativeRequirements = await nativeActivity.getRequirements(id);
+        expect(data.overrides[0].id).toBe(String(nativeRequirements.overrides[0].id));
         const nativeTarget = nativeRequirements.overrideTargets.find(target => target.profileId === participant.id);
         expect(nativeTarget).toMatchObject({label: participant.name});
         expect(nativeTarget).not.toHaveProperty('nameIsFallback');
@@ -361,6 +362,11 @@ describe('versioned Activity production operations', () => {
         const visible = (await activity.readActivityPlan(id, actor(owner))).data;
         expect(visible.participants).toContainEqual(expect.objectContaining({name: participant.name, assignedShifts: 1}));
         expect(visible.slots[0].roles[0].assigneeName).toBe(participant.name);
+        expect(visible.slots[0].roles[0].id).toBe(String(role.id));
+        expect(visible.allRoles.find(candidate => candidate.title === 'Coordinator')?.id).toBe(String(role.id));
+        expect(visible.participants.find(person => person.name === participant.name)?.roleIds).toContain(String(role.id));
+        const baseline = await activity.readActivitySlotBaseline(id, slot.id, actor(owner));
+        expect(baseline.values.roles).toContain(String(role.id));
         expect(contractValidator('ActivityView')(visible)).toBe(true);
     });
 

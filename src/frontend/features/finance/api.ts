@@ -1,7 +1,7 @@
 import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
-import {InvalidInputError} from '../../app/transport';
+import {createMultipartForm, InvalidInputError} from '../../app/transport';
 import {validateFinanceView} from '../../../../.generated/api/v1/browser/validateFinanceView.mjs';
 import {validateFinanceBreakdown} from '../../../../.generated/api/v1/browser/validateFinanceBreakdown.mjs';
 import {validateFinanceInvoiceInput} from '../../../../.generated/api/v1/browser/validateFinanceInvoiceInput.mjs';
@@ -52,10 +52,9 @@ export class FinanceApi {
     async record(eventId: string, poolId: string, input: components['schemas']['FinanceOrganizerInvoiceInput'], proof: File | null,
         scope: PilotRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void) {
         if (!validateFinanceOrganizerInvoiceInput(input)) throw new InvalidInputError();
-        // Use the same named data/proof serialization as participant invoices, keeping their proof requirements distinct.
-        const form = new FormData();
-        form.append('data', JSON.stringify(input));
-        if (proof) form.append('proof', proof);
+        // Share serialization with participant invoices and image consumers;
+        // this operation alone decides that its proof is optional.
+        const form = createMultipartForm(input, proof, 'proof');
         return this.transport.uploadJson('recordEventOrganizerInvoice', `/events/${encodeURIComponent(eventId)}/finance/pools/${encodeURIComponent(poolId)}/invoices/organizer`,
             form, validateFinanceMutationResult, scope, progress);
     }
@@ -164,11 +163,9 @@ export class FinanceApi {
     async submit(eventId: string, poolId: string, input: components['schemas']['FinanceInvoiceInput'], proof: File,
                  scope: PilotRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void) {
         if (!validateFinanceInvoiceInput(input)) throw new InvalidInputError();
-        // Finance's required proof is its own named part; the existing creation
-        // serializer intentionally handles optional header images instead.
-        const form = new FormData();
-        form.append('data', JSON.stringify(input));
-        form.append('proof', proof);
+        // Required participant proof retains its generated validation and draft
+        // lifetime while sharing the existing multipart serialization owner.
+        const form = createMultipartForm(input, proof, 'proof');
         return this.transport.uploadJson('submitEventInvoice', `/events/${encodeURIComponent(eventId)}/finance/pools/${encodeURIComponent(poolId)}/invoices`,
             form, validateFinanceMutationResult, scope, progress);
     }

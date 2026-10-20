@@ -17,7 +17,7 @@ const pool: components['schemas']['FinancePool'] = {id: poolId, name: 'Saved poo
     isDefault: false, needsRecalculation: false, hasPendingTakeovers: false, revision: 7, canSubmit: false, summary: null,
     calculation: null, exampleCalculation: null, coverageKnown: true, coverageGroups: [], pendingCoverageGroups: [], assignedCount: 1, assignAll: false,
     settings: {distribution: 'EQUAL', subtractPersonalInvoices: true, sendCalculationEmails: false, roundUpShares: false},
-    assignments: [{registrationId: '7', factor: 1, isExempt: false}], registrationIds: [7], surcharges: [],
+    assignments: [{registrationId: '7', factor: '1.0000', isExempt: false}], registrationIds: ['7'], surcharges: [],
     coverageChoices: participants, currentCoverageGroups: []};
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
@@ -64,15 +64,16 @@ describe('P8 independently saved allocation inputs', () => {
         await surface.get('input[id$="-all"]').setValue(false);
         expect((second.element as HTMLInputElement).checked).toBe(false);
         const factor = surface.get<HTMLInputElement>('[data-finance-assignment="7"] input[type="number"]');
+        expect(factor.element.value).toBe('1');
         await factor.setValue('002.5000'); await factor.trigger('blur');
         await surface.get('[data-finance-assignment="7"] input[id*="-exempt-"]').setValue(true);
         // A refreshed DTO must not overwrite this form's independently owned edit.
-        await mounted.wrapper.setProps({pool: {...pool, assignments: [{registrationId: '7', factor: 4, isExempt: false}]}});
+        await mounted.wrapper.setProps({pool: {...pool, assignments: [{registrationId: '7', factor: '4.0000', isExempt: false}]}});
         expect(factor.element.value).toBe('002.5000');
         const form = surface.get('form[data-finance-assignments]'); valid(form);
         await form.trigger('submit'); await flushPromises();
         expect(writes).toEqual([{assignAll: false, isDefault: false, subtractPersonalInvoices: true,
-            registrations: [7], exemptions: [7], participantFactors: {'7': 2.5}}]);
+            registrations: ['7'], exemptions: ['7'], participantFactors: {'7': '2.5000'}}]);
         expect(refresh).toHaveBeenCalledTimes(1);
         expect(factor.element.value).toBe('002.5000');
         expect((surface.get('[data-finance-assignment="7"] input[id*="-exempt-"]').element as HTMLInputElement).checked).toBe(true);
@@ -87,14 +88,14 @@ describe('P8 independently saved allocation inputs', () => {
         const reopened = surface.get('form[data-finance-assignments]'); valid(reopened);
         await reopened.trigger('submit'); await flushPromises();
         expect(writes[1]).toEqual({assignAll: false, isDefault: true, subtractPersonalInvoices: true,
-            registrations: [7], exemptions: [7], participantFactors: {'7': 2.5}});
+            registrations: ['7'], exemptions: ['7'], participantFactors: {'7': '2.5000'}});
     });
 
     it('excludes disabled deselected values while keeping filtered factor controls and their lexical drafts mounted', async () => {
         const writes: unknown[] = [];
         const mounted = await mountFrontendEvent(FinanceAssignments, async request => {
             writes.push(await request.json()); return json({changed: true});
-        }, {eventId, pool: {...pool, assignments: [...pool.assignments!, {registrationId: '8', factor: 3, isExempt: true}]},
+        }, {eventId, pool: {...pool, assignments: [...pool.assignments!, {registrationId: '8', factor: '3.0000', isExempt: true}]},
             participants, open: true, active: true, refresh: vi.fn(async () => {})});
         cleanups.push(mounted.dispose);
         const surface = body();
@@ -110,7 +111,7 @@ describe('P8 independently saved allocation inputs', () => {
         expect(factor.element.disabled).toBe(true);
         const form = surface.get('form'); valid(form); await form.trigger('submit'); await flushPromises();
         expect(writes).toEqual([{assignAll: false, isDefault: false, subtractPersonalInvoices: true,
-            registrations: [7], exemptions: [], participantFactors: {'7': 1}}]);
+            registrations: ['7'], exemptions: [], participantFactors: {'7': '1.0000'}}]);
         expect(factor.element.value).toBe('003.1250');
         await button(surface, 'Discard edits').trigger('click');
         expect(surface.get<HTMLInputElement>('[data-finance-assignment="8"] input[type="number"]').element.value).toBe('1');
@@ -136,7 +137,7 @@ describe('P8 independently saved allocation inputs', () => {
         const reopened = surface.get('form'); valid(reopened);
         await reopened.trigger('submit'); await flushPromises();
         expect(writes[1]).toEqual({assignAll: false, isDefault: false, subtractPersonalInvoices: true,
-            registrations: [7, 8, 9, 10], exemptions: [], participantFactors: {'7': 1, '8': 1, '9': 1, '10': 1}});
+            registrations: ['7', '8', '9', '10'], exemptions: [], participantFactors: {'7': '1.0000', '8': '1.0000', '9': '1.0000', '10': '1.0000'}});
     });
 
     it('admits roster additions during editing and the post-save read without replacing a surviving lexical factor', async () => {
@@ -157,7 +158,7 @@ describe('P8 independently saved allocation inputs', () => {
         expect(surface.get<HTMLInputElement>('[data-finance-assignment="11"] input[type="checkbox"]').element.checked).toBe(true);
         const form = surface.get('form'); valid(form);
         await form.trigger('submit'); await flushPromises();
-        expect(writes[0]).toMatchObject({registrations: [7, 8, 9, 10, 11], participantFactors: {'7': 2.5, '11': 1}});
+        expect(writes[0]).toMatchObject({registrations: ['7', '8', '9', '10', '11'], participantFactors: {'7': '2.5000', '11': '1.0000'}});
         expect(surface.get<HTMLInputElement>('[data-finance-assignment="12"] input[type="checkbox"]').element.checked).toBe(true);
         await button(surface, 'Close').trigger('click');
         await mounted.wrapper.setProps({open: false});
@@ -181,7 +182,7 @@ describe('P8 independently saved allocation inputs', () => {
         const form = surface.get('form'); valid(form);
         await form.trigger('submit'); await flushPromises();
         await form.trigger('submit'); await flushPromises();
-        expect(writes).toEqual([{registrationId: 7, amount: -3.25, note: 'Retained rebate', subtractFromPool: false}]);
+        expect(writes).toEqual([{registrationId: '7', amount: '-3.25', note: 'Retained rebate', subtractFromPool: false}]);
         expect(surface.get<HTMLInputElement>('input[type="number"]').element.value).toBe('-003.25');
         expect(button(surface, 'Add surcharge or rebate').attributes('disabled')).toBeDefined();
         await button(surface, 'Refresh').trigger('click'); await flushPromises();
@@ -207,7 +208,7 @@ describe('P8 independently saved allocation inputs', () => {
         const choice = surface.get<HTMLInputElement>('[data-finance-beneficiary="10"] input');
         await choice.setValue(true);
         const form = surface.get('form'); valid(form); await form.trigger('submit'); await flushPromises();
-        expect(writes).toEqual([{path: `/api/v1/events/${eventId}/finance/pools/${poolId}/takeovers`, data: {payerId: 7, beneficiaries: [10]}}]);
+        expect(writes).toEqual([{path: `/api/v1/events/${eventId}/finance/pools/${poolId}/takeovers`, data: {payerId: '7', beneficiaries: ['10']}}]);
         expect(choice.element.checked).toBe(true);
         expect(writes).toHaveLength(1);
         await button(surface, 'Close').trigger('click');
@@ -218,7 +219,7 @@ describe('P8 independently saved allocation inputs', () => {
         await reopenedChoice.setValue(false);
         const reopenedForm = surface.get('form'); valid(reopenedForm);
         await reopenedForm.trigger('submit'); await flushPromises();
-        expect(writes[1].data).toEqual({payerId: 7, beneficiaries: []});
+        expect(writes[1].data).toEqual({payerId: '7', beneficiaries: []});
     });
 
     it('requires protected fresh coverage before switching away from a confirmed payer whose saved read failed', async () => {
@@ -232,7 +233,7 @@ describe('P8 independently saved allocation inputs', () => {
         await surface.get('[data-finance-beneficiary="10"] input').setValue(true);
         const form = surface.get('form'); valid(form);
         await form.trigger('submit'); await flushPromises();
-        expect(writes).toEqual([{payerId: 7, beneficiaries: [10]}]);
+        expect(writes).toEqual([{payerId: '7', beneficiaries: ['10']}]);
         await button(surface, 'Close').trigger('click');
         await mounted.wrapper.setProps({open: false});
         await mounted.wrapper.setProps({open: true});

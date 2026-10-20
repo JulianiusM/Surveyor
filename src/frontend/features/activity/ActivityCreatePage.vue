@@ -165,63 +165,29 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
                                             <i class="bi bi-info-circle me-2" aria-hidden="true"></i> {{ messages.t('activity.noSlots') }}</span>
                                         <!-- Every initial slot field needs a visible name, including
                                         native time/number controls whose placeholders may not display.
-                                        Shared labels compose the existing inputs without another draft. -->
+                                        Shared controls retain each slot's lexical draft and original
+                                        constraints without introducing another form-value owner. -->
                                         <div
                                             v-for="slot in daySlots(day)"
                                             :key="slot.id"
                                             class="d-grid gap-1 mb-2 slot border border-secondary-subtle rounded p-2"
                                             :data-slot-date="day"
                                             :data-slot-id="slot.id">
-                                            <FormField :id="'initial-slot-' + slot.id + '-title'" :label="messages.t('packing.title')" label-class="small mb-0" required>
-                                                <template #control><input
-                                                    :id="'initial-slot-' + slot.id + '-title'"
-                                                    v-model="slot.title"
-                                                    class="form-control form-control-sm text-bg-dark"
-                                                    :placeholder="messages.t('packing.title')"
-                                                    required
-                                                    :disabled="disabled"
-                                                /></template>
-                                            </FormField>
-                                            <FormField :id="'initial-slot-' + slot.id + '-description'" :label="messages.t('packing.description')" label-class="small mb-0">
-                                                <template #control><input
-                                                    :id="'initial-slot-' + slot.id + '-description'"
-                                                    v-model="slot.description"
-                                                    class="form-control form-control-sm text-bg-dark"
-                                                    :placeholder="messages.t('packing.description')"
-                                                    :disabled="disabled"
-                                                /></template>
-                                            </FormField>
-                                            <FormField :id="'initial-slot-' + slot.id + '-start'" :label="messages.t('activity.startTime')" label-class="small mb-0">
-                                                <template #control><input
-                                                    :id="'initial-slot-' + slot.id + '-start'"
-                                                    v-model="slot.startTime"
-                                                    type="time"
-                                                    class="form-control form-control-sm text-bg-dark"
-                                                    :placeholder="messages.t('activity.startTime')"
-                                                    :disabled="disabled"
-                                                /></template>
-                                            </FormField>
-                                            <FormField :id="'initial-slot-' + slot.id + '-end'" :label="messages.t('activity.endTime')" label-class="small mb-0">
-                                                <template #control><input
-                                                    :id="'initial-slot-' + slot.id + '-end'"
-                                                    v-model="slot.endTime"
-                                                    type="time"
-                                                    class="form-control form-control-sm text-bg-dark"
-                                                    :placeholder="messages.t('activity.endTime')"
-                                                    :disabled="disabled"
-                                                /></template>
-                                            </FormField>
-                                            <FormField :id="'initial-slot-' + slot.id + '-capacity'" :label="messages.t('activity.maxParticipants')" label-class="small mb-0">
-                                                <template #control><input
-                                                    :id="'initial-slot-' + slot.id + '-capacity'"
-                                                    :value="slot.maxAssignees"
-                                                    type="number"
-                                                    min="1"
-                                                    class="form-control form-control-sm text-bg-dark"
-                                                    :disabled="disabled"
-                                                    @input="slot.maxAssignees = ($event.target as HTMLInputElement).value"
-                                                /></template>
-                                            </FormField>
+                                            <FormField :id="'initial-slot-' + slot.id + '-title'" v-model="slot.title" :name="null"
+                                                :label="messages.t('packing.title')" label-class="small mb-0" control-class="form-control-sm"
+                                                :placeholder="messages.t('packing.title')" required :disabled="disabled" />
+                                            <FormField :id="'initial-slot-' + slot.id + '-description'" v-model="slot.description" :name="null"
+                                                :label="messages.t('packing.description')" label-class="small mb-0" control-class="form-control-sm"
+                                                :placeholder="messages.t('packing.description')" :disabled="disabled" />
+                                            <FormField :id="'initial-slot-' + slot.id + '-start'" v-model="slot.startTime" :name="null" type="time"
+                                                :label="messages.t('activity.startTime')" label-class="small mb-0" control-class="form-control-sm"
+                                                :placeholder="messages.t('activity.startTime')" :disabled="disabled" />
+                                            <FormField :id="'initial-slot-' + slot.id + '-end'" v-model="slot.endTime" :name="null" type="time"
+                                                :label="messages.t('activity.endTime')" label-class="small mb-0" control-class="form-control-sm"
+                                                :placeholder="messages.t('activity.endTime')" :disabled="disabled" />
+                                            <FormField :id="'initial-slot-' + slot.id + '-capacity'" v-model="slot.maxAssignees" :name="null"
+                                                type="number" lexical-number :min="1" :label="messages.t('activity.maxParticipants')"
+                                                label-class="small mb-0" control-class="form-control-sm" :disabled="disabled" />
                                             <ActionButton
                                                 type="button"
                                                 class="btn-sm align-self-end" variant="outline-danger"

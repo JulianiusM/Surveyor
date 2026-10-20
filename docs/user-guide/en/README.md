@@ -4,12 +4,12 @@ documentation-metadata
 audience: end users
 owner: product documentation maintainers
 status: current
-last-verified: 2026-10-14
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed English article content and image references retained; metadata routes to the active visual-authoring owner.
-source-anchors: docs/user-guide/en/; docs/user-guide/en/assets/; docs/features/help/HELP_VISUALS.md; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; src/views/layout.pug; src/public/style/help.sass; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; .github/workflows/release.yml
+verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+source-anchors: docs/user-guide/en/; docs/user-guide/en/assets/; docs/features/help/HELP_VISUALS.md; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; src/views/layout.pug; src/public/style/help.sass; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; .github/workflows/release.yml; src/frontend/components/AppHeader.vue; src/frontend/features/help/; src/locales/
 next-review: help-source-or-visible-UI-change
-production-reference: 2dfa257 native frontend documentation; not an installed production commit
+production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
 
 Surveyor helps groups choose dates, organize events, coordinate packing and transport, and assign activities. Start with the path that matches how you entered the application.
@@ -80,6 +80,8 @@ Open **Entity settings** for the properties and actions your active profile may 
 - Open **Help** for these guides.
 - Open the profile menu and select **Profile settings** to change the active profile’s displayed name.
 - Full-account users can select **Your profiles** to create or switch identities.
+- Use **Refresh** in the current page or section to read the latest available information. Ordinary refresh keeps unfinished input and selected files; it does not repeat a submission. If an action's result is unconfirmed, follow its inspection or recovery instructions before deciding what to do next.
+- Use the header language choice to change translated controls and Help. [Choosing your language](LOCALIZATION.md) explains how the choice is remembered and where English content can still appear.
 - Select **Logout** when leaving a shared device. A guest should keep the private link or recovery email before logging out.
 
 ## Guide index

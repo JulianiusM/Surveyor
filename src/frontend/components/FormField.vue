@@ -13,6 +13,7 @@ const props = withDefaults(
         multiline?: boolean;
         rows?: number;
         type?: string;
+        lexicalNumber?: boolean;
         required?: boolean;
         maxLength?: number;
         minLength?: number;
@@ -27,7 +28,10 @@ const props = withDefaults(
         labelIcon?: string;
         inputIcon?: string;
         largeGroup?: boolean;
-        inputMode?: 'email' | 'text' | 'numeric';
+        groupClass?: string;
+        inputMode?: 'email' | 'text' | 'numeric' | 'decimal';
+        ariaLabel?: string;
+        controlData?: Record<`data-${string}`, string | number | boolean | undefined>;
         state?: 'valid' | 'invalid';
         describedBy?: string;
     }>(),
@@ -36,13 +40,45 @@ const props = withDefaults(
 const emit = defineEmits<{'update:modelValue': [value: string]; focus: []; blur: []}>();
 const control = ref<HTMLInputElement | HTMLTextAreaElement | null>(null);
 const controlValue = computed({get: readValue, set: updateValue});
+const controlAttributes = computed(readControlAttributes);
+const inputAttributes = computed(readInputAttributes);
 
 function readValue(): string { return props.modelValue; }
 
-/** Text inputs and textareas expose lexical drafts. Feature owners retain
- * normalization, admission and the decision to include that value in a command.
- * Vue's native directive owns composition/caret handling; read the DOM string
- * here so its implicit number conversion cannot change a feature's raw input. */
+/** Textareas and both input lifecycles share names, validity and presentation.
+ * Feature constraints and data hooks remain explicit inputs, so one branch
+ * cannot silently omit accessible naming or the original submitted field name. */
+function readControlAttributes() {
+    // Data hooks identify existing feature controls without exposing another
+    // mutable model, event policy or general attribute override to callers.
+    return {
+        ...props.controlData,
+        id: props.id,
+        name: props.name === null ? undefined : props.name ?? props.id,
+        class: ['form-control', 'text-bg-dark', props.controlClass,
+            {'is-valid': props.state === 'valid', 'is-invalid': props.state === 'invalid'}],
+        required: props.required,
+        maxlength: props.maxLength,
+        minlength: props.minLength,
+        autocomplete: props.autocomplete,
+        disabled: props.disabled,
+        readonly: props.readOnly,
+        placeholder: props.placeholder,
+        inputmode: props.inputMode,
+        'aria-label': props.ariaLabel,
+        'aria-invalid': props.state === 'invalid' || undefined,
+        'aria-describedby': props.describedBy,
+    };
+}
+
+/** Number bounds and native input type do not apply to multiline controls. */
+function readInputAttributes() {
+    return {...controlAttributes.value, type: props.type, min: props.min, max: props.max, step: props.step};
+}
+
+/** Feature owners retain normalization, admission and submitted values. Text
+ * controls use Vue's composition/caret handling; opted-in number controls read
+ * the native DOM directly so blur cannot rewrite an unfinished lexical draft. */
 function updateValue(): void {
     // A supplied control slot owns its own input and never calls this setter.
     // No local value mirror competes with the feature's draft or restored model.
@@ -58,58 +94,44 @@ function updateValue(): void {
         <label class="form-label" :class="labelClass" :for="labelFor ?? id">
             <i v-if="labelIcon" class="bi me-1" :class="labelIcon" aria-hidden="true"></i><slot name="label">{{ label }}</slot><template v-if="required && requiredMarker"> *</template>
         </label>
-        <div :class="{'input-group': inputIcon || largeGroup, 'input-group-lg': largeGroup}">
+        <div :class="[groupClass, {'input-group': inputIcon || largeGroup || $slots.append, 'input-group-lg': largeGroup}]">
             <span v-if="inputIcon" class="input-group-text">
                 <i class="bi" :class="inputIcon" aria-hidden="true"></i>
             </span>
-            <!-- File and native-number adapters replace only this control. Their
-                 values stay with the feature, while label geometry and surrounding
-                 feedback still have this single presentation owner. -->
+            <!-- Distinct controls can replace this slot. Matching lexical numbers
+                 use the same native input below; intentional numeric directives
+                 remain available without changing their established lifecycle. -->
             <slot name="control">
                 <textarea v-if="multiline"
                     ref="control"
                     v-model="controlValue"
-                    :id="id"
-                    :name="name === null ? undefined : name ?? id"
-                    class="form-control text-bg-dark"
-                    :class="[controlClass, {'is-valid': state === 'valid', 'is-invalid': state === 'invalid'}]"
+                    v-bind="controlAttributes"
                     :rows="rows"
-                    :required="required"
-                    :maxlength="maxLength"
-                    :minlength="minLength"
-                    :disabled="disabled"
-                    :readonly="readOnly"
-                    :placeholder="placeholder"
-                    :aria-invalid="state === 'invalid' || undefined"
-                    :aria-describedby="describedBy"
                     @focus="emit('focus')"
                     @blur="emit('blur')"
                 ></textarea>
+                <!-- Vue normalizes number inputs on change even when its setter
+                     returns a string. The explicit lexical branch retains native
+                     spelling and validity without replacing text composition. -->
+                <input v-else-if="type === 'number' && lexicalNumber"
+                    ref="control"
+                    v-bind="inputAttributes"
+                    :value="modelValue"
+                    @input="updateValue"
+                    @focus="emit('focus')"
+                    @blur="emit('blur')"
+                />
                 <input v-else
                     ref="control"
                     v-model="controlValue"
-                    :id="id"
-                    :name="name === null ? undefined : name ?? id"
-                    :type="type"
-                    class="form-control text-bg-dark"
-                    :class="[controlClass, {'is-valid': state === 'valid', 'is-invalid': state === 'invalid'}]"
-                    :required="required"
-                    :maxlength="maxLength"
-                    :minlength="minLength"
-                    :min="min"
-                    :max="max"
-                    :step="step"
-                    :autocomplete="autocomplete"
-                    :disabled="disabled"
-                    :readonly="readOnly"
-                    :placeholder="placeholder"
-                    :inputmode="inputMode"
-                    :aria-invalid="state === 'invalid' || undefined"
-                    :aria-describedby="describedBy"
+                    v-bind="inputAttributes"
                     @focus="emit('focus')"
                     @blur="emit('blur')"
                 />
             </slot>
+            <!-- Adjacent actions share the existing input group. Their feature
+                 owns eligibility and commands, such as requirement calculation. -->
+            <slot name="append" />
         </div>
         <slot />
     </div>

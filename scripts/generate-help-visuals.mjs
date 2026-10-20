@@ -14,6 +14,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {chromium} from '@playwright/test';
+import {apiCompatibility} from '../.generated/api/v1/policy.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const locale = process.argv.find(argument => argument.startsWith('--locale='))?.slice('--locale='.length) ?? 'de';
@@ -33,11 +34,35 @@ const evidence = path.join(root, `.temp/help-visuals-${locale}`);
 const ui = catalog.resources.ui;
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const escape = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
-const text = value => escape(value.replace(/\{\{([a-z]+)\}\}/gu, (_match, key) => {
-    const translation = ui.packing[key] ?? ui.app[key];
+// The diagram demonstrates the existing add-combination form. Its sample choice
+// has occurrence one; the catalog still owns every displayed control/answer label.
+const surveyFigureLabels = {
+    surveyheading: ui.survey.addNewCombination,
+    surveyweekday: ui.survey.weekdayLabel,
+    surveymonday: ui.survey.weekday.MON,
+    surveyday: ui.survey.dayInMonth,
+    surveyfirst: ui.survey.nthDayInMonth.replace('{{nth}}', '1'),
+    surveyadd: ui.survey.add,
+    surveyyes: ui.survey.yes,
+    surveymaybe: ui.survey.maybe,
+    surveyno: ui.survey.no,
+};
+
+/** Resolve bounded figure aliases to the same UI catalog as their real controls.
+ * Explanatory prose remains language-owned; neither source can supply raw HTML. */
+function replaceFigureLabel(_match, key) {
+    // Existing app/packing bindings retain precedence; Survey admits only the
+    // explicit control/sample aliases above, never arbitrary catalog traversal.
+    const translation = ui.packing[key] ?? ui.app[key] ?? surveyFigureLabels[key];
     if (typeof translation !== 'string') throw new Error(`Unknown figure UI label: ${key}`);
     return translation;
-}));
+}
+
+/** Bind authored aliases before escaping the complete visible figure text. */
+function text(value) {
+    // Catalog labels are text, just like the surrounding explanatory sentences.
+    return escape(value.replace(/\{\{([a-z]+)\}\}/gu, replaceFigureLabel));
+}
 const lines = values => values.map(text).join('<br>');
 await fs.mkdir(output, {recursive: true});
 await fs.mkdir(evidence, {recursive: true});
@@ -68,6 +93,9 @@ const renderer = await import(pathToFileURL(path.join(root, 'dist/frontend-serve
 const profile = {id: '00000000-0000-4000-8000-000000000001', name: labels.fictionalProfile};
 const rendered = await renderer.render(`/frontend-pilot/help?locale=${locale}`, {session: {
     kind: 'account', context: 'fictional-help-figure', csrfToken: 'fictional-not-a-token', locale,
+    // The actual shell requires deployment metadata even for a server-only
+    // figure. Reuse its generated compatibility owner; this fixture never sends commands.
+    deployment: {buildId: 'fictional-help-figure', apiCompatibility},
     activeProfile: profile, profiles: [profile], loginUrl: '/frontend-pilot/users/login', logoutUrl: '/frontend-pilot/users/login',
     shell: {version: '', imprintUrl: '', privacyPolicyUrl: '', localLoginEnabled: true, oidcEnabled: false, oidcName: ''},
 }});

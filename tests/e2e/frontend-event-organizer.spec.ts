@@ -3,7 +3,8 @@ import type {Locator, Page, Response, TestInfo} from '@playwright/test';
 import {writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {createE2EActivityPlan, createE2EDriversList, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {closeModalForE2E, createResourceViaForm, expectUsableFrontendLayout, loginForE2E, openModalForE2E} from '../keywords/e2eCoreKeywords';
+import {closeModalForE2E, createResourceViaForm, expectUsableFrontendLayout, loginForE2E, openModalForE2E,
+    readControlContracts} from '../keywords/e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
@@ -354,16 +355,18 @@ function compareDietary(native: Awaited<ReturnType<typeof dietaryMetrics>>, pilo
 /** Retain raw control geometry alongside the browser constraints and state.
  * Permission serialization has its own independent HTTP assertions. */
 async function formControls(surface: Locator) {
-    return surface.evaluate(function measureControls(element) {
+    const measured = await surface.evaluate(function measureControls(element) {
         const controls = [...element.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>('input,textarea,select')]
             .filter(control => control.type !== 'hidden' && control.getClientRects().length && control.checkVisibility());
         return {timezone: element.querySelector<HTMLInputElement>('input[name="deadlineTz"]')?.value ?? null,
             controls: controls.map(control => ({name: control.closest('.perm-matrix') && control.type === 'checkbox' ? 'permission' : control.name,
-                type: control.type, width: control.getBoundingClientRect().width, height: control.getBoundingClientRect().height,
-                min: control.getAttribute('min'), max: control.getAttribute('max'), step: control.getAttribute('step'),
-                maxLength: control.getAttribute('maxlength'), required: control.required,
-                checked: control instanceof HTMLInputElement && control.type === 'checkbox' ? control.checked : null}))};
+                width: control.getBoundingClientRect().width, height: control.getBoundingClientRect().height}))};
     });
+    // Use the common control owner rather than a less complete Event-only
+    // snapshot. Hidden timezone transport remains separate explicit evidence.
+    const contracts = await readControlContracts(surface.locator('input:not([type="hidden"]),textarea,select'));
+    expect(contracts).toHaveLength(measured.controls.length);
+    return {...measured, controls: measured.controls.map((control, index) => ({...control, contract: contracts[index]}))};
 }
 
 /** Internal names and responsive sizes are diagnostics, while browser input
@@ -567,7 +570,10 @@ for (const width of [1280, 390]) {
                 const refreshedPageSections = observePageSections();
                 const beforeRefreshNavigation = documentRequests.length;
                 await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'event-page-refresh';});
-                await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+                // Finance has its own independently scoped Refresh. This action
+                // belongs to the Event page and its complete projection family.
+                await page.locator('main > section.card > .card-body > .d-flex.mb-1')
+                    .getByRole('button', {name: 'Refresh', exact: true}).click();
                 expect((await refreshed).status()).toBe(200);
                 response = await refreshedParticipants;
                 expect(await response.finished()).toBeNull();

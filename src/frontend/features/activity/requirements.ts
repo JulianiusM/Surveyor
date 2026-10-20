@@ -2,6 +2,7 @@ import type {components} from '../../../types/api/v1';
 import type {ActivityRequirementConfiguration, ActivityRequirementCoverage, ActivityRequirementDraft} from '../../../types/FrontendActivityRequirementTypes';
 import type {Translator} from '../../../types/LocalizationTypes';
 import {applyRounding, calculateRequirementAnalysis, countInclusiveDays} from '../../../modules/activity/requirements';
+import type {RequirementAnalysisInput} from '../../../modules/activity/requirements';
 
 /** Copy the native local-minute editor projection; timestamps remain ISO on the wire. */
 function localDeadline(value: string | null): string {
@@ -55,23 +56,37 @@ export function requirementInput(draft: ActivityRequirementDraft): components['s
         stayRequirements: draft.stays.filter(row => row.value.trim() !== '')
             .map(row => ({stayDays: row.stayDays, requiredShifts: Number(row.value)})),
         overrides: draft.overrides.filter(row => !!row.profileId).map(row => ({...(row.id == null ? {} : {id: row.id}),
-            profileId: row.profileId, roleId: row.roleId ? Number(row.roleId) : null, requiredShifts: Number(row.value) || 0})),
+            profileId: row.profileId, roleId: row.roleId || null, requiredShifts: Number(row.value) || 0})),
     };
 }
 
-/** Recompute unsaved targets and hypothetical role coverage from the same pure
- * engine used by the server. Assignment counts and role labels remain admitted data. */
-export function analyzeRequirementDraft(config: ActivityRequirementConfiguration, draft: ActivityRequirementDraft) {
+/** Adapt one admitted wire projection and lexical draft to the existing numeric
+ * domain contract, shared by ordinary coverage and the explicit Calculate action. */
+export function requirementAnalysisInput(config: ActivityRequirementConfiguration, draft: ActivityRequirementDraft) {
     const input = requirementInput(draft);
-    const analysis = calculateRequirementAnalysis({plan: {...config.plan, ...input},
-        participants: config.calculationContext.participants, roleRequirements: input.roleRequirements,
-        overrides: input.overrides, stayRequirements: input.stayRequirements, slots: config.calculationContext.slots,
-        assignedShiftCounts: config.calculationContext.assignedShiftCounts});
+    // Wire data and drafts keep canonical string identities. Convert only at
+    // this shared domain-engine boundary: Analyze and Calculate must see the
+    // same numeric role membership and override ordering as the native engine.
+    return {plan: {...config.plan, ...input},
+        participants: config.calculationContext.participants.map(person => ({...person, roleIds: person.roleIds.map(Number)})),
+        roleRequirements: input.roleRequirements.map(row => ({...row, roleId: Number(row.roleId)})),
+        overrides: input.overrides.map(row => ({...row, id: row.id == null ? undefined : Number(row.id),
+            roleId: row.roleId == null ? null : Number(row.roleId)})),
+        stayRequirements: input.stayRequirements,
+        slots: config.calculationContext.slots.map(slot => ({...slot,
+            roles: slot.roles.map(role => ({...role, roleId: Number(role.roleId)}))})),
+        assignedShiftCounts: config.calculationContext.assignedShiftCounts} satisfies RequirementAnalysisInput;
+}
+
+/** Recompute unsaved targets with the existing engine and its one explicit
+ * argument adapter. Cached wire identities never become another domain model. */
+export function analyzeRequirementDraft(config: ActivityRequirementConfiguration, draft: ActivityRequirementDraft) {
+    const analysis = calculateRequirementAnalysis(requirementAnalysisInput(config, draft));
     const saved = new Map(config.participants.map(person => [person.participantKey, person]));
     // Keep absent raw names distinguishable from user text. The shared participant
     // renderer localizes its generic fallback without deriving a name from an ID.
     return {...analysis, participants: analysis.participants.map(person => ({...person, name: person.name ?? '', nameIsFallback: !person.name,
-        count: person.assignedShifts, roleIds: person.roleIds ?? [], roles: saved.get(person.participantKey)?.roles ?? [],
+        count: person.assignedShifts, roleIds: (person.roleIds ?? []).map(String), roles: saved.get(person.participantKey)?.roles ?? [],
         attendance: person.attendance ? {arrivalDate: person.attendance.arrivalDate ?? null, departureDate: person.attendance.departureDate ?? null} : null,
         assignmentMode: draft.assignmentMode}))};
 }

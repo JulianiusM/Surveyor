@@ -2883,14 +2883,15 @@ function activitySlotCapabilities(permissions: PermView): components['schemas'][
         remove: permissions.allow('ITEM_DELETE', 'ITEM_DELETE')};
 }
 
-/** Token values mirror only editable slot fields, excluding hidden participant data. */
+/** Token values mirror only editable wire fields, including canonical role
+ * identities, so the read baseline and conditional write share one projection. */
 function activitySlotValues(slot: ActivitySlot, roles: number[], permissions: PermView): components['schemas']['ActivitySlotPatch'] {
     const capabilities = activitySlotCapabilities(permissions);
     return {...(capabilities.editTitle ? {title: slot.title} : {}),
         ...(capabilities.editDescription ? {description: slot.description ?? null} : {}),
         ...(capabilities.editMeta ? {startTime: slot.startTime ?? null, endTime: slot.endTime ?? null} : {}),
         ...(capabilities.editCapacity ? {maxAssignees: slot.maxAssignees ?? null} : {}),
-        ...(capabilities.editRoles ? {roles} : {})};
+        ...(capabilities.editRoles ? {roles: roles.map(String)} : {})};
 }
 
 /** Project the approved Vue civil calendar through the same pure owner used by
@@ -2922,7 +2923,7 @@ export async function readActivityPlan(id: string, session: SessionLike) {
             // A role remains visible while its holder's identity and removable
             // assignment handle follow the independent participant permission.
             const assignee = assigned.find(assignment => assignment.roles.includes(role.name));
-            return {id: role.id, name: role.name, maxQty: role.maxQty, assignedQty: role.assignedQty,
+            return {id: String(role.id), name: role.name, maxQty: role.maxQty, assignedQty: role.assignedQty,
                 assignmentId: visible && assignee ? String(assignee.id) : null,
                 assigneeName: visible && assignee ? assignee.name : null, self: assignee?.profileId === profileId};
         });
@@ -2941,7 +2942,7 @@ export async function readActivityPlan(id: string, session: SessionLike) {
             // than exposing a registration/profile row or future source fields.
             participants.push({participantKey: participant.participantKey, name: participant.name,
                 nameIsFallback: participant.nameIsFallback === true, count: participant.count,
-                assignedShifts: participant.assignedShifts, roles: participant.roles, roleIds: participant.roleIds,
+                assignedShifts: participant.assignedShifts, roles: participant.roles, roleIds: (participant.roleIds ?? []).map(String),
                 requiredShifts: participant.requiredShifts, remainingShifts: participant.remainingShifts,
                 source: participant.source, attendanceDays: participant.attendanceDays, assignmentMode: participant.assignmentMode,
                 attendance: participant.attendance ? {arrivalDate: participant.attendance.arrivalDate ?? null,
@@ -2961,7 +2962,7 @@ export async function readActivityPlan(id: string, session: SessionLike) {
         inheritedArchived: Boolean(plan.event?.archivedAt), assignmentMode: plan.assignmentMode, canSelfAssign: source.canSelfAssign,
         allowOverfillAfterFull: Boolean(plan.allowOverfillAfterFull), bindingDeadline: plan.bindingDeadline?.toISOString() ?? null,
         requirementProgress: source.requirementProgress ?? null, slots, weeks: projectActivityScheduleWeeks(plan.startDate, plan.endDate),
-        allRoles: source.roles.allRoles.map(role => ({id: role.id, title: role.title, description: role.description ?? null})),
+        allRoles: source.roles.allRoles.map(role => ({id: String(role.id), title: role.title, description: role.description ?? null})),
         textFields: source.textFields.map(field => ({id: field.id, title: field.title, text: field.text ?? '',
             editToken: comparisonToken('activity-text', field.id, session, {text: field.text ?? '',
                 ...(permissions.has('MANAGE_REQUIREMENTS') ? {title: field.title} : {})}),
@@ -3352,19 +3353,22 @@ export async function readActivityRequirements(id: string, session: SessionLike)
     const [data, allRoles] = await Promise.all([getRequirements(id, true), activityService.getAllRoles(id)]);
     const plan = data.plan;
 
-    // Select scalars from each persistence result before it crosses the versioned boundary.
+    // Select scalars from each persistence result before it crosses the versioned
+    // boundary. Legacy numeric handles become strings here; the shared native
+    // controller, persistence and requirement engines keep their numeric contract.
     return {
         plan: {id: plan.id, assignmentMode: plan.assignmentMode, generalRequiredShifts: plan.generalRequiredShifts ?? null,
             roundingMode: plan.roundingMode ?? null, bindingDeadline: plan.bindingDeadline?.toISOString() ?? null,
             startDate: plan.startDate, endDate: plan.endDate, allowOverfillAfterFull: Boolean(plan.allowOverfillAfterFull),
             allowExternalAssignees: Boolean(plan.allowExternalAssignees), allowArrivalDayEvening: Boolean(plan.allowArrivalDayEvening),
             allowDepartureDayMorning: Boolean(plan.allowDepartureDayMorning)},
-        roleRequirements: data.roleRequirements.map(row => ({roleId: Number(row.roleId), requiredShifts: row.requiredShifts})),
+        roleRequirements: data.roleRequirements.map(row => ({roleId: String(row.roleId), requiredShifts: row.requiredShifts})),
         stayRequirements: data.stayRequirements.map(row => ({stayDays: row.stayDays, requiredShifts: row.requiredShifts})),
-        overrides: data.overrides.map(row => ({id: row.id, profileId: row.profileId, roleId: row.roleId ?? null,
+        overrides: data.overrides.map(row => ({id: row.id == null ? undefined : String(row.id), profileId: row.profileId,
+            roleId: row.roleId == null ? null : String(row.roleId),
             requiredShifts: row.requiredShifts, profileName: row.profile?.name ?? null})),
         participants: data.participants.map(row => ({participantKey: row.participantKey, name: row.name ?? null,
-            roleIds: row.roleIds ?? [], requiredShifts: row.requiredShifts, assignedShifts: row.assignedShifts,
+            roleIds: (row.roleIds ?? []).map(String), requiredShifts: row.requiredShifts, assignedShifts: row.assignedShifts,
             remainingShifts: row.remainingShifts, source: row.source, attendanceDays: row.attendanceDays,
             attendance: {arrivalDate: row.attendance?.arrivalDate ?? null, departureDate: row.attendance?.departureDate ?? null},
             roles: row.roles, assignmentMode: row.assignmentMode})),
@@ -3373,15 +3377,15 @@ export async function readActivityRequirements(id: string, session: SessionLike)
         calculationContext: {
             participants: data.calculationContext.participants.map(row => ({profileId: row.profileId ?? null,
                 name: row.name ?? null, arrivalDate: row.arrivalDate ?? null, departureDate: row.departureDate ?? null,
-                roleIds: row.roleIds ?? []})),
+                roleIds: (row.roleIds ?? []).map(String)})),
             assignedShiftCounts: data.calculationContext.assignedShiftCounts,
             slots: data.calculationContext.slots.map(slot => ({id: slot.id, day: slot.day,
                 startTime: slot.startTime ?? null, endTime: slot.endTime ?? null, maxAssignees: slot.maxAssignees ?? null,
-                roles: slot.roles})),
+                roles: slot.roles.map(role => ({...role, roleId: String(role.roleId)}))})),
         },
         overrideTargets: data.overrideTargets.map(row => ({key: row.key, profileId: row.profileId, label: row.label,
             nameIsFallback: row.nameIsFallback === true, arrivalDate: row.arrivalDate, departureDate: row.departureDate})),
-        allRoles: allRoles.map(role => ({id: Number(role.id), title: role.title, description: role.description ?? null})),
+        allRoles: allRoles.map(role => ({id: String(role.id), title: role.title, description: role.description ?? null})),
     };
 }
 

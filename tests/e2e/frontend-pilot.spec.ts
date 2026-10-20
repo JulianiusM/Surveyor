@@ -348,6 +348,11 @@ for (const width of [1280, 390]) {
                 const item = row.getByRole('textbox', {name: 'Item 1', exact: true});
                 const description = row.getByRole('textbox', {name: 'Description 1', exact: true});
                 const capacity = row.getByRole('spinbutton', {name: 'Max # 1', exact: true});
+                // Shared hidden labels preserve the original accessible row and
+                // column context without adding duplicate painted table text.
+                await expect(item).toHaveAccessibleName('Item 1');
+                await expect(description).toHaveAccessibleName('Description 1');
+                await expect(capacity).toHaveAccessibleName('Max # 1');
                 await item.fill('Retained initial item');
                 await description.fill('Retained description');
                 await capacity.fill('12');

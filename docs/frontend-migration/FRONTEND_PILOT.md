@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P8 organizer finance and allocation composition source-reconciled with retained P7 and P0-P6 ownership; independent form saves, shared numeric controls and native/later-phase exclusions retained; execution belongs to paired review
+verification-scope: Current P0-P8 shared lexical controls, original decimal wire contracts, matching multipart and financial presentation ownership reconciled with source and localized/staged guidance; actual execution belongs to paired review
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -21,6 +21,10 @@ The [current implementation review](PILOT_PARITY_REVIEW.md#current-approved-inte
 and subsequent [Activity correction follow-up](PILOT_PARITY_REVIEW.md#activity-correction-follow-up-2026-10-20)
 record completed corrections and their scoped verification. Source mappings and earlier passing selections do not
 establish complete visual/behavioral parity for every implemented journey and relevant state.
+The subsequent [full-pilot correction](PILOT_PARITY_REVIEW.md#full-pilot-correction-and-decision-adoption-2026-10-20)
+reconciles repeated decision adoption, shared lexical numeric fields, original money/factor/identifier wire choices,
+matching multipart envelopes, financial text presentation and runtime/staged guidance across migrated modules.
+Its current executed evidence remains separate from earlier passing selections and original baseline captures.
 
 ## Migration boundary and current iteration
 

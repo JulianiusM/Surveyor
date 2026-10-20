@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P8 organizer finance and allocation contracts source-reconciled with retained P7 private reads and earlier method-policy/transport provenance; original shared operations, native isolation and later-phase exclusions retained; execution belongs to paired review
+verification-scope: Original decimal-string money/factor/identifier choices restored with explicitly preserved accepted command precision; P0-P8 shared operations, native isolation and later-phase exclusions retained; actual execution belongs to paired review
 source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/controller/activityController.ts; src/modules/activity/; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: next-contract-migration-or-authorized-cutover
 -->
@@ -17,8 +17,10 @@ transactions/persistence. A DTO deliberately differs from an entity; one wire sh
 
 The [baseline](FRONTEND_MIGRATION_BASELINE.md) owns behavior/route exceptions.
 [Foundation](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments) owns original choices and dated
-amendments. The decimal-string finance target below remains future work; current Help/Packing/Event/Drivers/Survey/Activity/finance/overview/identity
-contracts are authoritative in their YAML rather than a second maintained endpoint matrix.
+amendments. The [approved finance correction](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#approved-finance-wire-correction-2026-10-20)
+retains the original decimal-string transport with explicitly preserved accepted command precision. Current
+Help/Packing/Event/Drivers/Survey/Activity/finance/overview/identity contracts are authoritative in their YAML
+rather than a second maintained endpoint matrix.
 
 ## Implemented foundation boundary
 
@@ -40,6 +42,11 @@ projections retain independent method admission. Deliberate recommendation maint
 snapshot and known-job reads cannot maintain rows or enqueue work. Reviewed application retains the exact batch,
 current overlap acknowledgement and existing server provenance/application decisions, without stronger inherited
 completion guarantees.
+
+The same original identifier contract applies to Activity roles, overrides and role-ID arrays. Versioned controller
+projections and browser drafts retain decimal strings; the existing frontend requirements helper adapts arguments
+for the unchanged numeric pure engine at one shared boundary used by Analyze and Calculate. Existing native/Joi
+normalization and DBAL remain authoritative rather than acquiring a second domain representation.
 
 The P7 finance slice added separate participant/organizer saved projections and lazy saved-share breakdowns.
 Personal metadata is limited to eligible pools and own invoice/share contexts; unrelated pools, other invoices,
@@ -148,9 +155,11 @@ ETag/Vary is never authority. Context/local locale scope cannot leak into a sing
 | Value | Preserved wire meaning |
 |---|---|
 | UUID identifiers | UUID strings where the real identifier is UUID, never entity objects. |
-| Numeric assignment handle | Canonical positive decimal string; undisclosed handles null. Safe internal conversion only at owning persistence boundary. |
+| Numeric record identifier | Canonical positive decimal string; undisclosed handles null. Existing owning server operations perform internal conversion. |
 | Ordinary edit token | Opaque current-value comparison, distinct from reviewed financial revision/history. |
-| Financial amounts/factors | Future canonical decimal strings, preserving existing sign/range/precision/arithmetic; no locale separators or invented currency model. |
+| Financial command amount | Plain decimal string without exponent or locale separators; preserve precision accepted by the existing operation, including its sign/range/precision checks. |
+| Saved financial amount | Signed fixed-two-decimal string from the existing shared financial presenter; no new rounding or browser calculation. |
+| Financial factor | Canonical four-place decimal string within the existing operation's range; preserve zero and existing arithmetic. |
 | Civil date / instant | YYYY-MM-DD independent of browser timezone / normalized RFC3339 UTC. |
 | Local deadline | Explicit local date/time plus owning IANA timezone policy, not new Date guesses. |
 | Boolean | JSON true/false; legacy checkbox decoding belongs to native adapter. |

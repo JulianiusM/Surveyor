@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P6 shared notifications, integrated Refresh, controlled localization, locale-neutral presentation and approved shared civil-date ownership reconciled with original boundaries; approved staged first-install summary linked to Database; execution separate; no publication
+verification-scope: P0-P8 shared frontend/backend ownership, explicit lexical numeric controls, Finance decimal wire/read boundaries and existing authority/draft architecture source-reconciled; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -139,10 +139,12 @@ paragraph margins. `EntityQuickAdd` shares Packing/Drivers card, description/cap
 features supply their distinct title controls, values and commands. The installed native number directive retains
 coercion and DOM updates, including leading-zero normalization on change/rerender; feature drafts still hold a number
 or remaining input text. No shared control stores another draft or grants authority.
-`FormField` preserves native composition/caret handling while emitting lexical DOM strings. Feature-owned parsing,
-constraints, readonly state and explicit label content retain their existing meaning. The transport's
-`createMultipartForm` shares creation/header serialization across all five features without selecting operations,
-validating a second schema or copying their image lifetime.
+`FormField` preserves native composition/caret handling, with an explicit lexical-number path for string drafts
+and the existing native directive for intentional numeric normalization. Feature-owned parsing, constraints,
+readonly state and explicit label content retain their existing meaning. The transport's
+`createMultipartForm` shares creation/header serialization across all five entity features and the same Finance
+proof envelope with an explicitly named binary part. It selects no operation, validates no second schema and
+copies no file lifetime; required versus optional images/proofs remain with the feature.
 The existing `usePageTitle` owner accepts catalog-owned complete journey titles when native prefixes or branding
 differ from visible headings. SSR, initial hydration, warm navigation and locale changes consume that same owner.
 
@@ -226,10 +228,22 @@ Participant notes dialogs retain only a summary or participant-ID selection. Dis
 current admitted roster, independently of local search; removed sources close the selection. Organizer attendance
 dates are genuine local drafts and remain separate from those read-only notes and background replacements.
 
-Financial interaction retains its domain boundaries: pool actions lock relevant controls, report delayed progress
-after five seconds and display saved state only after confirmation. Payment feedback stays outside filtered share
-rows, and detailed saved share/coverage information has its own dialog. Confirmed participant submission clears
-invoice-specific inputs while retaining the available pool selection; pending/uncertain uploads prevent duplicate work.
+Finance composes the admitted Event page with distinct participant/organizer projections, shared saved history,
+totals, ledgers, coverage and lazy protected explanations. Independent pool, invoice-review, enrollment, factor,
+adjustment and coverage forms retain their own lexical drafts and confirmed saved-field baselines through sibling
+saves and failed follow-up reads. Matching controls use the shared `FormField` lexical-number option and the existing
+finance wheel guard; intentionally normalized numeric consumers keep their existing binding. One Finance palette
+supplies readable secondary text in the admitted region and shared dialogs, including dialogs rendered outside
+their feature subtree.
+
+Financial command money uses decimal strings retaining accepted precision; saved money uses the existing shared
+fixed-two-decimal presenter. Factors and numeric identifiers retain their canonical decimal-string contracts.
+Existing controller normalization, calculations and DBAL remain shared; Vue performs no replacement arithmetic.
+Locale-owned Finance reads retire through the same query-family owner as Help and Overview without invalidating
+untranslated Event snapshots. Pending uploads distinguish transferred bytes from saved confirmation; an unknown
+outcome requires fresh history inspection and explicit acknowledgement without replay. Confirmed submission clears
+completed invoice fields while retaining an eligible pool. Calculation, settlement and output operations keep their
+existing domain boundaries and independent reviewed evidence.
 
 
 <!-- /delta:amendment-01 -->

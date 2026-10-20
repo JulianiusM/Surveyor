@@ -175,12 +175,12 @@ describe('versioned finance shared ownership and private saved projections', () 
 
             // A browser-supplied proof filename cannot impersonate uploaded evidence.
             const forgedProof = new FormData();
-            forgedProof.append('data', JSON.stringify({amount: 8, description: 'Untrusted filename'}));
+            forgedProof.append('data', JSON.stringify({amount: '8', description: 'Untrusted filename'}));
             forgedProof.append('proof', 'forged.pdf');
             const rejected = await fetch(`${endpoint}/${poolId}/invoices/organizer`, {method: 'POST', headers, body: forgedProof});
             expect(rejected.status).toBe(400);
             const cost = new FormData();
-            cost.append('data', JSON.stringify({amount: 8, description: 'Optional organizer proof saved'}));
+            cost.append('data', JSON.stringify({amount: '8', description: 'Optional organizer proof saved'}));
             cost.append('proof', new Blob(['%PDF-1.4 HTTP organizer proof'], {type: 'application/pdf'}), 'organizer.pdf');
             const recorded = await fetch(`${endpoint}/${poolId}/invoices/organizer`, {method: 'POST', headers, body: cost});
             expect(recorded.status).toBe(200);
@@ -219,15 +219,15 @@ describe('versioned finance shared ownership and private saved projections', () 
             const own = (await eventService.getRegistrationFor(participant.id, id))!;
             const second = (await eventService.getRegistrationFor(other.id, id))!;
             expect((await publicPost(`/${publicPoolId}/assignments`, {assignAll: false, isDefault: true, subtractPersonalInvoices: false,
-                registrations: [own.id, second.id], exemptions: [second.id], participantFactors: {[own.id]: 0, [second.id]: 1.25}})).status).toBe(200);
-            expect((await publicPost(`/${publicPoolId}/adjustments`, {registrationId: own.id, amount: -2.5,
+                registrations: [String(own.id), String(second.id)], exemptions: [String(second.id)], participantFactors: {[own.id]: '0.0000', [second.id]: '1.2500'}})).status).toBe(200);
+            expect((await publicPost(`/${publicPoolId}/adjustments`, {registrationId: String(own.id), amount: '-2.5',
                 note: 'Public method rebate', subtractFromPool: false})).status).toBe(200);
             const adjusted = (await invoiceService.getPoolWithInvoices(publicPoolId))!;
             expect(adjusted).toMatchObject({description: 'Public method settings', distributionMethod: 'NIGHTS'});
             expect(adjusted.assignments.find(row => row.registrationId === own.id)?.factor).toBe(0);
             expect(adjusted.surcharges[0]).toMatchObject({amount: '-2.50', note: 'Public method rebate'});
             expect((await publicPost(`/${publicPoolId}/adjustments/${adjusted.surcharges[0].id}/remove`)).status).toBe(200);
-            expect((await publicPost(`/${publicPoolId}/takeovers/manage`, {payerId: own.id, beneficiaries: [second.id]})).status).toBe(200);
+            expect((await publicPost(`/${publicPoolId}/takeovers/manage`, {payerId: String(own.id), beneficiaries: [String(second.id)]})).status).toBe(200);
             const coverage = (await invoiceService.getPoolWithInvoices(publicPoolId))!;
             expect(coverage.takeovers).toEqual([expect.objectContaining({payerRegistrationId: own.id, beneficiaryRegistrationId: second.id})]);
 
@@ -235,19 +235,19 @@ describe('versioned finance shared ownership and private saved projections', () 
             // grant alone; recorder entry and retroactive review require a profile.
             const accepted = await submit(event, publicPoolId, participant, 'Anonymous public-grant acceptance');
             const declined = await submit(event, publicPoolId, other, 'Anonymous public-grant decline');
-            expect((await publicPost(`/${publicPoolId}/invoices/${accepted.id}/approve`, {correctedAmount: 30})).status).toBe(200);
+            expect((await publicPost(`/${publicPoolId}/invoices/${accepted.id}/approve`, {correctedAmount: '30'})).status).toBe(200);
             expect((await publicPost(`/${publicPoolId}/invoices/${accepted.id}/organizer-close`)).status).toBe(200);
             expect((await publicPost(`/${publicPoolId}/invoices/${declined.id}/decline`, {rejectionReason: 'Anonymous method review'})).status).toBe(200);
             const reviewed = (await invoiceService.getPoolWithInvoices(publicPoolId))!;
             expect(reviewed.invoices.find(row => row.id === accepted.id)).toMatchObject({status: 'CLOSED', amount: '40.00', correctedAmount: '30.00'});
             expect(reviewed.invoices.find(row => row.id === declined.id)).toMatchObject({status: 'REJECTED', rejectionReason: 'Anonymous method review'});
             expect((await publicPost(`/${publicPoolId}/invoices/${accepted.id}/revise`, {confirmed: true,
-                expectedRevision: reviewed.calculationRevision, correctedAmount: 29, correctedDescription: null})).status).toBe(401);
+                expectedRevision: reviewed.calculationRevision, correctedAmount: '29', correctedDescription: null})).status).toBe(401);
             expect((await publicPost(`/${publicPoolId}/invoices/${accepted.id}/reject-accepted`, {confirmed: true,
                 expectedRevision: reviewed.calculationRevision, rejectionReason: 'A profile is required'})).status).toBe(401);
             expect((await publicPost(`/${publicPoolId}/takeovers`, {beneficiaries: []})).status).toBe(401);
             const anonymousExpense = new FormData();
-            anonymousExpense.append('data', JSON.stringify({amount: 8, description: 'Profile required expense'}));
+            anonymousExpense.append('data', JSON.stringify({amount: '8', description: 'Profile required expense'}));
             expect((await fetch(`${endpoint}/${publicPoolId}/invoices/organizer`, {method: 'POST', headers: publicHeaders,
                 body: anonymousExpense})).status).toBe(401);
             for (const path of ['/finance', '/finance/organizer', `/finance/pools/${publicPoolId}/invoices/${accepted.id}/proof`]) {
@@ -509,7 +509,7 @@ describe('versioned finance shared ownership and private saved projections', () 
             });
             await Promise.race([locked, closing]);
             const form = new FormData();
-            form.append('data', JSON.stringify({amount: 12, description: 'Concurrent closed-pool upload'}));
+            form.append('data', JSON.stringify({amount: '12', description: 'Concurrent closed-pool upload'}));
             form.append('proof', new Blob(['%PDF-1.4 raced proof'], {type: 'application/pdf'}), 'race.pdf');
             submission = fetch(`${origin}/api/v1/events/${event.id}/finance/pools/${poolId}/invoices`, {
                 method: 'POST', headers: {Cookie: cookie!, 'X-Surveyor-Context': context, 'X-CSRF-Token': csrf,
@@ -594,8 +594,8 @@ describe('versioned finance shared ownership and private saved projections', () 
 
         const personal = await readEventFinance(id, actor(participant));
         expect(personal.invoices.find(row => row.id === String(retracted.id))).toMatchObject({status: 'RETRACTED', canRetract: false});
-        expect(personal.invoices.find(row => row.id === String(accepted.id))).toMatchObject({status: 'CLOSED', amount: 40,
-            description: 'Corrected original', correctedAmount: 35, correctedDescription: 'Corrected saved', canClose: false});
+        expect(personal.invoices.find(row => row.id === String(accepted.id))).toMatchObject({status: 'CLOSED', amount: '40.00',
+            description: 'Corrected original', correctedAmount: '35.00', correctedDescription: 'Corrected saved', canClose: false});
         expect(personal.invoices.find(row => row.id === String(rejected.id))).toMatchObject({status: 'REJECTED', rejectionReason: 'Saved rejection reason'});
         expect(personal.invoices.find(row => row.id === String(pending.id))).toMatchObject({status: 'NEW', canRetract: true});
         expect(await readEventInvoiceProof(id, poolId, String(retracted.id), actor(participant))).toBeTruthy();
@@ -616,12 +616,12 @@ describe('versioned finance shared ownership and private saved projections', () 
         const stored = (await invoiceService.getPoolWithInvoices(poolId))!;
         const personal = await readEventFinance(id, actor(participant));
         expect(personal.shares).toHaveLength(1);
-        expect(personal.shares[0]).toMatchObject({amount: -20, status: 'refund', isPaid: false});
+        expect(personal.shares[0]).toMatchObject({amount: '-20.00', status: 'refund', isPaid: false});
         const breakdown = await readEventFinanceBreakdown(id, poolId, personal.shares[0].id, actor(participant), 'participant');
         const validate = contractValidator('FinanceBreakdown');
         expect(validate(breakdown), JSON.stringify(validate.errors)).toBe(true);
         expect(JSON.stringify(breakdown)).not.toContain(other.name);
-        expect(breakdown.components.find(row => row.key === 'shareAmount')?.amount).toBe(-20);
+        expect(breakdown.components.find(row => row.key === 'shareAmount')?.amount).toBe('-20.00');
         const german = await readEventFinance(id, actor(participant), 'participant', 'de');
         expect(german.shares[0].caption).toBe('Zu erhaltende Erstattung');
         const germanBreakdown = await readEventFinanceBreakdown(id, poolId, personal.shares[0].id, actor(participant), 'participant', 'de');
@@ -661,8 +661,8 @@ describe('versioned finance shared ownership and private saved projections', () 
         await expect(admitEventInvoiceSubmission(id, actor(editor))).rejects.toMatchObject({status: 403});
         const validate = contractValidator('FinanceInvoiceForm');
         const file = {originalname: 'receipt.pdf'} as Express.Multer.File;
-        expect(validate(decodeApiMultipartData({data: JSON.stringify({amount: 10, description: 'Proof input'})}, file, 'proof'))).toBe(true);
-        expect(validate(decodeApiMultipartData({data: JSON.stringify({amount: 10, extra: 'forged'})}, file, 'proof'))).toBe(false);
+        expect(validate(decodeApiMultipartData({data: JSON.stringify({amount: '10', description: 'Proof input'})}, file, 'proof'))).toBe(true);
+        expect(validate(decodeApiMultipartData({data: JSON.stringify({amount: '10', extra: 'forged'})}, file, 'proof'))).toBe(false);
         expect(() => decodeApiMultipartData({data: '{}', proof: 'not uploaded'}, undefined, 'proof')).toThrow();
     });
 });
