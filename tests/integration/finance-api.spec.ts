@@ -7,7 +7,10 @@ import session from 'express-session';
 import type {Request} from 'express';
 import invoices, {
     admitEventInvoiceSubmission, closeEventInvoice, readEventFinance, readEventFinanceBreakdown,
-    readEventInvoiceProof, retractEventInvoice,
+    readEventInvoiceProof, retractEventInvoice, createEventFinancePool, updateEventFinanceSettings,
+    changeEventFinanceSubmissionState, admitEventFinanceOrganizer, recordEventOrganizerInvoice,
+    reviewEventFinanceInvoice, updateEventFinanceAssignments, addEventFinanceAdjustment,
+    removeEventFinanceAdjustment, updateEventFinanceTakeovers,
 } from '../../src/controller/eventPoolController';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
@@ -16,7 +19,10 @@ import {contractValidator} from '../../src/modules/api/contracts';
 import {decodeApiMultipartData} from '../../src/modules/api/transport';
 import {PERM} from '../../src/modules/lib/permissions';
 import {AppDataSource} from '../../src/modules/database/dataSource';
+import settings from '../../src/modules/settings';
 import eventRouter from '../../src/routes/api/v1/events';
+import nativeEventRouter from '../../src/routes/api/event';
+import {wrapErrorApi} from '../../src/middleware/validationErrorHandler';
 import {handleApiProblem} from '../../src/modules/api/problem';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import mailer from '../../src/modules/email';
@@ -73,6 +79,386 @@ afterAll(async function closeFinanceDatabase() {
 });
 
 describe('versioned finance shared ownership and private saved projections', () => {
+    it('preserves the existing native public management methods independently of profile-required invoice actions', async () => {
+        const {id, event, poolId} = await fixture();
+        const invoice = await submit(event, poolId, participant, 'Native public review baseline');
+        await adminService.updatePerms('event', id, {public: PERM.MANAGE_ASSIGNMENTS});
+        const app = express();
+        app.use(express.json());
+        app.use(session({secret: 'native-public-finance-baseline', resave: false, saveUninitialized: false}));
+        // Mount the unchanged real native API, including its actual parameter
+        // loader and permission middleware. No fixture grants a request actor.
+        app.use('/api/event', nativeEventRouter);
+        app.use(wrapErrorApi);
+        const server = http.createServer(app);
+        await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+        const address = server.address();
+        if (!address || typeof address === 'string') throw new Error('Missing native public-finance listener');
+        const endpoint = `http://127.0.0.1:${address.port}/api/event/${id}/invoice-pools`;
+        try {
+            const created = await fetch(endpoint, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: 'Native anonymous management baseline', distribution: 'EQUAL', assignAll: true})});
+            expect(created.status).toBe(200);
+            const settings = await fetch(`${endpoint}/${poolId}`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({description: 'Native anonymous saved setting', distribution: 'NIGHTS'})});
+            expect(settings.status).toBe(200);
+            const approved = await fetch(`${endpoint}/${poolId}/invoices/${invoice.id}/approve`, {method: 'POST',
+                headers: {'Content-Type': 'application/json'}, body: JSON.stringify({correctedAmount: 30})});
+            expect(approved.status).toBe(200);
+            expect((await fetch(`${endpoint}/${poolId}/invoices/${invoice.id}/close`, {method: 'POST'})).status).toBe(200);
+            const stored = (await invoiceService.getPoolWithInvoices(poolId))!;
+            expect(stored).toMatchObject({description: 'Native anonymous saved setting', distributionMethod: 'NIGHTS'});
+            expect(stored.invoices.find(row => row.id === invoice.id)).toMatchObject({amount: '40.00', correctedAmount: '30.00', status: 'CLOSED'});
+            expect((await invoiceService.listPools(id)).map(row => row.name)).toContain('Native anonymous management baseline');
+            // Native entry and retroactive review explicitly require a profile;
+            // public management cannot fabricate an audit recorder.
+            expect((await fetch(`${endpoint}/${poolId}/invoices/organizer`, {method: 'POST'})).status).toBe(401);
+            expect((await fetch(`${endpoint}/${poolId}/invoices/${invoice.id}/revise`, {method: 'POST'})).status).toBe(401);
+            expect(await eventService.getRegistrationFor(owner.id, id)).toBeNull();
+        } finally {
+            await new Promise<void>((resolve, reject) => {
+                server.close(error => error ? reject(error) : resolve());
+                server.closeAllConnections();
+            });
+        }
+    });
+
+    it('uses generated closed command shapes, CSRF admission and optional proof bytes through the actual organizer HTTP adapter', async () => {
+        const {id, event} = await fixture();
+        const context = 'finance-organizer-context-123456789012345';
+        const csrf = 'finance-organizer-csrf-123456789012345678';
+        const app = express();
+        app.use(express.json());
+        app.use(session({secret: 'finance-organizer-http-fixture', resave: false, saveUninitialized: false}));
+        app.post('/seed', function seedOrganizerSession(req, res) {
+            req.session.profile = owner;
+            req.session.auth = {user: owner.user!};
+            req.session.frontendContext = context;
+            req.session.frontendCsrfToken = csrf;
+            res.sendStatus(204);
+        });
+        app.use(function retainOrganizerProof(req, res, next) {
+            // This fixture tracks only files received by its own HTTP request.
+            res.once('finish', function captureOrganizerProof() { if (req.file) proofPaths.add(req.file.path); });
+            next();
+        });
+        app.use('/api/v1/events', eventRouter);
+        app.use(handleApiProblem);
+        const server = http.createServer(app);
+        await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+        const address = server.address();
+        if (!address || typeof address === 'string') throw new Error('Missing organizer HTTP listener address');
+        const origin = `http://127.0.0.1:${address.port}`;
+        try {
+            const seed = await fetch(`${origin}/seed`, {method: 'POST'});
+            const cookie = seed.headers.get('set-cookie')?.split(';', 1)[0];
+            expect(cookie).toBeTruthy();
+            const headers = {Cookie: cookie!, 'X-Surveyor-Context': context, 'X-CSRF-Token': csrf,
+                'X-Surveyor-Api-Compatibility': apiCompatibility, 'X-Surveyor-Locale': 'de'};
+            const input = {name: 'HTTP organizer input', distribution: 'EQUAL', status: 'OPEN', isDefault: false,
+                assignAll: true, subtractPersonalInvoices: true, sendCalculationEmails: false, roundUpShares: false, registrations: []};
+            const endpoint = `${origin}/api/v1/events/${id}/finance/pools`;
+            // Transport rejection precedes persistence, including unknown fields and absent CSRF proof.
+            const noCsrf = await fetch(endpoint, {method: 'POST', headers: {...headers, 'X-CSRF-Token': '', 'Content-Type': 'application/json'},
+                body: JSON.stringify(input)});
+            expect(noCsrf.status).toBe(403);
+            const forged = await fetch(endpoint, {method: 'POST', headers: {...headers, 'Content-Type': 'application/json'},
+                body: JSON.stringify({...input, recordedByProfileId: other.id})});
+            expect(forged.status).toBe(400);
+            expect((await invoiceService.listPools(id)).map(pool => pool.name)).not.toContain(input.name);
+            const created = await fetch(endpoint, {method: 'POST', headers: {...headers, 'Content-Type': 'application/json'}, body: JSON.stringify(input)});
+            expect(created.status).toBe(200);
+            expect(await created.json()).toEqual({changed: true});
+            expect(created.headers.get('cache-control')).toBe('private, no-store');
+            expect(created.headers.get('content-language')).toBe('de');
+            const poolId = (await invoiceService.listPools(id)).find(pool => pool.name === input.name)!.id;
+
+            // A browser-supplied proof filename cannot impersonate uploaded evidence.
+            const forgedProof = new FormData();
+            forgedProof.append('data', JSON.stringify({amount: 8, description: 'Untrusted filename'}));
+            forgedProof.append('proof', 'forged.pdf');
+            const rejected = await fetch(`${endpoint}/${poolId}/invoices/organizer`, {method: 'POST', headers, body: forgedProof});
+            expect(rejected.status).toBe(400);
+            const cost = new FormData();
+            cost.append('data', JSON.stringify({amount: 8, description: 'Optional organizer proof saved'}));
+            cost.append('proof', new Blob(['%PDF-1.4 HTTP organizer proof'], {type: 'application/pdf'}), 'organizer.pdf');
+            const recorded = await fetch(`${endpoint}/${poolId}/invoices/organizer`, {method: 'POST', headers, body: cost});
+            expect(recorded.status).toBe(200);
+            expect(await recorded.json()).toEqual({changed: true});
+            const pool = (await invoiceService.getPoolWithInvoices(poolId))!;
+            expect(pool.invoices).toHaveLength(1);
+            expect(pool.invoices[0]).toMatchObject({description: 'Optional organizer proof saved', proofOriginalName: 'organizer.pdf',
+                recordedByProfileId: owner.id, recordedByName: owner.name, registrationId: null});
+            expect(await eventService.getRegistrationFor(owner.id, id)).toBeNull();
+
+            // Public method grants remain independent from private page/profile
+            // admission. Anonymous writes still require origin and compatibility.
+            const publicHeaders = {'X-Surveyor-Api-Compatibility': apiCompatibility, 'X-Surveyor-Locale': 'en',
+                Origin: new URL(settings.value.rootUrl).origin};
+            const publicInput = {...input, name: 'Anonymous public-grant pool'};
+            async function publicPost(path: string, body?: object): Promise<globalThis.Response> {
+                return fetch(`${endpoint}${path}`, {method: 'POST', headers: body
+                    ? {...publicHeaders, 'Content-Type': 'application/json'} : publicHeaders,
+                    ...(body ? {body: JSON.stringify(body)} : {})});
+            }
+            expect((await publicPost('', publicInput)).status).toBe(403);
+            await adminService.updatePerms('event', id, {public: PERM.MANAGE_ASSIGNMENTS});
+            const noContext = await fetch(endpoint, {method: 'POST', headers: {...headers,
+                'X-Surveyor-Context': '', 'Content-Type': 'application/json'}, body: JSON.stringify(publicInput)});
+            expect(await noContext.json()).toMatchObject({code: 'CONTEXT_REQUIRED'});
+            const wrongContext = await fetch(endpoint, {method: 'POST', headers: {...headers,
+                'X-Surveyor-Context': 'another-context-12345678901234567890', 'Content-Type': 'application/json'}, body: JSON.stringify(publicInput)});
+            expect(await wrongContext.json()).toMatchObject({code: 'SESSION_CONTEXT_CHANGED'});
+            const noOrigin = await fetch(endpoint, {method: 'POST', headers: {
+                'X-Surveyor-Api-Compatibility': apiCompatibility, 'Content-Type': 'application/json'}, body: JSON.stringify(publicInput)});
+            expect(await noOrigin.json()).toMatchObject({code: 'CSRF_INVALID'});
+            expect((await publicPost('', publicInput)).status).toBe(200);
+            const publicPoolId = (await invoiceService.listPools(id)).find(row => row.name === publicInput.name)!.id;
+            expect((await publicPost(`/${publicPoolId}/settings`, {distribution: 'NIGHTS', description: 'Public method settings',
+                sendCalculationEmails: false, roundUpShares: false})).status).toBe(200);
+            const own = (await eventService.getRegistrationFor(participant.id, id))!;
+            const second = (await eventService.getRegistrationFor(other.id, id))!;
+            expect((await publicPost(`/${publicPoolId}/assignments`, {assignAll: false, isDefault: true, subtractPersonalInvoices: false,
+                registrations: [own.id, second.id], exemptions: [second.id], participantFactors: {[own.id]: 0, [second.id]: 1.25}})).status).toBe(200);
+            expect((await publicPost(`/${publicPoolId}/adjustments`, {registrationId: own.id, amount: -2.5,
+                note: 'Public method rebate', subtractFromPool: false})).status).toBe(200);
+            const adjusted = (await invoiceService.getPoolWithInvoices(publicPoolId))!;
+            expect(adjusted).toMatchObject({description: 'Public method settings', distributionMethod: 'NIGHTS'});
+            expect(adjusted.assignments.find(row => row.registrationId === own.id)?.factor).toBe(0);
+            expect(adjusted.surcharges[0]).toMatchObject({amount: '-2.50', note: 'Public method rebate'});
+            expect((await publicPost(`/${publicPoolId}/adjustments/${adjusted.surcharges[0].id}/remove`)).status).toBe(200);
+            expect((await publicPost(`/${publicPoolId}/takeovers/manage`, {payerId: own.id, beneficiaries: [second.id]})).status).toBe(200);
+            const coverage = (await invoiceService.getPoolWithInvoices(publicPoolId))!;
+            expect(coverage.takeovers).toEqual([expect.objectContaining({payerRegistrationId: own.id, beneficiaryRegistrationId: second.id})]);
+
+            // Native acceptance, decline and manager closure require the method
+            // grant alone; recorder entry and retroactive review require a profile.
+            const accepted = await submit(event, publicPoolId, participant, 'Anonymous public-grant acceptance');
+            const declined = await submit(event, publicPoolId, other, 'Anonymous public-grant decline');
+            expect((await publicPost(`/${publicPoolId}/invoices/${accepted.id}/approve`, {correctedAmount: 30})).status).toBe(200);
+            expect((await publicPost(`/${publicPoolId}/invoices/${accepted.id}/organizer-close`)).status).toBe(200);
+            expect((await publicPost(`/${publicPoolId}/invoices/${declined.id}/decline`, {rejectionReason: 'Anonymous method review'})).status).toBe(200);
+            const reviewed = (await invoiceService.getPoolWithInvoices(publicPoolId))!;
+            expect(reviewed.invoices.find(row => row.id === accepted.id)).toMatchObject({status: 'CLOSED', amount: '40.00', correctedAmount: '30.00'});
+            expect(reviewed.invoices.find(row => row.id === declined.id)).toMatchObject({status: 'REJECTED', rejectionReason: 'Anonymous method review'});
+            expect((await publicPost(`/${publicPoolId}/invoices/${accepted.id}/revise`, {confirmed: true,
+                expectedRevision: reviewed.calculationRevision, correctedAmount: 29, correctedDescription: null})).status).toBe(401);
+            expect((await publicPost(`/${publicPoolId}/invoices/${accepted.id}/reject-accepted`, {confirmed: true,
+                expectedRevision: reviewed.calculationRevision, rejectionReason: 'A profile is required'})).status).toBe(401);
+            expect((await publicPost(`/${publicPoolId}/takeovers`, {beneficiaries: []})).status).toBe(401);
+            const anonymousExpense = new FormData();
+            anonymousExpense.append('data', JSON.stringify({amount: 8, description: 'Profile required expense'}));
+            expect((await fetch(`${endpoint}/${publicPoolId}/invoices/organizer`, {method: 'POST', headers: publicHeaders,
+                body: anonymousExpense})).status).toBe(401);
+            for (const path of ['/finance', '/finance/organizer', `/finance/pools/${publicPoolId}/invoices/${accepted.id}/proof`]) {
+                const privateRead = await fetch(`${origin}/api/v1/events/${id}${path}`, {headers: publicHeaders});
+                expect(privateRead.status).toBe(401);
+                expect(await privateRead.json()).toMatchObject({code: 'AUTH_REQUIRED'});
+            }
+            expect((await publicPost(`/${publicPoolId}/submission-state`, {status: 'ORGANIZER_ONLY',
+                expectedRevision: reviewed.calculationRevision})).status).toBe(200);
+            expect((await invoiceService.getPoolWithInvoices(publicPoolId))!.status).toBe('ORGANIZER_ONLY');
+        } finally {
+            await new Promise<void>((resolve, reject) => {
+                server.close(error => error ? reject(error) : resolve());
+                server.closeAllConnections();
+            });
+        }
+    }, 30_000);
+
+    it('keeps organizer command grants independent from page reads and bounds every pool to its Event', async () => {
+        const {id, event, poolId} = await fixture();
+        const foreign = await fixture();
+        const input = {name: 'Versioned organizer pool', distribution: 'NIGHTS', description: 'Separate saved settings',
+            status: 'ORGANIZER_ONLY', assignAll: true, isDefault: false, subtractPersonalInvoices: true,
+            roundUpShares: false, sendCalculationEmails: false};
+        // A method grant cannot be inferred from registration, page access or a visible control.
+        await expect(createEventFinancePool(id, input, actor(participant))).rejects.toMatchObject({status: 403});
+        await adminService.addAdmin('event', id, editor.id, PERM.ACCESS_ADMIN);
+        await expect(createEventFinancePool(id, input, actor(editor))).rejects.toMatchObject({status: 403});
+        await adminService.updateAdminPerms('event', id, editor.id, PERM.MANAGE_ASSIGNMENTS);
+        const createdId = await createEventFinancePool(id, input, actor(editor));
+        const created = (await invoiceService.getPoolWithInvoices(createdId))!;
+        expect(created).toMatchObject({name: input.name, description: input.description, status: 'ORGANIZER_ONLY', distributionMethod: 'NIGHTS'});
+        expect([created.assignAll, created.isDefault, created.subtractPersonalInvoices, created.roundUpShares, created.sendCalculationEmails]
+            .map(Boolean)).toEqual([true, false, true, false, false]);
+        // Assign-all membership is derived from current Event registrations;
+        // creation need not persist redundant explicit assignment rows.
+        expect((await readEventFinance(id, actor(owner), 'organizer')).pools.find(pool => pool.id === createdId)?.assignedCount).toBe(2);
+        await expect(readEventFinance(id, actor(editor), 'organizer')).rejects.toMatchObject({status: 403});
+        expect((await admitEventFinanceOrganizer(id, actor(editor))).id).toBe(event.id);
+        await expect(admitEventFinanceOrganizer(id, {})).rejects.toMatchObject({status: 403});
+
+        // The admitted Event remains the owner even when a valid pool ID belongs to another root.
+        const foreignBefore = (await invoiceService.getPoolWithInvoices(foreign.poolId))!;
+        await expect(updateEventFinanceSettings(id, foreign.poolId,
+            {distribution: 'EQUAL', description: 'Forged cross-Event edit'}, actor(owner))).rejects.toMatchObject({status: 404});
+        await expect(updateEventFinanceAssignments(id, foreign.poolId,
+            {assignAll: true, registrations: []}, actor(owner))).rejects.toMatchObject({status: 404});
+        expect((await invoiceService.getPoolWithInvoices(foreign.poolId))!.calculationRevision).toBe(foreignBefore.calculationRevision);
+
+        // Submission access has its existing reviewed revision and never becomes financial reopening.
+        const revision = (await invoiceService.getPoolWithInvoices(poolId))!.calculationRevision;
+        await changeEventFinanceSubmissionState(id, poolId, {status: 'ORGANIZER_ONLY', expectedRevision: revision}, actor(owner));
+        await expect(changeEventFinanceSubmissionState(id, poolId,
+            {status: 'OPEN', expectedRevision: revision}, actor(owner))).rejects.toMatchObject({status: 409});
+        expect((await invoiceService.getPoolWithInvoices(poolId))!.status).toBe('ORGANIZER_ONLY');
+        await changeEventFinanceSubmissionState(id, poolId,
+            {status: 'OPEN', expectedRevision: revision + 1}, actor(owner));
+        expect((await invoiceService.getPoolWithInvoices(poolId))!.status).toBe('OPEN');
+    });
+
+    it('reviews original evidence through shared operations and rejects a stale retroactive correction without replacing saved shares', async () => {
+        const {id, event, poolId} = await fixture();
+        const invoice = await submit(event, poolId, participant, 'Immutable submitted receipt', 40);
+        const rejected = await submit(event, poolId, other, 'Rejected original receipt', 9);
+        const initial = (await invoiceService.getPoolWithInvoices(poolId))!;
+        // Acceptance writes effective overrides while preserving proof and original submitted fields.
+        await reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'approve',
+            {correctedAmount: 35, correctedDescription: 'Accepted effective receipt'}, actor(owner));
+        await reviewEventFinanceInvoice(id, poolId, String(rejected.id), 'decline',
+            {rejectionReason: 'Paid outside this pool'}, actor(owner));
+        await expect(reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'approve', {}, actor(owner)))
+            .rejects.toMatchObject({status: 409});
+        await reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'close', {}, actor(owner));
+        const closedInvoice = (await invoiceService.getPoolWithInvoices(poolId))!.invoices.find(row => row.id === invoice.id)!;
+        expect(closedInvoice).toMatchObject({status: 'CLOSED', amount: '40.00', description: 'Immutable submitted receipt',
+            correctedAmount: '35.00', correctedDescription: 'Accepted effective receipt', proofPath: invoice.proofPath});
+        expect((await invoiceService.getPoolWithInvoices(poolId))!.invoices.find(row => row.id === rejected.id))
+            .toMatchObject({status: 'REJECTED', amount: '9.00', description: 'Rejected original receipt', rejectionReason: 'Paid outside this pool'});
+        expect((await invoiceService.getPoolWithInvoices(poolId))!.calculationRevision).toBeGreaterThan(initial.calculationRevision);
+
+        // Calculation is fixture setup for P8's closed-pool input boundary, not a new P9 adapter.
+        await invoices.closePool(event, poolId, {sendEmails: false}, nativeActor(owner));
+        const calculated = (await invoiceService.getPoolWithInvoices(poolId))!;
+        await invoices.markSharePaid(event, poolId, String(calculated.shares[0].id), true, nativeActor(owner));
+        const saved = (await invoiceService.getPoolWithInvoices(poolId))!;
+        const reviewed = {confirmed: true, expectedRevision: saved.calculationRevision,
+            correctedAmount: 31, correctedDescription: 'Retroactive reviewed receipt'};
+        await updateEventFinanceSettings(id, poolId, {distribution: 'EQUAL', description: 'Concurrent saved setting'}, actor(owner));
+        await expect(reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'revise', reviewed, actor(owner)))
+            .rejects.toMatchObject({status: 409});
+        const afterConflict = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(afterConflict.invoices.find(row => row.id === invoice.id)?.correctedAmount).toBe('35.00');
+        await reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'revise',
+            {...reviewed, expectedRevision: afterConflict.calculationRevision}, actor(owner));
+        const revised = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(revised.invoices.find(row => row.id === invoice.id)).toMatchObject({amount: '40.00',
+            description: 'Immutable submitted receipt', correctedAmount: '31.00', correctedDescription: 'Retroactive reviewed receipt',
+            proofPath: invoice.proofPath, status: 'CLOSED'});
+        await reviewEventFinanceInvoice(id, poolId, String(invoice.id), 'reject',
+            {confirmed: true, expectedRevision: revised.calculationRevision, rejectionReason: 'Counted cost removed after review'}, actor(owner));
+        const final = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(Boolean(final.needsRecalculation)).toBe(true);
+        expect(final.shares).toEqual(saved.shares);
+        expect(final.calculationSnapshot).toEqual(saved.calculationSnapshot);
+        expect(final.invoices.find(row => row.id === invoice.id)).toMatchObject({status: 'REJECTED', amount: '40.00',
+            description: 'Immutable submitted receipt', proofPath: invoice.proofPath, rejectionReason: 'Counted cost removed after review'});
+        expect(await readEventInvoiceProof(id, poolId, String(invoice.id), actor(participant))).toBeTruthy();
+    });
+
+    it('keeps organizer recorder, attributed participant, pool cost and proof ownership distinct without creating attendance', async () => {
+        const {id, event, poolId} = await fixture();
+        const registration = (await eventService.getRegistrationFor(participant.id, id))!;
+        const foreign = await fixture();
+        const foreignRegistration = (await eventService.getRegistrationFor(participant.id, foreign.id))!;
+        const admitted = await admitEventFinanceOrganizer(id, actor(owner));
+        await recordEventOrganizerInvoice(admitted, poolId,
+            {amount: 18, description: 'Versioned shared pool-only expense'}, actor(owner));
+        await recordEventOrganizerInvoice(admitted, poolId,
+            {amount: 6, description: 'Versioned participant-paid expense', registrationId: registration.id}, actor(owner));
+        await expect(recordEventOrganizerInvoice(admitted, poolId,
+            {amount: 6, description: 'Foreign paid-by attribution', registrationId: foreignRegistration.id}, actor(owner)))
+            .rejects.toMatchObject({status: 400});
+        expect(await eventService.getRegistrationFor(owner.id, id)).toBeNull();
+        const stored = (await invoiceService.getPoolWithInvoices(poolId))!;
+        const sharedId = stored.invoices.find(row => row.description === 'Versioned shared pool-only expense')!.id;
+        const attributedId = stored.invoices.find(row => row.description === 'Versioned participant-paid expense')!.id;
+        expect(stored.invoices.find(row => row.id === sharedId)).toMatchObject({status: 'APPROVED', registrationId: null,
+            recordedByProfileId: owner.id, recordedByName: owner.name});
+        expect(stored.invoices.find(row => row.id === attributedId)).toMatchObject({status: 'APPROVED', registrationId: registration.id,
+            recordedByProfileId: owner.id, recordedByName: owner.name});
+        const personal = await readEventFinance(id, actor(participant));
+        expect(personal.invoices.map(row => row.id)).toContain(String(attributedId));
+        expect(personal.invoices.map(row => row.id)).not.toContain(String(sharedId));
+        expect(personal.invoices.find(row => row.id === String(attributedId))).toMatchObject({recordedByName: owner.name,
+            participantName: participant.name, participantEmail: null, canClose: true, canRetract: false});
+        expect(stored.invoices).toHaveLength(2);
+        expect(event.id).toBe(admitted.id);
+    });
+
+    it('saves factors, exemptions, signed adjustments and pending organizer coverage independently of applied closed shares', async () => {
+        const {id, event, poolId} = await fixture();
+        const registration = (await eventService.getRegistrationFor(participant.id, id))!;
+        const otherRegistration = (await eventService.getRegistrationFor(other.id, id))!;
+        await invoices.addOrganizerInvoice(event, poolId, {amount: 40, description: 'Saved cost before P8 edits'}, nativeActor(owner));
+        await invoices.closePool(event, poolId, {sendEmails: false}, nativeActor(owner));
+        const saved = (await invoiceService.getPoolWithInvoices(poolId))!;
+        await recordEventOrganizerInvoice(await admitEventFinanceOrganizer(id, actor(owner)), poolId,
+            {amount: 4, description: 'Additional cost after financial closure'}, actor(owner));
+        // Per-form updates affect current allocation inputs only; a zero factor and exemption are separate choices.
+        await updateEventFinanceAssignments(id, poolId, {assignAll: false, isDefault: true, subtractPersonalInvoices: false,
+            registrations: [registration.id, otherRegistration.id], exemptions: [otherRegistration.id],
+            participantFactors: {[registration.id]: 0, [otherRegistration.id]: 1.0001}}, actor(owner));
+        await addEventFinanceAdjustment(id, poolId, {registrationId: registration.id, amount: -3.25,
+            note: 'Reviewed redistribution rebate', subtractFromPool: true}, actor(owner));
+        await addEventFinanceAdjustment(id, poolId, {registrationId: otherRegistration.id, amount: 2.5,
+            note: 'Additional fixed charge', subtractFromPool: false}, actor(owner));
+        await updateEventFinanceTakeovers(id, poolId,
+            {payerId: registration.id, beneficiaries: [otherRegistration.id]}, actor(owner), true);
+        const changed = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect([changed.assignAll, changed.isDefault, changed.subtractPersonalInvoices, changed.needsRecalculation].map(Boolean))
+            .toEqual([false, true, false, true]);
+        expect(changed.assignments.map(row => ({id: row.registrationId, factor: row.factor, isExempt: Boolean(row.isExempt)})))
+            .toEqual(expect.arrayContaining([{id: registration.id, factor: 0, isExempt: false}, {id: otherRegistration.id, factor: 1.0001, isExempt: true}]));
+        expect(changed.surcharges.map(row => ({...row, subtractFromPool: Boolean(row.subtractFromPool)}))).toEqual(expect.arrayContaining([
+            expect.objectContaining({registrationId: registration.id, amount: '-3.25', subtractFromPool: true}),
+            expect.objectContaining({registrationId: otherRegistration.id, amount: '2.50', subtractFromPool: false}),
+        ]));
+        expect(changed.shares).toEqual(saved.shares);
+        expect(changed.calculationSnapshot).toEqual(saved.calculationSnapshot);
+        const organizer = await readEventFinance(id, actor(owner), 'organizer');
+        expect(organizer.pools.find(row => row.id === poolId)).toMatchObject({coverageGroups: [], hasPendingTakeovers: true,
+            pendingCoverageGroups: [{payerId: String(registration.id), beneficiaries: [{id: String(otherRegistration.id), name: other.name}]}]});
+
+        // Invalid values cannot partially change current inputs; deletion retains the saved share boundary too.
+        await expect(updateEventFinanceAssignments(id, poolId, {assignAll: false, registrations: [registration.id],
+            participantFactors: {[registration.id]: 0.00001}}, actor(owner))).rejects.toMatchObject({status: 400});
+        await expect(addEventFinanceAdjustment(id, poolId, {registrationId: registration.id, amount: 0,
+            note: 'Zero is invalid', subtractFromPool: true}, actor(owner))).rejects.toMatchObject({status: 400});
+        await removeEventFinanceAdjustment(id, poolId, String(changed.surcharges[0].id), actor(owner));
+        const afterDelete = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(afterDelete.surcharges).toHaveLength(1);
+        expect(afterDelete.shares).toEqual(saved.shares);
+        await expect(changeEventFinanceSubmissionState(id, poolId,
+            {status: 'OPEN', expectedRevision: afterDelete.calculationRevision}, actor(owner))).rejects.toMatchObject({status: 409});
+    });
+
+    it('enforces participant payer ownership, one-level coverage and OPEN state while retaining organizer reassignment authority', async () => {
+        const {id, event, poolId} = await fixture();
+        const registration = (await eventService.getRegistrationFor(participant.id, id))!;
+        const otherRegistration = (await eventService.getRegistrationFor(other.id, id))!;
+        // The participant adapter never gains the organizer's payer selection through its body.
+        await expect(updateEventFinanceTakeovers(id, poolId, {payerId: otherRegistration.id, beneficiaries: [registration.id]},
+            actor(participant), false)).rejects.toMatchObject({status: 403});
+        await updateEventFinanceTakeovers(id, poolId, {beneficiaries: [otherRegistration.id]}, actor(participant), false);
+        await expect(updateEventFinanceTakeovers(id, poolId, {beneficiaries: [registration.id]}, actor(other), false))
+            .rejects.toMatchObject({status: 400});
+        await expect(updateEventFinanceTakeovers(id, poolId, {payerId: registration.id, beneficiaries: []}, actor(other), true))
+            .rejects.toMatchObject({status: 403});
+        // Managers may clear another payer's inputs and then establish the opposite valid relationship.
+        await updateEventFinanceTakeovers(id, poolId, {payerId: registration.id, beneficiaries: []}, actor(owner), true);
+        await updateEventFinanceTakeovers(id, poolId, {payerId: otherRegistration.id, beneficiaries: [registration.id]}, actor(owner), true);
+        const planning = (await invoiceService.getPoolWithInvoices(poolId))!;
+        await changeEventFinanceSubmissionState(id, poolId,
+            {status: 'ORGANIZER_ONLY', expectedRevision: planning.calculationRevision}, actor(owner));
+        await expect(updateEventFinanceTakeovers(id, poolId, {beneficiaries: []}, actor(other), false))
+            .rejects.toMatchObject({status: 409});
+        await updateEventFinanceTakeovers(id, poolId, {payerId: otherRegistration.id, beneficiaries: []}, actor(owner), true);
+        expect((await invoiceService.getPoolWithInvoices(poolId))!.takeovers).toEqual([]);
+        expect(event.id).toBe(id);
+    });
+
     it('delivers a definite conflict when a pool closes after upload admission but before its locked submission', async () => {
         const {event, poolId} = await fixture();
         const context = 'finance-http-context-12345678901234567890';

@@ -8,8 +8,10 @@ import FinanceLedgerFooter from './FinanceLedgerFooter.vue';
 
 type Group = components['schemas']['FinancePool']['coverageGroups'][number];
 // Applied and pending rosters are separately supplied saved projections. This
-// reusable table never edits relationships or treats a pending payer as applied.
-const props = defineProps<{groups: Group[]; known: boolean; registrationId?: string | null}>();
+// reusable table emits only an explicitly enabled current-input edit shortcut;
+// it never writes relationships or treats a pending payer as applied.
+const props = defineProps<{groups: Group[]; known: boolean; registrationId?: string | null; editable?: boolean; disabled?: boolean}>();
+const emit = defineEmits<{edit: [payerId: string]}>();
 const {messages, locale} = usePilot();
 const id = useId();
 const search = ref('');
@@ -110,6 +112,10 @@ function toggle(groupId: string, event: MouseEvent): void {
                                 <small class="text-secondary d-block mt-1">
                                     {{ messages.t('finance.participantsCovered', {count: group.beneficiaries.length}) }}
                                 </small>
+                                <ActionButton v-if="editable" variant="outline-light" class="btn-sm mt-2" :disabled="disabled"
+                                              :aria-label="messages.t('finance.editTakeoversFor', {name: group.payerName})" @click="emit('edit', group.payerId)">
+                                    {{ messages.t('finance.edit') }}
+                                </ActionButton>
                             </th>
                             <td :data-label="messages.t('finance.coveredParticipants')">
                                 <div

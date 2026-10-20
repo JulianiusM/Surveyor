@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: authorized P7 finance implementation reconciled with retained P0-P6 decisions and implementation history; P8-P11, backend exclusions and cutover boundaries preserved; current verification belongs to paired review
+verification-scope: authorized P8 organizer finance and allocation inputs reconciled with retained P0-P7 history; P9-P11, backend exclusions and cutover boundaries preserved; current execution belongs to paired review
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -26,7 +26,13 @@ verification and unchanged native/cutover boundaries are recorded in that review
 The maintainer's subsequent [explicit P7 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p7-implementation-trigger-2026-10-20)
 authorizes finance read models and participant invoices under the phase contract below. P7 is implemented;
 its [scoped receipt](PILOT_PARITY_REVIEW.md#p7-finance-implementation-and-scoped-verification-2026-10-20) owns
-verification and remaining evidence limits. P8–P11 and cutover still require their own authorization. The historical receipts below preserve the scope and
+verification and remaining evidence limits. The subsequent
+[explicit P8 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p8-implementation-trigger-2026-10-20) starts
+organizer finance and allocation inputs under the phase contract below. Its
+[implementation review](PILOT_PARITY_REVIEW.md#p8-organizer-and-allocation-implementation-review-2026-10-20) records
+the completed flows, separately approved R1/R2 public-method parity, full known-criteria review and finite
+verification. P8 is implemented; P9–P11 and cutover still require their own authorization.
+The historical receipts below preserve the scope and
 decisions that governed each earlier phase rather than supplying permission to start the next one.
 
 P0 readiness and P1A–D identity/common presentation have recorded implementation and scoped verification in the
@@ -368,6 +374,15 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
    distinct.
 
    Serialize these packages because they share major controller and domain files.
+
+   **Current implementation:** Organizer creation, settings, submission access, optional-proof expenses and invoice
+   review use generated adapters into the existing EventPool controller. Retroactive correction/rejection captures
+   the reviewed invoice and pool revision. Separate membership/factor/exemption, signed-adjustment and coverage
+   forms retain their drafts across sibling saves and refresh. Participant coverage remains fixed to its own payer
+   in an eligible OPEN pool; organizer reassignment and pending closed-pool inputs stay distinct from applied coverage.
+   Shared enrollment controls, numeric scroll protection and existing Vue fields/dialogs/feedback serve matching
+   consumers. Closed-pool edits preserve saved shares and recorded transfers until P9 recalculation. Verification
+   and remaining limits belong to the paired review; native sources and excluded backend remedies are unchanged.
 
 10. **P9 — Migrate financial calculation, settlement, and outputs**  
     **Complexity:** Very high. **Prerequisites:** P8.

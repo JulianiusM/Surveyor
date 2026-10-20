@@ -1,0 +1,150 @@
+<script setup lang="ts">
+import {computed, reactive, ref, useId, watch} from 'vue';
+import type {components} from '../../../types/api/v1';
+import {useActionState, usePilot} from '../../app/context';
+import {useCommand} from '../../composables/command';
+import {useFinanceApi} from './api';
+import {protectFinanceNumberFromScroll} from './numbers';
+import FinanceHistory from './FinanceHistory.vue';
+import ActionButton from '../../components/ActionButton.vue';
+import AppDialog from '../../components/AppDialog.vue';
+import CommandFeedback from '../../components/CommandFeedback.vue';
+import FileField from '../../components/FileField.vue';
+import FormField from '../../components/FormField.vue';
+
+// This expense has one draft and exact optional File. Paid-by attribution never
+// substitutes the authenticated recorder; the shared controller records both.
+const props = defineProps<{
+    eventId: string;
+    pool: components['schemas']['FinancePool'];
+    participants: NonNullable<components['schemas']['FinanceView']['participants']>;
+    invoices?: components['schemas']['FinanceInvoice'][];
+    open: boolean;
+    active: boolean;
+    refresh: () => Promise<void>;
+}>();
+const emit = defineEmits<{close: []; history: []}>();
+const context = usePilot();
+const {messages} = context;
+const api = useFinanceApi(context);
+const id = useId();
+const form = ref<HTMLFormElement | null>(null);
+const draft = reactive({amount: '', description: '', registrationId: ''});
+const proof = ref<File | null>(null);
+const inspected = ref(false);
+const command = useCommand(props.refresh, true, {dirty: () => !!draft.amount || !!draft.description || !!draft.registrationId || !!proof.value,
+    unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
+const action = useActionState({eligible: () => props.active, blocked: () => command.action.disabled.value});
+const recovery = useActionState({eligible: () => props.active, blocked: () => command.recoveryAction.disabled.value,
+    pending: () => command.recovering.value});
+const eligible = computed(() => props.participants.filter(participant => props.pool.assignAll
+    || (props.pool.registrationIds ?? []).includes(Number(participant.id))));
+watch([() => props.eventId, () => props.pool.id, context.epoch, () => context.session.value?.context], releaseDraft);
+
+function releaseDraft(): void {
+    draft.amount = ''; draft.description = ''; draft.registrationId = ''; proof.value = null; inspected.value = false;
+}
+function updateAmount(event: Event): void { draft.amount = (event.target as HTMLInputElement).value; }
+function close(): void {
+    if (!command.mayLeave()) return;
+    if (command.uncertain.value) command.acknowledge();
+    releaseDraft();
+    emit('close');
+}
+
+/** Capture one organizer expense before locking its controls. Optional proof
+ * and participant attribution remain absent when the user selected neither. */
+async function submit(): Promise<void> {
+    if (!action.isAvailable() || !form.value?.reportValidity()) return;
+    if (!draft.description.trim()) {
+        command.setError('finance.enterADescriptionForThisExpense');
+        return;
+    }
+    const input = {amount: Number(draft.amount), description: draft.description.trim(),
+        ...(draft.registrationId ? {registrationId: Number(draft.registrationId)} : {})};
+    const poolId = props.pool.id;
+    const file = proof.value;
+    inspected.value = false;
+    // A transfer callback is progress only. Generated application confirmation
+    // alone releases the expense; unknown delivery never uploads it a second time.
+    const result = await command.run(scope => api.record(props.eventId, poolId, input, file, scope, transferProgress),
+        true, true, {success: props.pool.status === 'CLOSED' ? 'finance.expenseAddedClosed' : 'finance.expenseAddedAndAccepted'});
+    if (!result) return;
+    releaseDraft();
+    emit('history');
+}
+function transferProgress(): void { /* The shared command pending state covers transfer and application confirmation. */ }
+
+/** Inspection refreshes saved history without resubmitting this creation. Its
+ * acknowledgement remains an explicit human decision, never a row heuristic. */
+async function inspectHistory(): Promise<void> {
+    if (!recovery.isAvailable()) return;
+    if (await command.reconcileSafely(props.refresh)) {
+        inspected.value = true;
+        emit('history');
+    }
+}
+function acknowledge(): void {
+    if (!inspected.value || command.pending.value || command.recovering.value) return;
+    command.acknowledge();
+    releaseDraft();
+}
+</script>
+
+<template>
+    <AppDialog :open="open" :title="messages.t('finance.addInvoiceAmount')" :subtitle="pool.name"
+        :pending="command.pending.value || command.recovering.value" standard @close="close">
+        <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
+        <CommandFeedback :feedback="command.feedback" part="uncertain"
+            unknown-message="finance.weCouldNotConfirmWhetherYourInvoiceWasSaved"
+            :action="{state: recovery, label: messages.t('finance.checkInvoiceHistory')}" @action="inspectHistory">
+            <template #uncertain>
+                <ActionButton v-if="inspected" variant="outline-warning" class="mt-2" :state="recovery" @click="acknowledge">
+                    {{ messages.t('finance.reviewedHistory') }}
+                </ActionButton>
+            </template>
+        </CommandFeedback>
+        <FinanceHistory v-if="inspected && command.uncertain.value" :invoices="invoices ?? []" admin read-only disabled @refresh="inspectHistory" />
+        <form ref="form" :id="`${id}-form`" enctype="multipart/form-data" @submit.prevent="submit"
+              @wheel.capture.passive="protectFinanceNumberFromScroll" data-finance-organizer-invoice>
+            <p class="small">{{ messages.t('finance.addASharedPoolExpenseWithoutRegisteringForThe') }}</p>
+            <p v-if="pool.status === 'CLOSED'" class="text-warning small">{{ messages.t('finance.thisAddsASavedCostExistingSharesStayUnchanged') }}</p>
+            <fieldset class="border-0 p-0 m-0" :disabled="action.disabled.value">
+                <FormField :id="`${id}-amount`" class="mb-3" :label="messages.t('finance.amount')" required :required-marker="false">
+                    <template #control>
+                        <!-- Keep the browser's lexical value through change and
+                             blur; numeric conversion belongs only to submit. -->
+                        <input :id="`${id}-amount`" :value="draft.amount" name="amount" type="number" class="form-control text-bg-dark"
+                            min="0.01" max="99999999.99" step="0.01" required @input="updateAmount" />
+                    </template>
+                </FormField>
+                <FormField :id="`${id}-participant`" class="mb-3" :label="messages.t('finance.paidByParticipantOptional')">
+                    <template #control>
+                        <select :id="`${id}-participant`" v-model="draft.registrationId" name="registrationId" class="form-select text-bg-dark"
+                            :aria-describedby="`${id}-participant-help`">
+                            <option value="">{{ messages.t('finance.sharedOrganizerExpense') }}</option>
+                            <!-- Retain an invalidated local choice visibly until the
+                                 user changes it; the controller rechecks membership. -->
+                            <option v-if="draft.registrationId && !eligible.some(participant => String(participant.id) === draft.registrationId)"
+                                :value="draft.registrationId" disabled>
+                                {{ participants.find(participant => String(participant.id) === draft.registrationId)?.name ?? draft.registrationId }}
+                            </option>
+                            <option v-for="participant in eligible" :key="participant.id" :value="String(participant.id)">{{ participant.name }}</option>
+                        </select>
+                    </template>
+                    <small :id="`${id}-participant-help`" class="text-secondary">{{ messages.t('finance.organizerInvoiceAttributionHelp') }}</small>
+                </FormField>
+                <FormField :id="`${id}-description`" v-model="draft.description" class="mb-3" name="description"
+                    :label="messages.t('finance.description')" multiline :rows="3" :max-length="4000" required :required-marker="false" />
+                <FileField :id="`${id}-proof`" name="proof" class="mb-3" :label="messages.t('finance.proofOptional')"
+                    :selected-file="proof" accept="image/jpeg,image/png,image/gif,application/pdf" :described-by="`${id}-proof-help`" @choose="proof = $event">
+                    <small :id="`${id}-proof-help`" class="text-secondary">{{ messages.t('finance.attachAnImageOrPDFReceiptOrLeaveThis') }}</small>
+                </FileField>
+            </fieldset>
+        </form>
+        <template #footer>
+            <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.cancel') }}</ActionButton>
+            <ActionButton type="submit" :form="`${id}-form`" :state="action">{{ messages.t('finance.addInvoiceAmount') }}</ActionButton>
+        </template>
+    </AppDialog>
+</template>

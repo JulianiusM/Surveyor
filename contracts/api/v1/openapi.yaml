@@ -13,6 +13,34 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /events/{eventId}/finance/pools/{poolId}/assignments:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1assignments
+  /events/{eventId}/finance/pools/{poolId}/adjustments:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1adjustments
+  /events/{eventId}/finance/pools/{poolId}/adjustments/{surchargeId}/remove:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1adjustments~1{surchargeId}~1remove
+  /events/{eventId}/finance/pools/{poolId}/takeovers:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1takeovers
+  /events/{eventId}/finance/pools/{poolId}/takeovers/manage:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1takeovers~1manage
+  /events/{eventId}/finance/pools:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools
+  /events/{eventId}/finance/pools/{poolId}/settings:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1settings
+  /events/{eventId}/finance/pools/{poolId}/submission-state:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1submission-state
+  /events/{eventId}/finance/pools/{poolId}/invoices/organizer:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1invoices~1organizer
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/approve:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1invoices~1{invoiceId}~1approve
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/decline:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1invoices~1{invoiceId}~1decline
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/organizer-close:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1invoices~1{invoiceId}~1organizer-close
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/revise:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1invoices~1{invoiceId}~1revise
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/reject-accepted:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1invoices~1{invoiceId}~1reject-accepted
   /events/{eventId}/finance:
     $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance
   /events/{eventId}/finance/organizer:

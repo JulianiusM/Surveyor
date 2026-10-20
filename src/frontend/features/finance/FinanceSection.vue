@@ -15,6 +15,13 @@ import FinanceHistory from './FinanceHistory.vue';
 import FinanceShares from './FinanceShares.vue';
 import FinanceSubmission from './FinanceSubmission.vue';
 import FinanceTotals from './FinanceTotals.vue';
+import FinancePoolActions from './FinancePoolActions.vue';
+import FinancePoolEditor from './FinancePoolEditor.vue';
+import FinanceOrganizerInvoice from './FinanceOrganizerInvoice.vue';
+import FinanceInvoiceReview from './FinanceInvoiceReview.vue';
+import FinanceAssignments from './FinanceAssignments.vue';
+import FinanceAdjustments from './FinanceAdjustments.vue';
+import FinanceTakeovers from './FinanceTakeovers.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppAccordionButton from '../../components/AppAccordionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
@@ -38,6 +45,9 @@ const openPools = ref(new Set<string>());
 const selectedShareId = ref<string | null>(null);
 const breakdown = ref<{refresh: () => Promise<void>} | null>(null);
 const retraction = ref<Invoice | null>(null);
+const creating = ref(false);
+const editor = ref<{poolId: string; kind: 'settings' | 'expense' | 'assignments' | 'adjustments' | 'takeovers'; payerId?: string} | null>(null);
+const review = ref<{invoice: Invoice; action: 'approve' | 'decline' | 'revise' | 'reject' | 'close'} | null>(null);
 const key = computed(() => [...eventKeys.finance(context.session.value?.context, props.eventId, props.admin), locale.value]);
 const section = useEventSection(key, readFinance, computed(() => props.enabled), computed(() => open.value), retainLocaleSnapshot);
 const selection = computed(() => section.data.value?.shares.find(share => share.id === selectedShareId.value) ?? null);
@@ -75,6 +85,7 @@ function retireDeniedFinance(failure: Error | null): void {
 function retireLocalState(): void {
     selectedShareId.value = null; retraction.value = null; openPools.value = new Set();
     submissionOpen.value = false;
+    creating.value = false; editor.value = null; review.value = null;
 }
 /** Fresh authority removes dialogs whose original saved row is no longer
  * admitted; surviving read-only selections follow the current projection. */
@@ -92,6 +103,20 @@ function togglePool(poolId: string): void {
 function inspect(share: Share): void { if (available.isAvailable()) selectedShareId.value = share.id; }
 function beginRetraction(invoice: Invoice): void {
     if (available.isAvailable() && !props.admin && invoice.canRetract) retraction.value = {...invoice};
+}
+/** Capture the original invoice and revision. Background reads may update the
+ * ledger but cannot silently substitute new values into a review in progress. */
+function beginReview(invoice: Invoice, action: 'approve' | 'decline' | 'revise' | 'reject' | 'close'): void {
+    if (!props.admin || !available.isAvailable()) return;
+    // The review component repeats its current eligibility checks; only this
+    // copy owns the human-reviewed values until dismissal or confirmation.
+    review.value = {invoice: {...invoice}, action};
+}
+function editPool(poolId: string, kind: 'settings' | 'expense' | 'assignments' | 'adjustments' | 'takeovers'): void {
+    if (props.admin && available.isAvailable()) editor.value = {poolId, kind};
+}
+function editCoverage(poolId: string, payerId: string): void {
+    if (props.admin && available.isAvailable()) editor.value = {poolId, kind: 'takeovers', payerId};
 }
 function closeRetraction(): void { if (!command.pending.value && !command.recovering.value) retraction.value = null; }
 
@@ -164,11 +189,19 @@ function revealHistory(): void { submissionOpen.value = true; }
                     </StatusNotice>
                     <template v-if="section.data.value">
                         <template v-if="admin">
-                            <!-- Organizer mutations remain in the separately scoped
-                             native destination until P8; these saved reads are SPA. -->
-                            <a class="btn btn-outline-light btn-sm mb-3" :href="`/event/${eventId}/admin#invoicePoolAccordion`">
-                                {{ messages.t('finance.manageOrganizerFinance') }}
-                            </a>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <ActionButton variant="primary" class="btn-sm" :state="available" @click="creating = true">{{ messages.t('finance.createPool') }}</ActionButton>
+                                <!-- Calculation and settlement retain P9's native
+                                     destination; P8 inputs are independent SPA saves. -->
+                                <a class="btn btn-outline-light btn-sm" :href="`/event/${eventId}/admin#invoicePoolAccordion`">
+                                    {{ messages.t('finance.calculationAndSettlement') }}
+                                </a>
+                            </div>
+                            <FinancePoolEditor
+                                :event-id="eventId" :participants="section.data.value.participants ?? []" :pools="section.data.value.pools"
+                                :open="creating" :active="available.available.value" :refresh="section.refresh"
+                                @close="creating = false"
+                            />
                             <p v-if="!section.data.value.pools.length" class="text-secondary">{{ messages.t('finance.emptyPools') }}</p>
                             <div class="accordion accordion-dark">
                                 <section
@@ -229,6 +262,29 @@ function revealHistory(): void { submissionOpen.value = true; }
                                         class="accordion-collapse"
                                     >
                                         <div class="accordion-body">
+                                            <FinancePoolActions :event-id="eventId" :pool="pool"
+                                                                :active="available.available.value" :refresh="section.refresh"
+                                                                @edit="kind => editPool(pool.id, kind)" />
+                                            <!-- Each editor retains its own mounted
+                                                 draft through sibling saves and reads. -->
+                                            <FinancePoolEditor :event-id="eventId" :pool="pool" :participants="section.data.value.participants ?? []"
+                                                               :open="editor?.poolId === pool.id && editor.kind === 'settings'"
+                                                               :active="available.available.value" :refresh="section.refresh" @close="editor = null" />
+                                            <FinanceOrganizerInvoice :event-id="eventId" :pool="pool" :participants="section.data.value.participants ?? []"
+                                                                     :invoices="section.data.value.invoices.filter(invoice => invoice.poolId === pool.id)"
+                                                                     :open="editor?.poolId === pool.id && editor.kind === 'expense'"
+                                                                     :active="available.available.value" :refresh="section.refresh"
+                                                                     @history="openPools.add(pool.id)" @close="editor = null" />
+                                            <FinanceAssignments :event-id="eventId" :pool="pool" :participants="section.data.value.participants ?? []"
+                                                                :open="editor?.poolId === pool.id && editor.kind === 'assignments'"
+                                                                :active="available.available.value" :refresh="section.refresh" @close="editor = null" />
+                                            <FinanceAdjustments :event-id="eventId" :pool="pool" :participants="section.data.value.participants ?? []"
+                                                                :open="editor?.poolId === pool.id && editor.kind === 'adjustments'"
+                                                                :active="available.available.value" :refresh="section.refresh" @close="editor = null" />
+                                            <FinanceTakeovers :event-id="eventId" :pool="pool" :registration-id="section.data.value.registrationId" admin
+                                                              :initial-payer-id="editor?.poolId === pool.id ? editor.payerId : undefined"
+                                                              :open="editor?.poolId === pool.id && editor.kind === 'takeovers'"
+                                                              :active="available.available.value" :refresh="section.refresh" @close="editor = null" />
                                             <FinanceTotals :pool="pool" />
                                             <section
                                                 class="border border-secondary-subtle rounded-3 p-3 mt-3"
@@ -238,6 +294,8 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                 <FinanceCoverage
                                                     :groups="pool.coverageGroups"
                                                     :known="pool.coverageKnown"
+                                                    :editable="pool.status !== 'CLOSED'" :disabled="available.disabled.value"
+                                                    @edit="payerId => editCoverage(pool.id, payerId)"
                                                     data-finance-coverage-kind="applied"
                                                 />
                                                 <template
@@ -252,6 +310,8 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                     <FinanceCoverage
                                                         :groups="pool.pendingCoverageGroups"
                                                         known
+                                                        editable :disabled="available.disabled.value"
+                                                        @edit="payerId => editCoverage(pool.id, payerId)"
                                                         data-finance-coverage-kind="pending"
                                                     />
                                                 </template>
@@ -260,6 +320,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                 :invoices="section.data.value.invoices.filter(invoice => invoice.poolId === pool.id)"
                                                 admin
                                                 :disabled="refreshAction.disabled.value"
+                                                @review="beginReview"
                                                 @refresh="refresh"
                                             />
                                             <FinanceShares
@@ -345,12 +406,15 @@ function revealHistory(): void { submissionOpen.value = true; }
                                         :known="pool.coverageKnown"
                                         :registration-id="section.data.value.registrationId"
                                     />
-                                    <a
-                                        class="btn btn-outline-light btn-sm mt-2"
-                                        :href="`/event/${eventId}#participantInvoiceAccordion`"
+                                    <ActionButton
+                                        variant="outline-light" class="btn-sm mt-2" :state="available"
+                                        @click="editor = {poolId: pool.id, kind: 'takeovers'}"
                                     >
                                         {{ messages.t('finance.manageTakeovers2') }}
-                                    </a>
+                                    </ActionButton>
+                                    <FinanceTakeovers :event-id="eventId" :pool="pool" :registration-id="section.data.value.registrationId" :admin="false"
+                                                      :open="editor?.poolId === pool.id && editor.kind === 'takeovers'"
+                                                      :active="available.available.value" :refresh="section.refresh" @close="editor = null" />
                                 </article>
                             </section>
                             <FinanceShares
@@ -365,6 +429,14 @@ function revealHistory(): void { submissionOpen.value = true; }
                 </div>
             </div>
         </div>
+        <FinanceInvoiceReview
+            v-if="review && section.data.value?.pools.some(pool => pool.id === review?.invoice.poolId)"
+            :event-id="eventId" :invoice="review.invoice" :action="review.action"
+            :current-invoice="section.data.value!.invoices.find(invoice => invoice.id === review!.invoice.id)"
+            :pool="section.data.value!.pools.find(pool => pool.id === review!.invoice.poolId)!"
+            open :active="available.available.value" :refresh="section.refresh" @close="review = null"
+            @saved="command.setNotice"
+        />
         <FinanceBreakdown
             v-if="selection && section.data.value"
             ref="breakdown"

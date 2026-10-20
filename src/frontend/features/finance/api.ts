@@ -7,11 +7,132 @@ import {validateFinanceBreakdown} from '../../../../.generated/api/v1/browser/va
 import {validateFinanceInvoiceInput} from '../../../../.generated/api/v1/browser/validateFinanceInvoiceInput.mjs';
 import {validateFinanceRetractionInput} from '../../../../.generated/api/v1/browser/validateFinanceRetractionInput.mjs';
 import {validateFinanceMutationResult} from '../../../../.generated/api/v1/browser/validateFinanceMutationResult.mjs';
+import {validateFinancePoolCreateInput} from '../../../../.generated/api/v1/browser/validateFinancePoolCreateInput.mjs';
+import {validateFinancePoolSettingsInput} from '../../../../.generated/api/v1/browser/validateFinancePoolSettingsInput.mjs';
+import {validateFinanceSubmissionStateInput} from '../../../../.generated/api/v1/browser/validateFinanceSubmissionStateInput.mjs';
+import {validateFinanceOrganizerInvoiceInput} from '../../../../.generated/api/v1/browser/validateFinanceOrganizerInvoiceInput.mjs';
+import {validateFinanceAcceptanceInput} from '../../../../.generated/api/v1/browser/validateFinanceAcceptanceInput.mjs';
+import {validateFinanceDeclineInput} from '../../../../.generated/api/v1/browser/validateFinanceDeclineInput.mjs';
+import {validateFinanceRevisionInput} from '../../../../.generated/api/v1/browser/validateFinanceRevisionInput.mjs';
+import {validateFinanceAcceptedRejectionInput} from '../../../../.generated/api/v1/browser/validateFinanceAcceptedRejectionInput.mjs';
+import {validateFinanceAssignmentsInput} from '../../../../.generated/api/v1/browser/validateFinanceAssignmentsInput.mjs';
+import {validateFinanceAdjustmentInput} from '../../../../.generated/api/v1/browser/validateFinanceAdjustmentInput.mjs';
+import {validateFinanceTakeoverInput} from '../../../../.generated/api/v1/browser/validateFinanceTakeoverInput.mjs';
 
 /** Finance selects authored operations; shared transport owns actor admission,
  * generated delivery checks and progress without automatic command replay. */
 export class FinanceApi {
     constructor(private transport: PilotApi) {}
+
+    /** Create once through the generated contract; callers reconcile by reading rather than replaying uncertain writes. */
+    async createPool(eventId: string, input: components['schemas']['FinancePoolCreateInput'], scope: PilotRequestScope) {
+        if (!validateFinancePoolCreateInput(input)) throw new InvalidInputError();
+        return this.transport.read('createEventFinancePool', await this.transport.client.POST('/events/{eventId}/finance/pools', {
+            params: {path: {eventId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Save only editable pool settings through their shared backend owner. */
+    async settings(eventId: string, poolId: string, input: components['schemas']['FinancePoolSettingsInput'], scope: PilotRequestScope) {
+        if (!validateFinancePoolSettingsInput(input)) throw new InvalidInputError();
+        return this.transport.read('updateEventFinanceSettings', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/settings', {
+            params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Submission access retains its own revision and never calculates saved shares. */
+    async submissionState(eventId: string, poolId: string, input: components['schemas']['FinanceSubmissionStateInput'], scope: PilotRequestScope) {
+        if (!validateFinanceSubmissionStateInput(input)) throw new InvalidInputError();
+        return this.transport.read('changeEventFinanceSubmissionState', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/submission-state', {
+            params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Record an organizer expense, preserving the distinction between absent optional proof and an uploaded file. */
+    async record(eventId: string, poolId: string, input: components['schemas']['FinanceOrganizerInvoiceInput'], proof: File | null,
+        scope: PilotRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void) {
+        if (!validateFinanceOrganizerInvoiceInput(input)) throw new InvalidInputError();
+        // Use the same named data/proof serialization as participant invoices, keeping their proof requirements distinct.
+        const form = new FormData();
+        form.append('data', JSON.stringify(input));
+        if (proof) form.append('proof', proof);
+        return this.transport.uploadJson('recordEventOrganizerInvoice', `/events/${encodeURIComponent(eventId)}/finance/pools/${encodeURIComponent(poolId)}/invoices/organizer`,
+            form, validateFinanceMutationResult, scope, progress);
+    }
+
+    /** Accept submitted evidence with optional separate organizer corrections. */
+    async approve(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceAcceptanceInput'], scope: PilotRequestScope) {
+        if (!validateFinanceAcceptanceInput(input)) throw new InvalidInputError();
+        return this.transport.read('approveEventFinanceInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/approve', {
+            params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Reject an unreviewed invoice without deleting its history or retained proof. */
+    async decline(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceDeclineInput'], scope: PilotRequestScope) {
+        if (!validateFinanceDeclineInput(input)) throw new InvalidInputError();
+        return this.transport.read('declineEventFinanceInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/decline', {
+            params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Organizer invoice closure uses its independent method grant, without changing payer settlement. */
+    async organizerClose(eventId: string, poolId: string, invoiceId: string, scope: PilotRequestScope) {
+        return this.transport.read('closeEventOrganizerInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/organizer-close', {
+            params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Carry the captured confirmation and pool revision into the existing accepted-cost correction. */
+    async revise(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceRevisionInput'], scope: PilotRequestScope) {
+        if (!validateFinanceRevisionInput(input)) throw new InvalidInputError();
+        return this.transport.read('reviseEventFinanceInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/revise', {
+            params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Remove an accepted cost from future calculation while retaining its original evidence. */
+    async rejectAccepted(eventId: string, poolId: string, invoiceId: string, input: components['schemas']['FinanceAcceptedRejectionInput'], scope: PilotRequestScope) {
+        if (!validateFinanceAcceptedRejectionInput(input)) throw new InvalidInputError();
+        return this.transport.read('rejectAcceptedEventFinanceInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/reject-accepted', {
+            params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Save complete assignment inputs while the backend preserves its saved settlement snapshot. */
+    async assignments(eventId: string, poolId: string, input: components['schemas']['FinanceAssignmentsInput'], scope: PilotRequestScope) {
+        if (!validateFinanceAssignmentsInput(input)) throw new InvalidInputError();
+        return this.transport.read('updateEventFinanceAssignments', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/assignments', {
+            params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Submit the explicit signed adjustment and redistribution choice as one validated operation. */
+    async addAdjustment(eventId: string, poolId: string, input: components['schemas']['FinanceAdjustmentInput'], scope: PilotRequestScope) {
+        if (!validateFinanceAdjustmentInput(input)) throw new InvalidInputError();
+        return this.transport.read('addEventFinanceAdjustment', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/adjustments', {
+            params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Remove one admitted adjustment through its existing idempotent backend operation. */
+    async removeAdjustment(eventId: string, poolId: string, surchargeId: string, scope: PilotRequestScope) {
+        return this.transport.read('removeEventFinanceAdjustment', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/adjustments/{surchargeId}/remove', {
+            params: {path: {eventId, poolId, surchargeId}, header: this.transport.headers(scope)}, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
+
+    /** Select the distinct self-payer or organizer coverage operation without inferring authority in the shared chooser. */
+    async takeovers(eventId: string, poolId: string, input: components['schemas']['FinanceTakeoverInput'], organizer: boolean, scope: PilotRequestScope) {
+        if (!validateFinanceTakeoverInput(input)) throw new InvalidInputError();
+        // The generated paths remain explicit; the backend independently enforces the selected operation's method grant.
+        const options = {params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store' as const};
+        const result = organizer
+            ? await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/takeovers/manage', options)
+            : await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/takeovers', options);
+        return this.transport.read(organizer ? 'updateEventOrganizerFinanceTakeovers' : 'updateEventParticipantFinanceTakeovers',
+            result, validateFinanceMutationResult, scope).data;
+    }
 
     /** Personal and organizer projections have distinct server grants and reads. */
     async read(eventId: string, admin: boolean, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['FinanceView']> {

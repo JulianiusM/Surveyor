@@ -7,6 +7,7 @@ schemas:
     properties:
       audience: {type: string, enum: [participant, organizer]}
       registrationId: {type: [string, 'null']}
+      participants: {type: array, items: {$ref: '#/schemas/FinanceParticipant'}}
       pools: {type: array, items: {$ref: '#/schemas/FinancePool'}}
       invoices: {type: array, items: {$ref: '#/schemas/FinanceInvoice'}}
       shares: {type: array, items: {$ref: '#/schemas/FinanceShare'}}
@@ -45,6 +46,12 @@ schemas:
       assignAll: {type: boolean}
       revision: {type: integer, minimum: 0}
       canSubmit: {type: boolean}
+      settings: {anyOf: [{$ref: '#/schemas/FinancePoolSettings'}, {type: 'null'}]}
+      registrationIds: {type: array, items: {type: integer, minimum: 1}}
+      assignments: {type: array, items: {$ref: '#/schemas/FinanceAssignment'}}
+      surcharges: {type: array, items: {$ref: '#/schemas/FinanceAdjustment'}}
+      coverageChoices: {type: array, items: {$ref: '#/schemas/FinanceParticipant'}}
+      currentCoverageGroups: {type: array, items: {$ref: '#/schemas/FinanceCoverageGroup'}}
       summary: {anyOf: [{$ref: '#/schemas/FinanceSummary'}, {type: 'null'}]}
       calculation: {anyOf: [{$ref: '#/schemas/FinanceCalculation'}, {type: 'null'}]}
       exampleCalculation: {anyOf: [{$ref: '#/schemas/FinanceCalculation'}, {type: 'null'}]}
@@ -193,7 +200,326 @@ schemas:
     required: [changed]
     properties:
       changed: {type: boolean, const: true}
+  FinanceParticipant:
+    type: object
+    additionalProperties: false
+    required: [id, name, email]
+    properties:
+      id: {type: string, pattern: '^[1-9][0-9]*$'}
+      name: {type: string}
+      email: {type: [string, 'null']}
+  FinancePoolSettings:
+    type: object
+    additionalProperties: false
+    required: [distribution, subtractPersonalInvoices, sendCalculationEmails, roundUpShares]
+    properties:
+      distribution: {type: string, enum: [EQUAL, TIME_BASED, NIGHTS]}
+      subtractPersonalInvoices: {type: boolean}
+      sendCalculationEmails: {type: boolean}
+      roundUpShares: {type: boolean}
+  FinancePoolCreateInput:
+    type: object
+    additionalProperties: false
+    required: [name, distribution, status, isDefault, assignAll, subtractPersonalInvoices, sendCalculationEmails, roundUpShares, registrations]
+    properties:
+      name: {type: string, minLength: 1, maxLength: 255}
+      description: {type: string}
+      distribution: {type: string, enum: [EQUAL, TIME_BASED, NIGHTS]}
+      status: {type: string, enum: [OPEN, ORGANIZER_ONLY]}
+      isDefault: {type: boolean}
+      assignAll: {type: boolean}
+      subtractPersonalInvoices: {type: boolean}
+      sendCalculationEmails: {type: boolean}
+      roundUpShares: {type: boolean}
+      registrations: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+  FinancePoolSettingsInput:
+    type: object
+    additionalProperties: false
+    required: [distribution, description, sendCalculationEmails, roundUpShares]
+    properties:
+      distribution: {type: string, enum: [EQUAL, TIME_BASED, NIGHTS]}
+      description: {type: string}
+      sendCalculationEmails: {type: boolean}
+      roundUpShares: {type: boolean}
+  FinanceSubmissionStateInput:
+    type: object
+    additionalProperties: false
+    required: [status, expectedRevision]
+    properties:
+      status: {type: string, enum: [OPEN, ORGANIZER_ONLY]}
+      expectedRevision: {type: integer, minimum: 0}
+  FinanceOrganizerInvoiceInput:
+    type: object
+    additionalProperties: false
+    required: [amount, description]
+    properties:
+      amount: {type: number, exclusiveMinimum: 0, maximum: 99999999.99}
+      description: {type: string, minLength: 1, maxLength: 4000}
+      registrationId: {type: integer, minimum: 1}
+  FinanceOrganizerInvoiceForm:
+    type: object
+    additionalProperties: false
+    required: [data]
+    properties:
+      data: {$ref: '#/schemas/FinanceOrganizerInvoiceInput'}
+      proof: {type: string, format: binary}
+  FinanceAcceptanceInput:
+    type: object
+    additionalProperties: false
+    properties:
+      correctedAmount: {type: [number, 'null'], exclusiveMinimum: 0}
+      correctedDescription: {type: string, maxLength: 4000}
+  FinanceDeclineInput:
+    type: object
+    additionalProperties: false
+    required: [rejectionReason]
+    properties:
+      rejectionReason: {type: string, minLength: 1, maxLength: 4000}
+  FinanceRevisionInput:
+    type: object
+    additionalProperties: false
+    required: [confirmed, expectedRevision, correctedAmount, correctedDescription]
+    properties:
+      confirmed: {type: boolean, const: true}
+      expectedRevision: {type: integer, minimum: 0}
+      correctedAmount: {type: [number, 'null'], exclusiveMinimum: 0, maximum: 99999999.99}
+      correctedDescription: {type: [string, 'null'], maxLength: 4000}
+  FinanceAcceptedRejectionInput:
+    type: object
+    additionalProperties: false
+    required: [confirmed, expectedRevision, rejectionReason]
+    properties:
+      confirmed: {type: boolean, const: true}
+      expectedRevision: {type: integer, minimum: 0}
+      rejectionReason: {type: string, minLength: 1, maxLength: 4000}
+  FinanceAssignment:
+    type: object
+    additionalProperties: false
+    required: [registrationId, factor, isExempt]
+    properties:
+      registrationId: {type: string, pattern: '^[1-9][0-9]*$'}
+      factor: {type: number, minimum: 0, maximum: 1000}
+      isExempt: {type: boolean}
+  FinanceAdjustment:
+    type: object
+    additionalProperties: false
+    required: [id, registrationId, amount, note, subtractFromPool]
+    properties:
+      id: {type: string, pattern: '^[1-9][0-9]*$'}
+      registrationId: {type: string, pattern: '^[1-9][0-9]*$'}
+      amount: {type: number}
+      note: {type: string}
+      subtractFromPool: {type: boolean}
+  FinanceAssignmentsInput:
+    type: object
+    additionalProperties: false
+    required: [isDefault, assignAll, subtractPersonalInvoices, registrations, exemptions, participantFactors]
+    properties:
+      isDefault: {type: boolean}
+      assignAll: {type: boolean}
+      subtractPersonalInvoices: {type: boolean}
+      registrations: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+      exemptions: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
+      participantFactors:
+        type: object
+        propertyNames: {pattern: '^[1-9][0-9]*$'}
+        additionalProperties: {type: number, minimum: 0, maximum: 1000}
+  FinanceAdjustmentInput:
+    type: object
+    additionalProperties: false
+    required: [registrationId, amount, note, subtractFromPool]
+    properties:
+      registrationId: {type: integer, minimum: 1}
+      amount: {type: number, minimum: -99999999.99, maximum: 99999999.99, not: {const: 0}}
+      note: {type: string, minLength: 1, maxLength: 4000}
+      subtractFromPool: {type: boolean}
+  FinanceTakeoverInput:
+    type: object
+    additionalProperties: false
+    required: [beneficiaries]
+    properties:
+      payerId: {type: integer, minimum: 1}
+      beneficiaries: {type: array, uniqueItems: true, items: {type: integer, minimum: 1}}
 paths:
+  /events/{eventId}/finance/pools/{poolId}/assignments:
+    post:
+      operationId: updateEventFinanceAssignments
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Save enrollment factors and exemptions without replacing saved shares
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceAssignmentsInput'}}}}
+      responses:
+        '200': {description: Assignment inputs saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/adjustments:
+    post:
+      operationId: addEventFinanceAdjustment
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Add a signed participant surcharge or rebate through its existing operation
+      parameters: &financeInputCommandParameters
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceAdjustmentInput'}}}}
+      responses:
+        '200': {description: Adjustment saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/adjustments/{surchargeId}/remove:
+    post:
+      operationId: removeEventFinanceAdjustment
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Remove an adjustment while preserving the existing saved calculation
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: surchargeId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
+      responses:
+        '200': {description: Adjustment removed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/takeovers:
+    post:
+      operationId: updateEventParticipantFinanceTakeovers
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Save the current participant's own payer coverage in an eligible open pool
+      parameters: *financeInputCommandParameters
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceTakeoverInput'}}}}
+      responses:
+        '200': {description: Own coverage saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/takeovers/manage:
+    post:
+      operationId: updateEventOrganizerFinanceTakeovers
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Save one selected payer's coverage with the organizer reassignment grant
+      parameters: *financeInputCommandParameters
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceTakeoverInput'}}}}
+      responses:
+        '200': {description: Organizer coverage inputs saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools:
+    post:
+      operationId: createEventFinancePool
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Create an invoice pool through its existing organizer operation
+      parameters: &financeEventCommandParameters
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinancePoolCreateInput'}}}}
+      responses:
+        '200': {description: Pool created, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/settings:
+    post:
+      operationId: updateEventFinanceSettings
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Save invoice pool settings without recalculating saved shares
+      parameters: &financePoolCommandParameters
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinancePoolSettingsInput'}}}}
+      responses:
+        '200': {description: Settings saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/submission-state:
+    post:
+      operationId: changeEventFinanceSubmissionState
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Change participant submission access through its revision checked operation
+      parameters: *financePoolCommandParameters
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceSubmissionStateInput'}}}}
+      responses:
+        '200': {description: Submission access saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/invoices/organizer:
+    post:
+      operationId: recordEventOrganizerInvoice
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Record an organizer cost with optional paid by attribution and proof
+      parameters: *financePoolCommandParameters
+      requestBody: {required: true, content: {multipart/form-data: {schema: {$ref: '#/schemas/FinanceOrganizerInvoiceForm'}}}}
+      responses:
+        '200': {description: Organizer cost recorded, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/approve:
+    post:
+      operationId: approveEventFinanceInvoice
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Accept an unreviewed invoice with optional corrections
+      parameters: &financeInvoiceCommandParameters
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: invoiceId, in: path, required: true, schema: {type: string, pattern: '^[1-9][0-9]*$'}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceAcceptanceInput'}}}}
+      responses:
+        '200': {description: Invoice accepted, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/decline:
+    post:
+      operationId: declineEventFinanceInvoice
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Decline an unreviewed invoice retaining its audit evidence
+      parameters: *financeInvoiceCommandParameters
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceDeclineInput'}}}}
+      responses:
+        '200': {description: Invoice declined, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/organizer-close:
+    post:
+      operationId: closeEventOrganizerInvoice
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Close an accepted invoice through the organizer method grant
+      parameters: *financeInvoiceCommandParameters
+      responses:
+        '200': {description: Invoice closed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/revise:
+    post:
+      operationId: reviseEventFinanceInvoice
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Revise an accepted cost using the confirmed pool revision
+      parameters: *financeInvoiceCommandParameters
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceRevisionInput'}}}}
+      responses:
+        '200': {description: Invoice revised, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/reject-accepted:
+    post:
+      operationId: rejectAcceptedEventFinanceInvoice
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Reject an accepted cost using the confirmed pool revision
+      parameters: *financeInvoiceCommandParameters
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceAcceptedRejectionInput'}}}}
+      responses:
+        '200': {description: Accepted cost rejected, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
   /events/{eventId}/finance:
     get:
       operationId: getEventFinance

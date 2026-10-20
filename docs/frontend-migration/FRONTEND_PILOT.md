@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P7 Event finance composition and shared invoice/presentation/transport adoption source-reconciled alongside P0-P6; execution belongs to paired review; later phases and separate cutover boundaries retained
+verification-scope: P8 organizer finance and allocation composition source-reconciled with retained P7 and P0-P6 ownership; independent form saves, shared numeric controls and native/later-phase exclusions retained; execution belongs to paired review
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -54,8 +54,13 @@ cutover remain separately scoped; the paired review records actual verification 
 The subsequent [P7 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p7-implementation-trigger-2026-10-20) adds
 finance reads and participant invoices within the existing Event detail/admin pages. The EventPool controller
 supplies distinct personal and organizer projections, saved totals/shares/coverage and lazy payer explanations;
-participant upload, history, revision-reviewed retraction and closing reuse its existing operations. P8 organizer
-and takeover commands retain working native destinations. No default-route or publication change follows.
+participant upload, history, revision-reviewed retraction and closing reuse its existing operations. That P7 slice
+left organizer and takeover commands at working native destinations.
+The subsequent [P8 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p8-implementation-trigger-2026-10-20)
+adds organizer pool/settings/expense/review and allocation/coverage controls to those same Event pages. Each
+form saves independently through the original shared operations. Calculation, settlement and notification commands
+retain their native P9 destinations; native source, default-route cutover, guide publication and deployment remain
+separately authorized.
 
 The [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
 excludes native/Vue production coexistence coordination and rejects the ordinary Event document-POST exception.
@@ -196,6 +201,39 @@ dispositions also remain. The new adapter redacts unauthorized participants and 
 engine and native creation quantity of one; no new quantity editor is inferred. The
 [P5 source map](TEST_COVERAGE.md#p5-basic-activity-source-map-2026-10-18) owns assertion mappings, and the paired review
 owns actual execution and inspected visual evidence.
+
+## Finance behavior
+
+Finance remains a composition of admitted Event detail/admin pages. `FinanceSection` owns audience-specific reads,
+disclosures and selected review intent. `FinancePoolEditor` shares matching creation/settings fields;
+`FinanceOrganizerInvoice` owns the optional proof File and separate paid-by choice; `FinanceInvoiceReview` captures
+the original invoice, action and calculation revision through explicit retroactive confirmation. Original submitted
+evidence and recorder attribution remain visible beside effective corrections.
+
+`FinanceAssignments`, `FinanceAdjustments` and `FinanceTakeovers` own independent enrollment/factor/exemption,
+signed-adjustment and coverage drafts. Saving/removing an adjustment leaves an unfinished additive draft intact.
+Creation and assignment forms both adopt `FinanceEnrollmentFields` for the three matching enrollment flags;
+parents retain their own labels/help and drafts. The default flag attaches future registrations independently of
+assign-all or explicit current membership. Creation's All toggle selects every current attendee; the assignment
+editor restores its earlier individual selections after toggling All off. Filtered factor rows remain mounted and
+invalid controls are revealed before validity reporting. Existing-payer shortcuts open the same shared participant/organizer chooser.
+Form-owned saved baselines survive confirmed writes followed by failed reads, including Close/reopen and the next
+independent save. Fresh admitted rosters add new participants without replacing surviving lexical factors.
+After a failed saved read, changing coverage payer first requires a protected authoritative read; failure retains
+the current visible payer and confirmed selection, without a parallel coverage/reassignment model.
+Participant mode fixes the payer to the current registration; organizer mode retains its existing reassignment
+authority. Closed-pool changes update current inputs only. Saved shares, recorded transfers and applied coverage
+remain intact while pending coverage is displayed separately until the existing calculation workflow applies it.
+
+Matching forms compose `AppDialog`, `FormField`, `FileField`, `ActionButton`, `CommandFeedback` and `useCommand`.
+Finance's `numbers.ts` supplies one wheel guard to participant submission, organizer expense, invoice review,
+assignment factors and signed adjustments; it preserves lexical numeric drafts while scrolling rather than copying
+native browser code. Each feature API method selects generated contracts around the existing EventPool controller
+operation. Unknown writes never replay: additive expenses/adjustments require deliberate saved-history/list
+inspection and acknowledgement; submission access, assignments, coverage and adjustment removal reconcile through
+fresh reads. Confirmed completion releases only the submitted fields and remains saved if the following read fails.
+Native frontend sources and
+inherited backend defects remain outside this migration; P9–P11 and cutover retain their own authorization.
 
 ## Logical owners
 

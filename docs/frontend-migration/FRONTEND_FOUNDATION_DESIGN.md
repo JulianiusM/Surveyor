@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: explicit P7 trigger recorded alongside direct R2-R10 interface, staged documentation and civil-date decisions against original choices; source adoption and execution belong to paired review
+verification-scope: explicit P7/P8 triggers and separate P8 R1/R2 public-method approvals recorded alongside retained interface, staged documentation and civil-date decisions; source adoption and execution belong to paired review
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -911,6 +911,36 @@ existing browser transport's response and actor checks. Native frontend sources 
 P8 organizer mutations, P9–P11, unrelated backend remedies, default-route cutover, native removal, guide
 publication and deployment remain separately authorized. The paired review records actual source adoption,
 executed checks and remaining limits; this trigger alone does not establish completion.
+
+### Explicit P8 implementation trigger (2026-10-20)
+
+After P7, the maintainer directly requests full P8 implementation and reiterates all policies, particularly
+approval, visual and behavioral parity, and modularization/DRY. This starts P8A pool settings, submission access,
+organizer expenses and invoice review, followed by P8B enrollment, factors, exemptions, signed adjustments and
+participant/organizer coverage inputs under the existing phase contract. Each form retains its independent save
+boundary; accepted-invoice changes retain explicit review and captured revisions, and closed-pool input changes
+leave saved shares and recorded transfers in place pending recalculation.
+
+Both frontends reuse the existing EventPool controller and invoice/domain/DBAL owners. New versioned adapters and
+Vue presentation preserve their separate page, method, participant and proof authority. Native frontend sources,
+inherited backend-remedy exclusions, P9–P11, default-route cutover, native removal, guide publication and deployment
+retain their separate boundaries. This instruction grants no calculation or settlement-command implementation.
+The paired review records actual adoption, independent review, executed checks and remaining limits separately.
+
+### Approved P8 public-method parity (2026-10-20)
+
+After receiving the complete separate R1 and R2 explanations, the maintainer explicitly approves both decisions
+and requests full P8 completion followed by a full review against the known criteria. R1 permits versioned pool
+creation/settings/submission access, assignments, adjustment addition/removal and organizer coverage to honor the
+existing public management grant without an added profile requirement. R2 permits the same native-method parity
+for invoice acceptance, decline and organizer closure. Both decisions retain existing shared permission checks
+and business operations; browser request protections and protected projections remain separate.
+
+Organizer expenses, retroactive corrections/rejection, participant operations and private finance reads retain
+their existing identity requirements. This resolves the two previously blocked adapter corrections only; the
+original October 12 per-method choice, P8 trigger, native isolation and P9/cutover/backend exclusions remain intact.
+The prior automatic-review rejections and incomplete verification retain their historical scope in the paired
+review; approval itself does not establish implementation or passing checks.
 
 ## Cutover retirement inventory
 

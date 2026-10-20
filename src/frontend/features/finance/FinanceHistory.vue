@@ -10,8 +10,9 @@ import FinanceLedgerFooter from './FinanceLedgerFooter.vue';
 type Invoice = components['schemas']['FinanceInvoice'];
 // Both audiences receive their server-authorized records. Filters affect this
 // display only; proof access and participant commands keep their own authority.
-const props = defineProps<{invoices: Invoice[]; admin?: boolean; disabled?: boolean}>();
-const emit = defineEmits<{retract: [invoice: Invoice]; closeInvoice: [invoice: Invoice]; refresh: []}>();
+const props = defineProps<{invoices: Invoice[]; admin?: boolean; disabled?: boolean; readOnly?: boolean}>();
+const emit = defineEmits<{retract: [invoice: Invoice]; closeInvoice: [invoice: Invoice]; refresh: [];
+    review: [invoice: Invoice, action: 'approve' | 'decline' | 'revise' | 'reject' | 'close']}>();
 const {messages, locale} = usePilot();
 const id = useId();
 const search = ref('');
@@ -97,7 +98,7 @@ function recorderName(invoice: Invoice): string {
                         <th>{{ messages.t(admin ? 'finance.organizerReview' : 'finance.description') }}</th>
                         <th>{{ messages.t('finance.status') }}</th>
                         <th>{{ messages.t('finance.proof') }}</th>
-                        <th v-if="!admin">{{ messages.t('finance.actions') }}</th>
+                        <th v-if="!readOnly">{{ messages.t('finance.actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -182,7 +183,24 @@ function recorderName(invoice: Invoice): string {
                                 {{ messages.t(invoice.organizerRecorded && !invoice.proofOriginalName ? 'finance.noProofAttached' : 'finance.proofExpired') }}
                             </span>
                         </td>
-                        <td v-if="!admin" class="invoice-cell-actions" :data-label="messages.t('finance.actions')">
+                        <td v-if="admin && !readOnly" class="invoice-cell-actions" :data-label="messages.t('finance.actions')">
+                            <!-- The admitted organizer projection supplies these
+                                 review states; the server independently checks
+                                 every method and child identity on submission. -->
+                            <div class="d-flex flex-wrap gap-1">
+                                <template v-if="invoice.status === 'NEW'">
+                                    <ActionButton variant="success" class="btn-sm" :disabled="disabled" @click="emit('review', invoice, 'approve')">{{ messages.t('finance.accept') }}</ActionButton>
+                                    <ActionButton variant="outline-danger" class="btn-sm" :disabled="disabled" @click="emit('review', invoice, 'decline')">{{ messages.t('finance.reject') }}</ActionButton>
+                                </template>
+                                <template v-else-if="invoice.status === 'APPROVED' || invoice.status === 'CLOSED'">
+                                    <ActionButton variant="outline-light" class="btn-sm" :disabled="disabled" @click="emit('review', invoice, 'revise')">{{ messages.t('finance.correct') }}</ActionButton>
+                                    <ActionButton variant="outline-danger" class="btn-sm" :disabled="disabled" @click="emit('review', invoice, 'reject')">{{ messages.t('finance.rejectFromPool') }}</ActionButton>
+                                    <ActionButton v-if="invoice.status === 'APPROVED'" variant="outline-light" class="btn-sm" :disabled="disabled" @click="emit('review', invoice, 'close')">{{ messages.t('common.close') }}</ActionButton>
+                                </template>
+                                <span v-else class="text-secondary small">{{ messages.t('finance.noActions') }}</span>
+                            </div>
+                        </td>
+                        <td v-else-if="!readOnly" class="invoice-cell-actions" :data-label="messages.t('finance.actions')">
                             <ActionButton
                                 v-if="invoice.canRetract"
                                 variant="outline-danger"

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P7 private finance projections and participant multipart/lifecycle contracts reconciled alongside retained P0-P6 method-policy/transport provenance and native backend boundaries; execution belongs to paired review
+verification-scope: P8 organizer finance and allocation contracts source-reconciled with retained P7 private reads and earlier method-policy/transport provenance; original shared operations, native isolation and later-phase exclusions retained; execution belongs to paired review
 source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/controller/activityController.ts; src/modules/activity/; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: next-contract-migration-or-authorized-cutover
 -->
@@ -17,7 +17,7 @@ transactions/persistence. A DTO deliberately differs from an entity; one wire sh
 
 The [baseline](FRONTEND_MIGRATION_BASELINE.md) owns behavior/route exceptions.
 [Foundation](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments) owns original choices and dated
-amendments. Invoice examples below remain future v1 scope; current Help/Packing/Event/Drivers/Survey/Activity/overview/identity
+amendments. The decimal-string finance target below remains future work; current Help/Packing/Event/Drivers/Survey/Activity/finance/overview/identity
 contracts are authoritative in their YAML rather than a second maintained endpoint matrix.
 
 ## Implemented foundation boundary
@@ -41,13 +41,28 @@ snapshot and known-job reads cannot maintain rows or enqueue work. Reviewed appl
 current overlap acknowledgement and existing server provenance/application decisions, without stronger inherited
 completion guarantees.
 
-P7 finance contracts expose separate participant/organizer saved projections and lazy saved-share breakdowns.
+The P7 finance slice added separate participant/organizer saved projections and lazy saved-share breakdowns.
 Personal metadata is limited to eligible pools and own invoice/share contexts; unrelated pools, other invoices,
 contacts and financial aggregates remain private. Applied coverage is distinct from pending organizer inputs.
 Proof delivery reuses existing authorization independently of review state. Multipart submission, retraction and
 participant closing adapt the existing invoice operations with prepared acknowledgements; stale retraction and
 lock-time submission rejection are definite conflicts. Upload progress shares the browser transport's generated response/actor checks and cannot
-confirm persistence. These contracts neither expose P8 mutations nor repair inherited backend defects.
+confirm persistence. That original slice excluded organizer and takeover commands and repaired no inherited backend defects.
+
+The [P8 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p8-implementation-trigger-2026-10-20) extends the same
+finance contract with pool creation/settings, submission access, organizer expenses and invoice review, followed by
+enrollment, factors/exemptions, signed adjustments and participant/organizer takeover inputs. New adapters invoke
+the existing EventPool controller operations; they add no financial calculation or settlement business owner.
+Organizer reads still require both page and management grants, while organizer commands retain their independent
+native management grant. The separately [approved R1/R2 correction](FRONTEND_FOUNDATION_DESIGN.md#approved-p8-public-method-parity-2026-10-20)
+preserves profile-less public grants for pool creation/settings/submission access, assignments, adjustment
+addition/removal, organizer coverage and invoice acceptance/decline/organizer closure. Expense recording and
+retroactive review retain their profile requirements; no command admits a private read audience.
+Participant commands require event registration and keep the existing own-invoice or
+self-payer boundaries. The organizer projection includes current settings, assignments and adjustments. Participant
+coverage choices disclose only the assigned names/contact details already available in the native eligible OPEN-pool
+chooser; top-level organizer rosters, unrelated pools and other participants' invoice details stay private.
+Current coverage inputs remain separate from the saved applied roster and pending closed-pool groups.
 
 Help has one canonical release-owned tree: native English at `docs/user-guide/`, with pilot language corpora in its
 catalog-selected directories such as `en/` and `de/`. Staged maintainer documents are never runtime sources.
@@ -182,7 +197,7 @@ native original-value submission or overlap feedback is not implemented or promi
 | Event link/default masks/admin setup | Relevant current setup fields and independently granted owning policy. |
 | Capacity-sensitive assignments | Existing locked count/membership/idempotent behavior; not metadata revision. |
 | Recommendations | Existing generation-context fingerprint and overlap acknowledgement; application retains native source, provenance and eligibility checks. |
-| Finance | Existing calculation revision/review guarantees; a future adapter preserves them. |
+| Finance | Existing calculation revision for submission access, retraction and reviewed accepted-invoice changes; ordinary settings/allocation saves gain no generalized If-Match protocol. |
 
 Missing required If-Match is 428; mismatched touched comparison is 412 without a write.
 Weak/wildcard tags do not bypass application comparison. This is an authored field protocol carried in If-Match,
@@ -253,6 +268,16 @@ File commands retain existing size/type/storage/ownership/retention checks and p
 Multipart validation owns its decoded JSON and file parts separately; MIME allowlists alone do not prove content or
 extension/MIME pairing. Image/print/download/provider boundaries stay explicit document/binary operations.
 Never expose filesystem paths or introduce server self-HTTP.
+
+P8 organizer expenses use the existing named `data`/`proof` multipart envelope with optional proof and paid-by
+attribution, distinct from participant submissions' mandatory proof. The route admits the organizer before receiving
+bytes, validates the authored closed shape and prepares its fixed acknowledgement before entering the existing
+operation. That owner retains recorder attribution, membership, proof-type and rejected-upload cleanup decisions.
+JSON review/allocation commands use the same prepared acknowledgement boundary without postcommit admission.
+Existing precommit revision/lifecycle conflicts remain definite rejections; a successful shared write followed by
+lost delivery remains uncertain, without replay or speculative rollback. Confirmed writes remain saved through a
+failed follow-up read. P9 calculation, settlement and notification commands and separately authorized cutover remain
+outside this implementation.
 
 ## Coexistence, rollout, and verification
 

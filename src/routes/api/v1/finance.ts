@@ -3,6 +3,9 @@ import fs from 'node:fs/promises';
 import invoiceController, {
     admitEventInvoiceSubmission, closeEventInvoice, readEventFinance, readEventFinanceBreakdown,
     readEventInvoiceProof, retractEventInvoice,
+    admitEventFinanceOrganizer, createEventFinancePool, updateEventFinanceSettings,
+    changeEventFinanceSubmissionState, recordEventOrganizerInvoice, reviewEventFinanceInvoice,
+    updateEventFinanceAssignments, addEventFinanceAdjustment, removeEventFinanceAdjustment, updateEventFinanceTakeovers,
 } from '../../../controller/eventPoolController';
 import {requireApiContext} from '../../../modules/api/session';
 import {ApiProblem, requestLocale} from '../../../modules/api/problem';
@@ -18,6 +21,110 @@ import type {components} from '../../../types/api/v1';
 
 const router = Router({mergeParams: true});
 const uploadProof = prepareFileUploader(settings.value.invoiceDir, true, true).single('proof');
+
+router.post('/pools', asyncHandler(async function createPool(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'createEventFinancePool');
+    const reply = prepareValidatedJson(req, 'createEventFinancePool', 200, {changed: true});
+    await createEventFinancePool(String(req.params.eventId), req.body, actor);
+    sendPreparedJson(req, res, reply);
+}));
+
+router.post('/pools/:poolId/settings', asyncHandler(async function saveSettings(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'updateEventFinanceSettings');
+    const reply = prepareValidatedJson(req, 'updateEventFinanceSettings', 200, {changed: true});
+    await updateEventFinanceSettings(String(req.params.eventId), String(req.params.poolId), req.body, actor);
+    sendPreparedJson(req, res, reply);
+}));
+
+router.post('/pools/:poolId/submission-state', asyncHandler(async function saveSubmissionAccess(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'changeEventFinanceSubmissionState');
+    const reply = prepareValidatedJson(req, 'changeEventFinanceSubmissionState', 200, {changed: true});
+    await changeEventFinanceSubmissionState(String(req.params.eventId), String(req.params.poolId), req.body, actor);
+    sendPreparedJson(req, res, reply);
+}));
+
+/** Admit the organizer before accepting optional bytes, and retain the existing cost owner's cleanup policy. */
+router.post('/pools/:poolId/invoices/organizer', asyncHandler(async function recordOrganizerCost(req, res) {
+    const actor = await requireApiContext(req, res, true);
+    const event = await admitEventFinanceOrganizer(String(req.params.eventId), actor, true);
+    let enteredOperation = false;
+    try {
+        // The closed multipart schema distinguishes optional bytes from client-supplied filenames and unknown parts.
+        await receiveApiUpload(req, res, uploadProof);
+        validateOperationRequest(req, 'recordEventOrganizerInvoice', body => decodeApiMultipartData(body, req.file, 'proof'));
+        const reply = prepareValidatedJson(req, 'recordEventOrganizerInvoice', 200, {changed: true});
+        enteredOperation = true;
+        await recordEventOrganizerInvoice(event, String(req.params.poolId), req.body.data, actor, req.file);
+        sendPreparedJson(req, res, reply);
+    } finally {
+        // Once entered, the shared business owner controls retention; structural rejections discard this request's upload.
+        if (!enteredOperation && req.file) await fs.unlink(req.file.path).catch(() => undefined);
+    }
+}));
+
+/** Keep the shared JSON review transport uniform while explicit operation IDs retain their distinct generated contracts. */
+function registerInvoiceReview(path: string, operation: 'approveEventFinanceInvoice' | 'declineEventFinanceInvoice'
+    | 'closeEventOrganizerInvoice' | 'reviseEventFinanceInvoice' | 'rejectAcceptedEventFinanceInvoice',
+    action: Parameters<typeof reviewEventFinanceInvoice>[3]): void {
+    router.post(`/pools/:poolId/invoices/:invoiceId/${path}`, asyncHandler(async function reviewInvoice(req, res) {
+        // Only retroactive review requires an invoice actor; native initial review accepts the independent method grant.
+        const actor = await requireApiContext(req, res, action === 'revise' || action === 'reject');
+        validateOperationRequest(req, operation);
+        // Prepare the fixed receipt before any legacy operation writes; sending cannot introduce a new admission failure.
+        const reply = prepareValidatedJson(req, operation, 200, {changed: true});
+        await reviewEventFinanceInvoice(String(req.params.eventId), String(req.params.poolId), String(req.params.invoiceId), action, req.body, actor);
+        sendPreparedJson(req, res, reply);
+    }));
+}
+
+registerInvoiceReview('approve', 'approveEventFinanceInvoice', 'approve');
+registerInvoiceReview('decline', 'declineEventFinanceInvoice', 'decline');
+registerInvoiceReview('organizer-close', 'closeEventOrganizerInvoice', 'close');
+registerInvoiceReview('revise', 'reviseEventFinanceInvoice', 'revise');
+registerInvoiceReview('reject-accepted', 'rejectAcceptedEventFinanceInvoice', 'reject');
+
+router.post('/pools/:poolId/assignments', asyncHandler(async function saveAssignments(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'updateEventFinanceAssignments');
+    const reply = prepareValidatedJson(req, 'updateEventFinanceAssignments', 200, {changed: true});
+    await updateEventFinanceAssignments(String(req.params.eventId), String(req.params.poolId), req.body, actor);
+    sendPreparedJson(req, res, reply);
+}));
+
+router.post('/pools/:poolId/adjustments', asyncHandler(async function addAdjustment(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'addEventFinanceAdjustment');
+    const reply = prepareValidatedJson(req, 'addEventFinanceAdjustment', 200, {changed: true});
+    await addEventFinanceAdjustment(String(req.params.eventId), String(req.params.poolId), req.body, actor);
+    sendPreparedJson(req, res, reply);
+}));
+
+router.post('/pools/:poolId/adjustments/:surchargeId/remove', asyncHandler(async function removeAdjustment(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'removeEventFinanceAdjustment');
+    const reply = prepareValidatedJson(req, 'removeEventFinanceAdjustment', 200, {changed: true});
+    await removeEventFinanceAdjustment(String(req.params.eventId), String(req.params.poolId), String(req.params.surchargeId), actor);
+    sendPreparedJson(req, res, reply);
+}));
+
+/** Preserve two explicit coverage contracts and admissions while sharing their identical transport lifecycle. */
+function registerTakeoverCommand(organizer: boolean): void {
+    const operation = organizer ? 'updateEventOrganizerFinanceTakeovers' : 'updateEventParticipantFinanceTakeovers';
+    router.post(`/pools/:poolId/takeovers${organizer ? '/manage' : ''}`, asyncHandler(async function saveCoverage(req, res) {
+        const actor = await requireApiContext(req, res, !organizer);
+        validateOperationRequest(req, operation);
+        // Both commands retain a fixed prevalidated receipt and invoke the shared operation exactly once.
+        const reply = prepareValidatedJson(req, operation, 200, {changed: true});
+        await updateEventFinanceTakeovers(String(req.params.eventId), String(req.params.poolId), req.body, actor, organizer);
+        sendPreparedJson(req, res, reply);
+    }));
+}
+
+registerTakeoverCommand(false);
+registerTakeoverCommand(true);
 
 router.get('/', asyncHandler(async function getEventFinance(req, res) {
     const actor = await requireApiContext(req, res, true);

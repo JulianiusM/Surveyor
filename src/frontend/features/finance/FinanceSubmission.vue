@@ -4,6 +4,7 @@ import type {components} from '../../../types/api/v1';
 import {useActionState, usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
+import {protectFinanceNumberFromScroll} from './numbers';
 import ActionButton from '../../components/ActionButton.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import FileField from '../../components/FileField.vue';
@@ -116,6 +117,7 @@ function acknowledgeHistory(): void {
         <form
             v-show="eligible.length || hasDraft || command.pending.value || command.uncertain.value"
             @submit.prevent="submit"
+            @wheel.capture.passive="protectFinanceNumberFromScroll"
             enctype="multipart/form-data"
         >
             <fieldset

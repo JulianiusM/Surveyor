@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P7 finance contribution, localized shared presenters/catalog derivation and retained locale draft owners reconciled with P0-P6 guidance; authority, draft and backend boundaries retained; execution separate; no publication
+verification-scope: P8 organizer finance and independent allocation-form contribution source-reconciled with retained P7/P0-P6 guidance; shared numeric wheel owner, original business operations and native/later-phase exclusions retained; execution separate; no publication
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -253,9 +253,20 @@ private and pass only explicit permitted scalar projections. Inherited postcommi
 outside this adaptation.
 
 Finance composes the admitted Event page without adding a finance page/router or another HTTP owner.
-`FinanceSection` keeps audience-specific reads, disclosure and reviewed participant actions; `FinanceSubmission`
-owns its lexical invoice draft and exact proof File. History, saved totals, share ledger, coverage groups and lazy
+`FinanceSection` keeps audience-specific reads, disclosure and selected participant/organizer review intent;
+`FinanceSubmission` owns its lexical invoice draft and exact proof File. `FinancePoolEditor` shares matching
+creation/settings fields, `FinanceOrganizerInvoice` keeps its independent optional proof and paid-by draft, and
+`FinanceInvoiceReview` freezes the original invoice/action/revision through explicit retroactive confirmation.
+Enrollment/factors/exemptions, signed adjustments and coverage belong to `FinanceAssignments`, `FinanceAdjustments`
+and `FinanceTakeovers`. Each retains its own draft/save boundary: a sibling save or adjustment removal must not
+submit, reset or replace another unfinished form. History, saved totals, share ledger, coverage groups and lazy
 breakdown compose feature presentation and existing shared controls. Matching ledger footers share one owner.
+`FinanceEnrollmentFields` presents the three matching creation/assignment flags with explicit IDs, names, labels,
+help slots and update events. Both callers adopt it while retaining their own drafts and independent saves. The
+default flag attaches future registrations independently of assign-all/current membership; never force one flag
+when another changes. Creation's All toggle selects every current attendee. The assignment editor instead restores
+its remembered individual selections when All is cleared.
+
 Use the existing invoice controller/operations and saved financial presenters; never calculate a replacement share
 in a component or turn a saved read into preview, settlement or recalculation. Interface wording is an explicit
 per-call formatter with unchanged English defaults for existing native outputs. English `invoiceMessages`
@@ -268,11 +279,38 @@ read transition retains the same cache-owned snapshot and mounted draft through 
 commands disabled until a fresh current-language receipt. The retained Query's disabled observation prevents
 ordinary cache expiry from releasing an unfinished invoice; denial, eviction and actor/resource retirement still
 release it. No copied server snapshot or second draft owner is introduced.
+
+Finance's `numbers.ts` owns the shared wheel guard for number inputs in participant submissions, organizer expenses,
+invoice review, factors and signed adjustments. Each form installs it explicitly while keeping lexical strings,
+constraints and conversion-at-submit in its feature owner. The guard releases the focused numeric control before
+native wheel stepping without changing its value. Filtered factor rows stay mounted; validity reporting reveals an
+invalid row before focusing it. The assignment editor preserves deliberate individual selections and disabled local values;
+only selected assignments contribute factors/exemptions to the submitted body. A released eligible target must
+remain visibly represented or be deliberately cleared, rather than silently diverge from submitted draft identity.
+Trace validation through the actual native handler and shared operation: optional NEW-invoice acceptance does not
+inherit the stricter precision checks of a required retroactive correction merely because both render numeric fields.
+
+Keep current coverage inputs distinct from saved applied coverage. The shared chooser fixes participant mode to the
+current registration and eligible OPEN pools; organizers retain their independent payer/reassignment grant. Its
+current/pending row shortcut selects the intended payer without turning a read-only applied CLOSED group into an
+edit. Saving closed-pool allocation inputs marks the existing recalculation state and leaves saved shares,
+recorded transfers and applied coverage intact. Components never rebuild those figures from their draft.
 `PilotTransport.uploadJson` adds transfer progress to the existing generated response/actor checks. Upload completion
 is distinct from save confirmation. Unknown delivery locks the draft until deliberate saved-history inspection and
-human acknowledgement; it never replays automatically. Confirmed save releases only completed invoice fields and
-proof bytes, retains the applicable pool, and remains saved when the following read fails. Native proof/download
-outputs and separately unmigrated organizer/takeover actions keep their explicit destinations.
+human acknowledgement; it never replays automatically. The same explicit saved-list review protects additive
+adjustments. Submission access, assignments, coverage and adjustment removal reconcile through fresh reads.
+Confirmed save releases only completed fields/proof bytes, retains the applicable pool and remains saved when
+the following read fails. Settings, assignments and coverage retain a form-owned saved-field baseline through
+Close/reopen and explicit discard; never restore older Query values over a confirmed submission. A fresh admitted
+roster reconciles stable identities while retaining surviving lexical factors and adding new participant defaults.
+If a confirmed coverage save lacks a fresh read, changing payer first uses protected recovery; failure retains the
+visible payer and selection. Do not maintain a parallel coverage/reassignment model to infer other payers' inputs.
+Versioned JSON and
+multipart adapters prepare acknowledgements before entering the existing EventPool controller operation; page,
+method, participant and proof admission remain separate. Original backend normalization, revision checks and
+notifications remain shared without a new backend remedy or generalized comparison protocol. Native proof/download
+outputs and unmigrated calculation/settlement/notification commands keep their explicit destinations. Native
+frontend sources, P9–P11, cutover and guide publication retain their separate authorization.
 
 1. **Identify its actual contract.** Follow page admission, request parsing, controller decisions, DBAL and rendered
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;

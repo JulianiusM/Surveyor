@@ -646,10 +646,11 @@ test('reads saved signed ledgers and lazy calculations independently from curren
             await expect(organizerBreakdown).toContainText('Paid');
             await organizerBreakdown.screenshot({path: info.outputPath(`vue-organizer-breakdown-${width}.png`), animations: 'disabled'});
             await organizerBreakdown.getByRole('button', {name: 'Close', exact: true}).last().click();
-            // Organizer commands are the explicit P8 native destination. Follow
-            // the real link and its existing anchor, rather than merely checking
-            // a plausible URL that never reaches the unchanged finance owner.
-            const nativeManagement = page.getByRole('link', {name: 'Manage pools and invoices', exact: true});
+            // P8 inputs are now available in the same document. The explicitly
+            // retained P9 destination still reaches calculation and settlement.
+            await expect(organizerPool.getByRole('button', {name: 'Pool settings', exact: true})).toBeVisible();
+            await expect(organizerPool.getByRole('button', {name: 'Participants & factors', exact: true})).toBeVisible();
+            const nativeManagement = page.getByRole('link', {name: 'Calculation & settlement', exact: true}).first();
             await expect(nativeManagement).toHaveAttribute('href', `/event/${event.id}/admin#invoicePoolAccordion`);
             await nativeManagement.click();
             await expect(page).toHaveURL(new RegExp(`/event/${event.id}/admin#invoicePoolAccordion$`, 'u'));
@@ -674,7 +675,7 @@ test('reads saved signed ledgers and lazy calculations independently from curren
     }
 });
 
-test('keeps applied and pending coverage separate, preserves the native editing destination and retires denied locale history', async ({page, browser, baseURL}, info) => {
+test('keeps applied and pending coverage separate, opens personal coverage in place and retires denied locale history', async ({page, browser, baseURL}, info) => {
     test.setTimeout(150_000);
     const actors: BrowserContext[] = [];
     try {
@@ -746,6 +747,8 @@ test('keeps applied and pending coverage separate, preserves the native editing 
             await pool.locator('.accordion-button').first().click();
             const applied = pool.locator('[data-finance-coverage-kind="applied"]');
             const pending = pool.locator('[data-finance-coverage-kind="pending"]');
+            await expect(applied.getByRole('button', {name: /^Edit takeovers for/u})).toHaveCount(0);
+            await expect(pending.getByRole('button', {name: 'Edit takeovers for Coverage payer', exact: true})).toBeVisible();
             await expect(applied.locator('.coverage-name-chip')).toHaveCount(6);
             await expect(applied).not.toContainText('Pending beneficiary');
             await applied.getByRole('button', {name: /Show all 7/u}).click();
@@ -780,8 +783,13 @@ test('keeps applied and pending coverage separate, preserves the native editing 
             const participantPool = personal.locator(`[data-finance-participant-pool="${openPool}"]`);
             await expect(personal.locator('[data-finance-participant-pool]')).toHaveCount(1);
             await expect(participantPool).toContainText('Covered 01');
-            await expect(participantPool.getByRole('link', {name: 'Manage takeovers', exact: true}))
-                .toHaveAttribute('href', `/event/${event.id}#participantInvoiceAccordion`);
+            const documentMarker = await personalPage.evaluate(() => performance.timeOrigin);
+            await participantPool.getByRole('button', {name: 'Manage takeovers', exact: true}).click();
+            const chooser = personalPage.getByRole('dialog');
+            await expect(chooser.getByLabel('Payer', {exact: true})).toHaveCount(0);
+            await expect(chooser.locator(`[data-finance-beneficiary="${participantId('Covered 01')}"]`).getByRole('checkbox')).toBeChecked();
+            await chooser.getByRole('button', {name: 'Close', exact: true}).last().click();
+            expect(await personalPage.evaluate(() => performance.timeOrigin)).toBe(documentMarker);
             await expectUsableFrontendLayout(participantPool);
             await participantPool.screenshot({path: info.outputPath(`vue-participant-coverage-${width}.png`), animations: 'disabled'});
         }

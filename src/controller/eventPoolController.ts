@@ -65,16 +65,24 @@ function financeFormatter(locale?: string): InvoiceTextFormatter {
     return (key, parameters = {}) => translator.t(`finance.${key}` as MessageKey, parameters as MessageParameters[MessageKey]);
 }
 
-/** Admit one finance audience before loading any invoice or settlement collections. */
-async function admitFinance(eventId: string, session: SessionLike, audience?: components['schemas']['FinanceView']['audience']) {
-    if (!session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
+/** Load the event and current method grants without admitting a private finance audience. */
+async function loadFinanceSubject(eventId: string, session: SessionLike) {
     const event = await eventService.getEventById(eventId);
     if (!event) throw new ApiProblem('NOT_FOUND');
 
-    // Page admission does not grant access to organizer finance or someone else's proof.
+    // Native management grants may include public audiences independently of profile or page admission.
     const permissions = await evaluateSubject({kind: 'entity', entity: {
         entityType: 'event', entityId: event.id, ownerId: event.ownerId, eventId: event.id,
     }}, session);
+    return {event, permissions};
+}
+
+/** Admit one finance audience before loading any invoice or settlement collections. */
+async function admitFinance(eventId: string, session: SessionLike, audience?: components['schemas']['FinanceView']['audience']) {
+    if (!session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
+    const {event, permissions} = await loadFinanceSubject(eventId, session);
+
+    // Page admission does not grant access to organizer finance or someone else's proof.
     const registration = await eventService.getRegistrationFor(session.profile.id, eventId);
     if (audience === 'organizer' && (!permissions.has('ACCESS_ADMIN') || !permissions.has('MANAGE_ASSIGNMENTS'))) {
         throw new ApiProblem('FORBIDDEN');
@@ -151,6 +159,11 @@ function projectFinanceCoverage(takeovers: readonly InvoiceAppliedTakeover[], pa
     return result;
 }
 
+/** Project only the participant contact fields already shown by the native organizer and eligible coverage choosers. */
+function projectFinanceParticipant(participant: ParticipantRow): components['schemas']['FinanceParticipant'] {
+    return {id: String(participant.id), name: participant.name, email: participant.email ?? null};
+}
+
 /** Project accounting totals and distinct saved/future coverage only for the admitted pool audience. */
 function projectFinancePool(pool: EventInvoicePool, participants: readonly ParticipantRow[],
     audience: components['schemas']['FinanceView']['audience'], canSubmit: boolean,
@@ -161,6 +174,7 @@ function projectFinancePool(pool: EventInvoicePool, participants: readonly Parti
     const hasPendingTakeovers = organizer && invoiceHasPendingTakeovers(pool);
     const hasSavedShares = organizer && pool.status === 'CLOSED' && pool.shares.length > 0;
     const assignedCount = pool.assignAll ? participants.length : pool.assignments.length;
+    const assignedIds = new Set(pool.assignAll ? participants.map(row => Number(row.id)) : pool.assignments.map(row => row.registrationId));
     const snapshot = pool.calculationSnapshot;
     // Native personal coverage receives only eligible OPEN pools. History/share-only pool metadata cannot widen its roster.
     const coverageGroups = showCoverage ? projectFinanceCoverage(invoiceAppliedTakeovers(pool), participants, text) : [];
@@ -171,6 +185,17 @@ function projectFinancePool(pool: EventInvoicePool, participants: readonly Parti
         hasPendingTakeovers, coverageKnown, coverageGroups, pendingCoverageGroups,
         assignedCount: showCoverage ? assignedCount : 0,
         assignAll: showCoverage && Boolean(pool.assignAll), revision: pool.calculationRevision, canSubmit,
+        settings: organizer ? {distribution: pool.distributionMethod as components['schemas']['FinancePoolSettings']['distribution'],
+            subtractPersonalInvoices: Boolean(pool.subtractPersonalInvoices),
+            sendCalculationEmails: Boolean(pool.sendCalculationEmails), roundUpShares: Boolean(pool.roundUpShares)} : null,
+        registrationIds: organizer ? [...assignedIds] : [],
+        assignments: organizer ? pool.assignments.map(row => ({registrationId: String(row.registrationId),
+            factor: Number(row.factor), isExempt: Boolean(row.isExempt)})) : [],
+        surcharges: organizer ? pool.surcharges.map(row => ({id: String(row.id), registrationId: String(row.registrationId),
+            amount: Number(row.amount), note: row.note, subtractFromPool: Boolean(row.subtractFromPool)})) : [],
+        // Participant contacts belong only to assigned choices in an eligible OPEN pool, never history-only pool metadata.
+        coverageChoices: showCoverage ? participants.filter(row => assignedIds.has(Number(row.id))).map(projectFinanceParticipant) : [],
+        currentCoverageGroups: showCoverage ? projectFinanceCoverage(pool.takeovers, participants, text) : [],
         // Personal rows never expose pool-wide accounting or another payer's calculation example.
         summary: organizer ? invoicePoolSummary(pool, text) : null,
         calculation: hasSavedShares ? invoicePoolCalculationBreakdown(snapshot?.explanation, snapshot?.surcharges, text) : null,
@@ -197,6 +222,7 @@ export async function readEventFinance(eventId: string, session: SessionLike,
     const visiblePools = audience === 'organizer' ? pools : pools.filter(pool => eligiblePoolIds.has(pool.id)
         || invoices.some(invoice => invoice.poolId === pool.id) || shares.some(share => share.poolId === pool.id));
     return {audience, registrationId: registration ? String(registration.id) : null, invoices, shares,
+        participants: audience === 'organizer' ? participants.map(projectFinanceParticipant) : [],
         pools: visiblePools.map(pool => projectFinancePool(pool, participants, audience, eligiblePoolIds.has(pool.id), text))};
 }
 
@@ -260,6 +286,105 @@ export async function readEventInvoiceProof(eventId: string, poolId: string, inv
     const {event, permissions} = await admitFinance(eventId, session);
     // The proof policy admits an attributed participant or the independent manage-assignment method grant.
     return serveInvoiceProof(event, poolId, invoiceId, session as Request['session'], {entity: permissions} as PermBundle);
+}
+
+/** Admit only the native management method, retaining explicit identity requirements for attributed invoice changes. */
+async function admitFinanceManagement(eventId: string, session: SessionLike, requireProfile: boolean) {
+    if (requireProfile && !session.profile?.id) throw new ApiProblem('AUTH_REQUIRED');
+    const {event, permissions} = await loadFinanceSubject(eventId, session);
+    // Commands follow MANAGE_ASSIGNMENTS alone; this does not admit any private organizer projection.
+    if (!permissions.has('MANAGE_ASSIGNMENTS')) throw new ApiProblem('FORBIDDEN');
+    return {event, permissions};
+}
+
+/** Preserve the native organizer method grant independently from organizer-page admission. */
+export async function admitEventFinanceOrganizer(eventId: string, session: SessionLike, requireProfile = false): Promise<Event> {
+    const {event} = await admitFinanceManagement(eventId, session, requireProfile);
+    return event;
+}
+
+/** Map only an existing precommit conflict, retaining its definite rejection across the versioned boundary. */
+async function runFinanceOperation<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+        return await operation();
+    } catch (error) {
+        // Legacy prose stays private; no mutable admission or response preparation runs after a successful write.
+        if (error instanceof APIError && error.status === 409) throw new ApiProblem('RESOURCE_CONFLICT');
+        throw error;
+    }
+}
+
+/** Create a pool through the existing validated controller owner after matching its native method grant. */
+export async function createEventFinancePool(eventId: string, body: unknown, session: SessionLike): Promise<string> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    return runFinanceOperation(() => createInvoicePool(event, body));
+}
+
+/** Adapt settings transport without altering saved shares or existing recalculation behavior. */
+export async function updateEventFinanceSettings(eventId: string, poolId: string, body: unknown, session: SessionLike): Promise<void> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    await runFinanceOperation(() => updatePoolSettings(event, poolId, body));
+}
+
+/** Keep submission access separate from calculation, reusing the existing revision-checked operation. */
+export async function changeEventFinanceSubmissionState(eventId: string, poolId: string, body: unknown, session: SessionLike): Promise<void> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    await runFinanceOperation(() => changePoolSubmissionState(event, poolId, body));
+}
+
+/** Record optional proof only after the route has admitted the organizer before receiving upload bytes. */
+export async function recordEventOrganizerInvoice(event: Event, poolId: string, body: unknown, session: SessionLike,
+    file?: Express.Multer.File): Promise<void> {
+    // The existing owner validates attribution, locked pool membership, proof types and rejected-upload cleanup.
+    await runFinanceOperation(() => addOrganizerInvoice(event, poolId, body, session as Request['session'], file));
+}
+
+/** Dispatch one admitted invoice review to its existing owner, preserving evidence and revision requirements. */
+export async function reviewEventFinanceInvoice(eventId: string, poolId: string, invoiceId: string,
+    action: 'approve' | 'decline' | 'close' | 'revise' | 'reject', body: unknown, session: SessionLike): Promise<void> {
+    // Retroactive changes retain the native actor requirement; initial review follows the independent method grant.
+    const {event, permissions} = await admitFinanceManagement(eventId, session, action === 'revise' || action === 'reject');
+    const actor = session as Request['session'];
+    // Every operation still validates event/pool ownership and lifecycle itself; this adapter supplies only method admission.
+    await runFinanceOperation(async function reviewSavedInvoice() {
+        switch (action) {
+            case 'approve': return approveInvoice(event, poolId, invoiceId, body, actor);
+            case 'decline': return declineInvoice(event, poolId, invoiceId, body, actor);
+            case 'revise': return reviseInvoice(event, poolId, invoiceId, body, actor);
+            case 'reject': return rejectAcceptedInvoice(event, poolId, invoiceId, body, actor);
+            case 'close': {
+                // Capture the already admitted method grant before the write instead of performing postcommit permission reads.
+                return closeInvoice(event, poolId, invoiceId, actor, {entity: permissions} as PermBundle);
+            }
+        }
+    });
+}
+
+/** Save enrollment, exemptions and factors through the existing assignment owner without recalculating shares. */
+export async function updateEventFinanceAssignments(eventId: string, poolId: string, body: unknown, session: SessionLike): Promise<void> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    await runFinanceOperation(() => updatePoolAssignments(event, poolId, body));
+}
+
+/** Add a signed surcharge or rebate using the shared membership, precision and note checks. */
+export async function addEventFinanceAdjustment(eventId: string, poolId: string, body: unknown, session: SessionLike): Promise<void> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    await runFinanceOperation(() => addPoolSurcharge(event, poolId, body));
+}
+
+/** Remove an adjustment through the existing event-scoped controller, retaining its idempotent behavior. */
+export async function removeEventFinanceAdjustment(eventId: string, poolId: string, surchargeId: string, session: SessionLike): Promise<void> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    await runFinanceOperation(() => removePoolSurcharge(event, poolId, surchargeId));
+}
+
+/** Preserve participant self-coverage and the distinct organizer reassignment method in one transport adapter. */
+export async function updateEventFinanceTakeovers(eventId: string, poolId: string, body: unknown, session: SessionLike,
+    organizer: boolean): Promise<void> {
+    const event = organizer ? await admitEventFinanceOrganizer(eventId, session)
+        : (await admitFinance(eventId, session, 'participant')).event;
+    // The shared operation repeats OPEN, assigned-payer, one-level and reassignment checks under its existing lock.
+    await runFinanceOperation(() => updateTakeovers(event, poolId, body, session as Request['session'], organizer));
 }
 
 // Resolve the registration ID for the current actor so validation stays localized.

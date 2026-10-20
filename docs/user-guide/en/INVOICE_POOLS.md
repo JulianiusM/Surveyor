@@ -4,9 +4,10 @@ documentation-metadata
 audience: event participants; event organizers
 owner: event invoice-pool maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
+verification-scope: Native-reference provenance retained; bounded P8 creation/settings, allocation, expense and invoice-review tasks aligned with the current interface and catalogs. Untouched submission/history, calculation and settlement material retains its earlier reference scope.
+current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/locales/en.json
 source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/database/entities/event/EventInvoice.ts; src/modules/database/entities/event/EventInvoicePool.ts; src/modules/database/entities/event/EventInvoiceShare.ts; src/modules/database/entities/event/EventInvoiceSurcharge.ts; src/modules/database/entities/event/EventPoolAssignment.ts; src/modules/database/entities/event/EventPoolTakeover.ts; src/views/modules/module_invoice_pool.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/public/js/events.ts; src/modules/invoice/retention.ts; src/modules/lib/fileCommons.ts; tests/integration/invoice-workflows.spec.ts; tests/frontend/ui-behaviors.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
 next-review: invoice-pool-visible-UI-or-behavior-change
 production-reference: 2dfa257 native frontend documentation; not an installed production commit
@@ -194,7 +195,7 @@ Rules:
 - Only people assigned to the same pool can be selected.
 - Participant takeover controls are available only while the pool is open.
 
-Each payer has a row with name badges for the participants they cover. Use **Search takeovers** to find either name; matching covered participants appear even when their badges were hidden in a longer list. **Show all** reveals the rest of a payer's beneficiaries, and **Show fewer** returns to the compact view. Use **Previous** and **Next** for more payers. When email addresses are available, Surveyor emails both the payer and beneficiary after a takeover is added or removed and identifies who made the change.
+Each payer has a row with name badges for the participants they cover. Use **Search takeovers** to find either name; matching covered participants appear even when their badges were hidden in a longer list. The expansion button includes the group size: for example, **Show all 8** reveals all eight beneficiaries. **Show fewer** returns to the compact view. Use **Previous** and **Next** for more payers. When email addresses are available, Surveyor emails both the payer and beneficiary after a takeover is added or removed and identifies who made the change.
 
 A takeover is a calculation instruction, not a payment. It takes effect when the organizer closes or recalculates the pool.
 
@@ -255,13 +256,15 @@ recipient by name in both the greeting and the To field.
 
 ## Organizer tasks
 
-Pool actions show a spinner and status immediately, and prevent duplicate clicks while the change is in progress. After five seconds, a further message explains that the change is still awaiting confirmation. Keep the page open and wait for the result. Success and error notices disappear after ten seconds; active progress and **Recalculation required** stay visible while relevant. Wait for the saved confirmation before leaving the page.
+Use **Invoice pools & payments** in the event administration dashboard to create pools, edit their inputs, record expenses and review invoices. Each editing dialog has its own save action. Saving refreshes the saved information without reloading the page; wait for confirmation before leaving. **Close** asks before discarding unfinished changes, and **Discard edits** restores that form's saved values.
+
+For calculation previews, closing or recalculating a pool, rolling back pool changes, settlement emails and recording payments or refunds, select **Calculation & settlement**. It opens the administration page with those controls. The calculation and settlement instructions below describe that destination.
 
 ### Create an invoice pool
 
 1. Open the event.
 2. Select **Event administration dashboard**.
-3. Find **Invoice pools**.
+3. Open **Invoice pools & payments**.
 4. Select **Create pool**.
 5. Complete **Create a new pool**.
    Choose **Invoice submissions** as **Open for invoices** or **Organizer invoices only**.
@@ -286,7 +289,7 @@ Choose its name carefully; the settings dialog edits the description and distrib
 its summary and invoice ledger. Use **Pool settings**, **Participants & factors**, **Surcharges & rebates**, and
 **Manage takeovers** for focused editing dialogs.
 
-In **Pool settings**, change the description, distribution mode, **Round base shares up**, or **Send calculation emails automatically**, then select **Save pool settings**. Changing rounding requires recalculation for a closed pool. The email switch sets the default for future calculations; you can override it for an individual calculation. Save each dialog before previewing or calculating. **Close** hides an editing dialog without saving its fields; **Discard edits** resets pending fields to their saved values. Saving reloads the page, so finish one dialog before editing another.
+In **Pool settings**, change the description, distribution mode, **Round base shares up**, or **Send calculation emails automatically**, then select **Save pool settings**. Changing rounding requires recalculation for a closed pool. The email switch sets the default for future calculations; you can override it for an individual calculation. Save each dialog before previewing or calculating. Saving one dialog does not save changes in another.
 
 #### Distribution modes
 
@@ -304,7 +307,7 @@ Use these controls to change whether participants can submit invoices before the
 
 1. Open the uncalculated pool.
 2. Select **Close participant invoices**.
-3. Review the confirmation, then select **Close participant invoices** again.
+3. Review and accept the browser's confirmation prompt.
 
 The pool shows **Organizer invoices only**. Participants can no longer submit invoices or edit takeovers; their
 existing invoice history remains available. Organizers can still add expenses, review invoices, change allocation
@@ -395,9 +398,11 @@ For a closed pool, save the dialog first. The pool then requires recalculation; 
 
 An organizer can establish or reassign coverage for any payer in the pool.
 
-**Takeovers** lists each payer beside badges for the participants they cover. **Search takeovers** finds a payer or covered participant, including beneficiaries beyond the initial six badges. Select **Show all** to inspect a longer group and **Show fewer** to collapse it; long badge lists scroll within their row. Choose 10, 25, or 50 payers per page and use **Previous** or **Next** to move through the list.
+**Takeovers** lists each payer beside badges for the participants they cover. **Search takeovers** finds a payer or covered participant, including beneficiaries beyond the initial six badges. Select the expansion button, for example **Show all 8**, to inspect a longer group and **Show fewer** to collapse it; long badge lists scroll within their row. Choose 10, 25, or 50 payers per page and use **Previous** or **Next** to move through the list.
 
 Select **Edit** in a payer's row to change their coverage. **Manage takeovers** also lets you choose any payer. The editing dialog shows selected coverage and explains unavailable choices. Long lists scroll inside the dialog while **Save changes** remains reachable.
+
+If saving succeeds but the saved coverage cannot be refreshed, your confirmed selection remains available after closing and reopening the dialog. Choosing another payer first refreshes the saved coverage; if that read fails, the current payer stays selected.
 
 1. Open the pool.
 2. Select **Manage takeovers** from the pool’s controls.
@@ -438,7 +443,7 @@ The two adjustment modes behave differently:
 
 For example, split 100.00 equally between two participants with invoice credits disabled. A redistributed `-10.00` rebate for one participant makes the shared remainder 110.00: each base is 55.00, then the rebate leaves totals of 45.00 and 55.00. With redistribution cleared, the totals are 40.00 and 50.00. Factors affect the base split in either case; the fixed rebate is applied afterward.
 
-Use **Remove** on an incorrect adjustment, review **Confirm invoice action**, and select **Remove adjustment**, then add its replacement. The note is shown in share details, so write it for the participant who will read the final calculation.
+Use **Remove** on an incorrect adjustment and accept the browser's confirmation prompt, then add its replacement. Removing a saved adjustment keeps any unfinished new adjustment available. The note is shown in share details, so write it for the participant who will read the final calculation.
 
 Adjustments can be added or removed after closure. Each saved change requires **Recalculate pool** before it affects the share rows. Review all adjustments before recalculating.
 
@@ -448,13 +453,13 @@ Use **Add invoice / amount** for a cost that belongs in the shared pool, such as
 invoice workflow. You do not need an event registration to record it. You can leave the cost unassigned or identify
 the participant who paid.
 
-1. Open the pool in **Invoice pools**.
+1. Open the pool under **Invoice pools & payments**.
 2. Select **Add invoice / amount**.
 3. Enter a positive **Amount** with at most two decimal places.
 4. Under **Paid by participant (optional)**, select the participant who paid, or keep **No participant — shared pool expense**.
 5. Enter a required **Description** explaining the cost.
 6. Under **Proof (optional)**, attach a receipt or invoice when available.
-7. Select **Add expense** and wait for confirmation.
+7. Select **Add invoice / amount** and wait for confirmation.
 
 The invoice is immediately **Accepted** and included in pool costs in every pool state. The ledger shows the selected
 participant, or **Pool expense** when unassigned, alongside **Recorded by** with the organizer's name. The participant
@@ -462,7 +467,7 @@ who paid and the organizer who recorded it are separate. When no proof was suppl
 Proof remains optional for either choice and uses the same supported file types and 10 MiB limit as participant proofs.
 Adding the invoice sends no creation email.
 
-A confirmed validation error keeps your entries available for correction. If Surveyor cannot confirm whether the cost was saved, the form stays locked and offers **Reload and check saved invoices**. Check the ledger before adding the expense again; a lost response does not mean the cost was rejected.
+A confirmed validation error keeps your entries and selected proof available for correction. If Surveyor cannot confirm whether the cost was saved, the form stays locked. Select **Check invoice history** to load the saved invoices in the dialog, inspect them, then select **I have checked the invoice history**. This clears the retained form entries without submitting them again. A lost response does not mean the cost was rejected; check the saved history before deciding whether another expense is needed.
 
 The selector contains existing participants assigned to this pool; it does not add someone to the event or pool.
 When **Deduct submitter invoices from their share** is enabled, an attributed invoice reduces that participant's share
@@ -475,7 +480,7 @@ You can add an organizer expense to a closed pool. Its saved shares and payments
 
 ### Review submitted invoices
 
-Expand the pool’s **Invoices** section to reach **Invoice administration**. It opens automatically for **Open for invoices** and **Organizer invoices only** pools, or when invoices await review. Newest submissions appear first.
+Open the pool under **Invoice pools & payments** to reach **Invoice administration**. Newest submissions appear first.
 
 Use:
 
@@ -484,37 +489,39 @@ Use:
 - 25, 50, or 100 rows per page.
 - **Previous** and **Next** to move through longer ledgers.
 
-For each participant submission, compare **Submitted details** with **View proof**. The **Organizer review** column contains
-the correction and rejection fields while the invoice is Awaiting review. **Participant / source** shows participant
+For each participant submission, compare **Submitted details** with **View proof**. Select **Accept** or **Reject** to open
+the corresponding review dialog. **Participant / source** shows participant
 attribution separately from an organizer's **Recorded by** label. Organizer-entered invoices are already Accepted,
 can have no proof, and show **Pool expense** when no participant was selected.
 
 #### Accept without correction
 
-1. Leave **Corrected amount** empty.
-2. Leave **Corrected description** empty.
-3. Select **Accept**, review **Confirm invoice action**, then select **Accept** again.
+1. Select **Accept** on the invoice.
+2. Leave **Corrected amount** and **Corrected description** empty in the dialog.
+3. Review the invoice and amount, then select **Confirm**.
 
 The submitted amount and description become the effective accepted values.
 
 #### Accept with a correction
 
-1. Enter a positive **Corrected amount** when the accepted total differs from the submitted amount.
-2. Enter a **Corrected description** when the accepted explanation should differ. It can contain up to 4,000 characters.
-3. Select **Accept**, review **Confirm invoice action**, then select **Accept** again.
+1. Select **Accept** on the invoice.
+2. Enter a positive **Corrected amount** when the accepted total differs from the submitted amount.
+3. Enter a **Corrected description** when the accepted explanation should differ. It can contain up to 4,000 characters.
+4. Review the invoice and corrected amount, then select **Confirm**.
 
 Surveyor preserves the original submission and displays it beside the correction. The corrected amount is used for pool totals, invoice credit, and final shares. A blank corrected field keeps the corresponding submitted value.
 
 #### Reject
 
-1. Enter a **Rejection reason**. It is required and can contain up to 4,000 characters.
-2. Select **Reject**, review **Confirm invoice action**, then select **Reject** again.
+1. Select **Reject** on the invoice.
+2. Enter a **Rejection reason** in the dialog. It is required and can contain up to 4,000 characters.
+3. Review the invoice, then select **Confirm**.
 
 The invoice becomes Rejected. It is excluded from totals but remains in both the organizer ledger and the submitter’s history with the reason and proof.
 
 #### Close an accepted invoice
 
-Select **Close** on an Accepted invoice when its review record is finished, then review and confirm **Close** in **Confirm invoice action**. The invoice becomes Closed but remains included in **Full pool total** and in the final share calculation. The action does not settle a participant share.
+Select **Close** on an Accepted invoice when its review record is finished, review the invoice and amount in the dialog, then select **Confirm**. The invoice becomes Closed but remains included in **Full pool total** and in the final share calculation. The action does not settle a participant share.
 
 The attributed participant may also close their own Accepted invoice from **Your invoice history**, including one
 recorded for them by an organizer.
@@ -534,7 +541,7 @@ The original submission and proof are preserved. The corrected amount and descri
 
 To remove a counted cost, select **Reject from pool**, enter a required **Rejection reason** in **Reject invoice from pool**, then select **Continue** and **Confirm rejection**. The invoice becomes Rejected and is excluded from pool costs and personal invoice credit. Its original details, proof, and existing correction remain in history.
 
-For a closed pool, either change requires **Recalculate pool**. Existing shares and payments remain saved until you preview and apply the new calculation, which carries prior settlements forward. **Roll back pool changes** does not undo invoice corrections or rejections. If the pool changed after you opened the dialog, reload and review the invoice before confirming again.
+For a closed pool, either change requires **Recalculate pool**. Existing shares and payments remain saved until you preview and apply the new calculation, which carries prior settlements forward. **Roll back pool changes** does not undo invoice corrections or rejections. If the pool changed after you opened the dialog, cancel the review, use **Refresh**, and reopen the invoice to review it again before confirming.
 
 #### Notifications and late review
 

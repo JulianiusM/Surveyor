@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: authorized P7 finance implementation, independent semantic review and finite running-app evidence recorded alongside retained Activity corrections and P0-P6 history; native/backend exclusions and cutover conditions retained
+verification-scope: completed P8 organizer/allocation implementation, explicit R1/R2 adoption and full known-criteria source review with finite execution/visual evidence; P7 history, native/backend exclusions and cutover conditions retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,97 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## P8 organizer and allocation implementation review (2026-10-20)
+
+The [direct P8 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p8-implementation-trigger-2026-10-20) activates
+both packages. Organizer pool creation/settings, submission access, optional-proof expenses and invoice review now
+have separate Vue command owners. Allocation, factors/exemptions, signed adjustments and participant/organizer
+coverage use independent forms. The generated transport adapters call the existing EventPool controller and shared
+invoice/pool/takeover operations; no business engine, DBAL, schema or native frontend implementation was replaced.
+P9 calculation, settlement and outputs retain the explicit **Calculation & settlement** destination.
+
+Root and independent nonauthor review traced the native comparator, original decisions and amendments, actual
+Event consumers, generated contracts, permissions/private reads, file attribution, draft lifetimes and shared
+ownership. Matching creation/allocation controls adopt `FinanceEnrollmentFields`; numeric finance inputs adopt
+one scroll-protection helper. Existing dialogs, fields, feedback, history and coverage remain shared. Future-default
+enrollment stays independent of selecting all current participants. Optional NEW invoice corrections retain the
+native acceptance validation boundary; retroactive corrections/rejection retain their separate captured revision
+and final review. Original evidence and recorder/paid-by attribution survive correction.
+
+Sibling saves and refreshed props preserve unfinished fields, lexical numbers and selected proof. Confirmed writes
+stay confirmed after a failed follow-up read. An uncertain expense remains locked until fresh invoice-history
+inspection and explicit acknowledgement, without automatic replay. Filtering keeps factor rows mounted and reveals
+an invalid row before validity focus. Adjustment removal retains an unfinished addition. Participant coverage fixes
+the payer to the admitted registration; applied closed-pool coverage stays read-only while pending organizer inputs
+remain separately editable. These source changes leave saved shares and transfers for P9 recalculation.
+
+Final permission review found an added profile requirement on methods whose native API accepts a public management
+grant. Two attempted corrections were rejected before applying by automatic approval review. The maintainer then
+received the complete separate requests in the final conversational message and explicitly approved both R1
+(pool/allocation) and R2 (invoice review), followed by full implementation and review. The
+[dated amendment](FRONTEND_FOUNDATION_DESIGN.md#approved-p8-public-method-parity-2026-10-20) preserves that provenance
+and the original October 12 choice. The implemented ten methods now honor existing public management grants.
+Protected reads, organizer expenses, retroactive review and participant operations keep their existing identity
+requirements. Public writes expose no private finance audience and retain origin/context/CSRF protections.
+
+The subsequent full P8 review found two form-lifecycle defects and corrected them before completion. A confirmed
+save followed by a failed read could restore old settings, factors or coverage on Close/reopen and undo the saved
+change in a later request. Existing form owners now restore their confirmed/admitted saved-field baseline instead.
+Coverage keeps only the current payer's baseline; switching after a failed saved read requires protected fresh
+inputs, preserving the payer/selection on failure without replaying coverage rules in another model. Assignment
+roster changes during editing or the pending saved read now reconcile stable identities, preserve surviving lexical
+factors and add admitted participant defaults. Canonical saved all-membership and discarded unsubmitted values
+remain distinct. Root and independent nonauthor review inspected these final corrections and actual consumer adoption.
+
+The final full build passed, including generated inputs, server, native client, Vue client/SSR and copies. The test
+TypeScript graph passed again after the final test-only notice step. All 34 selected mounted finance cases across
+three files passed. The expanded real-persistence/HTTP suite passed all 12 cases, including native public-method
+comparison, all ten approved v1 grants, missing-grant rejection, authenticated context/CSRF checks and mandatory
+identity on protected operations. Earlier 11-case and native-only receipts retain their earlier scope. Database
+work used verified guarded disposable schemas, schema-scoped credentials and serialized ownership.
+
+All seven selected built Chromium workflows passed again on the final build (three P8 and four retained P7).
+They exercise real routes,
+middleware, sessions and persistence: optional proof and attribution, captured/stale review and cancellation,
+submission-access confirmation, factors/zero/exemption, signed adjustments with retained input, exact-payer editing,
+participant coverage, applied versus pending coverage and a dropped committed expense response without replay.
+Selected desktop/390-pixel and German phone scenes verify in-document operation, reachable dialog controls and
+numeric wheel protection. Root inspected fresh matched settings/allocation originals and German/expense phone
+scenes. The desktop settings selector's clipping and missing pool context were corrected before the final build.
+The final run's ignored inspection manifest preserves all 56 original captures (13 P8 and 43 P7) with individual
+identities and recorded inspection scope. Earlier seven-workflow and allocation-only manifests remain separate
+historical evidence rather than being relabeled as this final build.
+Independent review opened all 56 final originals individually at full resolution and found no remaining visual,
+information or workflow defect within the declared scenes.
+
+An earlier final renewal passed six workflows and failed the allocation case when the approved shared success
+notification intercepted the next mobile row action. Inspection confirmed its ordinary enabled dismissal control;
+the test now verifies and dismisses that specific success notice before continuing. The same seven workflows then
+passed with the original timeouts and all persistence, draft, removal and same-document assertions intact. No forced
+click, hidden notification, application-style change or command replay created the pass. The failed run's original
+artifacts remain preserved separately from the final passing captures.
+
+Existing English/German runtime Help articles now describe these P8 controls, separate saves, review stages and
+uncertain-expense inspection. Their headings/anchors, native provenance and P9 onward instructions remain intact;
+the P9 destination is stated explicitly. Inherited P7 upload prose still mentions page reload/history navigation,
+and untouched German history/status/P9 passages retain English labels. Those bounded content findings remain for
+their respective authorized follow-up rather than being represented as corrected by P8.
+The final engineering check reports 439 source files and zero findings; the production freeze/amendment guard
+also has zero findings. Help authoring has zero errors/warnings, and the general advisory documentation report
+retains only its existing unregistered-source-baseline finding.
+
+Local execution used Node.js 24.13.0 and MariaDB 10.4.32; this does not renew documented Node.js 24.15.0/MariaDB 10.11
+acceptance. The finite evidence does not establish exhaustive actor/state/locale/concurrency combinations, live
+SMTP/inbox delivery, rendered PDF layout, hosted CI or deployment. Native isolation, excluded backend remedies,
+P9–P11, cutover, native retirement and production-guide publication retain their separate boundaries. The
+[source/assertion map](TEST_COVERAGE.md#p8-organizer-finance-and-allocation-assertion-map-2026-10-20) owns the
+current executable coverage; earlier receipts below keep their original scope.
+
+P8 is implemented under its phase contract and explicit amendments. The full known-criteria review covers approval
+provenance, functional/visual parity, localization/responsive usability, actual modular/DRY adoption, readable
+contracts/comments, controller/DBAL separation, generated inputs, privacy/identity, drafts/files and honest command
+completion/recovery. No task-owned finding or approval decision remains open within this declared scope.
 
 ## P7 finance implementation and scoped verification (2026-10-20)
 

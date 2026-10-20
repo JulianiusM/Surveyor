@@ -6,7 +6,7 @@ owner: project maintainers
 status: migration-pending
 last-verified: 2026-10-20
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P7 finance source and assertion boundaries mapped alongside retained P0-P6 adoption and October 20 Activity corrections; execution and original visual review belong to paired review; native/backend exclusions remain open
+verification-scope: P8 organizer finance and allocation assertion sources mapped alongside retained P7/P0-P6 history and October 20 Activity corrections; execution and visual inspection belong to paired review; native/backend and later-phase exclusions remain
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -580,7 +580,8 @@ The [explicit P7 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p7-implemen
 finance saved reads and participant invoice workflows. `FinanceSection` composes the existing Event pages;
 `FinanceSubmission` owns the invoice draft/File; shared finance history, totals, ledger, coverage and lazy breakdown
 components consume generated operations. The EventPool controller reuses existing invoice/proof operations and
-saved presenters. No browser recalculation or P8 command implementation is introduced.
+saved presenters. This original P7 slice introduced no browser recalculation or P8 commands; the subsequent P8
+source map below records their separate authorization and assertion boundary.
 
 | Contract | Unique assertion boundary |
 |---|---|
@@ -596,6 +597,38 @@ Sources: [mounted finance](../../tests/frontend/frontend-finance.spec.ts),
 [shared presenter](../../tests/unit/invoice-presentation.spec.ts). The
 [paired review](PILOT_PARITY_REVIEW.md#p7-finance-implementation-and-scoped-verification-2026-10-20) owns actual
 execution and image-inspection results. This map supplies no unrun-check, external delivery, P8–P11 or cutover claim.
+
+## P8 organizer finance and allocation assertion map (2026-10-20)
+
+The [explicit P8 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p8-implementation-trigger-2026-10-20)
+authorizes pool/settings/expense/review first, then enrollment, factors/exemptions, signed adjustments and coverage.
+The same EventPool controller operations remain the business owners. The following table maps authored assertions,
+not execution results; the [paired review](PILOT_PARITY_REVIEW.md) owns actual commands, outcomes and image inspection.
+The [approved R1/R2 amendment](FRONTEND_FOUNDATION_DESIGN.md#approved-p8-public-method-parity-2026-10-20) additionally
+maps to real HTTP/persistence assertions for all ten public-grant methods. They distinguish missing management
+authority from missing identity, protect configured-origin/context/CSRF admission and retain strict private reads,
+expense, retroactive review and participant boundaries. A native-only case independently establishes that comparator.
+
+| Contract | Unique assertion boundary |
+|---|---|
+| INV-01/02: pool creation, settings and submission access | Real-persistence adapters distinguish management commands from organizer-page grants, reject cross-Event pools and stale access revisions, and preserve CLOSED state. Mounted forms keep creation allocation unsaved until submission, preserve independent future-default/current-enrollment flags and retain confirmed settings through a failed read. Built workflows compare native/Vue settings field values, constraints and optional-proof forms at desktop/phone widths, then create an ORGANIZER_ONLY pool through the same Vue document. |
+| INV-07/08: organizer review and retroactive changes | Persistence cases preserve original amount/description/proof through acceptance, correction, decline and closure, reject stale captured revisions and retain closed saved shares/settlements. Mounted review keeps lexical input and original revision through fresh props and Back to edit, protects cancellation and locks a completed change after failed refresh. Optional NEW-invoice acceptance retains its existing positive-number request behavior even beyond the input's suggested precision; retroactive correction retains its existing strict validation. Built acceptance/correction uses real persisted evidence, a concurrent settings change and the captured conflict, with no main-frame navigation. |
+| INV-09/20: organizer expense, attribution and proof | The actual HTTP adapter exercises generated closed multipart shapes, CSRF and optional proof bytes. Persistence separates recorder from paid-by participant, rejects foreign attribution and creates no recorder attendance. Mounted cases retain the exact File after rejection/unknown delivery, omit absent proof/attribution and clear confirmed fields despite failed reads. Built flows verify attributed history/proof ownership and hold/drop a committed response, inspect saved history and assert one upload without replay. |
+| INV-10: enrollment, factors/exemptions and signed adjustments | Persistence protects zero/four-decimal factors, precision rejection, exemptions, positive/negative adjustments, redistribution modes and unchanged saved shares/snapshots after closed input edits. Mounted cases restore individual enrollment after assign-all, exclude disabled factors, keep filtered lexical controls mounted and require explicit review of an unknown additive adjustment. Built saves persist factors/exemptions, add/remove a signed rebate and preserve an unfinished sibling adjustment. |
+| INV-11/18: participant/organizer coverage and pending inputs | Persistence rejects a forged participant payer, one-level coverage violations and non-OPEN participant edits while retaining organizer reassignment and closed pending inputs. Mounted self-payer controls exclude the payer, disable covered people/existing payers and retain confirmed selection after failed refresh. Built organizer/participant flows save and clear the same mapping with participant payer selection absent. Applied saved coverage and current/pending inputs remain separately asserted by the existing finance projection tests. |
+
+Sources: [real controller/HTTP/persistence cases](../../tests/integration/finance-api.spec.ts),
+[mounted organizer forms](../../tests/frontend/frontend-finance-review.spec.ts),
+[mounted allocation forms](../../tests/frontend/frontend-finance-allocation.spec.ts) and
+[built P8 workflows](../../tests/e2e/frontend-finance-p8.spec.ts).
+Mounted lifecycle assertions also close/reopen confirmed settings, factors and coverage after failed reads, then
+inspect the next request; assignment cases reconcile roster additions during dirty editing and a pending saved read.
+Organizer payer switching asserts failed and held protected reads, disabled save/dismissal and a later A-to-B-to-A
+selection from authoritative coverage, without additional writes.
+The built expense case also checks that the shared numeric wheel guard releases focus without changing the lexical
+amount. Its native/Vue captures and German phone settings check support finite visual/usability review, not an
+uninspected image or full-feature parity claim. P9 calculation/settlement commands, live mail/provider delivery,
+default-route cutover, native removal and guide publication remain outside this source map.
 
 ## Verification selection for subsequent migration slices
 
