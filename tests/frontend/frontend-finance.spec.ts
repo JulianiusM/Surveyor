@@ -60,7 +60,77 @@ async function fillInvoice(wrapper: Awaited<ReturnType<typeof mountFrontendEvent
     return {file, chooser: chooser.element};
 }
 
+/** Keep a real cache read pending so a locale command must decide its lifetime.
+ * Seeded data makes invalidation observable separately from cancellation; only
+ * this test's delivery promise is held, without replacing Query or context logic. */
+function holdLocaleRead(context: Awaited<ReturnType<typeof mountFinance>>['context'], queryKey: readonly unknown[], value: unknown) {
+    const received = {signal: null as AbortSignal | null};
+    let complete: ((result: unknown) => void) | undefined;
+    context.queryClient.setQueryData(queryKey, value);
+
+    /** Consume Query's real signal while retaining the original cached value. */
+    function readSnapshot({signal}: {signal: AbortSignal}): Promise<unknown> {
+        received.signal = signal;
+        // The caller releases delivery after checking which reads were aborted.
+        return new Promise(function holdSnapshot(resolve) { complete = resolve; });
+    }
+
+    function acceptCancellation(): void { /* Expected canceled reads have no delivered replacement. */ }
+    function finish(): void { complete?.(value); }
+    // The cache's ordinary freshness must not replace the pending read under
+    // examination with its just-seeded value.
+    const settled = context.queryClient.fetchQuery({queryKey, queryFn: readSnapshot, staleTime: 0}).catch(acceptCancellation);
+    return {queryKey, received, finish, settled};
+}
+
 describe('P7 finance saved reads and participant invoices', () => {
+    it.each([false, true])('cancels and invalidates translated finance reads across Events without retiring machine or foreign-actor reads (admin=%s)', async admin => {
+        const saved = {...snapshot, audience: admin ? 'organizer' as const : 'participant' as const,
+            registrationId: admin ? null : snapshot.registrationId};
+        const mounted = await mountFinance(async function deliverLocale(request) {
+            return json(new URL(request.url).pathname === '/api/v1/locale'
+                ? {...createFrontendEventSession(), locale: 'de'} : saved);
+        }, admin);
+        const {context} = mounted;
+        const actor = context.capture().context;
+        const otherActor = 'another-admitted-actor';
+        const otherEvent = '33333333-3333-4333-8333-333333333333';
+        const translated: ReturnType<typeof holdLocaleRead>[] = [];
+        const protectedReads: ReturnType<typeof holdLocaleRead>[] = [];
+
+        // Both audiences and every Event retain the same family boundary. An
+        // open explanation is a descendant, not a separately maintained registry.
+        for (const resource of [eventId, otherEvent]) {
+            translated.push(holdLocaleRead(context, [...eventKeys.finance(actor, resource, admin), 'en'], saved),
+                holdLocaleRead(context, [...eventKeys.financeBreakdown(actor, resource, poolId, share.id, admin), 'en'], breakdown));
+            // These are independently admitted machine projections, including a
+            // pending editor baseline which translation must never cancel.
+            protectedReads.push(holdLocaleRead(context, eventKeys.detail(actor, resource, admin), {title: 'Saved Event'}),
+                holdLocaleRead(context, eventKeys.metadata(actor, resource), {title: 'Reviewed title'}),
+                holdLocaleRead(context, [...eventKeys.finance(otherActor, resource, admin), 'en'], saved),
+                holdLocaleRead(context, [...eventKeys.financeBreakdown(otherActor, resource, poolId, share.id, admin), 'en'], breakdown));
+        }
+        expect([...translated, ...protectedReads].every(read => read.received.signal && !read.received.signal.aborted)).toBe(true);
+
+        // Exercise the production preference command and its real QueryClient
+        // cancellation/invalidation consumer, rather than calling the matcher.
+        await context.changeLocale('de');
+        expect(context.locale.value).toBe('de');
+        for (const read of translated) {
+            expect(read.received.signal?.aborted).toBe(true);
+            expect(context.queryClient.getQueryState(read.queryKey)?.isInvalidated).toBe(true);
+        }
+        for (const read of protectedReads) {
+            expect(read.received.signal?.aborted).toBe(false);
+            expect(context.queryClient.getQueryState(read.queryKey)).toMatchObject({isInvalidated: false, fetchStatus: 'fetching'});
+        }
+
+        // Release every held transport before disposal. Canceled finance reads
+        // remain canceled even if their obsolete delivery subsequently resolves.
+        for (const read of [...translated, ...protectedReads]) read.finish();
+        await Promise.all([...translated, ...protectedReads].map(read => read.settled));
+    });
+
     it.each([false, true])('sorts equal balances by case-insensitive displayed name and names each breakdown action (admin=%s)', async admin => {
         const rows = ['beta', 'ALPHA', 'alpha'].map((name, index) => ({...share, id: String(index + 20),
             poolName: `${name} pool`, payerName: `${name} payer`}));

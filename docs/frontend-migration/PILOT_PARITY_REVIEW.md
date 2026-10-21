@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-20
+last-verified: 2026-10-21
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Full-pilot decision adoption, shared lexical controls, original decimal transport and multilingual Help/staged guidance source reconciliation recorded; current execution separate from prior finite P0-P8 receipts; native/backend exclusions and cutover conditions retained
+verification-scope: Finance query-family reuse, matched native/Vue invoice-review assertions and specialist-reference reconciliation recorded with scoped current execution; prior finite P0-P8 receipts, native/backend exclusions and cutover conditions retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,50 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Finance readiness correction and scoped verification (2026-10-21)
+
+The maintainer directly instructed implementation of the preceding review plan. The existing query-key owner now
+uses `eventKeys.financeFamily` to match translated Finance audiences and descendants, without a copied Finance
+tag or fixed tuple position. The real locale-change consumer retains its actor boundary and excludes unrelated
+Event machine projections. The localization reference now identifies Help, Overview and translated Event Finance;
+the refresh reference distinguishes implemented P7/P8 from later P9 calculation/settlement. Existing staged
+contribution guidance already states these rules and requires no new owner or amendment.
+
+The existing P8 application suite now compares native and Vue invoice acceptance, submitted rejection, accepted
+correction/rejection and closure at 1280px/390px. Both renderers inspect the same saved invoices and actual fields,
+confirmation facts and Back-to-edit values. Canceled inspections leave saved data unchanged and send no command;
+explicit Vue confirmation sends one generated command without replacing the document. Saved results retain the
+original invoice amount, description and proof identity separately from effective corrections/rejection.
+The desktop fixture retains an OPEN pool; the phone fixture establishes a CLOSED pool and a nonzero saved payer
+balance marked paid through existing native operations before accepted changes. Both final reviews expose its
+existing recalculation warning. The assertions preserve saved share/settlement presentation after corrections or
+rejections while allowing the current pending-recalculation flag to change. This fixture setup does not exercise
+or add a Vue P9 calculation interface and does not certify raw payment/refund transfer history.
+
+Current checks use official Node.js 24.15.0; built application workflows use an independently verified, exact-grant
+disposable MariaDB 10.11.14 schema with strict SQL behavior.
+
+| Verification | Actual result and limit |
+|---|---|
+| Build and test compiler | Full server/native/Vue client/SSR build and asset copying pass; `typecheck:tests` passes. |
+| Mounted production consumers | All 123 Finance, refresh/navigation and command-recovery cases pass, including both new audience cases exercising actual locale-command cancellation/invalidation across Events and actor scopes. |
+| Matched built-application review | Both final 1280px/390px invoice-review cases pass together in 1.4 minutes, including the phone CLOSED-pool fixture with a nonzero saved balance marked paid, against the integrated backend and prepared database. |
+| Retained Finance workflows | All nine existing P7/P8 built-application cases pass together in 1.8 minutes, including uncertainty, stale review, allocation/coverage and German 320px/390px workflows. |
+| Advisory documentation review | 1,842 links checked in 88 Markdown files; no broken local links or metadata, command or path errors. The existing unregistered source fingerprint remains visible; production-freeze and amendment-boundary checks report zero findings. No baseline was changed. |
+
+Independent nonauthor review accepted all 40 new original scenes: 38 native/Vue English workflow
+captures at 1280px/390px and two German acceptance captures at 320px/390px. Unchanged originals were checked for
+byte identity against their individually inspected versions; changed final originals were reopened at
+original resolution. Root independently inspected final confirmation representatives. The selected information,
+warnings, values and actions remain readable within those captures. Native table crop edges and offscreen controls
+are not established by an image alone; no complete actor/state/viewport/browser cross-product is certified.
+
+The [coverage map](TEST_COVERAGE.md#finance-family-ownership-and-matched-review-assertions-2026-10-21) owns exact
+source/assertion boundaries. These scoped results do not rerun or replace the earlier whole-pilot matrix below,
+certify every actor/state/browser/viewport combination, or establish live mail/provider delivery. Native frontend,
+backend business operations and frozen production guides retain their existing boundaries. P9–P11, publication,
+default-route cutover, native removal and deployment are not started by this correction.
 
 ## Full-pilot correction and decision adoption (2026-10-20)
 

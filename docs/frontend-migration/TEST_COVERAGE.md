@@ -4,10 +4,10 @@ documentation-metadata
 audience: frontend migration implementers; reviewers; test maintainers
 owner: project maintainers
 status: migration-pending
-last-verified: 2026-10-20
+last-verified: 2026-10-21
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Current lexical numeric display, finance decimal contracts and matching source/assertion ownership reconciled with retained P0-P8 maps; test selection is not execution evidence or full parity certification
-source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts
+verification-scope: Finance locale-family production adoption and matched native/Vue invoice review, confirmation and closure assertions added to retained P0-P8 maps; test selection is not execution evidence or full parity certification
+source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts; src/frontend/app/queryKeys.ts; src/frontend/app/context.ts
 next-review: feature-migration-or-test-boundary-change
 -->
 
@@ -666,6 +666,37 @@ unchanged native business baseline. It corrects matching labels, independent sav
 maintained guide text is not an application-test fixture. Staged contribution guidance includes the actual lexical
 opt-in, translated Finance query family and decision-adoption handoff. Structural reports remain advisory.
 Actual final execution, original-image review and limitations belong to the latest paired review, not this map.
+
+## Finance family ownership and matched review assertions (2026-10-21)
+
+The existing query-key owner matches translated Event Finance reads through `eventKeys.financeFamily`, including
+audiences and breakdown descendants. It no longer copies the Finance discriminator or its fixed tuple position.
+The two audience cases in [mounted Finance](../../tests/frontend/frontend-finance.spec.ts) exercise the actual
+`changeLocale` command and QueryClient consumer. Pending translated reads across two Events are canceled and
+invalidated; Event detail/metadata and another actor's Finance reads remain pending and uninvalidated. The test
+holds real Query delivery rather than calling a private matching helper or replacing the cache owner.
+
+The two desktop/phone cases in [P8 built workflows](../../tests/e2e/frontend-finance-p8.spec.ts) compare native and
+Vue acceptance, submitted rejection, accepted correction/rejection and closure using the same saved invoices.
+They compare editable values/constraints, original invoice facts, immediate or frozen confirmation wording and
+Back-to-edit draft restoration. Canceling each native/Vue inspection sends no command and preserves saved data;
+deliberate Vue confirmation sends one command, preserves the document and retains original amount, description
+and proof identity beside effective changes. Native inline fields and separate confirmations retain their actual
+wrappers; Vue composes the same workflow through its shared dialog. Native NEW rejection presents its reason prompt
+inline and validates through the existing handler/controller, while Vue also declares the field required. That
+established semantic difference is explicit in the field comparison rather than silently normalized away.
+
+The desktop case retains an OPEN pool. Before accepted correction/rejection, the phone fixture uses existing
+native preview/close and payment operations to establish a CLOSED pool with a nonzero saved payer balance marked
+paid. Native and Vue final reviews show the same closed-pool warning. Confirmed changes mark recalculation pending
+while preserving every admitted saved share/settlement presentation field except its current `needsRecalculation`
+flag. This checks P8 review behavior, not a migrated P9 calculation interface or raw payment/refund transfer history.
+
+Original screenshots and measured presentation accompany the 1280px/390px comparisons; the existing German
+320px/390px workflows also capture invoice acceptance with its entered precision. These source mappings do not
+establish executed results or image acceptance. The [paired review](PILOT_PARITY_REVIEW.md) owns actual execution,
+independent original-image inspection and finite scope limits. Existing staged contribution rules remain accurate;
+the localization and refresh specialist references now reflect the implemented Finance families and P7/P8 scope.
 
 ## Verification selection for subsequent migration slices
 

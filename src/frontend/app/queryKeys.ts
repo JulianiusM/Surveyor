@@ -169,13 +169,24 @@ export function belongsToQueryFamily(query: Parameters<typeof matchQuery>[1], fa
     return matchQuery({queryKey: family}, query);
 }
 
+/** Match every Event-finance audience and descendant through its authored family.
+ * Resource extraction follows the existing Event prefix; the finance factory alone
+ * defines the remaining shape, including its discriminator and descendant boundary. */
+function belongsToEventFinanceFamily(query: Parameters<typeof matchQuery>[1], context: string | null): boolean {
+    // Read only the resource following the current prefix, without fixing that
+    // prefix's length or independently interpreting a finance segment's position.
+    const [resourceId] = query.queryKey.slice(eventKeys.all(context).length);
+    return typeof resourceId === 'string'
+        && belongsToQueryFamily(query, eventKeys.financeFamily(context, resourceId));
+}
+
 /** Only these existing projection owners include translated server content. Locale-free
  * machine snapshots remain available during a language preference command. Future migrated
  * language-owned projections extend this owner rather than invalidating the whole cache. */
 export function belongsToLocalizedQueryFamily(query: Parameters<typeof matchQuery>[1], context: string | null): boolean {
     // Match complete actor families, including obsolete locale variants and inactive pages.
     return belongsToQueryFamily(query, helpKeys.all(context)) || belongsToQueryFamily(query, overviewKeys.all(context))
-        // Finance contains request-local presenter wording. The key owner alone
-        // identifies this resource subfamily; other Event data remains locale-free.
-        || (belongsToQueryFamily(query, eventKeys.all(context)) && query.queryKey[4] === 'finance');
+        // Finance contains request-local presenter wording. Reuse its family
+        // definition while other Event projections remain locale-independent.
+        || belongsToEventFinanceFamily(query, context);
 }

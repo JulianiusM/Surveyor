@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; documentation contributors
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-20
+last-verified: 2026-10-21
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: direct R2 complete interface localization and R3 controlled component-message approval reconciled with original deferral, shared catalogs, Event date-wording consumers, approved shared civil-day presentation and retained Help/fallback/query-locale boundaries; execution separate
-source-anchors: src/locales/; scripts/generate-locales.mjs; src/modules/localization/; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/frontend/features/event/; src/controller/helpController.ts; docs/user-guide/en/; docs/user-guide/de/; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
+verification-scope: translated Help, Overview and Event Finance query families reconciled with their existing owners; prior interface, component-message, civil-day and Help decisions retained; execution separate
+source-anchors: src/locales/; scripts/generate-locales.mjs; src/modules/localization/; src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/frontend/app/queryKeys.ts; src/frontend/features/event/; src/frontend/features/finance/; src/controller/helpController.ts; docs/user-guide/en/; docs/user-guide/de/; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: frontend-production-cutover
 -->
 
@@ -170,15 +170,16 @@ Retire reversed/obsolete locale reads; a previous language cannot overwrite the 
 Translate in place while retaining dirty values, focus/selection, validation, open dialogs, IDs/pagination and
 reviewed tokens. Dirty numeric input keeps its original parsing context until resolved; switching language does not
 reinterpret decimal punctuation or deadlines. Locale-independent state keeps one current authority, while
-language-owned Help/Overview representations have scoped keys.
+language-owned Help, Overview and Event Finance representations have scoped keys.
 
 After confirmed locale change, cancel/invalidate only the named language-owned families from the existing query-key
 owner. Do not cancel Packing machine/edit/picker projections or their in-flight authority recovery merely to translate
 labels. Matching uses the shared family definitions rather than tuple positions or another registry; identity/read
 denial still retires the appropriate projections independently of language. Mounted command-recovery tests must prove
 that a locale switch does not cancel the fresh machine read needed to restore its edit baseline.
-`belongsToLocalizedQueryFamily` in the existing query-key owner matches the Help/Overview families without introducing
-another registry of language-owned data.
+`belongsToLocalizedQueryFamily` in the existing query-key owner matches the Help, Overview and translated Event
+Finance families without introducing another registry of language-owned data. Other Event projections remain
+language-independent, and matching never crosses the captured actor's scope.
 
 Each available translated article owns its complete body/headings/titles/TOC/search snippets and stable fragment IDs.
 Translated heading anchors are declared/validated from that article, not derived by loading another language.

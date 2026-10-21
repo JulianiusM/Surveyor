@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-19
+last-verified: 2026-10-21
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented P5/P6 Activity requirement drafts, recommendation/job observation and dynamic-route admission reconciled with shared read ownership; retained P0-P4 refresh/draft and anonymous context boundaries; no new concurrency guarantee
-source-anchors: src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/event/; src/frontend/features/overview/; src/frontend/features/activity/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
+verification-scope: implemented P7/P8 Finance and later P9 preview/settlement boundaries reconciled with existing shared read and draft owners; prior Activity, refresh and anonymous context decisions retained; no new concurrency guarantee or execution claim
+source-anchors: src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/event/; src/frontend/features/overview/; src/frontend/features/activity/; src/frontend/features/finance/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
 next-review: next-refresh-migration-or-authorized-cutover
 -->
 
@@ -235,7 +235,9 @@ or session/security revalidation.
 Use real mounted query/transport consumers for cancellation/authority, actual controller/DBAL calls for coexistence,
 and selected browser focus/navigation/SSR cases when their boundary is affected.
 Keep native/v1 action policy and private projection scenarios independent of full-page membership.
-Implemented Activity and future finance slices preserve baseline exception IDs and existing server protocols.
+Implemented Activity and P7/P8 Finance reads, invoice and allocation commands preserve baseline exception IDs and
+existing server protocols. P9 reviewed calculation previews and settlement remain later-phase work under their
+separate phase contract; their absence does not defer implemented Finance recovery or draft protection.
 
 Completed scoped correction evidence and its limits belong to the [review](PILOT_PARITY_REVIEW.md).
 Use the [risk procedure](staged/TESTING_GUIDE.md#risk-and-test-cost), not a mandatory full-stack test cross-product.
