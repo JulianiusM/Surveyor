@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-21
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: implemented P7/P8 Finance and later P9 preview/settlement boundaries reconciled with existing shared read and draft owners; prior Activity, refresh and anonymous context decisions retained; no new concurrency guarantee or execution claim
+verification-scope: P9 reviewed-preview, stable settlement display and deliberate unknown-result inspection integrated with existing read/draft owners; prior Activity, refresh and anonymous context decisions retained; no new concurrency guarantee or execution claim
 source-anchors: src/frontend/app/context.ts; src/frontend/app/createApp.ts; src/frontend/app/queryCache.ts; src/frontend/app/queryKeys.ts; src/frontend/composables/; src/frontend/features/packing/; src/frontend/features/event/; src/frontend/features/overview/; src/frontend/features/activity/; src/frontend/features/finance/; src/modules/api/session.ts; src/modules/database/services/PackingService.ts; contracts/api/v1/
 next-review: next-refresh-migration-or-authorized-cutover
 -->
@@ -82,8 +82,15 @@ arbitrary age-based command prohibition.
 | Reviewed finance preview | Explicit preview/refresh; stale detection cannot replace reviewed values/token. |
 | Recommendation/job | Existing job-specific backoff/expiry/terminal rules. |
 
-Reviewed finance previews remain a future frontend integration under
-[DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets).
+The [P9 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p9-implementation-trigger-2026-10-22) implements the
+previously deferred reviewed-finance integration. Preview reads use the shared transport's admission, cooldown,
+cancellation and locale checks. The mounted review captures one revision; background reads never replace it.
+An apply attempt consumes that review even on rejection, so another attempt requires explicit Refresh preview.
+Settings, assignment and adjustment drafts retain the native saved-input guard without broadening it to other forms.
+Saved settlement rows update current badges/captions after confirmation while retaining display identities until
+Refresh list, filtering, sorting or paging deliberately reapplies the view. Unknown calculation/settlement writes
+stay locked through fresh saved-state inspection and explicit acknowledgement; reads cannot prove failed delivery
+or replay a command. This adds no settlement revision protocol or stronger backend transaction guarantee.
 P6 implements recommendation snapshots and known-job observation through pure reads, separately from deliberate
 maintenance and generation commands. The
 [approved automatic-job amendment](FRONTEND_FOUNDATION_DESIGN.md#approved-automatic-recommendation-job-observation-2026-10-19)
@@ -235,9 +242,10 @@ or session/security revalidation.
 Use real mounted query/transport consumers for cancellation/authority, actual controller/DBAL calls for coexistence,
 and selected browser focus/navigation/SSR cases when their boundary is affected.
 Keep native/v1 action policy and private projection scenarios independent of full-page membership.
-Implemented Activity and P7/P8 Finance reads, invoice and allocation commands preserve baseline exception IDs and
-existing server protocols. P9 reviewed calculation previews and settlement remain later-phase work under their
-separate phase contract; their absence does not defer implemented Finance recovery or draft protection.
+Implemented Activity and P7–P9 Finance reads and commands preserve baseline exception IDs and existing server
+protocols. P9 separately protects captured financial reviews and stable signed settlement rows; generic metadata
+comparisons or list refresh cannot replace those feature-owned contracts. Authored checks and executed evidence
+retain their distinct owners in the coverage map and paired review.
 
 Completed scoped correction evidence and its limits belong to the [review](PILOT_PARITY_REVIEW.md).
 Use the [risk procedure](staged/TESTING_GUIDE.md#risk-and-test-cost), not a mandatory full-stack test cross-product.

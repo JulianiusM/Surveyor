@@ -59,6 +59,7 @@ schemas:
       revision: {type: integer, minimum: 0}
       canSubmit: {type: boolean}
       settings: {anyOf: [{$ref: '#/schemas/FinancePoolSettings'}, {type: 'null'}]}
+      canRollback: {type: boolean}
       registrationIds: {type: array, items: {$ref: './openapi.yaml#/components/schemas/DecimalId'}}
       assignments: {type: array, items: {$ref: '#/schemas/FinanceAssignment'}}
       surcharges: {type: array, items: {$ref: '#/schemas/FinanceAdjustment'}}
@@ -352,7 +353,164 @@ schemas:
     properties:
       payerId: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
       beneficiaries: {type: array, uniqueItems: true, items: {$ref: './openapi.yaml#/components/schemas/DecimalId'}}
+  FinanceCalculationInput:
+    type: object
+    additionalProperties: false
+    required: [expectedRevision, sendEmails]
+    properties:
+      expectedRevision: {type: integer, minimum: 0}
+      sendEmails: {type: boolean}
+  FinanceSettlementInput:
+    type: object
+    additionalProperties: false
+    required: [isPaid]
+    properties:
+      isPaid: {type: boolean}
+  FinanceRollbackResult:
+    type: object
+    additionalProperties: false
+    required: [needsRecalculation, externalChanges]
+    properties:
+      needsRecalculation: {type: boolean}
+      externalChanges: {type: boolean}
+  FinanceNotificationResult:
+    type: object
+    additionalProperties: false
+    required: [count]
+    properties:
+      count: {type: integer, minimum: 0}
+  FinancePreviewShare:
+    type: object
+    additionalProperties: false
+    required: [registrationId, payerName, baseShareAmount, extraAmount, invoiceCreditAmount, paymentCreditAmount, shareAmount, calculatedAmount, isPaid, notes, statusLabel]
+    properties:
+      registrationId: {$ref: './openapi.yaml#/components/schemas/DecimalId'}
+      payerName: {type: string}
+      baseShareAmount: {$ref: '#/schemas/FinanceMoney'}
+      extraAmount: {$ref: '#/schemas/FinanceMoney'}
+      invoiceCreditAmount: {$ref: '#/schemas/FinanceMoney'}
+      paymentCreditAmount: {$ref: '#/schemas/FinanceMoney'}
+      shareAmount: {$ref: '#/schemas/FinanceMoney'}
+      calculatedAmount: {$ref: '#/schemas/FinanceMoney'}
+      isPaid: {type: boolean}
+      notes: {type: array, items: {type: string}}
+      statusLabel: {type: string}
+  FinancePreviewTotals:
+    type: object
+    additionalProperties: false
+    required: [invoiceAmount, redistributedAmount, distributableAmount, allocatedBaseAmount, roundingDifference, adjustmentAmount, grossAmount, invoiceCreditAmount, expectedNetAmount, calculatedAmount, paymentCreditAmount, outstandingAmount, creditAmount]
+    properties:
+      invoiceAmount: {$ref: '#/schemas/FinanceMoney'}
+      redistributedAmount: {$ref: '#/schemas/FinanceMoney'}
+      distributableAmount: {$ref: '#/schemas/FinanceMoney'}
+      allocatedBaseAmount: {$ref: '#/schemas/FinanceMoney'}
+      roundingDifference: {$ref: '#/schemas/FinanceMoney'}
+      adjustmentAmount: {$ref: '#/schemas/FinanceMoney'}
+      grossAmount: {$ref: '#/schemas/FinanceMoney'}
+      invoiceCreditAmount: {$ref: '#/schemas/FinanceMoney'}
+      expectedNetAmount: {$ref: '#/schemas/FinanceMoney'}
+      calculatedAmount: {$ref: '#/schemas/FinanceMoney'}
+      paymentCreditAmount: {$ref: '#/schemas/FinanceMoney'}
+      outstandingAmount: {$ref: '#/schemas/FinanceMoney'}
+      creditAmount: {$ref: '#/schemas/FinanceMoney'}
+  FinancePreview:
+    type: object
+    additionalProperties: false
+    required: [revision, roundUpShares, calculation, exampleCalculation, shares, totals, columns]
+    properties:
+      revision: {type: integer, minimum: 0}
+      roundUpShares: {type: boolean}
+      calculation: {$ref: '#/schemas/FinanceCalculation'}
+      exampleCalculation: {$ref: '#/schemas/FinanceCalculation'}
+      shares: {type: array, items: {$ref: '#/schemas/FinancePreviewShare'}}
+      totals: {$ref: '#/schemas/FinancePreviewTotals'}
+      columns: {type: array, items: {$ref: '#/schemas/FinancePreviewColumn'}}
+  FinancePreviewColumn:
+    type: object
+    additionalProperties: false
+    required: [key, label]
+    properties:
+      key: {type: string, enum: [baseShareAmount, extraAmount, invoiceCreditAmount, paymentCreditAmount, shareAmount]}
+      label: {type: string}
 paths:
+  /events/{eventId}/finance/pools/{poolId}/preview:
+    get:
+      operationId: previewEventFinancePool
+      security: []
+      x-surveyor-command: {retryPolicy: read, precondition: none}
+      summary: Review current saved calculation inputs through the existing management grant
+      parameters: &financePreviewParameters
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Read-only reviewed allocation, content: {application/json: {schema: {$ref: '#/schemas/FinancePreview'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/close:
+    post:
+      operationId: closeEventFinancePool
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Close and calculate the captured preview revision through the shared operation
+      parameters: &financeCalculationParameters
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceCalculationInput'}}}}
+      responses:
+        '200': {description: Saved calculation committed, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/recalculate:
+    post:
+      operationId: recalculateEventFinancePool
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Replace the reviewed saved calculation while carrying recorded transfers forward
+      parameters: *financeCalculationParameters
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceCalculationInput'}}}}
+      responses:
+        '200': {description: Saved calculation replaced, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/rollback:
+    post:
+      operationId: rollbackEventFinancePool
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Restore local calculation inputs while preserving saved shares and transfers
+      parameters: *financeCalculationParameters
+      responses:
+        '200': {description: Local inputs restored, content: {application/json: {schema: {$ref: '#/schemas/FinanceRollbackResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/notify:
+    post:
+      operationId: notifyEventFinancePool
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Request existing settlement notices from the complete saved payer ledger
+      parameters: *financeCalculationParameters
+      responses:
+        '200': {description: Delivery queued for reachable payers, content: {application/json: {schema: {$ref: '#/schemas/FinanceNotificationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
+  /events/{eventId}/finance/pools/{poolId}/shares/{shareId}/settlement:
+    post:
+      operationId: settleEventFinanceShare
+      security: []
+      x-surveyor-command: {retryPolicy: reconcile-only, precondition: none}
+      summary: Record or reverse the signed saved payment or refund status
+      parameters:
+        - {$ref: './openapi.yaml#/components/parameters/Context'}
+        - {$ref: './openapi.yaml#/components/parameters/Locale'}
+        - {$ref: './openapi.yaml#/components/parameters/Csrf'}
+        - {name: eventId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: poolId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: shareId, in: path, required: true, schema: {$ref: './openapi.yaml#/components/schemas/DecimalId'}}
+      requestBody: {required: true, content: {application/json: {schema: {$ref: '#/schemas/FinanceSettlementInput'}}}}
+      responses:
+        '200': {description: Settlement marker saved, content: {application/json: {schema: {$ref: '#/schemas/FinanceMutationResult'}}}}
+        default: {$ref: './openapi.yaml#/components/responses/Problem'}
   /events/{eventId}/finance/pools/{poolId}/assignments:
     post:
       operationId: updateEventFinanceAssignments

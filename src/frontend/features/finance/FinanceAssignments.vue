@@ -4,6 +4,7 @@ import type {components} from '../../../types/api/v1';
 import {useActionState, usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
+import {useFinanceDraft} from './drafts';
 import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
 import FinanceEnrollmentFields from './FinanceEnrollmentFields.vue';
 import ActionButton from '../../components/ActionButton.vue';
@@ -34,6 +35,7 @@ const draft = reactive({assignAll: false, isDefault: false, subtractPersonalInvo
 // Query read fails. It contains only form fields, never a second finance projection.
 const baseline = ref('');
 const command = useCommand(props.refresh, false, {dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
+useFinanceDraft(() => props.pool.id, () => dirty.value || command.pending.value || command.uncertain.value);
 const action = useActionState({eligible: () => props.active, blocked: () => command.action.disabled.value});
 const visible = computed(visibleRows);
 watch([() => props.pool, () => props.participants], receiveSaved, {immediate: true});

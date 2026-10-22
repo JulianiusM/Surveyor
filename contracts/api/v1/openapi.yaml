@@ -13,6 +13,18 @@ servers:
 security:
   - sessionCookie: []
 paths:
+  /events/{eventId}/finance/pools/{poolId}/preview:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1preview
+  /events/{eventId}/finance/pools/{poolId}/close:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1close
+  /events/{eventId}/finance/pools/{poolId}/recalculate:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1recalculate
+  /events/{eventId}/finance/pools/{poolId}/rollback:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1rollback
+  /events/{eventId}/finance/pools/{poolId}/notify:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1notify
+  /events/{eventId}/finance/pools/{poolId}/shares/{shareId}/settlement:
+    $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1shares~1{shareId}~1settlement
   /events/{eventId}/finance/pools/{poolId}/assignments:
     $ref: ./finance.yaml#/paths/~1events~1{eventId}~1finance~1pools~1{poolId}~1assignments
   /events/{eventId}/finance/pools/{poolId}/adjustments:

@@ -18,11 +18,69 @@ import {validateFinanceAcceptedRejectionInput} from '../../../../.generated/api/
 import {validateFinanceAssignmentsInput} from '../../../../.generated/api/v1/browser/validateFinanceAssignmentsInput.mjs';
 import {validateFinanceAdjustmentInput} from '../../../../.generated/api/v1/browser/validateFinanceAdjustmentInput.mjs';
 import {validateFinanceTakeoverInput} from '../../../../.generated/api/v1/browser/validateFinanceTakeoverInput.mjs';
+import {validateFinancePreview} from '../../../../.generated/api/v1/browser/validateFinancePreview.mjs';
+import {validateFinanceCalculationInput} from '../../../../.generated/api/v1/browser/validateFinanceCalculationInput.mjs';
+import {validateFinanceRollbackResult} from '../../../../.generated/api/v1/browser/validateFinanceRollbackResult.mjs';
+import {validateFinanceNotificationResult} from '../../../../.generated/api/v1/browser/validateFinanceNotificationResult.mjs';
+import {validateFinanceSettlementInput} from '../../../../.generated/api/v1/browser/validateFinanceSettlementInput.mjs';
 
 /** Finance selects authored operations; shared transport owns actor admission,
  * generated delivery checks and progress without automatic command replay. */
 export class FinanceApi {
     constructor(private transport: PilotApi) {}
+
+    /** Read a fresh saved-input preview. Each dialog owns its captured revision;
+     * this read never commits shares or reuses a cached financial review. */
+    async preview(eventId: string, poolId: string, scope: PilotRequestScope, signal?: AbortSignal): Promise<components['schemas']['FinancePreview']> {
+        const transport = this.transport;
+        async function readPreview() {
+            const result = await transport.client.GET('/events/{eventId}/finance/pools/{poolId}/preview', {
+                params: {path: {eventId, poolId}, header: transport.headers(scope)}, signal, cache: 'no-store',
+            });
+            // Cancellation/locale fencing belongs inside transport too: a retired
+            // response cannot publish identity/cooldown effects while decoding.
+            return transport.read('previewEventFinancePool', {...result, signal}, validateFinancePreview, scope, undefined, true).data;
+        }
+        return transport.allowedRead(`event/${eventId}/finance/${poolId}/preview/${scope.locale}`, scope, readPreview, signal);
+    }
+
+    /** Apply exactly the reviewed revision through the existing calculation
+     * owner. An uncertain response must be inspected, never replayed. */
+    async calculate(eventId: string, poolId: string, input: components['schemas']['FinanceCalculationInput'], recalculate: boolean, scope: PilotRequestScope) {
+        if (!validateFinanceCalculationInput(input)) throw new InvalidInputError();
+        const options = {params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store' as const};
+        // Explicit generated operations preserve the distinct close/recalculate
+        // lifecycle while sharing transport and the backend calculation owner.
+        const result = recalculate ? await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/recalculate', options)
+            : await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/close', options);
+        return this.transport.read(recalculate ? 'recalculateEventFinancePool' : 'closeEventFinancePool',
+            result, validateFinanceMutationResult, scope).data;
+    }
+
+    /** Restore the last calculated local inputs without reversing saved shares,
+     * transfers, attendance or invoice changes. */
+    async rollback(eventId: string, poolId: string, scope: PilotRequestScope) {
+        return this.transport.read('rollbackEventFinancePool', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/rollback', {
+            params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, cache: 'no-store',
+        }), validateFinanceRollbackResult, scope).data;
+    }
+
+    /** Deliberately request existing saved settlement emails once. The result
+     * counts eligible recipients and does not promise external delivery. */
+    async notify(eventId: string, poolId: string, scope: PilotRequestScope) {
+        return this.transport.read('notifyEventFinancePool', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/notify', {
+            params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, cache: 'no-store',
+        }), validateFinanceNotificationResult, scope).data;
+    }
+
+    /** Record or reverse the captured saved share's complete settlement. The
+     * existing owner validates its sign and identity without a new protocol. */
+    async settlement(eventId: string, poolId: string, shareId: string, input: components['schemas']['FinanceSettlementInput'], scope: PilotRequestScope) {
+        if (!validateFinanceSettlementInput(input)) throw new InvalidInputError();
+        return this.transport.read('settleEventFinanceShare', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/shares/{shareId}/settlement', {
+            params: {path: {eventId, poolId, shareId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
+        }), validateFinanceMutationResult, scope).data;
+    }
 
     /** Create once through the generated contract; callers reconcile by reading rather than replaying uncertain writes. */
     async createPool(eventId: string, input: components['schemas']['FinancePoolCreateInput'], scope: PilotRequestScope) {

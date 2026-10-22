@@ -4,14 +4,14 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers; AI agents
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-20
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Full-pilot correction and similar-gap authorization reconciled with retained P0-P8 phase history; P9-P11, backend exclusions and cutover boundaries preserved; current execution belongs to paired review
+verification-scope: Full P9 implementation and scoped review reconciled with retained P0-P8 history; P10/P11, backend exclusions and cutover boundaries preserved; execution belongs to paired review
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
 
-## Current disposition (2026-10-20)
+## Current disposition (2026-10-22)
 
 The maintainer's latest [full-pilot correction](FRONTEND_FOUNDATION_DESIGN.md#reaffirmed-isolation-and-authorized-full-pilot-correction-2026-10-20)
 authorizes the reported fixes and equivalent gaps across every migrated area. Native isolation is an existing,
@@ -38,7 +38,11 @@ verification and remaining evidence limits. The subsequent
 organizer finance and allocation inputs under the phase contract below. Its
 [implementation review](PILOT_PARITY_REVIEW.md#p8-organizer-and-allocation-implementation-review-2026-10-20) records
 the completed flows, separately approved R1/R2 public-method parity, full known-criteria review and finite
-verification. P8 is implemented; P9–P11 and cutover still require their own authorization.
+verification. P8 is implemented. The subsequent
+[explicit P9 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p9-implementation-trigger-2026-10-22) authorizes
+the complete financial calculation, settlement and output phase. P9 is implemented; its
+[scoped implementation review](PILOT_PARITY_REVIEW.md#p9-calculation-settlement-and-output-implementation-review-2026-10-22)
+records execution, independent review and finite evidence limits. P10/P11 and cutover retain their separate authorization.
 The historical receipts below preserve the scope and
 decisions that governed each earlier phase rather than supplying permission to start the next one.
 
@@ -409,6 +413,16 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
     **Completion:** stale previews cannot commit; unknown writes cannot replay; recalculation preserves recorded
     transfers; exports use the full authorized saved ledger regardless of browser filters and never calculate or settle
     anything.
+
+    **Current implementation (2026-10-22):** `FinanceCalculationReview` reads the existing preview
+    owner and captures the reviewed revision for close/recalculate. The same settings, assignment and adjustment
+    draft owners block preview/apply; other independent form boundaries remain unchanged. `FinanceSettlement`
+    captures a signed saved row, while `FinanceShares` keeps its display identities stable through confirmed
+    status updates until deliberate refresh/control changes. `FinancePoolOutputs` owns separate rollback and
+    saved-email intents; the existing two PDF download variants retain their complete authorized saved ledger.
+    Unknown writes require explicit saved-state inspection and acknowledgement without replay. The assertion
+    map records authored persistence, mounted and built checks; the paired review owns executed results,
+    direct original-image inspection and finite completion evidence.
 
 11. **P10 — Complete cross-application integration**  
     **Complexity:** High. **Prerequisites:** all feature packages complete.

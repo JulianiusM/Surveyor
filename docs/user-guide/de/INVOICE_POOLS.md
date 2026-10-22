@@ -4,10 +4,10 @@ documentation-metadata
 audience: Veranstaltungsteilnehmer; Veranstaltungsorganisatoren
 owner: event invoice-pool maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Current participant and organizer controls, exact localized labels, independent saves, history refresh and uncertain-submission acknowledgement source-reconciled. Separate calculation/settlement and English email/PDF destinations retain their original boundaries; no new browser execution claimed.
-current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/locales/de.json
+verification-scope: Current participant and organizer controls, exact localized labels, independent saves, calculation/settlement confirmation, saved-read recovery and deferred ledger filtering source-reconciled. Existing English email/PDF output behavior retained; no new browser execution claimed.
+current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinanceCalculationReview.vue; src/frontend/features/finance/FinancePoolOutputs.vue; src/frontend/features/finance/FinanceSettlement.vue; src/frontend/features/finance/FinanceShares.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/locales/de.json
 source-anchors: docs/user-guide/en/INVOICE_POOLS.md; src/frontend/features/finance/; src/locales/
 heading-anchors: 1:invoice-pools-and-payments; 2:choose-your-task; 3:participant; 3:organizer; 2:first-understand-the-two-kinds-of-status; 3:pool-status; 3:invoice-status; 2:who-can-use-invoice-pool-controls; 3:participants; 3:organizers; 2:participant-tasks; 3:submit-an-invoice; 4:no-open-pool-is-available; 3:check-your-invoice-history; 4:what-to-do-for-each-status; 3:retract-an-invoice-awaiting-review; 3:choose-whose-share-you-will-cover; 3:understand-your-final-share; 2:organizer-tasks; 3:create-an-invoice-pool; 4:creation-fields; 4:distribution-modes; 3:stop-or-resume-participant-submissions; 3:understand-the-pool-totals; 3:choose-participants-and-exemptions; 3:manage-takeovers-for-the-group; 3:add-a-surcharge; 3:add-an-organizer-expense; 3:review-submitted-invoices; 4:accept-without-correction; 4:accept-with-a-correction; 4:reject; 4:close-an-accepted-invoice; 4:correct-or-reject-an-accepted-or-closed-invoice; 4:notifications-and-late-review; 3:preview-a-calculation; 4:reconcile-costs-and-reimbursements; 3:close-the-pool-and-calculate-shares; 3:recalculate-a-closed-pool; 3:roll-back-pool-changes; 3:send-settlement-emails; 3:record-whether-a-share-is-settled; 3:export-saved-shares-as-a-pdf; 2:privacy-proof-access-storage-and-retention; 2:troubleshooting; 3:i-cannot-see-invoice-pools-and-payments; 3:i-can-see-invoice-history-but-cannot-submit; 3:my-invoice-is-not-included-in-the-total; 3:my-accepted-amount-or-description-changed; 3:i-cannot-select-somebody-in-manage-takeovers; 3:a-share-is-different-from-the-simple-equal-split; 3:the-pool-changed-but-the-shares-did-not; 3:a-recalculated-share-requires-payment-although-i-already-paid; 3:an-expected-email-did-not-arrive; 3:a-proof-is-unavailable
 next-review: invoice-pool-visible-UI-or-behavior-change
@@ -54,10 +54,10 @@ Eine Rechnung und ihr Pool haben getrennte Lebenszyklen. **Abgeschlossene Rechnu
 |---|---|---|
 | **Offen für Rechnungen** | Kosten und Verteilungsregeln werden noch gesammelt. Es sind keine endgültigen Anteile festgeschrieben. | Zugeordnete Teilnehmer können Rechnungen einreichen und ihre eigenen Übernahmen verwalten. Organisatoren können Einstellungen, Zuordnungen, Faktoren, Befreiungen, Übernahmen, Zuschläge und Rabatte ändern, Teilnehmerrechnungen prüfen und Organisatorausgaben hinzufügen. |
 | **Nur Rechnungen der Organisation** | Teilnehmereinreichungen und das Bearbeiten eigener Übernahmen sind nicht verfügbar. Endgültige Anteile wurden noch nicht berechnet. | Organisatoren können Kosten hinzufügen und prüfen, Verteilungsgrundlagen bearbeiten, mit **Teilnehmerrechnungen öffnen** Teilnehmereinreichungen zulassen oder Anteile vorab ansehen und berechnen. |
-| **Abgeschlossen** | Surveyor hat aus akzeptierten Kosten und den bei der letzten Berechnung gespeicherten Verteilungsregeln einen endgültigen Anteil je Zahler erzeugt. | Teilnehmer sehen ihre Anteile, können aber keine neuen Rechnungen einreichen. Organisatoren können Zahlungen erfassen, Einstellungen korrigieren und Organisatorausgaben hinzufügen. Gespeicherte Kosten- oder Verteilungsänderungen wirken erst nach **Recalculate pool** auf die Anteile. |
+| **Abgeschlossen** | Surveyor hat aus akzeptierten Kosten und den bei der letzten Berechnung gespeicherten Verteilungsregeln einen endgültigen Anteil je Zahler erzeugt. | Teilnehmer sehen ihre Anteile, können aber keine neuen Rechnungen einreichen. Organisatoren können Zahlungen erfassen, Einstellungen korrigieren und Organisatorausgaben hinzufügen. Gespeicherte Kosten- oder Verteilungsänderungen wirken erst nach **Pool neu berechnen** auf die Anteile. |
 
-Das Schließen löscht den Pool nicht. Es gibt keine gewöhnliche Funktion **Reopen pool** oder **Delete pool**. **Recalculate pool** ersetzt die Anteile, während der Pool geschlossen bleibt.
-**Offen für Rechnungen** und **Nur Rechnungen der Organisation** sind unabhängige Auswahlmöglichkeiten beim Erstellen. Beide können direkt mit **Close pool & calculate** geschlossen werden; vorher ist kein weiterer Poolzustand nötig.
+Das Schließen löscht den Pool nicht. Es gibt keine gewöhnliche Funktion zum Wiederöffnen oder Löschen des Pools. **Pool neu berechnen** ersetzt die Anteile, während der Pool geschlossen bleibt.
+**Offen für Rechnungen** und **Nur Rechnungen der Organisation** sind unabhängige Auswahlmöglichkeiten beim Erstellen. Beide können direkt mit **Pool schließen und berechnen** geschlossen werden; vorher ist kein weiterer Poolzustand nötig.
 **Teilnehmerrechnungen schließen** ist eine eigene Aktion vor der Berechnung: Sie stoppt Teilnehmereinreichungen ohne Anteilsberechnung und kann mit **Teilnehmerrechnungen öffnen** rückgängig gemacht werden. Ein finanziell geschlossener Pool kann Teilnehmereinreichungen nicht wieder öffnen.
 
 **Neuberechnung erforderlich** bedeutet, dass gespeicherte Berechnungsgrundlagen seit der letzten Berechnung geändert wurden. Bisherige Anteile bleiben sichtbar, und Organisatoren können weiterhin Zahlungen auf diese Beträge erfassen. Prüfen Sie die neue Berechnung und wenden Sie sie an oder nehmen Sie ausstehende Pooländerungen zurück. Erfasste Zahlungen werden bei einer Neuberechnung übernommen.
@@ -229,13 +229,13 @@ Die Erklärung enthält nur Funktionen, die dieser Pool verwendet. Umverteilte Z
 
 **Zahlung erfassen** und **Erstattung erfassen** erfassen Transfers, die bereits außerhalb von Surveyor stattgefunden haben. Surveyor belastet keine Karte, sendet keine Überweisung und beweist keinen Geldfluss. Organisatoren prüfen den vorzeichenbehafteten berechneten Saldo und bestätigen. Abbrechen oder Schließen der Prüfung lässt den gespeicherten Zustand unverändert.
 
-Berechnungs-E-Mails und PDFs verwenden dieselben Bezeichnungen, denselben vorzeichenbehafteten berechneten Saldo und den ausdrücklichen Zahlungs- beziehungsweise Erstattungsstatus. Das Erfassen oder Rückgängigmachen eines Transfers erzeugt bei vorhandener Adresse ebenfalls eine Status-E-Mail. E-Mails nennen den Empfänger in Anrede und Empfängerfeld mit Namen.
+Berechnungs-E-Mails und PDFs zeigen auf Englisch dieselben Angaben, denselben vorzeichenbehafteten berechneten Saldo und den ausdrücklichen Zahlungs- beziehungsweise Erstattungsstatus. Das Erfassen oder Rückgängigmachen eines Transfers erzeugt bei vorhandener Adresse ebenfalls eine englische Status-E-Mail. E-Mails nennen den Empfänger in Anrede und Empfängerfeld mit Namen.
 
 ## Aufgaben für Organisatoren
 
 Unter **Rechnungspools und Zahlungen** in der Veranstaltungsverwaltung können Sie Pools erstellen, ihre Eingaben ändern, Ausgaben erfassen und Rechnungen prüfen. Jeder Bearbeitungsdialog hat eine eigene Speicheraktion. Speichern aktualisiert die gespeicherten Angaben, ohne die Seite neu zu laden; warten Sie vor dem Verlassen auf die Bestätigung. **Schließen** fragt vor dem Verwerfen ungespeicherter Änderungen nach. **Änderungen verwerfen** stellt die gespeicherten Werte dieses Formulars wieder her.
 
-Für Berechnungsvorschauen, Schließen oder Neuberechnen eines Pools, Rücknahme von Pooländerungen, Abrechnungs-E-Mails und das Erfassen von Zahlungen oder Erstattungen wählen Sie **Berechnung und Zahlungen**. Dies öffnet die Verwaltungsseite mit diesen Funktionen. Die folgenden Berechnungs- und Zahlungsanleitungen beschreiben dieses Ziel; die dort genannten englischen Schaltflächenbezeichnungen gelten für diese Seite.
+Berechnungsvorschau, Schließen und Neuberechnen eines Pools, Wiederherstellen gespeicherter Pooleinstellungen, Abrechnungs-E-Mails sowie das Erfassen von Zahlungen und Erstattungen sind im selben Pool verfügbar. Speichern Sie vor einer Berechnung jeden noch offenen Bearbeitungsdialog. Die Oberfläche verwendet Ihre gewählte Sprache; E-Mails und PDF-Inhalte bleiben englisch.
 
 ### Einen Rechnungspool erstellen
 
@@ -285,7 +285,7 @@ Mit diesen Funktionen ändern Sie vor Berechnung und Schließung des Pools, ob T
 
 Der Pool zeigt **Nur Rechnungen der Organisation**. Teilnehmer können keine Rechnungen mehr einreichen und keine Übernahmen bearbeiten. Ihre bestehende Rechnungshistorie bleibt verfügbar. Organisatoren können weiterhin Ausgaben hinzufügen, Rechnungen prüfen, Verteilungsgrundlagen ändern und Anteile vorab ansehen oder berechnen. Diese Aktion erhält Kosten und Einstellungen und berechnet weder Anteile noch erfasst sie Zahlungen.
 
-Um Teilnehmereinreichungen vor der Berechnung zuzulassen, wählen Sie **Teilnehmerrechnungen öffnen** und bestätigen. Das funktioniert auch bei einem direkt als **Nur Rechnungen der Organisation** erstellten Pool. Er wird **Offen für Rechnungen**. Speichern oder verwerfen Sie vorher offene Bearbeitungsentwürfe. Ändert sich der Pool während Ihrer Prüfung, laden Sie neu und kontrollieren Sie vor einem erneuten Versuch den aktuellen Zustand. Sobald **Close pool & calculate** den Pool auf **Abgeschlossen** gesetzt hat, lassen sich Teilnehmereinreichungen nicht wieder öffnen.
+Um Teilnehmereinreichungen vor der Berechnung zuzulassen, wählen Sie **Teilnehmerrechnungen öffnen** und bestätigen. Das funktioniert auch bei einem direkt als **Nur Rechnungen der Organisation** erstellten Pool. Er wird **Offen für Rechnungen**. Speichern oder verwerfen Sie vorher offene Bearbeitungsentwürfe. Ändert sich der Pool während Ihrer Prüfung, laden Sie neu und kontrollieren Sie vor einem erneuten Versuch den aktuellen Zustand. Sobald **Pool schließen und berechnen** den Pool auf **Abgeschlossen** gesetzt hat, lassen sich Teilnehmereinreichungen nicht wieder öffnen.
 
 ### Die Poolsummen verstehen
 
@@ -362,7 +362,7 @@ Es gelten dieselben Regeln wie bei der Selbstverwaltung: keine Selbstübernahme,
 
 Vor der Anteilsberechnung sendet eine Änderung **Invoice takeovers updated** an betroffene Zahler und Begünstigte mit E-Mail-Adresse. Die Nachricht nennt Veranstaltung, Pool, handelnde Person und hinzugefügte oder entfernte Übernahmen.
 
-Nach Schließung zeigt **Übernahmen** zuerst die in der gespeicherten Berechnung verwendeten Übernahmen. Organisatoränderungen erscheinen separat unter **Ausstehende Übernahmeänderungen** und lassen gespeicherte Anteile unverändert. **Übernahmeänderungen ausstehend** erscheint außerdem im zugeklappten Poolkopf und neben diesen Änderungen. Teilnehmer werden erst nach erfolgreichem **Apply recalculation** benachrichtigt, anhand des Unterschieds zwischen vorher angewendeten und endgültigen neuen Übernahmen. Zwischenänderungen, eine fehlgeschlagene Berechnung oder **Roll back pool changes** senden keine Übernahmemeldung. Diese Benachrichtigung ist unabhängig von **Email participants after this calculation**. Ältere Berechnungen ohne gespeicherten Übernahmenachweis kennzeichnen dessen Fehlen, statt ausstehende Änderungen als angewendet darzustellen. Ihre nächste erfolgreiche Berechnung legt einen Ausgangszustand fest, ohne frühere Verantwortungsänderungen zu erraten. Die aktuell bearbeitbaren Auswahlwerte stehen unter **Übernahmen für die nächste Berechnung**.
+Nach Schließung zeigt **Übernahmen** zuerst die in der gespeicherten Berechnung verwendeten Übernahmen. Organisatoränderungen erscheinen separat unter **Ausstehende Übernahmeänderungen** und lassen gespeicherte Anteile unverändert. **Übernahmeänderungen ausstehend** erscheint außerdem im zugeklappten Poolkopf und neben diesen Änderungen. Teilnehmer werden erst nach erfolgreichem **Neuberechnung anwenden** benachrichtigt, anhand des Unterschieds zwischen vorher angewendeten und endgültigen neuen Übernahmen. Zwischenänderungen, eine fehlgeschlagene Berechnung oder **Pooländerungen zurücksetzen** senden keine Übernahmemeldung. Diese Benachrichtigung ist unabhängig von **Email participants after this calculation**. Ältere Berechnungen ohne gespeicherten Übernahmenachweis kennzeichnen dessen Fehlen, statt ausstehende Änderungen als angewendet darzustellen. Ihre nächste erfolgreiche Berechnung legt einen Ausgangszustand fest, ohne frühere Verantwortungsänderungen zu erraten. Die aktuell bearbeitbaren Auswahlwerte stehen unter **Übernahmen für die nächste Berechnung**.
 
 ### Einen Zuschlag hinzufügen
 
@@ -383,7 +383,7 @@ Beispiel: 100.00 werden bei deaktivierten Rechnungsgutschriften gleichmäßig au
 
 Entfernen Sie eine falsche Anpassung mit **Entfernen** und akzeptieren Sie die Bestätigungsabfrage des Browsers. Fügen Sie anschließend den Ersatz hinzu. Ein noch nicht gespeicherter neuer Anpassungsentwurf bleibt beim Entfernen erhalten. Die Notiz erscheint in den Anteilsdetails. Formulieren Sie sie für den Teilnehmer, der die endgültige Berechnung liest.
 
-Anpassungen können nach Schließung hinzugefügt oder entfernt werden. Jede gespeicherte Änderung wirkt erst nach **Recalculate pool** auf die Anteilszeilen. Prüfen Sie vor der Neuberechnung alle Anpassungen.
+Anpassungen können nach Schließung hinzugefügt oder entfernt werden. Jede gespeicherte Änderung wirkt erst nach **Pool neu berechnen** auf die Anteilszeilen. Prüfen Sie vor der Neuberechnung alle Anpassungen.
 
 ### Eine Organisatorausgabe hinzufügen
 
@@ -403,7 +403,7 @@ Ein bestätigter Validierungsfehler erhält Ihre Eingaben und den ausgewählten 
 
 Die Auswahl enthält vorhandene, diesem Pool zugeordnete Teilnehmer; sie fügt niemanden zur Veranstaltung oder zum Pool hinzu. Bei aktiviertem **Eingereichte Rechnungen vom eigenen Anteil abziehen** senkt eine zugeordnete Rechnung den Anteil dieses Teilnehmers oder seines übernehmenden Zahlers. Sie erscheint außerdem im Bereich **Dein Rechnungsverlauf** dieses Teilnehmers mit Zugriff auf den Beleg und der bestehenden Aktion **Schließen** für angenommene Rechnungen. Die Voreinstellung ohne Zuordnung erzeugt weder persönliche Rechnungsgutschrift noch Teilnehmereintrag in der Historie, auch nicht für einen Organisator, der selbst teilnimmt. Allein die erfassende Person bestimmt niemals Erstattung oder Belegzugang.
 
-Sie können Organisatorausgaben zu geschlossenen Pools hinzufügen. Gespeicherte Anteile und Zahlungen bleiben unverändert; **Neuberechnung erforderlich** erscheint. Prüfen und verwenden Sie **Recalculate pool**, um die neuen Kosten aufzunehmen. **Roll back pool changes** entfernt weder die gespeicherte Ausgabe noch ihre Annahme.
+Sie können Organisatorausgaben zu geschlossenen Pools hinzufügen. Gespeicherte Anteile und Zahlungen bleiben unverändert; **Neuberechnung erforderlich** erscheint. Prüfen und verwenden Sie **Pool neu berechnen**, um die neuen Kosten aufzunehmen. **Pooländerungen zurücksetzen** entfernt weder die gespeicherte Ausgabe noch ihre Annahme.
 
 ### Eingereichte Rechnungen prüfen
 
@@ -464,148 +464,156 @@ Ursprüngliche Einreichung und Beleg bleiben erhalten. Korrigierter Betrag und k
 
 Um angerechnete Kosten zu entfernen, wählen Sie **Aus Pool ablehnen**, geben unter **Rechnung aus Pool ablehnen** einen erforderlichen **Ablehnungsgrund** ein und wählen **Weiter** sowie **Ablehnung bestätigen**. Die Rechnung wird abgelehnt und aus Poolkosten und persönlicher Rechnungsgutschrift ausgeschlossen. Ursprüngliche Angaben, Beleg und vorhandene Korrektur bleiben in der Historie.
 
-Bei einem geschlossenen Pool erfordert jede dieser Änderungen **Recalculate pool**. Anteile und Zahlungen bleiben gespeichert, bis Sie die neue Berechnung prüfen und anwenden; dabei werden frühere Abwicklungen übernommen. **Roll back pool changes** macht Rechnungskorrekturen und -ablehnungen nicht rückgängig. Änderte sich der Pool seit Öffnung des Dialogs, brechen Sie die Prüfung ab, wählen **Aktualisieren** und öffnen die Rechnung zur erneuten Prüfung vor der Bestätigung.
+Bei einem geschlossenen Pool erfordert jede dieser Änderungen **Pool neu berechnen**. Anteile und Zahlungen bleiben gespeichert, bis Sie die neue Berechnung prüfen und anwenden; dabei werden frühere Abwicklungen übernommen. **Pooländerungen zurücksetzen** macht Rechnungskorrekturen und -ablehnungen nicht rückgängig. Änderte sich der Pool seit Öffnung des Dialogs, brechen Sie die Prüfung ab, wählen **Aktualisieren** und öffnen die Rechnung zur erneuten Prüfung vor der Bestätigung.
 
 #### Benachrichtigungen und späte Prüfung
 
-Hat der zugeordnete Teilnehmer eine E-Mail-Adresse, sendet Surveyor eine Annahme-, Ablehnungs- oder Abschlussnachricht mit der angezeigten Bezeichnung des handelnden Organisators. Bei Organisatorrechnungen gehen diese bestehenden Prüfmeldungen an den ausgewählten Teilnehmer, nicht an die erfassende Person. Die gespeicherte Prüfung wird bestätigt, ohne auf E-Mail-Zustellung zu warten. Hat ein anderer Organisator dieselbe Rechnung bereits geprüft, laden Sie vor einer weiteren Aktion den gespeicherten Status neu. Prüfaktionen bleiben für Awaiting-review-Rechnungen auch im geschlossenen Pool verfügbar. Nachträgliche Annahme verlangt **Recalculate pool**, bevor die neuen Kosten in den festgeschriebenen Anteilen stehen.
+Hat der zugeordnete Teilnehmer eine E-Mail-Adresse, sendet Surveyor eine Annahme-, Ablehnungs- oder Abschlussnachricht mit der angezeigten Bezeichnung des handelnden Organisators. Bei Organisatorrechnungen gehen diese bestehenden Prüfmeldungen an den ausgewählten Teilnehmer, nicht an die erfassende Person. Die gespeicherte Prüfung wird bestätigt, ohne auf E-Mail-Zustellung zu warten. Hat ein anderer Organisator dieselbe Rechnung bereits geprüft, laden Sie vor einer weiteren Aktion den gespeicherten Status neu. Prüfaktionen bleiben für Awaiting-review-Rechnungen auch im geschlossenen Pool verfügbar. Nachträgliche Annahme verlangt **Pool neu berechnen**, bevor die neuen Kosten in den festgeschriebenen Anteilen stehen.
 
 Klären oder schließen Sie möglichst jede ungeprüfte Rechnung bewusst aus, bevor Sie den Pool schließen. Bei der Schließung werden Awaiting review, Rejected und Retracted ignoriert.
 
 ### Eine Berechnung vorab ansehen
 
 1. Speichern Sie gewünschte Einstellungen, Teilnehmerfaktoren, Anpassungen und Übernahmen.
-2. Wählen Sie **Preview calculation** oder bei einem geschlossenen Pool **Recalculate pool**.
-3. Klappen Sie **Calculation breakdown** für die Kontextzahlen des Pools auf. Öffnen Sie separat **Example calculation** für die Rechenschritte und prüfen Sie danach die zutreffenden Bestandteile und den Calculated balance jedes Zahlers.
+2. Wählen Sie **Berechnung ansehen** oder bei einem geschlossenen Pool **Pool neu berechnen**.
+3. Klappen Sie **Berechnungsübersicht** für die Kontextzahlen des Pools auf. Öffnen Sie separat **Beispielrechnung** für die Rechenschritte und prüfen Sie danach die zutreffenden Bestandteile und die Spalte **Berechneter Saldo** jedes Zahlers.
 4. Schließen Sie den Dialog für weitere Änderungen oder bestätigen Sie die Berechnung, wenn die Beträge stimmen.
 
 Die Vorschau speichert keine Anteile, schließt den Pool nicht, ändert keine Zahlungsmarkierungen und sendet keine E-Mails. Sie verwendet dieselben Berechnungs- und Zahlungsübertragsregeln wie die endgültige Aktion. Ändert jemand nach der Vorschau Eingaben oder erfasst eine Zahlung, aktualisieren Sie die Vorschau vor der Anwendung.
 
-**Calculation breakdown** listet Kontextzahlen: gespeicherte Kosten, zugeordnete Teilnehmerzahl, zutreffende Tage oder Nächte, berechtigte Einheiten, Befreiungen und Gesamtgewicht sowie verwendete Zuschlags- und Rabattkategorien und relevante Abwicklungssummen. Es enthält weder Formeln noch erklärende Absätze. Das separate, zugeklappte **Example calculation** erklärt zuerst Gesamtsumme und Basis und danach die Rechnung eines geeigneten anonymen Zahlers samt Rundungsrichtung. Gibt es keinen geeigneten Zahler, können gespeicherte Kostenrechnungen die Poolsummen auch ohne eine Beispielperson erklären. Entgegengesetzte Zuschlags- und Rabattsummen bleiben auch bei Nettowirkung null sichtbar. Doppelte Beträge werden weggelassen.
-**Rounding difference** zeigt den kleinen Überschuss oder Fehlbetrag der gewählten Rundung. Bei gleicher Dreiteilung von 100.00 ergeben sich aufgerundet je 33.34, insgesamt 100.02, oder abgerundet je 33.33, insgesamt 99.99. Surveyor gibt ansonsten gleichen Teilnehmern keine unterschiedlichen Centbeträge, um eine exakt passende Gesamtsumme zu erzwingen.
+Warten Sie, bis die Vorschau geladen wurde. **Vorschau aktualisieren** liest die aktuellen gespeicherten Eingaben, ohne ungespeicherte Änderungen zu übernehmen. Speichern Sie offene Entwürfe oder wählen Sie **Änderungen verwerfen** und aktualisieren Sie danach die Vorschau. Nach einer abgelehnten Berechnung müssen Sie vor der nächsten Bestätigung eine neue Vorschau laden und prüfen.
+
+**Berechnungsübersicht** listet Kontextzahlen: gespeicherte Kosten, zugeordnete Teilnehmerzahl, zutreffende Tage oder Nächte, berechtigte Einheiten, Befreiungen und Gesamtgewicht sowie verwendete Zuschlags- und Rabattkategorien und relevante Abwicklungssummen. Sie enthält weder Formeln noch erklärende Absätze. Die separate, zugeklappte **Beispielrechnung** erklärt zuerst Gesamtsumme und Basis und danach die Rechnung eines geeigneten anonymen Zahlers samt Rundungsrichtung. Gibt es keinen geeigneten Zahler, können gespeicherte Kostenrechnungen die Poolsummen auch ohne eine Beispielperson erklären. Entgegengesetzte Zuschlags- und Rabattsummen bleiben auch bei Nettowirkung null sichtbar. Doppelte Beträge werden weggelassen.
+**Rundungsdifferenz** zeigt den kleinen Überschuss oder Fehlbetrag der gewählten Rundung. Bei gleicher Dreiteilung von 100.00 ergeben sich aufgerundet je 33.34, insgesamt 100.02, oder abgerundet je 33.33, insgesamt 99.99. Surveyor gibt ansonsten gleichen Teilnehmern keine unterschiedlichen Centbeträge, um eine exakt passende Gesamtsumme zu erzwingen.
 
 Die Rundung erfolgt je Teilnehmergrundanteil, bevor Übernahmegruppen zusammengeführt werden. Zuschläge, Rabatte und Rechnungserstattungen behalten ihre eingegebenen Centbeträge. Bei negativen Grundbeträgen geht Aufrunden zum größeren Wert: −33.333 wird −33.33, Abrunden ergibt −33.34.
 
 #### Kosten und Erstattungen abgleichen
 
-**Full pool total** sind angerechnete Rechnungskosten plus vorzeichenbehaftete aufgeschlagene Zuschläge oder Rabatte. **Base to distribute** ist die gemeinsame Summe nach Berücksichtigung umverteilter Zuschläge oder Rabatte. Umverteilung ändert, wer die vorhandenen Rechnungskosten trägt, nicht die Gesamtsumme. Aufgeschlagene Anpassungen ändern Gesamtsumme und betroffenen Teilnehmersaldo, lassen die gemeinsame Basis aber unverändert. Ohne beide Anpassungsarten sind die relevanten Beträge gleich. **Calculation breakdown** zeigt eine Kostenkennzahl; **Example calculation** erklärt den Zusammenhang.
+**Gesamtkosten des Pools** sind angerechnete Rechnungskosten plus vorzeichenbehaftete aufgeschlagene Zuschläge oder Rabatte. **Zu verteilender Grundbetrag** ist die gemeinsame Summe nach Berücksichtigung umverteilter Zuschläge oder Rabatte. Umverteilung ändert, wer die vorhandenen Rechnungskosten trägt, nicht die Gesamtsumme. Aufgeschlagene Anpassungen ändern Gesamtsumme und betroffenen Teilnehmersaldo, lassen die gemeinsame Basis aber unverändert. Ohne beide Anpassungsarten sind die relevanten Beträge gleich. **Berechnungsübersicht** zeigt eine Kostenkennzahl; **Beispielrechnung** erklärt den Zusammenhang.
 
-Poolkosten und noch erforderliche Transfers sind unterschiedliche Beträge. Bei **Deduct submitter invoices from their share** mindern Rechnungsgutschriften den Saldo jedes Einreichers oder seines übernehmenden Zahlers. Ein Grundanteil von `80.00` und eine Rechnungsgutschrift von `100.00` ergeben beispielsweise einen berechneten Saldo von `-20.00`, also eine Erstattung an diesen Zahler. Früher abgewickelte Zahlungen und Erstattungen beeinflussen den berechneten Saldo ebenfalls und werden bei Zutreffen angezeigt.
+Poolkosten und noch erforderliche Transfers sind unterschiedliche Beträge. Bei **Eingereichte Rechnungen vom eigenen Anteil abziehen** mindern Rechnungsgutschriften den Saldo jedes Einreichers oder seines übernehmenden Zahlers. Ein Grundanteil von `80.00` und eine Rechnungsgutschrift von `100.00` ergeben beispielsweise einen berechneten Saldo von `-20.00`, also eine Erstattung an diesen Zahler. Früher abgewickelte Zahlungen und Erstattungen beeinflussen den berechneten Saldo ebenfalls und werden bei Zutreffen angezeigt.
 
-Faktoren und Anwesenheit bestimmen jeden Grundanteil. Übernahmen führen diese Anteile samt Anpassungen zusammen. Weicht ein Ergebnis von Ihrer Erwartung ab, prüfen Sie Befreiungen, Faktoren, Anwesenheitsdaten und den für jede Anpassung ausgewählten Teilnehmer. Nach der Berechnung hält **View breakdown** den vollständigen Rechenweg mit Vorzeichen für jeden Zahler fest.
+Faktoren und Anwesenheit bestimmen jeden Grundanteil. Übernahmen führen diese Anteile samt Anpassungen zusammen. Weicht ein Ergebnis von Ihrer Erwartung ab, prüfen Sie Befreiungen, Faktoren, Anwesenheitsdaten und den für jede Anpassung ausgewählten Teilnehmer. Nach der Berechnung hält **Aufschlüsselung ansehen** den vollständigen Rechenweg mit Vorzeichen für jeden Zahler fest.
 
 ### Den Pool schließen und Anteile berechnen
 
-Diese endgültige Berechnung ist bei **Open for invoices** und **Organizer invoices only** verfügbar. Sie erzeugt gespeicherte Anteile und schließt den Pool. Das alleinige Stoppen von Teilnehmereinreichungen tut keines von beidem.
+Diese endgültige Berechnung ist bei **Offen für Rechnungen** und **Nur Rechnungen der Organisation** verfügbar. Sie erzeugt gespeicherte Anteile und schließt den Pool. Das alleinige Stoppen von Teilnehmereinreichungen tut keines von beidem.
 
-Prüfen Sie vor **Preview calculation**:
+Prüfen Sie vor **Berechnung ansehen**:
 
 1. Alle vorgesehenen Teilnehmer sind zugeordnet.
 2. Die Anwesenheitsdaten stimmen für eine Verteilung nach Tagen oder Nächten.
 3. Faktoren und Befreiungen sind korrekt.
 4. Übernahmen sind korrekt.
 5. Zuschläge, Rabatte und deren Umverteilungsmodus sind korrekt.
-6. Alle vorgesehenen Rechnungen sind Accepted oder Closed.
-7. **Deduct submitter invoices from their share** ist wie gewünscht eingestellt.
+6. Alle vorgesehenen Rechnungen haben den Status **Angenommen** oder **Abgeschlossen**.
+7. **Eingereichte Rechnungen vom eigenen Anteil abziehen** ist wie gewünscht eingestellt.
 
 Danach:
 
 1. Speichern Sie jeden Bearbeitungsdialog.
-2. Wählen Sie **Preview calculation**.
-3. Prüfen Sie die Vorschau und den Schalter **Email participants after this calculation**.
-4. Wählen Sie **Close pool & calculate**.
+2. Wählen Sie **Berechnung ansehen**.
+3. Prüfen Sie die Vorschau und den Schalter **Teilnehmende nach dieser Berechnung per E-Mail benachrichtigen**.
+4. Wählen Sie **Pool schließen und berechnen**.
+
+Warten Sie bei gesperrten Bedienelementen auf die Bestätigung. Pool und gespeicherte Anteile werden auf derselben Seite aktualisiert. Ist die Berechnung bestätigt, aber das anschließende Laden fehlgeschlagen, bleibt sie gespeichert; schließen Sie den Dialog und wählen Sie **Aktualisieren**. Bei unbestätigtem Ergebnis wählen Sie **Aktualisieren**, prüfen den gespeicherten Poolstatus und die aktuellen Anteile und wählen danach **Ich habe die gespeicherten Anteile geprüft**. Die Prüfung wiederholt weder die Berechnung noch den E-Mail-Versand.
 
 Mindestens ein Teilnehmer muss zugeordnet sein. Surveyor führt dann Folgendes aus:
 
-- Es wählt Accepted- und Closed-Rechnungen und ignoriert Awaiting review, Rejected und Retracted.
+- Es berücksichtigt Rechnungen mit dem Status **Angenommen** oder **Abgeschlossen** und ignoriert **Prüfung ausstehend**, **Abgelehnt** und **Zurückgezogen**.
 - Es berechnet die verteilbare Summe nach vorzeichenbehafteten umverteilten Anpassungen.
-- Es verteilt den Base share nach Teilnehmer-, einschließlich gerechneten Tages- oder Nachtgewichten, multipliziert mit individuellen Faktoren.
-- Befreite Teilnehmer erhalten keinen automatischen Base share.
+- Es verteilt den Grundanteil nach Teilnehmer-, einschließlich gerechneten Tages- oder Nachtgewichten, multipliziert mit individuellen Faktoren.
+- Befreite Teilnehmer erhalten keinen automatischen Grundanteil.
 - Persönliche Zuschläge und negative Rabatte werden nach der gewichteten Verteilung hinzugefügt.
 - Aktivierte Rechnungsgutschriften werden angewendet.
 - Begünstigte werden mit ihrem übernehmenden Zahler zusammengeführt.
 - Für jeden resultierenden Zahler wird eine Anteilszeile erstellt.
-- Positive Salden zeigen **Payment due**, negative **Refund due** und Nullsalden **No payment**.
-- Der Pool wird **Closed**.
-- Zahler mit E-Mail-Adresse erhalten eine Nachricht, wenn **Email participants after this calculation** ausgewählt ist.
+- Positive Salden zeigen **Zahlung ausstehend**, negative **Erstattung ausstehend** und Nullsalden **Keine Zahlung**.
+- Der Pool wird **Abgeschlossen**.
+- Zahler mit E-Mail-Adresse erhalten eine Nachricht, wenn **Teilnehmende nach dieser Berechnung per E-Mail benachrichtigen** ausgewählt ist.
 
-Die Vorschau verwendet dasselbe **Example calculation** wie die Organisatoransicht und das PDF. Sie erklärt die gespeicherten Poolsummen und die Basis und zeigt anschließend ein anonymes Beispiel für eine Person mit fälliger Zahlung, einschließlich zutreffender Faktoren, Anpassungen oder Gutschriften. Übernimmt diese Person die Kosten anderer Teilnehmer, nennt die Einleitung deren Anzahl. Erstattungen, befreite Zahler und Nullsalden erscheinen nicht als gewöhnliche Zahlungsbeispiele. Ist kein passendes Zahlungsbeispiel verfügbar, kann die Erklärung allein die Poolsummen zeigen. Ältere Berechnungen behalten ihre verfügbaren Beträge und Notizen; einzelne Erklärungswerte können fehlen. Aktuelle Einstellungen ersetzen keine fehlenden Angaben einer früheren Berechnung.
-Zutreffende Anpassungen, Rechnungsgutschriften und bereits abgewickelte Beträge erklären den berechneten Saldo. **Payments due** und vorzeichenbehaftete **Refunds due** zeigen einzuziehende beziehungsweise auszuzahlende Summen und bleiben neben relevanten Kostenangaben sichtbar.
+Die Vorschau verwendet dieselbe **Beispielrechnung** wie die Organisatoransicht; das PDF zeigt den entsprechenden Inhalt auf Englisch. Sie erklärt die gespeicherten Poolsummen und die Basis und zeigt anschließend ein anonymes Beispiel für eine Person mit fälliger Zahlung, einschließlich zutreffender Faktoren, Anpassungen oder Gutschriften. Übernimmt diese Person die Kosten anderer Teilnehmer, nennt die Einleitung deren Anzahl. Erstattungen, befreite Zahler und Nullsalden erscheinen nicht als gewöhnliche Zahlungsbeispiele. Ist kein passendes Zahlungsbeispiel verfügbar, kann die Erklärung allein die Poolsummen zeigen. Ältere Berechnungen behalten ihre verfügbaren Beträge und Notizen; einzelne Erklärungswerte können fehlen. Aktuelle Einstellungen ersetzen keine fehlenden Angaben einer früheren Berechnung.
+Zutreffende Anpassungen, Rechnungsgutschriften und bereits abgewickelte Beträge erklären den berechneten Saldo. **Ausstehende Zahlungen** und vorzeichenbehaftete **Ausstehende Erstattungen** zeigen einzuziehende beziehungsweise auszuzahlende Summen und bleiben neben relevanten Kostenangaben sichtbar.
 
-Eine Übernahme führt den bereits berechneten Base share, Anpassungen und Invoice credit des Begünstigten in der Zahlerzeile zusammen. Der Begünstigte behält seinen Faktor; der Faktor des Zahlers wird nicht erneut angewendet. Die Basis jedes Teilnehmers wird einheitlich in der durch **Round base shares up** gewählten Richtung gerundet. Der entstehende Überschuss oder Fehlbetrag bleibt in der Vorschau sichtbar.
+Eine Übernahme führt den bereits berechneten Grundanteil, Anpassungen und Rechnungsgutschriften des Begünstigten in der Zahlerzeile zusammen. Der Begünstigte behält seinen Faktor; der Faktor des Zahlers wird nicht erneut angewendet. Die Basis jedes Teilnehmers wird einheitlich in der durch **Grundanteile aufrunden** gewählten Richtung gerundet. Der entstehende Überschuss oder Fehlbetrag bleibt in der Vorschau sichtbar.
 
 ### Einen geschlossenen Pool neu berechnen
 
-Verwenden Sie **Recalculate pool** nach Änderungen an Einstellungen, Zuordnungen, Faktoren, Befreiungen, Übernahmen, Zuschlägen, Rabatten, Anwesenheitsdaten oder akzeptierten Rechnungen. Während **Recalculation required** angezeigt wird, können Sie weiterhin Zahlungen auf gespeicherte Anteile erfassen.
+Verwenden Sie **Pool neu berechnen** nach Änderungen an Einstellungen, Zuordnungen, Faktoren, Befreiungen, Übernahmen, Zuschlägen, Rabatten, Anwesenheitsdaten oder akzeptierten Rechnungen. Während **Neuberechnung erforderlich** angezeigt wird, können Sie weiterhin Zahlungen auf gespeicherte Anteile erfassen.
 
 1. Korrigieren und speichern Sie die Eingaben.
-2. Erfassen Sie mit **Record payment** oder **Record refund** bereits abgeschlossene Transfers auf die gespeicherten berechneten Salden.
-3. Wählen Sie **Recalculate pool** und prüfen Sie die Vorschau.
-4. Entscheiden Sie über **Email participants after this calculation**.
-5. Wählen Sie **Apply recalculation**.
+2. Erfassen Sie mit **Zahlung erfassen** oder **Erstattung erfassen** bereits abgeschlossene Transfers auf die gespeicherten berechneten Salden.
+3. Wählen Sie **Pool neu berechnen** und prüfen Sie die Vorschau.
+4. Entscheiden Sie über **Teilnehmende nach dieser Berechnung per E-Mail benachrichtigen**.
+5. Wählen Sie **Neuberechnung anwenden**.
 
-Bereits abgewickelte Beträge werden als Gutschrift auf die neue Berechnung angerechnet. Wer beispielsweise 100.00 bezahlt hat und nun einen berechneten Anteil von 120.00 schuldet, erhält einen **Calculated balance** von `20.00`. Bei einem neuen Anteil von 80.00 ergibt sich eine Erstattung von `-20.00`. War beim alten Anteil keine Abwicklung erfasst, wird sein Betrag durch den neu berechneten Saldo ersetzt.
+Bereits abgewickelte Beträge werden als Gutschrift auf die neue Berechnung angerechnet. Wer beispielsweise 100.00 bezahlt hat und nun einen berechneten Anteil von 120.00 schuldet, sieht unter **Berechneter Saldo** den Betrag `20.00`. Bei einem neuen Anteil von 80.00 ergibt sich eine Erstattung von `-20.00`. War beim alten Anteil keine Abwicklung erfasst, wird sein Betrag durch den neu berechneten Saldo ersetzt.
 
 Die Gutschrift wird auch bei wiederholten Neuberechnungen genau einmal angerechnet. Wurde die zusätzliche Zahlung von 20.00 erfasst, bleiben bei einem späteren Anteil von 130.00 noch 10.00 zu zahlen. Erstattungen funktionieren entsprechend: Eine zuvor abgewickelte Erstattung von `-30.00` gegenüber einer korrigierten Erstattung von `-20.00` ergibt `10.00`, die zurückgezahlt werden müssen.
 
 Zahlungen bleiben bei der Person, die sie geleistet oder erhalten hat. Ändert eine Übernahme den Zahler oder wird jemand aus diesem Pool entfernt, bleibt aber zur Veranstaltung angemeldet, kann seine vorhandene Zahlung als separater Erstattungsanteil erscheinen. Sie wird nicht stillschweigend einem anderen Zahler übertragen.
 
-Wird ein Teilnehmer mit erfassten Zahlungen oder Erstattungen befreit oder von jemand anderem übernommen, zeigt sein gespeicherter Anteil **Exempt · settlement retained** oder **Covered by … · settlement retained**, solange ein Korrekturtransfer nötig ist. Erfassen Sie diese Erstattung oder Rückzahlung und berechnen Sie danach neu, um sie anzuwenden. Erreicht der übertragene Saldo null, verschwindet der Hinweis: Ein befreiter Teilnehmer behält seinen normalen Nullanteil und die Beschriftung **Own share**; ein von jemand anderem übernommener früherer Zahler benötigt keine separate Zeile mehr. Die Hinweise beschreiben die gespeicherte Berechnung. Ausstehende Änderungen ersetzen sie nicht. Der Teilnehmer erhält **Your payment responsibility changed**, sobald eine Neuberechnung die Befreiung oder geänderte Übernahme anwendet, auch bei deaktivierten allgemeinen Berechnungs-E-Mails. Bereits abgewickelte Gutschriften bleiben vorzeichenbehaftete Nettobeträge, kein vollständiges chronologisches Transferbuch.
+Wird ein Teilnehmer mit erfassten Zahlungen oder Erstattungen befreit oder von jemand anderem übernommen, zeigt sein gespeicherter Anteil **Befreit · Ausgleich beibehalten** oder **Von … übernommen · Ausgleich beibehalten**, solange ein Korrekturtransfer nötig ist. Erfassen Sie diese Erstattung oder Rückzahlung und berechnen Sie danach neu, um sie anzuwenden. Erreicht der übertragene Saldo null, verschwindet der Hinweis: Ein befreiter Teilnehmer behält seinen normalen Nullanteil und die Beschriftung **Eigener Anteil**; ein von jemand anderem übernommener früherer Zahler benötigt keine separate Zeile mehr. Die Hinweise beschreiben die gespeicherte Berechnung. Ausstehende Änderungen ersetzen sie nicht. Der Teilnehmer erhält die englische E-Mail **Your payment responsibility changed**, sobald eine Neuberechnung die Befreiung oder geänderte Übernahme anwendet, auch bei deaktivierten allgemeinen Berechnungs-E-Mails. Bereits abgewickelte Gutschriften bleiben vorzeichenbehaftete Nettobeträge, kein vollständiges chronologisches Transferbuch.
 
-Der Pool bleibt geschlossen und Rechnungsprüfungen bleiben unverändert. Eine fehlgeschlagene Berechnung erhält alte Anteile und Zahlungen. Haben sich Eingaben oder Zahlungen geändert, aktualisieren Sie vor der Anwendung die Vorschau. Speichern Sie offene Dialoge oder wählen Sie vor der Berechnung **Discard edits**.
+Der Pool bleibt geschlossen und Rechnungsprüfungen bleiben unverändert. Eine fehlgeschlagene Berechnung erhält alte Anteile und Zahlungen. Haben sich Eingaben oder Zahlungen geändert, aktualisieren Sie vor der Anwendung die Vorschau. Speichern Sie offene Dialoge oder wählen Sie vor der Berechnung **Änderungen verwerfen**.
 
 ### Pooländerungen zurücknehmen
 
-Verwenden Sie **Roll back pool changes**, wenn Sie die letzte Berechnung behalten möchten, statt gespeicherte Pooländerungen anzuwenden.
+Verwenden Sie **Pooländerungen zurücksetzen**, wenn Sie die letzte Berechnung behalten möchten, statt gespeicherte Pooländerungen anzuwenden.
 
-1. Öffnen Sie den geschlossenen Pool mit **Recalculation required**.
-2. Wählen Sie **Roll back pool changes** und lesen Sie die Bestätigung.
-3. Wählen Sie **Restore last calculated settings**, lesen Sie das Ergebnis und wählen Sie danach **Return to pool**.
+1. Öffnen Sie den geschlossenen Pool mit **Neuberechnung erforderlich**.
+2. Wählen Sie **Pooländerungen zurücksetzen** und lesen Sie die Bestätigung.
+3. Wählen Sie **Zuletzt berechnete Einstellungen wiederherstellen**, lesen Sie das Ergebnis und wählen Sie danach **Schließen**.
 
 Die Rücknahme stellt Beschreibung, Verteilungseinstellungen, Rundungsrichtung, E-Mail-Voreinstellung, Zuordnungen, Faktoren, Befreiungen, Zuschläge und Rabatte sowie Übernahmen aus der letzten erfolgreichen Berechnung wieder her. Bestehende Anteile und erfasste Zahlungen bleiben erhalten. Es wird keine Berechnungs-, Abrechnungs- oder Übernahme-E-Mail gesendet.
 
 Die Rücknahme macht Änderungen an Veranstaltungsanmeldungen, Anwesenheitsdaten, Rechnungsprüfungen oder Organisatorausgaben nicht rückgängig. Sie löscht keine gespeicherte Organisatorausgabe und erstellt keine gelöschten Teilnehmer neu. Haben sich diese Angaben seit der letzten Berechnung geändert, kann der Pool trotz wiederhergestellter Einstellungen weiterhin eine Neuberechnung verlangen. Prüfen Sie die Ergebnismeldung.
 
-Bei einigen älteren geschlossenen Pools sind die zuletzt berechneten Einstellungen nicht verfügbar. Berechnen Sie erfolgreich neu, bevor Sie die Rücknahme verwenden. Stammt eine ältere Berechnung aus der Zeit vor der Rundungsauswahl, stellt die Rücknahme ihre Einstellungen mit aktiviertem Aufrunden wieder her; eine Neuberechnung bleibt erforderlich. **Discard edits** setzt nur ungespeicherte Formularfelder zurück; **Roll back pool changes** stellt gespeicherte Pooleinstellungen wieder her. Eine bereits angewendete Neuberechnung wird nicht rückgängig gemacht. Sind frühere Übernahmeangaben nicht verfügbar, lässt Surveyor Eingaben und Abwicklungen unverändert und bittet vor einer Rücknahme um Neuberechnung.
+Warten Sie vor einer weiteren Aktion auf das Ergebnis. Bei unbestätigtem Ergebnis wählen Sie **Aktualisieren**, prüfen die gespeicherten Poolsummen und Anteile und wählen **Ich habe die gespeicherten Anteile geprüft**. Diese Prüfung wiederholt die Rücknahme nicht. Eine bestätigte Wiederherstellung bleibt gespeichert, wenn nur das anschließende Laden fehlschlägt; schließen Sie die abgeschlossene Prüfung und aktualisieren Sie den Pool.
+
+Bei einigen älteren geschlossenen Pools sind die zuletzt berechneten Einstellungen nicht verfügbar. Berechnen Sie erfolgreich neu, bevor Sie die Rücknahme verwenden. Stammt eine ältere Berechnung aus der Zeit vor der Rundungsauswahl, stellt die Rücknahme ihre Einstellungen mit aktiviertem Aufrunden wieder her; eine Neuberechnung bleibt erforderlich. **Änderungen verwerfen** setzt nur ungespeicherte Formularfelder zurück; **Pooländerungen zurücksetzen** stellt gespeicherte Pooleinstellungen wieder her. Eine bereits angewendete Neuberechnung wird nicht rückgängig gemacht. Sind frühere Übernahmeangaben nicht verfügbar, lässt Surveyor Eingaben und Abwicklungen unverändert und bittet vor einer Rücknahme um Neuberechnung.
 
 ### Abrechnungs-E-Mails senden
 
-**Send calculation emails automatically** unter **Pool settings** steuert die Voreinstellung. **Email participants after this calculation** erlaubt eine abweichende Auswahl vor Schließung oder Neuberechnung. Bei einem neuen Pool sind beide aktiviert. Diese Auswahl steuert Abrechnungsnachrichten; Benachrichtigungen über bei erfolgreicher Neuberechnung angewendete Übernahmeänderungen werden dadurch nicht deaktiviert.
+**Berechnungs-E-Mails automatisch senden** unter **Pooleinstellungen** steuert die Voreinstellung. **Teilnehmende nach dieser Berechnung per E-Mail benachrichtigen** erlaubt eine abweichende Auswahl vor Schließung oder Neuberechnung. Bei einem neuen Pool sind beide aktiviert. Diese Auswahl steuert Abrechnungsnachrichten; Benachrichtigungen über bei erfolgreicher Neuberechnung angewendete Übernahmeänderungen werden dadurch nicht deaktiviert.
 
-Für spätere Nachrichten öffnen Sie einen geschlossenen Pool, wählen **Send settlement emails** und bestätigen. Das funktioniert auch bei ausgeschalteten automatischen E-Mails. Es sendet an Zahler mit E-Mail-Adresse, ohne neu zu berechnen, Zahlungsmarkierungen zu ändern oder Geld zu bewegen. Der Dialog schließt, wenn Surveyor den Erfolg der Anfrage bestätigt. Bei Fehlern oder unbestätigtem Erfolg bleibt er mit Rückmeldung geöffnet.
+Für spätere Nachrichten öffnen Sie einen geschlossenen Pool, wählen **Abrechnungs-E-Mails senden** und bestätigen mit derselben Schaltfläche. Das funktioniert auch bei ausgeschalteten automatischen E-Mails. Es sendet an Zahler mit E-Mail-Adresse, ohne neu zu berechnen, Zahlungsmarkierungen zu ändern oder Geld zu bewegen. Der Dialog zeigt das Ergebnis und die Anzahl der vorgesehenen Empfänger; wählen Sie danach **Schließen**. Die Bestätigung betrifft die Versandanforderung, nicht den Eingang im Postfach. Bei unbestätigtem Ergebnis wählen Sie **Aktualisieren**, prüfen den gespeicherten Zustand und wählen **Ich habe die gespeicherten Anteile geprüft**. Diese Prüfung sendet keine weiteren E-Mails; ein später bewusst erneut angeforderter Versand kann weitere E-Mails senden.
 
 E-Mails zeigen **Your calculated balance**, Status, Veranstaltung und Pool sowie **View your invoice pool** weit oben. **Payment due**, **Refund due**, **Paid**, **Refunded** oder **No payment** beschreibt den aktuellen Status. **Saved calculation notes** erhält die ursprünglich gespeicherten Notizen und verfassten Beschreibungen vor und außerhalb der vollständigen **Calculation explanation**. Wählen Sie **Calculation explanation**, um sie aufzuklappen, sofern Ihr E-Mail-Programm dies unterstützt. Andere Programme zeigen den vollständigen Inhalt möglicherweise direkt. Die konkrete Berechnung verwendet Ihren Namen und gegebenenfalls die Namen übernommener Teilnehmer, um jeden tatsächlichen Grundanteil und sämtliche zutreffenden Saldobestandteile zu erklären. Die gespeicherten Notizen bleiben erhalten und werden weder ersetzt noch umgeschrieben. Klartext-E-Mails enthalten immer die vollständige Erklärung und die Notizen. Bei geänderten Eingaben beschreibt die Nachricht die bisherige gespeicherte Berechnung. Die Zustellung hängt vom E-Mail-Dienst der Installation ab.
 
 ### Erfassen, ob ein Anteil abgewickelt ist
 
-Nach Schließung enthält **Shares & settlement** die Übersicht **Calculated shares**. Jede Zeile zeigt **Payer**, den vorzeichenbehafteten **Calculated balance** und einen kompakten Zahlungs- oder Erstattungsstatus. Der Status bezieht sich auf den benannten Zahler. **View breakdown** öffnet zutreffende gespeicherte Bestandteile, Notizen und die konkrete **Calculation explanation**. Das separate **Example calculation** des Pools erklärt Gesamtsumme und Basis und zeigt gegebenenfalls ein anonymes Zahlerbeispiel. **Calculation breakdown** listet poolweite Kontextzahlen und relevante Abwicklungssummen ohne Formeln oder Erklärungen. Telefone und Tablets zeigen dieselben Informationen als Karten. Gespeicherte Anteile bleiben auch bei erforderlicher Neuberechnung verfügbar.
+Nach Schließung enthält der Pool die Übersicht **Berechnete Anteile**. Jede Zeile zeigt **Zahlende Person**, den Betrag mit Vorzeichen unter **Berechneter Saldo** und einen kompakten Zahlungs- oder Erstattungsstatus. Der Status bezieht sich auf den benannten Zahler. **Aufschlüsselung ansehen** öffnet zutreffende gespeicherte Bestandteile, Notizen und die konkrete **Berechnungserklärung**. Die separate **Beispielrechnung** des Pools erklärt Gesamtsumme und Basis und zeigt gegebenenfalls ein anonymes Zahlerbeispiel. **Berechnungsübersicht** listet poolweite Kontextzahlen und relevante Abwicklungssummen ohne Formeln oder Erklärungen. Telefone und Tablets zeigen dieselben Informationen als Karten. Gespeicherte Anteile bleiben auch bei erforderlicher Neuberechnung verfügbar.
 
-**Filter share status** bietet **All statuses**, **Payment due**, **Refund due** und **Settled**. Verwenden Sie **Search shares**, **Sort shares**, **Shares per page**, **Previous** und **Next** zur Navigation. Die Erfassung eines Transfers aktualisiert den Status, behält aber berechneten Saldo und aktuelle Zeilenreihenfolge bei. **Refresh list** wendet Filter und Sortierung neu an. Die Funktion wird nach einer Statusänderung bei aktivem Filter hervorgehoben.
+**Anteilsstatus filtern** bietet **Alle Status**, **Zahlung ausstehend**, **Erstattung ausstehend** und **Beglichen**. Verwenden Sie **Anteile suchen**, **Anteile sortieren**, **Anteile pro Seite**, **Zurück** und **Weiter** zur Navigation. Die Erfassung eines Transfers aktualisiert den Status, behält aber berechneten Saldo und aktuelle Zeilenreihenfolge bei. Die Aktionszeile bleibt sichtbar, auch wenn ihr neuer Status nicht mehr zum Filter passt. **Liste aktualisieren**, geänderte Filter oder Sortierung sowie ein Seitenwechsel wenden die Auswahl neu an. **Liste aktualisieren** wird nach einer Statusänderung bei aktivem Filter hervorgehoben und bestätigt auch bei unveränderten Ergebnissen, dass die Auswahl angewendet wurde.
 
 Nachdem der tatsächliche Transfer abgeschlossen ist:
 
-1. Prüfen Sie Zahler und vorzeichenbehafteten **Calculated balance**.
-2. Wählen Sie bei positivem Saldo **Record payment**, bei negativem **Record refund**.
-3. Prüfen Sie **Confirm invoice action** einschließlich Betrag und Transferrichtung.
-4. Wählen Sie erneut **Record payment** beziehungsweise **Record refund** und warten Sie auf Bestätigung.
+1. Prüfen Sie Zahler und den Betrag mit Vorzeichen unter **Berechneter Saldo**.
+2. Wählen Sie bei positivem Saldo **Zahlung erfassen**, bei negativem **Erstattung erfassen**.
+3. Prüfen Sie im gleichnamigen Dialog die zahlende Person, den Betrag mit Vorzeichen und die Transferrichtung.
+4. Wählen Sie erneut **Zahlung erfassen** beziehungsweise **Erstattung erfassen** und warten Sie auf Bestätigung.
 
-**Cancel**, die Schließen-Schaltfläche, Escape und das Schließen über den Hintergrund lassen den gespeicherten Zustand unverändert. Die Prüfung fokussiert zunächst **Cancel**. Scrollen über einem fokussierten numerischen Rechnungsfeld verändert dessen Entwurfsbetrag nicht schrittweise.
+Vor der Bestätigung lassen **Abbrechen**, die Schließen-Schaltfläche, Escape und das Schließen über den Hintergrund den gespeicherten Zustand unverändert. Scrollen über einem fokussierten numerischen Rechnungsfeld verändert dessen Entwurfsbetrag nicht schrittweise.
 
-Die laufende Aktion zeigt einen Fortschrittsindikator. Erfolg zeigt **Paid** oder **Refunded**, erhält den vorzeichenbehafteten berechneten Saldo und aktualisiert **Payments due** beziehungsweise **Refunds due**. Warten Sie vor einer weiteren Aktion auf das Ergebnis. Bei vorhandener Adresse sendet Surveyor dem Zahler eine E-Mail.
+Die laufende Aktion zeigt einen Fortschrittsindikator. Erfolg zeigt **Bezahlt** oder **Erstattet**, erhält den vorzeichenbehafteten berechneten Saldo und aktualisiert **Ausstehende Zahlungen** beziehungsweise **Ausstehende Erstattungen**. Warten Sie vor einer weiteren Aktion auf das Ergebnis. Bei vorhandener Adresse sendet Surveyor dem Zahler eine E-Mail.
 
-Um eine falsche Erfassung zu korrigieren, wählen Sie **Undo payment** oder **Undo refund**, prüfen den vorzeichenbehafteten Betrag und bestätigen dieselbe Aktion. Dadurch wird **Payment due** oder **Refund due** wiederhergestellt, während berechneter Saldo und Gutschriften aus früheren Berechnungen erhalten bleiben. Machen Sie fehlerhafte Erfassungen vor einer neuen Berechnung rückgängig.
+Bei unbestätigtem Ergebnis wählen Sie im Dialog **Aktualisieren**, prüfen den gespeicherten Status und wählen danach **Ich habe die gespeicherten Anteile geprüft**. Dies schließt die Prüfung, ohne die Zahlungsaufzeichnung zu wiederholen. Ist das Speichern bestätigt und nur das anschließende Laden fehlgeschlagen, bleibt die Zahlung gespeichert und kann in diesem Dialog nicht erneut übermittelt werden. Wählen Sie **Schließen** und aktualisieren Sie den Pool.
+
+Um eine falsche Erfassung zu korrigieren, wählen Sie **Zahlung rückgängig machen** oder **Erstattung rückgängig machen**, prüfen den vorzeichenbehafteten Betrag und bestätigen dieselbe Aktion. Dadurch wird **Zahlung ausstehend** oder **Erstattung ausstehend** wiederhergestellt, während berechneter Saldo und Gutschriften aus früheren Berechnungen erhalten bleiben. Machen Sie fehlerhafte Erfassungen vor einer neuen Berechnung rückgängig.
 
 ### Gespeicherte Anteile als PDF exportieren
 
-1. Öffnen Sie die Übersicht **Calculated shares** des Pools.
-2. Wählen Sie **Export shares PDF with example** oder **Export shares PDF without example**.
+1. Öffnen Sie die Übersicht **Berechnete Anteile** des Pools.
+2. Wählen Sie **Anteils-PDF mit Beispiel exportieren** oder **Anteils-PDF ohne Beispiel exportieren**.
 3. Speichern oder drucken Sie das Dokument im A4-Hochformat.
 
 Beide PDF-Varianten beginnen mit **Calculation breakdown** und gespeicherten Kontextzahlen: relevante Kosten, verwendete vorzeichenbehaftete Anpassungskategorien sowie zutreffende Teilnehmer-, Tages-/Nacht-, Einheiten-, Befreiungs- und Gesamtgewichtsangaben. Dieser Bereich enthält keine Formeln oder erklärenden Absätze. Diese Zahlen bleiben unabhängig von einem Beispiel verfügbar. Gewöhnliche Pools ohne Anpassungen verwenden eine Kostenkennzahl, statt gleiche Kostenebenen mehrfach aufzuführen.
 
-**Export shares PDF with example** ergänzt dasselbe **Example calculation** wie Organisatoransicht und Vorschau. Es erklärt Gesamtsumme und gemeinsame Basis mit den gespeicherten Beträgen und zutreffenden Anpassungen. Ein anonymes Zahlungsbeispiel kann Anwesenheit, Anteilsfaktor, Gesamtgewicht, gerundeten Grundanteil und Saldobestandteile zeigen. Ein umverteilter Zuschlag senkt die gemeinsame Basis und wird anschließend zum betroffenen Anteil addiert, ohne die Gesamtsumme zu erhöhen. Übernimmt die Beispielperson die Kosten anderer Teilnehmer, nennt die Einleitung deren Anzahl vor der Erklärung des zusammengeführten Grundanteils. Dieses Beispiel ist von Ihrer persönlichen Erklärung in **View breakdown** und E-Mails getrennt. Ältere Berechnungen behalten verfügbare Beträge und Notizen. Ist kein passendes Zahlungsbeispiel verfügbar, kann der Export allein die Poolsummen erklären. Ist für die frühere Berechnung keine Erklärung verfügbar, erscheint kein Beispielabschnitt.
+**Anteils-PDF mit Beispiel exportieren** ergänzt unter **Example calculation** denselben Inhalt wie die Beispielrechnung in Organisatoransicht und Vorschau. Es erklärt Gesamtsumme und gemeinsame Basis mit den gespeicherten Beträgen und zutreffenden Anpassungen. Ein anonymes Zahlungsbeispiel kann Anwesenheit, Anteilsfaktor, Gesamtgewicht, gerundeten Grundanteil und Saldobestandteile zeigen. Ein umverteilter Zuschlag senkt die gemeinsame Basis und wird anschließend zum betroffenen Anteil addiert, ohne die Gesamtsumme zu erhöhen. Übernimmt die Beispielperson die Kosten anderer Teilnehmer, nennt die Einleitung deren Anzahl vor der Erklärung des zusammengeführten Grundanteils. Dieses Beispiel ist von Ihrer persönlichen Erklärung unter **Aufschlüsselung ansehen** und in E-Mails getrennt. Ältere Berechnungen behalten verfügbare Beträge und Notizen. Ist kein passendes Zahlungsbeispiel verfügbar, kann der Export allein die Poolsummen erklären. Ist für die frühere Berechnung keine Erklärung verfügbar, erscheint kein Beispielabschnitt.
 
-**Export shares PDF without example** enthält Kontextzahlen, Anteile, ursprüngliche sachliche Notizen, Abwicklungsstatus und -daten sowie Transfersummen. Es enthält keine Rechenerklärungen oder Formeln. Zutreffende Anwesenheits- und Verteilungszahlen bleiben in **Calculation breakdown**. Ein veralteter kompakter Export verwendet den kurzen Hinweis **Recalculation required**. Seine gespeicherten Anteile und Abwicklungssummen stimmen mit der Variante mit Beispiel überein.
+**Anteils-PDF ohne Beispiel exportieren** enthält Kontextzahlen, Anteile, ursprüngliche sachliche Notizen, Abwicklungsstatus und -daten sowie Transfersummen. Es enthält keine Rechenerklärungen oder Formeln. Zutreffende Anwesenheits- und Verteilungszahlen bleiben in **Calculation breakdown**. Ein veralteter kompakter Export verwendet den kurzen Hinweis **Recalculation required**. Seine gespeicherten Anteile und Abwicklungssummen stimmen mit der Variante mit Beispiel überein.
 
 Die Tabelle enthält jeden gespeicherten Anteil des Pools, unabhängig von Suche, Statusfilter, Sortierung oder Seite auf dem Bildschirm. Die zutreffenden Teilbeträge, der vorzeichenbehaftete **Calculated balance**, Status und gespeicherte Notizen jedes Zahlers erscheinen, ohne Formel oder Saldo unter jeder Zeile zu wiederholen. Erfasste Abwicklungen zeigen **Paid** oder **Refunded** und bei Verfügbarkeit das Abwicklungsdatum. **Saved settlement totals** enthält **Payments due** und vorzeichenbehaftete **Refunds due** für noch zu erfassende Transfers sowie zutreffende Rechnungsgutschriften, frühere Zahlungsüberträge und in dieser Berechnung erfasste **Payments received** beziehungsweise negative **Refunds paid**. Abgewickelte Beträge sind aus den fälligen Summen ausgeschlossen, während ihr ursprünglicher berechneter Saldo sichtbar bleibt. Bei **Recalculation required** stammen die exportierten Anteile aus der vorherigen gespeicherten Berechnung. Ein Export berechnet den Pool nicht neu und ändert keine Zahlungen.
 
@@ -660,15 +668,15 @@ Die Person muss demselben offenen Pool zugeordnet sein. Sie können weder sich s
 
 ### Ein Anteil weicht von der einfachen Gleichverteilung ab
 
-Prüfen Sie Verteilungsmodus, Anwesenheitsdaten, individuelle Faktoren, Befreiungen, umverteilte und aufgeschlagene Anpassungen, Rechnungsgutschriften und Übernahmen. Öffnen Sie **View breakdown**, um **Saved calculation notes** und gespeicherte numerische Eingaben zu lesen.
+Prüfen Sie Verteilungsmodus, Anwesenheitsdaten, individuelle Faktoren, Befreiungen, umverteilte und aufgeschlagene Anpassungen, Rechnungsgutschriften und Übernahmen. Öffnen Sie **Aufschlüsselung ansehen**, um **Gespeicherte Berechnungsnotizen** und gespeicherte numerische Eingaben zu lesen.
 
 ### Der Pool hat sich geändert, die Anteile aber nicht
 
-Die Berechnung eines geschlossenen Pools bleibt gespeichert, bis Sie eine Neuberechnung anwenden. Speichern Sie Änderungen im jeweiligen Dialog und prüfen und berechnen Sie danach neu. Alternativ stellt **Roll back pool changes** gespeicherte Pooleingaben wieder her. **Record payment** und **Record refund** bleiben währenddessen für die gespeicherten Salden verfügbar.
+Die Berechnung eines geschlossenen Pools bleibt gespeichert, bis Sie eine Neuberechnung anwenden. Speichern Sie Änderungen im jeweiligen Dialog und prüfen und berechnen Sie danach neu. Alternativ stellt **Pooländerungen zurücksetzen** gespeicherte Pooleingaben wieder her. **Zahlung erfassen** und **Erstattung erfassen** bleiben währenddessen für die gespeicherten Salden verfügbar.
 
 ### Ein neu berechneter Anteil verlangt eine Zahlung, obwohl ich schon bezahlt habe
 
-Prüfen Sie **Previously settled** und **Calculated balance** unter **View breakdown**. Frühere Zahlungen senken den neuen Saldo. Nur die neue Differenz muss abgewickelt werden. Ein Nullsaldo zeigt **No payment**. Eine Erstattung hat einen negativen berechneten Saldo.
+Prüfen Sie **Bisher beglichen** und **Berechneter Saldo** unter **Aufschlüsselung ansehen**. Frühere Zahlungen senken den neuen Saldo. Nur die neue Differenz muss abgewickelt werden. Ein Nullsaldo zeigt **Keine Zahlung**. Eine Erstattung hat einen negativen berechneten Saldo.
 
 ### Eine erwartete E-Mail ist nicht angekommen
 

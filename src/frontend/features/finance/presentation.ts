@@ -1,4 +1,5 @@
 import type {LocalizationContext} from '../../../types/LocalizationTypes';
+import type {components} from '../../../types/api/v1';
 
 /** Money formatting changes presentation only; signed balances remain server-owned. */
 export function financeMoney(amount: string, locale: string): string {
@@ -26,4 +27,22 @@ export function invoiceStatus(status: string, messages: LocalizationContext): st
 export function invoiceStatusClass(status: string): string {
     return status === 'NEW' ? 'bg-warning text-dark' : status === 'APPROVED' ? 'bg-success'
         : status === 'REJECTED' ? 'bg-danger' : 'bg-secondary';
+}
+
+// The four existing journeys retain their own complete messages. One selector
+// keeps ledger actions, signed confirmation and successful receipts consistent.
+const settlementMessages = {
+    payment: {action: 'finance.recordPayment', confirmation: 'finance.confirmRecordPayment', notice: 'finance.paymentRecorded'},
+    refund: {action: 'finance.recordRefund', confirmation: 'finance.confirmRecordRefund', notice: 'finance.refundRecorded'},
+    reversePayment: {action: 'finance.reversePayment', confirmation: 'finance.confirmReversePayment', notice: 'finance.paymentRecordRemoved'},
+    reverseRefund: {action: 'finance.reverseRefund', confirmation: 'finance.confirmReverseRefund', notice: 'finance.refundRecordRemoved'},
+} as const;
+
+/** Select existing action, review and receipt wording for a saved signed
+ * balance. The server owns its paid marker and financial calculation. */
+export function financeSettlementMessages(share: components['schemas']['FinanceShare']) {
+    const refund = Number(share.amount) < 0;
+    // A nonzero paid share reverses its recorded transfer in the same direction.
+    if (share.isPaid) return refund ? settlementMessages.reverseRefund : settlementMessages.reversePayment;
+    return refund ? settlementMessages.refund : settlementMessages.payment;
 }

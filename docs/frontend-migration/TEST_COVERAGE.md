@@ -6,7 +6,7 @@ owner: project maintainers
 status: migration-pending
 last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Cached Activity re-entry, personal Overview schedule commands and nonempty Event attendance-duplication assertions reconciled with retained P0-P8 maps; test selection is not execution evidence or full parity certification
+verification-scope: P9 reviewed calculation, signed settlement, outputs and privacy assertion map added to retained P0-P8, cached Activity and Overview coverage; test selection is not execution evidence or full parity certification
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts; src/frontend/app/queryKeys.ts; src/frontend/app/context.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -722,6 +722,34 @@ Original screenshots and measured presentation accompany the 1280px/390px compar
 establish executed results or image acceptance. The [paired review](PILOT_PARITY_REVIEW.md) owns actual execution,
 independent original-image inspection and finite scope limits. Existing staged contribution rules remain accurate;
 the localization and refresh specialist references now reflect the implemented Finance families and P7/P8 scope.
+
+## P9 financial review, settlement and outputs assertion map (2026-10-22)
+
+The [explicit P9 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p9-implementation-trigger-2026-10-22)
+authorizes the complete planned phase. The following map describes current production consumers and authored
+assertions; it does not certify an executed browser run, inspect an image or establish external mail delivery.
+The paired review owns commands, actual results, independent review and finite visual acceptance.
+
+| Contract | Unique assertion boundary |
+|---|---|
+| INV-12/13: reviewed saved-input calculation | Mounted `FinanceCalculationReview` cases retain a captured revision through background changes, consume rejected apply authority and require deliberate new preview. The generated transport validates decimal-string preview evidence. Genuine controller/HTTP/ORM cases call the existing calculation owner, reject stale revisions and preserve saved rows. Built cases author initial close and two-browser stale reviews after another browser changes settings or records payment. |
+| INV-14: rollback | The adapter invokes the existing saved-input restoration owner. Persistence asserts preserved share/transfer history; the retained invoice-history cases cover external-change invalidation. Mounted output cases distinguish rollback outcomes and lock completed commands. The built signed workflow authors pool-settings rollback after recalculation without replacing the saved payer rows. |
+| INV-15–18: signed saved settlement and stable display | Mounted `FinanceShares`/`FinanceSettlement` cases cover canceled signed confirmation, pending locks, confirmed-only status updates, failed follow-up reads, stable filtered rows and explicit refresh acknowledgement. Persistence retains positive payments, negative refunds and carried credits. The built workflow authors payment/refund recording and reversal, deferred status filtering and recalculation with both transfer directions. |
+| INV-19/20 and EXP-03: outputs/privacy | Existing mail/PDF unit cases retain numerical/output content. Real adapter cases protect independent management grants, Event/pool ownership, bodyless saved-email/rollback commands and queued-recipient counts. Built cases author actual PDF downloads of both variants with display filters excluded from their URLs, unchanged saved shares, recipient-count feedback and own/foreign proof/history/breakdown checks. They do not extract rendered PDF text or prove SMTP delivery. |
+| Unknown calculation and finite visual comparison | The built response-loss case pauses then drops a real committed calculation response, checks one POST, inspects current saved rows and acknowledges without replay. Four locale/width cases author native/Vue ready-notice, resting preview, expanded explanation, ledger, refund-confirmation and notification captures using equivalent saved actors/data at 1280px/390px in English/German. Painted text fragments must remain inside their translated header cells. Original images require individual inspection; source presence is not visual acceptance. Native labels retain their accepted English comparator default. |
+
+Sources: [generated-contract cases](../../tests/unit/frontend-finance-contracts.spec.ts),
+[genuine persistence/HTTP](../../tests/integration/finance-api.spec.ts),
+[retained invoice-history persistence](../../tests/integration/invoice-history-changes.spec.ts),
+[mounted calculation/output owners](../../tests/frontend/frontend-finance-calculation.spec.ts),
+[mounted settlement owners](../../tests/frontend/frontend-finance-settlement.spec.ts) and
+[built P9 workflows/captures](../../tests/e2e/frontend-finance-p9.spec.ts).
+The unchanged [allocation/rounding](../../tests/unit/invoice-distribution.spec.ts),
+[settlement arithmetic](../../tests/unit/invoice-settlements.spec.ts),
+[settlement email](../../tests/unit/invoice-settlement-email.spec.ts) and
+[shares PDF](../../tests/unit/invoice-shares-pdf.spec.ts) retain their existing boundaries rather than being
+reimplemented in the browser. Native frontend sources, stronger backend guarantees, full output localization,
+P10/P11, cutover and production-guide publication remain outside this implementation instruction.
 
 ## Verification selection for subsequent migration slices
 

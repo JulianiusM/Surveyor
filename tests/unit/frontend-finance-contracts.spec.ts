@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import {financeDecimal} from '../../src/frontend/features/finance/numbers';
-import {contractValidator} from '../../src/modules/api/contracts';
+import {contractValidator, operationContract} from '../../src/modules/api/contracts';
 
 describe('finance decimal transport preserves existing business inputs', () => {
     it('retains amount precision while normalizing only transport spelling', () => {
@@ -31,5 +31,26 @@ describe('finance decimal transport preserves existing business inputs', () => {
         expect(validate({...input, participantFactors: {'7': financeDecimal('1.00001', 4)}})).toBe(false);
         expect(validate({...input, registrations: [7]})).toBe(false);
         expect(validate({...input, participantFactors: {'7': 2.5}})).toBe(false);
+    });
+
+    it('requires reviewed calculation evidence while retaining the existing settlement and optional-output contracts', () => {
+        const calculation = contractValidator('FinanceCalculationInput');
+        expect(calculation({expectedRevision: 7, sendEmails: false})).toBe(true);
+        expect(calculation({sendEmails: false})).toBe(false);
+        expect(calculation({expectedRevision: 7})).toBe(false);
+        expect(calculation({expectedRevision: '7', sendEmails: true})).toBe(false);
+
+        // Payment confirmation is a browser interaction, not a replacement financial revision protocol.
+        const settlement = contractValidator('FinanceSettlementInput');
+        expect(settlement({isPaid: true})).toBe(true);
+        expect(settlement({isPaid: false})).toBe(true);
+        expect(settlement({isPaid: 'true'})).toBe(false);
+        expect(settlement({isPaid: true, expectedRevision: 7})).toBe(false);
+        expect(operationContract('rollbackEventFinancePool').requestSchema).toBeNull();
+        expect(operationContract('notifyEventFinancePool').requestSchema).toBeNull();
+        for (const operation of ['closeEventFinancePool', 'recalculateEventFinancePool', 'settleEventFinanceShare',
+            'rollbackEventFinancePool', 'notifyEventFinancePool'] as const) {
+            expect(operationContract(operation).policy.retryPolicy).toBe('reconcile-only');
+        }
     });
 });

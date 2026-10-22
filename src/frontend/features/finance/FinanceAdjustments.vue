@@ -4,6 +4,7 @@ import type {components} from '../../../types/api/v1';
 import {useActionState, usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
+import {useFinanceDraft} from './drafts';
 import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
 import {financeMoney} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
@@ -31,6 +32,7 @@ const inspected = ref(false);
 const dirty = computed(() => !!draft.registrationId || !!draft.amount || !!draft.note || !draft.subtractFromPool);
 const command = useCommand(props.refresh, true, {dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
 const removal = useCommand(props.refresh, false, {dirty: () => false, unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
+useFinanceDraft(() => props.pool.id, () => dirty.value || command.pending.value || command.uncertain.value || removal.pending.value || removal.uncertain.value);
 const action = useActionState({eligible: () => props.active, blocked: () => command.action.disabled.value || removal.action.disabled.value});
 const eligible = computed(() => props.participants.filter(person => props.pool.assignAll || props.pool.assignments?.some(row => row.registrationId === person.id)));
 function personName(registrationId: string): string {

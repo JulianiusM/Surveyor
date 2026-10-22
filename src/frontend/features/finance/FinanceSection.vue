@@ -8,6 +8,7 @@ import {isReadDenial} from '../../app/transport';
 import {useCommand} from '../../composables/command';
 import {useEventSection} from '../event/useEventSection';
 import {useFinanceApi} from './api';
+import {provideFinanceDrafts} from './drafts';
 import {financeMoney} from './presentation';
 import FinanceBreakdown from './FinanceBreakdown.vue';
 import FinanceCoverage from './FinanceCoverage.vue';
@@ -22,6 +23,8 @@ import FinanceInvoiceReview from './FinanceInvoiceReview.vue';
 import FinanceAssignments from './FinanceAssignments.vue';
 import FinanceAdjustments from './FinanceAdjustments.vue';
 import FinanceTakeovers from './FinanceTakeovers.vue';
+import FinancePoolOutputs from './FinancePoolOutputs.vue';
+import FinanceSettlement from './FinanceSettlement.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppAccordionButton from '../../components/AppAccordionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
@@ -38,6 +41,7 @@ const props = defineProps<{eventId: string; admin: boolean; enabled: boolean}>()
 const context = usePilot();
 const {messages, locale} = context;
 const api = useFinanceApi(context);
+const hasPendingEdits = provideFinanceDrafts();
 const id = useId();
 const open = ref(props.admin);
 const submissionOpen = ref(false);
@@ -48,6 +52,9 @@ const retraction = ref<Invoice | null>(null);
 const creating = ref(false);
 const editor = ref<{poolId: string; kind: 'settings' | 'expense' | 'assignments' | 'adjustments' | 'takeovers'; payerId?: string} | null>(null);
 const review = ref<{invoice: Invoice; action: 'approve' | 'decline' | 'revise' | 'reject' | 'close'} | null>(null);
+const settlement = ref<Share | null>(null);
+const settlementPending = ref(false);
+const refreshVersion = ref(0);
 const key = computed(() => [...eventKeys.finance(context.session.value?.context, props.eventId, props.admin), locale.value]);
 const section = useEventSection(key, readFinance, computed(() => props.enabled), computed(() => open.value), retainLocaleSnapshot);
 const selection = computed(() => section.data.value?.shares.find(share => share.id === selectedShareId.value) ?? null);
@@ -86,6 +93,7 @@ function retireLocalState(): void {
     selectedShareId.value = null; retraction.value = null; openPools.value = new Set();
     submissionOpen.value = false;
     creating.value = false; editor.value = null; review.value = null;
+    settlement.value = null; settlementPending.value = false;
 }
 /** Fresh authority removes dialogs whose original saved row is no longer
  * admitted; surviving read-only selections follow the current projection. */
@@ -101,6 +109,15 @@ function togglePool(poolId: string): void {
     openPools.value = next;
 }
 function inspect(share: Share): void { if (available.isAvailable()) selectedShareId.value = share.id; }
+/** Capture the organizer's signed saved row before opening confirmation.
+ * Revalidation can update current facts without replacing the reviewed intent. */
+function beginSettlement(share: Share): void {
+    if (!props.admin || !available.isAvailable() || settlementPending.value || Number(share.amount) === 0) return;
+    // The organizer projection requires its independent management grant. The
+    // command repeats authorization on the server against the captured share ID.
+    settlement.value = {...share};
+}
+function closeSettlement(): void {settlement.value = null; settlementPending.value = false;}
 function beginRetraction(invoice: Invoice): void {
     if (available.isAvailable() && !props.admin && invoice.canRetract) retraction.value = {...invoice};
 }
@@ -147,6 +164,9 @@ async function refresh(): Promise<void> {
     if (!refreshAction.isAvailable()) return;
     await command.reconcileSafely(async () => {
         await section.refresh();
+        // Explicit Refresh adopts current ledger ordering/status filters.
+        // Routine command reads leave the action row in its original position.
+        refreshVersion.value++;
         // A displayed saved explanation participates in this section's explicit
         // refresh, while collapsed/unselected rows stay genuinely lazy.
         await breakdown.value?.refresh();
@@ -191,11 +211,6 @@ function revealHistory(): void { submissionOpen.value = true; }
                         <template v-if="admin">
                             <div class="d-flex flex-wrap gap-2 mb-3">
                                 <ActionButton variant="primary" class="btn-sm" :state="available" @click="creating = true">{{ messages.t('finance.createPool') }}</ActionButton>
-                                <!-- Calculation and settlement retain P9's native
-                                     destination; P8 inputs are independent SPA saves. -->
-                                <a class="btn btn-outline-light btn-sm" :href="`/event/${eventId}/admin#invoicePoolAccordion`">
-                                    {{ messages.t('finance.calculationAndSettlement') }}
-                                </a>
                             </div>
                             <FinancePoolEditor
                                 :event-id="eventId" :participants="section.data.value.participants ?? []" :pools="section.data.value.pools"
@@ -327,10 +342,18 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                 v-if="pool.status === 'CLOSED'"
                                                 :shares="section.data.value.shares.filter(share => share.poolId === pool.id)"
                                                 admin
+                                                settlement
+                                                :pending-share-id="settlementPending ? settlement?.id : null"
+                                                :refresh-version="refreshVersion"
                                                 :disabled="available.disabled.value"
                                                 @inspect="inspect"
+                                                @settle="beginSettlement"
                                                 @refresh="refresh"
                                             />
+                                            <FinancePoolOutputs :event-id="eventId" :pool="pool" :active="available.available.value"
+                                                                :shares="section.data.value.shares.filter(share => share.poolId === pool.id)"
+                                                                :refresh="section.refresh" :has-pending-edits="() => hasPendingEdits(pool.id)"
+                                                                @saved="command.setNotice" />
                                             <div
                                                 v-if="pool.status === 'CLOSED' && section.data.value.shares.some(share => share.poolId === pool.id)"
                                                 class="d-flex flex-wrap gap-2 mt-3"
@@ -421,6 +444,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                                 :shares="section.data.value.shares"
                                 :pools="section.data.value.pools"
                                 :disabled="available.disabled.value"
+                                :refresh-version="refreshVersion"
                                 @inspect="inspect"
                                 @refresh="refresh"
                             />
@@ -446,6 +470,10 @@ function revealHistory(): void { submissionOpen.value = true; }
             :admin="admin"
             @close="selectedShareId = null"
         />
+        <FinanceSettlement v-if="settlement && section.data.value" :key="settlement.id" :event-id="eventId" :share="settlement"
+                           :current-share="section.data.value.shares.find(share => share.id === settlement?.id)" open
+                           :active="available.available.value" :refresh="section.refresh" @close="closeSettlement"
+                           @pending="settlementPending = $event" @saved="command.setNotice" />
         <AppDialog content-class="text-white finance-dialog"
             v-if="retraction"
             open

@@ -11,6 +11,7 @@ import invoices, {
     changeEventFinanceSubmissionState, admitEventFinanceOrganizer, recordEventOrganizerInvoice,
     reviewEventFinanceInvoice, updateEventFinanceAssignments, addEventFinanceAdjustment,
     removeEventFinanceAdjustment, updateEventFinanceTakeovers,
+    previewEventFinancePool, calculateEventFinancePool, rollbackEventFinancePool, notifyEventFinancePool, settleEventFinanceShare,
 } from '../../src/controller/eventPoolController';
 import * as eventService from '../../src/modules/database/services/EventService';
 import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
@@ -79,6 +80,99 @@ afterAll(async function closeFinanceDatabase() {
 });
 
 describe('versioned finance shared ownership and private saved projections', () => {
+    it('projects one localized reviewed calculation without writes and preserves the independent preview method grant', async () => {
+        const {id, event, poolId} = await fixture();
+        await invoices.addOrganizerInvoice(event, poolId, {amount: 27.51, description: 'Preview source'}, nativeActor(owner));
+        const before = (await invoiceService.getPoolWithInvoices(poolId))!;
+        sendEmail.mockClear();
+        await expect(previewEventFinancePool(id, poolId, actor(participant))).rejects.toMatchObject({status: 403});
+        await adminService.addAdmin('event', id, editor.id, PERM.MANAGE_ASSIGNMENTS);
+        const preview = await previewEventFinancePool(id, poolId, actor(editor), 'de');
+        const validate = contractValidator('FinancePreview');
+        expect(validate(preview), JSON.stringify(validate.errors)).toBe(true);
+        expect(preview.revision).toBe(before.calculationRevision);
+        expect(preview.shares).toHaveLength(2);
+        expect(preview.shares.map(row => row.baseShareAmount)).toEqual(['13.76', '13.76']);
+        expect(preview.totals).toMatchObject({invoiceAmount: '27.51', allocatedBaseAmount: '27.52', roundingDifference: '0.01'});
+        expect(preview.columns[0]).toMatchObject({key: 'baseShareAmount', label: 'Grundanteil'});
+        expect(preview.calculation.title).toBe('Berechnungsübersicht');
+        expect(JSON.stringify(preview)).not.toContain(participant.user!.email);
+        expect(sendEmail).not.toHaveBeenCalled();
+        // Method admission grants preview without silently admitting the private organizer page.
+        await expect(readEventFinance(id, actor(editor), 'organizer')).rejects.toMatchObject({status: 403});
+        expect((await invoiceService.getPoolWithInvoices(poolId))!.shares).toEqual(before.shares);
+        expect((await invoiceService.getPoolWithInvoices(poolId))!.calculationRevision).toBe(before.calculationRevision);
+        const foreign = await fixture();
+        await expect(previewEventFinancePool(foreign.id, poolId, actor(owner))).rejects.toMatchObject({status: 404});
+        await adminService.updatePerms('event', id, {public: PERM.MANAGE_ASSIGNMENTS});
+        expect((await previewEventFinancePool(id, poolId, {})).revision).toBe(before.calculationRevision);
+    });
+
+    it('rejects stale previews, carries signed recorded transfers and restores only pool-local calculation inputs', async () => {
+        const {id, event, poolId} = await fixture();
+        const cost = await submit(event, poolId, participant, 'Calculation source', 40);
+        await invoices.approveInvoice(event, poolId, String(cost.id), {}, nativeActor(owner));
+        const first = await previewEventFinancePool(id, poolId, actor(owner));
+        await updateEventFinanceSettings(id, poolId, {distribution: 'EQUAL', description: 'New input', sendCalculationEmails: false, roundUpShares: true}, actor(owner));
+        await expect(calculateEventFinancePool(id, poolId, {expectedRevision: first.revision, sendEmails: false}, actor(owner), false))
+            .rejects.toMatchObject({code: 'RESOURCE_CONFLICT', status: 409});
+        expect((await invoiceService.getPoolWithInvoices(poolId))!.shares).toEqual([]);
+        const reviewed = await previewEventFinancePool(id, poolId, actor(owner));
+        sendEmail.mockClear();
+        await calculateEventFinancePool(id, poolId, {expectedRevision: reviewed.revision, sendEmails: false}, actor(owner), false);
+        expect(sendEmail).not.toHaveBeenCalled();
+        const saved = (await invoiceService.getPoolWithInvoices(poolId))!;
+        const refund = saved.shares.find(row => Number(row.shareAmount) < 0)!;
+        const payment = saved.shares.find(row => Number(row.shareAmount) > 0)!;
+        await settleEventFinanceShare(id, poolId, String(refund.id), true, actor(owner));
+        await settleEventFinanceShare(id, poolId, String(payment.id), true, actor(owner));
+        await updateEventFinanceSettings(id, poolId, {distribution: 'EQUAL', description: 'Pending local edit', sendCalculationEmails: false, roundUpShares: false}, actor(owner));
+        const pending = (await invoiceService.getPoolWithInvoices(poolId))!;
+        // A stale source calculation remains payable; recording/reversing uses its saved signed balance.
+        await settleEventFinanceShare(id, poolId, String(payment.id), false, actor(owner));
+        await settleEventFinanceShare(id, poolId, String(payment.id), true, actor(owner));
+        expect((await invoiceService.getPoolWithInvoices(poolId))!.needsRecalculation).toBeTruthy();
+        const restored = await rollbackEventFinancePool(id, poolId, {}, actor(owner));
+        expect(restored).toEqual({needsRecalculation: false, externalChanges: false});
+        const afterRollback = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(afterRollback.description).toBe('New input');
+        expect(afterRollback.shares.map(row => [row.id, row.shareAmount, row.isPaid])).toEqual(pending.shares.map(row => [row.id, row.shareAmount, row.isPaid]));
+        const again = await previewEventFinancePool(id, poolId, actor(owner));
+        expect(again.shares.map(row => row.paymentCreditAmount).sort()).toEqual(['-20.00', '20.00']);
+        await calculateEventFinancePool(id, poolId, {expectedRevision: again.revision, sendEmails: false}, actor(owner), true);
+        const recalculated = (await invoiceService.getPoolWithInvoices(poolId))!;
+        expect(recalculated.shares.map(row => Number(row.shareAmount))).toEqual([0, 0]);
+        expect(recalculated.shares.map(row => Number(row.paymentCreditAmount)).sort((a, b) => a - b)).toEqual([-20, 20]);
+        expect(recalculated.status).toBe('CLOSED');
+    });
+
+    it('queues optional settlement notices from the complete saved ledger and preserves PDF snapshot privacy', async () => {
+        const {id, event, poolId} = await fixture();
+        await invoices.addOrganizerInvoice(event, poolId, {amount: 28, description: 'Mail and output source'}, nativeActor(owner));
+        const reviewed = await previewEventFinancePool(id, poolId, actor(owner));
+        sendEmail.mockClear();
+        await calculateEventFinancePool(id, poolId, {expectedRevision: reviewed.revision, sendEmails: true}, actor(owner), false);
+        expect(sendEmail).toHaveBeenCalledTimes(2);
+        const saved = (await invoiceService.getPoolWithInvoices(poolId))!;
+        await expect(notifyEventFinancePool(id, poolId, {expectedRevision: reviewed.revision}, actor(owner)))
+            .rejects.toMatchObject({code: 'RESOURCE_CONFLICT', status: 409});
+        sendEmail.mockClear();
+        expect(await notifyEventFinancePool(id, poolId, {}, actor(owner))).toEqual({count: 2});
+        expect(sendEmail).toHaveBeenCalledTimes(2);
+        expect((await invoiceService.getPoolWithInvoices(poolId))!.shares).toEqual(saved.shares);
+        // Both PDF variants use the existing complete saved rows, independent of any browser filtering.
+        const full = await invoices.getInvoiceSharesPdfData(event, poolId, {example: 'true'});
+        const compact = await invoices.getInvoiceSharesPdfData(event, poolId, {example: 'false'});
+        expect(full.shares).toHaveLength(2);
+        expect(compact.shares).toEqual(full.shares);
+        expect(full.pdfOptions?.includeExampleCalculation).toBe(true);
+        expect(compact.pdfOptions?.includeExampleCalculation).toBe(false);
+        const personal = await readEventFinance(id, actor(participant));
+        expect(personal.pools[0].summary).toBeNull();
+        expect(personal.pools[0].canRollback).toBeUndefined();
+        expect(JSON.stringify(personal)).not.toContain(other.user!.email);
+    });
+
     it('preserves the existing native public management methods independently of profile-required invoice actions', async () => {
         const {id, event, poolId} = await fixture();
         const invoice = await submit(event, poolId, participant, 'Native public review baseline');
@@ -190,6 +284,37 @@ describe('versioned finance shared ownership and private saved projections', () 
             expect(pool.invoices[0]).toMatchObject({description: 'Optional organizer proof saved', proofOriginalName: 'organizer.pdf',
                 recordedByProfileId: owner.id, recordedByName: owner.name, registrationId: null});
             expect(await eventService.getRegistrationFor(owner.id, id)).toBeNull();
+
+            // Exercise all reviewed calculation transports against real middleware and persistence.
+            const calculationPath = `${endpoint}/${poolId}`;
+            const previewReply = await fetch(`${calculationPath}/preview`, {headers});
+            expect(previewReply.status).toBe(200);
+            const calculation = await previewReply.json();
+            const jsonHeaders = {...headers, 'Content-Type': 'application/json'};
+            const missingRevision = await fetch(`${calculationPath}/close`, {method: 'POST', headers: jsonHeaders,
+                body: JSON.stringify({sendEmails: false})});
+            expect(missingRevision.status).toBe(400);
+            const closed = await fetch(`${calculationPath}/close`, {method: 'POST', headers: jsonHeaders,
+                body: JSON.stringify({expectedRevision: calculation.revision, sendEmails: false})});
+            expect(closed.status).toBe(200);
+            expect(await closed.json()).toEqual({changed: true});
+            const savedShares = (await invoiceService.getPoolWithInvoices(poolId))!.shares;
+            const settled = await fetch(`${calculationPath}/shares/${savedShares[0].id}/settlement`, {method: 'POST', headers: jsonHeaders,
+                body: JSON.stringify({isPaid: true})});
+            expect(settled.status).toBe(200);
+            expect(await settled.json()).toEqual({changed: true});
+            // These existing actions have no mandatory revision or request body.
+            const rolledBack = await fetch(`${calculationPath}/rollback`, {method: 'POST', headers});
+            expect(rolledBack.status).toBe(200);
+            expect(await rolledBack.json()).toEqual({needsRecalculation: false, externalChanges: false});
+            const notified = await fetch(`${calculationPath}/notify`, {method: 'POST', headers});
+            expect(notified.status).toBe(200);
+            expect(await notified.json()).toEqual({count: 2});
+            const freshPreview = await fetch(`${calculationPath}/preview`, {headers});
+            const freshCalculation = await freshPreview.json();
+            const recalculated = await fetch(`${calculationPath}/recalculate`, {method: 'POST', headers: jsonHeaders,
+                body: JSON.stringify({expectedRevision: freshCalculation.revision, sendEmails: false})});
+            expect(recalculated.status).toBe(200);
 
             // Public method grants remain independent from private page/profile
             // admission. Anonymous writes still require origin and compatibility.

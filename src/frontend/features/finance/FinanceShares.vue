@@ -2,17 +2,19 @@
 import {computed, ref, useId, watch} from 'vue';
 import type {components} from '../../../types/api/v1';
 import {usePilot} from '../../app/context';
-import {financeMoney} from './presentation';
+import {financeMoney, financeSettlementMessages} from './presentation';
 import ActionButton from '../../components/ActionButton.vue';
 import FormField from '../../components/FormField.vue';
+import StatusNotice from '../../components/StatusNotice.vue';
 import FinanceLedgerFooter from './FinanceLedgerFooter.vue';
 
 type Share = components['schemas']['FinanceShare'];
 // Organizer payer rows and personal pool rows share saved signed balances,
 // display filters and paging. The server supplies status/caption/coverage facts.
-const props = defineProps<{shares: Share[]; admin?: boolean; disabled?: boolean;
+const props = defineProps<{shares: Share[]; admin?: boolean; disabled?: boolean; readOnly?: boolean;
+    settlement?: boolean; pendingShareId?: string | null; refreshVersion?: number;
     pools?: Pick<components['schemas']['FinancePool'], 'id' | 'description'>[]}>();
-const emit = defineEmits<{inspect: [share: Share]; refresh: []}>();
+const emit = defineEmits<{inspect: [share: Share]; settle: [share: Share]; refresh: []}>();
 const {messages, locale} = usePilot();
 const id = useId();
 const search = ref('');
@@ -20,12 +22,53 @@ const status = ref('');
 const sort = ref('name');
 const size = ref(25);
 const page = ref(0);
+const refreshNeeded = ref(false);
+const refreshNotice = ref(0);
 const poolDescriptions = computed(() => new Map((props.pools ?? []).map(pool => [pool.id, pool.description ?? ''])));
-const filtered = computed(filteredShares);
+// Only display identities are retained. Every rendered amount/status still comes
+// directly from the current admitted read, without a second server-data store.
+const selectedIds = ref(filteredShares().map(share => share.id));
+const currentShares = computed(() => new Map(props.shares.map(share => [share.id, share])));
+const filtered = computed(() => selectedIds.value.flatMap(id => {
+    const share = currentShares.value.get(id);
+    return share ? [share] : [];
+}));
 const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / size.value)));
 const visible = computed(() => filtered.value.slice(page.value * size.value, (page.value + 1) * size.value));
-watch([search, status, sort, size], () => {page.value = 0;});
+watch([search, status, sort, size, locale], resetDisplay);
+watch(() => props.refreshVersion, applyDisplay);
+watch(() => props.shares.map(share => share.id).join(','), resetDisplay);
+watch(() => props.shares.map(share => `${share.id}:${share.status}`).join(','), markChangedFilter);
 watch(pages, value => {page.value = Math.min(page.value, value - 1);});
+
+/** Apply current filters only for explicit controls or a replacement saved share
+ * set. A confirmed settlement updates live text without removing its action row. */
+function applyDisplay(): void {
+    // Store display order alone; financial values remain owned by the read.
+    selectedIds.value = filteredShares().map(share => share.id);
+    refreshNeeded.value = false;
+}
+function resetDisplay(): void {page.value = 0; applyDisplay();}
+function markChangedFilter(): void {if (status.value) refreshNeeded.value = true;}
+function changePage(difference: number): void {page.value += difference; applyDisplay();}
+
+/** Refresh list acknowledges even an unchanged result and reapplies deferred
+ * status filtering. Its saved read remains owned by the parent section. */
+function refreshDisplay(): void {
+    if (props.disabled || props.pendingShareId) return;
+    // Preserve the current page and focus; no command or implicit retry is sent.
+    applyDisplay();
+    refreshNotice.value++;
+    emit('refresh');
+}
+
+/** A row action is available only through its organizer's explicit grant. The
+ * reviewed component captures the signed share before any asynchronous write. */
+function settle(share: Share): void {
+    if (!props.admin || props.readOnly || !props.settlement || props.disabled || props.pendingShareId || Number(share.amount) === 0) return;
+    // The parent owns the dialog lifetime; personal ledgers never emit commands.
+    emit('settle', share);
+}
 
 /** Search only the admitted saved rows; sort by their existing balance without
  * deriving allocations or changing the complete totals/export accounting. */
@@ -73,6 +116,9 @@ function statusLabel(status: string): string {
             <span v-if="admin" class="badge bg-secondary ms-2" data-finance-payer-count>{{ messages.t('finance.payersCount', {count: shares.length}) }}</span>
         </h3>
         <p v-if="admin" class="text-secondary small">{{ messages.t('finance.statusDescribesPayer') }}</p>
+        <StatusNotice v-if="refreshNotice" placement="notification" transient :renewal="refreshNotice" @dismiss="refreshNotice = 0">
+            {{ messages.t('finance.theCurrentFiltersAndOrderingHaveBeenApplied') }}
+        </StatusNotice>
         <div class="share-ledger-controls d-flex flex-wrap gap-2 mb-3">
             <FormField
                 :id="`${id}-search`"
@@ -83,20 +129,21 @@ function statusLabel(status: string): string {
                 control-class="form-control-sm"
                 :label="messages.t('finance.searchShares')"
                 :placeholder="messages.t(admin ? 'finance.searchPayersOrCalculationNotes' : 'finance.searchPoolsOrCalculationNotes')"
+                :disabled="disabled || !!pendingShareId"
             />
             <label class="visually-hidden" :for="`${id}-status`">{{ messages.t('finance.filterShareStatus') }}</label>
-            <select :id="`${id}-status`" v-model="status" class="form-select form-select-sm text-bg-dark">
+            <select :id="`${id}-status`" v-model="status" class="form-select form-select-sm text-bg-dark" :disabled="disabled || !!pendingShareId">
                 <option value="">{{ messages.t('finance.allStatuses') }}</option>
                 <option v-for="value in ['due', 'refund', 'settled']" :key="value" :value="value">{{ statusLabel(value) }}</option>
             </select>
             <label class="visually-hidden" :for="`${id}-sort`">{{ messages.t(admin ? 'finance.sortShares' : 'finance.sortPools') }}</label>
-            <select :id="`${id}-sort`" v-model="sort" class="form-select form-select-sm text-bg-dark">
+            <select :id="`${id}-sort`" v-model="sort" class="form-select form-select-sm text-bg-dark" :disabled="disabled || !!pendingShareId">
                 <option value="name">{{ messages.t(admin ? 'finance.payerAZ' : 'finance.poolAZ') }}</option>
                 <option value="amount-desc">{{ messages.t('finance.amountHighToLow') }}</option>
                 <option value="amount-asc">{{ messages.t('finance.amountLowToHigh') }}</option>
             </select>
             <label class="visually-hidden" :for="`${id}-size`">{{ messages.t('finance.sharesPerPage') }}</label>
-            <select :id="`${id}-size`" v-model="size" class="form-select form-select-sm text-bg-dark">
+            <select :id="`${id}-size`" v-model="size" class="form-select form-select-sm text-bg-dark" :disabled="disabled || !!pendingShareId">
                 <option v-for="value in [25, 50, 100]" :key="value" :value="value">
                     {{ messages.t('finance.pageSizeOption', {count: value}) }}
                 </option>
@@ -110,7 +157,8 @@ function statusLabel(status: string): string {
                         <th scope="col">{{ messages.t(admin ? 'finance.payer' : 'finance.pool') }}</th>
                         <th scope="col">{{ messages.t('finance.original') }}</th>
                         <th scope="col">{{ messages.t('finance.status') }}</th>
-                        <th scope="col">{{ messages.t('finance.calculationDetails') }}</th>
+                        <th v-if="!readOnly" scope="col">{{ messages.t('finance.calculationDetails') }}</th>
+                        <th v-if="admin && settlement && !readOnly" scope="col">{{ messages.t('finance.settlement') }}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -139,16 +187,31 @@ function statusLabel(status: string): string {
                                 {{ share.settledShareNotice.label }}
                             </small>
                         </td>
-                        <td :data-label="messages.t('finance.calculationDetails')">
+                        <td v-if="!readOnly" :data-label="messages.t('finance.calculationDetails')">
                             <ActionButton
                                 variant="outline-light"
                                 class="btn-sm"
-                                :disabled="disabled"
+                                :disabled="disabled || !!pendingShareId"
                                 :aria-label="admin ? messages.t('finance.viewBreakdownFor', {payerName: share.payerName}) : messages.t('finance.viewBreakdownForPool', {poolName: share.poolName})"
                                 @click="emit('inspect', share)"
                             >
                                 <i class="bi bi-calculator me-1" aria-hidden="true"></i>
                                 {{ messages.t('finance.viewBreakdown') }}
+                            </ActionButton>
+                        </td>
+                        <td v-if="admin && settlement && !readOnly" :data-label="messages.t('finance.settlement')"
+                            :class="Number(share.amount) === 0 ? 'd-none d-lg-table-cell' : undefined">
+                            <!-- Stable keyed rows retain their compact control while
+                                 the shared dialog command owns pending and recovery. -->
+                            <ActionButton v-if="Number(share.amount) !== 0" variant="outline-light" class="btn-sm"
+                                :disabled="disabled || !!pendingShareId"
+                                :aria-label="`${messages.t(financeSettlementMessages(share).action)} · ${share.payerName}`"
+                                :data-finance-settle="share.id" :aria-busy="pendingShareId === share.id" @click="settle(share)">
+                                <span class="d-inline-block me-1" style="width: 1em" aria-hidden="true">
+                                    <span v-if="pendingShareId === share.id" class="spinner-border spinner-border-sm" style="width: .875em; height: .875em" data-finance-settlement-pending></span>
+                                    <i v-else class="bi" :class="share.isPaid ? 'bi-arrow-counterclockwise' : 'bi-check2-circle'"></i>
+                                </span>
+                                {{ messages.t(financeSettlementMessages(share).action) }}
                             </ActionButton>
                         </td>
                     </tr>
@@ -161,10 +224,11 @@ function statusLabel(status: string): string {
             :size="size"
             :total="filtered.length"
             :pages="pages"
-            :disabled="disabled"
-            @previous="page--"
-            @next="page++"
-            @refresh="emit('refresh')"
+            :disabled="disabled || !!pendingShareId"
+            :refresh-needed="refreshNeeded"
+            @previous="changePage(-1)"
+            @next="changePage(1)"
+            @refresh="refreshDisplay"
         />
     </section>
 </template>

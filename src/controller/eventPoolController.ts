@@ -43,7 +43,7 @@ import {invoiceText} from '../modules/invoice/wording';
 import {
     invoiceSettledShareNotice, invoiceBalanceCaption, invoicePoolSummary, invoiceShareComponents,
     invoicePayerCalculation, invoicePoolCalculationBreakdown, invoicePoolCalculation, isOrganizerInvoice, presentInvoiceShare,
-    formatInvoiceMoney,
+    formatInvoiceMoney, invoiceShareColumns,
 } from '../modules/invoice/presentation';
 import {invoiceAppliedTakeovers, invoiceHasAppliedTakeoverEvidence, invoiceHasPendingTakeovers} from '../modules/invoice/coverage';
 import {evaluateSubject} from '../modules/permissionEngine';
@@ -189,6 +189,7 @@ function projectFinancePool(pool: EventInvoicePool, participants: readonly Parti
         settings: organizer ? {distribution: pool.distributionMethod as components['schemas']['FinancePoolSettings']['distribution'],
             subtractPersonalInvoices: Boolean(pool.subtractPersonalInvoices),
             sendCalculationEmails: Boolean(pool.sendCalculationEmails), roundUpShares: Boolean(pool.roundUpShares)} : null,
+        ...(organizer ? {canRollback: Boolean(pool.calculationSnapshot)} : {}),
         registrationIds: organizer ? [...assignedIds].map(String) : [],
         assignments: organizer ? pool.assignments.map(row => ({registrationId: String(row.registrationId),
             factor: Number(row.factor).toFixed(4), isExempt: Boolean(row.isExempt)})) : [],
@@ -399,6 +400,62 @@ export async function updateEventFinanceTakeovers(eventId: string, poolId: strin
         : (await admitFinance(eventId, session, 'participant')).event;
     // The shared operation repeats OPEN, assigned-payer, one-level and reassignment checks under its existing lock.
     await runFinanceOperation(() => updateTakeovers(event, poolId, body, session as Request['session'], organizer));
+}
+
+/** Present the shared read-only calculation with decimal wire values and request-local explanations. */
+export async function previewEventFinancePool(eventId: string, poolId: string, session: SessionLike,
+    locale?: string): Promise<components['schemas']['FinancePreview']> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    const text = financeFormatter(locale);
+    // The same preview engine projects carried settlements and arithmetic for native review and committed calculations.
+    const {pool, preview} = await runFinanceOperation(() => loadPoolPreview(event, poolId));
+    // Re-present numeric provenance in the chosen interface language; saved notes retain their original authored content.
+    const shares = preview.shares.map(share => {
+        const presentation = presentInvoiceShare(share, text);
+        return {registrationId: String(share.registrationId), payerName: share.payerName,
+            baseShareAmount: formatInvoiceMoney(share.baseShareAmount), extraAmount: formatInvoiceMoney(share.extraAmount),
+            invoiceCreditAmount: formatInvoiceMoney(share.invoiceCreditAmount), paymentCreditAmount: formatInvoiceMoney(share.paymentCreditAmount),
+            shareAmount: formatInvoiceMoney(share.shareAmount), calculatedAmount: formatInvoiceMoney(share.calculatedAmount),
+            isPaid: Boolean(share.isPaid), notes: (share.note ?? '').split(' • ').filter(Boolean), statusLabel: presentation.statusLabel};
+    });
+    const totals = Object.fromEntries(
+        Object.entries(preview.totals).map(([key, amount]) => [key, formatInvoiceMoney(amount)]),
+    ) as components['schemas']['FinancePreviewTotals'];
+    return {revision: preview.revision, roundUpShares: preview.roundUpShares, shares, columns: invoiceShareColumns(preview.shares, text),
+        calculation: invoicePoolCalculationBreakdown(preview.explanation, pool.surcharges, text),
+        exampleCalculation: invoicePoolCalculation(preview.explanation, preview.shares, pool.surcharges, text),
+        totals};
+}
+
+/** Confirm the captured preview through the original close/recalculate owner, retaining its locked revision check. */
+export async function calculateEventFinancePool(eventId: string, poolId: string, body: unknown,
+    session: SessionLike, recalculate: boolean): Promise<void> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    // The adapter chooses the existing operation once; notifications and carried credits remain owned by that operation.
+    await runFinanceOperation(() => recalculate ? recalculatePool(event, poolId, body, session as Request['session'])
+        : closePool(event, poolId, body, session as Request['session']));
+}
+
+/** Restore the saved local inputs without changing existing shares or recorded transfers. */
+export async function rollbackEventFinancePool(eventId: string, poolId: string, body: unknown,
+    session: SessionLike): Promise<components['schemas']['FinanceRollbackResult']> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    return runFinanceOperation(() => rollbackPoolChanges(event, poolId, body));
+}
+
+/** Queue the existing reachable-payer notices from saved shares, independently of current browser filters. */
+export async function notifyEventFinancePool(eventId: string, poolId: string, body: unknown,
+    session: SessionLike): Promise<components['schemas']['FinanceNotificationResult']> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    return runFinanceOperation(() => notifyPoolShares(event, poolId, body, session as Request['session']));
+}
+
+/** Record or reverse the signed saved balance through the existing settlement owner, including stale calculations. */
+export async function settleEventFinanceShare(eventId: string, poolId: string, shareId: string,
+    isPaid: boolean, session: SessionLike): Promise<void> {
+    const event = await admitEventFinanceOrganizer(eventId, session);
+    // Confirmation belongs to the frontend; this transport deliberately adds no new revision or comparison protocol.
+    await runFinanceOperation(() => markSharePaid(event, poolId, shareId, isPaid, session as Request['session']));
 }
 
 // Resolve the registration ID for the current actor so validation stays localized.
@@ -687,13 +744,18 @@ async function retractInvoice(event: Event, poolId: string, invoiceId: string, b
     notifySavedInvoiceChange(event, pool, invoice, saved, 'retracted', session);
 }
 
-/** Load calculation inputs and return the shared module’s read-only preview. */
-async function previewPool(event: Event, poolId: string) {
+/** Hydrate common preview inputs and retain their pool context for both transports' presentation. */
+async function loadPoolPreview(event: Event, poolId: string) {
     // Hydrate one authorized pool and its event participants, then return the domain's read-only DTO.
     const pool = await ensurePool(event, poolId);
     const participants = await eventService.getEventParticipants(event.id);
     const registrations = await eventService.getRegistrationsForEvent(event.id);
-    return buildPoolCalculationPreview(pool, participants, registrations);
+    return {pool, preview: buildPoolCalculationPreview(pool, participants, registrations)};
+}
+
+/** Return the existing native preview shape through the shared calculation-input owner. */
+async function previewPool(event: Event, poolId: string) {
+    return (await loadPoolPreview(event, poolId)).preview;
 }
 
 /** Apply allocation inputs atomically, then notify applied coverage and optional settlement results. */

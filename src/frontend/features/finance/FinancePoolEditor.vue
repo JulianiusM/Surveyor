@@ -4,6 +4,7 @@ import type {components} from '../../../types/api/v1';
 import {useActionState, usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
 import {useFinanceApi} from './api';
+import {useFinanceDraft} from './drafts';
 import FinanceEnrollmentFields from './FinanceEnrollmentFields.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
@@ -33,6 +34,7 @@ const baseline = ref(JSON.stringify(draft));
 const dirty = computed(() => JSON.stringify(draft) !== baseline.value);
 const command = useCommand(props.refresh, true, {dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown',
     recoveryEligible: () => props.active});
+useFinanceDraft(() => props.pool?.id, () => dirty.value || command.pending.value || command.uncertain.value);
 const action = useActionState({eligible: () => props.active && (!props.pool || !!props.pool.settings),
     blocked: () => command.action.disabled.value});
 const recovery = useActionState({eligible: () => props.active, blocked: () => command.recoveryAction.disabled.value,

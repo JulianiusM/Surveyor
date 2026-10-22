@@ -6,6 +6,7 @@ import invoiceController, {
     admitEventFinanceOrganizer, createEventFinancePool, updateEventFinanceSettings,
     changeEventFinanceSubmissionState, recordEventOrganizerInvoice, reviewEventFinanceInvoice,
     updateEventFinanceAssignments, addEventFinanceAdjustment, removeEventFinanceAdjustment, updateEventFinanceTakeovers,
+    previewEventFinancePool, calculateEventFinancePool, rollbackEventFinancePool, notifyEventFinancePool, settleEventFinanceShare,
 } from '../../../controller/eventPoolController';
 import {requireApiContext} from '../../../modules/api/session';
 import {ApiProblem, requestLocale} from '../../../modules/api/problem';
@@ -125,6 +126,53 @@ function registerTakeoverCommand(organizer: boolean): void {
 
 registerTakeoverCommand(false);
 registerTakeoverCommand(true);
+
+/** Retain the independent preview method grant while returning a localized, read-only reviewed revision. */
+router.get('/pools/:poolId/preview', asyncHandler(async function previewCalculation(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'previewEventFinancePool');
+    const result = await previewEventFinancePool(String(req.params.eventId), String(req.params.poolId), actor, requestLocale(req));
+    res.vary('Accept-Language');
+    sendValidatedJson(req, res, 'previewEventFinancePool', 200, result);
+}));
+
+/** Share command transport while leaving first closure and recalculation as distinct generated operations. */
+function registerCalculationCommand(recalculate: boolean): void {
+    const operation = recalculate ? 'recalculateEventFinancePool' : 'closeEventFinancePool';
+    router.post(`/pools/:poolId/${recalculate ? 'recalculate' : 'close'}`, asyncHandler(async function calculatePool(req, res) {
+        const actor = await requireApiContext(req, res);
+        validateOperationRequest(req, operation);
+        // Prepare the fixed receipt before entering legacy persistence and its postcommit notification behavior.
+        const reply = prepareValidatedJson(req, operation, 200, {changed: true});
+        await calculateEventFinancePool(String(req.params.eventId), String(req.params.poolId), req.body, actor, recalculate);
+        sendPreparedJson(req, res, reply);
+    }));
+}
+
+registerCalculationCommand(false);
+registerCalculationCommand(true);
+
+router.post('/pools/:poolId/rollback', asyncHandler(async function restoreCalculationInputs(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'rollbackEventFinancePool');
+    const result = await rollbackEventFinancePool(String(req.params.eventId), String(req.params.poolId), req.body ?? {}, actor);
+    sendValidatedJson(req, res, 'rollbackEventFinancePool', 200, result);
+}));
+
+router.post('/pools/:poolId/notify', asyncHandler(async function requestSettlementEmails(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'notifyEventFinancePool');
+    const result = await notifyEventFinancePool(String(req.params.eventId), String(req.params.poolId), req.body ?? {}, actor);
+    sendValidatedJson(req, res, 'notifyEventFinancePool', 200, result);
+}));
+
+router.post('/pools/:poolId/shares/:shareId/settlement', asyncHandler(async function recordSettlement(req, res) {
+    const actor = await requireApiContext(req, res);
+    validateOperationRequest(req, 'settleEventFinanceShare');
+    const reply = prepareValidatedJson(req, 'settleEventFinanceShare', 200, {changed: true});
+    await settleEventFinanceShare(String(req.params.eventId), String(req.params.poolId), String(req.params.shareId), req.body.isPaid, actor);
+    sendPreparedJson(req, res, reply);
+}));
 
 router.get('/', asyncHandler(async function getEventFinance(req, res) {
     const actor = await requireApiContext(req, res, true);

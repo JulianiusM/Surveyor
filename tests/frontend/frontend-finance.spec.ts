@@ -406,7 +406,9 @@ describe('P7 finance saved reads and participant invoices', () => {
         expect(wrapper.get('[data-finance-shares]').text()).toContain('Payment status describes the payer named in each row. The calculated balance stays visible after payment or refund.');
         expect(wrapper.find('[data-finance-submission]').exists()).toBe(false);
         expect(wrapper.findAll('button').some(item => item.text().trim() === 'Retract')).toBe(false);
-        expect(wrapper.find('a[href$="/admin#invoicePoolAccordion"]').exists()).toBe(true);
+        expect(wrapper.find('a[href$="/admin#invoicePoolAccordion"]').exists()).toBe(false);
+        expect(wrapper.find('[data-finance-pool-outputs]').exists()).toBe(true);
+        expect(wrapper.findAll('button').some(item => item.text().trim() === 'Recalculate pool')).toBe(true);
     });
 
     it('captures reviewed retraction revision and preserves confirmed lifecycle outcome through failed refresh', async () => {

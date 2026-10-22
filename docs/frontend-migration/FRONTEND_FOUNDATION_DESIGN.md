@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-20
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Latest full-pilot correction authorization and repeated native-isolation reaffirmation recorded without reopening prior decisions; original finance contract provenance routed to active DEC-006; source adoption and execution remain distinct
+verification-scope: Explicit full P9 implementation trigger recorded after retained P8 history; native isolation, original finance contract provenance and separate source/execution evidence preserved
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -973,6 +973,21 @@ current staged contribution guidance, and verification/review corrections. Older
 compatibility/update recovery, retaining mounted draft guards rather than replaying commands. It does not trigger
 P9–P11, default routes, native removal, production-guide publication, deployment or excluded general backend remedies.
 Actual production adoption and executed evidence belong to the paired review; authorization supplies neither.
+
+## Explicit P9 implementation trigger (2026-10-22)
+
+The maintainer directly requests full P9 implementation while retaining all policies, specifically approval,
+visual/behavioral parity and modularization/DRY. This starts the planned sequential packages: reviewed saved-input
+calculation, signed saved-share settlement, then email/PDF outputs and privacy checks. It supersedes the earlier
+P8 receipt's exclusion of starting P9; it does not change that receipt's original scope or authorize P10/P11.
+
+The existing EventPool controller and invoice calculation, settlement, rollback, notification and export owners
+remain shared. The Vue interface uses generated adapters and the existing command/read/dialog/feedback owners;
+captured preview revisions, signed arithmetic, recorded transfers and separate private projections retain their
+original contracts. Native frontend sources, excluded backend remedies, output-language extensions, default-route
+cutover, native removal, production-guide publication and deployment remain outside this instruction. Current
+implementation status belongs to the plan; actual execution, independent review and evidence limits belong to
+the paired review. This record supplies no additional approval or completed-verification claim.
 
 ## Cutover retirement inventory
 

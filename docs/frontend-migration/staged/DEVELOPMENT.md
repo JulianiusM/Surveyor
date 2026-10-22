@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Cached Activity requirement draft initialization and Overview automation consumer adoption reconciled with existing ownership and preservation guidance; retained P0-P8 contracts, no publication or new execution claim
+verification-scope: P9 calculation review, stable signed settlement and output owners reconciled with existing contribution guidance; cached Activity and Overview contracts retained, no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -341,8 +341,20 @@ Versioned JSON and
 multipart adapters prepare acknowledgements before entering the existing EventPool controller operation; page,
 method, participant and proof admission remain separate. Original backend normalization, revision checks and
 notifications remain shared without a new backend remedy or generalized comparison protocol. Native proof/download
-outputs and unmigrated calculation/settlement/notification commands keep their explicit destinations. Native
-frontend sources, P9–P11, cutover and guide publication retain their separate authorization.
+outputs keep their explicit destinations. P9's `FinanceCalculationReview` reads a fresh saved-input preview and
+captures its revision for close/recalculate. Its feature `drafts.ts` coordinates the existing settings, assignment
+and adjustment predicates without copying their values or widening the native guard. A background read cannot
+replace reviewed values; every apply attempt consumes confirmation authority until explicit Refresh preview.
+`FinanceSettlement` captures the signed saved payer row and confirms the existing status command without adding
+a revision field. `FinanceShares` retains display identities while showing fresh confirmed amounts/statuses;
+Refresh list or a control change reapplies deferred filters/order. Its read-only mode also presents actual saved
+rows during unknown-calculation inspection without exposing inert breakdown or settlement actions.
+`FinancePoolOutputs` keeps rollback and later saved-email delivery as separate deliberate intents. Rollback
+preserves shares/transfers and reports whether external changes still require calculation; email counts identify
+eligible queued recipients rather than successful external delivery. Calculation, settlement, rollback and email
+commands use the existing no-replay owner and explicit unknown-result review. Both PDF variants remain ordinary
+authorized downloads of the complete saved ledger, independent of browser filters. Native frontend sources,
+P10/P11, cutover and guide publication retain their separate authorization.
 
 1. **Identify its actual contract.** Trace the original accepted decision and all applicable dated amendments through
    their actual callers before treating a requirement as unresolved. Carry existing authorization into the handoff;

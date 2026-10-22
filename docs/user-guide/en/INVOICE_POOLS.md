@@ -4,10 +4,10 @@ documentation-metadata
 audience: event participants; event organizers
 owner: event invoice-pool maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Current participant and organizer controls, exact localized labels, independent saves, history refresh and uncertain-submission acknowledgement source-reconciled. Separate calculation/settlement and English email/PDF destinations retain their original boundaries; no new browser execution claimed.
-current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/locales/en.json
+verification-scope: Current participant and organizer controls, exact localized labels, independent saves, calculation/settlement confirmation, saved-read recovery and deferred ledger filtering source-reconciled. Existing English email/PDF output behavior retained; no new browser execution claimed.
+current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinanceCalculationReview.vue; src/frontend/features/finance/FinancePoolOutputs.vue; src/frontend/features/finance/FinanceSettlement.vue; src/frontend/features/finance/FinanceShares.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/locales/en.json
 source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/database/entities/event/EventInvoice.ts; src/modules/database/entities/event/EventInvoicePool.ts; src/modules/database/entities/event/EventInvoiceShare.ts; src/modules/database/entities/event/EventInvoiceSurcharge.ts; src/modules/database/entities/event/EventPoolAssignment.ts; src/modules/database/entities/event/EventPoolTakeover.ts; src/views/modules/module_invoice_pool.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/public/js/events.ts; src/modules/invoice/retention.ts; src/modules/lib/fileCommons.ts; tests/integration/invoice-workflows.spec.ts; tests/frontend/ui-behaviors.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/finance/; src/locales/
 next-review: invoice-pool-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
@@ -258,7 +258,7 @@ recipient by name in both the greeting and the To field.
 
 Use **Invoice pools & payments** in the event administration dashboard to create pools, edit their inputs, record expenses and review invoices. Each editing dialog has its own save action. Saving refreshes the saved information without reloading the page; wait for confirmation before leaving. **Close** asks before discarding unfinished changes, and **Discard edits** restores that form's saved values.
 
-For calculation previews, closing or recalculating a pool, rolling back pool changes, settlement emails and recording payments or refunds, select **Calculation & settlement**. It opens the administration page with those controls. The calculation and settlement instructions below describe that destination.
+Calculation previews, closing or recalculating a pool, restoring saved pool settings, settlement emails, and recording payments or refunds are available in the same pool. Save each unfinished editing dialog before calculating.
 
 ### Create an invoice pool
 
@@ -563,6 +563,8 @@ Resolve or consciously exclude every Awaiting-review invoice before closing the 
 
 Preview does not save shares, close the pool, change payment markers, or send emails. It uses the same calculation and settlement-credit rules as the final action. If someone changes inputs or records a payment after the preview, refresh the preview before applying it.
 
+Wait for the preview to finish loading before applying it. **Refresh preview** loads the latest saved inputs; it does not submit unfinished edits. If an editing dialog still has unsaved changes, save it or select **Discard edits**, then refresh the preview. After a rejected calculation, load and review another preview before confirming again.
+
 **Calculation breakdown** lists contextual numbers: saved cost amounts, the assigned participant count, applicable
 days or nights, eligible units, exemptions, and total weight, alongside used surcharge and rebate categories and
 relevant settlement totals. It contains no formulas or explanatory paragraphs. The separate, collapsed
@@ -614,6 +616,8 @@ Then:
 2. Select **Preview calculation**.
 3. Review the calculation preview and the **Email participants after this calculation** switch.
 4. Select **Close pool & calculate**.
+
+Wait for confirmation while the controls are locked. The saved pool and shares update on the same page. If the calculation is confirmed but the following read fails, the calculation remains saved; close the dialog and use **Refresh**. If the result cannot be confirmed, select **Refresh**, inspect the current saved pool status and shares, then select **I have checked the saved shares**. Inspection does not repeat the calculation or send more emails.
 
 At least one participant must be assigned. Surveyor then:
 
@@ -673,11 +677,13 @@ Use **Roll back pool changes** when you want to keep the last calculation instea
 
 1. Open the closed pool marked **Recalculation required**.
 2. Select **Roll back pool changes** and read the confirmation.
-3. Select **Restore last calculated settings**, read the result, then select **Return to pool**.
+3. Select **Restore last calculated settings**, read the result, then select **Close**.
 
 Rollback restores the pool's description, distribution settings, rounding direction, email preference, assignments, factors, exemptions, surcharges/rebates, and takeovers from its last successful calculation. Existing shares and recorded payments are preserved. No calculation, settlement, or takeover email is sent.
 
 Rollback does not undo changes to event registrations, attendance dates, invoice reviews or organizer expenses. It does not erase a saved organizer expense or recreate deleted participants. If those details changed since the last calculation, the pool may still require recalculation after its settings are restored. Review the result message.
+
+Wait for the result before another action. If the result cannot be confirmed, select **Refresh**, inspect the saved pool totals and shares, then select **I have checked the saved shares**. This inspection does not repeat rollback. A confirmed restoration remains saved if the following read fails; close the completed review and refresh the pool.
 
 For some older closed pools, the last calculated settings are unavailable. Recalculate successfully before using
 rollback. If an older calculation predates the rounding choice, restoring its settings enables rounding up and still
@@ -692,8 +698,7 @@ These choices control settlement messages; they do not disable notifications for
 successful recalculation.
 
 To send updates afterward, open a closed pool, select **Send settlement emails**, and confirm. This works even if automatic emails are switched off. It sends to payers with an email address without recalculating, changing payment markers, or moving money.
-The dialog closes when Surveyor confirms that the request succeeded. If the request fails or success is not confirmed,
-it stays open with feedback.
+The dialog reports the request result and the number of eligible payers, then offers **Close**. This confirms the sending request, not arrival in anyone's inbox. If the request result cannot be confirmed, use **Refresh** to inspect saved state before selecting **I have checked the saved shares**. Inspection never sends the emails again; another deliberate sending request can send another email.
 
 Emails keep **Your calculated balance**, status, event and pool context, and **View your invoice pool** action near
 the top. **Payment due**, **Refund due**, **Paid**, **Refunded**, or **No payment** describes the current status.
@@ -708,7 +713,7 @@ Delivery depends on the installation's mail service.
 
 ### Record whether a share is settled
 
-After closure, **Shares & settlement** contains the **Calculated shares** ledger. Each row shows the **Payer**,
+After closure, the pool contains the **Calculated shares** ledger. Each row shows the **Payer**,
 the signed **Calculated balance**, and a compact payment/refund status. Status describes
 the named payer. **View breakdown** opens applicable saved components, saved notes, and the concrete
 **Calculation explanation**. Expand the pool's separate **Example calculation** for total/base arithmetic and an
@@ -719,21 +724,22 @@ Phones and tablets show the same information as cards. Saved shares stay availab
 **Filter share status** offers **All statuses**, **Payment due**, **Refund due**, and
 **Settled**. Use **Search shares**, **Sort shares**, **Shares per page**, **Previous**,
 and **Next** to navigate. Recording a transfer updates status while keeping the calculated balance and current row
-order. **Refresh list** reapplies filters and ordering; it is highlighted after a status change under an active filter.
+order. The action row stays visible even when its new status no longer matches the active filter. **Refresh list**, a changed filter or sort, and page navigation reapply filters and ordering. **Refresh list** is highlighted after a status change under an active filter and acknowledges that the current filters were applied even if the results are unchanged.
 
 After the real-world transfer is complete:
 
 1. Check the payer and signed **Calculated balance**.
 2. Select **Record payment** for a positive balance or **Record refund** for a negative balance.
-3. Review **Confirm invoice action**, including the amount and transfer direction.
+3. Review the dialog bearing the same action name, including the payer, signed amount and transfer direction.
 4. Select **Record payment** or **Record refund** again and wait for confirmation.
 
-**Cancel**, the close button, Escape, and backdrop dismissal leave saved state unchanged. The review initially focuses
-**Cancel**. Scrolling over a focused invoice number field does not step its draft amount.
+Before confirmation, **Cancel**, the close button, Escape, and backdrop dismissal leave saved state unchanged. Scrolling over a focused invoice number field does not step its draft amount.
 
 The pending action displays a spinner. Success shows **Paid** or **Refunded**, retains the signed
 calculated balance, and updates **Payments due** or **Refunds due**.
 Wait for the result before another action. Surveyor emails the payer when an address is available.
+
+If the result cannot be confirmed, use **Refresh** in the dialog and inspect the saved status, then select **I have checked the saved shares**. This closes the uncertain review without repeating the transfer record. If the save was confirmed but the following read failed, it remains saved and cannot be submitted again from that review; use **Close** and refresh the pool.
 
 Use **Undo payment** or **Undo refund**, review the signed amount, and confirm the same action to correct a mistaken
 record. This restores **Payment due** or **Refund due** while retaining the calculated balance

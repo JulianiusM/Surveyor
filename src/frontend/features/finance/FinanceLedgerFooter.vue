@@ -5,7 +5,7 @@ import ActionButton from '../../components/ActionButton.vue';
 // Matching histories and share ledgers retain their own filtering/paging state.
 // This common footer renders only the supplied visible range and local actions.
 withDefaults(defineProps<{page: number; size: number; total: number; pages: number;
-    invoices?: boolean; coverage?: boolean; refreshable?: boolean; disabled?: boolean}>(), {refreshable: true});
+    invoices?: boolean; coverage?: boolean; refreshable?: boolean; refreshNeeded?: boolean; disabled?: boolean}>(), {refreshable: true});
 const emit = defineEmits<{previous: []; next: []; refresh: []}>();
 const {messages} = usePilot();
 </script>
@@ -19,9 +19,10 @@ const {messages} = usePilot();
         </small>
         <ActionButton
             v-if="refreshable"
-            variant="outline-light"
+            :variant="refreshNeeded ? 'warning' : 'outline-light'"
             class="btn-sm"
             :disabled="disabled"
+            data-finance-ledger-refresh
             @click="emit('refresh')"
         >
             {{ messages.t('finance.refreshList') }}
@@ -31,10 +32,10 @@ const {messages} = usePilot();
             role="group"
             :aria-label="messages.t(coverage ? 'finance.takeoverPages' : invoices ? 'finance.invoicePages' : 'finance.sharePages')"
         >
-            <ActionButton variant="outline-light" :disabled="page === 0" @click="emit('previous')">
+            <ActionButton variant="outline-light" :disabled="disabled || page === 0" @click="emit('previous')">
                 {{ messages.t('finance.previous2') }}
             </ActionButton>
-            <ActionButton variant="outline-light" :disabled="page + 1 >= pages" @click="emit('next')">
+            <ActionButton variant="outline-light" :disabled="disabled || page + 1 >= pages" @click="emit('next')">
                 {{ messages.t('finance.next') }}
             </ActionButton>
         </div>

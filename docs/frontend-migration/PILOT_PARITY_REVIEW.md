@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Cached Activity requirement initialization, personal Overview schedule parity and nonempty Event duplication verification recorded with scoped execution; prior finite P0-P8 receipts, native/backend exclusions and cutover conditions retained
+verification-scope: P9 calculation, signed settlement, saved outputs and privacy implementation verified with scoped persistence/mounted/built evidence; prior finite receipts, native/backend exclusions and cutover conditions retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,66 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## P9 calculation, settlement and output implementation review (2026-10-22)
+
+The maintainer's [explicit full P9 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p9-implementation-trigger-2026-10-22)
+authorizes all three packages under the existing parity, approval and shared-owner rules. P9 is implemented. No
+policy/design override or additional approval is inferred: P10/P11, excluded general backend remedies, native
+frontend changes, cutover, production-guide publication and deployment retain their separate boundaries.
+
+`FinanceCalculationReview` obtains a fresh generated decimal-string preview from the existing calculation owner.
+It keeps the reviewed revision through background reads, checks the same settings/assignment/adjustment drafts as
+native, and consumes apply authority after an attempt. A stale rejection requires another explicit preview.
+`FinanceSettlement` captures the signed saved payer row; the shared command owner protects pending work, confirmed
+saves with failed following reads and unknown delivery. `FinanceShares` retains only display identities while
+showing current admitted financial values. Status filtering/order changes wait for explicit Refresh or controls;
+Refresh preserves the current page and acknowledges unchanged results. Matching ledgers and confirmations share
+their message, footer and presentation owners.
+
+`FinancePoolOutputs` owns separate rollback and later-email intents, including the existing external-change
+rollback result and eligible-recipient count. Current saved totals/rows are visible during unknown-result
+inspection before acknowledgement; inspection never replays a write. Both ordinary PDF variants use the complete
+authorized saved ledger, independent of browser filters. The existing EventPool operations remain the native/v1
+business owners; arithmetic, signed rounding/credits, recorded transfers, mail/PDF English output, proof retention
+and per-method grants remain unchanged. Private participant projections do not acquire organizer data.
+
+Executed evidence:
+
+- `npm run build` passed; the final `npm run build:frontend` passed after the scoped preview-layout correction.
+  Frontend/client/SSR, server and test TypeScript checks passed.
+- Generated-contract and genuine HTTP/controller/ORM finance checks passed **18/18** on the inspected disposable
+  `surveyor_test` target. They cover all six new operations, bodyless rollback/notification, stale calculation,
+  signed transfer carry, independent grants, parent ownership, output data and notification choices/counts.
+- Mounted calculation/output and settlement checks passed **23/23**. Broader existing finance/allocation/review,
+  settlement, presentation, mail and PDF checks passed their **200** cases across the focused run and corrected
+  organizer-projection rerun. That assertion now checks actual Vue financial controls instead of the retired link.
+- `npm run e2e -- tests/e2e/frontend-finance-p9.spec.ts --workers=1 --reporter=line` passed **8/8** against the
+  built application and fully prepared disposable `cgd_e2e` target. Real workflows cover initial close, two-browser
+  stale previews after settings/payment changes, signed payment/refund recording and reversal, stable filtered rows,
+  carried transfers, rollback, dropped committed-response inspection without replay, both PDF downloads and private
+  proof/history/breakdown access. Requests remain in the same document where the workflow requires it.
+- `npm run check:development` reports **0 findings** across the full authored inventory and all 14 touched source
+  files in its readability scope; `git diff --check` is clean. The migration documentation boundary reports **0/0**.
+  Advisory documentation/Help reports have no task-created location, metadata, link or Help-authoring finding; the
+  existing unregistered source fingerprint remains advisory and was not rebased.
+
+Independent source review by `/root/p9_contract_review` and `/root/p9_settlement_ui`, followed by root review,
+checked actual shared adoption, original decision provenance, private reads, cancellation/locale fencing, draft
+ownership and no-replay semantics. Source review corrected the initially broader draft guard and made unknown
+calculation/output recovery expose actual saved state. Original EN/DE desktop/phone captures exposed overlapping
+German preview headings; the preview now uses the existing wide dialog and locale-neutral heading wrapping, with a
+painted-text containment assertion. The retained ready-notice state follows the approved common overlay design;
+separate resting captures explicitly dismiss that receipt to expose the underlying instructions and totals.
+
+The final visual set contains **48 originals** across English/German and 1280px/390px: native/Vue ready-notice,
+resting preview, expanded breakdown/example, ledger, refund confirmation and notification states. The independent
+reviewer inspected each original; root inspected representative final originals. Both real one-page PDF variants
+were rendered and independently/root inspected: all three signed payer rows remain despite a browser filter, and
+only the full variant includes the example. These are finite fixture comparisons, not exact-pixel certification,
+long/multipage PDF acceptance, full-pilot acceptance or SMTP-delivery proof. The system runner deliberately uses a
+refused local mail socket. Runtime English/German Help and staged contributor guidance match the implemented P9
+controls; frozen production/native guides and native frontend sources remain untouched.
 
 ## Cross-area correction and scoped verification (2026-10-22)
 
