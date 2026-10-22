@@ -2,7 +2,7 @@
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {defineComponent} from 'vue';
+import {defineComponent, type Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
@@ -10,6 +10,7 @@ import type {components} from '../../src/types/api/v1';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
 import {activityKeys} from '../../src/frontend/app/queryKeys';
 import ActivityRequirements from '../../src/frontend/features/activity/ActivityRequirements.vue';
+import ActivityPage from '../../src/frontend/features/activity/ActivityPage.vue';
 import {analyzeRequirementDraft, createRequirementDraft, requirementInput, requirementAnalysisInput} from '../../src/frontend/features/activity/requirements';
 
 const planId = '11111111-1111-4111-8111-111111111111';
@@ -38,6 +39,32 @@ function configuration(): components['schemas']['ActivityRequirements'] {
         overrideTargets: [{key: 'profile:' + profileId, profileId, label: 'Alex', arrivalDate: null, departureDate: null}],
     };
 }
+
+/** Admit the real Rules child through its production schedule parent. Both
+ * projections describe the same fixture participants, dates and slot capacity. */
+function linkedPlan(config: components['schemas']['ActivityRequirements']): components['schemas']['ActivityView'] {
+    // Recommendations stay outside this requirement-form journey; entering the
+    // parent must perform only its detail and independent requirement GETs.
+    return {
+        entityType: 'activity', id: planId, title: 'Camp duties', description: null,
+        startDate: config.plan.startDate, endDate: config.plan.endDate,
+        headerUrl: null, headerVersion: null, currentEventId: outsideId, currentEventUrl: null,
+        archived: false, inheritedArchived: false, assignmentMode: config.plan.assignmentMode,
+        canSelfAssign: true, allowOverfillAfterFull: config.plan.allowOverfillAfterFull,
+        bindingDeadline: config.plan.bindingDeadline, requirementProgress: null,
+        weeks: [{start: '2030-05-27', days: [config.plan.startDate, config.plan.endDate]}],
+        slots: config.calculationContext.slots.map(slot => ({...slot, position: 0, title: 'Kitchen duties', description: null,
+            assignedCount: 0, selfAssigned: false, selfRoles: [], roles: [], assignees: [], editToken: '"fixture"',
+            capabilities: {editTitle: true, editDescription: true, editMeta: true, editCapacity: true, editRoles: true,
+                manageAssignments: true, remove: true, inlineMetadataAdmission: true}})),
+        allRoles: config.allRoles, textFields: [], participants: config.participants.map(person => ({...person, name: person.name ?? '', count: 0})),
+        counters: {participants: config.participants.length, open: config.capacitySummary.availableSlots, empty: config.calculationContext.slots.length},
+        orderToken: '"fixture"',
+        capabilities: {editTitle: true, editDescription: true, editDates: true, addSlot: true, reorderSlots: true,
+            manageSettings: false, manageRequirements: true, manageRecommendations: false, exportSchedule: true,
+            duplicate: true, remove: true, roleCreationAdmission: true, rulesWorkspace: true},
+    };
+}
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
     for (const cleanup of cleanups.splice(0)) await cleanup();
@@ -51,12 +78,12 @@ function json(value: unknown, status = 200): Response {
 
 /** Exercise production query, draft, generated transport and command owners with
  * substituted HTTP delivery. Persistence belongs to integration and built E2E. */
-async function mounted(handler: (request: Request) => Promise<Response>) {
+async function mounted(handler: (request: Request) => Promise<Response>, component: Component = ActivityRequirements) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createPilotContext({session}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/activity/:planId', component: ActivityRequirements, props: true},
+        {path: '/frontend-pilot/activity/:planId', component, props: component === ActivityRequirements},
         {path: '/frontend-pilot', component: defineComponent({template: '<p>Overview</p>'})},
     ]});
     await router.push('/frontend-pilot/activity/' + planId);
@@ -72,6 +99,56 @@ async function mounted(handler: (request: Request) => Promise<Response>) {
 }
 
 describe('Activity requirements production frontend', () => {
+    it.each(['fresh', 'stale'] as const)('restores saved requirement controls and coverage on %s cached plan re-entry',
+        async function restoreCachedRequirements(cacheState) {
+            const saved = configuration();
+            const view = linkedPlan(saved);
+            let requirementReads = 0;
+            const {root, router, context, request} = await mounted(readPlan, ActivityPage);
+            const key = activityKeys.requirements(session.context, planId);
+            const cached = context.queryClient.getQueryData(key);
+
+            /** Keep real generated decoding and cache structural sharing; only
+             * HTTP delivery is substituted for this client's two projections. */
+            async function readPlan(request: Request): Promise<Response> {
+                if (new URL(request.url).pathname.endsWith('/requirements')) {
+                    requirementReads++;
+                    return json(saved);
+                }
+                return json(view);
+            }
+
+            // Depart through the actual router so the production parent and its
+            // requirement draft are disposed while the QueryClient stays alive.
+            await router.push('/frontend-pilot');
+            await flushPromises();
+            if (cacheState === 'stale') {
+                // A normal stale visit must also work when its successful GET
+                // returns equal JSON and Query retains the original data object.
+                await context.queryClient.invalidateQueries({queryKey: key, refetchType: 'none'});
+            }
+            await router.push('/frontend-pilot/activity/' + planId);
+            await vi.waitFor(() => expect(root.find('#requirementForm').exists()).toBe(true));
+            if (cacheState === 'stale') await vi.waitFor(() => expect(requirementReads).toBe(2));
+            await flushPromises();
+
+            // Restored controls belong to the same admitted Rules workspace,
+            // include its saved baseline and live coverage, and require no Save.
+            await root.get('#activity-rules-tab').trigger('click');
+            expect(root.get('#requirementForm').isVisible()).toBe(true);
+            expect(root.get<HTMLSelectElement>('#assignmentMode').element.value).toBe('REQUIRED');
+            expect(root.get<HTMLInputElement>('#requiredShifts').element.value).toBe('2');
+            expect(root.get<HTMLInputElement>('#stayRequirement-2').element.value).toBe('2');
+            expect(root.get('[data-requirements-dirty]').text()).toBe('Saved');
+            expect(root.get('[data-coverage-state]').attributes('data-coverage-state')).toBe('exact');
+            expect(root.get('#requirement-participant-status').text()).toContain('Alex');
+            expect(root.get('[data-requirements-save]').attributes('disabled')).toBeDefined();
+            expect(requirementReads).toBe(cacheState === 'fresh' ? 1 : 2);
+            expect(context.queryClient.getQueryData(key)).toBe(cached);
+            expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+        },
+    );
+
     it('associates role and override controls with their visible labels across languages without releasing drafts', async () => {
         const {wrapper, context, request} = await mounted(async () => json(configuration()));
         await wrapper.get('[data-add-override]').trigger('click');
@@ -298,5 +375,25 @@ describe('Activity requirements production frontend', () => {
         expect(wrapper.find('#requirementForm').exists()).toBe(true);
         expect((wrapper.get('#stayRequirement-2').element as HTMLInputElement).value).toBe('2');
         expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Saved');
+    });
+
+    it('releases the requirement draft and coverage when its admitted actor retires', async () => {
+        const {wrapper, context, request} = await mounted(async () => json(configuration()));
+        await wrapper.get('#stayRequirement-2').setValue('7');
+        expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Unsaved changes');
+        const reads = request.mock.calls.length;
+
+        // The shared identity owner closes readiness and advances this epoch
+        // before admitting another actor. This editor must release both saved
+        // calculation context and unsaved values, even while still mounted.
+        context.ready.value = false;
+        context.epoch.value++;
+        await flushPromises();
+
+        expect(wrapper.find('#requirementForm').exists()).toBe(false);
+        expect(wrapper.find('#requirement-participant-status').exists()).toBe(false);
+        expect(wrapper.find('[data-coverage-state]').exists()).toBe(false);
+        expect(request.mock.calls.length).toBe(reads);
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
     });
 });

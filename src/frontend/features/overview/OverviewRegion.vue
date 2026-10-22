@@ -596,7 +596,20 @@ async function archive(card: components['schemas']['OverviewCard'], restore: boo
     const lifecycle = card.type === 'event' ? eventLifecycle : card.type === 'drivers' ? driversLifecycle
         : card.type === 'survey' ? surveyLifecycle : card.type === 'activity' ? activityLifecycle : packingLifecycle;
     await lifecycle.archive(card.id, restore, card.inheritedArchived,
-        card.type === 'event' ? restore ? 'event.confirmRestore' : 'event.confirmArchive' : undefined);
+        card.type === 'event' ? restore ? 'event.confirmRestore' : 'event.confirmArchive' : undefined, !!card.automation);
+}
+
+/** Personal Overview retains native schedule controls for admitted Event and
+ * standalone Activity roots. Reuse their generated operations and this region's
+ * command/refresh lifetime; card state never replaces server authorization. */
+async function automate(card: components['schemas']['OverviewCard'], paused: boolean): Promise<void> {
+    if (actionsBlocked.value || !card.automation?.canManage) return;
+
+    // Only these existing feature APIs support independent schedules. Other
+    // cards stay inert even if an obsolete callback survives their replacement.
+    const lifecycle = card.type === 'event' ? eventLifecycle : card.type === 'activity' ? activityLifecycle : null;
+    if (!lifecycle) return;
+    await lifecycle.automate(card.id, paused);
 }
 
 /** Deliver permanent deletion through the existing confirmed-navigation owner.
@@ -721,6 +734,7 @@ function page(next: number): void {
                     :active="active"
                     @visibility="setVisibility(displayed.parent, $event)"
                     @archive="archive(displayed.parent, $event)"
+                    @automate="automate(displayed.parent, $event)"
                     @remove="remove(displayed.parent)"
                 >
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
@@ -751,6 +765,7 @@ function page(next: number): void {
                         :card-interaction="cardInteraction"
                         @visibility="setVisibility"
                         @archive="archive"
+                        @automate="automate"
                         @remove="remove"
                         @page="page"
                     />
@@ -768,6 +783,7 @@ function page(next: number): void {
                 :card-interaction="cardInteraction"
                 @visibility="setVisibility"
                 @archive="archive"
+                @automate="automate"
                 @remove="remove"
                 @expand="expand"
                 @page="page"

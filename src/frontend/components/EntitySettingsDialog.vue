@@ -403,12 +403,10 @@ function reviewEvent(): void {
  * command. These are shared resource actions; personal visibility and permanent
  * deletion remain separate operations with their own confirmation and authority. */
 async function archive(restore: boolean): Promise<void> {
-    // A dated feature supplies the native alternate wording, while the admitted
-    // schedule flag decides whether this actual resource uses that schedule.
-    const restoreConfirmation = data.value?.archive.hasAutomaticSchedule && props.scheduledRestoreConfirmation
-        ? props.scheduledRestoreConfirmation : props.restoreConfirmation;
+    // The admitted schedule flag selects the common restoration warning.
+    // Explicit feature wording retains Event's distinct attached-entity details.
     await lifecycle.archive(props.resourceId, restore, !!data.value?.archive.inherited,
-        restore ? restoreConfirmation : props.archiveConfirmation);
+        restore ? props.restoreConfirmation : props.archiveConfirmation, !!data.value?.archive.hasAutomaticSchedule);
 }
 
 /** Automatic archival remains a separate shared lifecycle command. Resuming an

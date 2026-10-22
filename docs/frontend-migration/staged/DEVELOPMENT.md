@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-20
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Full-pilot shared lexical field option, decimal wire boundaries, actual translated Finance query family and persistent decision adoption source-reconciled with existing contribution guidance; no publication or new execution claim
+verification-scope: Cached Activity requirement draft initialization and Overview automation consumer adoption reconciled with existing ownership and preservation guidance; retained P0-P8 contracts, no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -230,7 +230,9 @@ historical baseline evidence, superseded for Vue by the October 20 approval.
 
 For advanced Activity, compose `ActivityRequirements` and `ActivityRecommendations` inside the admitted Rules tab;
 changing tabs preserves their independent drafts. Requirements keep lexical form values and the saved calculation
-context separate from refreshed snapshots. `requirements.ts` calls the existing pure requirements engine for local
+context separate from refreshed snapshots. Initialize the independent requirement draft from an already admitted
+cached configuration when the form mounts; a fresh or unchanged refetch need not replace its cache object. Preserve
+dirty values on subsequent reads. `requirements.ts` calls the existing pure requirements engine for local
 coverage and baseline calculation, and `ActivityParticipants` renders both saved and unsaved progress. Structural
 engine inputs and the shared `RoundingMode` declaration under `src/types/` keep ORM entity imports out of browser
 compilation; this type boundary changes no calculation or database behavior. Role and override identifiers stay
@@ -1366,10 +1368,11 @@ controller/service duplicates grants, root/parent policy or visibility eligibili
 desired-state dispatch and success wording across Settings, Overview and Event Things to do. It composes each
 consumer's existing API, command and current translator without retaining state. Callers supply direct/inherited
 state and any required confirmation-key override, retaining eligibility and refresh dependencies.
-This includes Event/Activity scheduled-restore wording. Settings and Event child cards also adopt its pause/resume
-confirmation, dispatch and result wording. Pause remains immediate; resume retains the native elapsed-schedule
-warning. The caller still owns current capability checks and root/parent-scoped operations, and the same command
-retains uncertain-result/read recovery. Personal visibility and permanent deletion stay separate.
+This includes Event/Activity scheduled-restore wording. Settings and Overview adopt its pause/resume confirmation,
+dispatch and result wording when their admitted projection exposes an independent schedule. Linked Activity
+follows its Event and has no independent automatic controls. Pause remains immediate; resume retains the native
+elapsed-schedule warning. The caller still owns current capability checks and root/parent-scoped operations, and
+the same command retains uncertain-result/read recovery. Personal visibility and permanent deletion stay separate.
 
 Permanent deletion uses `useEntityRemoval` in that same composable module. Its three current consumers are
 `EntitySettingsDialog.vue`, `OverviewRegion.vue` and `EventThingsToDo.vue`. The feature supplies its generated

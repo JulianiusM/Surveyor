@@ -44,7 +44,6 @@ const operations = {settings: api.settings.bind(api), profiles: api.profiles.bin
         :duplicate-to="'/frontend-pilot/activity/' + planId + '/duplicate'"
         deleted-key="activity.deleted"
         :automation-labels="automationLabels"
-        scheduled-restore-confirmation="event.organizer.confirmRestoreScheduled"
         :event-extra-hint="context.messages.value.t('activity.eventLinkHint')"
         :linked-event-archive-hint="context.messages.value.t('activity.linkedArchiveHint')"
         :export-link="exportLink"

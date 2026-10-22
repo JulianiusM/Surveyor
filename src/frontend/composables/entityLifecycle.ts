@@ -25,10 +25,14 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
      * The caller supplies its current resource state;
      * personal visibility and permanent deletion remain separate operations. */
     async function archive(listId: string, restore: boolean, inherited: boolean,
-                           confirmationKey?: PilotPlainMessageKey): Promise<void> {
+                           confirmationKey?: PilotPlainMessageKey, hasAutomaticSchedule = false): Promise<void> {
         // Restore takes precedence over inherited archival, matching both existing
         // journeys. Read wording from the current locale at the user action boundary.
-        const confirmation = confirmationKey ?? (restore ? 'packing.confirmRestore'
+        // Independent schedules pause on restoration in the existing backend.
+        // Every matching host supplies its admitted schedule presence here;
+        // explicit feature wording (including Event's attached-entity warning) takes priority.
+        const confirmation = confirmationKey ?? (restore
+            ? hasAutomaticSchedule ? 'event.organizer.confirmRestoreScheduled' : 'packing.confirmRestore'
             : inherited ? 'packing.confirmArchiveIndependent' : 'packing.confirmArchive');
         if (!window.confirm(messages.value.t(confirmation))) return;
 
@@ -51,7 +55,7 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
         const changeAutomation = operation.bind(api);
 
         // Resuming may make an already expired resource eligible for archival.
-        // Pausing has no corresponding confirmation in either current consumer.
+        // Pausing has no corresponding confirmation in any current consumer.
         if (!paused && !window.confirm(messages.value.t(labels.confirmResume))) return;
 
         // Use the caller's existing command/feedback lifetime. A lost response

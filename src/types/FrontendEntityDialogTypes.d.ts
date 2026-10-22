@@ -50,5 +50,4 @@ export interface EntitySettingsDialogProps {
     eventExtraHint?: string;
     linkedEventArchiveHint?: string;
     exportLink?: {url: string; label: string};
-    scheduledRestoreConfirmation?: PilotPlainMessageKey;
 }

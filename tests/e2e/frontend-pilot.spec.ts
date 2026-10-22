@@ -2,9 +2,10 @@ import {expect, test, type APIRequestContext, type Dialog, type Locator, type Pa
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {writeFile} from 'node:fs/promises';
-import {createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
+import {createE2EActivityPlan, createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
 import {createResourceViaForm, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createBrowserReadGate as readGate, waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {readActivitySettingsForE2E} from '../keywords/frontendActivityE2EKeywords';
 import type {components} from '../../src/types/api/v1';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 
@@ -1864,6 +1865,263 @@ test('pilot creates and duplicates complete lists through the SPA forms with row
         .toEqual([['Bottle', true, 0], ['Hammock', false, 0]]);
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('creation');
 });
+
+/** Create a future Activity through the native form without logging in again.
+ * The caller's fresh active profile must own all three Overview fixtures. */
+async function createOverviewActivity(request: APIRequestContext, title: string, eventId?: string) {
+    const input = createE2EActivityPlan();
+    input.title = input.form.title = title;
+    // Future dates keep the genuine scheduler from changing this fixture during
+    // resume. Linked and standalone plans otherwise use the same creation owner.
+    Object.assign(input.form, {startDate: '2099-10-07', endDate: '2099-10-09',
+        slots: JSON.stringify({'2099-10-07': [{id: randomUUID(), day: '2099-10-07', pos: 0,
+            title: 'Overview duty', description: 'Lifecycle fixture', startTime: '09:00', endTime: '10:00', maxAssignees: 1}]}),
+        ...(eventId ? {event_id: eventId} : {})});
+    if (eventId) input.createPath += `?eventId=${eventId}`;
+    return createResourceViaForm(request, input);
+}
+
+/** Scope the trigger/menu to this card's own footer. Expanded Event cards also
+ * contain child cards, whose matching controls must remain separate targets. */
+async function openOverviewArchivalMenu(card: Locator): Promise<Locator> {
+    const footer = card.locator(':scope > .card-footer');
+    await footer.getByRole('button', {name: /^Archival and visibility for /u}).click();
+    const menu = footer.locator('.dropdown-menu');
+    await expect(menu).toBeVisible();
+    // Both native Popper and the shared Vue owner position asynchronously. Check
+    // actual viewport placement before recording or activating the menu.
+    await expect.poll(async function menuFitsViewport() {
+        const box = await menu.boundingBox();
+        const viewport = card.page().viewportSize()!;
+        return !!box && box.x >= -1 && box.y >= -1
+            && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1;
+    }).toBe(true);
+    return menu;
+}
+
+/** Record actual browser-owned confirmation text and answer its native dialog.
+ * Screenshots cover the rendered menus; they cannot capture browser chrome. */
+async function answerOverviewConfirmation(page: Page, action: () => Promise<unknown>, accepted: boolean) {
+    const pending = page.waitForEvent('dialog');
+    const activation = action();
+    const confirmation = await pending;
+    const receipt = {type: confirmation.type(), message: confirmation.message(), accepted};
+    if (accepted) await confirmation.accept();
+    else await confirmation.dismiss();
+    await activation;
+    expect(receipt.type).toBe('confirm');
+    return receipt;
+}
+
+/** Await the real versioned response. The caller separately checks all observed
+ * browser writes and fresh private settings, so a label alone cannot prove save. */
+async function overviewLifecycleCommand(page: Page, path: string, method: string, action: () => Promise<unknown>): Promise<void> {
+    const pending = page.waitForResponse(response => new URL(response.url()).pathname === path
+        && response.request().method() === method);
+    await action();
+    expect((await pending).status()).toBe(200);
+}
+
+for (const width of [1280, 390]) {
+    test(`personal Overview retains native schedule menus and shared lifecycle commands at ${width}px`, async function overviewSchedules({page}, info) {
+        test.setTimeout(90_000);
+        await page.setViewportSize({width, height: 900});
+        await loginForE2E(page.request, createE2ELogin());
+        // Isolate membership through a real profile rather than deleting other
+        // records or substituting the bounded Overview response.
+        const marker = `Schedule ${randomUUID().slice(0, 8)}`;
+        expect((await page.request.post('/users/profile/create', {form: {name: marker}, maxRedirects: 0})).status()).toBe(302);
+        const actor = (await bootstrap(page.request)).profiles.find(profile => profile.name === marker);
+        expect(actor).toBeDefined();
+        expect((await page.request.get('/users/profile/change/' + actor!.id, {maxRedirects: 0})).status()).toBe(302);
+
+        const eventInput = createE2EEvent();
+        eventInput.title = eventInput.form.title = marker + ' Event';
+        Object.assign(eventInput.form, {startDate: '2099-10-07', endDate: '2099-10-09'});
+        const event = await createResourceViaForm(page.request, eventInput);
+        const activity = await createOverviewActivity(page.request, marker + ' standalone');
+        const linked = await createOverviewActivity(page.request, marker + ' linked', event.id);
+        expect((await page.request.post(`/api/event/${event.id}/archive/automation`, {data: {paused: true}})).status()).toBe(200);
+        expect((await page.request.post(`/api/activity/${activity.id}/archive/automation`, {data: {paused: false}})).status()).toBe(200);
+        expect((await page.request.post(`/api/activity/${activity.id}/archive`, {data: {}})).status()).toBe(200);
+        expect((await page.request.post(`/api/users/overview/activity/${activity.id}/visibility`, {data: {visibility: 'shown'}})).status()).toBe(200);
+        expect((await readActivitySettingsForE2E(page.request, activity.id)).archive)
+            .toMatchObject({direct: true, autoArchivePaused: false, hasAutomaticSchedule: true});
+        expect((await readActivitySettingsForE2E(page.request, linked.id)).archive.hasAutomaticSchedule).toBe(false);
+
+        const writes: Array<{method: string; path: string; body: unknown}> = [];
+        const navigation: string[] = [];
+        const errors: string[] = [];
+        const confirmations: Array<{type: string; message: string; accepted: boolean}> = [];
+        const native = new Map<string, Awaited<ReturnType<typeof readVisiblePresentation>>>();
+        const resumeWarning = 'Resume automatic archival? If its date period and the configured delay have already ended, '
+            + 'the next automatic run can archive this entity.';
+        const restoreWarning = 'Restore this entity for everyone? Automatic archival will be paused until you resume it.';
+        function observeWrite(request: Request): void {
+            const path = new URL(request.url()).pathname;
+            if (request.method() !== 'GET' && path.startsWith('/api/')) {
+                writes.push({method: request.method(), path, body: request.postDataJSON()});
+            }
+        }
+        function observeNavigation(request: Request): void {
+            if (request.isNavigationRequest() && request.frame() === page.mainFrame()) navigation.push(request.url());
+        }
+        function observeError(error: Error): void { errors.push(error.message); }
+        page.on('request', observeWrite);
+        page.on('pageerror', observeError);
+        try {
+            // The same records supply both comparators. Cancel native commands:
+            // Vue must start from precisely the observed persisted schedule state.
+            for (const pilot of [false, true]) {
+                const label = pilot ? 'vue' : 'native';
+                const response = await page.goto(pilot ? '/frontend-pilot?locale=en' : '/users/dashboard', {waitUntil: 'domcontentloaded'});
+                expect(response?.status()).toBe(200);
+                if (pilot) {
+                    await waitForPilotHydration(page);
+                    await page.evaluate(() => { document.documentElement.dataset.pilotDocument = 'overview-schedules'; });
+                    page.on('request', observeNavigation);
+                }
+                const owner = page.locator('[data-collection="owner"][data-region="main"]');
+                const eventCard = owner.locator(`[data-id="${event.id}"]`);
+                const activityCard = owner.locator(`[data-id="${activity.id}"]`);
+                await expect(eventCard).toBeVisible();
+                await expect(activityCard).toBeVisible();
+                if (pilot) await expect(owner).toHaveAttribute('aria-busy', 'false');
+
+                const eventMenu = await openOverviewArchivalMenu(eventCard);
+                await expect(eventMenu.getByRole('button', {name: 'Resume automatic archival', exact: true})).toBeVisible();
+                const eventPresentation = await captureMatchedPresentation(page, info, label + '-overview-scheduled-event-menu', eventMenu,
+                    ['h6', 'button']);
+                if (pilot) expectVisiblePresentation(native.get('event')!, eventPresentation);
+                else native.set('event', eventPresentation);
+                const canceledResume = await answerOverviewConfirmation(page,
+                    () => eventMenu.getByRole('button', {name: 'Resume automatic archival', exact: true}).click(), false);
+                expect(canceledResume.message).toBe(resumeWarning);
+                confirmations.push(canceledResume);
+                expect(writes).toEqual([]);
+
+                const activityMenu = await openOverviewArchivalMenu(activityCard);
+                await expect(activityMenu.getByRole('button', {name: 'Restore for everyone', exact: true})).toBeVisible();
+                await expect(activityMenu.getByRole('button', {name: 'Pause automatic archival', exact: true})).toBeVisible();
+                const activityPresentation = await captureMatchedPresentation(page, info, label + '-overview-scheduled-activity-menu', activityMenu,
+                    ['h6', 'button']);
+                if (pilot) expectVisiblePresentation(native.get('activity')!, activityPresentation);
+                else native.set('activity', activityPresentation);
+                const canceledRestore = await answerOverviewConfirmation(page,
+                    () => activityMenu.getByRole('button', {name: 'Restore for everyone', exact: true}).click(), false);
+                expect(canceledRestore.message).toBe(restoreWarning);
+                confirmations.push(canceledRestore);
+                expect(writes).toEqual([]);
+                expect((await readActivitySettingsForE2E(page.request, activity.id)).archive)
+                    .toMatchObject({direct: true, autoArchivePaused: false});
+
+                // Expanded parent and nested child have distinct event forwarding
+                // paths. A linked Activity follows its Event, so it never gains
+                // an independent pause/resume control from the shared card.
+                await eventCard.getByRole('link', {name: 'Show linked entities for ' + event.title, exact: true}).click();
+                await expect(page).toHaveURL(new RegExp('owner_main_event=' + event.id));
+                const childCard = eventCard.locator(`.entity-overview-children [data-id="${linked.id}"]`);
+                await expect(childCard).toBeVisible();
+                const parentMenu = await openOverviewArchivalMenu(eventCard);
+                const parentPresentation = await captureMatchedPresentation(page, info, label + '-overview-expanded-event-menu', parentMenu,
+                    ['h6', 'button']);
+                if (pilot) expectVisiblePresentation(native.get('parent')!, parentPresentation);
+                else native.set('parent', parentPresentation);
+                await page.keyboard.press('Escape');
+                const childMenu = await openOverviewArchivalMenu(childCard);
+                await expect(childMenu.getByRole('button', {name: /automatic archival/u})).toHaveCount(0);
+                const childPresentation = await captureMatchedPresentation(page, info, label + '-overview-linked-activity-menu', childMenu,
+                    ['h6', 'button']);
+                if (pilot) expectVisiblePresentation(native.get('child')!, childPresentation);
+                else native.set('child', childPresentation);
+                const canceledChildArchive = await answerOverviewConfirmation(page,
+                    () => childMenu.getByRole('button', {name: 'Archive for everyone', exact: true}).click(), false);
+                expect(canceledChildArchive.message).toBe('Archive this entity for everyone? '
+                    + 'Existing access, actions, and files are preserved. You can restore it later.');
+                confirmations.push(canceledChildArchive);
+                expect(writes).toEqual([]);
+                expect((await readActivitySettingsForE2E(page.request, linked.id)).archive.direct).toBe(false);
+                if (!pilot) continue;
+
+                // Confirm the expanded Event parent's command, then pause through
+                // the same card without a confirmation. Fresh reads establish
+                // backend state, and the complete request list below rejects replay.
+                const eventAutomaticPath = `/api/v1/events/${event.id}/automatic-archive`;
+                await openOverviewArchivalMenu(eventCard);
+                await overviewLifecycleCommand(page, eventAutomaticPath, 'PUT', async function resumeExpandedEvent() {
+                    const receipt = await answerOverviewConfirmation(page,
+                        () => eventCard.locator(':scope > .card-footer').getByRole('button', {name: 'Resume automatic archival', exact: true}).click(), true);
+                    expect(receipt.message).toBe(resumeWarning);
+                    confirmations.push(receipt);
+                });
+                await expect(owner).toHaveAttribute('aria-busy', 'false');
+                const resumedEvent = await page.request.get(`/api/v1/events/${event.id}`, {headers: headers(await bootstrap(page.request))});
+                expect(resumedEvent.status()).toBe(200);
+                expect((await resumedEvent.json() as components['schemas']['EventView']).archive.autoArchivePaused).toBe(false);
+                await openOverviewArchivalMenu(eventCard);
+                await overviewLifecycleCommand(page, eventAutomaticPath, 'PUT',
+                    () => eventCard.locator(':scope > .card-footer').getByRole('button', {name: 'Pause automatic archival', exact: true}).click());
+                await expect(owner).toHaveAttribute('aria-busy', 'false');
+                const pausedEvent = await page.request.get(`/api/v1/events/${event.id}`, {headers: headers(await bootstrap(page.request))});
+                expect(pausedEvent.status()).toBe(200);
+                expect((await pausedEvent.json() as components['schemas']['EventView']).archive.autoArchivePaused).toBe(true);
+
+                await owner.getByRole('link', {name: 'Back to overview', exact: true}).click();
+                await expect(eventCard.locator('.entity-overview-children')).toHaveCount(0);
+                const activityAutomaticPath = `/api/v1/activity-plans/${activity.id}/automatic-archive`;
+                const activityRestorePath = `/api/v1/activity-plans/${activity.id}/restore`;
+                // Pause first, then resume before restoration. The final paused
+                // state must be produced by Restore itself, rather than merely
+                // preserving a schedule which was already paused beforehand.
+                await openOverviewArchivalMenu(activityCard);
+                await overviewLifecycleCommand(page, activityAutomaticPath, 'PUT',
+                    () => activityCard.getByRole('button', {name: 'Pause automatic archival', exact: true}).click());
+                await expect(owner).toHaveAttribute('aria-busy', 'false');
+                expect((await readActivitySettingsForE2E(page.request, activity.id)).archive)
+                    .toMatchObject({direct: true, autoArchivePaused: true});
+                await openOverviewArchivalMenu(activityCard);
+                await overviewLifecycleCommand(page, activityAutomaticPath, 'PUT', async function resumeStandaloneActivity() {
+                    const receipt = await answerOverviewConfirmation(page,
+                        () => activityCard.getByRole('button', {name: 'Resume automatic archival', exact: true}).click(), true);
+                    expect(receipt.message).toBe(resumeWarning);
+                    confirmations.push(receipt);
+                });
+                await expect(owner).toHaveAttribute('aria-busy', 'false');
+                expect((await readActivitySettingsForE2E(page.request, activity.id)).archive)
+                    .toMatchObject({direct: true, autoArchivePaused: false});
+                await openOverviewArchivalMenu(activityCard);
+                await overviewLifecycleCommand(page, activityRestorePath, 'POST', async function restoreScheduledActivity() {
+                    const receipt = await answerOverviewConfirmation(page,
+                        () => activityCard.getByRole('button', {name: 'Restore for everyone', exact: true}).click(), true);
+                    expect(receipt.message).toBe(restoreWarning);
+                    confirmations.push(receipt);
+                });
+                await expect(owner).toHaveAttribute('aria-busy', 'false');
+                expect((await readActivitySettingsForE2E(page.request, activity.id)).archive)
+                    .toMatchObject({direct: false, autoArchivePaused: true, hasAutomaticSchedule: true});
+                await expect(activityCard.locator('.badge').filter({hasText: /^Archived$/u})).toHaveCount(0);
+                await expect(activityCard).toContainText('Shown for me');
+                expect(writes).toEqual([
+                    {method: 'PUT', path: eventAutomaticPath, body: {paused: false}},
+                    {method: 'PUT', path: eventAutomaticPath, body: {paused: true}},
+                    {method: 'PUT', path: activityAutomaticPath, body: {paused: true}},
+                    {method: 'PUT', path: activityAutomaticPath, body: {paused: false}},
+                    {method: 'POST', path: activityRestorePath, body: null},
+                ]);
+                expect(navigation).toEqual([]);
+                expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('overview-schedules');
+            }
+            expect(errors).toEqual([]);
+            // Preserve the observed native/Vue dialog choices as behavioral
+            // evidence alongside original menu captures; no simulated UI image.
+            await info.attach('overview-schedule-confirmations', {body: JSON.stringify(confirmations, null, 2), contentType: 'application/json'});
+        } finally {
+            page.off('request', observeWrite);
+            page.off('request', observeNavigation);
+            page.off('pageerror', observeError);
+        }
+    });
+}
 
 test('pilot overview preserves personal visibility, shared archive state and linked navigation across collections', async ({page}, info) => {
     test.setTimeout(60_000);

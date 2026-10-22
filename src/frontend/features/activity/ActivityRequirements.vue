@@ -72,9 +72,12 @@ function accept(config: ActivityRequirementConfiguration): void {
     dirty.value = false;
     calculation.value = null;
 }
+// A newly mounted editor can already have an admitted cached configuration.
+// Initialize it now: an equal background GET keeps that cache object's identity
+// and cannot trigger this watcher later. Dirty controls retain their own values.
 watch(data, config => {
     if (config && (!draft.value || !dirty.value)) accept(config);
-});
+}, {immediate: true});
 watch([planId, context.epoch], () => {
     // A new resource/actor releases this draft rather than carrying profile IDs
     // or private requirement values into another admission journey.

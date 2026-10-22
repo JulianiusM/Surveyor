@@ -189,6 +189,20 @@ test('creates and duplicates an Event through multipart SPA commands with native
     expect(detail).not.toHaveProperty('invoicePools');
     expect(detail).not.toHaveProperty('participants');
     expect((await page.request.get(detail.headerUrl!, {headers: await frontendEventHeaders(page.request)})).status()).toBe(200);
+
+    // Establish actual attendance through the existing native operation before
+    // copying. Both the empty destination and unchanged source must be proved;
+    // a zero-count assertion against an empty source would be vacuous.
+    expect((await page.request.post(`/api/event/${id}/register`, {data: {
+        arrivalDate: detail.startDate, departureDate: detail.endDate, dietary: ['MEAT'],
+    }})).status()).toBe(200);
+    const sourceAttendance = await (await page.request.get(`/api/v1/events/${id}`, {
+        headers: await frontendEventHeaders(page.request),
+    })).json() as components['schemas']['EventView'];
+    expect(sourceAttendance.registrationCount).toBe(1);
+    expect(sourceAttendance.registration).toMatchObject({arrivalDate: detail.startDate,
+        departureDate: detail.endDate, dietary: ['MEAT']});
+
     // Independently read the existing native view instead of asserting only the
     // new projection that created the record.
     const native = await page.request.get(`/event/${id}`);
@@ -217,6 +231,11 @@ test('creates and duplicates an Event through multipart SPA commands with native
     const copy = await (await page.request.get(`/api/v1/events/${copyId}`, {headers: await frontendEventHeaders(page.request)})).json() as components['schemas']['EventView'];
     expect(copy).toMatchObject({title: `${title} copy`, startDate: detail.startDate, endDate: detail.endDate,
         location: detail.location, maxParticipants: 12, registration: null, registrationCount: 0, headerUrl: null, bindingDeadline: null});
+    const retainedSource = await (await page.request.get(`/api/v1/events/${id}`, {
+        headers: await frontendEventHeaders(page.request),
+    })).json() as components['schemas']['EventView'];
+    expect(retainedSource.registrationCount).toBe(1);
+    expect(retainedSource.registration).toEqual(sourceAttendance.registration);
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('event-create');
     expect(documentRequests).toEqual([]);
 });

@@ -118,9 +118,9 @@ async function archive(card: Card, restore: boolean): Promise<void> {
     if (!available.isAvailable()) return;
     const lifecycle = createChildLifecycle(card);
     if (!lifecycle) return;
-    // The shared owner retains the native scheduled-restore warning for this card.
-    await lifecycle.archive(card.id, restore, card.inheritedArchived,
-        restore && card.automation ? 'event.organizer.confirmRestoreScheduled' : undefined);
+    // The shared owner selects the native scheduled-restore warning from the
+    // current admitted projection; this host keeps only child/API ownership.
+    await lifecycle.archive(card.id, restore, card.inheritedArchived, undefined, !!card.automation);
 }
 
 /** Pause/resume uses the controller-projected schedule capability. Only resuming

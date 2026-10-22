@@ -14,6 +14,7 @@ const props = defineProps<{view: components['schemas']['OverviewRegion']; disabl
 const emit = defineEmits<{
     visibility: [card: Card, value: components['schemas']['OverviewVisibilityInput']['visibility']];
     archive: [card: Card, restore: boolean];
+    automate: [card: Card, paused: boolean];
     remove: [card: Card];
     expand: [card: Card];
     page: [page: number];
@@ -63,6 +64,7 @@ function followPage(event: MouseEvent, page: number, available: boolean): void {
                 :expansion-href="expandHref(card)"
                 @visibility="emit('visibility', card, $event)"
                 @archive="emit('archive', card, $event)"
+                @automate="emit('automate', card, $event)"
                 @remove="emit('remove', card)"
                 @expand="emit('expand', card)"
             />

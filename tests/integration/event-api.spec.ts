@@ -95,12 +95,23 @@ describe('versioned Event projections and native operation adoption', () => {
             allowRegDietUpdateAfterDeadline: 0, timezone: 'Europe/Berlin'});
         expect(await adminService.getDefaultPerms('event', result.id)).toMatchObject(values.defaultPermissions);
 
+        // A real saved attendee makes exclusion observable. An empty source
+        // cannot detect accidental copying or destructive movement of attendance.
+        await eventApi.saveEventRegistration(result.id, {arrivalDate: values.startDate, departureDate: values.endDate,
+            dietary: ['MEAT']}, sessionFor(participant));
+        const sourceAttendance = await eventService.getRegistrationsForEvent(result.id);
+        expect(sourceAttendance).toHaveLength(1);
+        expect(sourceAttendance[0]).toMatchObject({profileId: participant.id,
+            arrivalDate: values.startDate, departureDate: values.endDate});
+
         const duplicate = await eventApi.readEventDuplicate(result.id, sessionFor(owner));
         expect(duplicate.values).toMatchObject({requireDietaryInfo: true, allowDietComment: true, allowRegDietUpdateAfterDeadline: false});
         const second = await eventApi.createEvent(duplicate.values, undefined, sessionFor(owner));
         expect(second.id).not.toBe(result.id);
         expect(await eventService.getEventById(second.id)).toMatchObject({title: values.title, headerImg: null});
         expect(await adminService.getDefaultPerms('event', second.id)).toMatchObject(values.defaultPermissions);
+        expect(await eventService.getRegistrationsForEvent(second.id)).toEqual([]);
+        expect(await eventService.getRegistrationsForEvent(result.id)).toEqual(sourceAttendance);
 
         // Native cross-field rejection finishes before the creator is entered;
         // this outcome is confirmed validation rather than uncertain completion.

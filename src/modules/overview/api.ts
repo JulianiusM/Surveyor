@@ -62,8 +62,11 @@ export function projectOverviewCard(card: Entity, session: SessionLike, ownerCol
         capabilities: {archive: (migrated || sharedLifecycle) && Boolean(card.archive?.canArchive),
             restore: (migrated || sharedLifecycle) && Boolean(card.archive?.canRestore),
             duplicate: ownerActions, remove: ownerActions},
-        // Only the shared Event card host asks for this existing schedule context.
-        ...(sharedLifecycle && card.archive?.hasAutomaticSchedule ? {automation: {
+        // Event Things to do retains its existing optional schedule context.
+        // Personal Overview exposes the same native controls only to an actor
+        // admitted to manage that independent schedule; other viewers receive
+        // neither its pause state nor a new management capability.
+        ...((sharedLifecycle || migrated && card.archive?.canManageAutomation) && card.archive?.hasAutomaticSchedule ? {automation: {
             paused: card.archive.autoArchivePaused, canManage: card.archive.canManageAutomation}} : {}),
         children: card.overview ? {total: card.overview.total, matching: card.overview.matching} : null};
 }

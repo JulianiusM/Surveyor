@@ -7,6 +7,7 @@ import EntityHeader from '../../src/frontend/components/EntityHeader.vue';
 import EventPage from '../../src/frontend/features/event/EventPage.vue';
 import EventSettings from '../../src/frontend/features/event/EventSettings.vue';
 import EventThingsToDo from '../../src/frontend/features/event/EventThingsToDo.vue';
+import ActivitySettings from '../../src/frontend/features/activity/ActivitySettings.vue';
 import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
 import {eventKeys, packingKeys} from '../../src/frontend/app/queryKeys';
 import {createFrontendEventSession, createFrontendEventView, frontendEventId} from '../factories/frontendEventFactory';
@@ -184,6 +185,71 @@ describe('shared displayed entity header consumers', () => {
 });
 
 describe('shared automatic archival consumers', () => {
+    it.each(['Activity settings', 'Event settings'] as const)(
+        'shares scheduled restore consent through %s while retaining Event wording', async function preservesScheduledRestore(consumer) {
+            const eventSettings: components['schemas']['EventSettings'] = {
+                id: frontendEventId, title: 'Archived scheduled root', settingsToken: '"settings"',
+                headerUrl: null, headerVersion: null, editableFields: [], access: null,
+                capabilities: {editHeader: false, managePermissions: false, duplicate: false, remove: false,
+                    manageArchive: true, archive: false, restore: true, manageAutomation: true},
+                archive: {direct: true, inherited: false, archivedAt: '2026-10-01T00:00:00Z', autoArchivePaused: false, eventUrl: null},
+            };
+            // Activity emits a field-comparison token and its own metadata-field
+            // vocabulary. Preserve both contracts rather than admitting Event's
+            // broader token and field types through a common fixture.
+            const activitySettings: components['schemas']['ActivitySettings'] = {...eventSettings,
+                settingsToken: '"edit-settings"', editableFields: [], currentEvent: null,
+                capabilities: {...eventSettings.capabilities, linkEvent: false, export: false},
+                archive: {...eventSettings.archive, hasAutomaticSchedule: true}};
+            const settings = consumer === 'Activity settings' ? activitySettings : eventSettings;
+            const writes: string[] = [];
+
+            /** Retain actual dated-root settings callers and generated transport.
+             * A confirmed write changes their subsequent admitted HTTP read. */
+            async function restoreScheduledResource(request: Request): Promise<Response> {
+                if (request.method === 'POST') {
+                    writes.push(new URL(request.url).pathname);
+                    settings.archive.direct = false;
+                    settings.archive.archivedAt = null;
+                    settings.archive.autoArchivePaused = true;
+                    settings.capabilities.restore = false;
+                    settings.capabilities.archive = true;
+                    return json({changed: true});
+                }
+                return json(settings);
+            }
+
+            const component = consumer === 'Activity settings' ? ActivitySettings : EventSettings;
+            const mounted = await mountFrontendEvent(component, restoreScheduledResource,
+                consumer === 'Activity settings' ? {planId: frontendEventId, metadataAvailable: false}
+                    : {eventId: frontendEventId, metadataAvailable: false});
+            cleanups.push(mounted.dispose);
+            await vi.waitFor(function admitsRestoreControl() {
+                expect([...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Restore for everyone')).toBe(true);
+            });
+            const confirm = vi.mocked(window.confirm);
+
+            // Cancel keeps the current archive/schedule unchanged. The shared
+            // selector preserves the explicitly fuller Event parent warning.
+            confirm.mockReturnValue(false);
+            action('Restore for everyone').click();
+            await flushPromises();
+            const key = consumer === 'Event settings' ? 'event.confirmRestore' : 'event.organizer.confirmRestoreScheduled';
+            expect(confirm).toHaveBeenLastCalledWith(mounted.context.messages.value.t(key));
+            expect(writes).toEqual([]);
+            expect(settings.archive).toMatchObject({direct: true, autoArchivePaused: false});
+
+            confirm.mockReturnValue(true);
+            action('Restore for everyone').click();
+            await flushPromises();
+            const path = consumer === 'Activity settings' ? `/api/v1/activity-plans/${frontendEventId}/restore`
+                : `/api/v1/events/${frontendEventId}/restore`;
+            expect(writes).toEqual([path]);
+            expect(document.body.textContent).toContain(mounted.context.messages.value.t('overview.restored'));
+            expect(document.body.textContent).not.toContain('Restore for everyone');
+        },
+    );
+
     it.each(['settings', 'child cards'] as const)(
         'preserves resume confirmation and immediate pause through %s',
         async consumer => {

@@ -227,6 +227,113 @@ describe('Overview Packing lifecycle actions', () => {
     });
 });
 
+describe('Overview independent schedule controls', () => {
+    it.each([
+        {type: 'event', parent: false}, {type: 'activity', parent: false}, {type: 'event', parent: true},
+    ] as const)('shares admitted $type schedule commands and restore consent (parent=$parent)', async function exercisesSchedule(candidate) {
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
+        const confirmation = vi.fn(() => false);
+        vi.stubGlobal('confirm', confirmation);
+        const schedule: components['schemas']['OverviewCard'] = {...card, type: candidate.type,
+            url: `/frontend-pilot/${candidate.type}/${card.id}`, title: 'Archived scheduled root',
+            archived: true, visibility: 'shown', overviewHidden: false,
+            automation: {paused: true, canManage: true},
+            capabilities: {...card.capabilities, restore: true}};
+        const root = candidate.type === 'event' ? 'events' : 'activity-plans';
+        const writes: {path: string; method: string; body: unknown}[] = [];
+
+        /** Only HTTP supplies saved state. The generated feature API, shared
+         * command and actual region refresh must publish the next visible action. */
+        async function serveScheduledOverview(request: Request): Promise<Response> {
+            const path = new URL(request.url).pathname;
+            if (request.method !== 'GET') {
+                const body = request.method === 'PUT' ? await request.json() : null;
+                writes.push({path, method: request.method, body});
+                if (request.method === 'PUT') schedule.automation!.paused = body.paused;
+                else {
+                    schedule.archived = false;
+                    schedule.automation!.paused = true;
+                    schedule.capabilities.restore = false;
+                    schedule.capabilities.archive = true;
+                }
+                return json({changed: true});
+            }
+            const view = {...region(request), availableTypes: [candidate.type],
+                parent: candidate.parent ? schedule : null, items: candidate.parent ? [] : [schedule]};
+            return json(view);
+        }
+
+        const visit = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, serveScheduledOverview);
+        const {wrapper, context, request} = visit;
+        await vi.waitFor(() => expect(wrapper.findAll('button.dropdown-item')
+            .some(button => button.text() === 'Resume automatic archival')).toBe(true));
+
+        /** Open the real disclosure before invoking a currently rendered action.
+         * Each fresh GET replaces its label from admitted state, not a local mirror. */
+        async function choose(label: string): Promise<void> {
+            const button = wrapper.findAll('button.dropdown-item').find(control => control.text() === label)!;
+            expect(button, label).toBeDefined();
+            (button.element.closest('details') as HTMLDetailsElement).open = true;
+            await button.trigger('click');
+            await flushPromises();
+        }
+
+        // Canceled resumption never dispatches. Confirming it sends exactly the
+        // existing feature command; the fresh read then exposes immediate Pause.
+        await choose('Resume automatic archival');
+        expect(confirmation).toHaveBeenLastCalledWith(context.messages.value.t('event.organizer.confirmResumeAutomation'));
+        expect(writes).toEqual([]);
+        confirmation.mockReturnValue(true);
+        await choose('Resume automatic archival');
+        expect(writes).toEqual([{path: `/api/v1/${root}/${card.id}/automatic-archive`, method: 'PUT', body: {paused: false}}]);
+        expect(wrapper.text()).toContain('Pause automatic archival');
+        const confirmationsBeforePause = confirmation.mock.calls.length;
+        await choose('Pause automatic archival');
+        expect(confirmation).toHaveBeenCalledTimes(confirmationsBeforePause);
+        expect(writes[1]).toEqual({path: `/api/v1/${root}/${card.id}/automatic-archive`, method: 'PUT', body: {paused: true}});
+        expect(wrapper.text()).toContain('Resume automatic archival');
+
+        // Restoration's meaningful schedule warning is shared with Settings and
+        // Event children. Event keeps its fuller explicit parent/child wording.
+        confirmation.mockReturnValue(false);
+        await choose('Restore for everyone');
+        const restoreKey = candidate.type === 'event' ? 'event.confirmRestore' : 'event.organizer.confirmRestoreScheduled';
+        expect(confirmation).toHaveBeenLastCalledWith(context.messages.value.t(restoreKey));
+        expect(writes).toHaveLength(2);
+        confirmation.mockReturnValue(true);
+        const readsBeforeRestore = request.mock.calls.filter(([input]) => (input as Request).method === 'GET').length;
+        await choose('Restore for everyone');
+        expect(writes[2]).toEqual({path: `/api/v1/${root}/${card.id}/restore`, method: 'POST', body: null});
+        expect(writes).toHaveLength(3);
+        expect(wrapper.text()).toContain('Archive for everyone');
+        expect(wrapper.text()).toContain('Resume automatic archival');
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'GET').length).toBeGreaterThan(readsBeforeRestore);
+
+        // A retained DOM callback cannot bypass the common initialization gate.
+        // No fresh confirmation or command is allowed after that admission ends.
+        const resume = wrapper.findAll('button.dropdown-item').find(button => button.text() === 'Resume automatic archival')!;
+        const confirmationsBeforeRetirement = confirmation.mock.calls.length;
+        context.hydrated.value = false;
+        await resume.trigger('click');
+        await flushPromises();
+        expect(writes).toHaveLength(3);
+        expect(confirmation).toHaveBeenCalledTimes(confirmationsBeforeRetirement);
+    });
+
+    it.each(['packing', 'drivers', 'survey', 'activity'] as const)(
+        'does not invent an independent schedule for an unscheduled %s card', async function omitsUnscheduledActions(type) {
+            const unscheduled = {...card, type, automation: undefined,
+                capabilities: {...card.capabilities, archive: true}};
+            const {wrapper, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+                async function readUnscheduled(request) { return json({...region(request), availableTypes: [type], items: [unscheduled]}); });
+            await vi.waitFor(() => expect(wrapper.text()).toContain(unscheduled.title));
+            expect(wrapper.text()).not.toContain('Resume automatic archival');
+            expect(wrapper.text()).not.toContain('Pause automatic archival');
+            expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+        },
+    );
+});
+
 describe('visible resource recovery', () => {
     it('admits a new mounted GET after a cached terminal denial without waiting for cache expiry', async function admitsColdRead() {
         let denied = true;

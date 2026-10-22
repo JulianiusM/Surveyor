@@ -9,7 +9,7 @@ import * as entityAdminController from '../../src/controller/entityAdminControll
 import {archiveKey} from '../../src/modules/archive/policy';
 import {contractValidator} from '../../src/modules/api/contracts';
 import {prepareValidatedJson} from '../../src/modules/api/transport';
-import {setOverviewVisibility} from '../../src/modules/overview/api';
+import {projectOverviewCard, readOverview, setOverviewVisibility} from '../../src/modules/overview/api';
 import {AppDataSource} from '../../src/modules/database/dataSource';
 import {EntityVisibilityPreference} from '../../src/modules/database/entities/archive/EntityVisibilityPreference';
 import {Event} from '../../src/modules/database/entities/event/Event';
@@ -136,6 +136,56 @@ afterAll(async () => {
 });
 
 describe('authoritative archival and personal overview visibility', () => {
+    it('projects native schedule controls only for admitted personal Overview actors and independent roots', async function projectsOverviewSchedules() {
+        const event = await createEvent('Projected Overview Event');
+        const activity: ArchiveReference = {type: 'activity', id: await activityService.createActivityPlanTx(
+            owner.id, 'Projected standalone Activity', '', '2027-06-01', '2027-06-03', [],
+        )};
+        const linked: ArchiveReference = {type: 'activity', id: await activityService.createActivityPlanTx(
+            owner.id, 'Projected linked Activity', '', '2027-06-01', '2027-06-03', [], event.id,
+        )};
+        const packing: ArchiveReference = {type: 'packing', id: await packingService.createPackingListTx(owner.id, 'Projected Packing', '', [])};
+        const drivers: ArchiveReference = {type: 'drivers', id: await driverService.createDriversList(owner.id, 'Projected Drivers', '')};
+        const survey: ArchiveReference = {type: 'survey', id: await surveyService.createSurveyTx(owner.id, 'Projected Survey', '', [])};
+        const ownerSession: SessionLike = {profile: owner, auth: {user: owner.user!}};
+
+        // Native controller cards supply the authoritative schedule/capability
+        // snapshot. Exercise the actual personal read, not an opt-in DTO fixture.
+        for (const reference of [event, activity, linked, packing, drivers, survey]) {
+            const native = (await card(owner, reference))!;
+            expect(native).toBeDefined();
+            const view = await readOverview({collection: 'owner', region: 'main', type: reference.type,
+                q: native.title, ...(reference === linked ? {eventId: event.id} : {})}, ownerSession);
+            const projected = [...view.items, ...(view.parent ? [view.parent] : [])]
+                .find(item => item.id === reference.id && item.type === reference.type);
+            expect(projected, native.title).toBeDefined();
+            expect(contractValidator('OverviewRegion')(view)).toBe(true);
+            const scheduled = reference === event || reference === activity;
+            expect(native.archive?.hasAutomaticSchedule).toBe(scheduled);
+            expect(native.archive?.canManageAutomation).toBe(scheduled);
+            expect(projected!.automation).toEqual(scheduled ? {paused: false, canManage: true} : undefined);
+        }
+
+        // A real participant can see the same Event while lacking its private
+        // scheduler controls. Personal reads must omit even the pause state.
+        await registerEventAttendance(event.id, participant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        await pauseAsOwner(event, true);
+        const participantSession: SessionLike = {profile: participant, auth: {user: participant.user!}};
+        const nativeParticipant = (await card(participant, event, 'participant'))!;
+        expect(nativeParticipant.archive).toMatchObject({hasAutomaticSchedule: true, autoArchivePaused: true, canManageAutomation: false});
+        const participantView = await readOverview({collection: 'participant', region: 'main', type: 'event', q: nativeParticipant.title}, participantSession);
+        expect(participantView.items.find(item => item.id === event.id)?.automation).toBeUndefined();
+        expect(projectOverviewCard(nativeParticipant, participantSession).automation).toBeUndefined();
+
+        // Event Things to do keeps its established explicit schedule context,
+        // including a false management flag. Personal admission remains separate.
+        expect(projectOverviewCard(nativeParticipant, participantSession, false, true).automation)
+            .toEqual({paused: true, canManage: false});
+        await adminService.addAdmin('event', event.id, participant.id, PERM.EDIT_META);
+        const admitted = await readOverview({collection: 'participant', region: 'main', type: 'event', q: nativeParticipant.title}, participantSession);
+        expect(admitted.items.find(item => item.id === event.id)?.automation).toEqual({paused: true, canManage: true});
+    });
+
     it('archives every event attachment immediately and restores only inherited state', async () => {
         const event = await createEvent('Archive inheritance');
         const activity: ArchiveReference = {type: 'activity', id: await activityService.createActivityPlanTx(

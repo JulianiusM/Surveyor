@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-21
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Finance query-family reuse, matched native/Vue invoice-review assertions and specialist-reference reconciliation recorded with scoped current execution; prior finite P0-P8 receipts, native/backend exclusions and cutover conditions retained
+verification-scope: Cached Activity requirement initialization, personal Overview schedule parity and nonempty Event duplication verification recorded with scoped execution; prior finite P0-P8 receipts, native/backend exclusions and cutover conditions retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,49 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Cross-area correction and scoped verification (2026-10-22)
+
+The maintainer directly instructed implementation of the second review's three bounded fixes. `ActivityRequirements`
+now initializes its independent draft from an already admitted cached configuration, retaining its existing dirty-value
+guard. Actual parent/Rules-child tests cover fresh-cache re-entry without another GET, stale re-entry with an equal
+successful GET, saved controls and live coverage, and private draft retirement when its actor is released.
+
+Personal Overview now adopts the existing Event/standalone Activity schedule controls through its shared card,
+region, generated feature operations and lifecycle owner. Its projection exposes native schedule-management state
+only to admitted managers. The shared lifecycle owner also selects the meaningful scheduled Activity restore
+warning for Overview and Settings, while preserving Event's fuller parent/child warning. Event child cards retain
+that shared archive/restore owner; linked Activity has no independent automatic schedule.
+Resume retains confirmation, pause remains immediate, and existing command/read recovery retains its ownership.
+No recorded exception authorized the omitted controls or warning; this restores the established parity contract.
+
+Event duplication verification now starts from actual saved attendance in both real-ORM and built-application
+assertions. The destination excludes attendance while the source retains the same saved registration. Existing
+creation, duplicate, registration and persistence operations remain unchanged. The coverage map's earlier
+empty-source limitation is removed; the new proof does not establish every duplicate grant or deletion race.
+The staged contribution guide records cached draft initialization and the actual Overview automation consumer;
+its existing ownership/preservation rules, mapping operations and immutable reconciliation inputs are retained.
+
+Current checks use official Node.js 24.15.0. Persistence and built-application selections use independently verified,
+exact-grant disposable MariaDB 10.11.14 schemas with strict SQL behavior.
+
+| Verification | Actual result and limit |
+|---|---|
+| Build and test compiler | Full server/native/Vue client/SSR build and asset copying pass; the final test compiler passes with current generated inputs. |
+| Mounted production consumers | All 156 selected current cases pass across retained receipts: 70 Activity (14 requirements, 27 parent, 29 recommendation), 77 refresh/navigation and nine shared presentation cases. The two cached re-entry regressions failed against earlier source; the initialization fix and actor-retirement assertion pass. These mounted cases substitute HTTP delivery, without persistence or browser-layout certification. |
+| Real-ORM integration | Both selected suites pass all 37 cases: 20 archival and 17 Event, including actual schedule capability/privacy projections and nonempty-source attendance duplication. Direct controller/ORM calls do not establish Express or browser behavior. |
+| Built application | Both final Overview workflows pass at 1280px/390px; the strengthened Event duplication and retained Event Settings workflows also pass. Actual menus, native/Vue browser confirmation text, cancellation, single command dispatch, persisted flags and retained Vue documents are asserted. Restoring the archived Activity pauses its running schedule; linked Activity exposes no independent schedule. |
+| Engineering checks | The complete eight-file executable source scope has no findings; declaration, DBAL and session inventories retain their global scope. Independent source review checks actual adoption and preservation beyond these measurable rules. |
+
+Independent nonauthor review accepts all 16 final original menu captures: eight native/Vue pairs at 1280px/390px
+for flat Event, scheduled standalone Activity, expanded Event parent and linked Activity child. Root separately
+reviews four original representatives. Menu text, hierarchy, actions and states are readable and equivalent within
+these crops; measured browser assertions cover viewport placement. These are menu captures, not whole-page or
+browser-chrome images. Browser-owned confirmations are verified through actual dialog events.
+
+Current source/assertion boundaries belong to the [coverage map](TEST_COVERAGE.md). These scoped corrections do not
+renew the earlier full-pilot matrix, start P9–P11 or authorize publication, default-route cutover, native removal
+or deployment. Native frontend, shared business/DBAL owners and frozen production guides remain unchanged.
 
 ## Finance readiness correction and scoped verification (2026-10-21)
 
