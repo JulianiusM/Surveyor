@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-15
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved automatic document reload scope reconciled in existing upgrade guidance; unchanged production procedures stay in their existing owners; no runtime or cutover execution claimed
+verification-scope: approved document recovery retained; participant-upload validation distinguishes native reload from Vue same-document refresh; unchanged production procedures retained; no runtime or cutover execution claimed
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; package.json
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -65,3 +65,13 @@ Validate enabled identity-provider and SMTP workflows independently rather than 
 Only then remove the maintenance response and reopen normal traffic.
 
 <!-- /delta:amendment-04 -->
+
+## 5. Start and validate — amendment-05
+
+<!-- delta:amendment-05 -->
+of Accepted/Closed costs preserve recorded payments and require recalculation when the pool is closed. Confirmed
+participant uploads clear completed fields while retaining an eligible pool. Native consumers reload into invoice
+history; Vue consumers refresh the admitted data in the same document. Uncertain delivery requires explicit saved-history
+inspection without automatically submitting the upload again.
+
+<!-- /delta:amendment-05 -->

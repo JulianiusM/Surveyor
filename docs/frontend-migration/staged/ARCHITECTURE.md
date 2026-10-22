@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-20
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P8 shared frontend/backend ownership, explicit lexical numeric controls, Finance decimal wire/read boundaries and existing authority/draft architecture source-reconciled; no publication or new execution claim
+verification-scope: shared frontend/backend ownership, Finance decimal wire/read boundaries and current Overview schedule consumers source-reconciled; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -67,7 +67,8 @@ The [Development contract guidance](DEVELOPMENT.md#contract-authoring-and-genera
 schema/transport styles, strict generated validation and released-version compatibility. The shared translator and
 catalogs currently serve UI/API text and reviewed Help; language preference is a browser cookie. Grammar supports
 plain text/cardinal plurals and declared, validated component placeholders through the shared RichMessage owner;
-scalar values stay escaped text and catalogs cannot supply HTML. Principal-language persistence and full email/PDF/invoice localization remain intended
+scalar values stay escaped text and catalogs cannot supply HTML. Principal-language persistence and full localization
+of email, PDF and other invoice output remain intended
 future decisions in [DEC-006](decisions/DEC-006-FRONTEND-FRAMEWORK.md#deferred-localization-and-domain-integration-targets),
 without an implemented production capability.
 
@@ -120,9 +121,10 @@ The injected `noticeTargetKey` is a read-only presentation reference, not query,
 dismissal and diagnostics. Durable validation/recovery stays contextual. Features do not recreate notice placement.
 `composables/entityLifecycle.ts` supplies `createEntityLifecycle` to Settings, Overview and Event Things to do through
 their existing API, command and current translator. It shares archive/restore confirmation, desired-state dispatch and
-success wording. Settings and Event child cards also share its pause/resume operation: only resume asks for the
-existing elapsed-schedule confirmation. Callers retain eligibility, wording and refresh lifetimes; the
-helper adds no state or backend business policy.
+success wording. Settings, Overview and the Event child adapter share its pause/resume operation where the admitted
+projection exposes an independent schedule; linked Activity has no independent automatic controls. Pause is immediate,
+and resume asks for the existing elapsed-schedule confirmation. Callers retain eligibility, wording and refresh
+lifetimes; the helper adds no state or backend business policy.
 
 Event, Packing, Drivers, Survey and Activity detail adopt one displayed `EntityHeader`. Features supply the admitted title/icon, optional parent
 URL, image operation/version/query key and settings availability. The header preserves the 250px cover image and
@@ -496,3 +498,12 @@ never held Surveyor data, follow the one-time [Database initialization procedure
 Existing production schema evolution uses reviewed migrations; synchronization is not an upgrade tool.
 
 <!-- /delta:amendment-27 -->
+
+## Events and invoice pools — amendment-28
+
+<!-- delta:amendment-28 -->
+`wording.ts` and its locale catalog own native invoice interface and shared email/PDF/export messages.
+Vue interface projections use the shared generated translator. `presentation.ts` supplies the common
+settlement-status rule. The primary saved **Calculated balance** stays visible after payment or refund. The compact
+
+<!-- /delta:amendment-28 -->

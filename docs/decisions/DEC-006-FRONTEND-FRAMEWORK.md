@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers
 owner: frontend maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Existing framework/interface decisions retained; original finance money/factor/identifier rules, erroneous future-work provenance and maintainer-approved accepted command-precision correction recorded; implementation and execution remain separate; no cutover acceptance
+verification-scope: Existing framework/interface decisions and original deferred-target wording retained; factual P6/P9 implementation status distinguished from unimplemented principal-language and output-localization targets; no new decision or cutover acceptance
 source-anchors: package.json; vite.config.mts; src/app.ts; src/modules/frontendDevelopment.ts; src/modules/frontendPilotRenderer.ts; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/ARCHITECTURE.md; docs/DEVELOPMENT.md; docs/TESTING_GUIDE.md
 next-review: frontend-technology-or-rendering-boundary-change
 -->
@@ -256,6 +256,12 @@ Future financial frontend integration preserves explicit reviewed preview/refres
 rebasing of reviewed values. Recommendation/job consumers retain their established backoff/expiry/terminal protocol.
 These intended frontend integrations leave existing financial revisions, signed evidence and activity fingerprints
 with their domain owners; the 30-second shared-read policy is not a replacement for those contracts.
+
+**Implementation status (2026-10-22):** The preceding paragraphs preserve the original target status. P6 now
+supplies recommendation snapshots and known-job observation through pure reads; P9 now supplies explicit reviewed
+finance previews and saved settlement/output workflows. Domain-job timing, financial revisions, signed settlement
+evidence and recommendation fingerprints retain their existing owners. Principal-language persistence and full
+email/PDF localization remain unimplemented targets. This status correction supplies no new implementation authority.
 
 ## Approved interface and shared SPA amendments (2026-10-19)
 

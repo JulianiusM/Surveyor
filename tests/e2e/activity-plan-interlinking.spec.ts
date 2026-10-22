@@ -40,6 +40,9 @@ test('keeps manual overlap warnings visible after cancellation and applies only 
     await page.clock.install();
     await page.goto(first.path);
     await page.getByRole('tab', {name: 'Rules & auto-assign'}).click();
+    // This rendered child appears after participant options are adopted; the
+    // native Add dialog otherwise opens against its still-empty initial state.
+    await expect(page.locator('#recommendationSummaryStats > span.text-secondary')).toHaveText('No recommendations loaded.');
     await page.locator('[data-add-recommendation]').click();
     await page.locator('#addRecommendationParticipant').selectOption('profile:' + first.profileId);
     await expect(page.locator('[data-add-warning]')).toContainText(second.title);

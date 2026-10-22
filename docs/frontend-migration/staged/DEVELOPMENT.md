@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P9 calculation review, stable signed settlement and output owners reconciled with existing contribution guidance; cached Activity and Overview contracts retained, no publication or new execution claim
+verification-scope: P9 calculation, settlement and output guidance retained; inherited Finance prescriptions qualified by native/Vue owner, actual command precision and generated catalog ownership; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -1514,3 +1514,95 @@ reuse development or production database names.
 GRANT ALL PRIVILEGES ON `surveyor\_dev`.* TO 'surveyor_dev'@'127.0.0.1';
 
 <!-- /delta:amendment-36 -->
+
+## Invoice pool calculation and saved changes — amendment-37
+
+<!-- delta:amendment-37 -->
+Native organizer creation uses `postOrganizerExpense` and `lockOnUncertainFailure`: a confirmed API 4xx rejection permits
+correction, while network failures, server errors, or unconfirmed responses retain the form lock and a persistent
+**Reload and check saved invoices** recovery action. Vue organizer creation uses `FinanceOrganizerInvoice`, its
+feature API and the shared command owner; uncertainty requires in-place saved-history inspection and explicit
+acknowledgement. Neither consumer automatically retries this non-idempotent cost creation.
+
+<!-- /delta:amendment-37 -->
+
+## Invoice pool calculation and saved changes — amendment-38
+
+<!-- delta:amendment-38 -->
+an extra confirmation dialog displays the proposed change before committing. The native adapter accepts explicit
+`correctedAmount: number | null` and `correctedDescription: string | null`, with null restoring the original value.
+Versioned commands use generated decimal-string amount contracts before the same shared normalization and business
+operation; the wire spelling does not add a precision restriction or change saved calculations.
+Revision preserves the Accepted/Closed status and original fields. Retroactive rejection requires `rejectionReason`, changes
+
+<!-- /delta:amendment-38 -->
+
+## Invoice pool calculation and saved changes — amendment-39
+
+<!-- delta:amendment-39 -->
+The native participant upload binder in `src/public/js/modules/invoice-submission.ts` owns its progress, busy state,
+and recovery. Successful persistence clears amount/description/proof, keeps the event-scoped pool selection and
+reloads into `#invoiceHistory` after the success notice; its locked captured request prevents duplicate navigation.
+Vue's `FinanceSubmission` owns its mounted draft/proof/progress and uses its feature API with `useCommand` to refresh
+admitted Finance data in place. Confirmed save releases only completed fields while retaining an eligible pool;
+unknown delivery retains the draft until explicit saved-history inspection and acknowledgement. SMTP delivery is
+separate from persistence confirmation. Neither frontend automatically resends an uncertain proof upload; validation
+rejection remains distinct from possible committed delivery.
+
+<!-- /delta:amendment-39 -->
+
+## Invoice pool calculation and saved changes — amendment-40
+
+<!-- delta:amendment-40 -->
+Native pool mutations use `runInvoiceAdminAction` for immediate busy feedback, repeat-action blocking and a status
+update after five seconds. Its `showInlineAlert` targets `#liveAlerts` or dialog-local `.pool-form-status`, reveals
+the notice and expires it after ten seconds. Confirmed outcomes survive native reload through event-scoped session
+storage. Vue pool mutations use `useCommand`, `CommandFeedback` and the common page/dialog notification hosts;
+feedback never moves document focus or scroll, and confirmed results survive a failed following read without replay.
+Both consumers update amounts and settlement state only from confirmed saved data, keep pending work visible and
+acknowledge **Refresh list** even when the results are unchanged. Matching Vue commands share their existing owners
+instead of adopting native browser wrappers or notice storage.
+
+<!-- /delta:amendment-40 -->
+
+## Invoice pool calculation and saved changes — amendment-41
+
+<!-- delta:amendment-41 -->
+status filters, sorting, configurable page size, and pagination suitable for hundreds of pools. Native consumers keep
+their browser ledger; Vue consumers share `FinanceShares` and one lazily populated `FinanceBreakdown` dialog rather
+than creating a dialog for every pool. The **Share breakdown** dialog shows saved components, formatted concrete
+calculation steps,
+
+<!-- /delta:amendment-41 -->
+
+## Invoice pool calculation and saved changes — amendment-42
+
+<!-- delta:amendment-42 -->
+Native `initTakeoverOverviews` in `src/public/js/modules/invoice-takeovers.ts` supplies its search and payer paging;
+Vue consumers share `FinanceCoverage` for those controls, beneficiary disclosure and explicit payer-edit events.
+Each group initially shows six beneficiaries; **Show all** expands its badges within a bounded scroll area,
+
+<!-- /delta:amendment-42 -->
+
+## Invoice pool calculation and saved changes — amendment-43
+
+<!-- delta:amendment-43 -->
+Use the existing positive-amount normalization, upper bound and nonblank description. The rendered amount field's
+two-decimal step does not impose another shared-operation precision rule. Proof is optional, with the
+
+<!-- /delta:amendment-43 -->
+
+## Invoice pool calculation and saved changes — amendment-44
+
+<!-- delta:amendment-44 -->
+`wording.ts` and `locales/en.ts` own native invoice interface wording and shared email/PDF/export messages.
+Stable typed keys identify whole messages; named parameters and `Intl.PluralRules` select complete native messages.
+That catalog currently supplies English with supported-language fallback. Vue Finance uses the generated i18next
+catalogs and typed context translator for English/German interface messages and localized saved-data projections.
+`src/locales/en.json` selects existing English invoice messages by key; `scripts/generate-locales.mjs` reads the
+maintained literal catalog and derives those generated resources without copying its text. The native client build
+emits the pure wording/presentation owners and locale catalog under `shared/invoice/` as ordinary browser modules.
+Keep native imports pointed at those assets and use the Vue context translator for Vue consumers; do not copy
+catalogs, add forwarding exports or expose server-side invoice business modules as browser entries.
+
+<!-- /delta:amendment-44 -->

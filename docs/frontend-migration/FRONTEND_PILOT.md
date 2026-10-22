@@ -4,14 +4,14 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-20
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Current P0-P8 shared lexical controls, original decimal wire contracts, matching multipart and financial presentation ownership reconciled with source and localized/staged guidance; actual execution belongs to paired review
+verification-scope: Current P0-P9 scope and shared financial calculation, settlement and output owners reconciled with source and retained earlier ownership contracts; actual execution and finite visual evidence belong to paired review
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
 
-The opt-in Vue pilot migrates Packing, Help, Events, Drivers, Surveys, Activity planning and their necessary identity, overview and shared foundation journeys.
+The opt-in Vue pilot migrates Packing, Help, Events, Drivers, Surveys, Activity planning, event finance and their necessary identity, overview and shared foundation journeys.
 Native application routes remain available as the visual/behavioral reference. The comparator is
 `2dfa2573c64178f54684cc4877b5a945f66e24c8`, subject only to explicit exceptions in the
 [foundation decision ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments).
@@ -62,9 +62,14 @@ participant upload, history, revision-reviewed retraction and closing reuse its 
 left organizer and takeover commands at working native destinations.
 The subsequent [P8 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p8-implementation-trigger-2026-10-20)
 adds organizer pool/settings/expense/review and allocation/coverage controls to those same Event pages. Each
-form saves independently through the original shared operations. Calculation, settlement and notification commands
-retain their native P9 destinations; native source, default-route cutover, guide publication and deployment remain
-separately authorized.
+form saves independently through the original shared operations. At that boundary, calculation, settlement and
+notification commands retained their native P9 destinations.
+The subsequent [P9 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p9-implementation-trigger-2026-10-22)
+adds reviewed calculation, signed settlement, rollback and saved-email commands through the same Event composition.
+Both PDF variants remain authorized saved-ledger downloads. The
+[P9 review](PILOT_PARITY_REVIEW.md#p9-calculation-settlement-and-output-implementation-review-2026-10-22)
+owns actual execution and inspected visual/PDF evidence with its finite limits. P10/P11, native source changes,
+default-route cutover, guide publication and deployment retain their separate boundaries.
 
 The [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
 excludes native/Vue production coexistence coordination and rejects the ordinary Event document-POST exception.
@@ -236,8 +241,18 @@ native browser code. Each feature API method selects generated contracts around 
 operation. Unknown writes never replay: additive expenses/adjustments require deliberate saved-history/list
 inspection and acknowledgement; submission access, assignments, coverage and adjustment removal reconcile through
 fresh reads. Confirmed completion releases only the submitted fields and remains saved if the following read fails.
-Native frontend sources and
-inherited backend defects remain outside this migration; P9–P11 and cutover retain their own authorization.
+
+`FinanceCalculationReview` obtains an explicit saved-input preview, retains its reviewed revision through background
+reads and consumes apply authority after each attempt. Another attempt requires a new preview. The feature's
+`drafts.ts` coordinates existing settings, assignment and adjustment predicates without copying draft values.
+`FinanceSettlement` captures the signed saved payer row for confirmation. `FinanceShares` retains display identities
+while showing current admitted values; explicit Refresh or filter/sort/page changes reapply their display selection.
+`FinancePoolOutputs` keeps calculation, rollback and later saved-email intents separate. Unknown delivery requires
+fresh saved-state inspection and acknowledgement without replay; recipient counts do not certify mail delivery.
+Both PDF variants use the complete authorized saved ledger independently of browser filters. Existing EventPool,
+calculation, settlement, notification and export owners retain business behavior and arithmetic.
+Native frontend sources and inherited backend defects remain outside this migration; P10/P11 and cutover retain
+their own authorization.
 
 ## Logical owners
 

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P9 calculation, signed settlement, saved outputs and privacy implementation verified with scoped persistence/mounted/built evidence; prior finite receipts, native/backend exclusions and cutover conditions retained
+verification-scope: Full implemented P0-P9 baseline, shared-owner and staged-guide review; renewed supported-runtime checks and finite built-app visual evidence; inherited native readiness defect and separate P10/P11 boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,88 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Full implemented-scope review and migration readiness (2026-10-22)
+
+This review compares implemented P0–P9 with the original baseline and dated decisions, rather than treating the
+latest source or passing tests as design authority. The original full-application vision is not complete: P10
+cross-application integration and P11 cutover/publication/retirement remain explicitly separate phase contracts.
+No matching P0–P9 obligation found in this review is relabeled future work. Repository decision records establish
+the recorded authorization history; they cannot independently reconstruct every historical conversational approval.
+
+Independent source review by `/root/shared_architecture`, `/root/docs_decisions` and `/root/parity_review`, followed
+by root review, found no additional unauthorized architecture or technology departure in the inspected implemented
+scope. Vue/TypeScript, Vite, Router, Query, i18next-vue, app-owned controls and generated OpenAPI/Ajv consumers retain
+their selected responsibilities. Matching Vue consumers actually adopt shared presentation and behavior owners:
+list/detail reads, commands/recovery, entry/creation, metadata/settings, fields/files, headers, dialogs, notifications
+and lifecycle controls. Feature-specific finance, survey, ride and recommendation semantics retain their own owners.
+The reviewed complex paths document admission, draft lifetime, ordering and failure recovery; automated readability
+checks complement this semantic review rather than proving maintainability on their own.
+
+Both frontends continue to reuse existing backend/domain/controller/DBAL operations and catalogs. The recorded
+native-isolation decision deliberately preserves separate native presentation code and shared matching Vue owners.
+That temporary presentation duplication is authorized and remains a cutover retirement obligation, not permission
+for copied backend logic or parallel Vue implementations. No native or application-runtime source changes were made
+by this review. Previously authorized native creation-return changes remain part of the dated comparator exceptions.
+
+The review corrected factual documentation drift in the existing pilot reference, coverage map and staged guides.
+Overview's schedule consumers are now explicit. Finance guidance distinguishes native reload/recovery helpers from
+Vue's adopted in-place command, ledger, invoice, coverage and uncertainty owners, and retains accepted command-input
+precision and generated catalog ownership. The existing replacement manifest maps each new fragment exactly;
+its immutable baseline, protected inventory and prior reconciliation receipts remain unchanged. DEC-006 marks P6/P9 integration as implemented
+without erasing its original future-target wording. The single staged contribution playbook remains the next-slice
+guideline; no competing guide or documentation destination was introduced.
+
+The full E2E run exposed two verification defects: an early native Add-dialog action and an obsolete P8 assertion
+for a link replaced by P9's in-place preview. The first now waits for the actual post-read rendered signal while
+retaining overlap/cancellation/persistence assertions. The second verifies real preview readiness, cancellation,
+the retained document and unchanged saved shares. Neither weakens deadlines or repairs native behavior. The actual
+native early-open race is independently reproduced and remains openly recorded as `IMP-086`; native preservation
+excludes its repair here. Vue already gates the editor on its admitted recommendation workspace.
+
+The generation investigation adopted only an invocation-local cache of successfully prepared output directories.
+Writes stay ordered, check mode stays read-only and failures retain their owning artifact. All **1,116** emitted
+artifacts match the original bytes. A compiler-option experiment changed diagnostics and was not adopted. This is
+a bounded readiness optimization, not a validation, API, technology or application-behavior decision.
+
+All **539 distinct PNG images** in the **1,108 current captures** were actually inspected: the initial reviewed
+hash set plus two independently inspected 244-image partitions account for every original and verified duplicate.
+They cover the available header/calendar/Event, identity, Overview, Packing, Drivers, Survey, Activity and Finance
+states, including renewed Finance captures. Both current one-page PDF variants were rendered and independently/root
+inspected. Root also inspected complementary English/German desktop/phone Finance originals and the native failure.
+The image inventories and hashes under ignored `artifacts/frontend-review-20261022/` identify the exact files.
+No additional unexplained Vue discrepancy was found in this captured set. Unpaired native references, initial
+failure captures and intentional local table crops do not independently establish paired Vue parity or reachability.
+This complete capture inspection still does not certify unseen viewports, actors, locales, browsers or long PDFs.
+
+Current plans, staging and review records remain active migration material under the existing retirement inventory.
+Deleting them before authorized cutover would discard still-needed contracts and reconciliation inputs. Frozen
+production guides remain unchanged; preparing and reviewing staged replacements does not publish them. Existing
+excluded backend/native defects retain their central owners and explicit dispositions, without new inferred deferrals.
+
+The renewed checks use Node.js **24.15.0** and independently verified MariaDB **10.11.14** disposable schemas with
+strict SQL behavior and exact per-schema grants. The pre-existing local database is not reset. Logs, reports,
+case identities and image hashes remain in ignored `artifacts/frontend-review-20261022/`.
+The owned disposable database container and its temporary credential files were removed after verification.
+
+| Verification | Actual result and limit |
+|---|---|
+| Build and compiler | The full server/native/Vue client/SSR build and test compiler pass. All **1,002** distribution files are byte-identical before and after the supported-runtime rebuild. |
+| Database-free checks | The broad **1,880**-case run initially had seven timeouts. The complete affected loading-shell/development-runtime files pass on serial renewal; the final complete nine-case generation suite also passes, including future schemas and two clean trees. These are combined receipts, not one green broad run. |
+| Persistence/HTTP integration | The latest complete 29-file run passes **509** cases; **12** profile-administration cases remain unrun because their shared 30-second preparation hook times out, including on isolated renewal. `TEST-FRONTEND-PROFILE-PREPARATION` records this current blocker, not a pass or an excluded feature. An unsuccessful ordinary-import experiment was fully reverted. |
+| Built client browser | All **49** distinct cases have a passing result across the broad run and unchanged one-case renewal after a closed-browser timeout. The broad run itself had 48 passes and one failure. |
+| Built-application E2E | All **255** distinct cases have a passing result across the broad run, corrected two-case renewal and separately configured disabled-authentication run. The broad run itself had **252 passes, two failures and one configuration skip**; case-identity reconciliation retains those facts. No assertion deadline was increased. |
+| Engineering/documentation | The full 443-source policy inventory has zero findings; the scoped 175-file readability review covers 586 nontrivial operations. Independent/root review checks actual sharing, comments and boundaries. Production freeze and amendment checks report zero findings; the live advisory report retains only its existing unregistered source fingerprint, and Help checks are clean. |
+
+The reviewed architecture and current shared owners support subsequent authorized migrations without another
+foundation redesign. This review nevertheless withholds an unconditional readiness/parity sign-off while the
+twelve-case integration blocker remains open. It is not silently moved into a later phase or treated as accepted debt.
+
+Two untracked adjacent JavaScript test outputs appeared during final review: `frontend-drivers.spec.js` and
+`frontend-event-organizer.spec.js` under `tests/frontend/`. Their creator is unproven and no root/delegate command
+was identified as their emitter. They are preserved as unrelated changes; the configured Vitest projects select
+`.spec.ts` files. Their arrival invalidates earlier preparation input identities even though reviewed guide bytes
+are unchanged. Source-membership reconciliation does not approve these files or authorize their removal.
 
 ## P9 calculation, settlement and output implementation review (2026-10-22)
 
@@ -1010,7 +1092,7 @@ every database schedule. They remain excluded backend work, not hidden unfinishe
 principal language and complete email/PDF/domain localization remain unimplemented targets in active DEC-006.
 
 No finite receipt certifies live OIDC, successful SMTP/inbox delivery, hosted CI, operator restore/deployment,
-rendered PDF layout, every timezone/DST input, all permission/concurrency combinations, full-application migration,
+long or multipage PDF layout, every timezone/DST input, all permission/concurrency combinations, full-application migration,
 default-route cutover, native deletion or guide publication. Application checks stay separate from advisory
 documentation diagnostics. Production guides remain protected; prepared output needs actual independent/root
 semantic review tied to its current identities and separate publication authorization.

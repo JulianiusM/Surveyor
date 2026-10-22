@@ -352,13 +352,20 @@ for (const browser of [false, true]) {
     }
 }
 
+// Reuse successful directory preparation within this invocation. Keep creation
+// lazy and writes ordered so a failure still stops at its owning artifact.
+const preparedDirectories = new Set();
 for (const [relative, content] of output) {
     const destination = path.join(outputRoot, relative);
     if (check) {
         const existing = await fs.readFile(destination, 'utf8').catch(() => null);
         if (existing !== content) throw new Error(`Generated artifact is stale: ${relative}`);
     } else {
-        await fs.mkdir(path.dirname(destination), {recursive: true});
+        const directory = path.dirname(destination);
+        if (!preparedDirectories.has(directory)) {
+            await fs.mkdir(directory, {recursive: true});
+            preparedDirectories.add(directory);
+        }
         await fs.writeFile(destination, content);
     }
 }

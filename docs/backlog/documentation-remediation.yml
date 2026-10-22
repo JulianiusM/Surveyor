@@ -2149,6 +2149,34 @@ implementation_defects:
       checks and final-choice keyboard interaction; independent review of all 66 final Survey originals confirms
       the corrected Vue name remains unobscured. This entry retains only the unchanged native defect, whose
       repair remains outside the native-isolation decision. The pilot review owns the scoped execution evidence.
+  - id: IMP-086
+    status: open
+    discovered_on: 2026-10-22
+    severity: medium
+    owner: native frontend maintainers
+    package: native-activity-recommendations
+    out_of_scope_for_documentation_migration: true
+    title: Opening the native recommendation dialog before its read completes leaves the participant chooser empty
+    evidence:
+      - The full built-application review reproduced an empty participant chooser in the manual overlap workflow.
+        The requested profile identifier was present in the real recommendation response and correctly encoded.
+      - Native activity-recommendations-schedule.ts registers the Add dialog before awaiting loadRecommendations.
+        activity-recommendations-ui.ts populates the chooser when opened; its later renderAllRecommendations call
+        does not repopulate that already open chooser after participant options arrive.
+      - An isolated check of the actual built native state, logic and UI reproduces the empty chooser after a
+        successful data render; reopening the dialog exposes the expected participant. At reproduction time,
+        these native sources and the original overlap test were unchanged from the native comparison baseline.
+    impact: A fast visitor can open a manual recommendation dialog with no selectable participant despite an
+      available saved participant. Reopening the dialog after the read completes restores the chooser.
+    documentation_contract: The manual recommendation editor presents the current admitted participant choices.
+    disposition: The maintainer requires the native frontend to remain unchanged as the migration comparator;
+      its repair is outside this review. Vue already admits its editor only after the recommendation workspace
+      exists. The native overlap test now waits for the existing rendered data-readiness signal before opening
+      its dialog, retaining its overlap, cancellation and persistence assertions. This does not repair or certify
+      native early-open behavior, authorize a later phase or supply a backend-change approval.
+    closes_when:
+      - A separately authorized native correction retains current participant choices when the dialog opens before
+        a controlled delayed initial read, with real-browser coverage of the successful data arrival.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed
@@ -2377,6 +2405,33 @@ findings:
       MariaDB 10.11.14 with STRICT_TRANS_TABLES. Both built capacity cases passed after normal E2E initialization
       against the separate exact-grant disposable schema. No prepared-schema override, widened deadline, shared
       database setting or runtime numeric validation was introduced.
+  - id: TEST-FRONTEND-PROFILE-PREPARATION
+    status: open
+    discovered_on: 2026-10-22
+    severity: medium
+    category: verification
+    owner: frontend migration maintainers
+    package: frontend-pilot-readiness
+    title: Profile administration integration preparation expires before its twelve cases execute
+    evidence:
+      - The complete supported-runtime integration renewal passes 509 cases but skips all twelve cases in
+        tests/integration/frontend-profile-administration.spec.ts after its shared preparation hook exceeds 30 seconds.
+      - An unchanged isolated renewal reproduces the hook timeout on the exact-grant disposable MariaDB 10.11.14
+        target with Node.js 24.15.0. No application assertion executes or fails in this suite.
+      - A reverted ordinary-import experiment retains the same deadline and records database preparation at
+        6.852 seconds and built Overview module preparation at 15.328 seconds; the source application import
+        remains unfinished when the hook expires. It supplies no accepted source or test-configuration correction.
+      - An unchanged loader trace records distributed latency across source-module requests, with little time in
+        logged file reads and plugin transforms. Those timings omit other loader work and establish no single cause.
+    impact: Current whole-project integration acceptance is incomplete despite passing built-application profile
+      workflows. Source inspection and separate E2E results do not turn these twelve unrun integration cases into passes.
+    disposition: This is a current verification blocker, with evidence in the pilot review and ignored
+      artifacts/frontend-review-20261022 receipts. It is not an approved exclusion, later-phase deferral or
+      demonstrated application assertion defect. Native/backend source, assertions and deadlines remain unchanged.
+    closes_when:
+      - The complete existing profile-administration integration suite executes all twelve cases successfully
+        against the actual application and supported disposable database, with its preparation and assertion
+        boundaries preserved or an explicitly reviewed and authorized change to those boundaries.
   - id: TEST-FRONTEND-READINESS-PARITY
     status: closed
     closed_on: 2026-10-16

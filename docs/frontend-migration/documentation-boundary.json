@@ -283,8 +283,8 @@
       "target": "docs/ARCHITECTURE.md",
       "metadataOriginSha256": "79ea4b7a413aa8a59e9542cf8b495541529a375be6a56df09cf46acbc412d528",
       "metadata": {
-        "last-verified": "2026-10-20",
-        "verification-scope": "runtime/domain guidance retained; P0-P8 shared recovery, locale ownership, explicit lexical controls and Finance decimal contracts reconciled with one Session, shared controllers and pure DBAL; no deployment or full parity claim",
+        "last-verified": "2026-10-22",
+        "verification-scope": "runtime/domain guidance retained; shared frontend/backend owners, Finance decimal contracts and current Overview schedule consumers reconciled; no deployment or full parity claim",
         "source-anchors": "tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/modules/archive/policy.ts; src/modules/entityArchival.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; package.json; package-lock.json; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/database/; src/modules/activity/requirements.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/recommendationJobs.ts; src/modules/oidc.ts; src/modules/settings.ts; src/modules/permissionEngine.ts; src/modules/invoice/retention.ts; src/public/js/; src/views/; migrationDataSource.ts; scripts/runMigration.ts; scripts/genTypeormIdx.ts; esbuild.client.js; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; src/controller/helpController.ts; src/routes/help.ts; src/views/help.pug; scripts/check-help-documentation.mjs; docs/features/help/HELP_VISUALS.md; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; tests/integration/frontend-session-admission.spec.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts"
       },
       "operations": [
@@ -536,6 +536,16 @@
             "## Application layers",
             "### Entities, migrations, and subscribers"
           ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "`wording.ts` and its locale catalog own the feature's complete messages. `presentation.ts` supplies the common\nsettlement-status rule. The primary saved **Calculated balance** stays visible after payment or refund. The compact\n",
+          "originSha256": "ffe5c07c6a687edadc766246dd3b4d6d2488a03f56dbc17cb9c9bec954871997",
+          "payload": "amendment-28",
+          "headingPath": [
+            "## Domain architecture",
+            "### Events and invoice pools"
+          ]
         }
       ]
     },
@@ -545,7 +555,7 @@
       "metadataOriginSha256": "cffc790b8d510c7edbee8ba8e6fb6212439350b8e27c9b164536f345bce94e13",
       "metadata": {
         "last-verified": "2026-10-22",
-        "verification-scope": "setup/domain guidance retained; admitted cached Activity requirement initialization and shared Overview automation consumers reconciled with existing P0-P8 ownership, draft and query contracts; no operator rehearsal claimed",
+        "verification-scope": "setup/domain guidance retained; P9 shared Finance owners, native/Vue recovery and wire boundaries, generated catalog ownership, accepted command precision and Overview automation reconciled; no operator rehearsal claimed",
         "source-anchors": "tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/types/EntityPropertyTypes.d.ts; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_properties.pug; tests/integration/entity-properties.spec.ts; tests/integration/activity-property-integrity.spec.ts; tests/e2e/entity-properties.spec.ts; src/types/UserTypes.d.ts; src/modules/renderer.ts; src/routes/api/users.ts; src/views/modules/module_unified_entity_cards.pug; src/public/js/modules/entity-cards-overview.ts; src/public/js/modules/entity-archive.ts; src/modules/database/services/EntityLifecycleService.ts; src/modules/database/services/UserService.ts; src/controller/entityAdminController.ts; src/controller/userController.ts; src/middleware/adminApiFactory.ts; src/types/ArchiveTypes.d.ts; src/views/modules/module_entity_archive.pug; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; tests/integration/invoice-admin-feedback.spec.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; package.json; package-lock.json; README.md; src/server.ts; src/app.ts; src/routes/; src/controller/; src/middleware/; src/modules/settings.ts; src/modules/database/; scripts/genTypeormIdx.ts; scripts/runMigration.ts; migrationDataSource.ts; esbuild.client.js; tsconfig.json; tsconfig.server.json; vitest.config.mts; playwright.config.ts; tests/; .github/workflows/ci.yml; .github/workflows/release.yml; scripts/check-help-documentation.mjs; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tsconfig.test.json; playwright.frontend.config.ts; playwright.integration.config.ts; src/modules/api/transport.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; docs/decisions/DEC-006-FRONTEND-FRAMEWORK.md; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; tests/integration/frontend-session-admission.spec.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts"
       },
       "operations": [
@@ -897,6 +907,86 @@
             "## Clean-clone setup",
             "### 2. Create a development database"
           ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Organizer creation uses `postOrganizerExpense` and `lockOnUncertainFailure`: a confirmed API 4xx rejection permits\ncorrection, while network failures, server errors, or unconfirmed responses retain the form lock and a persistent\n**Reload and check saved invoices** recovery action. Do not automatically retry this non-idempotent cost creation.\n",
+          "originSha256": "7ce875e11153f95568263b74a54aa8ad2064d17db5ca8227f7425416ad9642f3",
+          "payload": "amendment-37",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "an extra confirmation dialog displays the proposed change before committing. Revision accepts explicit\n`correctedAmount: number | null` and `correctedDescription: string | null`, with null restoring the original value.\nIt preserves the Accepted/Closed status and original fields. Retroactive rejection requires `rejectionReason`, changes\n",
+          "originSha256": "cbae1168fefa52793103156210871552b48a9275d781d4bdcc4a145039986a83",
+          "payload": "amendment-38",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "The participant upload binder in `src/public/js/modules/invoice-submission.ts` owns progress, busy state, and recovery.\nSuccessful persistence is acknowledged independently of SMTP delivery, clears only amount/description/proof, preserves\nthe selected pool in event-scoped session storage, and refreshes the page after a short success message. The\n`#invoiceHistory` hook reopens the invoice sections. Inputs stay locked until navigation so no new draft can be lost;\nthe refreshed binder clears browser-restored invoice fields and restores the available pool selection. Each request\ncaptures its own `FormData` before controls are disabled; completed-request callbacks cannot trigger duplicate navigation.\nAn uncertain network outcome must send users\nto invoice history before retrying; never automatically resend a proof upload. Keep validation failures distinguishable\nfrom failures where the server may have committed the invoice.\n",
+          "originSha256": "14f9a95ef24521514edd4efe83a373786cb05464bca42c57c34544593f98fb8e",
+          "payload": "amendment-39",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "`runInvoiceAdminAction` gives pool mutations immediate busy feedback, blocks repeat actions, and adds a status update\nafter five seconds. Update ledger amounts and settlement state only from a successful server confirmation; use canonical\nsaved payment data when restoring controls after navigation or a failed request. Transient outcomes use the shared\n`showInlineAlert`: page actions target `#liveAlerts`, and dialogs target their local `.pool-form-status` within the\nmodal's focus trap. Alerts are brought into view and expire after ten seconds. Confirmed outcomes survive an automatic\nreload through event-scoped session storage and are restored after invoice-history navigation. Pending states remain\nvisible until completion. Settlement buttons show their own spinner; longer progress text goes below the ledger so inserting\nit cannot move the clicked row. **Refresh list** acknowledges every click, including unchanged results.\n",
+          "originSha256": "80e48769e1afc590b1f27db80c0f7842f33870fbaf0e8da2ec6e3b14570ea413",
+          "payload": "amendment-40",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "status filters, sorting, configurable page size, and pagination suitable for hundreds of pools. Reuse the existing\nbrowser ledger behavior and one read-only modal, filling the selected row's structured data lazily rather than creating\na modal for every pool. The **Share breakdown** dialog shows saved components, formatted concrete calculation steps,\n",
+          "originSha256": "e162480303f943ee3f58a6f5dcd9030b4c019ac6a0e5bf963e07354250b80682",
+          "payload": "amendment-41",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "`initTakeoverOverviews` in `src/public/js/modules/invoice-takeovers.ts` searches payer and beneficiary names and pages\nby payer. Each group initially shows six beneficiaries; **Show all** expands its badges within a bounded scroll area,\n",
+          "originSha256": "d5b4e7f67643361d3c70e2efd73d59a9b2293348edc33da817dfe84091e642c2",
+          "payload": "amendment-42",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "Validate a positive amount with at most two decimal places and a nonblank description; proof is optional, with the\n",
+          "originSha256": "ff6f24259d9f1896d55bd6d7738c26d0d1afda94bc01b83d6668ec7106a5ac02",
+          "payload": "amendment-43",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "`wording.ts` and `locales/en.ts` own all invoice feature wording, including interface help, confirmation and validation\nmessages, accessibility labels, emails, exports, and operational feedback. Stable typed keys identify whole messages;\nnamed parameters and `Intl.PluralRules` prepare them for later catalogs without distributed English fragments.\nThe current language is English; regional variants and unsupported locales resolve predictably to a supported catalog.\nThe client build emits the pure wording/presentation owners and locale catalogs under `shared/invoice/` as ordinary\nbrowser modules. It resolves their direct source imports to those assets; do not copy the catalog, re-export its\nbindings through a frontend wrapper, or expose server-side invoice business modules as browser entries.\n",
+          "originSha256": "a9dfe81de4c681b226f00c93b93ed971aac36e4cce2d4aaecebc61d3ad7298e9",
+          "payload": "amendment-44",
+          "headingPath": [
+            "## Current code patterns",
+            "### Invoice pool calculation and saved changes"
+          ]
         }
       ]
     },
@@ -1237,8 +1327,8 @@
       "target": "docs/UPGRADING.md",
       "metadataOriginSha256": "dd44a037ba28e99caa7ce4f4d1700ccfe92815e5032ad0b3ff5618b503fffa73",
       "metadata": {
-        "last-verified": "2026-10-14",
-        "verification-scope": "Complete settings-aware upgrade, migration, storage and rollback procedures retained; coherent frontend distribution and browser validation source-reviewed; documentation packaging remains advisory and no new deployment/provider rehearsal is claimed.",
+        "last-verified": "2026-10-22",
+        "verification-scope": "Complete settings-aware upgrade, migration, storage and rollback procedures retained; coherent frontend distribution and native/Vue upload validation reconciled; no new deployment/provider rehearsal claimed.",
         "next-review": "release-or-rollback-compatibility-change"
       },
       "operations": [
@@ -1276,6 +1366,16 @@
           "original": "Only then remove the maintenance response and reopen normal traffic.\n",
           "originSha256": "d924a02fc60e8902ccd62bab04e2925d0185c1856129887f64cc538a9d540dcd",
           "payload": "amendment-04",
+          "headingPath": [
+            "## Maintenance-window procedure",
+            "### 5. Start and validate"
+          ]
+        },
+        {
+          "kind": "replace-text",
+          "original": "of Accepted/Closed costs preserve recorded payments and require recalculation when the pool is closed. Successful\nparticipant uploads now refresh the page to reopened invoice history; the next form starts blank with its pool retained.\n",
+          "originSha256": "ac369e9cd785a8fdb6de16909a4a609a88cbf0a1936c3f0ba49d223b1d94831a",
+          "payload": "amendment-05",
           "headingPath": [
             "## Maintenance-window procedure",
             "### 5. Start and validate"

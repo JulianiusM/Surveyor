@@ -651,15 +651,20 @@ test('reads saved signed ledgers and lazy calculations independently from curren
             await expect(organizerBreakdown).toContainText('Paid');
             await organizerBreakdown.screenshot({path: info.outputPath(`vue-organizer-breakdown-${width}.png`), animations: 'disabled'});
             await organizerBreakdown.getByRole('button', {name: 'Close', exact: true}).last().click();
-            // P8 inputs are now available in the same document. The explicitly
-            // retained P9 destination still reaches calculation and settlement.
+            // P9 replaces the former native destination with an in-place review.
+            // Opening and cancelling it must preserve both the document and saved shares.
             await expect(organizerPool.getByRole('button', {name: 'Pool settings', exact: true})).toBeVisible();
             await expect(organizerPool.getByRole('button', {name: 'Participants & factors', exact: true})).toBeVisible();
-            const nativeManagement = page.getByRole('link', {name: 'Calculation & settlement', exact: true}).first();
-            await expect(nativeManagement).toHaveAttribute('href', `/event/${event.id}/admin#invoicePoolAccordion`);
-            await nativeManagement.click();
-            await expect(page).toHaveURL(new RegExp(`/event/${event.id}/admin#invoicePoolAccordion$`, 'u'));
-            await expect(page.locator('#invoicePoolAccordion')).toBeInViewport();
+            await expect(organizerPool.getByRole('button', {name: 'Send settlement emails', exact: true})).toBeVisible();
+            const documentTime = await page.evaluate(() => performance.timeOrigin);
+            await organizerPool.getByRole('button', {name: 'Recalculate pool', exact: true}).click();
+            const preview = page.getByRole('dialog', {name: 'Calculation preview', exact: true});
+            await expect(preview).toContainText('This preview does not change shares or send emails.');
+            await expect(preview.getByRole('button', {name: 'Apply recalculation', exact: true})).toBeEnabled();
+            await preview.getByRole('button', {name: 'Cancel', exact: true}).click();
+            await expect(preview).toBeHidden();
+            expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentTime);
+            expect((await readFinance(page.request, event.id, true)).shares).toEqual(finalOrganizer.shares);
         }
 
         // Locale changes re-render actual saved-data labels and controls. User
