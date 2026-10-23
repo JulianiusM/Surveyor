@@ -1079,15 +1079,27 @@ async function calculateBaselineRequirement(planId: string) {
 /**
  * A settings form may no longer list a saved profile after the plan moves to another event.
  * Preserve those unchanged rows, including omitted rows, inside the same locked transaction.
+ * Versioned editors can explicitly remove an admitted saved ID without deleting unseen rows.
  * Their existence never authorizes a new target or a changed override for a nonparticipant.
  */
 async function mergeRequirementOverrides(
     manager: EntityManager,
     plan: ActivityPlan,
     submitted: RequirementOverrideInput[],
+    removedOverrideIds: readonly string[],
 ): Promise<RequirementOverrideInput[]> {
     const {overrides: saved} = await requireRequirementConfiguration(plan.id, manager);
     const savedById = new Map(saved.map((override) => [override.id, override]));
+    // Removal is deliberate and plan-scoped. Omission still means retention for
+    // former participants; it must never delete a concurrent unseen override.
+    const removedIds = new Set<number>();
+    for (const id of removedOverrideIds) {
+        const numericId = Number(id);
+        if (!Number.isSafeInteger(numericId) || String(numericId) !== id || !savedById.has(numericId) || removedIds.has(numericId)) {
+            throw new APIError('Removed override must identify one saved override belonging to this activity plan', {}, 400);
+        }
+        removedIds.add(numericId);
+    }
     const registered = new Set(plan.eventId ? await activityService.getRegisteredProfileIds(manager, plan.eventId) : []);
     const result: RequirementOverrideInput[] = [];
     const submittedIds = new Set<number>();
@@ -1095,7 +1107,7 @@ async function mergeRequirementOverrides(
     for (const input of submitted) {
         const override = {...input, roleId: input.roleId ?? null};
         const previous = override.id == null ? undefined : savedById.get(override.id);
-        if (override.id != null && (!previous || submittedIds.has(override.id))) {
+        if (override.id != null && (!previous || submittedIds.has(override.id) || removedIds.has(override.id))) {
             throw new APIError('Override does not belong to this activity plan or is duplicated', {}, 400);
         }
         const unchanged = previous && previous.profileId === override.profileId
@@ -1114,7 +1126,7 @@ async function mergeRequirementOverrides(
     // A former participant is absent from that editor's choices, so omission must retain
     // the original row instead of turning an unrelated settings save into data deletion.
     for (const previous of saved) {
-        if (registered.has(previous.profileId) || submittedIds.has(previous.id)) continue;
+        if (registered.has(previous.profileId) || submittedIds.has(previous.id) || removedIds.has(previous.id)) continue;
         result.push({
             id: previous.id,
             profileId: previous.profileId,
@@ -1125,7 +1137,10 @@ async function mergeRequirementOverrides(
     return result;
 }
 
-async function updateRequirements(planId: string, body: any) {
+/** Save one coherent requirements configuration under the existing plan lock.
+ * Explicit versioned removal IDs supplement the native omission-retention rule;
+ * permissions, current membership checks and persistence remain with their owners. */
+async function updateRequirements(planId: string, body: any, removedOverrideIds: readonly string[] = []) {
     const {roleRequirements, stayRequirements, overrides, ...planSettings} = preprocessRequirementUpdate(body);
     const expectedPlan = await activityService.getActivityPlanById(planId);
     async function saveRequirements(manager: EntityManager): Promise<void> {
@@ -1196,7 +1211,7 @@ async function updateRequirements(planId: string, body: any) {
             }
         }
 
-        const retainedOverrides = await mergeRequirementOverrides(manager, plan, overrides);
+        const retainedOverrides = await mergeRequirementOverrides(manager, plan, overrides, removedOverrideIds);
         await requirementService.replaceRequirements(planId, roleRequirements, retainedOverrides, normalizedSettings, stayRequirements, manager);
     }
     await activityService.withActivityTransaction(saveRequirements);
@@ -3389,11 +3404,12 @@ export async function readActivityRequirements(id: string, session: SessionLike)
     };
 }
 
-/** Preserve the native settings transaction, validation, override retention and job invalidation. */
+/** Preserve the settings transaction and omission retention, with explicit saved-ID removal. */
 export async function saveActivityRequirements(id: string, input: components['schemas']['ActivityRequirementsInput'], session: SessionLike): Promise<void> {
     // The existing controller owns all requirement decisions and its transaction lifecycle.
     await requireActivityMethod(id, 'MANAGE_REQUIREMENTS', session);
-    await updateRequirements(id, input);
+    const {removedOverrideIds = [], ...settings} = input;
+    await updateRequirements(id, settings, removedOverrideIds);
 }
 
 /** Recommendations display only their native slot labels, never full slot persistence records. */

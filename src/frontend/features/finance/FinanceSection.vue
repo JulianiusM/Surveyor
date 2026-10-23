@@ -31,7 +31,7 @@ import AppDialog from '../../components/AppDialog.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
-import EntityListToolbar from '../../components/EntityListToolbar.vue';
+import RefreshButton from '../../components/RefreshButton.vue';
 
 type Invoice = components['schemas']['FinanceInvoice'];
 type Share = components['schemas']['FinanceShare'];
@@ -205,15 +205,15 @@ function revealHistory(): void { submissionOpen.value = true; }
             />
         </div>
         <div class="accordion-item bg-dark text-white border-secondary-subtle">
-            <h2 class="accordion-header">
+            <h2 class="accordion-header d-flex align-items-center">
                 <AppAccordionButton class="text-white" :expanded="open" :controls="`${id}-finance`" @click="open = !open">
                     <i class="bi bi-cash-coin me-2" aria-hidden="true"></i>
                     {{ messages.t('finance.invoicePoolsAndPayments') }}
                 </AppAccordionButton>
+                <RefreshButton class="mx-2" :state="refreshAction" @refresh="refresh()" />
             </h2>
             <div v-show="open" :id="`${id}-finance`" class="accordion-collapse">
                 <div class="accordion-body">
-                    <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="refreshAction" @refresh="refresh" />
                     <LoadingSkeleton v-if="section.loading.value" variant="table" :columns="4" :rows="3" />
                     <StatusNotice
                         v-if="section.query.error.value"

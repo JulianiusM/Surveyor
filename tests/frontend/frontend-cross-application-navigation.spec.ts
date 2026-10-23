@@ -46,7 +46,7 @@ afterEach(async () => {
 /** Mount a real link consumer against the production route declarations. This
  * client-layer fixture supplies only HTTP; it neither substitutes destination
  * modules nor claims their integrated server admission/persistence behavior. */
-async function visit(component: Component, props: Record<string, unknown> = {}, path = '/frontend-pilot') {
+async function visit(component: Component, props: Record<string, unknown> = {}, path = '/frontend-pilot/users/dashboard') {
     const requests: Request[] = [];
     const send = vi.fn(async function serveAdmittedProjection(input: RequestInfo | URL): Promise<Response> {
         const request = input as Request;
@@ -100,7 +100,7 @@ describe('cross-application production navigation', {timeout: 30_000}, () => {
             // Confirm the ordinary click resolved a feature module, not that fallback.
             expect(router.currentRoute.value.matched.at(-1)?.path).toBe(destination);
             expect(document.documentElement).toBe(origin);
-            await router.push('/frontend-pilot');
+            await router.push('/frontend-pilot/users/dashboard');
         }
         expect(requests).toEqual([]);
     });
@@ -123,17 +123,17 @@ describe('cross-application production navigation', {timeout: 30_000}, () => {
             expect(router.currentRoute.value.matched.at(-1)?.path).toBe(
                 `/frontend-pilot/${type}/:${type === 'event' ? 'eventId' : type === 'survey' ? 'surveyId' : type === 'activity' ? 'planId' : 'listId'}`);
 
-            await router.push('/frontend-pilot');
+            await router.push('/frontend-pilot/users/dashboard');
             await card.get(`a[href="${detail}/duplicate"]`).trigger('click');
             await vi.waitFor(() => expect(router.currentRoute.value.path).toBe(detail + '/duplicate'), {timeout: 10_000});
             expect(router.currentRoute.value.matched.at(-1)?.path).toContain('/duplicate');
-            await router.push('/frontend-pilot');
+            await router.push('/frontend-pilot/users/dashboard');
         }
         // Link clicks perform no document form submission or feature command.
         expect(requests.every(request => request.method === 'GET')).toBe(true);
     });
 
-    it('keeps admitted parent links navigable from every child card and both header layouts', async () => {
+    it('keeps admitted parent links navigable from every child card and the responsive header', async () => {
         vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:authorized-card');
         vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
         const parent = `/frontend-pilot/event/${frontendEventId}`;
@@ -145,22 +145,22 @@ describe('cross-application production navigation', {timeout: 30_000}, () => {
             link.element.dispatchEvent(modified);
             await flushPromises();
             expect(modified.defaultPrevented).toBe(false);
-            expect(overview.router.currentRoute.value.path).toBe('/frontend-pilot');
+            expect(overview.router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
             await link.trigger('click');
             await vi.waitFor(() => expect(overview.router.currentRoute.value.path).toBe(parent), {timeout: 10_000});
-            await overview.router.push('/frontend-pilot');
+            await overview.router.push('/frontend-pilot/users/dashboard');
         }
 
         const readImage = vi.fn();
         const header = await visit(EntityHeader, {resourceId, title: 'Child title', icon: 'bi-bag',
             imageVersion: null, imageQueryKey: ['child-header'], readImage, parentUrl: parent});
         const links = header.wrapper.findAll(`a[href="${parent}"]`);
-        expect(links).toHaveLength(2);
+        expect(links).toHaveLength(1);
         for (const link of links) {
             await link.trigger('click');
             await vi.waitFor(() => expect(header.router.currentRoute.value.path).toBe(parent), {timeout: 10_000});
             expect(header.router.currentRoute.value.matched.at(-1)?.path).toBe('/frontend-pilot/event/:eventId');
-            await header.router.push('/frontend-pilot');
+            await header.router.push('/frontend-pilot/users/dashboard');
         }
         expect(readImage).not.toHaveBeenCalled();
     });

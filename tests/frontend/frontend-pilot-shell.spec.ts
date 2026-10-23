@@ -1171,7 +1171,7 @@ describe('native shell and help presentation contract', () => {
     });
 
     it.each([
-        ['/frontend-pilot', 'dashboard'],
+        ['/frontend-pilot/users/dashboard', 'dashboard'],
         ['/frontend-pilot/users/login', 'getting_started'],
         ['/frontend-pilot/guest/recovery', 'getting_started'],
         ['/frontend-pilot/packing/create', 'packing_lists'],

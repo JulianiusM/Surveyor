@@ -4,10 +4,10 @@ documentation-metadata
 audience: packing-list participants; packing-list organizers
 owner: packing-list feature maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
-source-anchors: src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; src/locales/en.json; tests/frontend/frontend-pilot-editor.spec.ts; src/controller/packingController.ts; src/views/packing/packing-view.pug; docs/user-guide/en/assets/packing-shared-vs-local.png; src/frontend/features/packing/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
+verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
+source-anchors: src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; src/locales/en.json; tests/frontend/frontend-pilot-editor.spec.ts; src/controller/packingController.ts; src/views/packing/packing-view.pug; docs/user-guide/en/assets/packing-shared-vs-local.png; src/frontend/features/packing/; src/frontend/components/EntitySettingsDialog.vue; src/locales/; src/frontend/components/permissions/CreationPermissions.vue
 next-review: packing-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
@@ -165,7 +165,7 @@ An event organizer can instead open **Event administration dashboard**, expand *
 | **Assign to event (optional)** | An event the current profile may attach to, including past or archived events; choose **No event** for a standalone list. |
 | **Group Permissions** | Audience grants for viewing, editing, assignments, administration, duplication, and related actions. |
 
-The creation form starts with the standard non-event permission defaults. Review [Permissions and Sharing](PERMISSIONS.md) before publishing sensitive names or granting edit actions.
+The creation form starts with the standard non-event permission defaults. Open **Group Permissions** to review or change them. Review [Permissions and Sharing](PERMISSIONS.md) before publishing sensitive names or granting edit actions.
 
 ### 3. Add the initial items
 
@@ -305,7 +305,7 @@ With a full account and **Data Duplicate**, duplicate from the list's **Entity s
 1. Open the packing list and select **Entity settings**.
 2. Under **Actions**, select **Duplicate**.
 3. Review the prefilled title, description, items, **Max #** values, and **Everyone** settings.
-4. Review **Assign to event (optional)** and **Group Permissions** for the new list.
+4. Review **Assign to event (optional)** and open **Group Permissions** to check sharing for the new list.
 5. Select **Create list**.
 
 Owners can also use **Duplicate** on their **Administrable entities** overview card.

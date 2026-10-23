@@ -519,7 +519,7 @@ test('saves Survey owner properties, image and archive controls before permanent
     await settings.getByRole('tab', {name: 'Actions', exact: true}).click();
     await observeSurveyCommand(page, survey.id, '', 'DELETE',
         () => settings.getByRole('button', {name: 'Delete permanently', exact: true}).click());
-    await expect(page).toHaveURL('/frontend-pilot');
+    await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
     expect((await page.request.get(`/api/v1/surveys/${survey.id}`, {headers: await frontendEventHeaders(page.request)})).status()).toBe(404);
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('survey-settings');
     expect(navigations).toEqual([]);

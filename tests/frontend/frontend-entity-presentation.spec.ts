@@ -99,7 +99,7 @@ describe('shared displayed entity header consumers', () => {
             await flushPromises();
 
             // This is actual production adoption, including the existing cover
-            // geometry and the two responsive copies of the same admitted parent URL.
+            // geometry and one responsive copy of the admitted parent URL.
             const header = mounted.wrapper.findComponent(EntityHeader);
             expect(header.exists()).toBe(true);
             expect(header.get('h1').text()).toBe(view.title);
@@ -110,8 +110,9 @@ describe('shared displayed entity header consumers', () => {
             expect(image.element.style.objectFit).toBe('cover');
             expect(image.element.style.height).toBe('250px');
             expect(header.findAll('a').map(link => link.attributes('href')))
-                .toEqual(kind === 'packing' ? [`/event/${childId}`, `/event/${childId}`] : []);
-            expect(header.find('button').exists()).toBe(true);
+                .toEqual(kind === 'packing' ? [`/event/${childId}`] : []);
+            expect(header.get('.pilot-page-heading-actions button').text()).toBe(mounted.context.messages.value.t('packing.edit'));
+            expect(header.get('button[aria-label="Refresh"]').element.closest('.card-header')).not.toBeNull();
 
             // Equal image versions retain their URL through a real feature GET.
             // Current feature capabilities and title still replace their old display.
@@ -124,7 +125,8 @@ describe('shared displayed entity header consumers', () => {
             expect(header.get('h1').text()).toBe(view.title);
             expect(mounted.context.pageTitle.value).toBe(`${view.title} | ${kind === 'event' ? 'Event' : 'Surveyor'}`);
             expect(header.get('img').attributes('alt')).toBe(view.title);
-            expect(header.find('button').exists()).toBe(false);
+            expect(header.findAll('button')).toHaveLength(1);
+            expect(header.get('button').attributes('aria-label')).toBe('Refresh');
             expect(imageReads).toBe(1);
             expect(revoke).not.toHaveBeenCalled();
 
@@ -138,16 +140,19 @@ describe('shared displayed entity header consumers', () => {
         },
     );
 
-    it('keeps the Event dashboard heading distinct from the displayed entity header', async () => {
-        const view = createFrontendEventView();
+    it('keeps the Event dashboard title while sharing settings and Refresh placement', async () => {
+        const view = createFrontendEventView({capabilities: {...createFrontendEventView().capabilities, settings: true}});
         const mounted = await mountFrontendEvent(EventPage, async () => json(view), {});
         cleanups.push(mounted.dispose);
         mounted.router.addRoute({path: '/frontend-pilot/event/:eventId/admin',
             component: defineComponent({template: '<p>Dashboard route</p>'})});
         await mounted.router.push(`/frontend-pilot/event/${frontendEventId}/admin`);
         await flushPromises();
-        expect(mounted.wrapper.findComponent(EntityHeader).exists()).toBe(false);
-        expect(mounted.wrapper.get('h1.card-header').text()).toBe(`Event Dashboard — ${view.title}`);
+        const header = mounted.wrapper.getComponent(EntityHeader);
+        expect(header.get('h1').text()).toBe(`Event Dashboard — ${view.title}`);
+        expect(header.find('img').exists()).toBe(false);
+        expect(header.get('.pilot-page-heading-actions button').text()).toBe(mounted.context.messages.value.t('packing.edit'));
+        expect(header.get('button[aria-label="Refresh"]').element.closest('.card-header')).not.toBeNull();
         expect(mounted.context.pageTitle.value).toBe(`Dashboard — ${view.title}`);
     });
 

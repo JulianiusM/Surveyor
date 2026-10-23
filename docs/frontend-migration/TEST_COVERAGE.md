@@ -6,7 +6,7 @@ owner: project maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Shared deletion receipt admission/handoff and Activity cold-read recovery assertions mapped alongside approved readiness and whole-frontend P0-P10 scope; source selection is not execution evidence or exhaustive parity certification
+verification-scope: Interface corrections, Home restoration, collapsed permissions and actionable generated validation mapped to tests; existing P0-P10 mappings retained; selection is not execution or exhaustive parity certification
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts; src/frontend/app/queryKeys.ts; src/frontend/app/context.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -123,7 +123,7 @@ extend this map with their own IDs rather than copy whole completed plans or cla
 
 | Baseline IDs | Current owner | Assertion and practical limit |
 |---|---|---|
-| **SHL-03/04; EC-UI-03–05** passive sticky page confirmation | Existing `feedback.ts` receipt lifetime and zero-height App/AppDialog notice hosts | [Mounted shell](../../tests/frontend/frontend-pilot-shell.spec.ts), `presents page confirmations without moving focus or scrolling, while preserving renewal and dismissal` and `keeps uncertain outcomes durable and local when passive page confirmation expires`, protect common hosting, contextual durable recovery and independent receipt lifetimes. [Built Packing feedback](../../tests/e2e/frontend-pilot.spec.ts), `keeps native edit and Vue assignment feedback sticky without losing the scrolled row at ${width}px`, uses actual commands and long-page desktop/mobile geometry, checking a real command receipt, one confirmation, retained viewport context and stickiness after further scrolling. The native comparison uses single Tab/blur; inherited Enter duplication remains excluded as IMP-074. DOM spies alone do not establish sticky geometry. |
+| **SHL-03/04; EC-UI-03–05** passive sticky page confirmation | Existing `feedback.ts` receipt lifetime and natural-flow sticky App/AppDialog notice hosts | [Mounted shell](../../tests/frontend/frontend-pilot-shell.spec.ts), `presents page confirmations without moving focus or scrolling, while preserving renewal and dismissal` and `keeps uncertain outcomes durable and local when passive page confirmation expires`, protect common hosting, contextual durable recovery and independent receipt lifetimes. [Built Packing feedback](../../tests/e2e/frontend-pilot.spec.ts), `keeps native edit and Vue assignment feedback sticky without losing the scrolled row at ${width}px`, uses actual commands and long-page desktop/mobile geometry, checking a real command receipt, one confirmation, retained viewport context and stickiness after further scrolling. The native comparison uses single Tab/blur; inherited Enter duplication remains excluded as IMP-074. DOM spies alone do not establish sticky geometry. |
 | **REF-02/05; EC-UI-03/08** module-shaped loading | Static `createApp.ts` route records, `FrontendPilotUiTypes.d.ts` presentation contract and shared `LoadingSkeleton` primitives | [Mounted/SSR loading](../../tests/frontend/frontend-content-loading.spec.ts) checks actual declared route families, one status/animation, absent controls/private reads, Packing/Drivers six/five columns, Packing-only initial items, login recovery, guest widths, profile submit and the Event roster's explicit email breakpoint. [Built client startup](../../tests/frontend/browser/frontend-startup.spec.ts), `${sample.name} skeleton follows its page layout at ${width}px`, holds the real entry module pending to inspect actual SSR/CSS at 1280px/390px, local table overflow, module outline, page containment and reduced motion. Existing Help/Overview and editor fixtures retain loaded content, independent pending regions and focused drafts. Controlled document/API delivery establishes client geometry and lifecycle; integrated backend admission remains with system workflows. |
 | **SHL-01/04; HLP-01; foundation development delivery** source SSR/assets | Existing Express/Vite development middleware, shared SSR renderer and frontend-owned Sass graph | [Runtime integration](../../tests/integration/frontend-development-runtime.spec.ts), `renders source SSR and serves Vue HMR through the existing HTTP origin`, fetches the actual composed `application.sass` stylesheet through Express/Vite, asserting installed Bootstrap 5.3.8, accordion/timezone, Help and pilot CSS in cascade order alongside the retained CDN 5.3.3 layer and no native `/style/` link. It also exercises source Vue transformation, same HTTP/WebSocket origin, namespace isolation and initial Help versus interactive skeleton output. `does not initialize Vite in an installed production release` protects production admission. This database-free fixture establishes real server-component delivery, not stored sessions, ORM, a mounted browser or visual equivalence. |
 | **SHL-03/04; EC-UI-03–05** frontend-owned transient feedback | Existing `feedback.ts` notice lifetime and actual shared notice/command consumers | [Mounted shell](../../tests/frontend/frontend-pilot-shell.spec.ts), `expires a native flash, renews the same outcome, and preserves durable warnings`, `starts transient feedback only on disclosure and clears Vue state without removing its node`, and `pauses transient timers on pagehide and renews them after page-cache restoration`, protect the copied ten-second behavior through actual consumers. They assert receipt renewal, hidden-first disclosure, Vue-owned dismissal, cancellation on unmount and page-cache pause/resume; locale/deadline cases separately protect no renewal through translation. Controlled DOM/timers establish client lifetime behavior, not backend integration or rendered geometry. |
@@ -817,3 +817,46 @@ running them; `npm test` includes integration tests, while `npm run test:quick` 
 execution is certified by this source map. Latest commands/results belong to the [paired review](PILOT_PARITY_REVIEW.md);
 the [visual baseline](VISUAL_BASELINE.md) retains separate build/capture evidence.
 Optional documentation reports remain advisory and are not application correctness tests or delivery prerequisites.
+
+## Reported interface correction assertions (2026-10-23)
+
+The [correction plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#reported-interface-correction-plan-2026-10-23) has these
+additional boundaries; the paired review owns execution and limitations:
+
+- [Built client startup](../../tests/frontend/browser/frontend-startup.spec.ts) checks notification space appearing
+  and disappearing, stickiness after scrolling, centered entity headings, retained Refresh focus, no navigation
+  skeleton line, before-release insertion edges, and initial/loaded Profile header geometry at desktop/mobile widths.
+- [Entity presentation](../../tests/frontend/frontend-entity-presentation.spec.ts) checks Event administration's
+  adopted header/settings/Refresh placement, image exclusion and retained image/read lifetimes.
+- [Survey frontend](../../tests/frontend/frontend-surveys.spec.ts) checks last-row protection, actionable local
+  rejection, no duplicate POST for a known choice, and informational feedback for stale-read duplicate rejection.
+  [Survey persistence](../../tests/integration/surveys-v1-api.spec.ts) exercises the actual unique-index rejection.
+- Packing, Drivers and Activity mounted cases exercise their adopted `useListReorder` classes, before/after order,
+  unchanged comparison tokens and cancellation/denial cleanup. Shared browser tests inspect the painted edge.
+- [Requirements frontend](../../tests/frontend/frontend-activity-requirements.spec.ts) checks explicit former-event
+  override removal, failed-save draft retention and confirmed-removal cleanup before a failed follow-up read.
+  [Property integrity](../../tests/integration/activity-property-integrity.spec.ts) checks locked saved-ID validation,
+  atomic rejection, ordinary omission retention and preservation of another unsubmitted saved override.
+
+Isolated client fixtures establish presentation/interaction, without proving integrated backend persistence.
+
+The full-plan follow-up additionally covers:
+
+- Common presentation and built startup distinguish public Home from personal Overview for anonymous, account and
+  guest actors; Home issues no Overview read, shell destinations agree and return navigation keeps the document.
+  Overview tests retain independent query/history behavior and admit equivalent case/trailing-slash dashboard URLs.
+- Shared creation tests cover the collapsed permission disclosure across Event and all matching list creation and
+  duplicate forms. They retain audience/mask controls and drafts across close/reopen and submit the same chosen masks
+  while closed. Built startup checks the disclosure and responsive geometry in English/German at 1280px/390px.
+- Packing/Drivers creation and quick-add plus Activity creation/requirements/role/shared-field cases assert actionable
+  generated diagnostics, row/day labels, local rejection before any write and retained controls, drafts and files.
+  Survey retains its task-specific minimum-choice/duplicate messages through the same owner. Finance tests cover
+  its bounded organizer revision without adding limits to participant submissions.
+- Identity cases distinguish password-policy failure from confirmation mismatch, retain unsent credentials and
+  translate the existing receipt. Event registration and Activity calculation cases assert shared dismissal,
+  recovery, expiry and renewal without losing draft changes.
+
+Database-backed route and native/Vue comparator fixtures are adapted to the restored destinations and explicitly
+opened creation disclosure. Their raw captures and all matrix-control comparisons remain; only the asserted added
+disclosure heading/button is excluded from the native-equivalence text projection. Source adaptation is not an
+execution claim. The paired review records the actual final run and any unrun database suites.

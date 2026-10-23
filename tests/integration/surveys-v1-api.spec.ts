@@ -88,6 +88,20 @@ describe('versioned Survey production operations', () => {
         expect(await surveyService.getResponsesSorted(foreignId)).toEqual({});
     });
 
+    it('identifies an already saved recurring choice as a known rejection while preserving every saved choice', async () => {
+        const id = await fixture();
+        const combination = {weekday: 'WED', nthWeek: '3'} as const;
+        await surveys.addSurveyCombination(id, combination, actor(participant));
+
+        // The second actor can submit a stale view. Exercise the actual database
+        // uniqueness rejection rather than replacing the persistence owner.
+        await expect(surveys.addSurveyCombination(id, combination, actor(guest)))
+            .rejects.toMatchObject({code: 'SURVEY_COMBINATION_EXISTS', status: 409});
+        const saved = await surveyService.getCombinationsBySurveyId(id);
+        expect(saved).toHaveLength(3);
+        expect(saved.filter(item => item.weekday === 'WED' && item.nthWeek === '3')).toHaveLength(1);
+    });
+
     it('replaces omitted answers, preserves the other profile and clears an empty ballot', async () => {
         const id = await fixture();
         const [first, second] = (await surveys.readSurvey(id, actor(participant))).data.combinations;

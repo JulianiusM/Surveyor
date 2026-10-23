@@ -10,7 +10,10 @@ const props = withDefaults(
         decorative?: boolean;
         fieldWidths?: readonly number[];
     }>(),
-    {variant: 'lines', rows: 3, columns: 5, page: false, decorative: false},
+    {variant: 'lines', rows: 3, columns: 5, page: false, decorative: false,
+        // Keep absence distinct from an explicit layout override; Vue otherwise
+        // casts an omitted Boolean prop to false before the family fallback.
+        balancedHeader: undefined, headerActions: undefined},
 );
 const {messages} = usePilot();
 // Rows describe decorative repetition, never an authoritative record/field count.
@@ -19,6 +22,11 @@ const count = computed(() => Number.isFinite(props.rows) ? Math.max(1, Math.floo
 const columnCount = computed(() => Number.isFinite(props.columns) ? Math.max(1, Math.floor(props.columns)) : 5);
 const fields = computed(fieldLayout);
 const footerLayout = computed(footerWidth);
+// Detail families always expose a heading read action. Profile routes declare
+// their different header/action layouts explicitly in the same route metadata.
+const detailHeader = computed(() => ['list-detail', 'activity', 'survey', 'event', 'event-admin'].includes(props.variant));
+const balancedHeader = computed(() => props.balancedHeader ?? detailHeader.value);
+const headerActions = computed(() => props.headerActions ?? detailHeader.value);
 
 /** These are layout spans only. No feature labels, values, required state or
  * control authority enter the renderer. Creation families mirror their existing
@@ -57,8 +65,9 @@ function footerWidth(): NonNullable<PilotLoadingSkeleton['footer']> {
             'card bg-dark text-white mb-3': page}, 'pilot-skeleton-' + variant]" aria-hidden="true">
             <!-- Whole-page admission has no real header yet. Scoped data placeholders
                  live inside the feature's existing card and never duplicate it. -->
-            <span v-if="page" class="card-header pilot-skeleton-page-header">
+            <span v-if="page" class="card-header pilot-skeleton-page-header" :class="{'pilot-skeleton-balanced-header': balancedHeader}">
                 <span class="pilot-skeleton-bar pilot-skeleton-heading" />
+                <span v-if="balancedHeader && headerActions" class="pilot-skeleton-bar pilot-skeleton-header-actions" />
             </span>
             <span class="pilot-skeleton-content" :class="{'card-body': page}">
                 <template v-if="variant === 'table'">

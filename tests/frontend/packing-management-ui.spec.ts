@@ -81,7 +81,7 @@ async function mounted(component: Component, props: Record<string, unknown> | ((
     context.hydrated.value = true;
     const componentProps = reactive(typeof props === 'function' ? props(context) : {...props});
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {name: 'packing-test-overview', path: '/frontend-pilot', component, props: () => componentProps},
+        {name: 'packing-test-overview', path: '/frontend-pilot/users/dashboard', component, props: () => componentProps},
         {path: '/frontend-pilot/packing/create', component, props: () => componentProps},
         {path: '/frontend-pilot/packing/:listId/duplicate', component, props: () => componentProps},
         {path: '/frontend-pilot/packing/:listId', component, props: () => componentProps},
@@ -1877,7 +1877,7 @@ describe('packing overview presentation and navigation', () => {
                 return json({...region, q: query.get('q') ?? '', childPage, eventId,
                     parent: eventId ? parent : null, totalChildren: eventId ? 3 : 0,
                     hasPrevious: childPage > 1});
-            }, '/frontend-pilot?owner_main_q=equipment&owner_main_event=' + otherId + '&owner_main_childPage=2&participant_main_q=other');
+            }, '/frontend-pilot/users/dashboard?owner_main_q=equipment&owner_main_event=' + otherId + '&owner_main_childPage=2&participant_main_q=other');
         expect(wrapper.get('.entity-overview-children').text()).toContain('Linked entities 3–3 of 3');
         expect(wrapper.get('.entity-overview-children').text()).toContain('Administrable entities · 3 linked entities');
         expect(wrapper.text()).toContain('Parent details');
@@ -1914,7 +1914,7 @@ describe('packing overview presentation and navigation', () => {
             const q = query.get('q') ?? '';
             if (type === 'survey') return json({...region, q, type, matchingEntities: 1, totalCards: 1, items: [survey]});
             return json({...region, q});
-        }, '/frontend-pilot?participant_main_q=other');
+        }, '/frontend-pilot/users/dashboard?participant_main_q=other');
         const initial = new URL((request.mock.calls[0]![0] as Request).url);
         expect(initial.searchParams.has('type')).toBe(false);
         expect(wrapper.findAll('article[data-type]').map(item => item.attributes('data-type'))).toEqual(['event', 'survey']);
@@ -1922,7 +1922,7 @@ describe('packing overview presentation and navigation', () => {
         expect(wrapper.text()).not.toContain('No entities match');
         expect(button(wrapper, 'Show linked entities (2)').exists()).toBe(true);
 
-        await router.push({path: '/frontend-pilot', query: {...router.currentRoute.value.query,
+        await router.push({path: '/frontend-pilot/users/dashboard', query: {...router.currentRoute.value.query,
             owner_main_page: '2', owner_main_childPage: '3'}});
         await flushPromises();
         await wrapper.get('input[type="search"]').setValue('equipment');
@@ -1959,7 +1959,7 @@ describe('packing overview presentation and navigation', () => {
             regionEntities: 0, matchingEntities: 0, totalCards: 0, totalChildren: 0,
             hasPrevious: false, hasNext: false, parent: null, items: [],
         };
-        const {wrapper, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async () => json(region), '/frontend-pilot');
+        const {wrapper, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async () => json(region), '/frontend-pilot/users/dashboard');
         expect(wrapper.text()).toContain("You don't have any administrable entities yet");
         const key = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'});
         context.queryClient.setQueryData(key, {...region, totalEntities: 2, hiddenEntities: 2});
@@ -1979,7 +1979,7 @@ describe('packing overview presentation and navigation', () => {
         };
         const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async request =>
             json({...region, type: new URL(request.url).searchParams.get('type') ?? 'all'}),
-        '/frontend-pilot?owner_main_type=survey&participant_main_q=other');
+        '/frontend-pilot/users/dashboard?owner_main_type=survey&participant_main_q=other');
         expect(wrapper.get('form button[data-type="survey"]').attributes('aria-pressed')).toBe('true');
         expect(wrapper.text()).toContain('No entities match your search and filter.');
         await wrapper.get('form button[data-type="all"]').trigger('click');
@@ -1990,6 +1990,25 @@ describe('packing overview presentation and navigation', () => {
 });
 
 describe('packing command forms', () => {
+    it.each([
+        {control: '#quick-title', value: 'x'.repeat(256), message: 'Title: Use no more than 255 characters.'},
+        {control: '#quick-description', value: 'x'.repeat(65536), message: 'Description: Use no more than 65535 characters.'},
+        {control: '#quick-max', value: '2147483648', message: 'Max #: Enter a number no greater than 2147483647.'},
+    ])('explains rejected quick-add input in $control and retains its draft', async ({control, value, message}) => {
+        const {wrapper, request} = await mounted(PackingPage);
+        await wrapper.get('#quick-title').setValue('Extra lantern');
+        await wrapper.get(control).setValue(value);
+        const retained = wrapper.get<HTMLInputElement>(control).element;
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        const feedback = wrapper.get('.alert-danger');
+        expect(feedback.text()).toBe(message);
+        expect(feedback.classes()).toContain('pilot-notification');
+        expect(wrapper.get<HTMLInputElement>(control).element).toBe(retained);
+        expect(retained.value).toBe(value);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
     it('retains overlapping audience input, adopts untouched masks and saves only the deliberately reviewed audience', async () => {
         let projection: components['schemas']['PackingSettings'] = {...settings,
             capabilities: {...settings.capabilities, managePermissions: true},
@@ -2336,7 +2355,7 @@ describe('packing command forms', () => {
                 : {...list, capabilities: {...list.capabilities, manageSettings: true}});
         });
         // The committed destination is a different feature, as in the real route table.
-        router.addRoute({name: 'packing-test-overview', path: '/frontend-pilot',
+        router.addRoute({name: 'packing-test-overview', path: '/frontend-pilot/users/dashboard',
             component: defineComponent({template: '<p>Overview destination</p>'})});
         await wrapper.get('#quick-title').setValue('Parent draft');
         await button(wrapper, 'Entity settings').trigger('click');
@@ -2354,7 +2373,7 @@ describe('packing command forms', () => {
         expect(confirm.mock.calls.map(([message]) => message)).toEqual(approve
             ? ['Discard changes?', 'Permanently delete this entity and its contents? This cannot be undone.']
             : ['Discard changes?']);
-        if (approve) expect(router.currentRoute.value.path).toBe('/frontend-pilot');
+        if (approve) expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
         else {
             expect(router.currentRoute.value.path).toBe('/frontend-pilot/packing/' + id);
             expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe('Parent draft');
@@ -2381,7 +2400,7 @@ describe('packing command forms', () => {
         context.queryClient.setQueryData(warmDefault, {retained: 'Default Overview snapshot'});
         context.queryClient.setQueryData(warmFiltered, {retained: 'Filtered Overview snapshot'});
         let failNavigation = true;
-        router.addRoute({name: 'packing-test-overview', path: '/frontend-pilot', component: async function loadOverview() {
+        router.addRoute({name: 'packing-test-overview', path: '/frontend-pilot/users/dashboard', component: async function loadOverview() {
             if (failNavigation) throw new TypeError('Failed to fetch dynamically imported module');
             return defineComponent({template: '<p>Overview destination</p>'});
         }});
@@ -2426,7 +2445,7 @@ describe('packing command forms', () => {
         approveRetryDeparture = true;
         await retry.trigger('click');
         await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot');
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
         expect(deletes).toBe(1);
         expect(confirm).toHaveBeenCalledTimes(4);
         expect(confirm.mock.calls[3]).toEqual(['Discard changes?']);
@@ -2446,7 +2465,7 @@ describe('packing command forms', () => {
                 : {...list, capabilities: {...list.capabilities, manageSettings: true}});
         }, '/frontend-pilot/packing/' + id, session, {}, true);
         let failNavigation = true;
-        router.addRoute({name: 'packing-test-overview', path: '/frontend-pilot', component: async function loadOverview() {
+        router.addRoute({name: 'packing-test-overview', path: '/frontend-pilot/users/dashboard', component: async function loadOverview() {
             if (failNavigation) throw new TypeError('Failed to fetch dynamically imported module');
             return defineComponent({template: '<p>Overview destination</p>'});
         }});
@@ -2499,7 +2518,7 @@ describe('packing command forms', () => {
         approveRetryDeparture = true;
         await renewedRetry.trigger('click');
         await flushPromises();
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard');
         expect(deletes).toBe(1);
         expect(confirm).toHaveBeenCalledTimes(4);
         expect(confirm.mock.calls[3]).toEqual(['Discard changes?']);
@@ -3163,12 +3182,16 @@ describe('packing command forms', () => {
             return json(current);
         });
         await wrapper.get('[data-item-id="' + otherId + '"]').trigger('dragstart');
+        await wrapper.get('[data-item-id="' + itemId + '"]').trigger('dragover', {clientY: 0});
+        expect(wrapper.get('[data-item-id="' + itemId + '"]').classes()).toContain('pilot-reorder-before');
+        expect(received).toBeUndefined();
         context.queryClient.setQueryData(packingKeys.detail(session.context, id),
             {data: {...current, orderToken: '"remote-order"'}, etag: '"remote"'});
         await flushPromises();
         await wrapper.get('[data-item-id="' + itemId + '"]').trigger('drop');
         await flushPromises();
         expect(received).toEqual({token: '"order-original"', body: {itemIds: [otherId, itemId]}});
+        expect(wrapper.find('.pilot-reorder-before, .pilot-reorder-after, .pilot-reorder-dragging').exists()).toBe(false);
     });
 
     it.each(['title', 'description'] as const)('projects a %s-only settings grant without other settings authority', async field => {
@@ -3555,7 +3578,7 @@ describe('packing command forms', () => {
         await wrapper.get('form').trigger('submit');
         await flushPromises();
         const flash = wrapper.get('.alert-danger');
-        expect(flash.text()).toBe('"items" must contain at least 1 items');
+        expect(flash.text()).toBe('Add at least one item with a title before creating the packing list.');
         expect(flash.classes()).toContain('pilot-notification');
         expect(flash.element.closest('.pilot-notice-origin.pilot-notice-region')).not.toBeNull();
         expect(document.activeElement).toBe(title);
@@ -3563,6 +3586,46 @@ describe('packing command forms', () => {
         expect(wrapper.get<HTMLInputElement>('#create-title').element.value).toBe('Retained title');
         expect(wrapper.get<HTMLInputElement>('tbody input[aria-label="Item 1"]').element.value).toBe('   ');
         expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it.each([
+        {control: '#create-title', value: 'x'.repeat(256), field: 'Title', reason: 'Use no more than 255 characters.'},
+        {control: '#create-description', value: 'x'.repeat(65536), field: 'Description', reason: 'Use no more than 65535 characters.'},
+        {control: '#packing-row-1-title', value: 'x'.repeat(256), field: 'Item 2 — Title', reason: 'Use no more than 255 characters.'},
+        {control: '#packing-row-1-description', value: 'x'.repeat(65536), field: 'Item 2 — Description', reason: 'Use no more than 65535 characters.'},
+        {control: '#packing-row-1-capacity', value: '2147483648', field: 'Item 2 — Max #', reason: 'Enter a number no greater than 2147483647.'},
+    ])('identifies invalid pasted creation input in $control without losing rows or the selected file', async ({control, value, field, reason}) => {
+        const {wrapper, context, request} = await mounted(PackingCreatePage, {}, async request => {
+            if (new URL(request.url).pathname.endsWith('/events')) return json({items: [], selected: null, nextCursor: null});
+            return json({entry: {kind: 'render'}, context: {defaults, permissions: [], presets: []}, selectedEvent: null});
+        }, '/frontend-pilot/packing/create');
+        await wrapper.get('#create-title').setValue('Weekend equipment');
+        // An omitted blank first row must not change the reported visible index.
+        await button(wrapper, 'Add row').trigger('click');
+        await wrapper.get('#packing-row-1-title').setValue('Lantern');
+        await wrapper.get(control).setValue(value);
+        const chooser = wrapper.get<HTMLInputElement>('#create-header').element;
+        const file = new File(['header'], 'equipment.png', {type: 'image/png'});
+        Object.defineProperty(chooser, 'files', {configurable: true, value: [file]});
+        chooser.dispatchEvent(new Event('change', {bubbles: true}));
+        const retained = wrapper.get<HTMLInputElement>(control).element;
+        retained.focus();
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        const feedback = wrapper.get('.alert-danger');
+        expect(feedback.text()).toBe(field + ': ' + reason);
+        expect(feedback.classes()).toContain('pilot-notification');
+        expect(wrapper.get<HTMLInputElement>(control).element).toBe(retained);
+        expect(retained.value).toBe(value);
+        expect(document.activeElement).toBe(retained);
+        expect(chooser.files?.[0]).toBe(file);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(feedback.text()).not.toBe(field + ': ' + reason);
+        expect(feedback.text()).not.toContain('check the submitted');
+        expect(wrapper.get<HTMLInputElement>(control).element.value).toBe(value);
+        expect(chooser.files?.[0]).toBe(file);
     });
 
     it('creates a duplicate from ordered rows and current form values, without copying assignments or event links', async () => {

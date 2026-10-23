@@ -13,6 +13,7 @@ export interface ActivityRequirementDraft {
     roles: {roleId: string; value: string}[];
     stays: {stayDays: number; value: string}[];
     overrides: {key: number; id?: string; profileId: string; profileName?: string | null; roleId: string; value: string}[];
+    removedOverrideIds: string[];
 }
 
 /** Coverage wording is presentation; the shared domain engine supplies all figures. */

@@ -76,7 +76,8 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
         {path: '/frontend-pilot/packing/:listId/guest', component: PackingGuestFixture},
         {path: '/frontend-pilot/packing/:listId/duplicate', component: defineComponent({template: '<p>Duplicate destination</p>'})},
         {path: '/frontend-pilot/packing/:listId', component: defineComponent({template: '<p>Canonical detail</p>'})},
-        {path: '/frontend-pilot', component: PackingHome},
+        {path: '/frontend-pilot/users/dashboard', component: PackingHome},
+        {path: '/frontend-pilot', component: defineComponent({template: '<p>Public landing</p>'})},
         {path: '/frontend-pilot/packing/create', component: defineComponent({template: '<p>Create</p>'})},
         {path: '/frontend-pilot/help', component: defineComponent({template: '<p>Help</p>'})},
     ]});
@@ -1110,6 +1111,8 @@ describe('identity forms and packing overview navigation', () => {
         expect(wrapper.get('#password-info').text()).toContain('At least one digit');
         expect(wrapper.get('#password').classes()).toContain('is-invalid');
         expect(wrapper.get('#password').attributes('aria-describedby')).toBe('password-info');
+        expect(wrapper.get('.alert-danger').text()).toBe('Use at least 8 characters, including a letter and a digit.');
+        expect(wrapper.get<HTMLInputElement>('#password').element.value).toBe('eightletters');
         await wrapper.get('#password').setValue('eightletters1');
         await wrapper.get('#password-repeat').setValue('eightletters1');
         await wrapper.get('#password').trigger('blur');
@@ -1117,8 +1120,8 @@ describe('identity forms and packing overview navigation', () => {
         expect(wrapper.get('#password').classes()).toContain('is-valid');
     });
 
-    it('preserves native registration inline password mismatch wording before submission', async () => {
-        const {wrapper, request} = await mounted('/frontend-pilot/users/register', async () => json({valid: true}));
+    it('identifies registration password mismatch through shared feedback before submission', async () => {
+        const {wrapper, context, request} = await mounted('/frontend-pilot/users/register', async () => json({valid: true}));
         await wrapper.get('#password').setValue('correct password1');
         await wrapper.get('#password-repeat').setValue('different password1');
         // These are the original Pug inline words, deliberately independent of the
@@ -1126,9 +1129,14 @@ describe('identity forms and packing overview navigation', () => {
         expect(wrapper.get('#password-repeat-info').text()).toBe('Passwords do not match!');
         await wrapper.get('form').trigger('submit');
         expect(request.mock.calls.map(([req]) => req as Request).filter(req => req.method === 'POST')).toEqual([]);
-        expect(wrapper.get('.alert-danger').text()).toBe('Please check that both the password and the password repetition are valid!');
+        expect(wrapper.get('.alert-danger').text()).toBe('Passwords do not match!');
         expect(wrapper.get('.alert-danger').classes()).toContain('alert-dismissible');
         expect(wrapper.get('.btn-close').attributes('aria-label')).toBe('Dismiss notification');
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(wrapper.get('.alert-danger').text()).toBe('Die Passwörter stimmen nicht überein!');
+        expect(wrapper.get<HTMLInputElement>('#password').element.value).toBe('correct password1');
+        expect(wrapper.get<HTMLInputElement>('#password-repeat').element.value).toBe('different password1');
     });
 
     it('retains native forgot/reset instructions, labels, icons and full-width actions', async () => {
@@ -1441,7 +1449,7 @@ describe('identity forms and packing overview navigation', () => {
         for (const oidcEnabled of [false, true]) {
             const {wrapper, request, unmount} = await mounted(`/frontend-pilot/users/${operation}`, async () => json({changed: true}),
                 {session: {...session, shell: {...session.shell, localLoginEnabled: false, oidcEnabled}}});
-            expect(assign).toHaveBeenLastCalledWith('/frontend-pilot/users/oidc/login?next=%2Ffrontend-pilot');
+            expect(assign).toHaveBeenLastCalledWith('/frontend-pilot/users/oidc/login?next=%2Ffrontend-pilot%2Fusers%2Fdashboard');
             expect(wrapper.find('form').exists()).toBe(false);
             expect(request).not.toHaveBeenCalled();
             unmount();
@@ -1602,7 +1610,7 @@ describe('identity forms and packing overview navigation', () => {
     });
 
     it('opens hidden regions from initial and same-page query navigation without losing their filters', async () => {
-        const {wrapper, router, request} = await mounted(`/frontend-pilot?owner_hidden_q=equipment&owner_hidden_event=${eventId}`, async request => {
+        const {wrapper, router, request} = await mounted(`/frontend-pilot/users/dashboard?owner_hidden_q=equipment&owner_hidden_event=${eventId}`, async request => {
             const query = new URL(request.url).searchParams;
             const value: components['schemas']['OverviewRegion'] = {
                 collection: query.get('collection') as 'participant' | 'owner', region: query.get('region') as 'main' | 'hidden',
@@ -1619,7 +1627,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(queries().some(query => query.get('collection') === 'owner' && query.get('region') === 'hidden'
             && query.get('q') === 'equipment' && query.get('eventId') === eventId)).toBe(true);
 
-        await router.push({path: '/frontend-pilot', query: {...router.currentRoute.value.query, participant_hidden_q: 'tent', participant_hidden_open: '1'}});
+        await router.push({path: '/frontend-pilot/users/dashboard', query: {...router.currentRoute.value.query, participant_hidden_q: 'tent', participant_hidden_open: '1'}});
         await flushPromises();
         expect(hiddenButtons().map(button => button.attributes('aria-expanded'))).toEqual(['true', 'true']);
         expect(queries().some(query => query.get('collection') === 'participant' && query.get('region') === 'hidden'

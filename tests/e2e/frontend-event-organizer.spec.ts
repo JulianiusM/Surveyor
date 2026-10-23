@@ -4,7 +4,7 @@ import {writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {createE2EActivityPlan, createE2EDriversList, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
 import {closeModalForE2E, createResourceViaForm, expectUsableFrontendLayout, loginForE2E, openModalForE2E,
-    readControlContracts} from '../keywords/e2eCoreKeywords';
+    projectCreationPermissionDisclosure, readControlContracts, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
@@ -139,7 +139,7 @@ for (const type of ['packing', 'activity', 'drivers'] as const) {
         page.once('dialog', confirmation => confirmation.accept());
         await row.getByRole('button', {name: 'Delete', exact: true}).click();
         expect((await deleted).status()).toBe(200);
-        await expect(page).toHaveURL(/\/frontend-pilot$/u);
+        await expect(page).toHaveURL(/\/frontend-pilot\/users\/dashboard$/u);
         expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('event-child-delete');
         expect(documentRequests).toEqual([]);
         expect(deletes).toEqual([operation]);
@@ -278,7 +278,7 @@ async function metrics(surface: Locator) {
 }
 
 /** Store each independent native/pilot picture and its raw browser evidence. */
-async function capture(page: Page, info: TestInfo, name: string, surface: Locator) {
+async function capture(page: Page, info: TestInfo, name: string, surface: Locator, creation = false) {
     await surface.scrollIntoViewIfNeeded();
     await page.evaluate(() => document.fonts.ready);
     if (name.startsWith('pilot-')) await expectUsableFrontendLayout(surface);
@@ -287,7 +287,11 @@ async function capture(page: Page, info: TestInfo, name: string, surface: Locato
     await page.screenshot({path, animations: 'disabled', fullPage: true});
     await info.attach(name, {path, contentType: 'image/png'});
     await info.attach(`${name}-metrics`, {body: JSON.stringify(result, null, 2), contentType: 'application/json'});
-    return result;
+    if (!creation) return result;
+    // Raw metrics above retain the new heading; only the directly requested
+    // disclosure is projected out of the existing full-field comparison.
+    const projected = await projectCreationPermissionDisclosure(surface, await readVisiblePresentation(surface, []));
+    return {...result, text: projected.content.text};
 }
 
 /** Compare user-visible content, hierarchy and input constraints. Responsive
@@ -488,10 +492,15 @@ for (const width of [1280, 390]) {
         for (const pilot of [false, true]) {
             const prefix = pilot ? 'pilot' : 'native';
             await page.goto(`${pilot ? '/frontend-pilot' : ''}/event/create?locale=en`, {waitUntil: 'domcontentloaded'});
-            if (pilot) await waitForPilotHydration(page);
+            if (pilot) {
+                await waitForPilotHydration(page);
+                const permissions = page.locator('[data-creation-permissions] .accordion-button');
+                await expect(permissions).toHaveAttribute('aria-expanded', 'false');
+                await permissions.click();
+            }
             const form = page.locator('#eventForm');
             await expect(form.locator('.perm-matrix input[type="checkbox"]').first()).toBeVisible();
-            evidence[`${prefix}-creation`] = await capture(page, info, `${prefix}-creation`, form);
+            evidence[`${prefix}-creation`] = await capture(page, info, `${prefix}-creation`, form, true);
             evidence[`${prefix}-creation-controls`] = await formControls(form);
             expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
         }

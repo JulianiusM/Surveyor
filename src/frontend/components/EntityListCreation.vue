@@ -20,7 +20,7 @@ import CommandFeedback from './CommandFeedback.vue';
 import PageMessage from './PageMessage.vue';
 import LoadingSkeleton from './LoadingSkeleton.vue';
 import EventPicker from './EventPicker.vue';
-import AudiencePermissions from './permissions/AudiencePermissions.vue';
+import CreationPermissions from './permissions/CreationPermissions.vue';
 import CreationAdmissionNotices from './CreationAdmissionNotices.vue';
 import FormField from './FormField.vue';
 import FileField from './FileField.vue';
@@ -310,8 +310,9 @@ function collectCreation() {
                     </div>
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <AudiencePermissions
+                            <CreationPermissions
                                 v-if="formContext"
+                                :key="sourceId ?? 'create'"
                                 v-model="defaults"
                                 :permissions="formContext.permissions"
                                 :presets="formContext.presets"

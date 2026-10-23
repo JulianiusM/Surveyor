@@ -1,8 +1,9 @@
 import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotEventPickerQuery, PilotEventPickerSource, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
+import type {PilotInputField} from '../../../types/FrontendFeedbackTypes';
 import {driversKeys} from '../../app/queryKeys';
-import {createMultipartForm, InvalidInputError} from '../../app/transport';
+import {createMultipartForm, generatedInputError} from '../../app/transport';
 import {validateDriversListView} from '../../../../.generated/api/v1/browser/validateDriversListView.mjs';
 import {validateDriversMetadata} from '../../../../.generated/api/v1/browser/validateDriversMetadata.mjs';
 import {validateDriversMetadataPatch} from '../../../../.generated/api/v1/browser/validateDriversMetadataPatch.mjs';
@@ -75,7 +76,7 @@ export class DriversApi {
     async saveMetadata(listId: string, patch: components['schemas']['DriversMetadataPatch'], etag: string,
                        scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
         // Structural validation precedes transport; business/field checks remain server-owned.
-        if (!validateDriversMetadataPatch(patch)) throw new InvalidInputError('Invalid metadata patch.');
+        if (!validateDriversMetadataPatch(patch)) throw generatedInputError(validateDriversMetadataPatch.errors, driversInputField);
 
         const result = this.transport.read('updateDriversMetadata', await this.transport.client.PATCH('/drivers-lists/{listId}/metadata', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': etag}}, body: patch, cache: 'no-store',
@@ -158,7 +159,7 @@ export class DriversApi {
                         scope: PilotRequestScope): Promise<components['schemas']['DriversCreated']> {
         // Validate machine data before adapting it to the established multipart envelope.
         // The image is a separate part rather than a second handwritten creation schema.
-        if (!validateDriversCreateInput(input)) throw new InvalidInputError('Invalid drivers creation.');
+        if (!validateDriversCreateInput(input)) throw generatedInputError(validateDriversCreateInput.errors, driversInputField);
 
         const form = createMultipartForm(input, image);
 
@@ -170,7 +171,7 @@ export class DriversApi {
     }
 
     async addItem(listId: string, input: components['schemas']['DriversNewItem'], scope: PilotRequestScope) {
-        if (!validateDriversNewItem(input)) throw new InvalidInputError('Invalid drivers item.');
+        if (!validateDriversNewItem(input)) throw generatedInputError(validateDriversNewItem.errors, driversInputField);
         return this.transport.read('createDriversItem', await this.transport.client.POST('/drivers-lists/{listId}/items', {
             params: {path: {listId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), validateDriversCreated, scope).data;
@@ -178,7 +179,7 @@ export class DriversApi {
 
     async updateItem(listId: string, itemId: string, patch: components['schemas']['DriversItemPatch'], token: string,
                      scope: PilotRequestScope) {
-        if (!validateDriversItemPatch(patch)) throw new InvalidInputError('Invalid drivers item patch.');
+        if (!validateDriversItemPatch(patch)) throw generatedInputError(validateDriversItemPatch.errors, driversInputField);
         return this.transport.read('updateDriversItem', await this.transport.client.PATCH('/drivers-lists/{listId}/items/{itemId}', {
             params: {path: {listId, itemId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: patch, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -332,6 +333,17 @@ export class DriversApi {
             params: {path: {listId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), scope);
     }
+}
+
+/** Matching creation, quick-add and property controls share field diagnostics;
+ * their generated contracts retain their deliberately distinct constraints. */
+function driversInputField(path: string): PilotInputField | undefined {
+    if (path === '/title') return {label: 'packing.title'};
+    if (path === '/description') return {label: 'packing.description'};
+    if (path === '/maxAssignees') return {label: 'packing.maxNumber'};
+    if (path === '/eventId') return {label: 'eventPicker.currentEvent'};
+    if (path.startsWith('/defaultPermissions')) return {label: 'packing.groupPermissions'};
+    return undefined;
 }
 
 const owners = new WeakMap<PilotApi, DriversApi>();

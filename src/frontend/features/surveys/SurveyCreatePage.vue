@@ -84,7 +84,7 @@ function receiveCreation(): void {
     // The approved Vue-only duplicate correction seeds the actual saved values.
     // Later refreshes never replace these admitted, independently editable rows.
     fields.description = copy?.description ?? '';
-    rows.value = copy ? copy.combinations.map(item => ({key: rowKey++, weekday: item.weekday, nthWeek: item.nthWeek}))
+    rows.value = copy?.combinations.length ? copy.combinations.map(item => ({key: rowKey++, weekday: item.weekday, nthWeek: item.nthWeek}))
         : [{key: rowKey++, weekday: 'MON', nthWeek: '1'}];
     baseline.value = snapshot();
 }
@@ -108,11 +108,11 @@ function resetCreation(): void {
     rows.value = [];
 }
 function addRow(): void { if (!blocked.value) rows.value.push({key: rowKey++, weekday: 'MON', nthWeek: '1'}); }
-/** Remove only this local creation row. The native form permits removing all
- * rows; generated/server validation then rejects a submission without choices. */
+/** Keep one editable recurring choice throughout creation. The generated/server
+ * minimum remains authoritative even if a caller submits outside this control. */
 function removeRow(key: number): void {
     // Never mutate rows while creation admission or delivery is in flight.
-    if (!blocked.value) rows.value = rows.value.filter(row => row.key !== key);
+    if (!blocked.value && rows.value.length > 1) rows.value = rows.value.filter(row => row.key !== key);
 }
 async function readSubmissionEntry(scope: PilotRequestScope, returnTo: string) {
     return (await api.createEntry(scope, undefined, returnTo)).entry;
@@ -166,7 +166,7 @@ function collectCreation() {
                             <tbody id="combinationTable"><tr v-for="row in rows" :key="row.key" :id="'row-' + row.key">
                                 <CombinationFields v-model:weekday="row.weekday" v-model:nth-week="row.nthWeek" :prefix="'combinations[' + row.key + ']'"
                                     creation :disabled="blocked || !admitted" />
-                                <td class="text-center"><ActionButton variant="danger" class="btn-sm remove-combination-btn" :disabled="blocked || !admitted" @click="removeRow(row.key)">{{ messages.t('survey.remove') }}</ActionButton></td>
+                                <td class="text-center"><ActionButton variant="danger" class="btn-sm remove-combination-btn" :disabled="blocked || !admitted || rows.length <= 1" @click="removeRow(row.key)">{{ messages.t('survey.remove') }}</ActionButton></td>
                             </tr></tbody>
                         </table>
                     </div>

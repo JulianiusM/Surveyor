@@ -501,10 +501,17 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
                 notice.value = 'state.savedRefreshFailed';
             } else if (failure instanceof InvalidInputError) {
                 outcome.value = {confirmation: 'rejected', refresh: 'not-requested'};
-                setError('api:errors.VALIDATION_FAILED');
+                // Keep the feature's validated field diagnostic localized across
+                // language changes. Other callers retain the common fallback.
+                setError(failure);
             } else if (failure instanceof ApiFailure && failure.confirmedRejection) {
                 outcome.value = {confirmation: 'rejected', refresh: 'not-requested'};
-                setError(failure);
+                // Operations may identify a known no-op as information without
+                // replacing shared receipt timing, localized wording or placement.
+                // The validated rejection still retains its honest outcome.
+                const information = failure.problem && feedback?.rejectionInformation?.[failure.problem.code];
+                if (information) setFeedbackInformation(information);
+                else setError(failure);
                 // A stale inline edit stays a draft. Refresh only the remote representation;
                 // its component still requires explicit review before adopting a new token.
                 if (failure.status === 412) {

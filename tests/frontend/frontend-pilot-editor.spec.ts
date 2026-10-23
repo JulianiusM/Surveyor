@@ -1566,9 +1566,9 @@ describe('packing presentation compatibility', () => {
         const context = createPilotContext({session}, true, request);
         context.hydrated.value = true;
         const router = createRouter({history: createMemoryHistory(), routes: [
-            {path: '/frontend-pilot', component: OverviewRegion, props: {collection: 'owner', region: 'main'}},
+            {path: '/frontend-pilot/users/dashboard', component: OverviewRegion, props: {collection: 'owner', region: 'main'}},
         ]});
-        await router.push('/frontend-pilot');
+        await router.push('/frontend-pilot/users/dashboard');
         const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
             plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}],
                 [I18NextVue, {i18next: context.i18next}]],
@@ -1610,7 +1610,7 @@ describe('packing presentation compatibility', () => {
         } finally { await mounted.dispose(); }
     });
 
-    it('uses only the authorized event URL for both responsive header links', async () => {
+    it('uses only the authorized event URL for the responsive header link', async () => {
         const eventId = '66666666-6666-4666-8666-666666666666';
         const privateParent = await mountPackingView({...list, currentEventId: eventId});
         try {
@@ -1620,7 +1620,7 @@ describe('packing presentation compatibility', () => {
             currentEventUrl: `/event/${eventId}`});
         try {
             const links = accessibleParent.wrapper.findAll('.card-header a');
-            expect(links).toHaveLength(2);
+            expect(links).toHaveLength(1);
             for (const link of links) {
                 expect(link.text()).toBe('Go to event');
                 expect(link.attributes('href')).toBe(`/event/${eventId}`);

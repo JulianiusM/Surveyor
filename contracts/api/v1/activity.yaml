@@ -1035,6 +1035,7 @@ schemas:
         type: "string"
         minLength: 1
         maxLength: 255
+        pattern: "\\S"
       text:
         type: "string"
         maxLength: 16000
@@ -1119,6 +1120,12 @@ schemas:
       - stayRequirements
       - overrides
     properties:
+      removedOverrideIds:
+        description: Saved overrides deliberately removed from this draft. Omitted former-event overrides are otherwise retained.
+        type: array
+        uniqueItems: true
+        items:
+          $ref: ./common.yaml#/schemas/DecimalId
       assignmentMode:
         type: string
         enum:

@@ -19,7 +19,8 @@ import FormField from '../../components/FormField.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
-import EntityListToolbar from '../../components/EntityListToolbar.vue';
+import RefreshButton from '../../components/RefreshButton.vue';
+import PageHeading from '../../components/PageHeading.vue';
 import CommonPage from '../common/CommonPage.vue';
 
 type WorkflowKind = operations['getProfileWorkflowEntry']['parameters']['query']['kind'];
@@ -308,10 +309,10 @@ function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, 
         <StatusNotice v-if="completion.target.value" kind="success"
             :action="{state: completion.retryAction, label: messages.t('common.retry')}" @action="completion.retry">{{ messages.t('state.saved') }}</StatusNotice>
         <section class="card bg-dark text-white mb-3">
-            <h1 class="card-header text-center"><i class="bi me-2" :class="destructive ? 'bi-trash-fill' : 'bi-archive-fill'" aria-hidden="true"></i>{{ heading }}</h1>
+            <PageHeading class="card-header" :title="heading" :icon="destructive ? 'bi-trash-fill' : 'bi-archive-fill'">
+                <template #actions><RefreshButton :state="refreshAction" @refresh="refreshWorkflowAuthority" /></template>
+            </PageHeading>
             <div class="card-body">
-                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="refreshAction"
-                    @refresh="refreshWorkflowAuthority" />
                 <template v-if="workflow.kind === 'token'">
                     <div class="text-center mb-4">
                         <p class="lead">{{ messages.t('profile.tokenIntro', {name: context.session.value?.activeProfile?.name ?? ''}) }}</p>

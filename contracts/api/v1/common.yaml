@@ -431,6 +431,15 @@ schemas:
           - status
           - params
       - properties:
+          code: {const: SURVEY_COMBINATION_EXISTS}
+          messageKey: {const: survey.combinationAlreadyPresent}
+          status: {const: 409}
+          params:
+            type: object
+            additionalProperties: false
+            maxProperties: 0
+        required: [code, messageKey, status, params]
+      - properties:
           code:
             const: PRECONDITION_REQUIRED
           messageKey:

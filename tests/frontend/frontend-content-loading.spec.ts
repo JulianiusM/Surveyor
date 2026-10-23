@@ -92,7 +92,7 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
     context.visible.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
         {path: '/frontend-pilot/help', component: HelpPage},
-        {path: '/frontend-pilot', component: OverviewPage},
+        {path: '/frontend-pilot/users/dashboard', component: OverviewPage},
     ]});
     await router.push(path);
     await router.isReady();
@@ -223,7 +223,7 @@ describe('help and overview progressive content', () => {
         expect(help.html).not.toContain('data-loading-skeleton');
         expect(help.javascriptRequired).toBe(false);
 
-        const overview = await render('/frontend-pilot', {session});
+        const overview = await render('/frontend-pilot/users/dashboard', {session});
         expect(overview.html.match(/data-pilot-initial-loading/gu)).toHaveLength(1);
         expect(overview.html).toContain('data-loading-skeleton="overview"');
         expect(overview.html).not.toContain('data-collection=');
@@ -402,7 +402,7 @@ describe('help and overview progressive content', () => {
         function readRegion(request: Request): Promise<Response> {
             return new URL(request.url).searchParams.get('collection') === 'owner' ? owner.promise : participant.promise;
         }
-        const {wrapper, context, request} = await mounted('/frontend-pilot', readRegion);
+        const {wrapper, context, request} = await mounted('/frontend-pilot/users/dashboard', readRegion);
         const ownerView = wrapper.get('[data-collection="owner"][data-region="main"]');
         const participantView = wrapper.get('[data-collection="participant"][data-region="main"]');
         const participantForm = participantView.get('form');
@@ -450,7 +450,7 @@ describe('help and overview progressive content', () => {
         function readRegion(request: Request): Promise<Response> {
             return new URL(request.url).searchParams.get('region') === 'hidden' ? hidden.promise : main.promise;
         }
-        const {wrapper, context, request} = await mounted('/frontend-pilot?owner_hidden_open=1', readRegion);
+        const {wrapper, context, request} = await mounted('/frontend-pilot/users/dashboard?owner_hidden_open=1', readRegion);
         const hiddenView = wrapper.get('[data-collection="owner"][data-region="hidden"]');
         expect(request).toHaveBeenCalledTimes(3);
         expect(hiddenView.find('[data-loading-skeleton="cards"]').exists()).toBe(true);
@@ -466,7 +466,7 @@ describe('help and overview progressive content', () => {
             .find('[data-loading-skeleton="cards"]').exists()).toBe(true);
     });
 
-    it.each(['/frontend-pilot/help', '/frontend-pilot'])('ends initial placeholders after a confirmed read error on %s', async path => {
+    it.each(['/frontend-pilot/help', '/frontend-pilot/users/dashboard'])('ends initial placeholders after a confirmed read error on %s', async path => {
         const {wrapper, context} = await mounted(path, async () => json(problem, 400));
         expect(wrapper.text()).toContain(context.messages.value.t('state.loadFailed'));
         expect(wrapper.find('[data-loading-skeleton]').exists()).toBe(false);

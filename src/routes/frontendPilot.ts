@@ -154,7 +154,7 @@ function flashPageNotice(req: Request, notice: components['schemas']['EntryNotic
     req.flash.call({session} as Request, 'frontend-pilot-notice', JSON.stringify(notice));
 }
 
-router.get('/', asyncHandler(async function renderOverviewPilot(req, res) {
+router.get('/users/dashboard', asyncHandler(async function renderOverviewPilot(req, res) {
     const state = await bootstrap(req);
     // Interactive Overview sends its authoritative session and shared shell first.
     // Mounted regions read their existing URL state independently through the same
@@ -164,8 +164,9 @@ router.get('/', asyncHandler(async function renderOverviewPilot(req, res) {
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
 
-/** The landing page is opt-in during coexistence; Overview retains the pilot root. */
-router.get('/home', asyncHandler(async function renderLandingPilot(req, res) {
+/** Home keeps the native public landing behavior. The old explicit Home URL
+ * remains a compatible alias; personal collections have their own dashboard. */
+router.get(['/', '/home'], asyncHandler(async function renderLandingPilot(req, res) {
     const state = await bootstrap(req);
     // Native landing selects one uniform quick-create shortcut per document.
     // Send that choice with SSR so hydration cannot choose a different href.

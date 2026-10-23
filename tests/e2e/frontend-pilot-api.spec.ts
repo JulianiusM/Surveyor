@@ -404,7 +404,7 @@ test('keeps exact native and SPA duplicate destinations including query context 
         const forbidden = await anonymous.request.get('/api/v1/packing-lists/create-entry', {
             headers: headersFor(session), params: {returnTo: 'https://outside.invalid/duplicate'},
         });
-        expect(new URL((await forbidden.json()).entry.url, baseURL).searchParams.get('next')).toBe('/frontend-pilot');
+        expect(new URL((await forbidden.json()).entry.url, baseURL).searchParams.get('next')).toBe('/frontend-pilot/users/dashboard');
 
         // Use the actual mounted identity owner: the declared API command
         // returns the prepared identity, and the client retains its exact next/notice.

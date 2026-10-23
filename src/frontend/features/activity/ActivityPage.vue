@@ -23,7 +23,7 @@ import ActivityRecommendations from './ActivityRecommendations.vue';
 import EntityHeader from '../../components/EntityHeader.vue';
 import EntityDescription from '../../components/EntityDescription.vue';
 import EntityDetailReadState from '../../components/EntityDetailReadState.vue';
-import EntityListToolbar from '../../components/EntityListToolbar.vue';
+import RefreshButton from '../../components/RefreshButton.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import AppTabList from '../../components/AppTabList.vue';
@@ -252,7 +252,9 @@ async function confirmAssignment(): Promise<void> {
             :settings-available="!!data?.capabilities.manageSettings"
             :settings-disabled="blocked"
             @settings="settingsOpen = true"
-        />
+        >
+            <template #actions><RefreshButton v-if="!denied" :state="readAction" @refresh="refresh" /></template>
+        </EntityHeader>
         <div class="card-body">
             <CommandFeedback :feedback="command.feedback" />
             <EntityDetailReadState
@@ -317,10 +319,6 @@ async function confirmAssignment(): Promise<void> {
                         @changed="advancedChanged" @denied="advancedChanged" />
                 </div>
             </template>
-            <!-- A cold recoverable read has no schedule yet, but still needs the
-                 same explicit Refresh and cooldown owner. Confirmed access loss
-                 retains its existing private retirement without this action. -->
-            <EntityListToolbar v-if="!denied" :refresh-label="messages.t('common.refresh')" :state="readAction" @refresh="refresh" />
         </div>
     </section>
     <ActivitySettings

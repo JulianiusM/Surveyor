@@ -285,10 +285,10 @@ describe('admitted common documents through the actual Express application', () 
         expect(await repository.count()).toBe(before + 1);
     });
 
-    it('keeps the opt-in landing separate from the existing Overview root', async function preservesOverviewRoot() {
+    it('keeps public Home at the pilot root and personal Overview at the native dashboard path', async function preservesHomeAndOverview() {
         const base = await applicationOrigin();
-        const landing = await fetch(`${base}/frontend-pilot/home`);
-        const overview = await fetch(`${base}/frontend-pilot`);
+        const landing = await fetch(`${base}/frontend-pilot`);
+        const overview = await fetch(`${base}/frontend-pilot/users/dashboard`);
         expect(landing.status).toBe(200);
         expect(overview.status).toBe(200);
 

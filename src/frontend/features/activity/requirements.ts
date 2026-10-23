@@ -37,6 +37,7 @@ export function createRequirementDraft(config: ActivityRequirementConfiguration)
         }),
         overrides: config.overrides.map((row, key) => ({key, id: row.id, profileId: row.profileId ?? '', profileName: row.profileName,
             roleId: row.roleId == null ? '' : String(row.roleId), value: String(row.requiredShifts)})),
+        removedOverrideIds: [],
     };
 }
 
@@ -57,6 +58,7 @@ export function requirementInput(draft: ActivityRequirementDraft): components['s
             .map(row => ({stayDays: row.stayDays, requiredShifts: Number(row.value)})),
         overrides: draft.overrides.filter(row => !!row.profileId).map(row => ({...(row.id == null ? {} : {id: row.id}),
             profileId: row.profileId, roleId: row.roleId || null, requiredShifts: Number(row.value) || 0})),
+        ...(draft.removedOverrideIds.length ? {removedOverrideIds: [...draft.removedOverrideIds]} : {}),
     };
 }
 

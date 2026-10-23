@@ -366,7 +366,7 @@ test('guest creation and emailed personal URLs stay in the frontend and authenti
             const after = await session(recovered.request);
             expect(after).toMatchObject({kind: 'guest', activeProfile: created.session.activeProfile});
             expect(after.context).not.toBe(before.context);
-            expect((await recovered.request.get(link.pathname + '?next=https%3A%2F%2Foutside.invalid', {maxRedirects: 0})).headers().location).toBe('/frontend-pilot?locale=en');
+            expect((await recovered.request.get(link.pathname + '?next=https%3A%2F%2Foutside.invalid', {maxRedirects: 0})).headers().location).toBe('/frontend-pilot/users/dashboard?locale=en');
         } finally { await recovered.close(); }
     } finally { await guestBrowser.close(); }
 });

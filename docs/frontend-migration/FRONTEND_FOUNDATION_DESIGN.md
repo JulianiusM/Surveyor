@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Direct R1-R3 readiness approvals and subsequent two-finding correction instruction recorded after retained P10 trigger and original choices; native isolation, approval provenance and separate source/execution evidence preserved
+verification-scope: Direct interface requests and full-plan/Home correction recorded after original choices; compact permissions, shared diagnostics, native isolation, approval provenance and separate execution evidence preserved
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -1050,6 +1050,38 @@ Activity keeps its existing Refresh toolbar available without detail data for re
 same read, pending and cooldown owners. Validated denial or absence retains private-data retirement and removes
 that control. Native/backend behavior and the separate cutover, publication and deployment boundaries remain
 unchanged. The paired review records actual checks and limits rather than deriving success from this instruction.
+
+## Direct interface defect corrections (2026-10-23)
+
+The maintainer directly requests correction of sticky notification spacing, embedded Refresh/settings placement,
+navigation/loading geometry, explicit removal of saved overrides for profiles outside the Event, reorder previews,
+and Survey minimum-choice and diagnostic behavior. This request authorizes those bounded corrections and an audit
+of analogous Vue issues/shared owners; it does not establish that earlier implementation or tests were correct.
+
+Natural-flow sticky notices retain common SPA receipt ownership and no scripted focus/scroll movement. Shared
+headings/actions preserve each feature's existing read/recovery eligibility. The new frontend keeps one Survey
+creation combination and gives an already-present recurrence direct informational feedback, including stale-read
+rejections. Explicit requirements removal identifies deliberately removed saved rows; ordinary omission still
+retains former-event rows, and new/changed targets still require current registration. This preserves the earlier
+history safeguard while making the requested removal possible. Native frontend sources remain untouched.
+
+The correction plan and paired review separately record implementation, verification, remaining validation findings
+and limits. Existing backend owners and all independent cutover, publication and deployment boundaries remain.
+
+### Direct full-plan completion and Home correction (2026-10-23)
+
+The maintainer next requests full implementation of the plan, another all-area review, restoration of the landing
+page and compact creation permissions. The earlier root-Overview implementation is not evidence of approval to
+replace native Home. Public Home now retains the pilot root and compatible `/home` alias; personal Overview uses
+the native `/users/dashboard` suffix within the prefix. Navigation, default identity returns, contextual Help and
+confirmed removal destinations follow that distinction without changing native routes or private-read authority.
+
+Matching creation and duplicate permission matrices use one closed-by-default disclosure, retaining controls,
+audience selection and draft masks. Survey retains its deliberate exception. Shared generated-input diagnostics
+identify visible fields and row/day context through the existing feedback owner without copying constraints or
+discarding input/files. Analogous transient notices and password-validation wording follow the same clarity and
+receipt requirements. The paired review owns actual execution, independent review and limits; no general backend
+remedy, native cutover, publication or deployment is authorized.
 
 ## Cutover retirement inventory
 

@@ -16,11 +16,10 @@ import EventParticipants from './EventParticipants.vue';
 import EventBypassLinks from './EventBypassLinks.vue';
 import EventThingsToDo from './EventThingsToDo.vue';
 import FinanceSection from '../finance/FinanceSection.vue';
-import ActionButton from '../../components/ActionButton.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import EntityHeader from '../../components/EntityHeader.vue';
-import EntityListToolbar from '../../components/EntityListToolbar.vue';
+import RefreshButton from '../../components/RefreshButton.vue';
 
 const context = usePilot();
 const {messages} = context;
@@ -135,21 +134,21 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
 
 <template>
     <section class="card bg-dark text-white mb-3">
-        <h1 v-if="admin" class="card-header text-center">
-            <i class="bi bi-speedometer2 me-2" aria-hidden="true"></i>{{ messages.t('event.dashboard', {title: event?.title ?? ''}) }}
-        </h1>
         <EntityHeader
-            v-else
             :resource-id="eventId"
-            :title="event?.title ?? ''"
-            icon="bi-calendar2-event"
+            :title="admin ? messages.t('event.dashboard', {title: event?.title ?? ''}) : event?.title ?? ''"
+            :icon="admin ? 'bi-speedometer2' : 'bi-calendar2-event'"
             :image-version="event?.headerVersion"
             :image-query-key="key"
             :read-image="readHeader"
-            :image-enabled="!!event && !section.denied.value"
+            :image-enabled="!admin && !!event && !section.denied.value"
             :settings-available="!!event?.capabilities.settings"
             @settings="editorOpen = true"
-        />
+        >
+            <template #actions>
+                <RefreshButton v-if="!section.denied.value" :state="pageReadAction" @refresh="refreshPresentation('page')" />
+            </template>
+        </EntityHeader>
         <div class="card-body">
             <StatusNotice
                 v-if="section.query.error.value"
@@ -165,15 +164,8 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
             <LoadingSkeleton v-if="section.loading.value" v-bind="route.meta.loadingSkeleton" />
 
             <template v-if="event">
-                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="pageReadAction"
-                    @refresh="refreshPresentation('page')" />
                 <!-- One bounded projection drives both page intents. Registration,
                      roster, management and export remain independent capabilities. -->
-                <div v-if="admin" class="d-flex justify-content-end mb-3">
-                    <ActionButton v-if="event.capabilities.settings" variant="outline-light" @click="editorOpen = true">
-                        <i class="bi bi-gear me-1" aria-hidden="true"></i>{{ messages.t('packing.edit') }}
-                    </ActionButton>
-                </div>
                 <StatusNotice v-if="event.archive.direct || event.archive.inherited" kind="info">
                     {{ messages.t('packing.archived') }}
                 </StatusNotice>

@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {writeFile} from 'node:fs/promises';
 import {createE2EActivityPlan, createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, projectCreationPermissionDisclosure, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createBrowserReadGate as readGate, waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {readActivitySettingsForE2E} from '../keywords/frontendActivityE2EKeywords';
 import type {components} from '../../src/types/api/v1';
@@ -131,7 +131,7 @@ async function packing(page: Page, publicView = false) {
 /** Capture the genuine corresponding surface after fonts and hover state settle.
  * The shared assertion compares visible content/controls/styles and local boxes;
  * screenshots and raw measurements remain separately inspectable run evidence. */
-async function captureMatchedPresentation(page: Page, info: TestInfo, name: string, surface: Locator, selectors: string[], focus?: Locator) {
+async function captureMatchedPresentation(page: Page, info: TestInfo, name: string, surface: Locator, selectors: string[], focus?: Locator, creation = false) {
     if (new URL(page.url()).pathname.startsWith('/frontend-pilot')) await expectUsableFrontendLayout(surface);
     await page.evaluate(() => document.fonts.ready);
     // A no-op uncheck leaves native unfocused, while clearing the shared Packed
@@ -147,7 +147,7 @@ async function captureMatchedPresentation(page: Page, info: TestInfo, name: stri
     const presentation = await readVisiblePresentation(surface, selectors);
     await info.attach(name, {path, contentType: 'image/png'});
     await info.attach(name + '-presentation', {body: JSON.stringify(presentation, null, 2), contentType: 'application/json'});
-    return presentation;
+    return creation ? projectCreationPermissionDisclosure(surface, presentation) : presentation;
 }
 
 /** Record the real viewport context without scrolling or focusing the surface.
@@ -342,10 +342,15 @@ for (const width of [1280, 390]) {
             const prefix = pilot ? '/frontend-pilot' : '';
             const label = pilot ? 'pilot' : 'native';
             await page.goto(prefix + '/packing/create?locale=en', {waitUntil: 'domcontentloaded'});
-            if (pilot) await waitForPilotHydration(page);
+            if (pilot) {
+                await waitForPilotHydration(page);
+                const permissions = page.locator('[data-creation-permissions] .accordion-button');
+                await expect(permissions).toHaveAttribute('aria-expanded', 'false');
+                await permissions.click();
+            }
             await expect(page.locator('main tbody tr')).toHaveCount(1);
             const creation = await captureMatchedPresentation(page, info, label + '-packing-create', page.locator('main form').first(),
-                ['label', 'input', 'textarea', 'select', 'th', 'td', 'button']);
+                ['label', 'input', 'textarea', 'select', 'th', 'td', 'button'], undefined, true);
             if (pilot) expectVisiblePresentation(native.creation!, creation);
             else native.creation = creation;
 
@@ -480,7 +485,7 @@ for (const width of [1280, 390]) {
             }
             let original: Awaited<ReturnType<typeof readVisiblePresentation>> | undefined;
             for (const pilot of [false, true]) {
-                const path = pilot ? '/frontend-pilot' : '/users/dashboard';
+                const path = pilot ? '/frontend-pilot/users/dashboard' : '/users/dashboard';
                 // Native Overview owns a closed navigation query and rejects
                 // pilot-only locale fields. Compare its real admitted URL, with
                 // the same feature filter and the pilot's explicit English UI.
@@ -599,6 +604,9 @@ for (const intent of ['create', 'duplicate'] as const) {
             const requiredByAll = intent === 'create';
             expect(await row.locator('input[type="checkbox"]').isChecked()).toBe(!requiredByAll);
             await row.locator('input[type="checkbox"]').setChecked(requiredByAll);
+            const permissionDisclosure = page.locator('[data-creation-permissions] .accordion-button');
+            await expect(permissionDisclosure).toHaveAttribute('aria-expanded', 'false');
+            await permissionDisclosure.click();
             const permissions = page.locator('.perm-matrix input[type="checkbox"]');
             for (const checkbox of (await permissions.all()).slice(0, 2)) {
                 const checked = !(await checkbox.isChecked());
@@ -1141,7 +1149,7 @@ test('pilot navigates without replacing the document and preserves the legacy Pa
 
 test('loading overview regions renders the shell and faster authority independently', async ({page}, testInfo) => {
     const list = await packingFixture(page.request);
-    const destination = '/frontend-pilot?locale=en&owner_main_q=' + encodeURIComponent(list.title);
+    const destination = '/frontend-pilot/users/dashboard?locale=en&owner_main_q=' + encodeURIComponent(list.title);
     const response = await page.request.get(destination);
     expect(response.status()).toBe(200);
     const html = await response.text();
@@ -2131,7 +2139,7 @@ for (const width of [1280, 390]) {
             // Vue must start from precisely the observed persisted schedule state.
             for (const pilot of [false, true]) {
                 const label = pilot ? 'vue' : 'native';
-                const response = await page.goto(pilot ? '/frontend-pilot?locale=en' : '/users/dashboard', {waitUntil: 'domcontentloaded'});
+                const response = await page.goto(pilot ? '/frontend-pilot/users/dashboard?locale=en' : '/users/dashboard', {waitUntil: 'domcontentloaded'});
                 expect(response?.status()).toBe(200);
                 if (pilot) {
                     await waitForPilotHydration(page);
@@ -2304,7 +2312,7 @@ test('pilot overview preserves personal visibility, shared archive state and lin
     expect((await page.request.put(`/api/v1/packing-lists/${standalone.id}/items/${standaloneView.items[0]!.id}/self-assignment`,
         {headers: headers(await bootstrap(page.request))})).status()).toBe(200);
 
-    await page.goto('/frontend-pilot', {waitUntil: 'domcontentloaded'});
+    await page.goto('/frontend-pilot/users/dashboard', {waitUntil: 'domcontentloaded'});
     await page.evaluate(() => { document.documentElement.dataset.pilotDocument = 'overview'; });
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
     const participant = page.locator('[data-collection="participant"][data-region="main"]');
@@ -2446,9 +2454,9 @@ test('native and pilot disclosures keep link semantics and pilot failed paginati
         await createResourceViaForm(page.request, input);
     }
 
-    for (const destination of ['/users/dashboard', '/frontend-pilot']) {
+    for (const destination of ['/users/dashboard', '/frontend-pilot/users/dashboard']) {
         await page.goto(destination, {waitUntil: 'domcontentloaded'});
-        if (destination === '/frontend-pilot') await waitForPilotHydration(page);
+        if (destination === '/frontend-pilot/users/dashboard') await waitForPilotHydration(page);
         await navigationDisclosure(page);
         const region = page.locator('[data-collection="owner"][data-region="main"]');
         const next = region.getByRole('link', {name: 'Next', exact: true});

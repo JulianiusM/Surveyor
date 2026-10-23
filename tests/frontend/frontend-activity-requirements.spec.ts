@@ -289,6 +289,38 @@ describe('Activity requirements production frontend', () => {
         expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Saved');
     });
 
+    it.each([
+        {selector: '#requiredShifts', value: '-1', field: 'baseline', reason: 'minimum'},
+        {selector: '#stayRequirement-2', value: '1.5', field: 'stay', reason: 'integer'},
+        {selector: '#roleRequirement-7', value: '1.5', field: 'role', reason: 'integer'},
+    ] as const)('explains invalid $field requirements without writing or replacing the draft', async invalid => {
+        const {wrapper, context, request} = await mounted(async () => json(configuration()));
+        const control = wrapper.get<HTMLInputElement>(invalid.selector);
+        await control.setValue(invalid.value);
+        await wrapper.get('[data-requirements-save]').trigger('click');
+        await flushPromises();
+
+        for (const locale of ['en', 'de'] as const) {
+            context.locale.value = locale;
+            await flushPromises();
+            const field = invalid.field === 'baseline' ? context.messages.value.t('activity.requirements.baseline')
+                : invalid.field === 'role' ? context.messages.value.t('activity.requirements.roles')
+                    : context.messages.value.t('validation.rowField', {
+                        row: context.messages.value.t('activity.requirements.stays'), number: 2,
+                        field: context.messages.value.t('activity.requirements.requiredShifts'),
+                    });
+            const reason = invalid.reason === 'minimum' ? context.messages.value.t('validation.minimum', {limit: 0})
+                : context.messages.value.t('validation.integer');
+            expect(wrapper.get('.pilot-notification.alert-danger').text())
+                .toContain(context.messages.value.t('validation.fieldError', {field, reason}));
+            expect(wrapper.get(invalid.selector).element).toBe(control.element);
+            expect(control.element.value).toBe(invalid.value);
+            expect(wrapper.get('[data-requirements-dirty]').text())
+                .toBe(context.messages.value.t('activity.requirements.unsaved'));
+        }
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+    });
+
     it('calculates only a draft and saves zero personal overrides through the generated operation', async () => {
         let saved = configuration();
         const writes: components['schemas']['ActivityRequirementsInput'][] = [];
@@ -315,6 +347,35 @@ describe('Activity requirements production frontend', () => {
         expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Saved');
     });
 
+    it('dismisses and renews calculation feedback without releasing its unsaved requirement values', async () => {
+        const {wrapper, request} = await mounted(async () => json(configuration()));
+        vi.useFakeTimers();
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{} as DOMRect] as unknown as DOMRectList);
+        try {
+            await wrapper.get('[data-requirements-baseline-calc]').trigger('click');
+            const calculated = (wrapper.get('#requiredShifts').element as HTMLInputElement).value;
+            expect(wrapper.find('.pilot-notification').exists()).toBe(true);
+            await wrapper.get('.pilot-notification .btn-close').trigger('click');
+            expect(wrapper.find('.pilot-notification').exists()).toBe(false);
+            expect((wrapper.get('#requiredShifts').element as HTMLInputElement).value).toBe(calculated);
+            expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Unsaved changes');
+
+            // Recalculating an already visible result renews that feedback's
+            // deadline, even when the engine returns identical values/text.
+            await wrapper.get('[data-requirements-baseline-calc]').trigger('click');
+            await vi.advanceTimersByTimeAsync(9000);
+            await wrapper.get('[data-requirements-baseline-calc]').trigger('click');
+            await vi.advanceTimersByTimeAsync(1000);
+            expect(wrapper.find('.pilot-notification').exists()).toBe(true);
+            await vi.advanceTimersByTimeAsync(9000);
+            await flushPromises();
+            expect(wrapper.find('.pilot-notification').exists()).toBe(false);
+            expect((wrapper.get('#requiredShifts').element as HTMLInputElement).value).toBe(calculated);
+            expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Unsaved changes');
+            expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+        } finally { vi.useRealTimers(); }
+    });
+
     it('preserves an outside-event override without silently selecting a registered profile', async () => {
         const saved = configuration();
         saved.overrides = [{id: '8', profileId: outsideId, profileName: 'Former participant', roleId: null, requiredShifts: 0}];
@@ -327,11 +388,88 @@ describe('Activity requirements production frontend', () => {
         expect((wrapper.get('[data-override-target="participant"]').element as HTMLSelectElement).value).toBe('profile:' + outsideId);
         expect(wrapper.get('[data-retained]').text()).toBe('Former participant');
         expect(wrapper.get('[data-override-target="required"]').attributes('disabled')).toBeDefined();
-        expect(wrapper.get('.override-row button').attributes('disabled')).toBeDefined();
+        expect(wrapper.get('.override-row button').attributes('disabled')).toBeUndefined();
         await wrapper.get('#allowExternalAssignees').setValue(true);
         await wrapper.get('[data-requirements-save]').trigger('click');
         await flushPromises();
         expect(writes).toEqual([expect.objectContaining({overrides: [{id: '8', profileId: outsideId, roleId: null, requiredShifts: 0}]})]);
+    });
+
+    it.each([true, false])('saves deliberate outside-event override removal while retaining other settings (current targets: %s)', async hasTargets => {
+        let saved = configuration();
+        if (!hasTargets) saved.overrideTargets = [];
+        saved.overrides = [{id: '8', profileId: outsideId, profileName: 'Former participant', roleId: null, requiredShifts: 0}];
+        const writes: components['schemas']['ActivityRequirementsInput'][] = [];
+        const {wrapper} = await mounted(async request => {
+            if (request.method === 'GET') return json(saved);
+            const input = await request.json() as components['schemas']['ActivityRequirementsInput'];
+            writes.push(input);
+            saved = {...saved, overrides: []};
+            return json({changed: true});
+        });
+        expect(wrapper.get('[data-retained]').text()).toBe('Former participant');
+        expect(wrapper.get('[data-override-target="required"]').attributes('disabled')).toBeDefined();
+        await wrapper.get('.override-row button').trigger('click');
+        expect(wrapper.find('.override-row').exists()).toBe(false);
+        expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Unsaved changes');
+        expect(writes).toEqual([]);
+        await wrapper.get('[data-requirements-save]').trigger('click');
+        await flushPromises();
+        expect(writes).toEqual([expect.objectContaining({overrides: [], removedOverrideIds: ['8'], assignmentMode: 'REQUIRED',
+            stayRequirements: [{stayDays: 1, requiredShifts: 1}, {stayDays: 2, requiredShifts: 2}]})]);
+        expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Saved');
+        expect(wrapper.find('.override-row').exists()).toBe(false);
+    });
+
+    it('keeps an unconfirmed explicit removal in the draft until save succeeds or reload is accepted', async () => {
+        const saved = configuration();
+        saved.overrides = [{id: '8', profileId: outsideId, profileName: 'Former participant', roleId: null, requiredShifts: 0}];
+        const writes: components['schemas']['ActivityRequirementsInput'][] = [];
+        const {wrapper} = await mounted(async request => {
+            if (request.method === 'GET') return json(saved);
+            writes.push(await request.json() as components['schemas']['ActivityRequirementsInput']);
+            return new Response(JSON.stringify({type: 'about:blank', title: 'Invalid settings', status: 400,
+                detail: 'Reload these requirements before saving.', requestId: 'override-removal-rejected'}),
+            {status: 400, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}});
+        });
+        await wrapper.get('.override-row button').trigger('click');
+        await wrapper.get('[data-requirements-save]').trigger('click');
+        await flushPromises();
+        expect(writes).toEqual([expect.objectContaining({overrides: [], removedOverrideIds: ['8']})]);
+        expect(wrapper.find('.override-row').exists()).toBe(false);
+        expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Unsaved changes');
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        await wrapper.get('[data-requirements-refresh]').trigger('click');
+        await flushPromises();
+        expect(wrapper.get('[data-retained]').text()).toBe('Former participant');
+        expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Saved');
+    });
+
+    it('does not resend confirmed removal IDs after a failed follow-up read', async () => {
+        const saved = configuration();
+        saved.overrides = [{id: '8', profileId: outsideId, profileName: 'Former participant', roleId: null, requiredShifts: 0}];
+        const writes: components['schemas']['ActivityRequirementsInput'][] = [];
+        const {wrapper} = await mounted(async request => {
+            if (request.method === 'GET') {
+                if (writes.length) throw new TypeError('Network unavailable');
+                return json(saved);
+            }
+            writes.push(await request.json() as components['schemas']['ActivityRequirementsInput']);
+            return json({changed: true});
+        });
+        await wrapper.get('.override-row button').trigger('click');
+        await wrapper.get('[data-requirements-save]').trigger('click');
+        await flushPromises();
+        expect(writes).toEqual([expect.objectContaining({removedOverrideIds: ['8']})]);
+        expect(wrapper.get('[data-requirements-dirty]').text()).toBe('Saved');
+        // Ordinary read retries must settle before controls admit another edit.
+        await vi.waitFor(() => expect(wrapper.get<HTMLInputElement>('#allowExternalAssignees').element.disabled).toBe(false), {timeout: 5000});
+        await wrapper.get('#allowExternalAssignees').setValue(true);
+        await wrapper.get('[data-requirements-save]').trigger('click');
+        await flushPromises();
+        expect(writes).toHaveLength(2);
+        expect(writes[1]).toMatchObject({overrides: [], allowExternalAssignees: true});
+        expect(writes[1]).not.toHaveProperty('removedOverrideIds');
     });
 
     it('retains a confirmed saved form when its following requirements read fails', async () => {

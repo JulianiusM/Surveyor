@@ -371,7 +371,7 @@ test('uploads, displays and removes an image, then archives, restores, schedules
 
     page.once('dialog', confirmation => confirmation.accept());
     await dialog.getByRole('button', {name: 'Delete permanently', exact: true}).click();
-    await expect(page).toHaveURL(/\/frontend-pilot$/u);
+    await expect(page).toHaveURL(/\/frontend-pilot\/users\/dashboard$/u);
     expect((await page.request.get(`/event/${event.id}`)).status()).toBe(404);
 });
 

@@ -4,6 +4,7 @@ import {RouterLink, useRoute} from 'vue-router';
 import type {FrontendLandingQuickCreate} from '../../../types/FrontendPilotTypes';
 import {usePilot} from '../../app/context';
 import {usePageTitle} from '../../composables/pageTitle';
+import {frontendOverviewPath} from '../../../modules/lib/frontendIdentity';
 
 const context = usePilot();
 const {messages, session} = context;
@@ -103,7 +104,7 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
             </div>
             <template v-if="session?.activeProfile">
                 <div class="d-flex flex-wrap justify-content-center gap-2 mb-4">
-                    <RouterLink class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" to="/frontend-pilot">
+                    <RouterLink class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" :to="frontendOverviewPath">
                         <i class="bi bi-speedometer2" aria-hidden="true"></i>{{ messages.t('landing.openDashboard') }}
                     </RouterLink>
                     <RouterLink class="btn btn-outline-light btn-lg d-inline-flex align-items-center gap-2"

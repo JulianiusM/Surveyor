@@ -146,14 +146,14 @@ function filterChoices(element: ParentNode) {
  * lifecycle and rendered controls remain their production implementations. */
 async function mounted(component: Component, props: Record<string, unknown>,
     handler: (request: Request) => Promise<Response> = async request => json(region(request)),
-    path = '/frontend-pilot', previous = '/before', shell?: Component, prepare?: (context: ReturnType<typeof createPilotContext>) => void) {
+    path = '/frontend-pilot/users/dashboard', previous = '/before', shell?: Component, prepare?: (context: ReturnType<typeof createPilotContext>) => void) {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createPilotContext({session}, true, request);
     context.hydrated.value = true;
     prepare?.(context);
     const componentProps = reactive({...props});
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot', component, props: () => componentProps},
+        {path: '/frontend-pilot/users/dashboard', component, props: () => componentProps},
         {path: '/frontend-pilot/packing/:listId', component, props: () => componentProps},
         {path: '/frontend-pilot/help', component, props: () => componentProps},
         {path: '/before', component: defineComponent({template: '<p>Before overview</p>'})},
@@ -180,6 +180,24 @@ async function mounted(component: Component, props: Record<string, unknown>,
 }
 
 describe('Overview Packing lifecycle actions', () => {
+    it.each(['/frontend-pilot/users/dashboard/', '/frontend-pilot/users/DASHBOARD'])(
+        'presents and refreshes admitted data at equivalent dashboard URL %s', async path => {
+            const {wrapper, router, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+                async captured => json(region(captured)), path);
+            expect(router.currentRoute.value.matched[0]!.path).toBe('/frontend-pilot/users/dashboard');
+            expect(wrapper.get('article.card').text()).toContain(card.title);
+
+            // A valid route spelling must not discard successful data as obsolete,
+            // either on entry or through the existing explicit read owner.
+            const reads = request.mock.calls.length;
+            await wrapper.get('button[aria-label="Refresh"]').trigger('click');
+            await flushPromises();
+            expect(request.mock.calls.length).toBeGreaterThan(reads);
+            expect(wrapper.get('article.card').text()).toContain(card.title);
+            expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+        },
+    );
+
     it.each([
         {restore: false, inherited: false, confirmation: 'packing.confirmArchive', success: 'overview.archived'},
         {restore: false, inherited: true, confirmation: 'packing.confirmArchiveIndependent', success: 'overview.archived'},
@@ -421,7 +439,7 @@ describe('visible resource recovery', () => {
         // A new component visit must recheck native GET admission even while the
         // old rejected query remains cached. Its former observer cannot suspend it.
         denied = false;
-        await router.push('/frontend-pilot');
+        await router.push('/frontend-pilot/users/dashboard');
         await flushPromises();
         expect(reads).toBe(2);
         expect(root.findComponent(OverviewCard).exists()).toBe(true);
@@ -465,7 +483,7 @@ describe('visible resource recovery', () => {
             return held.promise;
         }
         const {root, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, readJoinedRegion,
-            '/frontend-pilot', '/before', undefined, function prepareJoinedRead(context): void {
+            '/frontend-pilot/users/dashboard', '/before', undefined, function prepareJoinedRead(context): void {
                 const api = useOverviewApi(context);
                 const parameters = {collection: 'owner' as const, region: 'main' as const};
                 const scope = context.capture();
@@ -816,7 +834,7 @@ describe('visible resource recovery', () => {
                     totalCards: 1, hasNext: false});
             }
             const {wrapper, context} = await mounted(OverviewPage, {}, readCountRegion,
-                '/frontend-pilot' + (hiddenOpen ? '?owner_hidden_open=1' : ''));
+                '/frontend-pilot/users/dashboard' + (hiddenOpen ? '?owner_hidden_open=1' : ''));
             const ownerBadge = () => wrapper.get('[aria-controls="overview-owner"] .badge').text();
             expect(ownerBadge()).toBe('2');
             denyMain = true;
@@ -845,7 +863,7 @@ describe('visible resource recovery', () => {
         const {root, context} = await mounted(draft, {}, async () => {
             if (unavailable) throw new TypeError('The session connection failed.');
             return json(session);
-        }, '/frontend-pilot', '/before', App);
+        }, '/frontend-pilot/users/dashboard', '/before', App);
         const input = root.get<HTMLInputElement>('[data-session-draft]');
         await input.setValue('Unsaved session recovery draft');
         input.element.focus();
@@ -891,7 +909,7 @@ describe('visible resource recovery', () => {
             return limited ? new Response(JSON.stringify({type: 'urn:surveyor:problem:future-unavailable', title: 'Unavailable',
                 status: 503, detail: 'The session read is temporarily unavailable.', requestId: 'shell-session-deadline'}),
                 {status: 503, headers: {'Content-Type': 'application/json', 'Retry-After': '91'}}) : json(session);
-        }, '/frontend-pilot', '/before', App);
+        }, '/frontend-pilot/users/dashboard', '/before', App);
         const stop = context.start();
         cleanups.push(stop);
         await context.refreshSession();
@@ -929,7 +947,7 @@ describe('visible resource recovery', () => {
         const native = nativeOverviewRegion(projection);
         const nativeForm = native.querySelector<HTMLFormElement>('.js-overview-search')!;
         const {wrapper} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
-            async () => json(projection), '/frontend-pilot?owner_main_q=fixture');
+            async () => json(projection), '/frontend-pilot/users/dashboard?owner_main_q=fixture');
         const form = wrapper.get('form');
         const trigger = form.get('summary');
         const nativeTrigger = nativeForm.querySelector<HTMLElement>('.dropdown-toggle')!;
@@ -1021,7 +1039,7 @@ describe('visible resource recovery', () => {
             hiddenEntities: 0, regionEntities: 0, matchingEntities: 0, totalCards: 0, hasNext: false});
         const native = nativeOverviewRegion(projection);
         const {wrapper} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
-            async () => json(projection), '/frontend-pilot?owner_main_q=' + encodeURIComponent(value.query));
+            async () => json(projection), '/frontend-pilot/users/dashboard?owner_main_q=' + encodeURIComponent(value.query));
         expect(wrapper.find('input[type="search"]').exists()).toBe(!!native.querySelector('.js-overview-search'));
         if (value.canonical) {
             expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value)
@@ -1084,7 +1102,7 @@ describe('visible resource recovery', () => {
                 hiddenEntities: 0, regionEntities: 0, matchingEntities: 0, totalCards: 0, hasNext: false};
             return json(confirmed);
         }
-        const path = '/frontend-pilot' + (value.query ? '?owner_main_q=' + value.query : '');
+        const path = '/frontend-pilot/users/dashboard' + (value.query ? '?owner_main_q=' + value.query : '');
         const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, read, path);
         await wrapper.get('input[type="search"]').setValue(value.draft);
         await wrapper.get('form').trigger('submit');
@@ -1110,7 +1128,7 @@ describe('visible resource recovery', () => {
             return json(region(request));
         }
         const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, read,
-            '/frontend-pilot?owner_main_q=fixture');
+            '/frontend-pilot/users/dashboard?owner_main_q=fixture');
         const input = wrapper.get<HTMLInputElement>('input[type="search"]');
         input.element.focus();
         await input.setValue(' fixture ');
@@ -1131,7 +1149,7 @@ describe('visible resource recovery', () => {
 
     it('renders the native canonical search after Back reuses equal raw and canonical cached projections', async () => {
         const rawQuery = ' fixture ';
-        const previous = '/frontend-pilot?owner_main_q=' + encodeURIComponent(rawQuery);
+        const previous = '/frontend-pilot/users/dashboard?owner_main_q=' + encodeURIComponent(rawQuery);
         async function read(request: Request): Promise<Response> {
             const projection = region(request);
             return json({...projection, q: projection.q.trim()});
@@ -1560,7 +1578,7 @@ describe('native overview search and history', () => {
         // read fails. The visible fallback and its date remain one scoped observation.
         vi.setSystemTime(new Date('2026-10-11T07:01:00Z'));
         unavailable = true;
-        await router.push('/frontend-pilot?owner_main_page=2');
+        await router.push('/frontend-pilot/users/dashboard?owner_main_page=2');
         await flushPromises();
         expect(context.queryClient.getQueryData(overviewKeys.region(session.context, 'en',
             {collection: 'owner', region: 'main', q: undefined, type: undefined, page: '2',
@@ -1654,7 +1672,7 @@ describe('native overview search and history', () => {
                 messageKey: status === 403 ? 'api:errors.FORBIDDEN' : 'api:errors.NOT_FOUND', params: {}}),
                 {status, headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context}});
             return json(region(request));
-        }, '/frontend-pilot?owner_main_q=initial');
+        }, '/frontend-pilot/users/dashboard?owner_main_q=initial');
         const oldVariant = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main', q: 'older'});
         const translated = overviewKeys.region(session.context, 'de', {collection: 'owner', region: 'main', q: 'older'});
         const unrelated = overviewKeys.region(session.context, 'en', {collection: 'participant', region: 'hidden'});
@@ -1674,7 +1692,7 @@ describe('native overview search and history', () => {
         expect(context.queryClient.getQueryData(otherActor)).toBeDefined();
         expect(wrapper.text()).not.toContain(card.title);
 
-        await router.push('/frontend-pilot');
+        await router.push('/frontend-pilot/users/dashboard');
         await flushPromises();
         try {
             // A Header/Back-owned route change starts a fresh read. Its empty error
@@ -1808,7 +1826,7 @@ describe('native overview search and history', () => {
         const outside = document.createElement('button');
         document.body.append(outside);
         outside.focus();
-        await router.push('/frontend-pilot?owner_main_page=2');
+        await router.push('/frontend-pilot/users/dashboard?owner_main_page=2');
         await flushPromises();
         expect(wrapper.text()).toContain(card.title);
         expect(document.activeElement).toBe(outside);
@@ -1939,7 +1957,7 @@ describe('native overview search and history', () => {
 
     it('preserves native modified-click destinations without changing the current region or reading another page', async () => {
         const {wrapper, router, request, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
-            async request => json(eventRegion(request)), '/frontend-pilot?owner_main_q=fixture&owner_main_event=' + eventId);
+            async request => json(eventRegion(request)), '/frontend-pilot/users/dashboard?owner_main_q=fixture&owner_main_event=' + eventId);
         const original = router.currentRoute.value.fullPath;
         const labels = [context.messages.value.t('overview.next'), context.messages.value.t('overview.showAllLinked')];
         const links = wrapper.findAll('a').filter(link => labels.includes(link.text()));
@@ -1973,7 +1991,7 @@ describe('native overview search and history', () => {
 
     it('uses one native close target that clears hidden parent/child paging and preserves independent filters', async () => {
         const {wrapper, router, context} = await mounted(OverviewPage, {}, undefined,
-            `/frontend-pilot?owner_hidden_open=1&owner_hidden_event=${eventId}&owner_hidden_childPage=3&owner_hidden_q=saved&owner_main_page=2&participant_main_q=other`);
+            `/frontend-pilot/users/dashboard?owner_hidden_open=1&owner_hidden_event=${eventId}&owner_hidden_childPage=3&owner_hidden_q=saved&owner_main_page=2&participant_main_q=other`);
         const toggle = wrapper.findAll('a').find(link => link.text().startsWith(context.messages.value.t('overview.hidden'))
             && link.attributes('aria-controls') === 'overview-owner-hidden')!;
         const href = new URL(toggle.attributes('href')!, 'https://surveyor.invalid');
@@ -1988,7 +2006,7 @@ describe('native overview search and history', () => {
     it('retains native hidden disclosure in saved and committed navigation from a selected-event deep link', async () => {
         const {wrapper, router, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'hidden'},
             async request => json({...eventRegion(request), region: 'hidden', hiddenEntities: 2}),
-            `/frontend-pilot?owner_hidden_event=${eventId}&participant_main_q=other`);
+            `/frontend-pilot/users/dashboard?owner_hidden_event=${eventId}&participant_main_q=other`);
         const back = wrapper.findAll('a').find(link => link.text() === 'Back to overview')!;
         const href = new URL(back.attributes('href')!, 'https://surveyor.invalid');
         expect(href.searchParams.get('owner_hidden_open')).toBe('1');
@@ -2032,7 +2050,7 @@ describe('native overview search and history', () => {
         await input.setValue('');
         await vi.advanceTimersByTimeAsync(300);
         await flushPromises();
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot#overview-owner-main');
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard#overview-owner-main');
         expect(request).toHaveBeenCalledTimes(2);
         expect(wrapper.text()).toContain('Latest survey');
     });
@@ -2040,7 +2058,7 @@ describe('native overview search and history', () => {
     it('debounces typed filters for 300 ms, preserves focus and other regions, and replaces filter history', async () => {
         vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
         const {wrapper, root, router, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
-            undefined, '/frontend-pilot?participant_main_q=other&owner_main_page=2&owner_main_childPage=3');
+            undefined, '/frontend-pilot/users/dashboard?participant_main_q=other&owner_main_page=2&owner_main_childPage=3');
         const input = wrapper.get<HTMLInputElement>('input[type="search"]');
         input.element.focus();
         await input.setValue('first');
@@ -2102,9 +2120,9 @@ describe('native overview search and history', () => {
 
     it('applies typing during pending Back to the requested root rather than reopening the old event', async () => {
         vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
-        const previous = '/frontend-pilot?owner_main_q=seed&participant_main_q=other';
+        const previous = '/frontend-pilot/users/dashboard?owner_main_q=seed&participant_main_q=other';
         const {wrapper, router} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, undefined,
-            '/frontend-pilot?owner_main_q=old&owner_main_event=' + eventId + '&participant_main_q=other', previous);
+            '/frontend-pilot/users/dashboard?owner_main_q=old&owner_main_event=' + eventId + '&participant_main_q=other', previous);
         const backStarted = deferred<void>();
         const back = deferred<void>();
         const removeGuard = router.beforeResolve(async to => {
@@ -2241,7 +2259,7 @@ describe('mixed-family Overview integration', () => {
         // Isolate this read-only projection's subscription while retaining the
         // real cache's state reducer and notification delivery.
         const {wrapper, root, context, request, update} = await mounted(projection, {locale: 'en'}, undefined,
-            '/frontend-pilot', '/before', undefined, function observeSubscription(context) {
+            '/frontend-pilot/users/dashboard', '/before', undefined, function observeSubscription(context) {
                 const cache = context.queryClient.getQueryCache();
                 const subscribe = cache.subscribe.bind(cache);
                 vi.spyOn(cache, 'subscribe').mockImplementation(function subscribeProjection(listener) {
@@ -2412,12 +2430,12 @@ describe('mixed-family Overview integration', () => {
                 return json(mixedRegion(request, deletes ? [] : [selected]));
             });
         const defaultKey = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'});
-        await router.push('/frontend-pilot?owner_main_q=equipment');
+        await router.push('/frontend-pilot/users/dashboard?owner_main_q=equipment');
         await flushPromises();
         try {
             await wrapper.get('button.btn-danger').trigger('click');
             await flushPromises();
-            expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+            expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard');
             expect(heldRequest).toBeDefined();
             expect(context.queryClient.getQueryState(defaultKey)?.isInvalidated).toBe(true);
             const retained = wrapper.get<HTMLButtonElement>('button.btn-danger');
@@ -2648,13 +2666,13 @@ describe('mixed-family Overview integration', () => {
         const otherActorKey = overviewKeys.region('another-confirmed-deletion-actor', 'en', {collection: 'owner', region: 'main'});
         context.queryClient.setQueryData(otherActorKey, 'Other actor remains untouched');
         if (filtered) {
-            await router.push('/frontend-pilot?owner_main_q=equipment');
+            await router.push('/frontend-pilot/users/dashboard?owner_main_q=equipment');
             await flushPromises();
         }
         await wrapper.get('button.btn-danger').trigger('click');
         await flushPromises();
 
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard');
         expect(wrapper.find('article.js-item').exists()).toBe(false);
         expect(reads).toEqual(filtered ? ['', 'equipment', 'equipment', ''] : ['', '']);
         expect(request.mock.calls.filter(([value]) => (value as Request).method === 'DELETE')).toHaveLength(1);
@@ -2733,7 +2751,7 @@ describe('mixed-family Overview integration', () => {
         expect(reads).toHaveLength(2);
         await retry.trigger('click');
         await flushPromises();
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard');
         expect(wrapper.find('article.js-item').exists()).toBe(false);
         expect(wrapper.find('.status-notice.alert-success').exists()).toBe(false);
         expect(reads).toEqual(['/api/v1/overview', '/api/v1/overview', '/api/v1/overview']);
@@ -2756,7 +2774,7 @@ describe('mixed-family Overview integration', () => {
         }
 
         const {wrapper, router, context} = await mounted(OverviewRegion,
-            {collection: 'owner', region: 'main'}, serveDeletion, '/frontend-pilot?owner_main_q=delete');
+            {collection: 'owner', region: 'main'}, serveDeletion, '/frontend-pilot/users/dashboard?owner_main_q=delete');
         const stopDelivery = router.beforeEach(to => to.query.owner_main_q ? undefined : false);
         cleanups.push(stopDelivery);
         await wrapper.get('button.btn-danger').trigger('click');
@@ -2774,7 +2792,7 @@ describe('mixed-family Overview integration', () => {
         stopDelivery();
         await notice.get('button').trigger('click');
         await flushPromises();
-        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard');
         expect(writes).toHaveLength(1);
     });
 });

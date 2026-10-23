@@ -25,9 +25,9 @@ const {messages} = usePilot();
     </StatusNotice>
     <StatusNotice v-else-if="error" kind="warning" :last-updated-at="lastUpdatedAt"
         :retry-at="retryAt" :read-error="error">{{ messages.t(hasData ? 'state.stale' : 'state.loadFailed') }}</StatusNotice>
-    <!-- Survey keeps its existing Refresh row between warnings and loading.
-         Lists supply no intervening content. The fragment adds no layout wrapper
-         and never replaces admitted data or mounted drafts during background reads. -->
+    <!-- Features may supply contextual recovery while heading Refresh remains
+         independent. The fragment never replaces admitted data or mounted drafts
+         during background reads. -->
     <slot />
     <LoadingSkeleton v-if="!hasData && !denied && pending" v-bind="skeleton" />
 </template>

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Approved composition, deletion consent and Overview write freshness retained; final-review removal receipt admission/handoff and Activity cold-read Refresh reconciled through existing owners; no publication or new execution claim
+verification-scope: Shared presentation, compact creation permissions and generated-input feedback reconciled with directly requested interface corrections; existing read/command and publication boundaries retained; no new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -37,7 +37,7 @@ endpoints or permission policy. The following contracts describe how those owner
 | DTO to browser operation | `features/<feature>/api.ts`, `app/transport.ts`, generated operation and feature validators. |
 | Entry/read to authorized view | `composables/pageEntry.ts`, `app/queryKeys.ts`, `app/queryCache.ts`; the feature supplies policy/dependencies. |
 | Snapshot to draft/command/recovery | `metadataDraft.ts`, `command.ts`, shared feedback, confirmed-navigation and fresh-read owners. |
-| Matching detail read/command state to presentation | `useListDetail`/`useListCommands` retain lifetimes; `EntityDetailReadState`, `EntityListToolbar` and `CommandFeedback` render injected state/events without another query, draft or authority owner. |
+| Matching detail read/command state to presentation | `useListDetail`/`useListCommands` retain lifetimes; `EntityDetailReadState`, `RefreshButton` and `CommandFeedback` render injected state/events without another query, draft or authority owner. |
 | Matching entity interaction to its consumers | `EntityEntryPage`, `EntityHeader`, `EntitySettingsDialog`, `EntityMetadataEditor`, `EntityAccessEditor` and `identity/GuestEntryPage`; feature operations, query families and field normalization remain injected. |
 | Route to SSR/hydration | Existing Express route/renderer, `app/serializeBootstrap.ts`, `createApp.ts` and `mountPreservingDrafts.ts`. |
 | Initial content to usable controls | `app/context.ts` initialization helpers, route metadata and existing shell/shared controls. |
@@ -54,6 +54,9 @@ third-party dependencies and browser-safe backend/domain/catalog owners retain t
 creation. Callers pass errors, timestamps, retry actions and stale/cold classification; reads, drafts and commands
 remain with their existing owners. Shared settings composes Access only when the feature supplies its complete
 access operations and profile-query inputs as well as admitted server capabilities. Standalone Surveys supply none.
+`CreationPermissions` composes the matching Event/list creation and duplicate audience matrices in a closed-by-default
+disclosure. It keeps the controls mounted when closed; each form still owns masks, presets, admission and submission.
+Reopening must retain the selected audience and all draft grants. Surveys retain their separate participation model.
 Route metadata selects the shared loading composition for the actual module: Survey creation has three fields and
 recurring-choice rows, while voting has separate ballot/results tables and a two-select combination form. Decorative
 geometry introduces no controls, records or authority. Survey metadata ETags identify representations for draft
@@ -81,6 +84,13 @@ compiles standalone validators and their required runtime helpers. Feature chunk
 neither the browser nor server startup compiles schemas. openapi-fetch consumes the generated paths while
 `app/transport.ts` supplies headers, runtime validation, cancellation and status classification, retaining the Response.
 Types alone cannot validate received JSON. Do not introduce another schema language, validator configuration or router.
+
+For local generated-input rejection, `app/transport.ts`'s `generatedInputError` projects safe rule metadata onto
+feature-supplied visible field/row/day labels. `InvalidInputError` carries that typed diagnostic to the existing
+command/feedback owner; shared feedback translates it at render time and retains the same dismissal receipt across
+locale changes. Read validator errors immediately, since generated validators reuse them. Never expose raw validator
+messages, paths or submitted values, copy schema limits into another validator, dispatch a rejected write or discard
+its mounted inputs/files. Task-specific messages, such as Survey's minimum choice, can retain their catalog keys.
 
 After all current outputs are written successfully, generation removes only recognized obsolete direct browser
 validator modules/declarations carrying its exact generated banner. Cleanup anchors to the selected output root's
@@ -620,12 +630,13 @@ a string round trip would change that behavior. Description and capacity
 retain their native omitted names. Explicit hint styling preserves each feature's existing appearance.
 
 `EntityListCounters` presents the admitted Packing/Drivers counts and feature labels without calculating membership
-or capacity. `EntityListToolbar` presents their hint/Refresh row inside the original `table-responsive` parent,
-including before data arrives. Survey adopts its no-hint, end-aligned variant through its existing read-state slot.
-Activity keeps that same no-hint toolbar after its schedule, outside the data-only branch so cold recoverable
-failures retain manual Refresh. Its existing read action owns pending state and the server cooldown; validated
-detail denial or absence retires the toolbar with the private projection. Neither control adds a wrapper,
-chooses a read or changes scroll ownership.
+or capacity. `RefreshButton` places their existing read action beside settings in `EntityHeader`, while the inline-edit
+hint stays inside the `table-responsive` parent. Survey and Activity adopt the same heading action, outside their
+data-only branches so cold recoverable failures retain manual Refresh. Existing read actions own pending state
+and server cooldowns; Activity's validated denial retires Refresh, while list/Survey deliberate read recovery keeps
+its existing eligibility. `PageHeading`
+keeps entity and profile titles centered despite unequal parent/action widths. These presentation owners choose
+no reads and do not change scroll ownership.
 
 `EntityAssignees` and `EntityAssignmentActions` share names/removal
 and feature-supplied assignment/full wording. Each feature supplies its own operations, query families, grants and feedback.
@@ -657,9 +668,9 @@ owner: a method denial releases only its affected intent, while missing-root abs
 `EntityDetailReadState` shares the denied, stale/cold warning and missing-pending-data skeleton fragment across
 Packing, Drivers, Survey and Activity. Features pass the actual denied/error/data/pending state, timestamps, cooldown and route
 shape. Lists retain their `list.data`-based successful timestamp; Survey retains its displayed-data timestamp.
-Its slot preserves Survey's Refresh row between warnings and loading. The component never infers admission, replaces
-a retained draft or owns a query, receipt or retry timer. Common presentation does not authorize normalizing distinct
-existing timestamps or relocating a toolbar outside its scrolling/interstitial parent.
+Its optional slot accepts contextual recovery; heading Refresh retains its separate feature-owned eligibility.
+The component never infers admission, replaces a retained draft or owns a query, receipt or retry timer. Common
+presentation does not authorize normalizing distinct existing timestamps or changing a table's scroll ownership.
 
 #### Backend and method-policy contracts
 
@@ -1189,8 +1200,8 @@ header URL, token or translated filename, recreate the input or emit another sel
 `feedback.ts` binds notices to semantic receipts and owns their ten-second scheduling/cancellation lifetime.
 Repeated outcomes renew; locale/render changes neither renew expiry nor revive dismissed notices. Persistent
 conditions use status semantics and remain visible. `App` and `AppDialog` supply common page/dialog notification
-hosts through the read-only `noticeTargetKey` presentation reference. A zero-height sticky anchor and bounded
-overlay preserve document layout, focus and scroll; gaps do not intercept input. Notifications never call focus or
+hosts through the read-only `noticeTargetKey` presentation reference. A sticky host reserves the visible stack's
+natural height at its origin and releases it when empty; the bounded stack keeps dismissal reachable. Notifications never call focus or
 scroll to reproduce native submission/refresh jumps. This shared rule supersedes the historical local reveal behavior.
 Confirmed destinations/receipts survive failed delivery; warnings clear only through their own successful recovery.
 Dispose timers/listeners and preserve page-cache restoration behavior.

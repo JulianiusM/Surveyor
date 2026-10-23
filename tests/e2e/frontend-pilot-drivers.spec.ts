@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import type {components} from '../../src/types/api/v1';
 import {createE2EDriversList, createE2ELogin} from '../factories/e2eCoreFactory';
-import {closeModalForE2E, createResourceViaForm, expectVisiblePresentation, loginForE2E, readVisiblePresentation,
+import {closeModalForE2E, createResourceViaForm, expectVisiblePresentation, loginForE2E, projectCreationPermissionDisclosure, readVisiblePresentation,
     withProfileWorkflowFixtureForE2E, dismissFrontendSuccessNotifications, expectUsableFrontendLayout} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {createFrontendEventFixture, frontendEventHeaders as apiHeaders} from '../keywords/frontendEventE2EKeywords';
@@ -51,7 +51,7 @@ async function command(page: Page, id: string, suffix: string, method: string,
 /** Preserve original screenshots and raw measurements while asserting complete
  * visible content, constraints, painted identity and usable control fit. */
 async function presentation(page: Page, info: TestInfo, name: string, surface: Locator,
-    selectors: string[], focus?: Locator) {
+    selectors: string[], focus?: Locator, creation = false) {
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(function releaseFocus() {
         if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -67,7 +67,7 @@ async function presentation(page: Page, info: TestInfo, name: string, surface: L
     await info.attach(name, {path, contentType: 'image/png'});
     const measured = await readVisiblePresentation(surface, selectors);
     await info.attach(name + '-presentation', {body: JSON.stringify(measured, null, 2), contentType: 'application/json'});
-    return measured;
+    return creation ? projectCreationPermissionDisclosure(surface, measured) : measured;
 }
 
 for (const width of [1280, 390]) {
@@ -86,9 +86,14 @@ for (const width of [1280, 390]) {
             const prefix = pilot ? '/frontend-pilot' : '';
             const label = pilot ? 'vue' : 'native';
             await page.goto(`${prefix}/drivers/create?locale=en`, {waitUntil: 'domcontentloaded'});
-            if (pilot) await waitForPilotHydration(page);
+            if (pilot) {
+                await waitForPilotHydration(page);
+                const permissions = page.locator('[data-creation-permissions] .accordion-button');
+                await expect(permissions).toHaveAttribute('aria-expanded', 'false');
+                await permissions.click();
+            }
             const creation = await presentation(page, info, label + '-drivers-create', page.locator('main form').first(),
-                ['label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button']);
+                ['label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button'], undefined, true);
             if (pilot) expectVisiblePresentation(native.creation!, creation);
             else native.creation = creation;
 

@@ -125,7 +125,7 @@ describe('Event organizer workflows', () => {
         const cachedOverview = [overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'}),
             overviewKeys.region(session.context, 'de', {collection: 'participant', region: 'hidden'})];
         for (const key of cachedOverview) context.queryClient.setQueryData(key, {items: [owned]});
-        router.addRoute({path: '/frontend-pilot', component: defineComponent({template: '<p>Overview</p>'})});
+        router.addRoute({path: '/frontend-pilot/users/dashboard', component: defineComponent({template: '<p>Overview</p>'})});
         router.onError(() => {});
         await wrapper.findAll('.accordion-button')[1]!.trigger('click');
         await wrapper.get('[data-test="sibling-draft"]').setValue('Retain this draft');
@@ -141,7 +141,7 @@ describe('Event organizer workflows', () => {
         expect(wrapper.get<HTMLInputElement>('[data-test="sibling-draft"]').element.value).toBe('Retain this draft');
 
         confirmation.mockReset().mockReturnValue(true);
-        const stopFailure = router.beforeResolve(to => {if (to.path === '/frontend-pilot') throw new Error('Destination chunk unavailable');});
+        const stopFailure = router.beforeResolve(to => {if (to.path === '/frontend-pilot/users/dashboard') throw new Error('Destination chunk unavailable');});
         await button(wrapper, 'Delete').trigger('click'); await flushPromises();
         expect(finishDelete).toBeTypeOf('function');
         expect(button(wrapper, 'Delete').attributes('disabled')).toBeDefined();
@@ -161,7 +161,7 @@ describe('Event organizer workflows', () => {
         expect(button(wrapper, 'Delete').attributes('disabled')).toBeDefined();
         confirmation.mockReturnValue(true);
         await button(wrapper, 'Try again').trigger('click'); await flushPromises();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot');
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
         expect(confirmation).toHaveBeenCalledTimes(2);
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'GET')).toHaveLength(1);
@@ -200,7 +200,7 @@ describe('Event organizer workflows', () => {
         const placeholder = defineComponent({template: '<p>Destination</p>'});
         const router = createRouter({history: createMemoryHistory(), routes: [
             {path: '/frontend-pilot/event/:eventId/admin', component: EventPage},
-            {path: '/frontend-pilot', component: placeholder},
+            {path: '/frontend-pilot/users/dashboard', component: placeholder},
             {path: '/frontend-pilot/help', component: placeholder},
             {path: '/:pathMatch(.*)*', component: placeholder},
         ]});
@@ -232,7 +232,7 @@ describe('Event organizer workflows', () => {
         }
         router.onError(() => {});
         router.beforeResolve(function rejectOverview(to): void {
-            if (to.path === '/frontend-pilot') throw new Error('Controlled Overview delivery failure');
+            if (to.path === '/frontend-pilot/users/dashboard') throw new Error('Controlled Overview delivery failure');
         });
         const confirmation = vi.mocked(window.confirm);
         await wrapper.findAll('.dashboard-accordion-button')[1]!.trigger('click');

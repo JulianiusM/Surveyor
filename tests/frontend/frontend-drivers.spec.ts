@@ -81,6 +81,67 @@ async function mounted(component: Component, handler: (request: Request) => Prom
 }
 
 describe('Drivers production frontend consumers', () => {
+    it.each([
+        {control: '#quick-description', value: 'x'.repeat(65536), message: 'Description: Use no more than 65535 characters.'},
+        {control: '#quick-max', value: '2147483648', message: 'Max #: Enter a number no greater than 2147483647.'},
+    ])('explains rejected ride input in $control while retaining the readonly driver and draft', async ({control, value, message}) => {
+        const {wrapper, request} = await mounted(DriversPage, async () => json(list));
+        await wrapper.get(control).setValue(value);
+        const retained = wrapper.get<HTMLInputElement>(control).element;
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        expect(wrapper.get('.alert-danger').text()).toBe(message);
+        expect(wrapper.get('.alert-danger').classes()).toContain('pilot-notification');
+        expect(wrapper.get<HTMLInputElement>(control).element).toBe(retained);
+        expect(retained.value).toBe(value);
+        expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe(session.activeProfile!.name);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it.each(['before', 'after'] as const)('previews the %s edge and submits that exact Drivers position once', async edge => {
+        const writes: unknown[] = [];
+        const {wrapper} = await mounted(DriversPage, async request => {
+            if (request.method === 'PUT') { writes.push(await request.json()); return json({changed: true}); }
+            return json(list);
+        });
+        const moving = wrapper.get('[data-item-id="' + (edge === 'before' ? secondId : itemId) + '"]');
+        const target = wrapper.get('[data-item-id="' + (edge === 'before' ? itemId : secondId) + '"]');
+        vi.spyOn(target.element, 'getBoundingClientRect').mockReturnValue({top: 100, height: 60} as DOMRect);
+        await moving.trigger('dragstart');
+        await target.trigger('dragover', {clientY: edge === 'before' ? 110 : 150});
+        expect(moving.classes()).toContain('pilot-reorder-dragging');
+        expect(target.classes()).toContain('pilot-reorder-' + edge);
+        expect(writes).toEqual([]);
+        await target.trigger('drop');
+        await flushPromises();
+        expect(writes).toEqual([{itemIds: [secondId, itemId]}]);
+        expect(wrapper.find('.pilot-reorder-before, .pilot-reorder-after, .pilot-reorder-dragging').exists()).toBe(false);
+        await target.trigger('drop');
+        expect(writes).toHaveLength(1);
+    });
+
+    it('clears Drivers insertion feedback on leaving, cancellation and reorder revocation', async () => {
+        const {wrapper, context, request} = await mounted(DriversPage, async () => json(list));
+        const moving = wrapper.get('[data-item-id="' + secondId + '"]');
+        const target = wrapper.get('[data-item-id="' + itemId + '"]');
+        await moving.trigger('dragstart');
+        await target.trigger('dragover', {clientY: 0});
+        expect(target.classes()).toContain('pilot-reorder-before');
+        await target.trigger('dragleave');
+        expect(target.classes()).not.toContain('pilot-reorder-before');
+        await target.trigger('dragover', {clientY: 0});
+        await moving.trigger('dragend');
+        expect(target.classes()).not.toContain('pilot-reorder-before');
+        await moving.trigger('dragstart');
+        await target.trigger('dragover', {clientY: 0});
+        context.queryClient.setQueryData(driversKeys.detail(session.context, listId),
+            {data: {...list, capabilities: {...list.capabilities, reorder: false}}, etag: '"revoked"'});
+        await flushPromises();
+        expect(wrapper.find('.pilot-reorder-before, .pilot-reorder-after, .pilot-reorder-dragging').exists()).toBe(false);
+        await target.trigger('drop');
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+    });
+
     it('renders offering identity and passenger controls through the shared list presentation', async () => {
         const writes: string[] = [];
         const {wrapper} = await mounted(DriversPage, async request => {
@@ -151,9 +212,24 @@ describe('Drivers production frontend consumers', () => {
         expect(wrapper.findComponent(EntityListCreation).exists()).toBe(true);
         expect(wrapper.get<HTMLInputElement>('#create-title').element.value).toBe('Copied journeys');
         expect(wrapper.findAll('tbody tr')).toHaveLength(0);
+        const permissions = wrapper.get('[data-creation-permissions]');
+        const toggle = permissions.get('button[aria-controls="create-defaults-panel"]');
+        expect(toggle.attributes('aria-expanded')).toBe('false');
+        expect(permissions.get('#create-defaults-panel').isVisible()).toBe(false);
+        await toggle.trigger('click');
+        await permissions.get('#create-defaults-audience').setValue('guest');
+        const guestPermission = permissions.get<HTMLInputElement>('#create-defaults-guest-ACCESS_ITEMS');
+        await guestPermission.setValue(true);
+        await toggle.trigger('click');
+        expect(permissions.get('#create-defaults-panel').isVisible()).toBe(false);
+        await toggle.trigger('click');
+        expect(permissions.get('#create-defaults-guest-ACCESS_ITEMS').element).toBe(guestPermission.element);
+        expect(permissions.get<HTMLSelectElement>('#create-defaults-audience').element.value).toBe('guest');
+        await toggle.trigger('click');
         await wrapper.get('form').trigger('submit');
         await flushPromises();
-        expect(submitted).toEqual({title: 'Copied journeys', description: 'Copied description', eventId: null, defaultPermissions: defaults});
+        expect(submitted).toEqual({title: 'Copied journeys', description: 'Copied description', eventId: null,
+            defaultPermissions: {...defaults, guest: 1}});
         expect(router.currentRoute.value.path).toBe(`/frontend-pilot/drivers/${secondId}`);
     });
 
@@ -227,6 +303,32 @@ describe('Drivers production frontend consumers', () => {
         expect(wrapper.get<HTMLInputElement>('#quick-max').element.value).toBe('1');
         expect(wrapper.text()).toContain('Your change was saved, but the refreshed data could not be loaded.');
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(1);
+    });
+
+    it.each([
+        {control: '#create-title', value: 'x'.repeat(256), message: 'Title: Use no more than 255 characters.'},
+        {control: '#create-description', value: 'x'.repeat(65536), message: 'Description: Use no more than 65535 characters.'},
+    ])('explains a pasted Drivers creation error in $control before uploading its retained image', async ({control, value, message}) => {
+        const {wrapper, request, context} = await mounted(DriversCreatePage, creationRead, '/frontend-pilot/drivers/create');
+        await wrapper.get('#create-title').setValue('Weekend journeys');
+        await wrapper.get(control).setValue(value);
+        const chooser = wrapper.get<HTMLInputElement>('#create-header').element;
+        const file = chooseImage(chooser);
+        const retained = wrapper.get<HTMLInputElement>(control).element;
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        const feedback = wrapper.get('.alert-danger');
+        expect(feedback.text()).toBe(message);
+        expect(feedback.classes()).toContain('pilot-notification');
+        expect(wrapper.get<HTMLInputElement>(control).element).toBe(retained);
+        expect(retained.value).toBe(value);
+        expect(chooser.files?.[0]).toBe(file);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(feedback.text()).toContain('Gib höchstens');
+        expect(retained.value).toBe(value);
+        expect(chooser.files?.[0]).toBe(file);
     });
 
     it('retains the entered list and exact File after uncertain creation without replaying a multipart command', async () => {

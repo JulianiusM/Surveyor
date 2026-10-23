@@ -169,7 +169,7 @@ describe('drafts entered before hydration', () => {
         vi.stubGlobal('fetch', request);
         const account: components['schemas']['SessionView'] = {...session, kind: 'account',
             activeProfile: {id: profileId, name: 'Fixture'}, profiles: [{id: profileId, name: 'Fixture'}], logoutUrl: '/users/logout'};
-        const {container, router, initialize} = await nativeApplication('/frontend-pilot?owner_main_q=initial', {
+        const {container, router, initialize} = await nativeApplication('/frontend-pilot/users/dashboard?owner_main_q=initial', {
             session: account, overview: [],
         });
         expect(container.querySelector('main input')).toBeNull();
@@ -224,7 +224,7 @@ describe('drafts entered before hydration', () => {
         expect(request).toHaveBeenCalledOnce();
         const submitted = request.mock.calls[0]![0] as Request;
         expect(new URL(submitted.url).pathname).toBe('/api/v1/auth/login');
-        expect(await submitted.json()).toEqual({username: 'early-account', password: 'synthetic-early-password', next: '/frontend-pilot'});
+        expect(await submitted.json()).toEqual({username: 'early-account', password: 'synthetic-early-password', next: '/frontend-pilot/users/dashboard'});
         expect(context.bootstrap).not.toHaveProperty('password');
     }, 30_000);
 

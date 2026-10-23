@@ -4,10 +4,10 @@ documentation-metadata
 audience: Aktivitätsteilnehmer; Aktivitätsorganisatoren
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
-source-anchors: docs/user-guide/en/ACTIVITY_PLANS.md; src/locales/de.json; src/frontend/features/activity/; src/frontend/components/EntitySettingsDialog.vue; src/views/activity/export/schedule.pug; src/frontend/features/activity/ActivityRecommendations.vue; src/frontend/features/activity/recommendationDraft.ts; src/locales/
+verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
+source-anchors: docs/user-guide/en/ACTIVITY_PLANS.md; src/locales/de.json; src/frontend/features/activity/; src/frontend/components/EntitySettingsDialog.vue; src/views/activity/export/schedule.pug; src/frontend/features/activity/ActivityRecommendations.vue; src/frontend/features/activity/recommendationDraft.ts; src/locales/; src/frontend/components/permissions/CreationPermissions.vue
 heading-anchors: 1:activity-plans; 2:choose-your-task; 3:i-am-participating; 3:i-am-organizing; 2:before-you-begin; 2:participate-in-an-activity-plan; 3:find-a-slot; 3:join-a-whole-slot; 3:take-a-named-role; 3:leave-a-slot-or-role; 3:understand-assignment-warnings; 3:use-shared-text-fields; 2:organize-an-activity-plan; 3:create-an-activity-plan; 3:understand-the-tabs; 3:change-plan-properties; 3:link-change-or-remove-an-event; 3:add-and-edit-slots; 4:add-a-slot-after-creation; 4:edit-a-slot; 3:add-named-roles-to-a-slot; 3:manage-role-assignments; 3:review-participants; 3:configure-basic-assignment-rules; 3:change-permissions-and-administrators; 3:export-the-schedule; 2:advanced-requirements-and-assignment-recommendations; 3:set-participant-requirements; 4:understand-which-requirement-wins; 3:check-requirement-coverage; 3:generate-assignment-suggestions; 3:review-generated-suggestions; 3:stage-a-manual-assignment-change; 3:save-and-apply-the-review; 3:advanced-limitations; 2:archive-or-restore-a-plan; 2:troubleshooting; 3:i-see-registration-required; 3:join-or-take-is-unavailable; 3:a-slot-does-not-appear-under-open-slots; 3:i-joined-the-wrong-profile; 3:i-cannot-edit-slots-roles-participants-rules-settings-or-exports; 3:my-changes-in-rules-and-auto-assign-were-lost; 3:auto-generate-is-disabled; 3:requirement-coverage-says-the-configuration-is-incomplete; 3:recommendation-generation-became-stale-or-failed; 3:a-participant-still-needs-shifts-after-generation; 3:an-approved-change-was-not-applied; 2:related-guides
 next-review: activity-plan-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
@@ -145,7 +145,7 @@ Das Erstellen setzt ein angemeldetes vollständiges Benutzerkonto voraus. Das ak
    - **Beschreibung (optional)** — bis zu 16.000 Zeichen.
    - **Kopfbild (optional)** — JPEG, PNG oder GIF, bis 10 MiB.
    - **Veranstaltung zuordnen (optional)** — verbindet Anmeldung, Anwesenheit, Teilnehmer und erweiterte Zuweisungsfunktionen mit einer Veranstaltung.
-4. Prüfen Sie **Gruppenberechtigungen**. Diese regeln, wer den Plan ansehen, teilnehmen, bearbeiten, verwalten oder exportieren darf. Siehe [Berechtigungen und Freigaben](PERMISSIONS.md).
+4. Öffnen Sie **Gruppenberechtigungen** und prüfen Sie, wer den Plan ansehen, teilnehmen, bearbeiten, verwalten oder exportieren darf. Siehe [Berechtigungen und Freigaben](PERMISSIONS.md).
 5. Fügen Sie nach Auswahl des Datumsbereichs mindestens ein anfängliches Zeitfenster im Kalender hinzu:
    - Wählen Sie beim richtigen Tag **+ Einsatz**.
    - Geben Sie den **Titel** ein.

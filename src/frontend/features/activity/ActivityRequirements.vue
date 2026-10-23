@@ -94,7 +94,7 @@ function roleTitle(id: string): string {
     // the label does not create or authorize a role relationship.
     return configuration.value?.allRoles.find(role => role.id === id)?.title ?? String(id);
 }
-/** Former-event overrides remain visible but cannot be edited in place. */
+/** Former-event overrides remain visible and removable; their saved values stay fixed. */
 function retained(profileId: string): boolean {
     // A blank new selection is incomplete rather than a retained saved profile.
     return !!profileId && !targets.value.some(target => target.profileId === profileId);
@@ -119,6 +119,8 @@ function removeOverride(key: number): void {
     if (blocked.value || !draft.value) return;
     // Local row identity stays independent of persisted override IDs, including
     // newly added rows which have not received a server identity yet.
+    const removed = draft.value.overrides.find(row => row.key === key);
+    if (removed?.id) draft.value.removedOverrideIds.push(removed.id);
     draft.value.overrides = draft.value.overrides.filter(row => row.key !== key);
     markDirty();
 }
@@ -171,6 +173,9 @@ async function save(): Promise<void> {
         if (isActive() && context.isCurrent(scope) && resource === props.planId) {
             dirty.value = false;
             calculation.value = null;
+            // This removal is already committed even if the follow-up read
+            // fails. A later edit must not resend IDs which no longer exist.
+            if (draft.value) draft.value.removedOverrideIds = [];
             emit('changed');
         }
         return result;
@@ -223,7 +228,11 @@ async function save(): Promise<void> {
                         </div>
                     </div>
                 </StatusNotice>
-                <StatusNotice v-if="calculation" :kind="calculation.difference || calculation.reason ? 'warning' : 'info'" transient placement="notification">
+                <!-- Calculation writes the draft before presenting this result.
+                     Dismissal releases feedback only; another calculation renews
+                     its receipt without discarding the unsaved baseline. -->
+                <StatusNotice v-if="calculation" :kind="calculation.difference || calculation.reason ? 'warning' : 'info'"
+                    transient placement="notification" :renewal="calculation" @dismiss="calculation = null">
                     {{ messages.t('activity.requirements.calculated', {baseline: calculation.baseline}) }}
                     {{ calculation.difference ? messages.t('activity.requirements.closestBaseline', {count: Math.abs(calculation.difference)}) : messages.t('activity.requirements.exactBaseline') }}
                     <template v-if="calculation.reason === 'fixed-requirements-fill-capacity'">{{ messages.t('activity.requirements.fixedBaseline') }}</template>
@@ -348,7 +357,7 @@ async function save(): Promise<void> {
                             <div class="col-3 col-sm-2 col-lg-1 d-grid">
                                 <ActionButton type="button" class="btn-sm w-100" variant="outline-danger"
                                     :aria-label="messages.t('activity.requirements.removeOverride')"
-                                    :disabled="blocked || retained(row.profileId)" @click="removeOverride(row.key)">
+                                    :disabled="blocked" @click="removeOverride(row.key)">
                                     <i class="bi bi-x-lg" aria-hidden="true"></i>
                                 </ActionButton>
                             </div>

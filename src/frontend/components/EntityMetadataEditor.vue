@@ -326,8 +326,10 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
     <!-- One recovery action covers uncertainty, confirmed values awaiting authority
          and failed reads. Keep its node while an unknown command's read fails so
          the focused control is retained rather than replaced by another Refresh. -->
-    <div v-if="(unknown || awaitingAuthority || metadata.error.value) && !lostAuthority" class="mb-3">
-        <ActionButton :variant="unknown || awaitingAuthority ? 'outline-warning' : 'outline-secondary'" :state="refreshAction"
+    <div v-if="draft || ((unknown || awaitingAuthority || metadata.error.value) && !lostAuthority)" class="d-flex align-items-center justify-content-between gap-2 mb-3">
+        <h3 class="fs-5 mb-0">{{ messages.t('packing.properties') }}</h3>
+        <ActionButton v-if="(unknown || awaitingAuthority || metadata.error.value) && !lostAuthority"
+            :variant="unknown || awaitingAuthority ? 'outline-warning' : 'outline-secondary'" :state="refreshAction"
             @click="refresh()">
             {{ messages.t('common.refresh') }}
         </ActionButton>
@@ -348,7 +350,6 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
     <section v-if="draft" data-entity-section="properties">
         <!-- Metadata owns its baseline and focused draft while the settings dialog switches
                  panels. Other commands never discard or implicitly submit these fields. -->
-        <h3 class="fs-5">{{ messages.t('packing.properties') }}</h3>
         <!-- Shared transient notifications retain the command receipt; durable
              recovery stays available beside this independently owned draft. -->
         <div aria-live="polite">

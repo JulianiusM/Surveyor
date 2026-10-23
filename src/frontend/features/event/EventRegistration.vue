@@ -26,7 +26,6 @@ const requirements: Dietary[] = ['HALAL', 'KOSHER', 'ALLERGIES'];
 const fields = reactive({arrivalDate: '', departureDate: '', dietary: [] as Dietary[], allergyNotes: '', dietComment: ''});
 const baseline = ref('');
 let ownerId: string | null = null;
-const validation = ref(false);
 // Save and Cancel share protection and server refresh, while their initiating
 // buttons retain separate pending/focus and existing spinner presentation.
 const pendingControl = ref<'save' | 'cancel' | null>(null);
@@ -77,7 +76,7 @@ function resetFields(registration: components['schemas']['EventRegistration'] | 
         dietary: [...registration.dietary], allergyNotes: registration.allergyNotes, dietComment: registration.dietComment}
         : {arrivalDate: '', departureDate: '', dietary: [], allergyNotes: '', dietComment: ''});
     baseline.value = snapshot();
-    validation.value = false;
+    command.clearRecoveredError('event.registration.mealRequired');
 }
 
 /** Copy the native meal interaction: meat and fish can coexist, while selecting
@@ -93,6 +92,9 @@ function selectDiet(choice: Dietary, event: Event): void {
         selected.push(choice);
     }
     fields.dietary = selected;
+    // Correcting the missing meal retires only that local rejection, without
+    // erasing a distinct saved/unknown/server receipt from the shared owner.
+    if (selected.some(value => meals.includes(value))) command.clearRecoveredError('event.registration.mealRequired');
 }
 
 /** Submit once through the existing registration operation. Admission carries
@@ -100,8 +102,12 @@ function selectDiet(choice: Dietary, event: Event): void {
  * supplies it to the consumption owner, never a background detail refresh. */
 async function save(): Promise<void> {
     if (!saveAction.isAvailable()) return;
-    validation.value = props.event.requireDietaryInfo && !fields.dietary.some(value => meals.includes(value));
-    if (validation.value) return;
+    if (props.event.requireDietaryInfo && !fields.dietary.some(value => meals.includes(value))) {
+        // Local validation shares the same localized, sticky feedback receipt
+        // as generated/server rejections; no request or draft reset occurs.
+        command.setError('event.registration.mealRequired');
+        return;
+    }
     const eventId = props.event.id;
     const regToken = typeof route.query.regToken === 'string' ? route.query.regToken : undefined;
     const input: components['schemas']['EventRegistrationInput'] = {arrivalDate: fields.arrivalDate,
@@ -154,8 +160,6 @@ async function cancel(): Promise<void> {
             <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
             <CommandFeedback :feedback="command.feedback" part="uncertain"
                 :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="recover" />
-            <StatusNotice v-if="validation" kind="danger">{{ messages.t('event.registration.mealRequired') }}</StatusNotice>
-
             <!-- Saved dates remain visible above the independently editable draft. -->
             <div v-if="event.registration" class="row g-3">
                 <div class="col-md-6">

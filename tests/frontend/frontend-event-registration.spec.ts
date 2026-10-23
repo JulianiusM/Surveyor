@@ -23,6 +23,37 @@ async function enterDates(wrapper: Awaited<ReturnType<typeof mountFrontendEvent>
 }
 
 describe('Event participant registration', () => {
+    it('shares sticky localized validation feedback while preserving and correcting the registration draft', async () => {
+        const event = createFrontendEventView({requireDietaryInfo: true});
+        const mounted = await mountFrontendEvent(EventRegistration, async () => json({changed: true}),
+            {event, refresh: async () => {}});
+        cleanups.push(mounted.dispose);
+        await enterDates(mounted.wrapper);
+        const arrival = mounted.wrapper.get<HTMLInputElement>('[name="arrivalDate"]');
+        await mounted.wrapper.get('form').trigger('submit');
+        expect(mounted.request).not.toHaveBeenCalled();
+        const feedback = mounted.wrapper.get('.pilot-notification.alert-danger');
+        expect(feedback.text()).toContain(mounted.context.messages.value.t('event.registration.mealRequired'));
+        expect(feedback.element.closest('.pilot-notice-region')).not.toBeNull();
+
+        mounted.context.locale.value = 'de';
+        await flushPromises();
+        expect(mounted.wrapper.get('.pilot-notification.alert-danger').element).toBe(feedback.element);
+        expect(feedback.text()).toContain(mounted.context.messages.value.t('event.registration.mealRequired'));
+        expect(mounted.wrapper.get('[name="arrivalDate"]').element).toBe(arrival.element);
+        expect(arrival.element.value).toBe('2027-06-01');
+        await mounted.wrapper.get('#diet-meat').setValue(true);
+        expect(mounted.wrapper.find('.pilot-notification.alert-danger').exists()).toBe(false);
+        expect(mounted.request).not.toHaveBeenCalled();
+
+        await mounted.wrapper.get('#diet-meat').setValue(false);
+        await mounted.wrapper.get('form').trigger('submit');
+        await mounted.wrapper.get('.pilot-notification .btn-close').trigger('click');
+        expect(mounted.wrapper.find('.pilot-notification').exists()).toBe(false);
+        expect(arrival.element.value).toBe('2027-06-01');
+        expect(mounted.request).not.toHaveBeenCalled();
+    });
+
     it.each(['save', 'cancel'] as const)('marks only registration %s pending while the shared command blocks both controls', async kind => {
         const event = createFrontendEventView({requireDietaryInfo: false, registration: {id: '17', arrivalDate: '2027-06-01',
             departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''}});

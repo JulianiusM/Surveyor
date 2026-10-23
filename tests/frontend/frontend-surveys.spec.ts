@@ -11,6 +11,8 @@ import {createPilotContext, observeInitialDocument, pilotContextKey} from '../..
 import {surveyKeys} from '../../src/frontend/app/queryKeys';
 import SurveyPage from '../../src/frontend/features/surveys/SurveyPage.vue';
 import SurveyCreatePage from '../../src/frontend/features/surveys/SurveyCreatePage.vue';
+import {useSurveysApi} from '../../src/frontend/features/surveys/api';
+import {InvalidInputError} from '../../src/frontend/app/transport';
 
 const surveyId = '11111111-1111-4111-8111-111111111111';
 const profileId = '22222222-2222-4222-8222-222222222222';
@@ -103,6 +105,7 @@ describe('Survey production frontend consumers', () => {
         const combination = wrapper.get<HTMLButtonElement>('#survey-add-combination button[type="submit"]');
         const initiator = kind === 'ballot' ? ballot : combination;
         const sibling = kind === 'ballot' ? combination : ballot;
+        if (kind === 'combination') await wrapper.get('#survey-add-weekday').setValue('TUE');
         await wrapper.get(kind === 'ballot' ? '#survey-ballot' : '#survey-add-combination').trigger('submit');
         await flushPromises();
         try {
@@ -260,35 +263,89 @@ describe('Survey production frontend consumers', () => {
             combinations: [{weekday: 'THU', nthWeek: '4'}]});
     });
 
-    it('rejects creation after removing the last recurrence without dispatch or losing the draft', async () => {
+    it('keeps the last recurring choice editable and submits the retained draft', async () => {
         let submitted: unknown;
-        const {wrapper, request, context, router} = await mounted(SurveyCreatePage, async request => {
+        const {wrapper, request, router} = await mounted(SurveyCreatePage, async request => {
             if (request.method === 'GET') return json({entry: {kind: 'render'}, context: {}});
             submitted = JSON.parse(String((await request.formData()).get('data')));
             return json({id: copyId}, 201);
         }, '/frontend-pilot/survey/create');
         await wrapper.get('#title').setValue('Keep my survey');
         await wrapper.get('#description').setValue('Keep my entered instructions');
+        expect(wrapper.get<HTMLButtonElement>('.remove-combination-btn').element.disabled).toBe(true);
         await wrapper.get('.remove-combination-btn').trigger('click');
-        await wrapper.get('#surveyForm').trigger('submit');
-        await flushPromises();
-
-        // The actual generated request validator rejects the empty array before
-        // multipart delivery. This is a definite rejection, so editing can recover.
-        expect(request.mock.calls.filter(([value]) => (value as Request).method === 'POST')).toHaveLength(0);
-        expect(wrapper.text()).toContain(context.messages.value.t('api:errors.VALIDATION_FAILED'));
         expect(wrapper.get<HTMLInputElement>('#title').element.value).toBe('Keep my survey');
         expect(wrapper.get<HTMLTextAreaElement>('#description').element.value).toBe('Keep my entered instructions');
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/survey/create');
-        expect(wrapper.findAll('#combinationTable tr')).toHaveLength(0);
-
-        await wrapper.get('#addCombinationBtn').trigger('click');
+        expect(wrapper.findAll('#combinationTable tr')).toHaveLength(1);
         await wrapper.get('#surveyForm').trigger('submit');
         await flushPromises();
         expect(request.mock.calls.filter(([value]) => (value as Request).method === 'POST')).toHaveLength(1);
         expect(submitted).toEqual({title: 'Keep my survey', description: 'Keep my entered instructions',
             combinations: [{weekday: 'MON', nthWeek: '1'}]});
         expect(router.currentRoute.value.path).toBe(`/frontend-pilot/survey/${copyId}`);
+    });
+
+    it('explains a duplicate existing combination through shared information feedback without writing', async () => {
+        const {wrapper, request, context} = await mounted(SurveyPage, async () => json(survey));
+        await wrapper.get('#survey-add-combination').trigger('submit');
+        await flushPromises();
+        expect(request.mock.calls.filter(([value]) => (value as Request).method === 'POST')).toHaveLength(0);
+        const notice = wrapper.get('.alert-info');
+        expect(notice.text()).toContain(context.messages.value.t('survey.combinationAlreadyPresent'));
+        expect(wrapper.find('.alert-warning').exists()).toBe(false);
+        expect(wrapper.get<HTMLSelectElement>('#survey-add-weekday').element.value).toBe('MON');
+
+        // Message identity belongs to the common feedback owner, so translating
+        // a retained result does not leave old-language feature text behind.
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(notice.text()).toContain(context.messages.value.t('survey.combinationAlreadyPresent'));
+    });
+
+    it('explains a duplicate added since the last read without an uncertainty warning or automatic replay', async () => {
+        const {wrapper, request, context} = await mounted(SurveyPage, async request => {
+            if (request.method === 'GET') return json(survey);
+            return json({type: 'urn:surveyor:problem:survey-combination-exists', title: 'Already present', status: 409,
+                detail: 'This combination is already present.', requestId: 'survey-duplicate',
+                code: 'SURVEY_COMBINATION_EXISTS', messageKey: 'survey.combinationAlreadyPresent', params: {}}, 409);
+        });
+        await wrapper.get('#survey-add-weekday').setValue('TUE');
+        await wrapper.get('#survey-add-combination').trigger('submit');
+        await flushPromises();
+        expect(wrapper.get('.alert-info').text()).toContain(context.messages.value.t('survey.combinationAlreadyPresent'));
+        expect(wrapper.find('.alert-warning').exists()).toBe(false);
+        expect(wrapper.get<HTMLButtonElement>('#survey-add-combination button').element.disabled).toBe(false);
+        expect(wrapper.get<HTMLSelectElement>('#survey-add-weekday').element.value).toBe('TUE');
+        expect(request.mock.calls.filter(([value]) => (value as Request).method === 'POST')).toHaveLength(1);
+    });
+
+    it.each(['title', 'duplicate'] as const)('explains %s creation validation and preserves the complete editable draft', async failure => {
+        const {wrapper, request, context} = await mounted(SurveyCreatePage, async () => json({entry: {kind: 'render'}, context: {}}),
+            '/frontend-pilot/survey/create');
+        await wrapper.get('#title').setValue(failure === 'title' ? '   ' : 'Keep my survey');
+        await wrapper.get('#description').setValue('Keep my instructions');
+        if (failure === 'duplicate') await wrapper.get('#addCombinationBtn').trigger('click');
+        await wrapper.get('#surveyForm').trigger('submit');
+        await flushPromises();
+        const key = failure === 'title' ? 'survey.titleInvalid' : 'survey.combinationAlreadyPresent';
+        expect(wrapper.text()).toContain(context.messages.value.t(key));
+        expect(request.mock.calls.filter(([value]) => (value as Request).method === 'POST')).toHaveLength(0);
+        expect(wrapper.get<HTMLTextAreaElement>('#description').element.value).toBe('Keep my instructions');
+        expect(wrapper.findAll('#combinationTable tr')).toHaveLength(failure === 'duplicate' ? 2 : 1);
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(wrapper.text()).toContain(context.messages.value.t(key));
+    });
+
+    it('rejects a programmatic empty combination submission with an actionable typed error before delivery', async () => {
+        const request = vi.fn<typeof fetch>();
+        const context = createPilotContext({session}, true, request);
+        cleanups.push(async () => {context.queryClient.clear(); context.updates.dispose();});
+        const result = useSurveysApi(context).createSurvey({title: 'Survey', description: '', combinations: []}, null, context.capture());
+        await expect(result).rejects.toBeInstanceOf(InvalidInputError);
+        await expect(result).rejects.toMatchObject({messageKey: 'survey.combinationsRequired'});
+        expect(request).not.toHaveBeenCalled();
     });
 
     it('keeps an uncertain creation and its selected File without automatic multipart replay', async () => {

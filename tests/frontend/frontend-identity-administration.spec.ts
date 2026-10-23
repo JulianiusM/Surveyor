@@ -61,7 +61,7 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
         {path: '/frontend-pilot/users/profile', component: ProfileAdministrationPage, meta: {profileMode: 'edit'}},
         {path: '/frontend-pilot/users/profile/manage', component: ProfileAdministrationPage, meta: {profileMode: 'manage'}},
         {path: '/frontend-pilot/users/profile/create', component: ProfileAdministrationPage, meta: {profileMode: 'create'}},
-        {path: '/frontend-pilot', component: defineComponent({template: '<p>Overview destination</p>'})},
+        {path: '/frontend-pilot/users/dashboard', component: defineComponent({template: '<p>Overview destination</p>'})},
         {path: '/frontend-pilot/users/login', component: defineComponent({template: '<p>Account login destination</p>'})},
     ]});
     const stopDocument = observeInitialDocument(context, router);
@@ -340,7 +340,7 @@ describe('profile administration consumers', () => {
         expect(payload).toEqual({profileId: otherId});
         expect(context.session.value?.activeProfile?.id).toBe(otherId);
         expect(context.queryClient.getQueryData(['private-old-profile'])).toBeUndefined();
-        expect(router.currentRoute.value.path).toBe('/frontend-pilot');
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
     });
 
     it('retires private form fields and cached projections after a validated denial', async () => {

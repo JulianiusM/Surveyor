@@ -3,8 +3,8 @@
 /* Paused enhanced reads retain their real href for modified/new-tab navigation.
    Ordinary clicks use the same action admission as the visible disabled state. */
 .pilot-app a.btn[aria-disabled="true"]:not(.disabled) { opacity: var(--bs-btn-disabled-opacity, .65); }
-/* Contextual page notices remain in the document. Transient notifications use
-   the separate shared overlay, so this grouping adds no containing layout box. */
+/* Contextual page notices and transient notifications share the document flow.
+   This contextual grouping adds no extra containing layout box. */
 .pilot-page-notices { display: contents; }
 .pilot-nav-dropdown > summary { list-style: none; cursor: pointer; }
 .pilot-nav-dropdown > summary::-webkit-details-marker { display: none; }
@@ -59,21 +59,27 @@
    rather than a locale or fixed column count, determines the number per row. */
 .pilot-choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); gap: .5rem; }
 .pilot-choice-grid .form-check-label { overflow-wrap: normal; }
-/* Notifications overlay the nearest page/dialog scope. The zero-height sticky
-   anchor never changes a draft's position, and gaps do not intercept its input.
-   A bounded stack keeps dismissal reachable without moving page focus/scroll. */
-.pilot-notice-region { position: sticky; top: 0; z-index: 1035; height: 0; min-height: 0; flex: 0 0 0; pointer-events: none; }
-.pilot-notice-stack { position: absolute; inset: 0 0 auto; display: grid; gap: .5rem;
+/* A sticky host reserves its real height at its original position. The stack
+   becomes empty on dismissal/expiry, releasing that space without a stale gap.
+   Sticky positioning keeps results visible after scrolling past their origin;
+   no notification changes focus or requests a document/dialog scroll. */
+.pilot-notice-region { position: sticky; top: 0; z-index: 1035; min-height: 0; flex: 0 0 auto; pointer-events: none; }
+.pilot-notice-stack { display: grid; gap: .5rem;
     max-height: min(65dvh, 32rem); overflow-y: auto; overscroll-behavior: contain; pointer-events: none; }
+.pilot-notice-stack:not(:empty) { margin-bottom: 1rem; }
 .pilot-notification { min-width: 0; max-width: 100%; margin: 0 !important; overflow-wrap: anywhere; pointer-events: auto; }
 .pilot-dialog .pilot-notice-region { z-index: 3; }
 /* SSR has no mounted injection target yet. Its local origin uses the same
-   zero-height overlay before hydration relocates the unchanged receipt. */
+   natural height before hydration relocates the unchanged receipt. */
 .pilot-notice-origin { display: contents; }
-.pilot-notice-origin.pilot-notice-region { display: block; }
+.pilot-notice-origin.pilot-notice-region { display: block; margin-bottom: 1rem; }
 .pilot-notice-origin.pilot-notice-region > .pilot-notification {
-    position: absolute; inset: 0 0 auto; max-height: min(65dvh, 32rem); overflow-y: auto;
+    max-height: min(65dvh, 32rem); overflow-y: auto;
 }
+/* The header keeps one fixed slot for route delivery. A small spinner conveys
+   pending navigation without inserting a skeleton row above the current page. */
+.pilot-navigation-indicator { display: inline-flex; width: 1rem; height: 1rem; margin-inline-start: .5rem; }
+.pilot-navigation-indicator .spinner-border { width: 1rem; height: 1rem; }
 .pilot-dialog-backdrop { position: fixed; inset: 0; z-index: 1050; background: rgb(0 0 0 / 50%); }
 .pilot-dialog { position: fixed; z-index: 1055; inset: 1.75rem auto auto 50%; transform: translateX(-50%);
     --bs-modal-header-padding-x: 1rem; --bs-modal-header-padding-y: 1rem; --bs-modal-title-line-height: 1.5;
@@ -149,6 +155,16 @@
 .pilot-skeleton-animated { animation: pilot-skeleton-pulse 1.6s ease-in-out infinite; }
 .pilot-skeleton-shapes.card { gap: 0; }
 .pilot-skeleton-page-header .pilot-skeleton-heading { width: 60%; height: clamp(1.75rem, 4vw, 2.5rem); margin: 0 auto; }
+/* Shared page headings retain their centered h1 proportions and the mobile
+   action row through admission. Geometry never exposes a real control/grant. */
+.pilot-skeleton-balanced-header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); align-items: center; gap: 1rem; padding: 1rem; }
+.pilot-skeleton-balanced-header > .pilot-skeleton-heading { grid-column: 2; width: 100%; font-size: calc(1.375rem + 1.5vw); height: 1.2em; }
+.pilot-skeleton-balanced-header > .pilot-skeleton-header-actions { grid-column: 3; justify-self: end; width: 2rem; height: 1.9375rem; }
+/* Entity Settings uses the normal button height beside compact Refresh. */
+:is(.pilot-skeleton-list-detail, .pilot-skeleton-activity, .pilot-skeleton-survey, .pilot-skeleton-event, .pilot-skeleton-event-admin) .pilot-skeleton-header-actions { height: 2.375rem; }
+@media (min-width: 1200px) {
+    .pilot-skeleton-balanced-header > .pilot-skeleton-heading { font-size: 2.5rem; }
+}
 .pilot-skeleton-content.card-body { gap: 1.5rem; }
 .pilot-skeleton-bar { display: block; min-width: 0; height: 1rem; border-radius: var(--bs-border-radius-sm);
     background: currentColor; opacity: .18; }
@@ -186,6 +202,9 @@
     border-top: 1px solid var(--bs-border-color-translucent); }
 @keyframes pilot-skeleton-pulse { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
 @media (max-width: 767.98px) {
+    .pilot-skeleton-balanced-header { grid-template-columns: minmax(0, 1fr); }
+    .pilot-skeleton-balanced-header > .pilot-skeleton-heading { grid-column: 1; }
+    .pilot-skeleton-balanced-header > .pilot-skeleton-header-actions { grid-column: 1; justify-self: center; }
     .pilot-skeleton-summary { grid-template-columns: minmax(0, 1fr); }
     .pilot-skeleton-form-footer-half, .pilot-skeleton-form-footer-two-thirds { width: 100%; }
     /* The participant roster alone folds email into the name column below md.
@@ -203,3 +222,15 @@
 @media (prefers-reduced-motion: reduce) {
     .pilot-skeleton-animated, .pilot-app .spinner-border, .pilot-dialog .spinner-border { animation: none; }
 }
+
+/* One gesture owner supplies these classes to lists and schedule cards. Inset
+   edges show the actual insertion position without changing row/card geometry. */
+.pilot-reorder-dragging { opacity: .5; }
+.pilot-reorder-before { box-shadow: inset 0 3px var(--bs-info); }
+.pilot-reorder-after { box-shadow: inset 0 -3px var(--bs-info); }
+/* Collapsed table borders and Bootstrap's cell background shadows otherwise
+   cover a row shadow. Preserve the table's existing background under the edge. */
+tr.pilot-reorder-before > * { box-shadow: inset 0 3px var(--bs-info),
+    inset 0 0 0 9999px var(--bs-table-bg-state, var(--bs-table-bg-type, var(--bs-table-accent-bg))); }
+tr.pilot-reorder-after > * { box-shadow: inset 0 -3px var(--bs-info),
+    inset 0 0 0 9999px var(--bs-table-bg-state, var(--bs-table-bg-type, var(--bs-table-accent-bg))); }

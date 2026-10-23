@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Approved readiness corrections and final-review deletion receipt admission and Activity cold-read recovery implemented and independently reviewed; renewed scoped execution and separate P11 boundaries retained
+verification-scope: Full interface follow-up, Home restoration and compact permissions independently reviewed; full frontend/unit results, final builds, finite built-client runs and database-test limits recorded; P11 boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -1436,3 +1436,98 @@ follow-up. All five implemented entity families already adopt the shared guest/e
 owners where their responsibilities match. Distinct ride, survey, activity and finance semantics stay in their owners. Inspect
 all current matching Vue consumers and adopt shared changes together; preserve native isolation, actual backend
 reuse and every existing phase-specific exception. The live phase plan is a contract, not inferred authorization.
+
+## Reported interface corrections: implementation and review (2026-10-23)
+
+The maintainer's direct request and [correction plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md#reported-interface-correction-plan-2026-10-23)
+govern this bounded change. Earlier zero-height notification and interstitial-toolbar receipts above are historical;
+current App/AppDialog hosts reserve natural flow space, and matching pages adopt `PageHeading`/`RefreshButton`.
+Event administration shares entity settings placement. Navigation retains its mounted view while a header spinner
+reports delivery. Shared skeletons retain centered headings and explicitly declared profile/action geometry.
+
+Packing, Drivers and Activity adopt the same before/after drop preview. Requirements use explicit removed saved
+IDs under the existing controller lock, preserving omitted former-event overrides and native behavior. Survey
+creation retains one choice, generated validation produces actionable wording, and both known and stale-read
+duplicates use direct informational feedback. Controller/DBAL ownership, existing operation guarantees, native
+isolation and separate cutover/publication/deployment boundaries remain.
+
+Executed evidence for this correction:
+
+- Full frontend Vitest selection: 57 files, 1,427 passing tests and one stale assertion expecting two parent links.
+  The single responsive-link assertion was corrected without removing navigation checks; its four-test file then
+  passed. The final three-file loading/shell/content rerun passed 133 tests after Boolean-default and geometry fixes.
+- Four focused API-problem/contract/localization unit files passed 61 tests. Survey/command and requirements/reorder
+  selections also passed, covering invalid local input, duplicate responses, draft retention and saved-removal cleanup.
+- Final coherent isolated built-browser selection passed 43 cases at 1280px/390px, including notification
+  reserve/stick/release, centered headers, complete initial/loaded header heights, same-node Refresh focus,
+  navigation without the line, and the painted insertion edge before release. Root and the relevant agents
+  inspected the captured originals. Fixtures block the external icon font; icon artwork itself is not certified.
+  Compact Refresh now retains its normal hit area while that font is absent or loading.
+- Server build, client/SSR frontend checks/builds, final test typecheck and the final CSS-only client/SSR Vite rebuild
+  passed. Development-policy and whitespace checks passed; production freeze/amendment boundary reported zero findings.
+- The advisory documentation report has no broken links, metadata, classification or profile errors; its existing
+  source-baseline mismatch remains visible and was not rebased to hide changes.
+
+New real-persistence regressions cover explicit override-ID validation/omission preservation and Survey unique-index
+rejection, but were **not run**: the available account has privileges beyond the dedicated disposable schema.
+No schema reset, database-user change or integrated E2E run was performed for this task. Isolated client results
+do not establish those persistence boundaries or exhaustive parity.
+
+Independent nonauthors reviewed shared presentation/loading, Survey validation/error classification and override/
+reorder boundaries; root reviewed actual adoption, authorization provenance, readable contracts and lifecycle
+preservation. Identified issues were corrected and relevant checks rerun. The plan separately records the remaining
+reachable Packing/Activity creation diagnostic gaps and their proposed shared presentation remedy; those follow-ups
+were not implemented by that earlier receipt. The follow-up below completes them under the subsequent direct request.
+
+## Full interface follow-up: implementation and renewed review (2026-10-23)
+
+The maintainer explicitly requests full plan implementation and another review of all migrated areas, corrects the
+unapproved Home replacement and requests compact creation permissions. Public Home is restored at the pilot root,
+with `/home` retained as an alias; personal Overview uses `/frontend-pilot/users/dashboard`. Shell links, default
+identity returns, contextual Help and confirmed entity-removal delivery agree. Explicit valid return destinations
+remain valid. Dashboard history/query regions also admit Router-equivalent case and trailing-slash spellings.
+
+`CreationPermissions` is the single closed-by-default disclosure over the existing matrix in matching Event/list
+creation and list duplication. Closing retains the actual controls, audience and selected masks, including masks
+submitted while closed. Survey retains its intentional permissions exception. English/German runtime Help now
+explicitly opens the section; native frontend/flat Help and production guides remain untouched.
+
+Shared generated diagnostics now identify visible fields and, where needed, actual row/day positions through the
+existing typed error and feedback owners. Packing, Drivers, Activity, Event, Survey and user-editable Finance
+validators adopt that owner. This completes the initial Packing/Activity findings and analogous quick-add, role,
+shared-text and numeric requirement cases. Local rejection dispatches no write and retains mounted drafts/files.
+Finance preserves intentionally unbounded participant/pool descriptions and captured revisions; organizer correction
+explains its own bounded description. Identity distinguishes password requirements from confirmation mismatch.
+Activity calculation feedback now dismisses/expires/renews correctly; Event's missing-meal rejection uses the same
+sticky receipt; Survey's combination form has its intended alignment.
+
+The renewed source audit covered every entity family's creation/detail/settings, Overview/navigation, identity,
+Help, Event administration and Finance workflows, all draggable consumers, transient notices and Refresh sites.
+Matching controls adopt shared owners; contextual preview/recovery actions retain their operation-specific placement.
+Independent nonauthors reviewed diagnostics, compact permissions, restored routing, tests and documentation; root
+reviewed actual production adoption, controller boundaries, retained state, readable contracts and approval provenance.
+No further concrete analogous source defect remained from that reviewed scope; this is not an exhaustive state matrix.
+
+Current executed evidence:
+
+- Full frontend Vitest selection: **57 files, 1,460 tests passed**. Related identity, API problem/contracts,
+  localization and Help unit selection: **5 files, 116 tests passed**. Focused validation, disclosure, Event/Activity
+  feedback and Finance selections also passed; those overlap the full corpus and are not added to its total.
+- Coherent final server build and client/SSR frontend builds passed, along with frontend and test typechecks.
+- Isolated built-client startup: **81 unique scenarios passed** across the full run's 78 passing cases and the
+  focused three-case rerun after correcting a mobile test locator for the intentionally collapsed navigation.
+  No production edit followed the final builds. Cases include anonymous/account/guest Home, all four creation
+  permission families in English/German at 1280px/390px, notification reserve/stick/release, centered loading/header
+  geometry and the painted reorder edge before release. Root and the browser owner inspected original desktop/mobile
+  Home, German permission disclosures, sticky notification and reorder captures. External icon fonts are blocked in
+  these fixtures; artwork and unsampled browser/input/device states are not certified.
+- Development-policy check: **446 sources, zero findings** after adding explanatory contracts for the changed API
+  methods. Whitespace and production-freeze/amendment checks passed with zero findings.
+- Advisory documentation/Help checks report no broken links, metadata, source classification or Help-authoring errors.
+  The existing source-baseline mismatch remains visible; it was not rebased.
+
+Database-backed route and native/Vue comparator sources follow the restored routes and explicitly open the new
+creation disclosure. Raw captures and matrix-control comparisons remain; the separately asserted added heading/button
+is the sole text/geometry projection exception. These integration/E2E tests and the authored persistence regressions
+were **not run**: the available database account still exceeds the disposable schema boundary. No schema reset,
+database-user change, native/default-route cutover, guide publication or deployment occurred.

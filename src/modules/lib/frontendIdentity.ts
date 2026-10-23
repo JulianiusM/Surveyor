@@ -5,6 +5,10 @@ import type {FrontendGuestLinkHandoff} from '../../types/FrontendPilotTypes';
 
 type IdentityProblemCode = components['schemas']['Problem']['code'];
 
+/** Mirror the native personal dashboard without replacing the public landing route.
+ * Navigation, identity fallbacks and confirmed removal delivery share this destination. */
+export const frontendOverviewPath = '/frontend-pilot/users/dashboard';
+
 /**
  * Decode the existing guest-link flash boundary without carrying another identity's
  * private recovery link into a newly admitted document. Old unscoped strings and
@@ -113,7 +117,7 @@ export function frontendDocumentUrl(url: string): string {
 
 /** Only application-owned relative destinations can complete a pilot identity transition. */
 export function safeFrontendReturn(input: unknown): string {
-    const fallback = '/frontend-pilot';
+    const fallback = frontendOverviewPath;
     if (typeof input !== 'string' || /[\\\u0000-\u001f\u007f]/u.test(input)) return fallback;
     try {
         const base = new URL('https://surveyor.invalid');

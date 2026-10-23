@@ -10,13 +10,14 @@ import {overviewKeys, surveyKeys} from '../../app/queryKeys';
 import {useListCommands, useListDetail} from '../../composables/listDetail';
 import {usePageTitle} from '../../composables/pageTitle';
 import {useSurveysApi} from './api';
+import {combinationIdentity} from './presentation';
 import EntityHeader from '../../components/EntityHeader.vue';
 import EntityDescription from '../../components/EntityDescription.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import EntityDetailReadState from '../../components/EntityDetailReadState.vue';
-import EntityListToolbar from '../../components/EntityListToolbar.vue';
+import RefreshButton from '../../components/RefreshButton.vue';
 import SurveyBallot from './SurveyBallot.vue';
 import SurveyResults from './SurveyResults.vue';
 import CombinationFields from './CombinationFields.vue';
@@ -143,13 +144,21 @@ async function submitBallot(): Promise<void> {
  * needs explicit review because a resource read cannot identify the new row. */
 async function addCombination(): Promise<void> {
     if (!combinationAction.isAvailable()) return;
+    // An already displayed choice needs no write or recovery warning. Compare
+    // both recurring fields against the admitted data, retaining the selection
+    // and ballot while the shared notice owner presents this ordinary no-op.
+    const identity = combinationIdentity(combination);
+    if (data.value?.combinations.some(item => combinationIdentity(item) === identity)) {
+        command.setInformation('survey.combinationAlreadyPresent');
+        return;
+    }
     // Capture both select values before sending. Only confirmed creation releases
     // them; rejected and unknown outcomes retain the visible combination draft.
     const submitted = {...combination};
     pendingControl.value = 'combination';
     try {
         const result = await command.run(scope => api.addCombination(surveyId.value, submitted, scope), true, true,
-            {success: 'survey.combinationAdded'});
+            {success: 'survey.combinationAdded', rejectionInformation: {SURVEY_COMBINATION_EXISTS: 'survey.combinationAlreadyPresent'}});
         if (result) Object.assign(combination, {weekday: 'MON', nthWeek: '1'});
     } finally { pendingControl.value = null; }
 }
@@ -162,11 +171,12 @@ async function addCombination(): Promise<void> {
     <section class="card bg-dark text-white mb-3">
         <EntityHeader :resource-id="surveyId" :title="data?.title ?? messages.t('app.survey')" icon="bi-clipboard-check"
             :image-version="data?.headerVersion" :image-enabled="!!data && !denied" :image-query-key="key" :read-image="api.header.bind(api)"
-            :settings-available="!!data?.capabilities.manageSettings" :settings-disabled="blocked" @settings="editorOpen = true" />
+            :settings-available="!!data?.capabilities.manageSettings" :settings-disabled="blocked" @settings="editorOpen = true">
+            <template #actions><RefreshButton :state="readAction" @refresh="refresh" /></template>
+        </EntityHeader>
         <div class="card-body">
             <EntityDetailReadState :denied="denied" :error="list.error.value" :has-data="!!data" :pending="list.isPending.value"
                 :last-updated-at="data ? list.dataUpdatedAt.value : undefined" :retry-at="retryAt" :skeleton="route.meta.loadingSkeleton">
-                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="readAction" @refresh="refresh" />
             </EntityDetailReadState>
             <template v-if="data">
                 <StatusNotice v-if="data.archived" kind="info">{{ messages.t('packing.archived') }}</StatusNotice>
@@ -177,7 +187,7 @@ async function addCombination(): Promise<void> {
                     @answer="(id, answer) => answers[id] = answer" @submit="submitBallot" />
                 <SurveyResults :combinations="data.combinations" :responses="data.responses" />
                 <h2 class="text-center mt-5 mb-3"><i class="bi bi-calendar-plus-fill me-2" aria-hidden="true"></i>{{ messages.t('survey.addNewCombination') }}</h2>
-                <form id="survey-add-combination" class="row g-3 justify-content.center" @submit.prevent="addCombination">
+                <form id="survey-add-combination" class="row g-3 justify-content-center" @submit.prevent="addCombination">
                     <CombinationFields v-model:weekday="combination.weekday" v-model:nth-week="combination.nthWeek" prefix="survey-add" :disabled="blocked" />
                     <div class="col-12 text-center d-grid mt-3"><ActionButton type="submit" variant="outline-primary" :state="combinationAction"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>{{ messages.t('survey.add') }}</ActionButton></div>
                 </form>

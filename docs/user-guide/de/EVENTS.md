@@ -4,10 +4,10 @@ documentation-metadata
 audience: Veranstaltungsteilnehmer; Veranstaltungsorganisatoren
 owner: event feature maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
-source-anchors: src/controller/eventController.ts; src/views/event/; src/views/modules/module_entity_select.pug; src/frontend/features/event/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
+verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
+source-anchors: src/controller/eventController.ts; src/views/event/; src/views/modules/module_entity_select.pug; src/frontend/features/event/; src/frontend/components/EntitySettingsDialog.vue; src/locales/; src/frontend/components/permissions/CreationPermissions.vue
 heading-anchors: 1:events-guide; 2:choose-your-task; 2:join-and-register-for-an-event; 3:1-open-the-invitation; 3:2-review-the-event-information; 3:3-complete-register-for-this-event; 3:dietary-information; 2:change-or-cancel-your-registration; 3:what-the-binding-deadline-changes; 2:what-appears-after-registration; 2:create-an-event; 3:creation-fields; 3:deadline-and-dietary-switches; 2:review-permissions-before-sharing; 2:share-the-event; 2:change-event-properties; 2:open-the-administration-dashboard; 2:manage-registrations; 3:view-and-filter-participants; 3:adjust-or-remove-a-registration; 2:create-a-late-registration-link; 2:link-plans-and-lists-to-the-event; 3:choose-an-event; 2:export-the-participant-list; 2:header-image-duplication-and-deletion; 2:archive-or-restore-the-event; 2:troubleshooting; 3:i-cannot-see-the-registration-form; 3:i-cannot-update-or-cancel-after-the-deadline; 3:a-related-plan-or-list-is-missing; 3:i-cannot-open-or-use-the-administration-dashboard; 3:participant-information-is-visible-to-more-people-than-expected
 next-review: event-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
@@ -122,7 +122,7 @@ Du brauchst ein angemeldetes vollständiges Konto. Das aktive Profil wird Eigent
 1. Öffne oben **Neu**.
 2. Wähle unter **Planen und entscheiden** **Veranstaltung**.
 3. Fülle das Erstellungsformular aus.
-4. Prüfe **Gruppenberechtigungen**, insbesondere die Sichtbarkeit von Teilnehmerdaten.
+4. Öffne **Gruppenberechtigungen** und prüfe insbesondere die Sichtbarkeit von Teilnehmerdaten.
 5. Wähle **Veranstaltung erstellen**.
 
 ### Felder bei der Erstellung

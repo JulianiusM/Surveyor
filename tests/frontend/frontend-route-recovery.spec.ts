@@ -187,7 +187,7 @@ describe('dynamic-content automatic document replacement', () => {
         }
     });
 
-    it.each(['/frontend-pilot', ...families.map(family => `/frontend-pilot/${family}/${firstList}`), eventAdmin])(
+    it.each(['/frontend-pilot/users/dashboard', ...families.map(family => `/frontend-pilot/${family}/${firstList}`), eventAdmin])(
         'retains one guarded automatic startup recovery for dynamic %s', async path => {
         window.history.replaceState({}, '', path);
         const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});

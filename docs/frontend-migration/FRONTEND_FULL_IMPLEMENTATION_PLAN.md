@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P10 history, individually approved R1-R3 and directly authorized final-review fixes routed to current implementation review; P11, backend exclusions and cutover boundaries preserved
+verification-scope: Directly requested interface follow-ups, restored Home/Overview routes, compact permissions and shared validation implementation reconciled after retained history; P11, backend exclusions and cutover boundaries preserved
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
@@ -203,6 +203,9 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
       mail, session and provider consequences.
     - **P1D:** opt-in landing, message and error presentation. `/frontend-pilot` remains Overview; configured
       privacy/imprint links remain external and `/healthz` remains Express-owned.
+
+      The root-Overview implementation above is superseded by the maintainer's
+      [Home correction](#full-plan-follow-up-and-restored-entry-points-2026-10-23); it did not establish approval to replace Home.
 
    Existing `userController`, `UserService`, identity components and session-completion owners retain responsibility.
    The [receipt and direct-reuse correction](PILOT_PARITY_REVIEW.md#p1-migration-verification-2026-10-14) distinguish
@@ -504,3 +507,70 @@ The original dependent-decision wording does not require reopening those exclusi
 behavior except for explicitly approved frontend changes; minor backend transport/presentation adaptation is allowed.
 New frontend/adapter code still follows the established engineering and security requirements. Documentation
 diagnostics remain advisory.
+
+## Reported interface correction plan (2026-10-23)
+
+The maintainer requests the listed interface fixes first, followed by an audit of analogous defects and duplicated
+Vue responsibilities. This is implementation authority for these corrections; the original decisions and separate
+cutover/publication boundaries remain. Verification and remaining findings belong in the paired review.
+
+1. Correct the shared page/dialog notification host to reserve its natural height at its origin, release space
+   when notifications disappear, and remain sticky during scrolling. Preserve receipt lifetime, dismissal,
+   accessibility and the prohibition on submission/refresh-driven focus or scroll calls.
+2. Replace standalone Refresh rows with the shared compact `RefreshButton` in entity/profile headings, Help
+   actions, Finance's accordion heading and Overview controls. Reuse `PageHeading` for balanced centered titles;
+   Event administration uses the same settings/action placement as entity detail. Keep specialized preview,
+   ledger and recovery controls beside the values or status they operate on.
+3. Remove the navigation skeleton line in favor of an accessible header progress indicator. Check entity-family
+   placeholder geometry against admitted headings at desktop/mobile widths, retaining readable content and drafts
+   during background reads and pending navigation.
+4. Let organizers explicitly remove a saved override for a former event participant. Carry only deliberately
+   removed saved identifiers through the existing requirements operation and validate them under its existing
+   lock. Retain ordinary omission protection, registration checks for new/changed targets and native behavior.
+5. Extend `useListReorder` with a before/after insertion preview and adopt it in every draggable Vue consumer:
+   Packing, Drivers and Activity schedules. Preserve membership/capability checks, same-day boundaries and one
+   existing reorder command on drop; invalid/canceled gestures clear the marker without writing.
+6. Keep at least one editable survey combination, explain empty/invalid/duplicate inputs through the shared
+   localized error owner, and report an existing combination directly through common sticky feedback. Handle
+   both a known loaded duplicate and a duplicate rejected after a stale read without an uncertain outcome.
+7. Verify actual shared adoption and review adjacent creation, feedback, loading, settings and recovery flows.
+   Use focused mounted tests, built-browser geometry/interaction checks, compiler/build checks and guarded
+   persistence checks for the explicit override/duplicate boundaries. Record limitations and any separately
+   scoped findings without treating the plan itself as acceptance evidence.
+
+### Additional validation findings and implementation
+
+The initial analogous-flow audit found two reproducible gaps beyond the reported Survey cases:
+
+- Packing creation accepts a pasted root/item title or description beyond generated limits, and a capacity above
+  its allowed integer range; its API reduced those failures to the generic submitted-values message.
+- Activity creation accepts an overlong or whitespace-only slot title and an overlong slot description; collection
+  trimmed values and the generated validator rejected them, but the resulting message did not identify the slot/field.
+
+The maintainer subsequently requests full implementation and another all-area review. These creation gaps now use
+`generatedInputError` and the existing typed `InvalidInputError` feedback channel, with feature-owned field and row/day
+labels and shared localized rule wording. Packing/Drivers quick-add, metadata, Activity slot/role/shared-field and
+requirement inputs adopt the same owner where applicable. Generated constraints remain authoritative; UI code does
+not copy a second validator. Tests exercise normal paste/numeric/whitespace input, retained drafts/files and no POST
+on local rejection. Event's inspected creation text controls already enforce their limits; its missing-meal feedback
+now uses the common sticky receipt. The audit does not claim every reachable validation failure has been exercised.
+
+### Full-plan follow-up and restored entry points (2026-10-23)
+
+The maintainer explicitly corrects the unapproved replacement of Home with Overview. Earlier P1D implementation
+wording describing Overview at the pilot root records the previous implementation, not authorization for that
+replacement. Restore the native distinction inside the existing opt-in prefix: public Home at `/frontend-pilot`,
+personal Overview at `/frontend-pilot/users/dashboard`, and `/home` as a compatible Home alias. Update navigation,
+contextual Help, default identity returns and confirmed completion destinations together. Preserve explicit valid
+return destinations, independent Overview regions and private-read admission; no native default route changes.
+
+Creation and duplication for Packing, Drivers and Activity, plus Event creation, adopt `CreationPermissions` over
+their existing audience matrix. It starts collapsed and retains its actual controls and feature-owned masks when
+closed, including selected audience and pre-hydration edits. Survey's deliberate permissions exception remains.
+
+The renewed audit also aligns transient Activity calculation feedback and Event registration validation with shared
+receipt dismissal/renewal, corrects Survey combination-form alignment, and distinguishes identity password-policy failures
+from confirmation mismatches. Finance's user-editable generated-input rejections use visible field diagnostics, including
+an organizer revision seeded from a longer participant description; accepted names and intentionally unbounded
+participant descriptions retain their existing contracts. The review records independent semantic checks and executed
+evidence separately.

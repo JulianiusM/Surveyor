@@ -52,6 +52,55 @@ async function selectProof(dialog: DOMWrapper<HTMLElement>) {
 }
 
 describe('P8A organizer finance forms', () => {
+    it('identifies an overlong saved participant description during revision without writing or losing the reviewed draft', async () => {
+        // Participant descriptions intentionally have no generated length cap.
+        // Opening one for organizer correction can therefore seed this value
+        // directly, without a user typing past the correction control's limit.
+        const description = 'Original participant evidence '.repeat(150);
+        const mounted = await mountForm(FinanceInvoiceReview, {invoice: {...invoice, description}, action: 'revise'});
+        const control = mounted.dialog.get<HTMLTextAreaElement>('textarea[name="correctedDescription"]');
+        expect(control.element.value).toBe(description);
+        await mounted.dialog.get('form').trigger('submit');
+        await mounted.dialog.get('form').trigger('submit');
+        await flushPromises();
+        expect(mounted.request).not.toHaveBeenCalled();
+        const feedback = mounted.dialog.get('.pilot-notification.alert-danger');
+        for (const locale of ['en', 'de'] as const) {
+            mounted.context.locale.value = locale;
+            await flushPromises();
+            expect(mounted.dialog.get('.pilot-notification.alert-danger').element).toBe(feedback.element);
+            expect(feedback.text()).toContain(mounted.context.messages.value.t('validation.fieldError', {
+                field: mounted.context.messages.value.t('finance.description'),
+                reason: mounted.context.messages.value.t('validation.maxLength', {limit: 4000}),
+            }));
+            expect(mounted.dialog.get('textarea[name="correctedDescription"]').element).toBe(control.element);
+            expect(control.element.value).toBe(description);
+        }
+
+        await button(mounted.dialog, mounted.context.messages.value.t('finance.backToEdit')).trigger('click');
+        await control.setValue('Reviewed correction');
+        await mounted.dialog.get('form').trigger('submit');
+        await mounted.dialog.get('form').trigger('submit');
+        await flushPromises();
+        expect(mounted.request).toHaveBeenCalledTimes(1);
+        expect(await (mounted.request.mock.calls[0]![0] as Request).json()).toEqual({
+            confirmed: true, expectedRevision: 7, correctedAmount: '10', correctedDescription: 'Reviewed correction',
+        });
+        expect(mounted.wrapper.emitted('close')).toHaveLength(1);
+    });
+
+    it('preserves the intentionally unbounded description when creating a pool', async () => {
+        const description = 'Shared pool information '.repeat(250);
+        const mounted = await mountForm(FinancePoolEditor, {pool: undefined});
+        await mounted.dialog.get('input[name="name"]').setValue('Weekend pool');
+        await mounted.dialog.get('input[name="description"]').setValue(description);
+        await mounted.dialog.get('form').trigger('submit');
+        await flushPromises();
+        expect(mounted.request).toHaveBeenCalledTimes(1);
+        expect(await (mounted.request.mock.calls[0]![0] as Request).json()).toMatchObject({name: 'Weekend pool', description});
+        expect(mounted.wrapper.emitted('saved')).toHaveLength(1);
+    });
+
     it('retains the source draft and captured revision through Back, fresh saved props and the final retroactive confirmation', async () => {
         const mounted = await mountForm(FinanceInvoiceReview, {invoice, action: 'revise'});
         const amount = mounted.dialog.get<HTMLInputElement>('input[name="correctedAmount"]');

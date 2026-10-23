@@ -62,7 +62,7 @@ function resolvePresentation(): {page: FrontendCommonPage; renewal: unknown} {
          Ordinary full messages reuse their existing expiry and Home presentation. -->
     <PageMessage v-if="page.kind === 'message'" :kind="page.severity" :message="localizedMessage"
         :display-message="page.severity !== 'warning'"
-        :renewal="presentation.renewal" home-url="/frontend-pilot/home" />
+        :renewal="presentation.renewal" />
     <section v-else class="card bg-dark text-white mb-3">
         <h1 class="card-header text-center bg-danger text-light">
             <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>{{ messages.t('common.errorHeading') }}

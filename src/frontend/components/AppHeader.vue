@@ -4,7 +4,7 @@ import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {RouteLocationNormalized} from 'vue-router';
 import {useActionState, usePilot} from '../app/context';
 import {localeManifest} from '../../modules/localization/translator';
-import {safeFrontendReturn} from '../../modules/lib/frontendIdentity';
+import {frontendOverviewPath, safeFrontendReturn} from '../../modules/lib/frontendIdentity';
 import {pilotHelpUrl, resolveContextualHelpUrl} from '../../modules/lib/helpNavigation';
 import {completeIdentityEntry, useConfirmedNavigation} from '../composables/pageEntry';
 import {useCommand} from '../composables/command';
@@ -165,6 +165,11 @@ async function retryCompletion(): Promise<void> {
                 <RouterLink class="navbar-brand d-flex align-items-center" to="/frontend-pilot">
                     <img :src="'/img/logo.png'" :alt="messages.t('app.title')" height="30" class="me-2" />
                     <span class="fw-semibold">{{ messages.t('app.title') }}</span>
+                    <!-- Reserve a small header slot so lazy delivery never inserts
+                         a false page skeleton or shifts the brand/navigation. -->
+                    <span class="pilot-navigation-indicator" aria-hidden="true">
+                        <span v-if="navigation.destination.value" class="spinner-border"></span>
+                    </span>
                 </RouterLink>
                 <!-- Before initialization the ordinary navigation stays expanded,
                      including on mobile. Its collapse button requires JavaScript. -->
@@ -227,7 +232,7 @@ async function retryCompletion(): Promise<void> {
                         </AppNavigationDropdown>
                         <AppNavigationDropdown :label="messages.t('app.overview')" icon="bi-collection">
                             <li>
-                                <RouterLink class="dropdown-item" to="/frontend-pilot"
+                                <RouterLink class="dropdown-item" :to="frontendOverviewPath"
                                     ><i class="bi bi-speedometer2 me-2" aria-hidden="true"></i
                                     >{{ messages.t('app.yourOverview') }}</RouterLink
                                 >
@@ -254,7 +259,7 @@ async function retryCompletion(): Promise<void> {
                             align-end
                         >
                             <li>
-                                <RouterLink class="dropdown-item" to="/frontend-pilot"
+                                <RouterLink class="dropdown-item" :to="frontendOverviewPath"
                                     ><i class="bi bi-speedometer2 me-1" aria-hidden="true"></i
                                     >{{ messages.t('app.yourOverview') }}</RouterLink
                                 >

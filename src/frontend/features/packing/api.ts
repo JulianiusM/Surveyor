@@ -1,8 +1,9 @@
 import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotEventPickerQuery, PilotEventPickerSource, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
+import type {PilotInputField} from '../../../types/FrontendFeedbackTypes';
 import {packingKeys} from '../../app/queryKeys';
-import {createMultipartForm, InvalidInputError} from '../../app/transport';
+import {createMultipartForm, generatedInputError} from '../../app/transport';
 import {validatePackingListView} from '../../../../.generated/api/v1/browser/validatePackingListView.mjs';
 import {validatePackingMetadata} from '../../../../.generated/api/v1/browser/validatePackingMetadata.mjs';
 import {validatePackingMetadataPatch} from '../../../../.generated/api/v1/browser/validatePackingMetadataPatch.mjs';
@@ -75,7 +76,7 @@ export class PackingApi {
     async saveMetadata(listId: string, patch: components['schemas']['PackingMetadataPatch'], etag: string,
                        scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
         // Structural validation precedes transport; business/field checks remain server-owned.
-        if (!validatePackingMetadataPatch(patch)) throw new InvalidInputError('Invalid metadata patch.');
+        if (!validatePackingMetadataPatch(patch)) throw generatedInputError(validatePackingMetadataPatch.errors, path => packingInputField(path));
 
         const result = this.transport.read('updatePackingMetadata', await this.transport.client.PATCH('/packing-lists/{listId}/metadata', {
             params: {path: {listId}, header: {...this.transport.headers(scope), 'If-Match': etag}}, body: patch, cache: 'no-store',
@@ -155,10 +156,12 @@ export class PackingApi {
      * Only a validated creation receipt confirms success, and uncertain delivery is left to
      * the shared command owner without replaying this non-idempotent request. */
     async createPacking(input: components['schemas']['PackingCreateInput'], image: File | null,
-                        scope: PilotRequestScope): Promise<components['schemas']['PackingCreated']> {
+                        scope: PilotRequestScope, itemRows?: readonly number[]): Promise<components['schemas']['PackingCreated']> {
         // Validate machine data before adapting it to the established multipart envelope.
         // The image is a separate part rather than a second handwritten creation schema.
-        if (!validatePackingCreateInput(input)) throw new InvalidInputError('Invalid packing creation.');
+        if (!validatePackingCreateInput(input)) {
+            throw generatedInputError(validatePackingCreateInput.errors, path => packingInputField(path, itemRows));
+        }
 
         const form = createMultipartForm(input, image);
 
@@ -169,16 +172,20 @@ export class PackingApi {
         }), validatePackingCreated, scope).data;
     }
 
+    /** Quick-add keeps its separate generated creation bounds. A rejected row
+     * stays editable without dispatch or an uncertain creation receipt. */
     async addItem(listId: string, input: components['schemas']['PackingNewItem'], scope: PilotRequestScope) {
-        if (!validatePackingNewItem(input)) throw new InvalidInputError('Invalid packing item.');
+        if (!validatePackingNewItem(input)) throw generatedInputError(validatePackingNewItem.errors, path => packingInputField(path));
         return this.transport.read('createPackingItem', await this.transport.client.POST('/packing-lists/{listId}/items', {
             params: {path: {listId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), validatePackingCreated, scope).data;
     }
 
+    /** Existing-item edits retain their own scalar rules and comparison token;
+     * field feedback does not replace the shared conflict/draft lifecycle. */
     async updateItem(listId: string, itemId: string, patch: components['schemas']['PackingItemPatch'], token: string,
                      scope: PilotRequestScope) {
-        if (!validatePackingItemPatch(patch)) throw new InvalidInputError('Invalid packing item patch.');
+        if (!validatePackingItemPatch(patch)) throw generatedInputError(validatePackingItemPatch.errors, path => packingInputField(path));
         return this.transport.read('updatePackingItem', await this.transport.client.PATCH('/packing-lists/{listId}/items/{itemId}', {
             params: {path: {listId, itemId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: patch, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -332,6 +339,20 @@ export class PackingApi {
             params: {path: {listId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), scope);
     }
+}
+
+/** Root fields and item rows keep the labels of their actual controls. Visible
+ * row numbers may differ from the collected array when blank drafts are omitted. */
+function packingInputField(path: string, itemRows?: readonly number[]): PilotInputField | undefined {
+    const item = /^\/items\/(\d+)\/(\w+)$/u.exec(path);
+    const field = item ? item[2] : path.slice(1);
+    const label = field === 'title' ? 'packing.title' : field === 'description' ? 'packing.description'
+        : field === 'maxAssignees' ? 'packing.maxNumber' : undefined;
+    if (label) return {label, ...(item ? {row: {label: 'packing.item', number: itemRows?.[Number(item[1])] ?? Number(item[1]) + 1}} : {})};
+    if (path === '/items') return {label: 'packing.itemsToPack'};
+    if (path === '/eventId') return {label: 'eventPicker.currentEvent'};
+    if (path.startsWith('/defaultPermissions')) return {label: 'packing.groupPermissions'};
+    return undefined;
 }
 
 const owners = new WeakMap<PilotApi, PackingApi>();

@@ -87,6 +87,39 @@ async function mounted(component: Component, handler: (request: Request) => Prom
 }
 
 describe('Activity production frontend consumers', () => {
+    it('previews same-day insertion edges while refusing another day and external drops', async () => {
+        const writes: unknown[] = [];
+        const current = {...view, slots: [slot, {...slot, id: planId, title: 'Second breakfast slot', position: 1}, view.slots[1]!]};
+        const {wrapper} = await mounted(ActivityPage, async request => {
+            if (request.method === 'PUT') { writes.push(await request.json()); return json({changed: true}); }
+            return json(current);
+        });
+        const moving = wrapper.get('[data-slotid="' + slotId + '"]');
+        const target = wrapper.get('[data-slotid="' + planId + '"]');
+        const otherDay = wrapper.get('[data-slotid="' + otherId + '"]');
+        vi.spyOn(target.element, 'getBoundingClientRect').mockReturnValue({top: 100, height: 60} as DOMRect);
+        await target.trigger('dragover', {clientY: 150});
+        await target.trigger('drop');
+        expect(writes).toEqual([]);
+        await moving.trigger('dragstart');
+        await otherDay.trigger('dragover', {clientY: 150});
+        expect(otherDay.classes()).not.toContain('pilot-reorder-after');
+        await otherDay.trigger('drop');
+        expect(writes).toEqual([]);
+
+        await moving.trigger('dragstart');
+        await target.trigger('dragover', {clientY: 110});
+        expect(target.classes()).toContain('pilot-reorder-before');
+        await target.trigger('dragover', {clientY: 150});
+        expect(target.classes()).toContain('pilot-reorder-after');
+        expect(target.classes()).not.toContain('pilot-reorder-before');
+        expect(writes).toEqual([]);
+        await target.trigger('drop');
+        await flushPromises();
+        expect(writes).toEqual([{order: [{slotId: planId, position: 0}, {slotId, position: 1}]}]);
+        expect(wrapper.find('.pilot-reorder-before, .pilot-reorder-after, .pilot-reorder-dragging').exists()).toBe(false);
+    });
+
     it.each([429, 503])('recovers cold detail through Refresh after its server deadline without replacing later drafts (%s)', async status => {
         vi.useFakeTimers();
         vi.setSystemTime(Date.UTC(2026, 9, 23, 6, 0, 0));
@@ -641,6 +674,50 @@ describe('Activity production frontend consumers', () => {
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(1);
     });
 
+    it('explains an overlong role name locally and keeps the role suggestion draft', async () => {
+        const {wrapper, context, request} = await mounted(ActivityPage, async () => json(view));
+        await wrapper.get('[data-slot-edit]').trigger('click');
+        await flushPromises();
+        const search = document.querySelector<HTMLInputElement>('#slotEditorRoleInput')!;
+        search.value = 'x'.repeat(256);
+        search.dispatchEvent(new Event('input', {bubbles: true}));
+        await flushPromises();
+        document.querySelector<HTMLButtonElement>('#slotEditorRoleSuggestions button')!.click();
+        await flushPromises();
+        const feedback = document.querySelector('.alert-danger')!;
+        expect(feedback.textContent).toContain('Role: Use no more than 255 characters.');
+        expect(feedback.classList.contains('pilot-notification')).toBe(true);
+        expect(document.querySelector('#slotEditorRoleInput')).toBe(search);
+        expect(search.value).toBe('x'.repeat(256));
+        expect(document.querySelector('#slotEditorForm')).not.toBeNull();
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(feedback.textContent).toContain('Gib höchstens 255 Zeichen ein.');
+        expect(search.value).toBe('x'.repeat(256));
+    });
+
+    it('identifies whitespace-only new shared-text titles without trimming or losing the entered text', async () => {
+        const {wrapper, context, request} = await mounted(ActivityPage, async () => json(view));
+        await wrapper.findAll('button').find(button => button.text() === context.messages.value.t('activity.addTextField'))!.trigger('click');
+        await flushPromises();
+        const title = document.querySelector<HTMLInputElement>('#textFieldTitle')!;
+        const text = document.querySelector<HTMLTextAreaElement>('#textFieldText')!;
+        title.value = '   ';
+        title.dispatchEvent(new Event('input', {bubbles: true}));
+        text.value = 'Keep these instructions exactly.';
+        text.dispatchEvent(new Event('input', {bubbles: true}));
+        document.querySelector<HTMLFormElement>('#textFieldForm')!.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+        await flushPromises();
+        const feedback = document.querySelector('.alert-danger')!;
+        expect(feedback.textContent).toContain('Title: Enter at least one non-space character.');
+        expect(feedback.classList.contains('pilot-notification')).toBe(true);
+        expect(title.value).toBe('   ');
+        expect(text.value).toBe('Keep these instructions exactly.');
+        expect(document.querySelector('#textFieldTitle')).toBe(title);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
     it('keeps the native default of one when optional new-slot capacity is blank', async () => {
         let submitted: unknown;
         const {wrapper} = await mounted(ActivityPage, async request => {
@@ -712,6 +789,57 @@ describe('Activity production frontend consumers', () => {
         expect(wrapper.get<HTMLInputElement>('#endDate').element.validity.customError).toBe(true);
         expect(wrapper.findAll('.add-slot')).toHaveLength(2);
         expect(request.mock.calls.every(([value]) => (value as Request).method === 'GET')).toBe(true);
+    });
+
+    it.each([
+        {field: 'title', value: 'x'.repeat(256), label: 'Title', reason: 'Use no more than 255 characters.'},
+        {field: 'description', value: 'x'.repeat(16001), label: 'Description', reason: 'Use no more than 16000 characters.'},
+        {field: 'slot-title', value: '   ', label: '6/2/2030, Slot 1 — Title', reason: 'Enter a value.'},
+        {field: 'slot-title', value: 'x'.repeat(256), label: '6/2/2030, Slot 1 — Title', reason: 'Use no more than 255 characters.'},
+        {field: 'slot-description', value: 'x'.repeat(16001), label: '6/2/2030, Slot 1 — Description', reason: 'Use no more than 16000 characters.'},
+        {field: 'slot-capacity', value: '0', label: '6/2/2030, Slot 1 — Max participants', reason: 'Enter a number of at least 1.'},
+    ])('explains rejected Activity creation $field with its visible day/slot and retains drafts and image', async ({field, value, label, reason}) => {
+        const {wrapper, context, request} = await mounted(ActivityCreatePage, async request => {
+            return new URL(request.url).pathname.endsWith('/events') ? json({items: [], nextCursor: null, previousCursor: null})
+                : json({entry: {kind: 'render'}, context: definitions, selectedEvent: null});
+        }, '/frontend-pilot/activity/create');
+        await wrapper.get('#title').setValue('Weekend duties');
+        await wrapper.get('#startDate').setValue('2030-06-01');
+        await wrapper.get('#endDate').setValue('2030-06-02');
+        await flushPromises();
+        // The flattened payload contains another day's slot first. Diagnostics
+        // must identify the second day's first visible slot, not global row two.
+        await wrapper.findAll('.add-slot')[0]!.trigger('click');
+        await wrapper.findAll('.add-slot')[1]!.trigger('click');
+        const slotInputs = wrapper.findAll('.slot input');
+        await slotInputs[0]!.setValue('Breakfast');
+        await slotInputs[5]!.setValue('Lunch');
+        const control = field === 'title' ? wrapper.get<HTMLInputElement>('#title')
+            : field === 'description' ? wrapper.get<HTMLInputElement>('#create-description')
+            : wrapper.findAll<HTMLInputElement>('.slot input')[field === 'slot-title' ? 5 : field === 'slot-description' ? 6 : 9]!;
+        await control.setValue(value);
+        const retained = control.element;
+        const chooser = wrapper.get<HTMLInputElement>('#create-header').element;
+        const file = new File(['header'], 'duties.png', {type: 'image/png'});
+        Object.defineProperty(chooser, 'files', {configurable: true, value: [file]});
+        chooser.dispatchEvent(new Event('change', {bubbles: true}));
+        retained.focus();
+        await wrapper.get('form').trigger('submit');
+        await flushPromises();
+        const feedback = wrapper.get('.alert-danger');
+        expect(feedback.text()).toBe(label + ': ' + reason);
+        expect(feedback.classes()).toContain('pilot-notification');
+        expect(retained.isConnected).toBe(true);
+        expect(retained.value).toBe(value);
+        expect(document.activeElement).toBe(retained);
+        expect(chooser.files?.[0]).toBe(file);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(feedback.text()).not.toBe(label + ': ' + reason);
+        if (field.startsWith('slot-')) expect(feedback.text()).toContain('2.6.2030, Dienst 1');
+        expect(retained.value).toBe(value);
+        expect(chooser.files?.[0]).toBe(file);
     });
 
     it('freezes injected root fields while the shared creation command is pending', async () => {

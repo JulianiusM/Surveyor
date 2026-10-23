@@ -18,6 +18,9 @@ export interface PilotLoadingSkeleton {
     columns?: number;
     hideColumnOnMobile?: number;
     footer?: 'compact' | 'half' | 'two-thirds' | 'full';
+    /** Match shared page headings without projecting any action authority. */
+    balancedHeader?: boolean;
+    headerActions?: boolean;
 }
 
 declare module 'vue-router' {
@@ -200,6 +203,9 @@ export type PilotPlainMessageKey = {
 export interface PilotCommandFeedback {
     /** Null keeps successful maintenance silent; omission retains the ordinary saved notice. */
     success?: PilotPlainMessageKey | null;
+    /** Explicit known no-op rejections may be information. Unknown failures,
+     * unrelated server codes and command confirmation retain their own semantics. */
+    rejectionInformation?: Partial<Record<components['schemas']['Problem']['code'], PilotPlainMessageKey>>;
 }
 
 /** Reuse neutral authored wire shapes while the caller owns its discovery endpoint,

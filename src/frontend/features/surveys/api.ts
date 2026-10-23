@@ -1,7 +1,7 @@
 import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
-import {createMultipartForm, InvalidInputError} from '../../app/transport';
+import {createMultipartForm, generatedInputError, InvalidInputError} from '../../app/transport';
 import {validateSurveyView} from '../../../../.generated/api/v1/browser/validateSurveyView.mjs';
 import {validateSurveyCreateEntry} from '../../../../.generated/api/v1/browser/validateSurveyCreateEntry.mjs';
 import {validateSurveyResourceEntry} from '../../../../.generated/api/v1/browser/validateSurveyResourceEntry.mjs';
@@ -15,6 +15,7 @@ import {validateSurveyBallotInput} from '../../../../.generated/api/v1/browser/v
 import {validateSurveyCombinationInput} from '../../../../.generated/api/v1/browser/validateSurveyCombinationInput.mjs';
 import {validateMutationResult} from '../../../../.generated/api/v1/browser/validateMutationResult.mjs';
 import {validateGuestEntry} from '../../../../.generated/api/v1/browser/validateGuestEntry.mjs';
+import {combinationIdentity} from './presentation';
 
 type Survey = components['schemas']['SurveyView'];
 type Metadata = components['schemas']['SurveyMetadata'];
@@ -88,7 +89,22 @@ export class SurveysApi {
     async createSurvey(input: components['schemas']['SurveyCreateInput'], image: File | null, scope: PilotRequestScope) {
         // Reject malformed local values before allocating or dispatching bytes.
         // Admission and business validation remain with the server controller.
-        if (!validateSurveyCreateInput(input)) throw new InvalidInputError('Invalid survey creation.');
+        if (!validateSurveyCreateInput(input)) {
+            throw generatedInputError(validateSurveyCreateInput.errors, (path, error) => {
+                if (path === '/combinations' && error.keyword === 'minItems') return 'survey.combinationsRequired';
+                if (path === '/title') return 'survey.titleInvalid';
+                if (path === '/description') return 'survey.descriptionInvalid';
+                if (path.startsWith('/combinations/')) return 'survey.combinationInvalid';
+                return undefined;
+            });
+        }
+        // The saved combination has a unique weekday/occurrence identity. Keep
+        // duplicate local rows editable, but explain their conflict before any
+        // multipart write rather than exposing a database rejection as uncertainty.
+        const identities = input.combinations.map(combinationIdentity);
+        if (new Set(identities).size !== identities.length) {
+            throw new InvalidInputError('Duplicate survey combination.', 'survey.combinationAlreadyPresent');
+        }
 
         const form = createMultipartForm(input, image);
 
@@ -117,7 +133,9 @@ export class SurveysApi {
      * identify a created row and cannot authorize automatic creation replay. */
     async addCombination(surveyId: string, input: components['schemas']['SurveyCombinationInput'], scope: PilotRequestScope) {
         // Generated validation owns the finite weekday/occurrence wire values.
-        if (!validateSurveyCombinationInput(input)) throw new InvalidInputError('Invalid survey combination.');
+        if (!validateSurveyCombinationInput(input)) {
+            throw generatedInputError(validateSurveyCombinationInput.errors, () => 'survey.combinationInvalid');
+        }
 
         const result = await this.transport.client.POST('/surveys/{surveyId}/combinations', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -151,7 +169,10 @@ export class SurveysApi {
     async saveMetadata(surveyId: string, patch: components['schemas']['SurveyMetadataPatch'], _token: string,
                        scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
         // Keep the generated sparse patch distinct from its local baseline token.
-        if (!validateSurveyMetadataPatch(patch)) throw new InvalidInputError('Invalid survey metadata.');
+        if (!validateSurveyMetadataPatch(patch)) {
+            throw generatedInputError(validateSurveyMetadataPatch.errors, path => path === '/title' ? {label: 'survey.title'}
+                : path === '/description' ? {label: 'survey.description'} : undefined);
+        }
 
         const result = this.transport.read('updateSurveyMetadata', await this.transport.client.PATCH('/surveys/{surveyId}/metadata', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, body: patch, cache: 'no-store',

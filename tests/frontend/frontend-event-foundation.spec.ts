@@ -163,6 +163,14 @@ describe('Event foundation production consumers', () => {
         await wrapper.get('[name="endDate"]').setValue('2027-06-03');
         await wrapper.get('[name="maxParticipants"]').setValue(capacity);
         await wrapper.get('[name="allowRegDietUpdateAfterDeadline"]').setValue(true);
+        const permissions = wrapper.get('[data-creation-permissions]');
+        const toggle = permissions.get('button[aria-controls="event-create-permissions-panel"]');
+        expect(toggle.attributes('aria-expanded')).toBe('false');
+        expect(permissions.get('#event-create-permissions-panel').isVisible()).toBe(false);
+        await toggle.trigger('click');
+        await permissions.get('#event-create-permissions-audience').setValue('public');
+        await permissions.get('#event-create-permissions-public-ACCESS_ITEMS').setValue(true);
+        await toggle.trigger('click');
         selectImage(wrapper.get<HTMLInputElement>('#event-header-image').element);
         const form = wrapper.get<HTMLFormElement>('#eventForm');
         expect(form.attributes('action')).toBeUndefined();
@@ -170,10 +178,11 @@ describe('Event foundation production consumers', () => {
         await form.trigger('submit');
         await flushPromises();
         expect(writes).toEqual([expect.objectContaining({title: 'Summer camp', maxParticipants: capacity, deadlineTz: 'UTC',
-            allowRegDietUpdateAfterDeadline: true, requireDietaryInfo: false, defaultPermissions: defaults})]);
+            allowRegDietUpdateAfterDeadline: true, requireDietaryInfo: false, defaultPermissions: {...defaults, public: 1}})]);
         expect(deliveredImage).toBeInstanceOf(File);
         expect((deliveredImage as File | null)?.name).toBe('selected.png');
         expect(form.get('button[type="submit"]').attributes('disabled')).toBeDefined();
+        expect(toggle.attributes('disabled')).toBeDefined();
         // Repeated activation during delivery cannot create a second resource.
         await form.trigger('submit'); await flushPromises();
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(1);

@@ -35,9 +35,9 @@ export function localizedHelpUrl(href: string, locale: string): string {
  * The policy remains independent of HTML rendering, persistence and SPA transport. */
 export function resolveContextualHelpUrl(requestPath: string, locale?: string): string {
     let pathname = requestPath.split(/[?#]/u, 1)[0].toLowerCase();
-    // Pilot Overview represents the native dashboard. Other migrated paths retain
-    // their native families; one rule set therefore serves future module migrations.
-    if (/^\/frontend-pilot\/?$/u.test(pathname)) pathname = '/users/dashboard';
+    // Home remains the public landing page; the personal dashboard retains its
+    // native path beneath the pilot prefix, so contextual Help cannot confuse them.
+    if (/^\/frontend-pilot\/?$/u.test(pathname)) pathname = '/';
     else pathname = pathname.replace(/^\/frontend-pilot(?=\/)/u, '');
 
     const rules: Array<[RegExp, string]> = [

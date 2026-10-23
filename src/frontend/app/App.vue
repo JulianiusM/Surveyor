@@ -130,8 +130,8 @@ function dismissPersonalLink(): void {
         <AppHeader @locale-error="localeError = true" @locale-recovered="localeError = false" />
         <main id="pilot-main" class="container-fluid flex-grow-1 py-3" tabindex="-1"
             :data-pilot-interactive="interactiveContent ? '' : undefined">
-            <!-- The shared overlay keeps command results visible without changing
-                 document height, the current form focus or the scroll position. -->
+            <!-- The shared sticky host reserves space for visible results at its
+                 origin. Receipt changes never focus a control or request a scroll. -->
             <div class="pilot-notice-region">
                 <div ref="noticeTarget" class="pilot-notice-stack" data-pilot-notices>
                     <!-- Guest registration delivers the native one-visit transient flash.
@@ -170,9 +170,9 @@ function dismissPersonalLink(): void {
                     {{ messages.t('state.updateAvailable') }}
                 </StatusNotice>
             </div>
-            <!-- Delivery progress supplements the current route. Replacing RouterView here
-                 would discard mounted edits and turn navigation latency into input loss. -->
-            <LoadingSkeleton v-if="ready && pendingNavigation" class="pilot-navigation-loading mb-3" :rows="1" />
+            <!-- Pending navigation belongs to the header indicator, not a page
+                 skeleton. Keep the mounted route and announce progress once. -->
+            <span v-if="ready && pendingNavigation" class="pilot-navigation-loading visually-hidden" role="status">{{ messages.t('common.loading') }}</span>
             <!-- Route presentation selects the same public layout for SSR and hydration.
                  The renderer owns shared geometry; no private read or command is implied. -->
             <LoadingSkeleton v-if="ready && initialLoading" data-pilot-initial-loading v-bind="route.meta.loadingSkeleton" page />

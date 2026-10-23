@@ -28,7 +28,7 @@ const props = withDefaults(
 const emit = defineEmits<{close: []}>();
 const {messages} = usePilot();
 // A modal owns a presentation host above its body, using the same notice renderer
-// and receipts as the page. Its overlay never obscures its own command result.
+// and receipts as the page. Visible receipts reserve space above the scroll body.
 const noticeTarget = ref<HTMLElement | null>(null);
 provide(noticeTargetKey, noticeTarget);
 // Features may open a modal from several buttons instead of one Reka DialogTrigger.

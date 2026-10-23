@@ -1,8 +1,9 @@
 import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotEventPickerQuery, PilotEventPickerSource, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
+import type {PilotInputField} from '../../../types/FrontendFeedbackTypes';
 import {activityKeys} from '../../app/queryKeys';
-import {createMultipartForm, InvalidInputError} from '../../app/transport';
+import {createMultipartForm, generatedInputError, InvalidInputError} from '../../app/transport';
 import {validateActivityView} from '../../../../.generated/api/v1/browser/validateActivityView.mjs';
 import {validateActivityMetadata} from '../../../../.generated/api/v1/browser/validateActivityMetadata.mjs';
 import {validateActivityMetadataPatch} from '../../../../.generated/api/v1/browser/validateActivityMetadataPatch.mjs';
@@ -10,6 +11,8 @@ import {validateActivitySettings} from '../../../../.generated/api/v1/browser/va
 import {validateActivityDuplicate} from '../../../../.generated/api/v1/browser/validateActivityDuplicate.mjs';
 import {validateActivityCreateInput} from '../../../../.generated/api/v1/browser/validateActivityCreateInput.mjs';
 import {validateActivityCreated} from '../../../../.generated/api/v1/browser/validateActivityCreated.mjs';
+import {validateActivityRoleInput} from '../../../../.generated/api/v1/browser/validateActivityRoleInput.mjs';
+import {validateActivityTextFieldPatch} from '../../../../.generated/api/v1/browser/validateActivityTextFieldPatch.mjs';
 import {validateActivityNewSlot} from '../../../../.generated/api/v1/browser/validateActivityNewSlot.mjs';
 import {validateActivitySlotPatch} from '../../../../.generated/api/v1/browser/validateActivitySlotPatch.mjs';
 import {validateEventPickerOptions} from '../../../../.generated/api/v1/browser/validateEventPickerOptions.mjs';
@@ -53,7 +56,9 @@ export class ActivityApi {
     /** Submit the generated flat settings draft once through the existing business owner. */
     async saveRequirements(planId: string, input: components['schemas']['ActivityRequirementsInput'], scope: PilotRequestScope) {
         // Zero-valued requirements and explicit nulls survive generated structural validation.
-        if (!validateActivityRequirementsInput(input)) throw new InvalidInputError('Invalid activity requirements.');
+        if (!validateActivityRequirementsInput(input)) {
+            throw generatedInputError(validateActivityRequirementsInput.errors, path => activityRequirementField(path, input));
+        }
         return this.transport.read('updateActivityRequirements', await this.transport.client.PUT('/activity-plans/{planId}/requirements', {
             params: {path: {planId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -120,14 +125,16 @@ export class ActivityApi {
     /** Slot commands adapt existing controller operations. The component supplies only
      * its admitted sparse values; actor, ownership and business policy stay server-owned. */
     async addSlot(planId: string, input: components['schemas']['ActivityNewSlot'], scope: PilotRequestScope) {
-        if (!validateActivityNewSlot(input)) throw new InvalidInputError('Invalid activity slot.');
+        if (!validateActivityNewSlot(input)) throw generatedInputError(validateActivityNewSlot.errors, path => activityInputField(path));
         return this.transport.read('addActivitySlot', await this.transport.client.POST('/activity-plans/{planId}/slots', {
             params: {path: {planId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
+    /** Validate the sparse edit before dispatch while preserving the slot's captured
+     * comparison token; local rejection leaves draft and conflict ownership intact. */
     async updateSlot(planId: string, slotId: string, input: components['schemas']['ActivitySlotPatch'], token: string, scope: PilotRequestScope) {
-        if (!validateActivitySlotPatch(input)) throw new InvalidInputError('Invalid activity slot patch.');
+        if (!validateActivitySlotPatch(input)) throw generatedInputError(validateActivitySlotPatch.errors, path => activityInputField(path));
         return this.transport.read('updateActivitySlot', await this.transport.client.PATCH('/activity-plans/{planId}/slots/{slotId}', {
             params: {path: {planId, slotId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: input, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -167,6 +174,11 @@ export class ActivityApi {
     }
 
     async createRole(planId: string, name: string, scope: PilotRequestScope) {
+        // Role suggestions remain editable after a rejected name. Use the same
+        // generated bounds as the server before dispatching this creation once.
+        if (!validateActivityRoleInput({name})) {
+            throw generatedInputError(validateActivityRoleInput.errors, () => ({label: 'activity.role'}));
+        }
         return this.transport.read('addActivityRole', await this.transport.client.POST('/activity-plans/{planId}/roles', {
             params: {path: {planId}, header: this.transport.headers(scope)}, body: {name}, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -178,14 +190,19 @@ export class ActivityApi {
         }), validateMutationResult, scope).data;
     }
 
+    /** Creation requires a nonblank label under the existing controller rule.
+     * Project its generated failure locally before allocating a shared field. */
     async addTextField(planId: string, input: components['schemas']['ActivityTextFieldInput'], scope: PilotRequestScope) {
-        if (!validateActivityTextFieldInput(input)) throw new InvalidInputError('Invalid activity text field.');
+        if (!validateActivityTextFieldInput(input)) throw generatedInputError(validateActivityTextFieldInput.errors, path => activityInputField(path));
         return this.transport.read('addActivityTextField', await this.transport.client.POST('/activity-plans/{planId}/text-fields', {
             params: {path: {planId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), validateMutationResult, scope).data;
     }
 
     async updateTextField(planId: string, textFieldId: string, input: components['schemas']['ActivityTextFieldPatch'], token: string, scope: PilotRequestScope) {
+        // Saved-title edits deliberately retain their existing empty-title rule;
+        // the distinct patch schema, rather than creation, owns this validation.
+        if (!validateActivityTextFieldPatch(input)) throw generatedInputError(validateActivityTextFieldPatch.errors, path => activityInputField(path));
         return this.transport.read('updateActivityTextField', await this.transport.client.PUT('/activity-plans/{planId}/text-fields/{textFieldId}', {
             params: {path: {planId, textFieldId}, header: {...this.transport.headers(scope), 'If-Match': token}}, body: input, cache: 'no-store',
         }), validateMutationResult, scope).data;
@@ -243,7 +260,7 @@ export class ActivityApi {
     async saveMetadata(planId: string, patch: components['schemas']['ActivityMetadataPatch'], etag: string,
                        scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
         // Structural validation precedes transport; business/field checks remain server-owned.
-        if (!validateActivityMetadataPatch(patch)) throw new InvalidInputError('Invalid metadata patch.');
+        if (!validateActivityMetadataPatch(patch)) throw generatedInputError(validateActivityMetadataPatch.errors, path => activityInputField(path));
 
         const result = this.transport.read('updateActivityMetadata', await this.transport.client.PATCH('/activity-plans/{planId}/metadata', {
             params: {path: {planId}, header: {...this.transport.headers(scope), 'If-Match': etag}}, body: patch, cache: 'no-store',
@@ -318,7 +335,10 @@ export class ActivityApi {
                         scope: PilotRequestScope): Promise<components['schemas']['ActivityCreated']> {
         // Validate machine data before adapting it to the established multipart envelope.
         // The image is a separate part rather than a second handwritten creation schema.
-        if (!validateActivityCreateInput(input)) throw new InvalidInputError('Invalid activity creation.');
+        const slots = input.slots;
+        if (!validateActivityCreateInput(input)) {
+            throw generatedInputError(validateActivityCreateInput.errors, path => activityInputField(path, slots));
+        }
 
         const form = createMultipartForm(input, image);
 
@@ -467,6 +487,38 @@ export class ActivityApi {
             params: {path: {planId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), scope);
     }
+}
+
+/** Generated requirement diagnostics retain feature labels and duration identity.
+ * Filtered role/override arrays identify their group rather than a misleading
+ * compacted row number or an internal participant/role identifier. */
+function activityRequirementField(path: string, input: components['schemas']['ActivityRequirementsInput']): PilotInputField | undefined {
+    if (path === '/generalRequiredShifts') return {label: 'activity.requirements.baseline'};
+    if (path === '/bindingDeadline') return {label: 'activity.requirements.deadline'};
+    if (path === '/assignmentMode') return {label: 'activity.requirements.mode'};
+    if (path === '/roundingMode') return {label: 'activity.requirements.rounding'};
+    const stay = /^\/stayRequirements\/(\d+)\//u.exec(path);
+    if (stay) return {label: 'activity.requirements.requiredShifts', row: {label: 'activity.requirements.stays',
+        number: input.stayRequirements[Number(stay[1])]?.stayDays ?? Number(stay[1]) + 1}};
+    if (path.startsWith('/roleRequirements/')) return {label: 'activity.requirements.roles'};
+    if (path.startsWith('/overrides/')) return {label: 'activity.requirements.overrides'};
+    return undefined;
+}
+
+/** Slot numbering follows its displayed day rather than the flattened wire array.
+ * This projection owns visible labels only; generated contracts own validation. */
+function activityInputField(path: string, slots?: components['schemas']['ActivityCreateInput']['slots']): PilotInputField | undefined {
+    const match = /^\/slots\/(\d+)\/(\w+)$/u.exec(path);
+    const field = match ? match[2] : path.slice(1);
+    const label = field === 'title' ? 'packing.title' : field === 'description' ? 'packing.description' : field === 'text' ? 'activity.text'
+        : field === 'startDate' || field === 'day' ? 'event.startDateLabel' : field === 'endDate' ? 'event.endDateLabel'
+        : field === 'startTime' ? 'activity.startTime' : field === 'endTime' ? 'activity.endTime'
+        : field === 'maxAssignees' ? 'activity.maxParticipants' : undefined;
+    const slot = match ? slots?.[Number(match[1])] : undefined;
+    if (label) return {label, ...(slot ? {row: {label: 'validation.slot', number: slot.position + 1, day: slot.day}} : {})};
+    if (path === '/eventId') return {label: 'eventPicker.currentEvent'};
+    if (path.startsWith('/defaultPermissions')) return {label: 'packing.groupPermissions'};
+    return undefined;
 }
 
 const owners = new WeakMap<PilotApi, ActivityApi>();

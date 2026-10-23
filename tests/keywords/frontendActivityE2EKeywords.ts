@@ -5,7 +5,7 @@ import type {components} from '../../src/types/api/v1';
 import type {Locale} from '../../src/types/LocalizationTypes';
 import {createTranslator} from '../../src/modules/localization/translator';
 import {createE2EActivityPlan, createE2ELogin} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, loginForE2E, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
+import {createResourceViaForm, loginForE2E, projectCreationPermissionDisclosure, readVisiblePresentation, expectUsableFrontendLayout} from './e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from './frontendEventE2EKeywords';
 
 /** Create production records through the unchanged native form. The resulting
@@ -117,7 +117,7 @@ export async function expectActivityTabKeyboard(page: Page): Promise<void> {
 /** Retain an inspectable screenshot and complete visible text/control measures.
  * The caller compares corresponding same-actor native and Vue surfaces. */
 export async function captureActivityPresentation(page: Page, info: TestInfo, name: string, surface: Locator,
-    selectors: string[]) {
+    selectors: string[], creation = false) {
     if (new URL(page.url()).pathname.startsWith('/frontend-pilot')) await expectUsableFrontendLayout(surface);
     await page.evaluate(() => document.fonts.ready);
     await page.evaluate(function releaseFocus() {
@@ -131,7 +131,7 @@ export async function captureActivityPresentation(page: Page, info: TestInfo, na
     const evidence = JSON.stringify(measured, null, 2);
     await writeFile(info.outputPath(`${name}-presentation.json`), evidence);
     await info.attach(`${name}-presentation`, {body: evidence, contentType: 'application/json'});
-    return measured;
+    return creation ? projectCreationPermissionDisclosure(surface, measured) : measured;
 }
 
 /** Preserve raw schedule evidence and verify R9's approved total separately.
@@ -174,7 +174,7 @@ export async function captureActivitySchedulePresentation(page: Page, info: Test
 export async function captureActivityCreationPresentation(page: Page, info: TestInfo, name: string, surface: Locator,
     locale: Locale = 'en') {
     const selectors = ['label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button'];
-    const measured = await captureActivityPresentation(page, info, name, surface, selectors);
+    const measured = await captureActivityPresentation(page, info, name, surface, selectors, true);
     if (!new URL(page.url()).pathname.startsWith('/frontend-pilot')) return measured;
 
     const messages = createTranslator(locale);
@@ -184,6 +184,10 @@ export async function captureActivityCreationPresentation(page: Page, info: Test
         const root = element as HTMLElement;
         const failures: string[] = [];
         const omitted = new Set<HTMLElement>();
+        // Its separate shared projection already checked the opened disclosure.
+        // Retain the same exact heading exception while reviewing slot labels.
+        const permissionHeading = root.querySelector<HTMLElement>('[data-creation-permissions] .accordion-header');
+        if (permissionHeading) omitted.add(permissionHeading);
         const slots = root.querySelectorAll<HTMLElement>('#slotArea .slot');
         if (!slots.length) failures.push('No initial slot to review');
 
@@ -233,7 +237,8 @@ export async function captureActivityCreationPresentation(page: Page, info: Test
         }
 
         const elements = Array.from(root.querySelectorAll<HTMLElement>(expected.selectors.join(',')))
-            .filter(node => node.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true}));
+            .filter(node => node.checkVisibility({opacityProperty: true, visibilityProperty: true, contentVisibilityAuto: true})
+                && !permissionHeading?.contains(node));
         return {failures, text: comparisonText(root).replace(/\s+/gu, ' ').trim(),
             elements: elements.map((node, index) => ({index, omitted: omitted.has(node),
                 text: comparisonText(node).replace(/\s+/gu, ' ').trim()}))};

@@ -50,7 +50,9 @@ const source: FrontendListCreationSource<components['schemas']['PackingDuplicate
         // an invalid generated command. This check owns no backend permission.
         const items = collectedItems();
         if (!items.length) return {error: 'packing.itemsRequired'};
-        return {operation: scope => api.createPacking({...values, items}, image, scope)};
+        // Omitted blank drafts do not renumber visible rows in error feedback.
+        const itemRows = rows.value.flatMap((row, index) => row.title.trim() ? [index + 1] : []);
+        return {operation: scope => api.createPacking({...values, items}, image, scope, itemRows)};
     },
 };
 </script>

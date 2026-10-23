@@ -12,7 +12,7 @@ import {usePageTitle} from '../../composables/pageTitle';
 import {useReadRetryAt} from '../../composables/feedback';
 import {useEventApi} from './api';
 import EventFields from './EventFields.vue';
-import AudiencePermissions from '../../components/permissions/AudiencePermissions.vue';
+import CreationPermissions from '../../components/permissions/CreationPermissions.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PageMessage from '../../components/PageMessage.vue';
@@ -170,11 +170,11 @@ function collectCreation() {
                             label-icon="bi-card-image" :selected-file="image" @choose="image = $event" />
                     </div>
 
-                    <!-- Visible audience controls retain every audience's draft;
+                    <!-- Collapsed audience controls retain every audience's draft;
                          the command submits their masks independently of disclosure. -->
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <AudiencePermissions v-model="defaults" :permissions="definitions?.permissions ?? []"
+                            <CreationPermissions :key="sourceId ?? 'create'" v-model="defaults" :permissions="definitions?.permissions ?? []"
                                 :presets="definitions?.presets ?? []" prefix="event-create-permissions"
                                 :disabled="blocked || !definitions" />
                         </div>

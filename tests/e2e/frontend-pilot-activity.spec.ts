@@ -65,7 +65,12 @@ for (const width of [1280, 390]) {
             const prefix = pilot ? '/frontend-pilot' : '';
             const label = pilot ? 'vue' : 'native';
             await page.goto(`${prefix}/activity/create?locale=en`, {waitUntil: 'domcontentloaded'});
-            if (pilot) await waitForPilotHydration(page);
+            if (pilot) {
+                await waitForPilotHydration(page);
+                const permissions = page.locator('[data-creation-permissions] .accordion-button');
+                await expect(permissions).toHaveAttribute('aria-expanded', 'false');
+                await permissions.click();
+            }
             await page.locator('#title').fill('Dated kitchen duties');
             await page.locator('#startDate').fill('2030-06-01');
             await page.locator('#endDate').fill('2030-06-02');
@@ -424,7 +429,7 @@ test('retains schedule filters across assignments, edits shared text and slot de
 
 test('recovers a cold Activity detail failure through manual Refresh in the same document', async function recoverColdActivity({page}) {
     const plan = await createActivityForE2E(page.request);
-    await page.goto(`/frontend-pilot?locale=en&owner_main_q=${encodeURIComponent(plan.title)}`, {waitUntil: 'domcontentloaded'});
+    await page.goto(`/frontend-pilot/users/dashboard?locale=en&owner_main_q=${encodeURIComponent(plan.title)}`, {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
     // The actual card link includes its description in its accessible name.
@@ -810,7 +815,7 @@ test('adopts shared Activity settings for metadata, image, archive and permanent
     expect((await readActivityForE2E(page.request, plan.id)).archived).toBe(false);
     await observeActivityCommand(page, plan.id, '', 'DELETE',
         () => settings.getByRole('button', {name: 'Delete permanently', exact: true}).click());
-    await expect(page).toHaveURL('/frontend-pilot');
+    await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
     expect((await page.request.get(`/api/v1/activity-plans/${plan.id}`, {headers: await frontendEventHeaders(page.request)})).status()).toBe(404);
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('activity-settings');
     expect(navigation).toEqual([]);

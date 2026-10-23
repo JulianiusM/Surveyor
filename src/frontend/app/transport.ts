@@ -1,11 +1,13 @@
 import createClient from 'openapi-fetch';
 import type {components, paths} from '../../types/api/v1';
-import type {PilotRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
+import type {PilotPlainMessageKey, PilotRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
 import {validateSafeProblemDetails} from '../../../.generated/api/v1/browser/validateSafeProblemDetails.mjs';
 import {validateComparisonToken} from '../../../.generated/api/v1/browser/validateComparisonToken.mjs';
 import {apiCompatibility, operationPolicies} from '../../../.generated/api/v1/policy.mjs';
 import type {ApiOperationId} from '../../types/ApiTransportTypes';
+import type {ErrorObject} from 'ajv';
+import type {PilotInputDiagnostic, PilotInputField} from '../../types/FrontendFeedbackTypes';
 
 type Validator<T> = (value: unknown) => value is T;
 type Problem = components['schemas']['Problem'];
@@ -55,8 +57,37 @@ export class UnconfirmedResponseError extends Error {
     constructor() { super('The server response did not confirm the requested operation.'); }
 }
 
-/** The shared validator rejected input before any network side effect was attempted. */
-export class InvalidInputError extends Error {}
+/** The shared validator rejected input before any network side effect was attempted.
+ * Features may identify the invalid field with a typed catalog key; private
+ * diagnostic text never becomes user feedback or implies a dispatched command. */
+export class InvalidInputError extends Error {
+    constructor(message?: string, readonly messageKey?: PilotPlainMessageKey,
+                readonly diagnostic?: PilotInputDiagnostic) { super(message); }
+}
+
+/** Project a generated rejection onto a feature's visible field without copying
+ * constraints or exposing validator messages, payloads or schema locations.
+ * Call immediately after validation: generated validators reuse their errors. */
+export function generatedInputError(errors: readonly ErrorObject[] | null | undefined,
+                                    field: (path: string, error: ErrorObject) => PilotInputField | PilotPlainMessageKey | undefined): InvalidInputError {
+    // Pick the first actionable field in the generated order. Branch-summary
+    // diagnostics without a visible owner retain the established generic fallback.
+    for (const error of errors ?? []) {
+        const path = error.keyword === 'required'
+            ? error.instancePath + '/' + String(error.params.missingProperty) : error.instancePath;
+        const identity = field(path, error);
+        if (!identity) continue;
+        // Some features already have clearer task-specific wording (for example
+        // the Survey's required recurring choices). Keep that catalog identity.
+        if (typeof identity === 'string') return new InvalidInputError(undefined, identity);
+        const limit = typeof error.params.limit === 'number' ? error.params.limit : undefined;
+        const type = typeof error.params.type === 'string' ? error.params.type
+            : Array.isArray(error.params.type) && error.params.type.includes('integer') ? 'integer' : undefined;
+        const rule = error.keyword === 'pattern' && error.params.pattern === '\\S' ? 'nonBlank' : error.keyword;
+        return new InvalidInputError(undefined, undefined, {field: identity, rule, limit, type});
+    }
+    return new InvalidInputError();
+}
 
 /** Matching generated image/proof operations use one multipart envelope.
  * Features validate/select their own wire shape and endpoint before calling;

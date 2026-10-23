@@ -4,7 +4,7 @@ import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import type {FrontendPilotBootstrap} from '../../types/FrontendPilotTypes';
 import type {PilotLoadingSkeleton} from '../../types/FrontendPilotUiTypes';
-import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import {frontendDocumentUrl, frontendOverviewPath} from '../../modules/lib/frontendIdentity';
 import {resolvePilotHelpQuery} from '../../modules/lib/helpNavigation';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from './context';
 import App from './App.vue';
@@ -54,9 +54,10 @@ const eventPage = javascriptPage({variant: 'event'});
 const eventAdminPage = javascriptPage({variant: 'event-admin'});
 const eventCreatePage = javascriptPage({variant: 'event-create'});
 const guestPage = javascriptPage({variant: 'guest', rows: 2});
-const profilePage = javascriptPage({variant: 'profile', rows: 1});
-const profileRosterPage = javascriptPage({variant: 'roster', rows: 3});
-const workflowPage = javascriptPage({variant: 'workflow'});
+const profilePage = javascriptPage({variant: 'profile', rows: 1, balancedHeader: true, headerActions: true});
+const profileCreatePage = javascriptPage({variant: 'profile', rows: 1, balancedHeader: true});
+const profileRosterPage = javascriptPage({variant: 'roster', rows: 3, balancedHeader: true, headerActions: true});
+const workflowPage = javascriptPage({variant: 'workflow', balancedHeader: true, headerActions: true});
 const loginPage = javascriptPage({variant: 'login', rows: 2});
 const registerPage = javascriptPage({variant: 'identity', rows: 5});
 const identityMessagePage = javascriptPage({variant: 'workflow'});
@@ -68,12 +69,12 @@ const resetPage = javascriptPage({variant: 'identity', rows: 2, footer: 'full'})
 export const pilotRoutes: readonly RouteRecordRaw[] = [
     // Only shared content which another actor can change opts into
     // automatic document replacement. New routes default to explicit recovery.
-    {path: '/frontend-pilot', component: OverviewPage, meta: {...overviewPage, dynamicContent: true}},
-    {path: '/frontend-pilot/home', component: LandingPage},
+    {path: '/frontend-pilot', alias: '/frontend-pilot/home', component: LandingPage},
+    {path: frontendOverviewPath, component: OverviewPage, meta: {...overviewPage, dynamicContent: true}},
     {path: '/frontend-pilot/message', component: CommonPage},
     {path: '/frontend-pilot/users/profile', component: ProfileAdministrationPage, meta: {...profilePage, profileMode: 'edit'}},
     {path: '/frontend-pilot/users/profile/manage', component: ProfileAdministrationPage, meta: {...profileRosterPage, profileMode: 'manage'}},
-    {path: '/frontend-pilot/users/profile/create', component: ProfileAdministrationPage, meta: {...profilePage, profileMode: 'create'}},
+    {path: '/frontend-pilot/users/profile/create', component: ProfileAdministrationPage, meta: {...profileCreatePage, profileMode: 'create'}},
     // Warm workflow visits share read-only admission and command lifecycles.
     // Explicit issuance/confirmation never belongs to Query or route refresh.
     {path: '/frontend-pilot/users/profile/migrate/request', component: ProfileWorkflowPage, meta: {...workflowPage, profileWorkflow: 'token'}},

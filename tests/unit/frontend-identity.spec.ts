@@ -14,7 +14,7 @@ describe('frontend identity destinations', () => {
         '/frontend-pilot/../../users/login', '/frontend-pilot/../outside', '/frontend-pilotish',
         '/frontend-pilot/\r\nLocation: https://outside.invalid', 'javascript:alert(1)'])
     ('keeps an unsafe or unrelated return inside the frontend: %j', value => {
-        expect(safeFrontendReturn(value)).toBe('/frontend-pilot');
+        expect(safeFrontendReturn(value)).toBe('/frontend-pilot/users/dashboard');
     });
 });
 

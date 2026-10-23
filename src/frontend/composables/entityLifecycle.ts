@@ -7,6 +7,7 @@ import type {useCommand} from './command';
 import type {EntityAutomationMessages, EntityLifecycleOperations, EntityRemovalRequest} from '../../types/FrontendEntitySettingsTypes';
 import {useActionState, usePilot} from '../app/context';
 import {overviewKeys} from '../app/queryKeys';
+import {frontendOverviewPath} from '../../modules/lib/frontendIdentity';
 
 // These existing Event/Activity messages describe one shared schedule action.
 // A feature may supply its established override without duplicating its policy.
@@ -114,7 +115,7 @@ export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'r
                 // The write is already confirmed. A failed current Overview read
                 // belongs to the existing delivery receipt, whose Retry repeats
                 // only admitted reads/navigation and never this DELETE.
-                await destination.navigate('/frontend-pilot', scope, origin,
+                await destination.navigate(frontendOverviewPath, scope, origin,
                     {kind: 'success', messageKey: request.success}, false, readFamilies);
             }
         } finally {

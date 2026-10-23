@@ -13,6 +13,7 @@ import {completeIdentityEntry, useConfirmedNavigation, usePageEntry} from '../..
 import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {usePageTitle} from '../../composables/pageTitle';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
+import {frontendOverviewPath} from '../../../modules/lib/frontendIdentity';
 import {IdentityAdministrationApi} from './administrationApi';
 import {identityAdministrationKeys} from '../../app/queryKeys';
 import FormField from '../../components/FormField.vue';
@@ -21,7 +22,8 @@ import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
-import EntityListToolbar from '../../components/EntityListToolbar.vue';
+import RefreshButton from '../../components/RefreshButton.vue';
+import PageHeading from '../../components/PageHeading.vue';
 
 type Profile = components['schemas']['ProfileSettings'];
 type Projection = Profile | components['schemas']['ProfileManagement'];
@@ -250,7 +252,7 @@ async function switchProfile(id: string): Promise<void> {
     // Bootstrap and private-cache retirement follow the same path as login and logout.
     finished.value = true;
     await completeIdentityEntry(context, router, result,
-        {kind: 'redirect', url: '/frontend-pilot', notice: null}, origin, completion);
+        {kind: 'redirect', url: frontendOverviewPath, notice: null}, origin, completion);
 }
 
 function changeProfile(scope: PilotRequestScope): Promise<components['schemas']['IdentityResult']> {
@@ -273,7 +275,9 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
         <ActionButton variant="outline-light" :state="resourceRecovery" @click="recover">{{ messages.t('common.retry') }}</ActionButton>
     </PageMessage>
     <section v-else class="card bg-dark text-white mb-3">
-        <h1 class="card-header text-center"><i class="bi me-2" :class="mode === 'create' ? 'bi-person-plus-fill' : 'bi-archive-fill'" aria-hidden="true"></i>{{ title }}</h1>
+        <PageHeading class="card-header" :title="title" :icon="mode === 'create' ? 'bi-person-plus-fill' : 'bi-archive-fill'">
+            <template #actions><RefreshButton v-if="mode !== 'create'" :state="resourceRecovery" @refresh="recover" /></template>
+        </PageHeading>
         <div class="card-body">
             <!-- Read and command receipts retain independent recovery, pending and uncertainty lifetimes. -->
             <StatusNotice v-if="pageAdmission.error.value" kind="warning" :read-error="pageAdmission.error.value"
@@ -298,8 +302,6 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
             </StatusNotice>
             <LoadingSkeleton v-if="!data && !projection.error.value" v-bind="route.meta.loadingSkeleton" />
             <template v-if="data">
-                <EntityListToolbar v-if="mode !== 'create'" :refresh-label="messages.t('common.refresh')"
-                    :state="resourceRecovery" @refresh="recover" />
                 <!-- The account roster is projected explicitly; each action adopts the existing switch command. -->
                 <ul v-if="mode === 'manage'" class="list-group">
                     <li v-for="owned in profiles" :key="owned.id" class="list-group-item d-flex justify-content-between align-items-start">

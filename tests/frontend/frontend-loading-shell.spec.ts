@@ -75,6 +75,29 @@ async function mountedApp() {
 }
 
 describe('shared skeleton accessibility', () => {
+    it.each([
+        ['/frontend-pilot/users/profile', true],
+        ['/frontend-pilot/users/profile/manage', true],
+        ['/frontend-pilot/users/profile/create', false],
+        ['/frontend-pilot/users/profile/migrate/request', true],
+        ['/frontend-pilot/users/profile/delete', true],
+        ['/frontend-pilot/users/account/delete', true],
+    ] as const)('matches the shared balanced profile heading on %s', async (path, actions) => {
+        const result = await render(path, {session});
+        const host = document.createElement('div');
+        host.innerHTML = result.html;
+        expect(host.querySelector('.pilot-skeleton-page-header.pilot-skeleton-balanced-header')).not.toBeNull();
+        expect(!!host.querySelector('.pilot-skeleton-header-actions')).toBe(actions);
+    });
+
+    it('keeps generic identity workflow headings independent of profile action geometry', async () => {
+        const result = await render('/frontend-pilot/users/activate/fixture-token', {session});
+        const host = document.createElement('div');
+        host.innerHTML = result.html;
+        expect(host.querySelector('.pilot-skeleton-page-header')).not.toBeNull();
+        expect(host.querySelector('.pilot-skeleton-balanced-header, .pilot-skeleton-header-actions')).toBeNull();
+    });
+
     it('keeps accordion state with its feature and guards synthetic activation before initialization or while disabled', async () => {
         const context = createPilotContext({session}, false);
         const wrapper = mount(AppAccordionButton, {props: {expanded: false, controls: 'retained-panel'},
@@ -193,6 +216,8 @@ describe('shared skeleton accessibility', () => {
         host.innerHTML = result.html;
         const skeleton = host.querySelector<HTMLElement>('main [data-loading-skeleton="activity"]')!;
         expect(skeleton).not.toBeNull();
+        expect(skeleton.querySelector('.pilot-skeleton-page-header.pilot-skeleton-balanced-header')).not.toBeNull();
+        expect(skeleton.querySelector('.pilot-skeleton-header-actions')).not.toBeNull();
         expect(skeleton.querySelector('[data-skeleton-columns]')?.getAttribute('data-skeleton-columns')).toBe('7');
         expect(skeleton.querySelector('.pilot-skeleton-counters')).not.toBeNull();
         expect(skeleton.querySelector('.pilot-skeleton-field')).toBeNull();
@@ -338,7 +363,10 @@ describe('lazy route delivery', () => {
         input.element.setSelectionRange(2, 7);
         const navigation = router.push('/frontend-pilot/slow');
         await flushPromises();
-        expect(wrapper.get('.pilot-navigation-loading').attributes('data-loading-skeleton')).toBe('lines');
+        expect(wrapper.get('.pilot-navigation-loading').attributes('role')).toBe('status');
+        expect(wrapper.get('.pilot-navigation-loading').classes()).toContain('visually-hidden');
+        expect(wrapper.find('main [data-loading-skeleton]').exists()).toBe(false);
+        expect(wrapper.find('header .pilot-navigation-indicator .spinner-border').exists()).toBe(true);
         expect(router.currentRoute.value.path).toBe('/frontend-pilot');
         expect(wrapper.get('main input').element).toBe(input.element);
         expect(input.element.value).toBe('Retained local edit');

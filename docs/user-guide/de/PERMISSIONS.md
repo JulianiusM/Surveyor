@@ -4,10 +4,10 @@ documentation-metadata
 audience: Organisatoren; erfahrene Administratoren
 owner: permission-system maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
-source-anchors: src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/components/EntityAccessEditor.vue; src/frontend/components/permissions/AudiencePermissions.vue; src/locales/
+verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
+source-anchors: src/modules/lib/permissions.ts; src/modules/permissionEngine.ts; src/middleware/guestFlowFactory.ts; src/middleware/permissionMiddleware.ts; src/locales/de.json; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/components/EntityAccessEditor.vue; src/frontend/components/permissions/AudiencePermissions.vue; src/locales/; src/frontend/components/permissions/CreationPermissions.vue
 heading-anchors: 1:permissions-and-sharing; 2:choose-a-common-setup; 2:four-rules-to-remember; 3:example-of-cumulative-grants; 2:who-receives-each-grant; 2:open-the-permission-controls; 3:while-creating-an-item; 3:after-creation; 2:configure-group-permissions; 2:add-or-change-a-named-administrator; 2:sharing-recipes; 3:normal-open-collaboration; 3:full-account-profiles-only; 3:registered-event-participants-only; 3:read-only-participation; 3:let-participants-add-entries-without-managing-everybody; 3:delegate-a-limited-organizer; 3:delegate-property-or-event-link-editing; 3:delegate-complete-control; 2:permission-label-reference; 2:preset-reference; 3:initial-selections; 2:parent-and-child-permissions; 2:page-access-is-not-the-same-as-an-action-permission; 2:troubleshooting; 3:a-permission-remains-after-i-cleared-it; 3:a-full-account-user-receives-a-guest-permission; 3:a-participant-cannot-use-an-action-on-a-linked-list-or-plan; 3:an-event-organizer-cannot-open-the-administration-dashboard; 3:an-administrator-appears-but-cannot-do-anything; 3:i-cannot-find-a-guest-in-add-administrator
 next-review: permission-or-entity-settings-behavior-change
 production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
@@ -64,7 +64,7 @@ Persönliches **Für mich ausblenden**, **Für mich einblenden** und **Standards
 
 ### Beim Erstellen eines Eintrags
 
-Erstellungsformulare für Veranstaltungen, Aktivitätenpläne, Pack- und Fahrtenlisten enthalten **Gruppenberechtigungen**. Wähle die **Zielgruppe der Berechtigungen**, verwende **Voreinstellungen** oder einzelne Kontrollkästchen und sende anschließend das Erstellungsformular ab.
+Erstellungsformulare für Veranstaltungen, Aktivitätenpläne, Pack- und Fahrtenlisten enthalten den zunächst eingeklappten Abschnitt **Gruppenberechtigungen**. Öffne ihn, um die **Zielgruppe der Berechtigungen** zu wählen und **Voreinstellungen** oder einzelne Kontrollkästchen zu verwenden. Beim Zuklappen bleiben deine Änderungen erhalten und werden beim Erstellen übernommen.
 
 Umfragen zeigen diese Matrix nicht.
 

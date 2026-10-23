@@ -22,7 +22,7 @@ import EntityAssignees from '../../components/EntityAssignees.vue';
 import EntityAssignmentActions from '../../components/EntityAssignmentActions.vue';
 import EntityQuickAdd from '../../components/EntityQuickAdd.vue';
 import EntityListCounters from '../../components/EntityListCounters.vue';
-import EntityListToolbar from '../../components/EntityListToolbar.vue';
+import RefreshButton from '../../components/RefreshButton.vue';
 import FormField from '../../components/FormField.vue';
 
 type Item = components['schemas']['DriversItemView'];
@@ -210,7 +210,9 @@ const reorder = useListReorder({
             :settings-available="!!data?.capabilities.manageSettings"
             :settings-disabled="blocked"
             @settings="editorOpen = true"
-        />
+        >
+            <template #actions><RefreshButton :state="readAction" @refresh="refresh" /></template>
+        </EntityHeader>
         <div class="card-body">
             <!-- Native item/assignment commands present transient feedback in the
                  shared page alert host; durable reconciliation stays beside the list. -->
@@ -228,12 +230,10 @@ const reorder = useListReorder({
                     :open="data.counters.open" :empty="data.counters.empty" :participants-label="messages.t('packing.participants')"
                     :items-label="messages.t('drivers.items')" :open-label="messages.t('packing.open')" :empty-label="messages.t('drivers.empty')" />
             </template>
-            <!-- The native scrolling container owns its editing hint as well as the
-                 table. Keep the approved read control in that row, including before
-                 data arrives; horizontal scrolling must not create a fixed hint. -->
+            <!-- The scrolling container retains its editing hint and table;
+                 Refresh stays in the entity heading independently of data. -->
             <div class="table-responsive">
-                <EntityListToolbar :hint="messages.t('packing.inlineHint')" :refresh-label="messages.t('common.refresh')"
-                    :state="readAction" @refresh="refresh" />
+                <small class="d-block mb-1 text-info fst-italic fw-light">{{ messages.t('packing.inlineHint') }}</small>
                 <template v-if="data">
                     <table
                         class="table table-dark table-bordered table-hover align-middle"
@@ -262,9 +262,11 @@ const reorder = useListReorder({
                                 :key="item.id"
                                 :data-item-id="item.id"
                                 :draggable="data.capabilities.reorder && !blocked && !editing"
+                                :class="reorder.classes(item.id)"
                                 @dragstart="reorder.begin(item.id, $event)"
                                 @dragend="reorder.reset"
-                                @dragover.prevent
+                                @dragover="reorder.over(item.id, $event)"
+                                @dragleave="reorder.leave(item.id, $event)"
                                 @drop="reorder.drop(item.id, $event)"
                             >
                                 <td>{{ item.driverName }}</td>

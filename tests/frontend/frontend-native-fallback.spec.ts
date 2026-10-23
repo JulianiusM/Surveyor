@@ -158,7 +158,7 @@ describe('admitted initial document delivery', () => {
         vi.stubGlobal('fetch', fetch);
         const account: components['schemas']['SessionView'] = {...session, kind: 'account',
             activeProfile: {id: profileId, name: 'Account fixture'}, profiles: [{id: profileId, name: 'Account fixture'}], logoutUrl: '/users/logout'};
-        const url = '/frontend-pilot?participant_hidden_open=1&owner_main_q=equipment';
+        const url = '/frontend-pilot/users/dashboard?participant_hidden_open=1&owner_main_q=equipment';
         const overview = [region('participant', 'main'), region('participant', 'hidden'), region('owner', 'main'), region('owner', 'hidden')];
         overview[2].q = 'equipment';
         const result = await render(url, {session: account, overview});

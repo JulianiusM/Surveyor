@@ -4,10 +4,10 @@ documentation-metadata
 audience: drivers; passengers; transport organizers
 owner: drivers-list feature maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
-source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/drivers/drivers-create.pug; src/views/drivers/drivers-view.pug; src/public/js/drivers.ts; src/routes/drivers.ts; src/routes/api/drivers.ts; src/controller/driversController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/drivers/DriversList.ts; src/modules/database/entities/drivers/DriversItem.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/services/DriverService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/drivers-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/decisions/DEC-003-DRIVER-LIST-PARTICIPANT-COUNT.md; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/drivers/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
+verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/drivers/drivers-create.pug; src/views/drivers/drivers-view.pug; src/public/js/drivers.ts; src/routes/drivers.ts; src/routes/api/drivers.ts; src/controller/driversController.ts; src/middleware/guestFlowFactory.ts; src/middleware/assignFlowFactory.ts; src/middleware/entityHeaderUpdateHandler.ts; src/modules/database/entities/drivers/DriversList.ts; src/modules/database/entities/drivers/DriversItem.ts; src/modules/database/entities/drivers/DriversAssignment.ts; src/modules/database/services/DriverService.ts; src/modules/lib/permissions.ts; src/views/event/event-dashboard.pug; src/views/modules/module_entity_header.pug; src/views/modules/module_unified_entity_cards.pug; tests/integration/drivers-workflows.spec.ts; tests/integration/controller-smoke-workflows.spec.ts; docs/decisions/DEC-003-DRIVER-LIST-PARTICIPANT-COUNT.md; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/drivers/; src/frontend/components/EntitySettingsDialog.vue; src/locales/; src/frontend/components/permissions/CreationPermissions.vue
 next-review: drivers-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
@@ -181,7 +181,7 @@ The creation form does not add driver rows. Create the list first, then grant th
 
 ### 3. Review sharing before creation
 
-Drivers lists use the general cumulative permission system. The normal non-event default gives the Public audience basic access but does not include **Item Add**. Decide who should be allowed to offer rides before sharing the link.
+Open **Group Permissions** to review sharing. Drivers lists use the general cumulative permission system. The normal non-event default gives the Public audience basic access but does not include **Item Add**. Decide who should be allowed to offer rides before sharing the link.
 
 For an event-linked list, granting **Item Add** to the Participant audience is a common way to limit ride creation to registered event participants. Other arrangements are possible; see [Permissions and Sharing](PERMISSIONS.md).
 
@@ -306,7 +306,7 @@ Duplicating requires a full account and **Data Duplicate**. Start from the list'
 
 1. Open the drivers list and select **Entity settings**.
 2. Under **Actions**, select **Duplicate**.
-3. Review the prefilled title, description, and **Group Permissions**.
+3. Review the prefilled title and description, then open **Group Permissions** to check sharing.
 4. Choose **Assign to event (optional)** for the new list when needed.
 5. Select **Create list**.
 6. Ask drivers to recreate the applicable ride offers under their own active profiles.

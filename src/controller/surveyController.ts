@@ -15,6 +15,7 @@
  */
 
 import {Request} from "express";
+import {QueryFailedError} from 'typeorm';
 import {
     archiveEntity, assertEntityPropertyContext, classifyArchiveCommandError, comparisonToken, entityTag,
     getArchivePresentations, getEntityPropertyPresentation, normalizeBasicProperties,
@@ -383,14 +384,26 @@ export async function readSurveySettings(id: string, session: SessionLike): Prom
 }
 
 /** Any admitted account or registered guest may extend the shared choices.
- * The finite generated input constrains transport; the existing operation owns
- * persistence and retains duplicates and archived-survey behavior as before. */
+ * The finite generated input constrains transport and the existing unique
+ * index remains authoritative, including a choice added after the caller read. */
 export async function addSurveyCombination(id: string, body: components['schemas']['SurveyCombinationInput'], session: SessionLike,
     prepare?: SurveyMutationPreparation): Promise<components['schemas']['MutationResult']> {
     requireSurveyProfile(session);
     const survey = await requireSurvey(id);
     prepare?.({changed: true});
-    await addCombination(survey, body.weekday, body.nthWeek);
+    try {
+        await addCombination(survey, body.weekday, body.nthWeek);
+    } catch (failure) {
+        // This operation inserts only one generated-ID recurring choice. Its
+        // duplicate-key rejection confirms that the weekday/occurrence already
+        // exists; classify it without exposing driver text or adding a racy
+        // precheck. Every other persistence failure retains normal uncertainty.
+        if (failure instanceof QueryFailedError
+            && (failure.driverError as Error & {code?: string}).code === 'ER_DUP_ENTRY') {
+            throw new ApiProblem('SURVEY_COMBINATION_EXISTS');
+        }
+        throw failure;
+    }
     return {changed: true};
 }
 

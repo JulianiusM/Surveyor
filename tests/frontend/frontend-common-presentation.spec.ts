@@ -106,6 +106,32 @@ function releaseDisabledFocus(button: HTMLButtonElement | HTMLInputElement | HTM
 }
 
 describe('common frontend presentation', () => {
+    it.each(['anonymous', 'account', 'guest'] as const)('keeps Home public and separate from personal Overview for %s visitors', async kind => {
+        const selected = kind === 'anonymous' ? session : accountSession(kind);
+        const home = await render('/frontend-pilot', {session: selected, landing: {quickCreate: 'event'}});
+        const root = document.createElement('div');
+        root.innerHTML = home.html;
+
+        // Exercise the actual router/SSR tree, not a replacement landing view.
+        // Home must never mount private collection readers or their skeletons.
+        expect(root.querySelector('main h1')?.textContent?.trim()).toBe('Surveyor');
+        expect(root.querySelector('[data-loading-skeleton="overview"]')).toBeNull();
+        expect(root.querySelector('.js-overview-region')).toBeNull();
+        const homeLink = [...root.querySelectorAll('header a')].find(link => link.textContent?.trim() === 'Home')!;
+        const overviewLink = [...root.querySelectorAll('header a')].find(link => link.textContent?.trim() === 'Your overview')!;
+        expect(homeLink.getAttribute('href')).toBe('/frontend-pilot');
+        expect(overviewLink.getAttribute('href')).toBe('/frontend-pilot/users/dashboard');
+
+        // The distinct dashboard retains progressive private reads. The prior
+        // explicit Home URL remains an alias for existing bookmarks.
+        const overview = await render('/frontend-pilot/users/dashboard', {session: selected});
+        expect(overview.html).toContain('data-loading-skeleton="overview"');
+        const alias = await render('/frontend-pilot/home', {session: selected, landing: {quickCreate: 'event'}});
+        root.innerHTML = alias.html;
+        expect(root.querySelector('main h1')?.textContent?.trim()).toBe('Surveyor');
+        expect(root.querySelector('[data-loading-skeleton="overview"]')).toBeNull();
+    });
+
     it.each([false, true])('retains locale selector focus after its actual preference command unless the user moves elsewhere (%s)', async cancelled => {
         let finish!: (response: Response) => void;
         const held = new Promise<Response>(function holdLocaleResponse(resolve) { finish = resolve; });
@@ -583,7 +609,7 @@ describe('common frontend presentation', () => {
         const {wrapper, request} = await mounted(LandingPage, {}, {session: current, landing: {quickCreate: 'survey'}});
         expect(texts(wrapper.element, 'h1, h2, p, li')).toEqual(texts(native, 'h1, h2, p, li'));
         expect(wrapper.get('a.btn-outline-light').attributes('href')).toBe('/frontend-pilot/survey/create');
-        expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/frontend-pilot');
+        expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/frontend-pilot/users/dashboard');
         expect(wrapper.find('fixture').exists()).toBe(false);
         expect(request).not.toHaveBeenCalled();
     });
@@ -653,14 +679,14 @@ describe('common frontend presentation', () => {
             .rejects.toThrow('Invalid pilot bootstrap field: commonPage');
     });
 
-    it.each(['info', 'success', 'warning', 'error'] as const)('retains native %s message headings/body policy and returns Home to the opt-in landing', async severity => {
+    it.each(['info', 'success', 'warning', 'error'] as const)('retains native %s message headings/body policy and returns Home to the landing page', async severity => {
         const message = 'A confirmed <safe> outcome';
         const native = nativePage(renderNativeMessage, {status: severity, message}).querySelector('main > .card')!;
         const {wrapper, context, request} = await mounted(CommonPage,
             {page: {kind: 'message', severity, message}}, {}, '/frontend-pilot/message');
         expect(texts(wrapper.element, 'h1')).toEqual(texts(native, 'h1'));
         expect(texts(wrapper.element, '.alert')).toEqual(texts(native, '.alert'));
-        expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/frontend-pilot/home');
+        expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/frontend-pilot');
         expect(context.pageTitle.value).toBe(nativePage(renderNativeMessage, {status: severity, message}).querySelector('title')!.textContent);
         expect(wrapper.find('safe').exists()).toBe(false);
         expect(request).not.toHaveBeenCalled();

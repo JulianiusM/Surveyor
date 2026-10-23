@@ -1,6 +1,22 @@
 import type {Ref} from 'vue';
 import type {PilotActionState, PilotPlainMessageKey} from './FrontendPilotUiTypes';
 
+/** Feature-owned field identity for safe generated-input feedback. Draft values
+ * and parser text are deliberately absent; collection positions identify controls. */
+export interface PilotInputField {
+    label: PilotPlainMessageKey;
+    row?: {label: PilotPlainMessageKey; number: number; day?: string};
+}
+
+/** The generated schema owns these rules and their limits. Presentation only
+ * retains enough metadata to explain a rejection across locale changes. */
+export interface PilotInputDiagnostic {
+    field: PilotInputField;
+    rule: string;
+    limit?: number;
+    type?: string;
+}
+
 /** A notice presents an existing operation's action without owning its admission or retry policy. */
 export interface PilotNoticeAction {
     /** Omitted when the existing action uses only shared initialization and its handler's guards. */

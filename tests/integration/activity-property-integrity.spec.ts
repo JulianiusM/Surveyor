@@ -1,7 +1,7 @@
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import activityController from '../../src/controller/activityController';
 import {changeEntityEvent} from '../../src/controller/entityAdminController';
-import {buildPlanRecommendationContext, saveGeneratedRecommendations} from '../../src/controller/activityController';
+import {buildPlanRecommendationContext, readActivityRequirements, saveActivityRequirements, saveGeneratedRecommendations} from '../../src/controller/activityController';
 import {ActivityPlan} from '../../src/modules/database/entities/activity/ActivityPlan';
 import {Profile} from '../../src/modules/database/entities/user/Profile';
 import {AppDataSource} from '../../src/modules/database/dataSource';
@@ -33,6 +33,48 @@ beforeAll(async function prepareDatabase() {
 afterAll(closeIntegrationDatabase);
 
 describe('activity property and relationship integrity', () => {
+    it('removes only explicitly named former-event overrides through the versioned shared settings operation', async () => {
+        const oldEventId = await createIntegrationEvent(owner.id, 'Override original event');
+        const newEventId = await createIntegrationEvent(owner.id, 'Override destination event');
+        await registerEventAttendance(oldEventId, previousParticipant, {});
+        await registerEventAttendance(oldEventId, currentParticipant, {});
+        const planId = await createEventActivityPlan(owner.id, oldEventId);
+        await activityController.updateRequirements(planId, {assignmentMode: 'FREE', overrides: [
+            {profileId: previousParticipant.id, requiredShifts: 2}, {profileId: currentParticipant.id, requiredShifts: 1},
+        ]});
+        const plan = (await activityService.getActivityPlanById(planId))!;
+        const actor = {profile: owner, auth: {user: owner.user!}};
+        await changeEntityEvent('activity', plan, {eventId: newEventId, expectedEventId: oldEventId}, actor);
+        const config = await readActivityRequirements(planId, actor);
+        const removed = config.overrides.find(row => row.profileId === previousParticipant.id)!;
+        const retained = config.overrides.find(row => row.profileId === currentParticipant.id)!;
+        const removedId = removed.id;
+        const retainedId = retained.id;
+        expect(removedId).toBeDefined();
+        expect(retainedId).toBeDefined();
+        if (!removedId || !retainedId) throw new Error('Saved overrides must expose their persisted identities');
+        const input = {...config.plan, roleRequirements: config.roleRequirements, stayRequirements: config.stayRequirements, overrides: []};
+
+        // Invalid, duplicated or contradictory identities fail before the same
+        // controller-owned transaction writes either settings or override rows.
+        await expect(saveActivityRequirements(planId, {...input, removedOverrideIds: ['999999999']}, actor))
+            .rejects.toMatchObject({status: 400});
+        await expect(saveActivityRequirements(planId, {...input, removedOverrideIds: [removedId, removedId]}, actor))
+            .rejects.toMatchObject({status: 400});
+        await expect(saveActivityRequirements(planId, {...input, overrides: [removed], removedOverrideIds: [removedId]}, actor))
+            .rejects.toMatchObject({status: 400});
+        expect((await requirementService.getRequirementConfiguration(planId))!.overrides).toHaveLength(2);
+
+        // Omission retains both rows even for a versioned caller. Explicitly
+        // removing one cannot erase the other row absent from this submission.
+        await saveActivityRequirements(planId, input, actor);
+        expect((await requirementService.getRequirementConfiguration(planId))!.overrides).toHaveLength(2);
+        await saveActivityRequirements(planId, {...input, removedOverrideIds: [removedId]}, actor);
+        expect((await requirementService.getRequirementConfiguration(planId))!.overrides).toEqual([
+            expect.objectContaining({id: Number(retainedId), profileId: currentParticipant.id, requiredShifts: 1}),
+        ]);
+    });
+
     it('saves a property patch atomically and refuses dates excluding committed slots', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
         const plan = (await activityService.getActivityPlanById(planId))!;

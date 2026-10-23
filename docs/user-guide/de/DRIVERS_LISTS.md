@@ -4,10 +4,10 @@ documentation-metadata
 audience: Fahrer; Mitfahrer; Transportorganisatoren
 owner: drivers-list feature maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
-source-anchors: docs/user-guide/en/DRIVERS_LISTS.md; src/frontend/features/drivers/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
+verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
+source-anchors: docs/user-guide/en/DRIVERS_LISTS.md; src/frontend/features/drivers/; src/frontend/components/EntitySettingsDialog.vue; src/locales/; src/frontend/components/permissions/CreationPermissions.vue
 heading-anchors: 1:drivers-lists; 2:choose-your-task; 2:understand-drivers-rides-and-assignments; 2:open-and-read-a-drivers-list; 3:read-the-driver-table; 2:take-a-passenger-place; 3:remove-yourself-from-a-ride; 2:offer-a-ride; 3:correct-the-displayed-driver-name; 2:open-a-list-as-a-guest; 2:understand-the-counters; 3:counter-examples; 2:create-a-drivers-list; 3:1-open-the-creation-form; 3:2-enter-the-list-details; 3:3-review-sharing-before-creation; 3:4-create-and-test-the-list; 2:manage-list-content; 3:edit-the-list-title-or-description; 2:manage-ride-offers; 3:edit-a-ride-description; 3:change-passenger-capacity; 3:reorder-rides; 3:remove-another-passenger; 3:delete-a-ride-offer; 2:manage-the-header-image; 2:link-a-drivers-list-to-an-event; 2:configure-sharing-and-permissions; 3:privacy-before-sharing; 2:duplicate-or-delete-a-drivers-list; 3:duplicate-a-list; 3:delete-a-complete-list; 2:capabilities-and-limits; 2:practical-examples; 3:separate-outbound-and-return-journeys; 3:several-departure-times; 3:event-transport; 2:archive-or-restore-a-list; 2:troubleshooting; 3:add-new-item-is-missing; 3:the-wrong-driver-name-appears; 3:take-is-missing-or-does-not-work; 3:an-event-linked-list-says-registration-is-required; 3:the-participant-number-seems-too-low; 3:the-list-is-missing-from-your-overview; 3:i-cannot-edit-or-remove-another-person-s-row-or-assignment; 3:a-capacity-change-would-leave-too-many-passengers; 2:related-guides
 next-review: drivers-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
@@ -182,7 +182,7 @@ Das Erstellungsformular legt keine Fahrerzeilen an. Erstellen Sie zuerst die Lis
 
 ### 3. Die Freigaben vor dem Erstellen prüfen
 
-Fahrgemeinschaftslisten verwenden das allgemeine kumulative Berechtigungssystem. Die normale Voreinstellung ohne Veranstaltung gewährt der Zielgruppe **Öffentlich** grundlegenden Zugriff, enthält aber kein **Gegenstände hinzufügen**. Legen Sie vor dem Teilen des Links fest, wer Fahrten anbieten darf.
+Öffnen Sie **Gruppenberechtigungen**, um die Freigaben zu prüfen. Fahrgemeinschaftslisten verwenden das allgemeine kumulative Berechtigungssystem. Die normale Voreinstellung ohne Veranstaltung gewährt der Zielgruppe **Öffentlich** grundlegenden Zugriff, enthält aber kein **Gegenstände hinzufügen**. Legen Sie vor dem Teilen des Links fest, wer Fahrten anbieten darf.
 
 Bei einer mit einer Veranstaltung verknüpften Liste ist **Gegenstände hinzufügen** für die Zielgruppe **Teilnehmer** eine übliche Möglichkeit, Fahrtangebote auf angemeldete Veranstaltungsteilnehmer zu beschränken. Andere Regeln sind möglich; siehe [Berechtigungen und Freigaben](PERMISSIONS.md).
 
@@ -307,7 +307,7 @@ Das Duplizieren erfordert ein vollständiges Benutzerkonto und **Daten duplizier
 
 1. Öffnen Sie die Fahrgemeinschaftsliste und wählen Sie **Entitätseinstellungen**.
 2. Wählen Sie unter **Aktionen** die Aktion **Duplizieren**.
-3. Prüfen Sie den vorausgefüllten Titel, die Beschreibung und **Gruppenberechtigungen**.
+3. Prüfen Sie den vorausgefüllten Titel und die Beschreibung. Öffnen Sie anschließend **Gruppenberechtigungen**, um die Freigaben zu prüfen.
 4. Wählen Sie bei Bedarf **Veranstaltung zuordnen (optional)** für die neue Liste.
 5. Wählen Sie **Liste erstellen**.
 6. Bitten Sie die Fahrer, passende Fahrtangebote unter ihren eigenen aktiven Profilen erneut anzulegen.

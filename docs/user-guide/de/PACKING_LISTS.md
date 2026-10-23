@@ -4,11 +4,11 @@ documentation-metadata
 audience: Packlistenteilnehmer; Packlistenorganisatoren
 owner: packing-list feature maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; settings save/discard, refresh and notice wording corrected where applicable. Native business reference, declared anchors and image bytes retained; no new browser execution claimed.
+verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
 heading-anchors: 1:packing-lists; 2:choose-your-task; 2:understand-the-three-kinds-of-state; 2:open-and-read-a-packing-list; 3:read-the-summary-counters; 3:read-the-item-table; 2:take-an-item; 3:remove-yourself; 2:understand-everyone-items; 2:use-packed-as-your-personal-checklist; 2:open-a-list-as-a-guest; 2:create-a-packing-list; 3:1-open-the-creation-form; 3:2-enter-the-list-details; 3:3-add-the-initial-items; 3:4-select-create-list; 2:manage-list-content; 3:edit-the-list-title-or-description; 3:add-another-item; 3:edit-an-existing-item; 3:reorder-items; 3:remove-another-participant; 3:delete-an-item; 2:manage-the-header-image; 2:link-a-packing-list-to-an-event; 2:configure-sharing-and-permissions; 3:privacy-before-sharing; 2:duplicate-or-delete-a-packing-list; 3:duplicate-a-list; 3:delete-a-list; 2:capabilities-and-limits; 2:practical-examples; 3:shared-camping-equipment; 3:personal-essentials; 3:event-setup; 2:archive-or-restore-a-list; 2:troubleshooting; 3:the-list-cannot-be-created; 3:take-is-missing-or-does-not-work; 3:an-event-linked-list-says-registration-is-required; 3:the-list-is-missing-from-your-overview; 3:my-packed-marks-disappeared; 3:someone-else-can-see-my-packed-marks; 3:item-editing-or-organizer-controls-are-missing; 3:an-item-stays-at-the-top-of-the-list; 2:related-guides
-source-anchors: src/views/packing/packing-view.pug; src/controller/packingController.ts; src/locales/de.json; docs/user-guide/de/assets/packing-shared-vs-local.png; scripts/generate-help-visuals.mjs; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; tests/frontend/frontend-pilot-editor.spec.ts; src/frontend/features/packing/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
+source-anchors: src/views/packing/packing-view.pug; src/controller/packingController.ts; src/locales/de.json; docs/user-guide/de/assets/packing-shared-vs-local.png; scripts/generate-help-visuals.mjs; src/frontend/features/identity/IdentityPage.vue; src/frontend/features/overview/OverviewPage.vue; src/frontend/features/packing/PackingPage.vue; src/frontend/features/packing/packed.ts; tests/frontend/frontend-pilot-editor.spec.ts; src/frontend/features/packing/; src/frontend/components/EntitySettingsDialog.vue; src/locales/; src/frontend/components/permissions/CreationPermissions.vue
 next-review: packing-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
 -->
@@ -166,7 +166,7 @@ Veranstaltungsorganisatoren können stattdessen in **Veranstaltungsverwaltung** 
 | **Veranstaltung zuordnen (optional)** | Eine Veranstaltung, mit der das aktuelle Profil verknüpfen darf, auch vergangen oder archiviert; **Keine Veranstaltung** für eine eigenständige Liste. |
 | **Gruppenberechtigungen** | Zielgruppenrechte für Ansicht, Bearbeitung, Zusagen, Verwaltung, Duplizieren und verwandte Aktionen. |
 
-Das Formular startet mit den Standardrechten für Nicht-Veranstaltungseinträge. Lies [Berechtigungen und Freigaben](PERMISSIONS.md), bevor du sensible Namen veröffentlichst oder Bearbeitungsrechte erteilst.
+Das Formular startet mit den Standardrechten für Nicht-Veranstaltungseinträge. Öffne **Gruppenberechtigungen**, um sie zu prüfen oder zu ändern. Lies [Berechtigungen und Freigaben](PERMISSIONS.md), bevor du sensible Namen veröffentlichst oder Bearbeitungsrechte erteilst.
 
 ### 3. Die ersten Gegenstände hinzufügen
 
@@ -306,7 +306,7 @@ Mit vollständigem Konto und **Daten duplizieren** verwendest du die **Entitäts
 1. Öffne die Liste und **Entitätseinstellungen**.
 2. Wähle unter **Aktionen** **Duplizieren**.
 3. Prüfe Titel, Beschreibung, Gegenstände, Höchstzahlen und **Alle**-Einstellungen.
-4. Prüfe Veranstaltungszuordnung und Gruppenberechtigungen der neuen Liste.
+4. Prüfe die Veranstaltungszuordnung und öffne **Gruppenberechtigungen**, um die Freigaben der neuen Liste zu prüfen.
 5. Wähle **Liste erstellen**.
 
 Eigentümer können außerdem **Duplizieren** auf ihrer Karte unter **Verwaltbare Einträge** verwenden.

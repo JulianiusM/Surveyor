@@ -9,6 +9,7 @@ import type {components} from '../../../types/api/v1';
 import type {PilotOverviewCountRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {overviewKeys} from '../../app/queryKeys';
 import {overviewQueryParameters} from './api';
+import {frontendOverviewPath} from '../../../modules/lib/frontendIdentity';
 import OverviewRegion from './OverviewRegion.vue';
 import AppAccordionButton from '../../components/AppAccordionButton.vue';
 const context = usePilot();
@@ -119,7 +120,7 @@ function hiddenQuery(collection: string) {
     return query;
 }
 function hiddenHref(collection: string): string {
-    return router.resolve({path: '/frontend-pilot', query: hiddenQuery(collection)}).href;
+    return router.resolve({path: frontendOverviewPath, query: hiddenQuery(collection)}).href;
 }
 </script>
 <template>

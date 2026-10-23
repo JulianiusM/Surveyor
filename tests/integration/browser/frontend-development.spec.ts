@@ -137,7 +137,7 @@ test.describe('actual frontend development runtime', () => {
         try {
             // The source renderer uses the approved initial skeleton, just like an
             // installed build. Holding its entry must expose no inactive editors.
-            await page.goto(`/frontend-pilot?owner_main_q=${encodeURIComponent(marker)}`, {waitUntil: 'commit'});
+            await page.goto(`/frontend-pilot/users/dashboard?owner_main_q=${encodeURIComponent(marker)}`, {waitUntil: 'commit'});
             await entryStarted.promise;
             await expect(page.locator('[data-pilot-initial-loading]')).toBeVisible();
             await expect(page.locator('main input, main form, [data-collection]')).toHaveCount(0);

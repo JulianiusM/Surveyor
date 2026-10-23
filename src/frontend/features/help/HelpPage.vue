@@ -17,7 +17,7 @@ import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
-import EntityListToolbar from '../../components/EntityListToolbar.vue';
+import RefreshButton from '../../components/RefreshButton.vue';
 
 const context = usePilot();
 const api = useHelpApi(context);
@@ -158,13 +158,14 @@ function retainReadingSpace(): void {
         :style="{minHeight: retainedReadingHeight === undefined ? undefined : `${retainedReadingHeight}px`}">
         <div class="card-header d-flex justify-content-between align-items-center gap-2">
             <h1 class="card-title mb-0" :lang="contentLocale"><i class="bi bi-question-circle me-2" aria-hidden="true"></i>{{ pageTitle }}</h1>
-            <RouterLink :to="helpRoute('/help')" class="btn btn-sm btn-outline-light">
-                <i class="bi bi-house me-1" aria-hidden="true"></i>{{ messages.t('help.home') }}
-            </RouterLink>
+            <div class="d-flex align-items-center gap-2">
+                <RouterLink :to="helpRoute('/help')" class="btn btn-sm btn-outline-light">
+                    <i class="bi bi-house me-1" aria-hidden="true"></i>{{ messages.t('help.home') }}
+                </RouterLink>
+                <RefreshButton v-if="page" :state="retryAction" @refresh="retryHelp" />
+            </div>
         </div>
         <div class="card-body">
-            <EntityListToolbar v-if="page" :refresh-label="messages.t('common.refresh')" :state="retryAction"
-                @refresh="retryHelp" />
             <StatusNotice v-if="page?.fallbackToEnglish" class="help-language-fallback">{{
                 messages.t('help.englishFallbackNotice')
             }}</StatusNotice>

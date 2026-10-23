@@ -88,8 +88,8 @@ function dismiss(): void {
 </script>
 
 <template>
-    <!-- Before the scope host mounts, SSR/first hydration use the same overlay
-         geometry locally. Moving that one node later never removes flow height.
+    <!-- Before the scope host mounts, SSR/first hydration reserve notice height
+         locally. The shared host retains that natural space after relocation.
          Ordinary durable/content notices keep display:contents at this boundary. -->
     <div class="pilot-notice-origin" :class="{'pilot-notice-region': placement === 'notification' && notification && !notificationTarget}">
         <Teleport :to="notificationTarget ?? 'body'" :disabled="!notification || placement === 'hosted' || !notificationTarget">

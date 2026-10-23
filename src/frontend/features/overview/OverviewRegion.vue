@@ -21,8 +21,10 @@ import {observePageNavigation} from '../../composables/pageNavigation';
 import {ApiFailure, isReadDenial, isTerminalReadFailure, ObsoleteRequestError} from '../../app/transport';
 import {overviewKeys} from '../../app/queryKeys';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
+import {frontendOverviewPath} from '../../../modules/lib/frontendIdentity';
 import {observeQueryReads, refetchFreshQueries, refetchFreshQuery, retireQueryFamily, useQueryAdmission, useQueryInvalidation} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
+import RefreshButton from '../../components/RefreshButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
@@ -351,9 +353,16 @@ function retireDeniedRegion(scope: PilotRequestScope, error: ApiFailure): void {
         overviewKeys.regionAuthority(scope.context, props.collection, props.region), error);
 }
 
+/** Router admits equivalent case/trailing-slash spellings against one record.
+ * Use that identity so a valid dashboard URL cannot discard its own read. */
+function isOverviewRoute(target: RouteLocationNormalized): boolean {
+    return target.matched.some(record => record.path === frontendOverviewPath);
+}
+
+/** Admit only this mounted region's current scope and actual dashboard record. */
 function mayPresentRead(scope: PilotRequestScope, generation: number): boolean {
     return mounted && props.active !== false && generation === readGeneration && context.isCurrent(scope, true)
-        && route.path === '/frontend-pilot' && (!navigation.destination.value || navigation.destination.value.path === '/frontend-pilot');
+        && isOverviewRoute(route) && (!navigation.destination.value || isOverviewRoute(navigation.destination.value));
 }
 
 /** Fence this region when Router starts a relevant Back/Forward or page change.
@@ -367,7 +376,7 @@ function rememberNavigation(to: RouteLocationNormalized): void {
         if (preparedRead && navigationKey(preparedRead.parameters) === navigationKey(regionParameters(to.query))) return;
         const action = parameter('event') && !parameter('event', to.query) ? 'back' : 'page';
         retireReads();
-        if (to.path === '/frontend-pilot') {
+        if (isOverviewRoute(to)) {
             pendingFocus = {key: navigationKey(regionParameters(to.query)), scope: context.capture(), action};
         }
     }
@@ -429,7 +438,7 @@ function navigationQuery(values: Record<string, string | undefined>) {
     return next;
 }
 function navigationHref(values: Record<string, string | undefined>): string {
-    return router.resolve({path: '/frontend-pilot', query: navigationQuery(values), hash: '#' + regionId.value}).href;
+    return router.resolve({path: frontendOverviewPath, query: navigationQuery(values), hash: '#' + regionId.value}).href;
 }
 
 /** Locale/actor replacement cannot reuse private cards, scroll origins or a failed request. */
@@ -503,7 +512,7 @@ async function deliverNavigation(read: NavigationRead): Promise<void> {
         // Another region may have committed while this GET was pending. Merge the captured
         // region only into the latest route/pending history target, never its old whole URL.
         preparedRead = read;
-        const destination = {path: '/frontend-pilot', query: targetQuery(read.parameters), hash: '#' + regionId.value};
+        const destination = {path: frontendOverviewPath, query: targetQuery(read.parameters), hash: '#' + regionId.value};
         const failure = read.history === 'replace' ? await router.replace(destination) : await router.push(destination);
         if (isNavigationFailure(failure) && router.currentRoute.value.fullPath !== router.resolve(destination).fullPath) return;
         if (!mayPresentRead(read.scope, read.generation)) return;
@@ -678,7 +687,6 @@ function page(next: number): void {
          during background reads, which leave cards and focused controls mounted. -->
     <section ref="element" :id="regionId" class="js-overview-region" :data-collection="collection" :data-region="region"
         :aria-busy="!!displayed && (overview.isFetching.value || !!pendingRead)">
-        <h3 class="visually-hidden js-overview-heading" tabindex="-1">{{ title }}</h3>
         <StatusNotice v-if="destination.target.value" kind="success"
             :retry-at="destination.retryAt.value"
             :action="{state: destination.retryAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="destination.retry">
@@ -698,9 +706,12 @@ function page(next: number): void {
              so empty/populated transitions retain the focused Refresh button. -->
         <form
             class="d-flex flex-wrap gap-2 mb-3 align-items-center"
-            method="get" action="/frontend-pilot"
+            method="get" :action="frontendOverviewPath"
             @submit.prevent="submitSearch"
         >
+            <!-- Empty collections retain a meaningful heading beside Refresh;
+                 populated collections integrate it with search and filters. -->
+            <h3 class="js-overview-heading mb-0" :class="showSearchControls ? 'visually-hidden' : 'h6'" tabindex="-1">{{ title }}</h3>
             <template v-if="showSearchControls">
                 <input v-for="[name, value] in nativeSearchFields" :key="name" type="hidden" :name="name" :value="value" />
                 <div class="input-group input-group-sm" style="max-width: 320px">
@@ -750,13 +761,7 @@ function page(next: number): void {
                     messages.t('overview.matching', {count: displayed.matchingEntities})
                 }}</span>
             </template>
-            <ActionButton
-                class="btn-sm ms-auto"
-                variant="outline-secondary"
-                :state="refreshAction"
-                @click="refreshOverview"
-                >{{ messages.t('common.refresh') }}</ActionButton
-            >
+            <RefreshButton class="ms-auto" show-label :state="refreshAction" @refresh="refreshOverview" />
         </form>
         <LoadingSkeleton v-if="initialLoading" variant="cards" :rows="4" />
         <template v-if="displayed">

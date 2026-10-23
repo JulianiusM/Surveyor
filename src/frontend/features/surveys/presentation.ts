@@ -1,4 +1,11 @@
 import type {SurveyAnswer, WeekDay} from '../../../types/SurveyTypes';
+import type {components} from '../../../types/api/v1';
+
+/** Creation and collaborative additions identify a recurring choice by both
+ * saved fields. Local row keys and server IDs are independent DOM identities. */
+export function combinationIdentity(combination: components['schemas']['SurveyCombinationInput']): string {
+    return combination.weekday + '/' + combination.nthWeek;
+}
 
 /** Both combination inputs and read-only column headings select the same catalog
  * owner. The mapping keeps dynamic weekday labels typed without a copied catalog. */

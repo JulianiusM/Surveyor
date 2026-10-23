@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: approved composition, first-attempt consent and Overview write-freshness ownership reconciled with full-application navigation and shared frontend/backend boundaries; no publication or new execution claim
+verification-scope: Shared presentation, compact creation permissions, generated diagnostics and Home/Overview routes reconciled with existing ownership and decisions; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -25,6 +25,10 @@ Surrounding notes use this file's location. Preparing complete temporary output 
 `src/modules/frontendPilotRenderer.ts` is the existing Express renderer owner; it supplies authorized bootstrap data
 and coherent built manifest assets without making HTTP calls to its own application. Each request owns its app,
 router, QueryClient, locale instance and bootstrap. Private state never lives in a module singleton or persisted cache.
+
+Within the opt-in prefix, public Home is `/frontend-pilot` (`/home` remains an alias); personal Overview retains the
+native `/users/dashboard` suffix. Shell links, identity fallback and confirmed-removal delivery share the Overview
+destination constant. Home renders its existing request-captured suggestion without reading personal collections.
 
 `serializeBootstrap.ts` escapes inert script-element JSON; `decodeBootstrap` validates every declared field before
 reactive state is created. Feature validators load with their view. Shared type-only contracts remain `.d.ts` files.
@@ -52,6 +56,12 @@ persists secrets/files or replays writes. Session/security revalidation and scop
 runtime validators; no second handwritten wire schema or runtime schema compilation exists. Transport adapters decode
 and present around the same controller business owners. Page admission, method grants and private projections remain
 separate; reusable controls never grant authority.
+
+Generated local-input failures flow through the existing transport/command/feedback owners. Features supply visible
+field and optional row/day labels; shared typed diagnostics retain only safe generated rule metadata and translate
+at render time. Constraints remain in authored schemas and business checks in controllers. Matching creation and
+duplicate permission matrices use `CreationPermissions`, a closed-by-default disclosure that keeps controls and
+drafts mounted while the existing form retains submission and admission.
 
 Express's ordinary `req.session` is the single request Session. Admission checks current stored generation without
 adopting another snapshot; its plain hydrated actor captures identity for the operation. Initial session projection
@@ -125,8 +135,8 @@ independent method grants and the producing observer's error/recovery state. Exi
 upload completion, multipart decoding and confined stored-binary delivery across the five feature adapters; feature
 admission, parser policy, cleanup and business operations remain with their existing owners.
 
-Transient command notifications share page/dialog hosts supplied by `App` and `AppDialog`. Their sticky zero-height
-anchor and bounded overlay stack preserve content position without focusing a notice or scrolling the document.
+Transient command notifications share page/dialog hosts supplied by `App` and `AppDialog`. Their sticky host
+reserves the visible stack's natural height and releases it when empty, without scripted focus or scrolling.
 The injected `noticeTargetKey` is a read-only presentation reference, not query, draft or authority state.
 `CommandFeedback` chooses shared notification presentation; `StatusNotice` owns rendering, expiry, renewal,
 dismissal and diagnostics. Durable validation/recovery stays contextual. Features do not recreate notice placement.
@@ -190,11 +200,12 @@ generated operations. Packing/Drivers/Survey/Activity compose `useListCommands` 
 cooldowns, explicit stale recovery, guarded post-command refresh and deliberate unknown-creation review. Features
 inject their actual fresh read and dirty policy, including Survey's ballot merge; Packing/Drivers/Activity opt into their
 common permission wording and shared denial notifications. The composition keeps no second snapshot/draft and never repeats a mutation.
-`EntityListCounters` shares Packing/Drivers' admitted counter panel; `EntityListToolbar` supplies integrated Refresh
-to list/Activity details, Event detail/admin, Help, profile administration and profile workflows through each existing read owner.
+`EntityListCounters` shares Packing/Drivers' admitted counter panel; `RefreshButton` supplies integrated Refresh
+in the owning heading for entity details, Event administration, Finance, Help and profile workflows through each existing read owner.
+`PageHeading` keeps entity and profile titles centered with independent parent navigation and actions.
 Features retain admitted projections, cooldown and dirty-value policy; creation/static content invents no read.
 `EntityDetailReadState` shares the list details' denied/stale/cold fragment and skeleton through explicit
-state/timestamp props and a Survey Refresh slot; it owns no query or authority. `CommandFeedback`'s optional creation
+state/timestamp props and optional contextual recovery; it owns no query or authority. `CommandFeedback`'s optional creation
 review descriptor shares the unknown-creation paragraph/button while features retain eligibility, wording, margins
 and the existing review operation.
 

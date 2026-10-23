@@ -121,7 +121,7 @@ for (const width of [1280, 390]) {
         const nativeRegion = page.locator('#sec-own-parts-main');
         const native = await captureCards(page, info, 'native', nativeRegion, fixture.resources);
 
-        await page.goto('/frontend-pilot?locale=en', {waitUntil: 'domcontentloaded'});
+        await page.goto('/frontend-pilot/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
         await waitForPilotHydration(page);
         const owner = page.locator('[data-collection="owner"][data-region="main"]');
         await expect(owner.locator('.js-item')).toHaveCount(5);
@@ -197,7 +197,7 @@ for (const width of [1280, 390]) {
 test('keeps parent grouping, personal placement, hidden-region history and counts independent across families', async ({page}) => {
     test.setTimeout(90_000);
     const {resources, event, child} = await mixedOverview(page.request);
-    await page.goto('/frontend-pilot?locale=en', {waitUntil: 'domcontentloaded'});
+    await page.goto('/frontend-pilot/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
     const participant = page.locator('[data-collection="participant"][data-region="main"]');
@@ -243,10 +243,11 @@ test('keeps parent grouping, personal placement, hidden-region history and count
 test('blocks writes from a deleted warm Overview card until its genuine destination read arrives', async ({page}) => {
     const {resources} = await mixedOverview(page.request);
     const removed = resources.find(resource => resource.type === 'packing')!;
-    await page.goto('/frontend-pilot?locale=en', {waitUntil: 'domcontentloaded'});
+    await page.goto('/frontend-pilot/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);
-    await page.locator('header a.navbar-brand').click();
-    await expect(page).toHaveURL('/frontend-pilot');
+    await page.locator('header').getByRole('button', {name: 'Overview', exact: true}).click();
+    await page.locator('header').getByRole('link', {name: 'Your overview', exact: true}).click();
+    await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
     await expect(owner.locator('.js-item')).toHaveCount(5);
     await expect(owner).toHaveAttribute('aria-busy', 'false');
@@ -270,7 +271,7 @@ test('blocks writes from a deleted warm Overview card until its genuine destinat
         await owner.getByRole('button', {name: 'Delete', exact: true}).click();
         expect((await deleted).status()).toBe(200);
         await held.received;
-        await expect(page).toHaveURL('/frontend-pilot');
+        await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
 
         // The retained card is readable while its real saved projection is held.
         // Its native disabled control cannot submit a second destructive command.
@@ -298,12 +299,13 @@ test('blocks writes from a deleted warm Overview card until its genuine destinat
 test('reconciles confirmed root deletion at the same Overview URL and from a filtered visit into its warm default cache', async ({page}) => {
     test.setTimeout(90_000);
     const {resources, child} = await mixedOverview(page.request);
-    await page.goto('/frontend-pilot?locale=en', {waitUntil: 'domcontentloaded'});
+    await page.goto('/frontend-pilot/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);
     // Commit the exact default destination through existing SPA navigation. Its
     // admitted projection is also the warm return target for the second deletion.
-    await page.locator('header a.navbar-brand').click();
-    await expect(page).toHaveURL('/frontend-pilot');
+    await page.locator('header').getByRole('button', {name: 'Overview', exact: true}).click();
+    await page.locator('header').getByRole('link', {name: 'Your overview', exact: true}).click();
+    await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
     const owner = page.locator('[data-collection="owner"][data-region="main"]');
     await expect(owner.locator('.js-item')).toHaveCount(5);
     await expect(owner).toContainText('6 matching entities');
@@ -342,7 +344,7 @@ test('reconciles confirmed root deletion at the same Overview URL and from a fil
         await card.getByRole('button', {name: 'Delete', exact: true}).click();
         expect((await deleted).status()).toBe(200);
         const projection = await (await reconciled).json() as components['schemas']['OverviewRegion'];
-        await expect(page).toHaveURL('/frontend-pilot');
+        await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
         await expect(owner.locator(`.js-item[data-id="${resource.id}"]`)).toHaveCount(0);
         await expect(owner.locator('.js-item')).toHaveCount(4 - index);
         await expect(owner).toContainText(`${5 - index} matching entities`);

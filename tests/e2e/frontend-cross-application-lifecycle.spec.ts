@@ -74,8 +74,9 @@ async function holdRead(page: Page, path: string) {
 
 /** Follow the actual shell link while retaining its application document marker. */
 async function openOverview(page: Page): Promise<void> {
-    await page.locator('header').getByRole('link', {name: 'Home', exact: true}).click();
-    await expect(page).toHaveURL(/\/frontend-pilot(?:\?[^#]*)?$/u);
+    await page.locator('header').getByRole('button', {name: 'Overview', exact: true}).click();
+    await page.locator('header').getByRole('link', {name: 'Your overview', exact: true}).click();
+    await expect(page).toHaveURL(/\/frontend-pilot\/users\/dashboard(?:\?[^#]*)?$/u);
 }
 
 /** The whole painted card is a link, including its visible description. Select
@@ -104,7 +105,7 @@ test('external profile switching retires held Packing editors, drafts and warmed
     expect(roster.activeProfile?.id).toBe(original.activeProfile?.id);
 
     // Warm both Overview families, then enter Packing through the real card.
-    await page.goto('/frontend-pilot?locale=en', {waitUntil: 'domcontentloaded'});
+    await page.goto('/frontend-pilot/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
     await waitForPilotHydration(page);
     await expect(cardLink(page, resources.activity.id)).toBeVisible();
     await cardLink(page, resources.packing.id).click();
@@ -195,7 +196,7 @@ test('revoked Packing admission cannot return through history while independent 
             })).status()).toBe(200);
         }
 
-        await page.goto('/frontend-pilot?locale=en', {waitUntil: 'domcontentloaded'});
+        await page.goto('/frontend-pilot/users/dashboard?locale=en', {waitUntil: 'domcontentloaded'});
         await waitForPilotHydration(page);
         await page.evaluate(() => { document.documentElement.dataset.p10Document = 'revoked-retirement'; });
         await cardLink(page, resources.activity.id).click();

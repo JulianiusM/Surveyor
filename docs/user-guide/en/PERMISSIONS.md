@@ -4,10 +4,10 @@ documentation-metadata
 audience: organizers; advanced administrators
 owner: permission-system maintainers
 status: current
-last-verified: 2026-10-12
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Reviewed pilot-language content at its fixed release-owned source; article bodies, declared anchors and image bytes preserved during promotion.
-source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/modules/permissionEngine.ts; src/modules/lib/permissions.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/modules/database/services/EntityAdminService.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts
+verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
+source-anchors: src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/modules/permissionEngine.ts; src/modules/lib/permissions.ts; src/middleware/permissionMiddleware.ts; src/middleware/guestFlowFactory.ts; src/middleware/adminApiFactory.ts; src/modules/database/services/EntityAdminService.ts; src/views/modules/module_perm_matrix.pug; src/views/modules/module_admin_matrix.pug; src/views/modules/module_admin_options.pug; src/public/js/modules/perm-matrix.ts; src/public/js/modules/admin-matrix.ts; src/routes/event.ts; src/routes/api/event.ts; src/routes/api/activity.ts; src/routes/api/packing.ts; src/routes/api/drivers.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/components/permissions/CreationPermissions.vue
 next-review: permission-or-entity-settings-behavior-change
 production-reference: 2dfa257 native frontend documentation; not an installed production commit
 -->
@@ -63,8 +63,9 @@ Personal **Hide for me**, **Show for me**, and **Use default visibility** choice
 
 ### While creating an item
 
-Creation forms for Events, Activity plans, Packing lists, and Drivers lists contain **Group Permissions**. Choose a
-**Permission audience**, use **Presets** or individual checkboxes, and then submit the creation form.
+Creation forms for Events, Activity plans, Packing lists, and Drivers lists contain a collapsed **Group Permissions**
+section. Open it to choose a **Permission audience** and use **Presets** or individual checkboxes. Closing the section
+keeps your choices; they are included when you submit the creation form.
 
 Surveys do not show this matrix.
 

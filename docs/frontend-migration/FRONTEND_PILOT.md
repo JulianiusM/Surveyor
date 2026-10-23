@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P10 opt-in application scope, shared Overview and cross-family navigation/recovery owners reconciled with source; actual execution and finite visual evidence belong to paired review
+verification-scope: Restored public Home and distinct personal dashboard reconciled with P0-P10 opt-in application and navigation/recovery owners; actual execution and finite visual evidence belong to paired review
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -114,8 +114,8 @@ The exact duplicate URL after login is an explicitly approved native exception.
 
 | Pilot route family | Contract |
 |---|---|
-| `/frontend-pilot` | Bounded mixed overview; native membership, search and personal visibility; other feature destinations remain native until migrated. |
-| `/frontend-pilot/home` | Explicit opt-in native-equivalent landing; captured quick-create suggestion, account/guest welcome and migrated Packing/Event/Drivers/Survey/Activity creation destinations. Other creation destinations remain native. The Overview root stays unchanged. |
+| `/frontend-pilot`, `/frontend-pilot/home` | Public native-equivalent Home; captured quick-create suggestion, account/guest welcome and migrated Packing/Event/Drivers/Survey/Activity creation destinations. `/home` remains a compatible alias. Home does not read personal collections. |
+| `/frontend-pilot/users/dashboard` | Personal mixed Overview; native membership, search and personal visibility. Your overview, default identity returns and confirmed entity-removal delivery use this destination; Home and the brand use the landing root. |
 | `/frontend-pilot/message` | Admitted informational/command feedback; route query data cannot supply message authority. Common error presentation retains server-selected status and development-only diagnostics. |
 | `/frontend-pilot/users/profile`, `/frontend-pilot/users/profile/manage`, `/frontend-pilot/users/profile/create` | Current profile editing for accounts/guests; account-only owned roster/creation and existing profile switching. Creation preserves the active profile. |
 | `/frontend-pilot/users/profile/migrate/request`, `/frontend-pilot/users/profile/migrate/show` | Ordinary warm entry, explicit generated token issuance and body-only preview/transfer use SPA command/navigation owners. Private draft/result/token state stays mounted; a fixed nonsecret fragment supports local history without replay. The existing initial token GET compatibility remains distinct. Receiving active profile and former-owner cleanup stay unchanged; no stronger backend token/transaction guarantee is introduced. |
@@ -183,9 +183,9 @@ Feature slots retain Packing's editable title and Drivers' readonly actor name; 
 decisions remain feature-owned. The shared capacity control retains installed Vue's numeric coercion and DOM updates,
 including leading-zero normalization on change/rerender. `EntityDescription` supplies escaped lines for both lists,
 Surveys and Event, with explicit paragraph/divider inputs preserving their different surrounding layout.
-`EntityListCounters` presents admitted Packing/Drivers counts. Packing, Drivers, Survey and Activity share `EntityListToolbar`,
+`EntityListCounters` presents admitted Packing/Drivers counts. Packing, Drivers, Survey and Activity share `RefreshButton`,
 `EntityDetailReadState` and the existing `CommandFeedback` creation-review presentation, retaining list scrolling,
-Survey's Refresh placement, feature wording/timestamps and the existing read/command owners. Local inline denial
+heading-integrated Refresh placement, feature wording/timestamps and the existing read/command owners. Local inline denial
 uses `useListCommands` without dispatch; generic presentation supplies no feature authority.
 
 ## Surveys behavior

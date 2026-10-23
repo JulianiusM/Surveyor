@@ -8,6 +8,7 @@ import {usePilot} from '../app/context';
 import {observeQueryReads} from '../app/queryCache';
 import {useAuthorizedImage} from '../composables/authorizedImage';
 import ActionButton from './ActionButton.vue';
+import PageHeading from './PageHeading.vue';
 
 // Features retain their admitted title, parent URL, image version and settings
 // capability. This owner shares the displayed layout and binary-image lifecycle;
@@ -56,34 +57,28 @@ async function recoverHeaderAfterRead(): Promise<void> {
             class="card-img-top"
             style="object-fit: cover; height: 250px"
         />
-        <!-- Native uses an empty desktop parent track when no link is admitted.
-             The same authorized link appears before the title on desktop and
-             beneath it on mobile, retaining the established flex geometry. -->
-        <div class="p-3 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
-            <div v-if="parentUrl" class="btn-group d-md-inline d-none">
+        <!-- Equal side tracks keep every entity title centered, independently
+             of its parent link or available settings and refresh actions. -->
+        <PageHeading :title="title" :icon="icon">
+            <template v-if="parentUrl" #parent>
                 <RouterLink class="btn btn-outline-light" :to="parentUrl">
                     <i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('packing.goToEvent') }}
                 </RouterLink>
-            </div>
-            <div v-else class="d-none d-md-inline"></div>
-            <h1 class="mb-0 text-center">
-                <i class="bi me-2" :class="icon" aria-hidden="true"></i>{{ title }}
-            </h1>
-            <div v-if="parentUrl" class="btn-group d-md-none">
-                <RouterLink class="btn btn-outline-light" :to="parentUrl">
-                    <i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('packing.goToEvent') }}
-                </RouterLink>
-            </div>
+            </template>
             <!-- Features own availability and pending state. Opening settings is
-                 an explicit presentation event, never an inferred permission. -->
-            <ActionButton
-                v-if="settingsAvailable"
-                variant="outline-light"
-                :disabled="settingsDisabled"
-                @click="emit('settings')"
-            >
-                <i class="bi bi-gear me-1" aria-hidden="true"></i>{{ messages.t('packing.edit') }}
-            </ActionButton>
-        </div>
+                 an explicit presentation event, never an inferred permission.
+                 Injected actions retain the feature's existing read lifecycle. -->
+            <template #actions>
+                <ActionButton
+                    v-if="settingsAvailable"
+                    variant="outline-light"
+                    :disabled="settingsDisabled"
+                    @click="emit('settings')"
+                >
+                    <i class="bi bi-gear me-1" aria-hidden="true"></i>{{ messages.t('packing.edit') }}
+                </ActionButton>
+                <slot name="actions" />
+            </template>
+        </PageHeading>
     </div>
 </template>

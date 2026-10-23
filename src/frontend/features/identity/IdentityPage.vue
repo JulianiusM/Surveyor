@@ -288,12 +288,12 @@ async function submit(): Promise<void> {
     if (identityDenial.value || needsOidc.value || mode.value === 'reset' && !resetAllowed.value) return;
     if (mode.value === 'register' && (!isRegistrationPasswordValid(fields.password)
         || fields.password !== fields.passwordRepeat)) {
-        // Native registration's browser validation uses one global inline alert
-        // for policy or repetition failure. Its field warning stays independent.
+        // Identify the failed requirement using the existing password policy;
+        // keep the field warning and the user's unsent credentials available.
         // Reset has no such browser handler: its controller owns rejection and
         // native redisplay, including clearing both submitted password fields.
         showPasswordCriteria.value = !isRegistrationPasswordValid(fields.password);
-        command.setError('auth.invalidPassword', 'transient');
+        command.setError(showPasswordCriteria.value ? 'auth.passwordRequirements' : 'auth.passwordMismatch', 'transient');
         return;
     }
     if (mode.value === 'login' || mode.value === 'guest-login') {

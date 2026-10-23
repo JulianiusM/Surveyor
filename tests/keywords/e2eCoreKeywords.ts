@@ -85,6 +85,33 @@ export async function readVisiblePresentation(surface: Locator, selectors: strin
     return result.presentation!;
 }
 
+/** Compare the existing creation controls after opening the directly requested
+ * compact permission panel. Callers retain raw screenshots/measurements first;
+ * only its one added disclosure heading/button leaves the comparison value. */
+export async function projectCreationPermissionDisclosure(surface: Locator, measured: Awaited<ReturnType<typeof readVisiblePresentation>>) {
+    const heading = surface.locator('[data-creation-permissions] .accordion-header');
+    if (await heading.count() === 0) return measured;
+    await expect(heading).toHaveCount(1);
+    const toggle = heading.locator('button');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const panelId = await toggle.getAttribute('aria-controls');
+    expect(panelId).not.toBeNull();
+    await expect(surface.locator(`[id="${panelId}"]`)).toBeVisible();
+    const label = (await heading.innerText()).replace(/\s+/gu, ' ').trim();
+    expect(label).not.toBe('');
+
+    // Refuse an ambiguous match rather than stripping an unrelated field/value.
+    // No permission checkbox, label, input constraint or audience is excluded.
+    expect(measured.content.text.split(label)).toHaveLength(2);
+    const matches = measured.content.elements.map((element, index) => ({element, index}))
+        .filter(({element}) => element.text === label);
+    expect(matches.length).toBeLessThanOrEqual(1);
+    const omitted = matches[0]?.index;
+    return {...measured, content: {...measured.content, text: measured.content.text.replace(label, '').replace(/\s+/gu, ' ').trim(),
+        elements: measured.content.elements.filter((_element, index) => index !== omitted)},
+        geometry: measured.geometry.filter((_bounds, index) => omitted === undefined || index !== omitted + 1)};
+}
+
 /** Playwright serializes this one self-contained browser inspector for both
  * public readers. Paint filtering, control meaning and text selection therefore
  * share one owner without importing application code or changing the document. */

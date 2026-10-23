@@ -157,7 +157,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                     v-for="slot in daySlots(day)"
                                     :key="slot.id"
                                     class="slot border rounded p-2 mb-2 d-grid gap-1 draggable"
-                                    :class="{'d-none': !shown(slot)}"
+                                    :class="[{'d-none': !shown(slot)}, drag.classes(slot.id)]"
                                     :data-slotid="slot.id"
                                     :data-itemid="slot.id"
                                     :data-day="slot.day"
@@ -166,7 +166,8 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                     :draggable="view.capabilities.reorderSlots && !disabled && !editing"
                                     @dragstart="begin(slot, $event)"
                                     @dragend="drag.reset"
-                                    @dragover.prevent
+                                    @dragover="drag.over(slot.id, $event)"
+                                    @dragleave="drag.leave(slot.id, $event)"
                                     @drop="drop(slot, $event)">
                                     <div class="d-flex justify-content-between align-items-start mb-0">
                                         <i v-if="view.capabilities.reorderSlots" class="bi bi-grip-vertical text-bg-dark me-2" aria-hidden="true"></i>

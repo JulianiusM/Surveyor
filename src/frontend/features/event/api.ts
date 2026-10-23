@@ -6,7 +6,8 @@ import {validateEventRegistrationInput} from '../../../../.generated/api/v1/brow
 import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
-import {createMultipartForm, InvalidInputError} from '../../app/transport';
+import type {PilotInputField} from '../../../types/FrontendFeedbackTypes';
+import {createMultipartForm, generatedInputError, InvalidInputError} from '../../app/transport';
 import {validateEventCreateEntry} from '../../../../.generated/api/v1/browser/validateEventCreateEntry.mjs';
 import {validateEventCreateInput} from '../../../../.generated/api/v1/browser/validateEventCreateInput.mjs';
 import {validateEventCreated} from '../../../../.generated/api/v1/browser/validateEventCreated.mjs';
@@ -51,7 +52,7 @@ export class EventApi {
     async saveMetadata(eventId: string, patch: components['schemas']['EventMetadataPatch'], etag: string,
                        scope: PilotRequestScope): Promise<PilotRead<Metadata>> {
         // Structural validation precedes transport; business/field checks remain server-owned.
-        if (!validateEventMetadataPatch(patch)) throw new InvalidInputError('Invalid metadata patch.');
+        if (!validateEventMetadataPatch(patch)) throw generatedInputError(validateEventMetadataPatch.errors, eventInputField);
 
         const result = this.transport.read('updateEventMetadata', await this.transport.client.PATCH('/events/{eventId}/metadata', {
             params: {path: {eventId}, header: {...this.transport.headers(scope), 'If-Match': etag}}, body: patch, cache: 'no-store',
@@ -93,7 +94,7 @@ export class EventApi {
      * parsing/order. Only the declared JSON receipt confirms this creation. */
     async createEvent(input: components['schemas']['EventCreateInput'], image: File | null,
                       scope: PilotRequestScope): Promise<components['schemas']['EventCreated']> {
-        if (!validateEventCreateInput(input)) throw new InvalidInputError('Invalid Event creation.');
+        if (!validateEventCreateInput(input)) throw generatedInputError(validateEventCreateInput.errors, eventInputField);
         const form = createMultipartForm(input, image);
 
         // Captured actor/CSRF proof covers both file delivery and response
@@ -383,6 +384,19 @@ export class EventApi {
         });
         return this.transport.read('setEventChildAutomaticArchival', result, validateMutationResult, scope).data;
     }
+}
+
+/** Creation and metadata controls expose the same named Event fields. Their
+ * distinct generated contracts remain authoritative for admitted wire values. */
+function eventInputField(path: string): PilotInputField | undefined {
+    const field = path.slice(1);
+    const label = field === 'title' ? 'event.title' : field === 'description' ? 'event.description'
+        : field === 'location' ? 'event.locationLabel' : field === 'startDate' ? 'event.startDateLabel'
+        : field === 'endDate' ? 'event.endDateLabel' : field === 'maxParticipants' ? 'event.maxParticipantsLabel'
+        : field === 'bindingDeadline' ? 'event.deadlineLabel' : field === 'deadlineTz' ? 'event.timezone' : undefined;
+    if (label) return {label};
+    if (path.startsWith('/defaultPermissions')) return {label: 'packing.groupPermissions'};
+    return undefined;
 }
 
 const owners = new WeakMap<PilotApi, EventApi>();
