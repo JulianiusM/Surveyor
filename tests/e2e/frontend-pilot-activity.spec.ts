@@ -1,4 +1,4 @@
-import {expect, test, type Page} from '@playwright/test';
+import {expect, test, type Page, type Route} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createTranslator} from '../../src/modules/localization/translator';
@@ -420,6 +420,69 @@ test('retains schedule filters across assignments, edits shared text and slot de
     await expect(total).toHaveText('2');
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('activity-schedule');
     expect(navigation).toEqual([]);
+});
+
+test('recovers a cold Activity detail failure through manual Refresh in the same document', async function recoverColdActivity({page}) {
+    const plan = await createActivityForE2E(page.request);
+    await page.goto(`/frontend-pilot?locale=en&owner_main_q=${encodeURIComponent(plan.title)}`, {waitUntil: 'domcontentloaded'});
+    await waitForPilotHydration(page);
+    const owner = page.locator('[data-collection="owner"][data-region="main"]');
+    // The actual card link includes its description in its accessible name.
+    // Identify the visible title heading within that navigation control.
+    const activityLink = owner.getByRole('link').filter({has: page.getByRole('heading', {name: plan.title, exact: true})});
+    await expect(activityLink).toBeVisible();
+    const origin = await page.evaluate(() => performance.timeOrigin);
+    const documents: string[] = [];
+    const mutations: string[] = [];
+    page.on('request', request => {
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documents.push(request.url());
+        const path = new URL(request.url()).pathname;
+        if (request.method() !== 'GET' && path.startsWith(`/api/v1/activity-plans/${plan.id}`)) mutations.push(path);
+    });
+
+    // Keep page entry and persistence real. Only detail response delivery fails,
+    // after each genuine backend read, through the normal two automatic retries.
+    const pattern = `**/api/v1/activity-plans/${plan.id}`;
+    let unavailable = true;
+    let detailReads = 0;
+    async function deliverActivityDetail(route: Route): Promise<void> {
+        detailReads++;
+        if (!unavailable) { await route.continue(); return; }
+        const response = await route.fetch();
+        expect(response.status()).toBe(200);
+        await route.fulfill({response, status: 503, contentType: 'text/plain', body: 'Temporarily unavailable'});
+    }
+    await page.route(pattern, deliverActivityDetail);
+    try {
+        const entry = page.waitForResponse(response => response.request().method() === 'GET'
+            && new URL(response.url()).pathname === `/api/v1/activity-plans/${plan.id}/entry`);
+        await activityLink.click();
+        const admitted = await entry;
+        expect(admitted.status()).toBe(200);
+        expect((await admitted.json()).entry.kind).toBe('render');
+        await expect(page.getByText(createTranslator('en').t('state.loadFailed'), {exact: true})).toBeVisible();
+        expect(detailReads).toBe(3);
+        await expect(page.locator('#tab-schedule')).toHaveCount(0);
+
+        // An exhausted cold read retains its existing recovery owner without
+        // inventing a projection. One deliberate read reaches the real endpoint
+        // and renders saved content without reloading or dispatching a command.
+        const refresh = page.getByRole('button', {name: 'Refresh', exact: true});
+        await expect(refresh).toBeEnabled();
+        await page.screenshot({path: test.info().outputPath('activity-cold-recovery.png'), fullPage: true});
+        unavailable = false;
+        const recovered = page.waitForResponse(response => response.request().method() === 'GET'
+            && new URL(response.url()).pathname === `/api/v1/activity-plans/${plan.id}`);
+        await refresh.click();
+        expect((await recovered).status()).toBe(200);
+        await expect(page.locator(`.slot[data-slotid="${plan.view.slots[0]!.id}"]`)).toBeVisible();
+        await expect(page.getByText(createTranslator('en').t('state.loadFailed'), {exact: true})).toHaveCount(0);
+        expect(detailReads).toBe(4);
+        await page.screenshot({path: test.info().outputPath('activity-recovered.png'), fullPage: true});
+        expect(mutations).toEqual([]);
+        expect(documents).toEqual([]);
+        expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
+    } finally { await page.unroute(pattern, deliverActivityDetail); }
 });
 
 test('restores Schedule after a refreshed participant roster disappears without replaying writes', async function recoverParticipantPanel({page}) {

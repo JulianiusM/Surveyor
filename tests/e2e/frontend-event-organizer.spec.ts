@@ -196,6 +196,20 @@ test('protects a new attendance draft after confirmed child deletion fails its f
         expect(failedDelivery).toBeGreaterThan(0);
         await expect(page).toHaveURL(original);
 
+        // The child receipt already owns confirmed departure recovery. Another
+        // mounted removal owner must not issue a parent DELETE whose outcome
+        // cannot obtain its own receipt; ordinary admitted editing stays usable.
+        await page.getByRole('button', {name: 'Entity settings', exact: true}).click();
+        const settings = page.getByRole('dialog', {name: 'Entity settings', exact: true});
+        await expect(settings.locator('[name="title"]')).toBeEnabled();
+        await settings.getByRole('tab', {name: 'Actions', exact: true}).click();
+        await expect(settings.getByRole('button', {name: 'Delete permanently', exact: true})).toBeDisabled();
+        await expect(settings.getByRole('button', {name: 'Archive for everyone', exact: true})).toBeEnabled();
+        expect(deletes).toEqual([operation]);
+        await settings.screenshot({path: test.info().outputPath('retained-child-parent-actions.png')});
+        await settings.getByRole('button', {name: 'Close', exact: true}).last().click();
+        await expect(settings).toHaveCount(0);
+
         // This edit begins after the original attempt has settled. Its own discard
         // decision must therefore govern a later ordinary same-document departure.
         const roster = page.locator('.event-participants');

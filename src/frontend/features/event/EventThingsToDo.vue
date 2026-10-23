@@ -297,7 +297,7 @@ async function refresh(): Promise<void> {
                                                 variant="outline-danger"
                                                 :state="available"
                                                 :pending="command.pending.value && deletingChild?.type === card.type && deletingChild.id === card.id"
-                                                :disabled="available.disabled.value"
+                                                :disabled="available.disabled.value || removal.action.disabled.value"
                                                 @click="deleteChild(card)"
                                             >
                                                 <i class="bi bi-trash me-1" aria-hidden="true"></i>{{ messages.t('overview.delete') }}

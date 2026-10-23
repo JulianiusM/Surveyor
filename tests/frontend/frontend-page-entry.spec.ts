@@ -273,7 +273,9 @@ describe('server-owned page entry and canonical navigation', () => {
         await router.push('/frontend-pilot/command-fixture');
         await flushPromises();
         const origin = router.currentRoute.value.fullPath;
+        expect(completion.available.value).toBe(true);
         expect(await completion.navigate('/frontend-pilot/confirmed-destination', context.capture(), origin)).toBe(false);
+        expect(completion.available.value).toBe(false);
         expect(completion.target.value).toBe('/frontend-pilot/confirmed-destination');
         expect(completion.pending.value).toBe(false);
         expect(router.currentRoute.value.fullPath).toBe(origin);
@@ -300,6 +302,44 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(deliveries).toBe(2);
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/confirmed-destination');
         expect(completion.target.value).toBeNull();
+        expect(completion.available.value).toBe(true);
+    });
+
+    it('invalidates every selected warm variant before an existing read cooldown can pause confirmed delivery', async () => {
+        let unavailable = true;
+        const visit = await confirmedReadVisit(async () => unavailable
+            ? new Response('{}', {status: 429, headers: {'Content-Type': 'application/json',
+                'Retry-After': '1', 'X-Surveyor-Context': session.context}}) : json(session));
+        const family = ['confirmed-dependency', session.context] as const;
+        const key = [...family, 'visible'];
+        const hiddenKey = [...family, 'another-locale'];
+        const observer = new QueryObserver(visit.context.queryClient, {queryKey: key,
+            queryFn: () => visit.context.api.bootstrap(), initialData: session, staleTime: Infinity, retry: false});
+        const stopRead = observer.subscribe(() => {});
+        cleanups.push(async () => { stopRead(); });
+        vi.useFakeTimers();
+        await observer.refetch();
+        expect(visit.request).toHaveBeenCalledOnce();
+        // Warm another inactive locale after the failure has established its
+        // deadline; session error handling can already invalidate observed keys.
+        visit.context.queryClient.setQueryData(hiddenKey, session);
+        expect(visit.context.queryClient.getQueryState(hiddenKey)?.isInvalidated).toBe(false);
+
+        // A previous read's server deadline must pause GET delivery, not skip
+        // retiring snapshots after a newly confirmed irreversible command.
+        expect(await visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin,
+            null, false, [family])).toBe(false);
+        expect(visit.completion.available.value).toBe(false);
+        expect(visit.completion.retryAction.disabled.value).toBe(true);
+        expect(visit.context.queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+        expect(visit.context.queryClient.getQueryState(hiddenKey)?.isInvalidated).toBe(true);
+        expect(visit.request).toHaveBeenCalledOnce();
+
+        unavailable = false;
+        await vi.advanceTimersByTimeAsync(1001);
+        expect(await visit.completion.retry()).toBe(true);
+        expect(visit.router.currentRoute.value.path).toBe('/frontend-pilot/help');
+        expect(visit.request).toHaveBeenCalledTimes(2);
     });
 
     it('retains confirmed delivery and its read deadline across owner unmount, then retries only the eligible read and navigation', async () => {
@@ -409,6 +449,8 @@ describe('server-owned page entry and canonical navigation', () => {
             enabled: false, meta: {surveyorRead: {mayRead: () => visit.context.mayRead()}}});
         const stopRead = observer.subscribe(() => {});
         cleanups.push(async () => { stopRead(); });
+        const hiddenKey = [...family, 'another-locale'];
+        visit.context.queryClient.setQueryData(hiddenKey, session);
         // The actual session owner closes resource-read admission while its
         // bootstrap is held; the public readonly projection stays untouched.
         const restoringSession = visit.context.refreshSession();
@@ -418,6 +460,7 @@ describe('server-owned page entry and canonical navigation', () => {
             expect(visit.context.sessionRead.value.pending).toBe(true);
             expect(await visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin, null, false, [family])).toBe(false);
             expect(visit.completion.target.value).toBe('/frontend-pilot/help');
+            expect(visit.context.queryClient.getQueryState(hiddenKey)?.isInvalidated).toBe(true);
             expect(visit.completion.retryAction.disabled.value).toBe(true);
             expect(await visit.completion.retry()).toBe(false);
             expect(visit.request).toHaveBeenCalledOnce();
@@ -476,6 +519,7 @@ describe('server-owned page entry and canonical navigation', () => {
         context.session.value = {...session, context: 'superseding-context-1234567890'};
         await flushPromises();
         expect(completion.target.value).toBeNull();
+        expect(completion.available.value).toBe(true);
         expect(await completion.retry()).toBe(false);
         expect(router.currentRoute.value.fullPath).toBe(origin);
     });
@@ -486,7 +530,7 @@ describe('server-owned page entry and canonical navigation', () => {
         }));
         const ConfirmedOwner = defineComponent({
             props: {identity: {type: String, required: true}},
-            template: '<section><button @click="complete">Confirm command</button><p v-if="completion.target.value">Retry confirmed delivery</p></section>',
+            template: '<section><button :disabled="!completion.available.value" @click="complete">Confirm command</button><p v-if="completion.target.value">Retry confirmed delivery</p></section>',
             setup(props) {
                 const completion = useConfirmedNavigation(props.identity);
                 function complete(): Promise<boolean> { return completion.navigate('/frontend-pilot/help'); }
@@ -505,6 +549,8 @@ describe('server-owned page entry and canonical navigation', () => {
             await flushPromises();
             expect(owners[0]!.text()).toContain('Retry confirmed delivery');
             expect(owners[1]!.text()).not.toContain('Retry confirmed delivery');
+            expect(owners[0]!.get('button').attributes('disabled')).toBeDefined();
+            expect(owners[1]!.get('button').attributes('disabled')).toBeDefined();
         } finally { cancelDelivery(); }
     });
 

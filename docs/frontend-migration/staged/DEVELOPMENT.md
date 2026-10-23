@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Approved composing-Enter, first-attempt deletion consent and Overview write-freshness contracts reconciled with existing full-application owners; retained recovery, control/value and generated boundaries; no publication or new execution claim
+verification-scope: Approved composition, deletion consent and Overview write freshness retained; final-review removal receipt admission/handoff and Activity cold-read Refresh reconciled through existing owners; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -622,7 +622,10 @@ retain their native omitted names. Explicit hint styling preserves each feature'
 `EntityListCounters` presents the admitted Packing/Drivers counts and feature labels without calculating membership
 or capacity. `EntityListToolbar` presents their hint/Refresh row inside the original `table-responsive` parent,
 including before data arrives. Survey adopts its no-hint, end-aligned variant through its existing read-state slot.
-Neither control adds a wrapper, chooses a read or changes scroll ownership.
+Activity keeps that same no-hint toolbar after its schedule, outside the data-only branch so cold recoverable
+failures retain manual Refresh. Its existing read action owns pending state and the server cooldown; validated
+detail denial or absence retires the toolbar with the private projection. Neither control adds a wrapper,
+chooses a read or changes scroll ownership.
 
 `EntityAssignees` and `EntityAssignmentActions` share names/removal
 and feature-supplied assignment/full wording. Each feature supplies its own operations, query families, grants and feedback.
@@ -780,11 +783,17 @@ entry decision. Capture the intended destination/notice once and commit it throu
 owner. Failed or canceled delivery retains the same completion through component remounts within its captured actor
 scope, without replaying a command. A navigation Retry repeats only its required reads and destination delivery.
 
-Permanent deletion uses `useEntityRemoval` in Settings, Overview and Event Things to do. After confirmation it
-cancels older Overview reads and marks only the captured actor's collection variants stale through the shared
-query-cache owner. The confirmed-navigation receipt retains selected family keys, never a feature callback or
-another data/error snapshot. It refreshes eligible mounted collection readers before delivery; inactive/hidden
-variants stay stale for their own next admitted read. It never reads the deleted detail. The exact current URL
+Permanent deletion uses `useEntityRemoval` in Settings, Overview and Event Things to do. Its action derives
+availability from the existing shared confirmed-navigation receipt and its own command admission. All three
+consumers use that same action for their Delete control and dispatch: another pending or retained receipt pauses
+only permanent deletion, without taking ownership of sibling drafts or other writes.
+After confirmation, the delivery owner synchronously installs its receipt before yielding to cancellation of
+older Overview reads and invalidation of the captured actor's collection variants through the shared query-cache
+owner. That first invalidation runs even when shared read admission or a server cooldown prevents a GET; no
+unprotected handoff leaves a second deletion available. Later Retry repeats required reads/delivery without
+repeating invalidation or DELETE. The receipt retains selected family keys, never a feature callback, another
+data/error snapshot or separate write-lock state. It refreshes eligible mounted collection readers before delivery;
+inactive/hidden variants stay stale for their own next admitted read. It never reads the deleted detail. The exact current URL
 and a warm different destination both require this delivery boundary: a duplicate Router replacement is not a
 fresh read. Failed reads retain confirmed success and admitted reads/delivery recovery, with the actual eligible query
 failures supplying Retry availability/deadlines through the existing cache and read-retry owners.
@@ -1504,8 +1513,9 @@ the same command retains uncertain-result/read recovery. Personal visibility and
 Permanent deletion uses `useEntityRemoval` in that same composable module. Its three current consumers are
 `EntitySettingsDialog.vue`, `OverviewRegion.vue` and `EventThingsToDo.vue`. The feature supplies its generated
 root/child operation and confirmation/success wording; the shared owner obtains whole-page consent before writing,
-dispatches once and retains the confirmed destination through failed delivery. Required reads and destination
-recovery follow the [shared entry contract](#entry-canonical-delivery-and-outcomes) without repeating the command.
+admits deletion from the existing receipt's availability, dispatches once and retains the confirmed destination
+through failed delivery. Required reads and destination recovery follow the
+[shared entry contract](#entry-canonical-delivery-and-outcomes) without repeating the command.
 Private drafts and capability checks remain with their actual feature owners.
 
 Never accept profile IDs, timestamps, stored parent state, or other arbitrary fields from the browser. Follow the [archival authority contract](PERMISSIONS_REFERENCE.md#archival-authority-and-personal-visibility), including the survey exception. A private preference may change placement only after existing overview membership is established.

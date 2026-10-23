@@ -49,6 +49,7 @@ afterEach(async () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    vi.useRealTimers();
     document.body.innerHTML = '';
 });
 
@@ -60,7 +61,7 @@ function json(value: unknown, status = 200): Response {
 /** Mount production components and generated transport; only HTTP delivery is
  * substituted. Persistence and native/built parity have their own integration layers. */
 async function mounted(component: Component, handler: (request: Request) => Promise<Response>,
-    path = `/frontend-pilot/activity/${planId}`, stubs: Record<string, boolean> = {}) {
+    path = `/frontend-pilot/activity/${planId}`, stubs: Record<string, boolean> = {}, detailStatus: 'success' | 'error' = 'success') {
     const request = vi.fn((input: RequestInfo | URL) => handler(input as Request));
     const context = createPilotContext({session}, true, request);
     context.hydrated.value = true;
@@ -79,13 +80,84 @@ async function mounted(component: Component, handler: (request: Request) => Prom
     await flushPromises();
     cleanups.push(async () => {root.unmount(); stopInitial(); await context.queryClient.cancelQueries(); context.queryClient.clear();});
     if (component === ActivityPage) {
-        await vi.waitFor(() => expect(context.queryClient.getQueryState(activityKeys.detail(session.context, planId))).toMatchObject({status: 'success'}));
+        await vi.waitFor(() => expect(context.queryClient.getQueryState(activityKeys.detail(session.context, planId))).toMatchObject({status: detailStatus}));
         await flushPromises();
     }
     return {root, wrapper: root.findComponent(component), request, context, router};
 }
 
 describe('Activity production frontend consumers', () => {
+    it.each([429, 503])('recovers cold detail through Refresh after its server deadline without replacing later drafts (%s)', async status => {
+        vi.useFakeTimers();
+        vi.setSystemTime(Date.UTC(2026, 9, 23, 6, 0, 0));
+        const issue = {type: 'urn:future:read', title: 'Read unavailable', status,
+            detail: 'Wait before reading this activity again.', requestId: 'activity-cold-retry'};
+        let unavailable = true;
+        let holdRecovery = true;
+        let finishRecovery: ((response: Response) => void) | undefined;
+        let current = structuredClone(view);
+        const {wrapper, request, router} = await mounted(ActivityPage, async function readActivity() {
+            if (unavailable) return new Response(JSON.stringify(issue), {status,
+                headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context, 'Retry-After': '5'}});
+            if (holdRecovery) return new Promise<Response>(resolve => { finishRecovery = resolve; });
+            return json(current);
+        }, undefined, {}, 'error');
+        const refresh = wrapper.get<HTMLButtonElement>('button[aria-label="Refresh"]');
+        expect(wrapper.find('.slot').exists()).toBe(false);
+        expect(wrapper.get('[data-read-issue]').text()).toBe(issue.detail);
+        expect(wrapper.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-23T06:00:05.000Z');
+        expect(refresh.element.disabled).toBe(true);
+        await refresh.trigger('click');
+        expect(request).toHaveBeenCalledOnce();
+
+        // The existing read owner releases only availability at the server's
+        // deadline. It starts no GET until this deliberate Refresh gesture.
+        await vi.advanceTimersByTimeAsync(5001);
+        await flushPromises();
+        expect(refresh.element.disabled).toBe(false);
+        expect(request).toHaveBeenCalledOnce();
+        unavailable = false;
+        await refresh.trigger('click');
+        await flushPromises();
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(refresh.element.disabled).toBe(true);
+        await refresh.trigger('click');
+        expect(request).toHaveBeenCalledTimes(2);
+        finishRecovery!(json(current));
+        await flushPromises();
+        expect(wrapper.get('.slot').text()).toContain('Breakfast help');
+        expect(wrapper.find('[data-read-issue]').exists()).toBe(false);
+        expect(wrapper.get('button[aria-label="Refresh"]').element).toBe(refresh.element);
+        expect(refresh.element.disabled).toBe(false);
+
+        // Successful recovery enters the ordinary retained-data path. A later
+        // Refresh keeps the actual unsaved inline input and current route.
+        holdRecovery = false;
+        const description = wrapper.get(`[data-slotid="${slotId}"] small[tabindex="0"]`);
+        await description.trigger('dblclick');
+        const draft = description.get<HTMLInputElement>('input');
+        await draft.setValue('Unsaved recovered activity notes');
+        current = {...current, title: 'Refreshed camp duties'};
+        await refresh.trigger('click');
+        await flushPromises();
+        expect(wrapper.get(`[data-slotid="${slotId}"] small[tabindex="0"] input`).element).toBe(draft.element);
+        expect(draft.element.value).toBe('Unsaved recovered activity notes');
+        expect(request).toHaveBeenCalledTimes(3);
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+        expect(router.currentRoute.value.fullPath).toBe(`/frontend-pilot/activity/${planId}`);
+    });
+
+    it.each([403, 404])('keeps Refresh absent after validated cold detail retirement (%s)', async status => {
+        const issue = {type: 'urn:future:read', title: 'Activity unavailable', status,
+            detail: 'This activity is unavailable.', requestId: 'activity-cold-denied'};
+        const {wrapper, request, context} = await mounted(ActivityPage, async () => new Response(JSON.stringify(issue), {status,
+            headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}}), undefined, {}, 'error');
+        expect(wrapper.text()).toContain(context.messages.value.t('state.forbidden'));
+        expect(wrapper.find('button[aria-label="Refresh"]').exists()).toBe(false);
+        expect(wrapper.find('.slot').exists()).toBe(false);
+        expect(request).toHaveBeenCalledOnce();
+    });
+
     it('counts all saved slots independently of schedule filters through refreshed and empty data', async () => {
         let current: components['schemas']['ActivityView'] = {...view,
             slots: [slot, {...view.slots[1]!, maxAssignees: 1}], counters: {participants: 1, open: 1, empty: 1}};

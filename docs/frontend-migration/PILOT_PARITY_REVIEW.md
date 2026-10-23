@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Whole-frontend readiness review and explicitly approved composing-Enter, deletion-consent and Overview write-freshness corrections; finite execution and separate P11 boundaries retained
+verification-scope: Approved readiness corrections and final-review deletion receipt admission and Activity cold-read recovery implemented and independently reviewed; renewed scoped execution and separate P11 boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -25,18 +25,27 @@ from committed P10 corrections at `419e8bbd02ca202aeaf29789ea00a89eafa3d99a` and
 [dated amendment](FRONTEND_FOUNDATION_DESIGN.md#approved-readiness-corrections-2026-10-23). The existing owners now
 implement all three corrections; no approved remedy is deferred.
 
+The next final review at `ee58f9f057b67d2b18b216eea2b3d751e3f56747` found two further P2 gaps. The maintainer
+directly requested their implementation and another review; the
+[dated correction](FRONTEND_FOUNDATION_DESIGN.md#authorized-final-review-corrections-2026-10-23) records that bounded
+authority separately from R1–R3. Both fixes now use their existing shared owners, with no task-owned remedy deferred.
+
 | Decision | Shared adoption and reviewed behavior |
 |---|---|
 | R1: composing Enter | `InlineCell` guards input Enter and textarea Ctrl+Enter before default prevention, serving Activity text/schedule, Packing and Drivers through their existing shared control. Activity role entry guards its distinct selection/creation operation the same way. Completed shortcuts, mouse actions and blur retain their existing behavior. Six mounted cases exercise both inline presentations and both role branches; the built Packing editor additionally requires the retained node, untouched composing default, no premature persistence and exactly one later genuine PATCH. Events are synthetic, not an operating-system IME certification. |
 | R2: first-attempt deletion consent | `useEntityRemoval` releases original whole-page discard consent in its existing first-attempt `finally`. Confirmed result and read/navigation recovery survive independently, without DELETE replay. Mounted App/Event admin, retained Settings and denied-private-view fallback cases cancel and accept later current-draft departure. The built organizer case confirms a real child DELETE, fails only lazy-module network delivery, then creates a new attendance draft. Forward through genuine same-document Help history preserves the same draft node on cancellation and leaves on acceptance; the persisted arrival date is unchanged. |
 | R3: invalidated Overview writes | `queryCache` exposes a read-only reactive projection of the current key's actual invalidation flag, disposing its subscription without another authority/data store. Overview's region handlers and shared card controls block archive, restore, automation, personal visibility and Delete while retaining existing read/navigation admission. Regressions cover warm destination and paused collection reads, background-read failure, locale/key replacement and successful recovery, including direct handler refusal. The built warm-default deletion case holds genuine backend delivery, requires disabled stale-card Delete with no replay, then verifies the removed card disappears and a saved survivor regains its action. |
+| Final review: shared deletion admission | The existing confirmed-navigation receipt exposes derived capacity. `useEntityRemoval` uses it for dispatch; Settings, all five Overview card families and Event administrator child controls adopt the same Delete-only restriction. The receipt installs before cancellation/invalidation yields, including when a previous read deadline or shared read pause prevents GET delivery. Later Retry repeats only admitted reads/navigation. Mounted actual Event/Settings cases reject a second parent Delete through both its rendered control and public action event during held cancellation and after failed delivery, preserving Archive and current attendance drafts. The built organizer journey proves one real child DELETE, blocked parent Delete, usable title/Archive controls and retained draft/departure protection. |
+| Final review: Activity cold-read Refresh | The existing toolbar now remains outside the data-only schedule branch. Cold recoverable reads retain manual Refresh and its existing pending/cooldown owner; validated 403/404 still retires private controls. Mounted 429/503 cases require deadline-respecting recovery without overlapping reads and retain a later real inline draft. The built Overview-to-Activity journey confirms real entry admission, fails only three genuine detail-response deliveries, then restores the real backend response through one deliberate Refresh without mutation or document navigation. |
 
 Independent nonauthor reviews and root review checked actual production adoption, retained control/value lifetimes,
 no-replay behavior, comments and declaration boundaries. The similar-issue trace also inspected every explicit Enter
 handler, both whole-page departure-consent consumers and Overview's manual cache seeding/aliases. Search controls
 which only suppress parent submission perform no action shortcut; Profile workflow already releases its own lease.
 Initial Overview bootstrap cannot revive after a committed SPA departure, and canonical aliases follow an actual
-admitted successful read. No further production defect was established within these reviewed boundaries.
+admitted successful read. The final follow-up additionally traced the three removal consumers, all five Overview
+families, creation/identity/profile delivery handoffs and matching cold-read controls in Packing, Drivers, Survey
+and Activity's advanced workspaces. No additional concrete defect was established within those reviewed boundaries.
 
 The staged contribution and architecture guidance now describes these exact ownership contracts. Complete-guide
 review additionally found an inherited Operations promise of a five-second Finance pool notice: only native
@@ -46,20 +55,24 @@ retaining the useful keep-open/no-repeat guidance. This corrects documentation w
 runtime behavior. Original decisions and production guides remain preserved.
 
 Verification uses supported Node.js **24.15.0** and the task-owned, schema-restricted MariaDB **10.11.14** runtime.
-Ignored `artifacts/frontend-approved-decisions-20261023/` retains exact commands, failures, baselines and receipts.
+Ignored `artifacts/frontend-final-fixes-20261023/` retains current commands, failures, baselines and receipts;
+`artifacts/frontend-approved-decisions-20261023/` retains the preceding R1–R3 execution history.
 
 | Check | Executed result and limit |
 |---|---|
-| Full build and test compiler | Server, native assets, Vue client and SSR builds passed. Final test typecheck passed after the new system-test fixture corrections. |
-| Complete database-free suite | **2,031/2,031** in **89 files** passed with unchanged assertions and deadlines. An earlier full run passed 2,030 but exceeded the existing development SSR/HMR 30-second limit; its log remains. A timing-only diagnostic passed the same assertions in 23.34 seconds, observing first SSR and Sass compilation costs. The failing run's slow phase and cause remain unproven; the passing renewal does not claim a repaired development runtime. |
+| Full build and test compiler | Server, native assets, Vue client and SSR builds passed. The renewed test typecheck passed after correcting the new system fixture's card locator to the actual link containing its title and description. |
+| Complete database-free suite | **2,037/2,037** in **89 files** passed with unchanged existing assertions and deadlines. The first broad run passed 2,036 but the existing clean-tree generator case exceeded its 60-second deadline. The unchanged focused case then passed in 36.34 seconds, followed by the successful normal full renewal. The initial slow phase/cause is unproven; no deadline, generator or runtime repair is claimed. |
 | Isolated built-client browser suite | **50/50** passed through the established client runner. These isolated browser fixtures are distinct from integrated E2E. |
-| Focused shared-owner regressions | The complete affected Overview file passed **109/109**; the four adjacent Packing, Activity, Event organizer and page-entry suites passed **268/268**. These selections overlap the complete database-free run and are not additional unique-test totals. |
-| Complete built-application E2E | One uninterrupted normal run passed **269 cases**, with **one disabled-local-login configuration skip** and **zero failures** across **270 cases**. Real backend persistence, ordinary native/Vue comparisons and all three new boundary journeys ran. Earlier new-fixture failures were incorrect Help URL/translated Retry expectations, corrected to actual existing routes/catalog wording without changing application behavior, criteria or deadlines. |
-| Semantic, visual and engineering review | Root and an independent reviewer inspected **32 original capture files** across Overview, all five card families, calendars, Event Settings and German Finance. No sampled visual defect was found. Global **444-source**, **11-DBAL-owner** and **161-frontend-source** engineering checks reported no findings; an ordinary-file scan found no emitted JavaScript/map siblings. |
+| Focused shared-owner regressions | Activity's complete mounted file passed **35/35**, and the corrected page-entry file passed **31/31**. The full renewal includes these files, organizer held/settled delivery cases, shared Settings and Overview regressions; overlapping selections are not additional unique-test totals. Corrected baseline assertions failed before the fixes and passed afterward. |
+| Scoped built-application E2E | A normal renewed selection passed **28/28**, with zero failures/skips, across Event organizer, basic Activity and cross-application workflows. The first selection passed 27 but the new Activity fixture assumed a title-only accessible card-link name; its corrected focused journey and the subsequent complete selected renewal passed without changing product names, criteria or deadlines. These are integrated built-app/database tests; the current selection does not rerun the entire E2E inventory. The preceding complete 269-pass/one-configuration-skip receipt remains historical evidence for its earlier source state. |
+| Semantic, visual and engineering review | Root and independent nonauthors reviewed actual production adoption, relevant guide changes and three new original English desktop captures: retained-child parent Settings, cold Activity recovery and the restored saved schedule. No sampled visual defect was found. The global 444-source/11-DBAL checks and all eight changed frontend readability owners reported no findings. Final ordinary-file inspection found no emitted JavaScript/map siblings or native/backend/contract/dependency changes. |
 
 Visual observation remains finite to those visible scenes, widths and locales; neither it nor synthetic composing
 events proves every browser, input method, actor or state. The prior unexplained Windows worker exit remains historical
-evidence, not a diagnosed or repaired fault; the current uninterrupted E2E run contains no such exit. Native frontend,
+evidence, not a diagnosed or repaired fault; the current scoped renewal contains no such exit. The preceding
+development SSR/HMR timeout likewise retains its earlier uncertainty. Initial validation encountered three
+untracked emitted JavaScript siblings; only those outputs were removed before the corrected baseline, without
+changing IDE settings or claiming an established producer. Final source inspection is clean. Native frontend,
 backend business sources and production guides are unchanged by this correction. P11/default-route cutover, native
 retirement, guide publication, deployment and excluded backend remedies retain their separate authority.
 

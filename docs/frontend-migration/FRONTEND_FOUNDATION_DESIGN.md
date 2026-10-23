@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Direct R1-R3 readiness approvals recorded after retained P10 trigger and original choices; native isolation, approval provenance and separate source/execution evidence preserved
+verification-scope: Direct R1-R3 readiness approvals and subsequent two-finding correction instruction recorded after retained P10 trigger and original choices; native isolation, approval provenance and separate source/execution evidence preserved
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -1030,6 +1030,26 @@ belong to the paired review rather than being inferred from this record.
 All three decisions retain existing feature/command/query ownership and shared backend business behavior. They
 authorize no native-source change, excluded backend remedy, P11/default-route cutover, native retirement,
 production-guide publication or deployment.
+
+## Authorized final-review corrections (2026-10-23)
+
+The next final review identified two P2 findings: a second permanent deletion could succeed without its own
+recovery destination while an earlier deletion's delivery receipt remained, and Activity's cold recoverable
+detail failure removed its only manual Refresh. The maintainer directly instructs implementation of those fixes
+and another review. This supplies bounded forward authority, separately from the earlier R1–R3 approvals.
+
+Settings, Overview and Event Things to do derive permanent-deletion admission from the existing shared
+confirmed-navigation receipt. A retained or pending receipt prevents another deletion; unrelated actions and
+drafts retain their existing owners. The first confirmed handoff installs that receipt before yielding to
+Overview cancellation/invalidation. Marking cached collections stale proceeds even during shared read suspension
+or a server cooldown; GETs and destination delivery still await their existing admission. Later Retry repeats
+only required reads/delivery. R2's release of original departure consent and current-draft protection, and R3's
+actual query invalidation flag, remain intact. No second receipt store or general write lock is authorized.
+
+Activity keeps its existing Refresh toolbar available without detail data for recoverable failures, using the
+same read, pending and cooldown owners. Validated denial or absence retains private-data retirement and removes
+that control. Native/backend behavior and the separate cutover, publication and deployment boundaries remain
+unchanged. The paired review records actual checks and limits rather than deriving success from this instruction.
 
 ## Cutover retirement inventory
 

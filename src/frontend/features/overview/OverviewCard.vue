@@ -188,7 +188,7 @@ function expand(event: MouseEvent): void {
                         v-if="interaction.migrated && card.capabilities.remove"
                         class="btn-sm"
                         variant="danger"
-                        :disabled="writeDisabled"
+                        :disabled="writeDisabled || interaction.removeDisabled"
                         :pending="interaction.removePending" :show-spinner="false"
                         @click="emit('remove')"
                         ><i class="bi bi-trash me-1" aria-hidden="true"></i

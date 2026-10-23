@@ -584,6 +584,7 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                     :automation="data.capabilities.manageAutomation && api.automate && automationLabels ? {paused: data.archive.autoArchivePaused,
                         pauseLabel: automationLabels.pause, resumeLabel: automationLabels.resume, pausedHint: automationLabels.pausedHint} : undefined"
                     :disabled="!!blocked"
+                    :remove-disabled="removal.action.disabled.value"
                     :pending-action="command.pending.value
                         && (pendingAction === 'archive' || pendingAction === 'automation' || pendingAction === 'remove')
                         ? pendingAction : null"

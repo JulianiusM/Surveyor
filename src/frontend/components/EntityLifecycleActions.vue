@@ -42,7 +42,7 @@ const {messages} = usePilot();
                 messages.t('common.duplicate')
             }}</RouterLink
             ><a v-if="exportLink" class="btn btn-outline-light" :href="exportLink.url" target="_blank" rel="noopener">{{ exportLink.label }}</a
-            ><ActionButton v-if="canRemove" variant="outline-danger" :disabled="disabled"
+            ><ActionButton v-if="canRemove" variant="outline-danger" :disabled="disabled || removeDisabled"
                 :pending="pendingAction === 'remove'" :show-spinner="false"
                 @click="emit('remove', $event)">{{ labels.deletePermanently }}</ActionButton>
         </div>

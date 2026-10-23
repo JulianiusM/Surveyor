@@ -53,7 +53,7 @@ const pendingRemoval = shallowRef<{type: components['schemas']['OverviewCard']['
 
 function cardInteraction(card: components['schemas']['OverviewCard']): PilotOverviewCardInteraction {
     const removePending = pendingRemoval.value?.type === card.type && pendingRemoval.value.id === card.id;
-    const writeState = {removePending, writesDisabled: overviewInvalidated.value};
+    const writeState = {removePending, removeDisabled: removal.action.disabled.value, writesDisabled: overviewInvalidated.value};
     if (card.type === 'event') return {...writeState, migrated: true, readHeader: eventApi.header.bind(eventApi), duplicateUrl: card.url + '/duplicate'};
     if (card.type === 'drivers') return {...writeState, migrated: true, readHeader: driversApi.header.bind(driversApi), duplicateUrl: card.url + '/duplicate'};
     if (card.type === 'survey') return {...writeState, migrated: true, readHeader: surveyApi.header.bind(surveyApi), duplicateUrl: card.url + '/duplicate'};

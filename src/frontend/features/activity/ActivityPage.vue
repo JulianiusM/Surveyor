@@ -316,8 +316,11 @@ async function confirmAssignment(): Promise<void> {
                         :plan-id="planId" :view="data" :assignment-mode="requirementMode ?? data.assignmentMode" :disabled="blocked"
                         @changed="advancedChanged" @denied="advancedChanged" />
                 </div>
-                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="readAction" @refresh="refresh" />
             </template>
+            <!-- A cold recoverable read has no schedule yet, but still needs the
+                 same explicit Refresh and cooldown owner. Confirmed access loss
+                 retains its existing private retirement without this action. -->
+            <EntityListToolbar v-if="!denied" :refresh-label="messages.t('common.refresh')" :state="readAction" @refresh="refresh" />
         </div>
     </section>
     <ActivitySettings

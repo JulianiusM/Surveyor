@@ -131,6 +131,8 @@ export type PilotMetadataFieldPolicy<TValues extends object> = {
  * actor/route receipt across identity remounts without persisting inputs or replaying writes. */
 export interface PilotConfirmedNavigation {
     pending: Ref<boolean>;
+    /** Existing shared receipt capacity, not another command/permission lock. */
+    available: ComputedRef<boolean>;
     retryAction: PilotActionState;
     fallbackRetryAction: PilotActionState;
     retryAt: ComputedRef<number | undefined>;
@@ -225,6 +227,8 @@ export interface PilotOverviewCardInteraction {
     duplicateUrl?: string;
     /** The owning collection identifies this Delete independently of sibling locks. */
     removePending?: boolean;
+    /** A retained confirmed destination pauses only another permanent deletion. */
+    removeDisabled?: boolean;
     /** Optional collection freshness policy pauses mutations while preserving navigation. */
     writesDisabled?: boolean;
 }

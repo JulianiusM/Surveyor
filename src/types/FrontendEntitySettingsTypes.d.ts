@@ -105,6 +105,8 @@ export interface EntityLifecycleActionsProps {
     canRemove: boolean;
     duplicateTo: string;
     disabled: boolean;
+    /** Permanent deletion additionally needs the shared delivery slot. */
+    removeDisabled?: boolean;
     /** Broader dialog blocking stays separate from this initiating operation. */
     pendingAction?: 'archive' | 'automation' | 'remove' | null;
     contextHint?: string;

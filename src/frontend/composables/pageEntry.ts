@@ -10,7 +10,7 @@ import {frontendDocumentUrl, safeFrontendReturn} from '../../modules/lib/fronten
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import {canRetryRead, useActionState, usePilot} from '../app/context';
 import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../app/transport';
-import {queryFamilyReadError, refetchFreshQueries, retireQueryFamily, useQueryAdmission} from '../app/queryCache';
+import {invalidateQueryFamilies, queryFamilyReadError, refetchFreshQueries, retireQueryFamily, useQueryAdmission} from '../app/queryCache';
 import {belongsToQueryFamily} from '../app/queryKeys';
 import {useReadRetry, useReadRetryAt} from './feedback';
 import {observePageNavigation} from './pageNavigation';
@@ -248,6 +248,12 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         return !pending.value;
     }
 
+    /** Another irreversible command needs an empty delivery slot. Derive that
+     * admission from this receipt, independently of its original mounted owner. */
+    function mayNavigate(): boolean {
+        return !disposed && !pending.value && receipt.value === undefined;
+    }
+
     function admitNavigation(to: RouteLocationNormalized, from: RouteLocationNormalized): boolean {
         return !pending.value || to.fullPath === receipt.value?.destination
             || frontendDocumentUrl(to.fullPath) === frontendDocumentUrl(from.fullPath);
@@ -303,9 +309,16 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
      * component. Local controls add their own mount lifetime and deadline wakeup. */
     function mayRetry(owner: unknown): boolean {
         const confirmed = receipt.value;
-        return !!confirmed && !disposed && context.hydrated.value && !pending.value && confirmed.owner === owner
-            // Session-refresh delivery can establish its own admission. A
-            // dependency-only retry instead uses the existing shared barrier.
+        return !!confirmed && !pending.value && confirmed.owner === owner && mayDeliver();
+    }
+
+    /** Read admission is distinct from canceling/marking pre-command snapshots
+     * stale. A server cooldown or shared read pause must still allow the latter. */
+    function mayDeliver(): boolean {
+        const confirmed = receipt.value;
+        // Session-refresh delivery can establish its own admission. A
+        // dependency-only retry instead uses the existing shared barrier.
+        return !!confirmed && !disposed && context.hydrated.value
             && (!confirmed.readFamilies.length || confirmed.refreshSession || context.mayRead(confirmed.scope))
             && canRetryRead(retryError());
     }
@@ -317,9 +330,10 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
 
     /** Retry delivery with the current presentation language, while retaining the confirmed
      * actor/epoch and origin. Language selection cannot invalidate a committed business result. */
-    async function retry(owner: unknown): Promise<boolean> {
+    async function retry(owner: unknown, invalidateDependencies = false): Promise<boolean> {
         const confirmed = receipt.value;
-        if (!confirmed || !mayRetry(owner)) return false;
+        if (!confirmed || disposed || !context.hydrated.value || pending.value || confirmed.owner !== owner
+            || !invalidateDependencies && !mayDeliver()) return false;
 
         // A receipt may survive a remount, but cannot cross another actor or an
         // accepted departure from its originating form. Retire that obsolete
@@ -332,6 +346,17 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
 
         pending.value = true;
         try {
+            // The first confirmed handoff owns cancellation/invalidation before
+            // yielding. Sibling removals see this same receipt throughout that
+            // await; cooldowns pause GETs without leaving old snapshots current.
+            // Later Retry repeats only delivery reads, not this broad invalidation.
+            if (invalidateDependencies && confirmed.readFamilies.length) {
+                try { await invalidateQueryFamilies(context.queryClient, confirmed.readFamilies); }
+                catch { return false; }
+                if (receipt.value !== confirmed || !context.isCurrent(confirmed.scope)) return false;
+            }
+            if (!mayDeliver()) return false;
+
             // Keep this serial display requirement in the shared receipt rather
             // than retaining a feature callback after its component has retired.
             // Failure retains confirmed success; Retry repeats only reads/delivery.
@@ -379,13 +404,13 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
                             origin: string = router.currentRoute.value.fullPath,
                             notice: components['schemas']['EntryNotice'] | null = null, refreshSession = false,
                             readFamilies: readonly (readonly unknown[])[] = []): Promise<boolean> {
-        if (disposed || pending.value || receipt.value || !context.isCurrent(scope)
+        if (!mayNavigate() || !context.isCurrent(scope)
             || frontendDocumentUrl(router.currentRoute.value.fullPath) !== frontendDocumentUrl(origin)) return false;
         // Copy only the selected key arrays so later caller mutation cannot
         // replace the dependencies of this already confirmed command receipt.
         receipt.value = {destination: pageDestination(router, destination), scope, origin, notice, owner, refreshSession,
             readFamilies: readFamilies.map(family => [...family])};
-        return retry(owner);
+        return retry(owner, true);
     }
 
     function target(owner: unknown): string | null {
@@ -450,7 +475,7 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         if (confirmedNavigations.get(context.session) === navigation) confirmedNavigations.delete(context.session);
     }
     const navigation = {pending, target, notice, fallbackTarget, navigate, retry, retryFallback, retain, identifyOwner,
-        mayRetry, mayRetryFallback, retryError};
+        mayNavigate, mayRetry, mayRetryFallback, retryError};
     return navigation;
 }
 
@@ -472,6 +497,7 @@ export function useConfirmedNavigation(identity?: string): PilotConfirmedNavigat
     const owner = navigation.identifyOwner(component, identity);
     onBeforeUnmount(navigation.retain(owner));
     const target = computed(() => navigation.target(owner));
+    const available = computed(navigation.mayNavigate);
     const notice = computed(() => navigation.notice(owner));
     const fallbackTarget = computed(navigation.fallbackTarget);
     const retryAvailable = useReadRetry(navigation.retryError);
@@ -499,7 +525,7 @@ export function useConfirmedNavigation(identity?: string): PilotConfirmedNavigat
     function retryFallback(): Promise<boolean> {
         return fallbackRetryAction.isAvailable() ? navigation.retryFallback() : Promise.resolve(false);
     }
-    return {pending: navigation.pending, target, notice, fallbackTarget, navigate, retry, retryFallback,
+    return {pending: navigation.pending, available, target, notice, fallbackTarget, navigate, retry, retryFallback,
         retryAction, fallbackRetryAction, retryAt, fallbackRetryAt};
 }
 

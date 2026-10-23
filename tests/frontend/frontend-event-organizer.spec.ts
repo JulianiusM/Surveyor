@@ -18,6 +18,7 @@ import EventSettings from '../../src/frontend/features/event/EventSettings.vue';
 import EventPage from '../../src/frontend/features/event/EventPage.vue';
 import {copyEventText} from '../../src/frontend/features/event/clipboard';
 import AppDialog from '../../src/frontend/components/AppDialog.vue';
+import EntityLifecycleActions from '../../src/frontend/components/EntityLifecycleActions.vue';
 import type {components} from '../../src/types/api/v1';
 
 const childId = '22222222-2222-4222-8222-222222222222';
@@ -166,9 +167,14 @@ describe('Event organizer workflows', () => {
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'GET')).toHaveLength(1);
     });
 
-    it('protects a new organizer attendance draft on canceled and accepted Back after confirmed child deletion delivery fails', async () => {
+    it.each([false, true])('protects sibling deletion and a new attendance draft after confirmed child deletion (held invalidation: %s)', async heldInvalidation => {
         const event = createFrontendEventView({capabilities: {...createFrontendEventView().capabilities,
-            admin: true, participants: true, manageRegistrations: true, manageAssignments: true}});
+            admin: true, participants: true, settings: true, manageRegistrations: true, manageAssignments: true}});
+        const settings: components['schemas']['EventSettings'] = {id: eventId, title: event.title,
+            settingsToken: 'organizer-settings-token', headerUrl: null, headerVersion: null, editableFields: [], access: null,
+            capabilities: {editHeader: false, managePermissions: false, duplicate: false, remove: true,
+                manageArchive: true, archive: true, restore: false, manageAutomation: false, export: false},
+            archive: event.archive};
         // These are actual organizer capabilities: the backend's admin child
         // projection exposes owner actions, independently of roster management.
         const owned = {...card, capabilities: {...card.capabilities, duplicate: true, remove: true}};
@@ -181,6 +187,7 @@ describe('Event organizer workflows', () => {
                 return json({changed: true});
             }
             if (url.pathname.endsWith('/participants')) return json(roster);
+            if (url.pathname.endsWith('/settings')) return json(settings);
             if (url.pathname.endsWith('/registration-links')) return json({items: []});
             if (url.pathname.endsWith('/things-to-do')) return json({items: [owned]});
             if (url.pathname.endsWith('/finance/organizer')) return json({audience: 'organizer', registrationId: null,
@@ -204,13 +211,25 @@ describe('Event organizer workflows', () => {
             plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
             provide: {[pilotContextKey as symbol]: context},
         }});
+        let releaseInvalidation: (() => void) | undefined;
         cleanups.push(async function disposeOrganizerJourney(): Promise<void> {
+            releaseInvalidation?.();
             wrapper.unmount();
             await context.queryClient.cancelQueries();
             context.queryClient.clear();
             context.updates.dispose();
         });
         await flushPromises();
+        // A real query cancellation can finish after the DELETE response. Hold
+        // only that completion to exercise the shared receipt handoff as well
+        // as its settled failed-navigation state, without holding HTTP authority.
+        if (heldInvalidation) {
+            const cancelQueries = context.queryClient.cancelQueries.bind(context.queryClient);
+            vi.spyOn(context.queryClient, 'cancelQueries').mockImplementationOnce(async function holdCancellation(filters, options): Promise<void> {
+                await cancelQueries(filters, options);
+                await new Promise<void>(resolve => { releaseInvalidation = resolve; });
+            });
+        }
         router.onError(() => {});
         router.beforeResolve(function rejectOverview(to): void {
             if (to.path === '/frontend-pilot') throw new Error('Controlled Overview delivery failure');
@@ -223,15 +242,35 @@ describe('Event organizer workflows', () => {
         expect(confirmation).toHaveBeenCalledWith('Delete this item?');
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
         expect(router.currentRoute.value.path).toBe(origin);
+        if (heldInvalidation) expect(releaseInvalidation).toBeTypeOf('function');
         expect(removal.attributes('disabled')).toBeDefined();
         expect(wrapper.text()).toContain('Changes saved');
+
+        // The parent retains independently admitted Settings and archival, but
+        // cannot commit a second irreversible write into the child's exclusive
+        // delivery receipt. Check both the visible control and its public event
+        // boundary; a disabled button alone cannot protect programmatic dispatch.
+        await button(wrapper, 'Entity settings').trigger('click');
+        await flushPromises();
+        const surface = new DOMWrapper(document.body);
+        const parentRemoval = button(surface, 'Delete permanently');
+        expect(parentRemoval.attributes('disabled')).toBeDefined();
+        expect(button(surface, 'Archive for everyone').attributes('disabled')).toBeUndefined();
+        confirmation.mockClear();
+        wrapper.findComponent(EntityLifecycleActions).vm.$emit('remove', new MouseEvent('click'));
+        await flushPromises();
+        expect(confirmation).not.toHaveBeenCalled();
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
+        await button(surface, 'Close').trigger('click');
+        await flushPromises();
+        releaseInvalidation?.();
+        await flushPromises();
 
         // This genuine roster dialog starts after the failed first delivery.
         // The earlier deletion approval cannot authorize discarding its new input.
         await wrapper.get('.event-participants .accordion-button').trigger('click');
         await button(wrapper.get('.event-participants'), 'Edit dates').trigger('click');
         await flushPromises();
-        const surface = new DOMWrapper(document.body);
         const departure = surface.get<HTMLInputElement>('.pilot-dialog input[name="departureDate"]');
         expect(departure.element.disabled).toBe(false);
         await departure.setValue('2027-06-02');
