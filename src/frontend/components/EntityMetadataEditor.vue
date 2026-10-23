@@ -140,7 +140,7 @@ const awaitingAuthority = computed(() => !!draft.value?.awaitingAuthority);
 const refreshAction = useActionState({eligible: mayRefreshMetadata, pending: () => refreshing.value,
     blocked: () => !!props.busy || pending.value});
 
-function mayRefreshMetadata(): boolean { return active && context.mayRead() && retryAvailable.value; }
+function mayRefreshMetadata(): boolean { return active && props.active !== false && context.mayRead() && retryAvailable.value; }
 
 /** A current read can offer review after partial field revocation. A denied read
  * or retired actor/resource still forbids presenting any late result. */

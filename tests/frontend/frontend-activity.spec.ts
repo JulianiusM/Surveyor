@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises, mount} from '@vue/test-utils';
+import {DOMWrapper, flushPromises, mount} from '@vue/test-utils';
 import {defineComponent, type Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
@@ -425,6 +425,43 @@ describe('Activity production frontend consumers', () => {
         expect(document.body.textContent).toContain('You need Edit Meta permission to create roles for this plan.');
         expect(search.value).toBe('New role');
         expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it('retains a shared-text title draft and blocks partial saving after title authority is lost even when Review is attempted', async () => {
+        let current: components['schemas']['ActivityView'] = {...view, textFields: [{id: otherId,
+            title: 'Saved title', text: 'Saved instructions', editToken: '"text-opening"',
+            capabilities: {edit: true, editTitle: true, delete: true}}]};
+        const {wrapper, context, request} = await mounted(ActivityPage, async () => json(current));
+        await wrapper.get('.text-field-edit').trigger('click');
+        await flushPromises();
+        const title = document.querySelector<HTMLInputElement>('#textFieldTitle')!;
+        const text = document.querySelector<HTMLTextAreaElement>('#textFieldText')!;
+        title.value = 'Keep my unfinished title';
+        title.dispatchEvent(new Event('input', {bubbles: true}));
+        text.value = 'Keep my unfinished instructions';
+        text.dispatchEvent(new Event('input', {bubbles: true}));
+        current = {...current, textFields: [{...current.textFields[0]!, editToken: '"text-without-title"',
+            capabilities: {edit: true, editTitle: false, delete: false}}]};
+        await context.queryClient.invalidateQueries({queryKey: activityKeys.detail(session.context, planId)});
+        await flushPromises();
+        const review = new DOMWrapper(document.body).findAll('button')
+            .find(control => control.text().trim() === context.messages.value.t('draft.review'));
+        expect(review).toBeDefined();
+        expect(review!.attributes('disabled')).toBeDefined();
+        await review!.trigger('click');
+        await flushPromises();
+
+        // The opening grant loss blocks Review as well as Save. Attempting
+        // that action cannot bypass the guard and omit the retained title.
+        expect(document.querySelector('#textFieldTitle')).toBe(title);
+        expect(title.value).toBe('Keep my unfinished title');
+        expect(document.querySelector('#textFieldText')).toBe(text);
+        expect(text.value).toBe('Keep my unfinished instructions');
+        expect(document.querySelector<HTMLButtonElement>('[type="submit"][form="textFieldForm"]')!.disabled).toBe(true);
+        document.querySelector<HTMLFormElement>('#textFieldForm')!.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+        await flushPromises();
+        expect(request.mock.calls.every(([value]) => (value as Request).method === 'GET')).toBe(true);
+        expect(document.querySelector('#textFieldForm')).not.toBeNull();
     });
 
     it('retains the failed role-creation suggestion focus without marking slot Save pending or changing its styling', async () => {

@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-22
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Shared Windows fork IPC handoff and owned temporary-resource cleanup added to retained runner layers and finite evidence requirements; no publication or new execution claim
-source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts; tests/unit/civil-date.spec.ts; tests/e2e/frontend-calendar.spec.ts
+verification-scope: Browser focus setup isolation reconciled with retained Windows fork IPC handoff, owned temporary-resource cleanup, runner layers and finite evidence requirements; no publication or new execution claim
+source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts; tests/unit/civil-date.spec.ts; tests/e2e/frontend-calendar.spec.ts; tests/e2e/frontend-pilot-activity-advanced.spec.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
 
@@ -180,6 +180,11 @@ establish any of those guarantees.
 Use isolated built-browser checks for SSR/hydration/module delivery and focus when a full backend workflow is not
 needed. Use built-application E2E when actual routes, sessions, rendering and persistence are the boundary. Source
 development/HMR with real server/persistence belongs to browser integration. Configuration skips are unrun modes.
+
+Isolate completion-induced scrolling from deliberate test setup. When moving focus to prove that a pending
+operation must not reclaim it, use native `focus({preventScroll: true})` for that setup move. An ordinary focus
+can start smooth scrolling before the held response is released. Preserve exact completion scroll assertions;
+do not turn setup movement into an application failure or widen the comparison to conceal it.
 
 For ordinary migrated forms and links, assert that the built workflow retains a marker on the current document
 and emits no unexpected main-frame navigation request. Select scoped suites by explicit file paths when a filter

@@ -79,17 +79,25 @@ async function remove(adjustment: NonNullable<components['schemas']['FinancePool
 /** One deliberate saved-list read reconciles both independent receipts without
  * issuing a second request or replaying either financial command. */
 async function refresh(): Promise<void> {
-    if (!props.active || command.pending.value || removal.pending.value) return;
-    // Both command owners consume the same admitted read completion. The first
-    // eligible recovery starts it; a blocked recovery cannot start extra work.
+    if (!props.active || !command.recoveryAction.isAvailable() || !removal.recoveryAction.isAvailable()) return;
+    // Both histories consume one admitted read. Start with the owner whose
+    // outcome is unknown so its protected recovery spans the actual GET; a
+    // healthy sibling's ordinary reconciliation supplies no pending lease.
     let reading: Promise<void> | undefined;
     function readSaved(): Promise<void> { return reading ??= props.refresh(); }
-    if (await command.reconcileSafely(readSaved)) inspected.value = true;
-    await removal.reconcileSafely(readSaved);
+    if (removal.uncertain.value) {
+        if (await removal.reconcileSafely(readSaved)) await command.reconcileSafely(readSaved);
+        return;
+    }
+
+    if (await command.reconcileSafely(readSaved)) {
+        inspected.value = true;
+        await removal.reconcileSafely(readSaved);
+    }
 }
 /** Explicit saved-list review releases this uncertain additive input once. */
 function acknowledge(): void {
-    if (!inspected.value || command.recovering.value) return;
+    if (!inspected.value || command.recoveryAction.disabled.value || removal.recoveryAction.disabled.value) return;
     // No inferred row matching can prove which ambiguous creation persisted.
     command.acknowledge(); reset();
 }
@@ -107,7 +115,8 @@ function close(): void {
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refresh">
             <template #uncertain>
-                <ActionButton v-if="inspected" variant="outline-warning" :disabled="command.recovering.value" @click="acknowledge">
+                <ActionButton v-if="inspected" variant="outline-warning"
+                    :disabled="command.recoveryAction.disabled.value || removal.recoveryAction.disabled.value" @click="acknowledge">
                     {{ messages.t('finance.reviewedAdjustments') }}
                 </ActionButton>
             </template>

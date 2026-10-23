@@ -57,8 +57,9 @@ const admission = usePageEntry<components['schemas']['ProfileWorkflowEntry']>({
     read: readWorkflowEntry,
 });
 const admissionRetryAt = useReadRetryAt(() => admission.error.value, admission.retryAvailable);
+const sessionRetryAvailable = useReadRetry(() => context.sessionRead.value.error);
 const command = useCommand(refreshAdmission, true, {dirty: isDirty, busy: () => reading.value,
-    unknownMessage: 'auth.leaveUnknown', problemKey: workflowProblemKey});
+    unknownMessage: 'auth.leaveUnknown', problemKey: workflowProblemKey, recoveryEligible: mayRecoverWorkflow});
 // Authority Refresh shares the existing recovery admission and lease. A sibling
 // token/destructive command only blocks it; that command never owns its spinner.
 const refreshAction = useActionState({eligible: () => command.recoveryAction.isAvailable(),
@@ -159,6 +160,12 @@ function mayReadPreview(): boolean {
 function maySubmitWorkflow(): boolean {
     return active && !finished.value && context.mayRead() && admission.outcome.value?.kind === 'render'
         && !command.pending.value && !command.uncertain.value && !reading.value;
+}
+/** Recovery needs both existing read deadlines, but may itself restore session
+ * admission. Keep this predicate on the command so direct recovery and toolbar
+ * presentation share it without restricting ordinary workflow commands. */
+function mayRecoverWorkflow(): boolean {
+    return sessionRetryAvailable.value && admission.retryAvailable.value;
 }
 function workflowProblemKey(problem: components['schemas']['Problem']) {
     if (problem.code !== 'VALIDATION_FAILED') return;
@@ -276,11 +283,19 @@ function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, 
     <!-- Warm router visits have no document-owned secret or POST result. Offer an
          explicit real request rather than issuing a token or repeating a preview. -->
     <PageMessage v-if="admission.outcome.value?.kind === 'denied'" kind="error" :message="messages.t('common.notAllowed')" :renewal="admission.outcome.value" />
-    <StatusNotice v-else-if="admission.error.value" kind="warning" :read-error="admission.error.value" :retry-at="admissionRetryAt"
+    <StatusNotice v-else-if="admission.error.value && !workflow" kind="warning" :read-error="admission.error.value" :retry-at="admissionRetryAt"
         :action="{state: admission.retryAction, label: messages.t('common.retry')}" @action="admission.retry">{{ messages.t('state.loadFailed') }}</StatusNotice>
     <LoadingSkeleton v-else-if="!workflow" v-bind="route.meta.loadingSkeleton" page />
     <CommonPage v-else-if="denialPage" :page="denialPage" />
     <template v-else-if="workflow">
+        <!-- A temporary authority-read failure retains the admitted form and its
+             local secret/input nodes. Only the entry owner's denial or actor/
+             visit retirement can release them; Retry repeats the read alone. -->
+        <StatusNotice v-if="admission.error.value" kind="warning" :read-error="admission.error.value"
+            :retry-at="admissionRetryAt" :last-updated-at="admission.admittedAt.value"
+            :action="{state: admission.retryAction, label: messages.t('common.retry')}" @action="admission.retry">
+            {{ messages.t('state.stale') }}
+        </StatusNotice>
         <StatusNotice v-if="readError" kind="danger" :read-error="readError" :retry-at="readRetryAt"
             :action="{state: previewAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="requestPreview">
             {{ messages.t('state.loadFailed') }}

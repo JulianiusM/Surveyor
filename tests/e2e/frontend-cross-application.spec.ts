@@ -1,4 +1,4 @@
-import {expect, test, type APIRequestContext, type Locator, type Page, type Route, type TestInfo} from '@playwright/test';
+import {expect, test, type APIRequestContext, type Locator, type Page, type Response, type Route, type TestInfo} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createE2EActivityPlan, createE2EDriversList, createE2EEvent, createE2ELogin, createE2EPackingList, createE2ESurvey} from '../factories/e2eCoreFactory';
@@ -235,5 +235,90 @@ test('keeps parent grouping, personal placement, hidden-region history and count
     await expect(owner.locator(`[data-id="${child.id}"]`)).toBeVisible();
     for (const resource of resources.filter(resource => resource.type !== 'event')) {
         await expect(owner.locator(`[data-id="${resource.id}"]`)).toBeVisible();
+    }
+});
+
+test('reconciles confirmed root deletion at the same Overview URL and from a filtered visit into its warm default cache', async ({page}) => {
+    test.setTimeout(90_000);
+    const {resources, child} = await mixedOverview(page.request);
+    await page.goto('/frontend-pilot?locale=en', {waitUntil: 'domcontentloaded'});
+    await waitForPilotHydration(page);
+    // Commit the exact default destination through existing SPA navigation. Its
+    // admitted projection is also the warm return target for the second deletion.
+    await page.locator('header a.navbar-brand').click();
+    await expect(page).toHaveURL('/frontend-pilot');
+    const owner = page.locator('[data-collection="owner"][data-region="main"]');
+    await expect(owner.locator('.js-item')).toHaveCount(5);
+    await expect(owner).toContainText('6 matching entities');
+    await expect(owner).toHaveAttribute('aria-busy', 'false');
+    const documentOrigin = await page.evaluate(() => performance.timeOrigin);
+    const deletes: string[] = [];
+    const documents: string[] = [];
+    page.on('request', request => {
+        if (request.method() === 'DELETE') deletes.push(new URL(request.url()).pathname);
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documents.push(request.url());
+    });
+    const selected = ['packing', 'drivers'].map(type => resources.find(resource => resource.type === type)!);
+
+    for (const [index, resource] of selected.entries()) {
+        if (index > 0) {
+            // Search uses the real region form and leaves the previously admitted
+            // default cache intact. Returning after deletion reconciles that key.
+            await owner.getByRole('searchbox').fill(resource.title);
+            await owner.getByRole('button', {name: 'Search', exact: true}).click();
+            await expect.poll(() => new URL(page.url()).searchParams.get('owner_main_q')).toBe(resource.title);
+            await expect(owner.locator('.js-item')).toHaveCount(1);
+            await expect(owner).toHaveAttribute('aria-busy', 'false');
+        }
+        const card = owner.locator(`.js-item[data-type="${resource.type}"][data-id="${resource.id}"]`);
+        await expect(card).toBeVisible();
+        const deleted = page.waitForResponse(response => response.request().method() === 'DELETE'
+            && new URL(response.url()).pathname === resource.endpoint);
+        // Require the deletion's immediate reconciliation; the ordinary 30-second
+        // Overview poll must not make a missing follow-up read appear correct.
+        const reconciled = page.waitForResponse(readDeletedDefault, {timeout: 5000});
+
+        // Confirmation sends the actual generated command once. A later GET is
+        // persistence evidence; no optimistic fixture or fabricated body can
+        // remove the old card or satisfy this saved-projection assertion.
+        page.once('dialog', confirmation => confirmation.accept());
+        await card.getByRole('button', {name: 'Delete', exact: true}).click();
+        expect((await deleted).status()).toBe(200);
+        const projection = await (await reconciled).json() as components['schemas']['OverviewRegion'];
+        await expect(page).toHaveURL('/frontend-pilot');
+        await expect(owner.locator(`.js-item[data-id="${resource.id}"]`)).toHaveCount(0);
+        await expect(owner.locator('.js-item')).toHaveCount(4 - index);
+        await expect(owner).toContainText(`${5 - index} matching entities`);
+        await expect(owner).toHaveAttribute('aria-busy', 'false');
+        expect(projection.q).toBe('');
+        expect(projection.type).toBe('all');
+        expect(projection.matchingEntities).toBe(5 - index);
+        const retainedEvent = resources.find(candidate => candidate.type === 'event')!;
+        expect(projection.items.find(item => item.type === 'event' && item.id === retainedEvent.id)?.children?.total).toBe(1);
+        for (const removed of selected.slice(0, index + 1)) {
+            expect(projection.items.some(item => item.type === removed.type && item.id === removed.id)).toBe(false);
+            await expect(owner.locator(`.js-item[data-id="${removed.id}"]`)).toHaveCount(0);
+        }
+        expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentOrigin);
+        expect(deletes).toEqual(selected.slice(0, index + 1).map(removed => removed.endpoint));
+        expect(documents).toEqual([]);
+
+        /** Accept only a new genuine default-region read after persistence. A
+         * preceding poll still containing this root cannot satisfy the journey. */
+        async function readDeletedDefault(response: Response): Promise<boolean> {
+            const url = new URL(response.url());
+            if (response.request().method() !== 'GET' || response.status() !== 200 || url.pathname !== '/api/v1/overview'
+                || url.searchParams.get('collection') !== 'owner' || url.searchParams.get('region') !== 'main'
+                || url.searchParams.get('q') || url.searchParams.get('eventId')) return false;
+            const projection = await response.json() as components['schemas']['OverviewRegion'];
+            return !projection.items.some(item => item.type === resource.type && item.id === resource.id);
+        }
+    }
+
+    // The saved Event still groups its child after both root removals; that child
+    // does not become a root card or borrow another family's deletion scope.
+    await expect(owner.locator(`[data-id="${child.id}"]`)).toHaveCount(0);
+    for (const remaining of resources.filter(resource => !selected.includes(resource))) {
+        await expect(owner.locator(`.js-item[data-id="${remaining.id}"]`)).toBeVisible();
     }
 });

@@ -75,7 +75,13 @@ for (const locale of ['en', 'de'] as const) {
                     // Chromium drops native disabled-button focus to BODY. A
                     // deliberate later focus owner must cancel restoration.
                     await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true);
-                    if (moveFocus) await otherControl.focus();
+                    // Deliberate focus cancels restoration. Keep its own native
+                    // smooth scrolling out of the completion-only measurement.
+                    if (moveFocus) {
+                        await otherControl.evaluate(function focusWithoutScrolling(control) {
+                            (control as HTMLInputElement).focus({preventScroll: true});
+                        });
+                    }
                     const waiting = moveFocus ? await page.evaluate(() => ({x: scrollX, y: scrollY})) : before;
                     const completion = page.waitForResponse(response => response.request().method() === 'GET'
                         && new URL(response.url()).pathname === `/api/v1/activity-plans/${plan.id}/requirements`);

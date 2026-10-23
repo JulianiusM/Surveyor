@@ -201,5 +201,5 @@
 }
 /* Respect the same motion preference across every future migrated feature. */
 @media (prefers-reduced-motion: reduce) {
-    .pilot-skeleton-animated, .pilot-app .spinner-border { animation: none; }
+    .pilot-skeleton-animated, .pilot-app .spinner-border, .pilot-dialog .spinner-border { animation: none; }
 }

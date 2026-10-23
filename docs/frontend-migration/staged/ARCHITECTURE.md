@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: full-application navigation boundary reconciled with shared frontend/backend ownership, Finance wire/read boundaries and Overview consumers; no publication or new execution claim
+verification-scope: full-application navigation and required-read delivery reconciled with shared frontend/backend ownership, Finance wire/read boundaries and Overview consumers; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -94,8 +94,8 @@ so the feature can release completed input; actual captured-actor retirement sti
 
 `command.ts`, `pageEntry.ts` and `feedback.ts` share status, departure protection, canonical delivery and receipt-owned
 messages. Pending/unknown status may outlive an editor without retaining its fields. Confirmed navigation retries
-delivery only. The frontend feedback owner manages transient notice scheduling/cancellation; persistent conditions
-remain visible.
+only its required reads and destination delivery, never the confirmed command. The frontend feedback owner manages
+transient notice scheduling/cancellation; persistent conditions remain visible.
 `observePageNavigation` shares router subscriptions, latest pending destination and disposal across App, Header,
 Overview and page-entry/confirmed-transition consumers, retaining each caller's URL boundary and callbacks.
 The same navigation module coordinates Router scrolling with a mounted page's reactive render readiness. Help

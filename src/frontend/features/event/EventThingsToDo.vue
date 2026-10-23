@@ -201,6 +201,7 @@ async function refresh(): Promise<void> {
             />
         </div>
         <StatusNotice v-if="destination.target.value" kind="success"
+            :retry-at="destination.retryAt.value"
             :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">
             {{ messages.t('state.saved') }}
         </StatusNotice>

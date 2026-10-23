@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Authorized shared pending-control adoption and current guidance/test corrections reviewed against retained P0-P10 history; prior finite execution evidence retains its own scope and separate P11 boundaries
+verification-scope: Whole-frontend readiness review against committed P10 corrections; shared recovery, deletion and retained-control gaps corrected; three directly presented behavior decisions remain unresolved; finite execution and separate P11 boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,79 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Whole-frontend production-readiness review (2026-10-23)
+
+The maintainer requested another review of the whole frontend, emphasizing previously missed gaps and production
+readiness. The starting tree was clean at `247c99021ce46918dd46cba02d26df78937d5c3f`. Source review covered all
+167 authored frontend files: application/composable/identity owners, Activity/Event/Finance, shared components and
+the remaining feature/style owners. Relevant declaration, transport, renderer, controller, build and test boundaries
+were traced additionally. This is a finite review, not proof of every browser, operating-system input method or
+actor/state/locale combination.
+
+The corrections adopt existing owners rather than introduce another controller, service, draft store or query-policy
+registry. Native frontend and backend business sources remain unchanged.
+
+| Reviewed gap | Corrected ownership and exercised boundary |
+|---|---|
+| Refresh released before dependent reads completed | Event's explicit page action now spans its selected reads. The shared fresh-family helper retains the first observed failure but waits for every already-dispatched read before releasing its initiating owner. Held successful and rejected sibling reads retain the draft, busy state and focus policy. |
+| Profile workflow teardown and recovery deadlines | A temporary warm admission failure retains the admitted form and its input/secret nodes. Existing session and admission retry availability jointly govern authority Refresh, including recovery while ordinary reads remain paused. Validated denial and actor/visit retirement retain their existing authority. |
+| Confirmed deletion did not reconcile cached collections | Shared entity removal cancels older Overview reads and invalidates only the captured actor's collection variants. The existing confirmed-navigation receipt retains selected read-family keys and retries admitted reads/delivery without repeating DELETE or reading the deleted detail. Same-URL, warm filtered-return, held-read, actor-retirement and cooldown cases exercise this boundary. The remaining destination/paused-variant write window is the open R3 decision below. |
+| Overview Delete lacked initiating pending state | The region supplies the actual typed row identity to the shared card/action owner. Another family sharing its UUID remains only blocked; rejection retains the initiating control's focus policy. |
+| Independent Finance histories and roster changes | Adjustment inspection starts with the uncertain removal owner and shares one saved-data read. Explicit pool creation releases removed checkbox identifiers while preserving surviving choices and pending/unknown submission ownership. |
+| Activity title draft silently omitted after grant loss | The shared-text dialog retains its opening field set and refuses partial Save/Review while its title grant is lost. Other metadata editors retain their separately established explicit field-review contract. |
+| Settings retained values outlived their actual controls | A selected header File keeps its native chooser hidden and disabled through narrow write loss. Metadata keeps its existing dirty/unknown/pending/recovery owner through the same boundary, with current grants blocking new writes and hidden automatic reads. Regrant restores the retained control/draft; validated read denial still retires protected state. Unknown metadata recovery remains reachable from the dialog footer on another tab. |
+| Portal spinner escaped reduced-motion styling | The existing reduced-motion selector includes the dialog portal. A real built-client pending picker spinner now has no animation under the reduced-motion preference. |
+
+The [coverage map](TEST_COVERAGE.md#p10-cross-application-assertion-map-2026-10-23) names the actual assertion
+owners, and the [staged playbook](staged/DEVELOPMENT.md) records their reusable contracts without changing distinct
+feature review rules. The built root-deletion regression requires genuine successful DELETE and Overview responses,
+uses the exact default URL and a warm filtered return, and bounds reconciliation to five seconds so ordinary polling
+cannot conceal the original defect.
+
+Three further findings remain **open decisions**, not approved deferrals or future-work acceptance:
+
+- **R1:** composing Enter can submit unfinished inline text or select/create an Activity role. Mounted production
+  controls reproduced the premature action; unchanged native source has the same keyboard behavior. The Vue-only
+  behavioral exception was asked directly in the conversation and remains unapproved.
+- **R2:** retained deletion departure consent can also cover a new attendance draft entered after failed destination
+  delivery. The corrected App/Event admin reproduction confirms Back commits another route, removes that draft's
+  control and asks no discard question. Its direct behavior decision remains unapproved. An earlier participant-view
+  diagnostic supplied an impossible remove grant and is explicitly rejected as production evidence.
+- **R3:** a warm destination or reopened paused Overview can expose enabled write controls while its invalidated
+  data awaits a fresh read. Both windows were reproduced with mounted production controls and valid capability
+  projections. The write-only fence was asked directly, including its consequence for ordinary background-read
+  failures and locale invalidation; it remains unapproved. Navigation and read controls retain their existing rules.
+
+None of these remedies is implemented or silently authorized by this review. Production readiness is not certified while
+these findings remain unresolved. They do not reopen P11, deployment, native removal, guide publication or the
+separately excluded backend remedies.
+
+Current evidence is retained under ignored `artifacts/frontend-production-review-20261023/`; the mounted consent
+proof has its separate `artifacts/frontend-production-consent-review-20261023/` scope. The full build and all
+50 built-client browser cases passed. The initial database-free run passed 2,016 cases but exceeded the unchanged
+development SSR/HMR and clean-tree-generation deadlines; that failed run is retained. The isolated complete
+renewal passed all 2,018 cases with the same deadlines. Four test-fixture type errors were corrected without
+changing production behavior, and the final test typecheck passed.
+
+The integrated full run completed with 264 passes, two failures and one local-login configuration skip. The mobile
+Activity Reload failure came from its deliberate alternate-focus setup: twelve instrumented cycles retained the
+genuine backend response, and all six alternate-focus cycles scrolled before delivery while Reload remained disabled.
+The setup now uses native `preventScroll`; both focus outcomes, exact scroll assertions, response gates and deadlines
+remain unchanged. The other failure was a zero-duration Windows worker exit before the profile-token case produced
+an assertion; its cause remains unknown. Three unchanged targeted token observations passed. The final two complete
+affected files then passed all 35 cases. Matching actual case identities across the full and final runs gives 266
+enabled cases with passing observations and one configuration skip, not one uninterrupted green full run.
+
+Human review inspected 37 current original images: desktop/mobile Overview and all five card families, one calendar
+set and German Finance preview/ledger samples. No additional visual defect was found in those scenes; offscreen
+content, other input methods and unsampled actor/state/browser combinations remain outside that observation.
+The engineering check covered the full authored declaration/DBAL inventory and all frontend TypeScript/Vue paths,
+with no findings; whitespace and native/backend source isolation checks were clean. Current Architecture,
+Development and Testing amendments reconcile required-read delivery, captured-actor remounts and focus-test setup
+without publishing production guides. Complete eight-guide preparation and independent/root semantic review retain
+their own input/output receipts and the existing advisory fingerprint finding. Earlier run/capture receipts below
+remain historical evidence for their own source bytes.
 
 ## Shared-control adoption and guidance correction (2026-10-23)
 

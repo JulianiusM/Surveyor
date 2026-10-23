@@ -6,6 +6,8 @@ import type {PilotConfirmedNavigation, PilotPlainMessageKey, PilotRequestScope} 
 import type {useCommand} from './command';
 import type {EntityAutomationMessages, EntityLifecycleOperations, EntityRemovalRequest} from '../../types/FrontendEntitySettingsTypes';
 import {usePilot} from '../app/context';
+import {overviewKeys} from '../app/queryKeys';
+import {invalidateQueryFamilies} from '../app/queryCache';
 
 // These existing Event/Activity messages describe one shared schedule action.
 // A feature may supply its established override without duplicating its policy.
@@ -74,7 +76,7 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
 
 /** Share permanent deletion across Settings, Overview and Event children. Consent
  * precedes the irreversible write and survives failed destination delivery; fields
- * remain with their mounted owners and Retry can only navigate after confirmation. */
+ * remain with their mounted owners and Retry can only read/deliver after confirmation. */
 export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'run' | 'prepareDeparture' | 'pending' | 'outcome' | 'action'>,
                                  destination: PilotConfirmedNavigation) {
     const context = usePilot();
@@ -100,8 +102,19 @@ export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'r
         try {
             const confirmed = await command.run(deleteResource, false, false,
                 {success: request.success});
-            if (confirmed) await destination.navigate('/frontend-pilot', scope, origin,
-                {kind: 'success', messageKey: request.success});
+            if (confirmed && context.isCurrent(scope)) {
+                // Every deletion consumer returns to the actor's Overview. Mark
+                // its warm variants stale and cancel older reads without touching
+                // the deleted detail or forcing a hidden projection to fetch.
+                const readFamilies = [overviewKeys.all(scope.context)];
+                await invalidateQueryFamilies(context.queryClient, readFamilies);
+
+                // The write is already confirmed. A failed current Overview read
+                // belongs to the existing delivery receipt, whose Retry repeats
+                // only admitted reads/navigation and never this DELETE.
+                await destination.navigate('/frontend-pilot', scope, origin,
+                    {kind: 'success', messageKey: request.success}, false, readFamilies);
+            }
         } finally {
             // A failed route load retains the shared confirmed destination and
             // its consent. Neither Retry nor unmount may resubmit the DELETE.

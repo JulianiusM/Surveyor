@@ -5,7 +5,7 @@ import {defineComponent, ref, type Component} from 'vue';
 import {useDraftProtection} from '../../src/frontend/composables/command';
 import {createFrontendEventSession, frontendEventId as eventId} from '../factories/frontendEventFactory';
 import {frontendEventJson as json, frontendEventButton as button, mountFrontendEvent} from '../keywords/frontendEventKeywords';
-import {eventKeys} from '../../src/frontend/app/queryKeys';
+import {eventKeys, overviewKeys} from '../../src/frontend/app/queryKeys';
 import EventParticipants from '../../src/frontend/features/event/EventParticipants.vue';
 import EventBypassLinks from '../../src/frontend/features/event/EventBypassLinks.vue';
 import EventThingsToDo from '../../src/frontend/features/event/EventThingsToDo.vue';
@@ -104,7 +104,7 @@ describe('Event organizer workflows', () => {
         }, template: '<input data-test="sibling-draft" v-model="draft" /><EventThingsToDo :event-id="eventId" admin />'});
         const owned = {...card, capabilities: {...card.capabilities, remove: true}};
         let finishDelete: (() => void) | undefined;
-        const {wrapper, request, router} = await mounted(host, async req => {
+        const {wrapper, request, router, context} = await mounted(host, async req => {
             if (req.method === 'DELETE') {
                 expect(new URL(req.url).pathname).toBe(`/api/v1/events/${eventId}/things-to-do/activity/${childId}`);
                 expect(new URL(req.url).searchParams.get('view')).toBe('admin');
@@ -112,6 +112,12 @@ describe('Event organizer workflows', () => {
             }
             return json({items: [owned]});
         });
+        // Closed Overview variants stay cached without a live read owner. A
+        // confirmed child deletion makes them stale without forcing discovery
+        // or retiring the Event section's independently mounted observer.
+        const cachedOverview = [overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'}),
+            overviewKeys.region(session.context, 'de', {collection: 'participant', region: 'hidden'})];
+        for (const key of cachedOverview) context.queryClient.setQueryData(key, {items: [owned]});
         router.addRoute({path: '/frontend-pilot', component: defineComponent({template: '<p>Overview</p>'})});
         router.onError(() => {});
         await wrapper.findAll('.accordion-button')[1]!.trigger('click');
@@ -133,6 +139,8 @@ describe('Event organizer workflows', () => {
         expect(finishDelete).toBeTypeOf('function');
         expect(button(wrapper, 'Delete').attributes('disabled')).toBeDefined();
         finishDelete!(); await flushPromises();
+        for (const key of cachedOverview) expect(context.queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'GET')).toHaveLength(1);
         expect(wrapper.text()).toContain('Changes saved');
         expect(router.currentRoute.value.path).toBe(`/frontend-pilot/event/${eventId}`);
         stopFailure();
@@ -140,6 +148,7 @@ describe('Event organizer workflows', () => {
         expect(router.currentRoute.value.path).toBe('/frontend-pilot');
         expect(confirmation).toHaveBeenCalledTimes(2);
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'GET')).toHaveLength(1);
     });
 
     it.each([

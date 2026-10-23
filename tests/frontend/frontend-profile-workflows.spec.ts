@@ -376,6 +376,129 @@ describe('SPA profile workflows', () => {
         expectPrivateCache(context);
     });
 
+    it('retains the admitted workflow input and focus through failed authority Refresh and explicit read recovery', async function retainsFailedAuthorityDraft() {
+        let failAdmission = true;
+        const {host, context, request} = await mounted({kind: 'entry'}, undefined, rejectUnexpectedRequest,
+            async function readRecoverableAdmission(received) {
+                expect(received.method).toBe('GET');
+                if (!failAdmission) return json({entry: {kind: 'render'}});
+
+                // A real decoded temporary server failure owns its cooldown. It
+                // cannot revoke the earlier admitted form or replay its token.
+                const response = rejection(500);
+                response.headers.set('Retry-After', '1');
+                return response;
+            });
+        vi.useFakeTimers();
+        const form = host.querySelector<HTMLFormElement>('#forgotForm')!;
+        const input = form.querySelector<HTMLInputElement>('#token')!;
+        const refresh = host.querySelector<HTMLButtonElement>('button[aria-label="Refresh"]')!;
+        input.value = 'Keep unsubmitted token';
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        input.focus();
+        input.setSelectionRange(2, 8);
+        await nextTick();
+
+        // The focused, editable draft stays mounted while a separate authority
+        // read fails. Its supplementary warning retains the actual read receipt.
+        refresh.click();
+        await flushPromises();
+        expect(host.querySelector('#forgotForm')).toBe(form);
+        expect(form.querySelector('#token')).toBe(input);
+        expect(host.querySelector('button[aria-label="Refresh"]')).toBe(refresh);
+        expect(input.value).toBe('Keep unsubmitted token');
+        expect(document.activeElement).toBe(input);
+        expect([input.selectionStart, input.selectionEnd]).toEqual([2, 8]);
+        const warning = host.querySelector('[data-read-retry-at]')!.closest('.status-notice')!;
+        expect(warning.textContent).toContain(context.messages.value.t('state.stale'));
+        expect(warning.querySelector('[data-last-successful-refresh]')).not.toBeNull();
+        const retry = warning.querySelector<HTMLButtonElement>('button')!;
+        expect(retry.disabled).toBe(true);
+        expect(refresh.disabled).toBe(true);
+        // The toolbar shares command recovery admission with its handler. Even
+        // a dispatched click cannot start a session read while entry waits.
+        refresh.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+        await flushPromises();
+        const failedRequests = request.mock.calls.map(([received]) => received as Request);
+        expect(failedRequests.map(received => new URL(received.url).pathname))
+            .toEqual(['/api/v1/session', '/api/v1/profiles/workflow-entry']);
+        expect(failedRequests.every(received => received.method === 'GET')).toBe(true);
+
+        // Expiring the server deadline changes only availability. The existing
+        // explicit admission Retry must recover without replacing local controls.
+        await vi.advanceTimersByTimeAsync(1001);
+        await flushPromises();
+        expect(retry.disabled).toBe(false);
+        expect(refresh.disabled).toBe(false);
+        expect(request).toHaveBeenCalledTimes(2);
+        failAdmission = false;
+        retry.click();
+        await flushPromises();
+        expect(host.querySelector('#forgotForm')).toBe(form);
+        expect(form.querySelector('#token')).toBe(input);
+        expect(host.querySelector('button[aria-label="Refresh"]')).toBe(refresh);
+        expect(input.value).toBe('Keep unsubmitted token');
+        expect(document.activeElement).toBe(input);
+        expect([input.selectionStart, input.selectionEnd]).toEqual([2, 8]);
+        expect(host.querySelector('[data-read-retry-at]')).toBeNull();
+        expect(request).toHaveBeenCalledTimes(3);
+        expect(request.mock.calls.every(([received]) => (received as Request).method === 'GET')).toBe(true);
+        expectPrivateCache(context);
+    });
+
+    it('keeps workflow authority Refresh unavailable through the session cooldown and resumes explicit recovery without read admission', async function honorsWorkflowSessionCooldown() {
+        let failSession = true;
+        const {host, context, request} = await mounted({kind: 'entry'}, undefined,
+            async function readRecoverableSession(input) {
+                expect(new URL((input as Request).url).pathname).toBe('/api/v1/session');
+                if (!failSession) return json(session);
+
+                // Session and workflow admission are different required reads.
+                // This failure pauses new resource reads without retiring drafts.
+                const response = rejection(500);
+                response.headers.set('Retry-After', '1');
+                return response;
+            });
+        vi.useFakeTimers();
+        const input = host.querySelector<HTMLInputElement>('#token')!;
+        const refresh = host.querySelector<HTMLButtonElement>('button[aria-label="Refresh"]')!;
+        input.value = 'Retained session-recovery draft';
+        input.dispatchEvent(new Event('input', {bubbles: true}));
+        input.focus();
+        await nextTick();
+
+        refresh.click();
+        await flushPromises();
+        expect(context.ready.value).toBe(true);
+        expect(context.mayRead()).toBe(false);
+        expect(host.querySelector('#token')).toBe(input);
+        expect(input.value).toBe('Retained session-recovery draft');
+        expect(document.activeElement).toBe(input);
+        expect(refresh.disabled).toBe(true);
+        refresh.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+        await flushPromises();
+        expect(request).toHaveBeenCalledOnce();
+
+        // Deadline expiry permits this recovery command to establish admission;
+        // requiring readsReady here would instead leave the toolbar in a dead end.
+        await vi.advanceTimersByTimeAsync(1001);
+        await flushPromises();
+        expect(context.mayRead()).toBe(false);
+        expect(refresh.disabled).toBe(false);
+        expect(request).toHaveBeenCalledOnce();
+        failSession = false;
+        refresh.click();
+        await flushPromises();
+        expect(context.mayRead()).toBe(true);
+        expect(host.querySelector('#token')).toBe(input);
+        expect(input.value).toBe('Retained session-recovery draft');
+        expect(document.activeElement).toBe(input);
+        expect(request.mock.calls.map(([received]) => new URL((received as Request).url).pathname))
+            .toEqual(['/api/v1/session', '/api/v1/session', '/api/v1/profiles/workflow-entry']);
+        expect(request.mock.calls.every(([received]) => (received as Request).method === 'GET')).toBe(true);
+        expectPrivateCache(context);
+    });
+
     it('keeps entry text through secret-free preview Back/Forward and uses only the validated token for execution', async function retainsPreviewHistory() {
         let executedToken: string | undefined;
         const path = '/frontend-pilot/users/profile/migrate/show?locale=en&keep=hello%20world';

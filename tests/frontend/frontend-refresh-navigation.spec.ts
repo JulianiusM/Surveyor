@@ -2328,6 +2328,166 @@ describe('mixed-family Overview integration', () => {
         expect(wrapper.findAll('article.js-item')).toHaveLength(4);
     });
 
+    it.each([false, true])('retains only the initiating Overview Delete focus after rejection unless deliberately moved (%s)', async moved => {
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const delivery = deferred<Response>();
+        const selected = mixedCards().map(value => ({...value, headerUrl: null, headerVersion: null}));
+        const writes: string[] = [];
+        const {wrapper, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async function rejectDelete(request): Promise<Response> {
+                if (request.method === 'DELETE') {
+                    writes.push(new URL(request.url).pathname);
+                    return delivery.promise;
+                }
+                return json(mixedRegion(request, selected));
+            });
+        const control = wrapper.get<HTMLButtonElement>('article[data-type="packing"] button.btn-danger');
+        const sibling = wrapper.get('article[data-type="drivers"] button.btn-danger');
+        const input = wrapper.get<HTMLInputElement>('input[type="search"]');
+        control.element.focus();
+
+        try {
+            await control.trigger('click');
+            await flushPromises();
+            expect(control.attributes('aria-busy')).toBe('true');
+            expect(sibling.attributes('aria-busy')).toBe('false');
+            expect(control.find('.spinner-border').exists()).toBe(false);
+            expect((control.element as HTMLButtonElement).disabled).toBe(true);
+            expect((sibling.element as HTMLButtonElement).disabled).toBe(true);
+            // Happy DOM retains disabled focus; model only Chromium's native
+            // release so the actual shared completion owner must restore it.
+            document.body.tabIndex = -1;
+            document.body.focus();
+            document.body.removeAttribute('tabindex');
+            if (moved) {
+                document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
+                input.element.focus();
+            }
+            (control.element as HTMLButtonElement).click();
+            expect(writes).toEqual([`/api/v1/packing-lists/${otherId}`]);
+            delivery.resolve(json({type: 'about:blank', title: 'Forbidden', status: 403,
+                detail: 'Delete is no longer permitted.', requestId: 'overview-rejected-delete',
+                code: 'FORBIDDEN', messageKey: 'api:errors.FORBIDDEN', params: {}}, 403));
+            await flushPromises();
+            expect(wrapper.get('article[data-type="packing"] button.btn-danger').element).toBe(control.element);
+            expect((control.element as HTMLButtonElement).disabled).toBe(false);
+            expect(document.activeElement).toBe(moved ? input.element : control.element);
+            expect(writes).toHaveLength(1);
+            expect(request.mock.calls.filter(([value]) => (value as Request).method === 'GET')).toHaveLength(1);
+        } finally {
+            delivery.resolve(json({changed: false}));
+            await flushPromises();
+        }
+    });
+
+    it.each([false, true])('refreshes confirmed deletion on the default Overview and its warm filtered return (%s)', async filtered => {
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const selected = {...card, type: 'packing' as const, title: 'Delete this equipment',
+            url: `/frontend-pilot/packing/${otherId}`, capabilities: {...card.capabilities, remove: true}};
+        let deleted = false;
+        const reads: string[] = [];
+        const {wrapper, router, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async function committedDeletion(request): Promise<Response> {
+                if (request.method === 'DELETE') { deleted = true; return json({changed: true}); }
+                reads.push(new URL(request.url).searchParams.get('q') ?? '');
+                return json(mixedRegion(request, deleted ? [] : [selected]));
+            });
+        const otherActorKey = overviewKeys.region('another-confirmed-deletion-actor', 'en', {collection: 'owner', region: 'main'});
+        context.queryClient.setQueryData(otherActorKey, 'Other actor remains untouched');
+        if (filtered) {
+            await router.push('/frontend-pilot?owner_main_q=equipment');
+            await flushPromises();
+        }
+        await wrapper.get('button.btn-danger').trigger('click');
+        await flushPromises();
+
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+        expect(wrapper.find('article.js-item').exists()).toBe(false);
+        expect(reads).toEqual(filtered ? ['', 'equipment', 'equipment', ''] : ['', '']);
+        expect(request.mock.calls.filter(([value]) => (value as Request).method === 'DELETE')).toHaveLength(1);
+        expect(context.queryClient.getQueryData(otherActorKey)).toBe('Other actor remains untouched');
+        expect(context.queryClient.getQueryState(otherActorKey)?.isInvalidated).toBe(false);
+    });
+
+    it('cancels an older Overview GET before confirmed deletion refresh so its late result cannot restore the card', async () => {
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const held = deferred<Response>();
+        const selected = {...card, type: 'packing' as const, capabilities: {...card.capabilities, remove: true}};
+        let heldRequest!: Request;
+        let reads = 0;
+        let deletes = 0;
+        const {wrapper, context} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async function retainOldRead(request): Promise<Response> {
+                if (request.method === 'DELETE') { deletes++; return json({changed: true}); }
+                if (++reads === 2) { heldRequest = request; return held.promise; }
+                return json(mixedRegion(request, deletes ? [] : [selected]));
+            });
+        const olderRead = context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await flushPromises();
+        try {
+            expect(heldRequest.signal.aborted).toBe(false);
+            await wrapper.get('button.btn-danger').trigger('click');
+            await flushPromises();
+            expect(heldRequest.signal.aborted).toBe(true);
+            expect(wrapper.find('article.js-item').exists()).toBe(false);
+            expect(reads).toBe(3);
+            held.resolve(json(mixedRegion(heldRequest, [selected])));
+            await olderRead;
+            await flushPromises();
+            expect(wrapper.find('article.js-item').exists()).toBe(false);
+            expect(deletes).toBe(1);
+        } finally {
+            held.resolve(json(mixedRegion(heldRequest, [selected])));
+            await olderRead;
+        }
+    });
+
+    it.each([429, 503])('retains confirmed deletion when its Overview read fails with %s and retries only after the server deadline', async status => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        vi.setSystemTime(new Date('2026-10-23T12:00:00Z'));
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const selected = {...card, type: 'packing' as const, capabilities: {...card.capabilities, remove: true}};
+        let deletes = 0;
+        let unavailable = true;
+        const reads: string[] = [];
+        const {wrapper, router, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async function failOnlyConfirmedRead(request): Promise<Response> {
+                if (request.method === 'DELETE') { deletes++; return json({changed: true}); }
+                reads.push(new URL(request.url).pathname);
+                if (deletes && unavailable) return new Response('{}', {status,
+                    headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context, 'Retry-After': '5'}});
+                return json(mixedRegion(request, deletes ? [] : [selected]));
+            });
+        await wrapper.get('button.btn-danger').trigger('click');
+        await flushPromises();
+        const confirmation = wrapper.get('.status-notice.alert-success');
+        const retry = confirmation.get<HTMLButtonElement>('button');
+        expect(confirmation.text()).toContain(context.messages.value.t('packing.deleted'));
+        expect(confirmation.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-23T12:00:05.000Z');
+        expect(retry.element.disabled).toBe(true);
+        expect(retry.attributes('aria-busy')).toBe('false');
+        expect(wrapper.get<HTMLButtonElement>('button.btn-danger').element.disabled).toBe(true);
+        await retry.trigger('click');
+        expect(reads).toHaveLength(2);
+
+        // Deadline wakeup only changes this existing Retry's availability. It
+        // does not read automatically or reopen the confirmed DELETE control.
+        unavailable = false;
+        await vi.advanceTimersByTimeAsync(5001);
+        await flushPromises();
+        expect(retry.element.disabled).toBe(false);
+        expect(confirmation.find('[data-read-retry-at]').exists()).toBe(false);
+        expect(reads).toHaveLength(2);
+        await retry.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+        expect(wrapper.find('article.js-item').exists()).toBe(false);
+        expect(wrapper.find('.status-notice.alert-success').exists()).toBe(false);
+        expect(reads).toEqual(['/api/v1/overview', '/api/v1/overview', '/api/v1/overview']);
+        expect(request.mock.calls.filter(([value]) => (value as Request).method === 'DELETE')).toHaveLength(1);
+        expect(deletes).toBe(1);
+    });
+
     it.each(families)('retains the confirmed $type deletion message through failed delivery and retries navigation only', async family => {
         vi.stubGlobal('confirm', vi.fn(() => true));
         const selected = {...card, type: family.type, title: `Delete ${family.type}`,

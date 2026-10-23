@@ -253,6 +253,62 @@ test.describe('page-shaped initial loading', function pageShapedInitialLoading()
     }
 });
 
+test('reduced motion suppresses the actual pending picker spinner inside its portal dialog', async ({page}) => {
+    const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Motion fixture'};
+    const session: Session = {...startupSession(), kind: 'account', activeProfile: profile, profiles: [profile],
+        context: 'motion-browser-context-1234567890', csrfToken: 'motion-browser-csrf-1234567890'};
+    const option: components['schemas']['EventPickerOption'] = {
+        id: '22222222-2222-4222-8222-222222222222', title: 'Selectable fixture event', description: null,
+        startDate: '2026-10-23', endDate: '2026-10-24', archived: false, deadlinePassed: false,
+    };
+    const delivery = await startupDocument(page, '/frontend-pilot/packing/create', {session,
+        pageEntry: {kind: 'render'}, packingCreateContext: {
+            defaults: {participant: 0, guest: 0, authenticated: 0, public: 0}, permissions: [], presets: [],
+        }});
+    const received = readGate();
+    const held = readGate();
+    const completed = readGate();
+    const pattern = '**/api/v1/packing-lists/events?*';
+    await page.route(pattern, deliverOptions);
+
+    // Keep the real built AppDialog, ActionButton, provider and query owners.
+    // Only synthetic read delivery is held; this client layer has no backend.
+    async function deliverOptions(route: Route): Promise<void> {
+        const next = new URL(route.request().url()).searchParams.has('cursor');
+        try {
+            if (next) { received.release(); await held.promise; }
+            await route.fulfill({status: 200, contentType: 'application/json',
+                headers: {'X-Surveyor-Context': session.context!},
+                body: JSON.stringify({items: [option], selected: null, nextCursor: next ? null : 'motion-next'})});
+        } finally { if (next) completed.release(); }
+    }
+
+    try {
+        await page.goto(delivery.url);
+        await waitForPilotHydration(page);
+        await page.locator('#create-event-button').click();
+        const dialog = page.getByRole('dialog');
+        const next = dialog.getByRole('button', {name: 'Next page', exact: true});
+        await expect(next).toBeEnabled();
+        await page.emulateMedia({reducedMotion: 'reduce'});
+        await next.click();
+        await received.promise;
+        await expect(next).toBeDisabled();
+        await expect(next).toHaveAttribute('aria-busy', 'true');
+        const spinner = next.locator('.spinner-border');
+        await expect(spinner).toBeVisible();
+        expect(await spinner.evaluate(element => element.closest('.pilot-app') === null)).toBe(true);
+        expect(await spinner.evaluate(element => getComputedStyle(element).animationName)).toBe('none');
+        held.release();
+        await completed.promise;
+        await expect(dialog.getByRole('button', {name: 'Previous page', exact: true})).toBeEnabled();
+        expect(delivery.observed.commands).toBe(0);
+    } finally {
+        held.release();
+        await page.unroute(pattern, deliverOptions);
+    }
+});
+
 test('initial startup retains editable static Help search and recovers only after one accepted discard confirmation', async ({page}) => {
     const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synthetic Help',
         content: '<h2 id="task">Synthetic task</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};

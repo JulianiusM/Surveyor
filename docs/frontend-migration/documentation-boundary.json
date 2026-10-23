@@ -995,9 +995,9 @@
       "target": "docs/TESTING_GUIDE.md",
       "metadataOriginSha256": "2828c430b419daaeeaa0090252c7740f10d713c63a45f5475081f891174c709b",
       "metadata": {
-        "verification-scope": "canonical setup/database safety retained; implemented frontend interface, numeric display/wire shapes, localization, draft/recovery, shared Windows IPC handoff and owned temporary-resource cleanup reconciled with existing runners; executed evidence belongs to paired review; no hosted-CI or operator rehearsal claimed",
+        "verification-scope": "canonical setup/database safety retained; implemented frontend interface, numeric display/wire shapes, localization, draft/recovery, browser focus setup, shared Windows IPC handoff and owned temporary-resource cleanup reconciled with existing runners; executed evidence belongs to paired review; no hosted-CI or operator rehearsal claimed",
         "source-anchors": "tests/unit/entity-archival.spec.ts; tests/frontend/entity-archive.spec.ts; tests/frontend/entity-cards-overview.spec.ts; tests/integration/entity-archival.spec.ts; tests/e2e/archival.spec.ts; package.json; package-lock.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tsconfig.test.json; tests/env.load.ts; tests/support/env.ts; tests/support/database.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/factories/; tests/keywords/; scripts/e2e.db.init.ts; tests/.env.test.example; .env.e2e.example; .github/workflows/ci.yml; tests/unit/help-documentation.spec.ts; tests/e2e/help-experience.spec.ts; scripts/check-help-documentation.mjs; src/frontend/; contracts/api/v1/; src/locales/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; vite.config.mts; tsconfig.frontend.json; tsconfig.frontend-ssr.json; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts",
-        "last-verified": "2026-10-22"
+        "last-verified": "2026-10-23"
       },
       "operations": [
         {

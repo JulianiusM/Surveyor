@@ -193,6 +193,47 @@ describe('P8 independently saved allocation inputs', () => {
         expect(button(surface, 'Add surcharge or rebate').attributes('disabled')).toBeUndefined();
     });
 
+    it('protects one held inspection of an uncertain removal before allowing another Refresh or Close', async () => {
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        let finishRead!: () => void;
+        const refresh = vi.fn(() => new Promise<void>(resolve => { finishRead = resolve; }));
+        const mounted = await mountFrontendEvent(FinanceAdjustments, async request => {
+            expect(new URL(request.url).pathname).toContain('/adjustments/51/remove');
+            throw new TypeError('Removal response lost');
+        }, {eventId, pool: {...pool, surcharges: [{id: '51', registrationId: '7', amount: '3.00', note: 'Saved adjustment',
+            subtractFromPool: true}]}, participants, open: true, active: true, refresh});
+        cleanups.push(mounted.dispose);
+        const surface = body();
+        await surface.get('input[id$="-note"]').setValue('Independent unfinished addition');
+        await button(surface, 'Remove').trigger('click');
+        await flushPromises();
+        expect(mounted.request).toHaveBeenCalledOnce();
+        const inspection = button(surface, 'Refresh');
+        await inspection.trigger('click');
+        await flushPromises();
+        try {
+            // Removal owns the unknown receipt. Its first saved-data GET must
+            // already protect dismissal and repeat recovery, even though the
+            // additive sibling command itself has a healthy history.
+            expect(refresh).toHaveBeenCalledOnce();
+            expect(inspection.attributes('aria-busy')).toBe('true');
+            expect(inspection.attributes('disabled')).toBeDefined();
+            expect(button(surface, 'Close').attributes('disabled')).toBeDefined();
+            await inspection.trigger('click');
+            await button(surface, 'Close').trigger('click');
+            await flushPromises();
+            expect(refresh).toHaveBeenCalledOnce();
+            expect(mounted.wrapper.emitted('close')).toBeUndefined();
+            expect(surface.get<HTMLInputElement>('input[id$="-note"]').element.value).toBe('Independent unfinished addition');
+        } finally {
+            finishRead();
+            await flushPromises();
+        }
+        expect(mounted.request).toHaveBeenCalledOnce();
+        expect(button(surface, 'Add surcharge or rebate').attributes('disabled')).toBeUndefined();
+        expect(surface.get<HTMLInputElement>('input[id$="-note"]').element.value).toBe('Independent unfinished addition');
+    });
+
     it('keeps participant coverage self-owned and blocks covered people or existing payers while retaining the confirmed selection', async () => {
         const writes: Array<{path: string; data: unknown}> = [];
         const mounted = await mountFrontendEvent(FinanceTakeovers, async request => {

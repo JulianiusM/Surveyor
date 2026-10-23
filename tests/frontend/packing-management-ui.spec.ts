@@ -11,6 +11,7 @@ import {pilotRoutes} from '../../src/frontend/app/createApp';
 import App from '../../src/frontend/app/App.vue';
 import {noticeTargetKey} from '../../src/frontend/composables/feedback';
 import InlineCell from '../../src/frontend/components/InlineCell.vue';
+import EntityHeaderEditor from '../../src/frontend/components/EntityHeaderEditor.vue';
 import PackingPage from '../../src/frontend/features/packing/PackingPage.vue';
 import PackingEntry from '../../src/frontend/features/packing/PackingEntry.vue';
 import PackingSettings from '../../src/frontend/features/packing/PackingSettings.vue';
@@ -2314,7 +2315,7 @@ describe('packing command forms', () => {
         const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true, remove: true},
             access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
         let deletes = 0;
-        const {wrapper, router} = await mounted(PackingPage, {}, async request => {
+        const {wrapper, router, context, request} = await mounted(PackingPage, {}, async request => {
             if (request.method === 'DELETE') {
                 deletes++;
                 return json({changed: true});
@@ -2322,6 +2323,12 @@ describe('packing command forms', () => {
             return json(new URL(request.url).pathname.endsWith('/settings') ? projection
                 : {...list, capabilities: {...list.capabilities, manageSettings: true}});
         });
+        // Detail/Settings deletion must retire every warm Overview variant too,
+        // without fetching that inactive destination or the just-deleted detail.
+        const warmDefault = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'});
+        const warmFiltered = overviewKeys.region(session.context, 'de', {collection: 'participant', region: 'hidden', q: 'equipment'});
+        context.queryClient.setQueryData(warmDefault, {retained: 'Default Overview snapshot'});
+        context.queryClient.setQueryData(warmFiltered, {retained: 'Filtered Overview snapshot'});
         let failNavigation = true;
         router.addRoute({name: 'packing-test-overview', path: '/frontend-pilot', component: async function loadOverview() {
             if (failNavigation) throw new TypeError('Failed to fetch dynamically imported module');
@@ -2343,6 +2350,9 @@ describe('packing command forms', () => {
         expect(wrapper.findComponent(PackingSettings).exists()).toBe(true);
         expect(button(wrapper, 'Delete permanently').attributes('disabled')).toBeDefined();
         expect(button(wrapper, 'Close').attributes('disabled')).toBeDefined();
+        expect(context.queryClient.getQueryState(warmDefault)?.isInvalidated).toBe(true);
+        expect(context.queryClient.getQueryState(warmFiltered)?.isInvalidated).toBe(true);
+        expect(request.mock.calls.filter(([input]) => new URL((input as Request).url).pathname === '/api/v1/overview')).toHaveLength(0);
 
         failNavigation = false;
         await button(wrapper, 'Try again').trigger('click');
@@ -2847,7 +2857,11 @@ describe('packing command forms', () => {
         expect(wrapper.get('#pilot-access-admins-tab').attributes('aria-selected')).toBe('true');
 
         recovering = true;
-        await button(wrapper, 'Refresh').trigger('click');
+        // General's retained editor has its own hidden Refresh. Exercise the
+        // dialog footer's user-reachable recovery while Access is selected.
+        const refresh = wrapper.findAll('button').find(control => control.text() === 'Refresh' && control.isVisible());
+        expect(refresh).toBeDefined();
+        await refresh!.trigger('click');
         await flushPromises();
         try {
             expect(wrapper.findAll('[role="tab"]').every(tab => tab.attributes('disabled') !== undefined)).toBe(true);
@@ -3109,6 +3123,98 @@ describe('packing command forms', () => {
         await wrapper.get('#pilot-settings-event form').trigger('submit');
         await flushPromises();
         expect(saved).toEqual({body: {eventId: itemId, expectedEventId: otherId}, token: '"edit-remote-settings"'});
+    });
+
+    it.each([false, true])('retains the same metadata draft through narrow write-grant loss with independent Header grant (%s)', async headerAllowed => {
+        vi.useFakeTimers({toFake: ['setInterval', 'clearInterval']});
+        let projection = {...settings, editableFields: ['title'],
+            capabilities: {...settings.capabilities, editHeader: headerAllowed, duplicate: true}};
+        const metadata = {entityType: 'packing', id, values: {title: 'Existing title'}, editableFields: ['title'],
+            currentEventId: null, archived: false, inheritedArchived: false};
+        const {wrapper, context, request} = await mounted(PackingSettings, {listId: id},
+            async function retainMetadataDraft(request): Promise<Response> {
+                return json(new URL(request.url).pathname.endsWith('/settings') ? projection : metadata);
+            });
+        const field = wrapper.get<HTMLInputElement>('[name="title"]');
+        await field.setValue('Retained local title');
+
+        // The independent Actions panel keeps Settings admitted. General may
+        // stay visible for Header or disappear while retaining this same draft.
+        projection = {...projection, editableFields: []};
+        await context.queryClient.refetchQueries({queryKey: packingKeys.settings(session.context, id), exact: true});
+        await flushPromises();
+        expect(field.element.isConnected).toBe(true);
+        expect(field.isVisible()).toBe(false);
+        expect(field.element.closest('fieldset')?.disabled).toBe(true);
+        expect(field.element.value).toBe('Retained local title');
+        await wrapper.get('#packing-metadata-form').trigger('submit');
+        await flushPromises();
+        expect(request.mock.calls.every(([value]) => (value as Request).method === 'GET')).toBe(true);
+        await vi.advanceTimersByTimeAsync(60_000);
+        await flushPromises();
+        expect(request.mock.calls.filter(([value]) => new URL((value as Request).url).pathname.endsWith('/metadata'))).toHaveLength(1);
+
+        projection = {...projection, editableFields: ['title']};
+        await context.queryClient.refetchQueries({queryKey: packingKeys.settings(session.context, id), exact: true});
+        await flushPromises();
+        await button(wrapper, 'General').trigger('click');
+        expect(wrapper.get('[name="title"]').element).toBe(field.element);
+        expect(field.isVisible()).toBe(true);
+        expect(field.element.closest('fieldset')?.disabled).toBe(false);
+        expect(field.element.value).toBe('Retained local title');
+        expect(request.mock.calls.every(([value]) => (value as Request).method === 'GET')).toBe(true);
+    });
+
+    it('retains the same chosen header input through narrow capability loss without admitting hidden commands', async () => {
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        let projection = {...settings, headerUrl: '/packing/' + id + '/header', headerVersion: 'chosen-header',
+            capabilities: {...settings.capabilities, editHeader: true, duplicate: true}};
+        const uploads: {name: string; token: string | null}[] = [];
+        const {wrapper, context, request} = await mounted(PackingSettings, {listId: id},
+            async function headerAuthority(request): Promise<Response> {
+                if (request.method === 'PUT') {
+                    uploads.push({name: ((await request.formData()).get('image') as File).name,
+                        token: request.headers.get('If-Match')});
+                    return json({changed: true});
+                }
+                return json(projection);
+            });
+        const original = wrapper.get<HTMLInputElement>('input[type="file"]');
+        const selection = new DataTransfer();
+        const file = new File(['chosen bytes'], 'retained-local.png', {type: 'image/png'});
+        selection.items.add(file);
+        original.element.files = selection.files;
+        await original.trigger('change');
+        const header = wrapper.findComponent(EntityHeaderEditor);
+
+        // An independently admitted Actions panel keeps this same Settings visit
+        // alive while current authority removes only the header write capability.
+        projection = {...projection, capabilities: {...projection.capabilities, editHeader: false}};
+        await context.queryClient.refetchQueries({queryKey: packingKeys.settings(session.context, id), exact: true});
+        await flushPromises();
+        expect(original.element.isConnected).toBe(true);
+        expect(original.element.files?.[0]).toBe(file);
+        expect(header.isVisible()).toBe(false);
+        expect(original.element.disabled).toBe(true);
+        // Retained callbacks need the same fresh capability fence as native
+        // controls; a hidden draft is never permission to upload or remove.
+        header.vm.$emit('upload', new Event('click'));
+        header.vm.$emit('remove', new Event('click'));
+        await flushPromises();
+        expect(request.mock.calls.every(([value]) => (value as Request).method === 'GET')).toBe(true);
+        expect(window.confirm).not.toHaveBeenCalled();
+
+        projection = {...projection, capabilities: {...projection.capabilities, editHeader: true}};
+        await context.queryClient.refetchQueries({queryKey: packingKeys.settings(session.context, id), exact: true});
+        await button(wrapper, 'General').trigger('click');
+        expect(wrapper.get('input[type="file"]').element).toBe(original.element);
+        expect(original.element.files?.[0]).toBe(file);
+        expect(header.isVisible()).toBe(true);
+        expect(original.element.disabled).toBe(false);
+        await button(wrapper, 'Upload').trigger('click');
+        await flushPromises();
+        expect(uploads).toEqual([{name: file.name, token: settings.settingsToken}]);
+        expect(original.element.files?.length).toBe(0);
     });
 
     it('retains a chosen file on refresh and requires review before uploading with a new token', async () => {

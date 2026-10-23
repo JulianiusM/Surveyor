@@ -127,17 +127,20 @@ export type PilotMetadataFieldPolicy<TValues extends object> = {
     readonly [TField in keyof TValues]?: (value: TValues[TField]) => TValues[TField];
 };
 
-/** A confirmed command retries only its canonical navigation. The shared owner retains the
+/** A confirmed command retries its selected eligible reads and canonical navigation. The shared owner retains the
  * actor/route receipt across identity remounts without persisting inputs or replaying writes. */
 export interface PilotConfirmedNavigation {
     pending: Ref<boolean>;
     retryAction: PilotActionState;
     fallbackRetryAction: PilotActionState;
+    retryAt: ComputedRef<number | undefined>;
+    fallbackRetryAt: ComputedRef<number | undefined>;
     target: ComputedRef<string | null>;
     notice: ComputedRef<components['schemas']['EntryNotice'] | null>;
     fallbackTarget: ComputedRef<string | null>;
     navigate(destination: string, scope?: PilotRequestScope, origin?: string,
-             notice?: components['schemas']['EntryNotice'] | null, refreshSession?: boolean): Promise<boolean>;
+             notice?: components['schemas']['EntryNotice'] | null, refreshSession?: boolean,
+             readFamilies?: readonly (readonly unknown[])[]): Promise<boolean>;
     retry(): Promise<boolean>;
     retryFallback(): Promise<boolean>;
 }
@@ -220,6 +223,8 @@ export interface PilotOverviewCardInteraction {
     lifecycle?: boolean;
     readHeader?: PilotImageRead;
     duplicateUrl?: string;
+    /** The owning collection identifies this Delete independently of sibling locks. */
+    removePending?: boolean;
 }
 
 /** A parent collection derives membership aggregates from this admitted query.

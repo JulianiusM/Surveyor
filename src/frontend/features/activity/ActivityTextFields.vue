@@ -23,6 +23,9 @@ const title = ref('');
 const text = ref('');
 const baseline = ref('');
 const editToken = ref('');
+// One opening title grant defines this dialog's field set. Losing it must keep
+// the draft visible and block a partial text save, as the slot editor does.
+const openingTitleAllowed = ref(false);
 // Removal identifies only its initiating saved-row control. Dialog/inline saves
 // retain their existing command lifetime and never borrow a delete focus claim.
 const removingId = ref<string | null>(null);
@@ -31,8 +34,9 @@ const current = computed(() => props.fields.find(field => field.id === id.value)
 const maySave = computed(() => id.value ? !!current.value?.capabilities.edit : props.manage);
 const dirty = computed(() => open.value && JSON.stringify([title.value, text.value]) !== baseline.value);
 const conflict = computed(() => !!id.value && !!current.value && current.value.editToken !== editToken.value);
+const permissionLost = computed(() => open.value && !!id.value && openingTitleAllowed.value && !current.value?.capabilities.editTitle);
 const command = useCommand(props.refresh, false, {dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown'});
-const blocked = computed(() => props.disabled || command.action.disabled.value);
+const blocked = computed(() => props.disabled || command.action.disabled.value || permissionLost.value);
 
 function edit(field?: components['schemas']['ActivityTextField']): void {
     if (blocked.value || (field ? !field.capabilities.edit : !props.manage)) return;
@@ -46,12 +50,14 @@ function edit(field?: components['schemas']['ActivityTextField']): void {
     title.value = field?.title ?? '';
     text.value = field?.text ?? '';
     editToken.value = field?.editToken ?? '';
+    openingTitleAllowed.value = field ? field.capabilities.editTitle : props.manage;
     baseline.value = JSON.stringify([title.value, text.value]);
     open.value = true;
 }
 function close(): void { if (command.mayLeave()) open.value = false; }
 
-/** Submit the admitted title grant independently from the shared text grant. */
+/** Submit this opening field set only while its title and text grants remain
+ * admitted; reviewing a newer token cannot discard a retained title draft. */
 async function save(): Promise<void> {
     if (blocked.value || !maySave.value || conflict.value) return;
     const patch = {text: text.value, ...(id.value && !current.value?.capabilities.editTitle ? {} : {title: title.value})};
@@ -188,6 +194,7 @@ async function reviewUnknown(): Promise<void> {
                         :disabled="blocked"
                         @click="editToken = current?.editToken ?? ''">{{ messages.t('draft.review') }}</ActionButton>
                 </StatusNotice>
+                <StatusNotice v-if="permissionLost" kind="warning">{{ messages.t('common.notAllowed') }}</StatusNotice>
                 <CommandFeedback
                     :feedback="command.feedback"
                     :creation-review="{required: command.reviewRequired.value, message: 'activity.reviewUnknownItem', state: command.recoveryAction}"

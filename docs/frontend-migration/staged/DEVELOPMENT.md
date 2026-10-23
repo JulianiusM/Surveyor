@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Full-application contribution contracts reconciled, including shared native-control pending focus and initiating state independent of spinner presentation; Finance ownership, actual command precision, generated catalog ownership and obsolete-validator retirement retained; no publication or new execution claim
+verification-scope: Full-application contribution contracts reconciled, including confirmed-deletion read delivery, compound recovery and retained control/value lifetimes; shared focus, Finance ownership, actual command precision and generated owners retained; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -199,10 +199,16 @@ second action implementation or a native-control exception.
 Pending spans the complete initiating action, including every selected fresh read. An ordinary
 `command.reconcileSafely` does not itself set `command.recovering`; its protected recovery branch does.
 Use the existing read/command state when it covers that lifetime. When one handler awaits several independently
-settling reads, its owner may retain a presentation-only initiating marker through `finally`, as Overview and
+settling reads, its owner may retain a presentation-only initiating marker through `finally`, as Overview, Event and
 Finance do. This marker selects the control or row; it stores no request, snapshot, draft, permission or command
 lease. Matching Save/Cancel, ballot/combination and repeated-row actions likewise identify their actual initiator
 while siblings retain their separate blocking policy.
+If one selected read fails before another settles, `refetchFreshQueries` waits for all already-dispatched reads
+before propagating the first observed failure. Failure must not release the initiating control while a sibling
+request still belongs to that action.
+When one inspection reconciles independent command histories through a shared GET, start with the uncertain
+owner so its protected recovery spans that read. Other histories consume the same completion; every affected
+owner still participates in repeat-action and dismissal admission.
 The shared Event picker distinguishes Previous, Next and Retry from filter/background discovery. Creation keeps
 Create pending across its admission/write handoff while a read-only admission Retry only blocks Create. Profile
 workflow authority Refresh likewise stays distinct from token/destructive commands; submission remains blocked
@@ -476,8 +482,14 @@ authorized downloads of the complete saved ledger, independent of browser filter
    in the read owner: session recovery must remain available while ordinary reads wait, local Cancel/draft controls
    need no read admission, and already admitted commands retain their captured completion lifetime. This derived
    state stores no drafts, server data or authority and never retries an operation automatically.
+   Compound recovery uses the existing retry availability of every required session/resource read through
+   `useCommand`'s `recoveryEligible`; it must still be able to establish ordinary read admission after a failed
+   session check. A retained warm admission failure adds its warning without replacing the admitted form nodes.
    Reevaluate already-open dialogs when method grants change: readable content and local drafts may remain, while
    dispatch controls must show the same current availability as their handlers.
+   Activity's shared-text form preserves its opening title/instructions field set: losing one grant blocks
+   partial submission until that grant returns or the user leaves the draft. Other owners retain their existing
+   field-review contract; `MetadataDraft` can deliberately release unavailable fields through its explicit Review.
    Read-only dialogs retain selection, not copied server values. Event notes resolve the selected participant or
    whole-roster summary from current admitted data even when local search hides its row. A removed row or empty
    summary retires that selection; genuine date drafts remain independent.
@@ -759,8 +771,19 @@ authority. Preserve the newest destination when an older lazy delivery settles a
 
 Keep server-owned admission/canonical navigation separate from temporary resource reads. `usePageEntry` owns the
 entry decision. Capture the intended destination/notice once and commit it through the shared confirmed-navigation
-owner. Failed or canceled delivery retains the same completion, including across actor remount, without replaying
-a command. A navigation Retry repeats delivery only.
+owner. Failed or canceled delivery retains the same completion through component remounts within its captured actor
+scope, without replaying a command. A navigation Retry repeats only its required reads and destination delivery.
+
+Permanent deletion uses `useEntityRemoval` in Settings, Overview and Event Things to do. After confirmation it
+cancels older Overview reads and marks only the captured actor's collection variants stale through the shared
+query-cache owner. The confirmed-navigation receipt retains selected family keys, never a feature callback or
+another data/error snapshot. It refreshes eligible mounted collection readers before delivery; inactive/hidden
+variants stay stale for their own next admitted read. It never reads the deleted detail. The exact current URL
+and a warm different destination both require this delivery boundary: a duplicate Router replacement is not a
+fresh read. Failed reads retain confirmed success and admitted reads/delivery recovery, with the actual eligible query
+failures supplying Retry availability/deadlines through the existing cache and read-retry owners.
+Temporary shared read suspension keeps dependency Retry closed without consuming the receipt; session-refresh
+recovery remains able to restore its own admission. Actor replacement retires the captured continuation.
 
 Preserve exact duplicate return through the shared guest-flow owner/forms and surveys' distinct policy. Invalid
 guest tokens and expired stored identity keep their established status, message and provider boundaries. Read retries
@@ -1118,6 +1141,17 @@ component lifetime alone cannot identify current form scope. `composables/fileSe
 clears the same chooser when the feature releases its File to null. Its watcher is not immediate, so initial setup
 cannot erase pre-hydration selection before restoration. Release decisions, dirtiness, commands and tokens stay
 in their owning feature or shared interaction composite.
+Narrow write-grant loss must preserve a retained File together with its original native chooser while disabling
+dispatch; recreating an input cannot restore a nonempty FileList. Settings keeps that local chooser hidden until
+the same grant returns. Actor/read denial and accepted departure retain their separate retirement boundary.
+The same Settings boundary retains the actual metadata child while its existing dirty/unknown/pending/recovery
+state needs that owner. A current projection with no editable metadata hides and disables it, removes its active
+read eligibility and keeps other admitted panels usable. Regrant restores that same draft; full read denial closes
+the private owner. When an unknown metadata result survives a tab change, the visible dialog footer exposes the
+existing parent Refresh owner rather than requiring a hidden child's control.
+For Finance creation's explicit participant chooser, retire removed IDs from its existing draft and comparison
+baseline without selecting newcomers. Automatic enrollment retains its own current-roster rule; pending/unknown
+submissions keep their captured choices until their existing completion/review owner releases them.
 
 Header upload passes the settings owner's `selectedFile` through the declaration contract. Confirmation releases the draft
 even when follow-up fails; the editor clears the same input through the shared release owner so the same file can be
@@ -1163,6 +1197,8 @@ Dialogs share one focus trap/dismissal owner, pending close lock and actual invo
 body-field initial target. Tabs retain independent drafts and freeze while necessary work is pending. Avoid
 simultaneous Vue/Bootstrap DOM ownership. Mixed navigation disclosures use the existing app-owned wrapper and its
 established native key policy.
+Reduced-motion styling also covers the actual dialog portal root: its pending spinner can render outside
+`.pilot-app` while retaining the same shared action owner.
 
 Authorized images use the shared injected read/lifetime owner with cancellation, generation checks and object-URL
 cleanup. A missing optional image does not fail the resource. Equal successful reads can restore a failed image;
@@ -1449,7 +1485,8 @@ the same command retains uncertain-result/read recovery. Personal visibility and
 Permanent deletion uses `useEntityRemoval` in that same composable module. Its three current consumers are
 `EntitySettingsDialog.vue`, `OverviewRegion.vue` and `EventThingsToDo.vue`. The feature supplies its generated
 root/child operation and confirmation/success wording; the shared owner obtains whole-page consent before writing,
-dispatches once and retains the confirmed destination through failed delivery. Retry repeats navigation only.
+dispatches once and retains the confirmed destination through failed delivery. Required reads and destination
+recovery follow the [shared entry contract](#entry-canonical-delivery-and-outcomes) without repeating the command.
 Private drafts and capability checks remain with their actual feature owners.
 
 Never accept profile IDs, timestamps, stored parent state, or other arbitrary fields from the browser. Follow the [archival authority contract](PERMISSIONS_REFERENCE.md#archival-authority-and-personal-visibility), including the survey exception. A private preference may change placement only after existing overview membership is established.

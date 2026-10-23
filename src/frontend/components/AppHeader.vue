@@ -352,6 +352,7 @@ async function retryCompletion(): Promise<void> {
              only for header-owned navigation or after its originating form has unmounted.
              Its spacing input avoids conflicting with the notice's default bottom margin. -->
         <StatusNotice v-if="!completion.pending.value && (completion.target.value || completion.fallbackTarget.value)" kind="warning" no-margin
+            :retry-at="completion.target.value ? completion.retryAt.value : completion.fallbackRetryAt.value"
             :action="{state: completion.target.value ? completion.retryAction : completion.fallbackRetryAction,
                 label: messages.t('common.retry'), class: 'ms-2'}" @action="retryCompletion">
             {{ messages.t('state.loadFailed') }}

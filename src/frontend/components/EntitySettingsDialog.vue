@@ -133,6 +133,11 @@ watch(settings.error, (failure) => {
 const data = computed(() => settings.data.value ?? last.value);
 const initialLoading = computed(() => !data.value && settings.isPending.value);
 const showMetadata = computed(() => data.value ? !!data.value.editableFields.length : props.metadataAvailable === true);
+// A write-grant change must not destroy the child that owns an unsaved draft or
+// admitted command/recovery. Its current projection still controls visibility,
+// writes and automatic reads; full read denial retires the dialog as before.
+const retainedMetadata = computed(() => !!fields.value && (fields.value.dirty || fields.value.unknown
+    || fields.value.pending || fields.value.refreshing || fields.value.awaitingAuthority));
 /** Present only settings panels admitted by this projection; their controls still
  * use the feature's field/method capabilities and independent draft owners. */
 const panels = computed(() => {
@@ -195,7 +200,11 @@ async function refreshAfterCommand(): Promise<void> {
     completedSettingsReads++;
     // Refresh related snapshots after a confirmed settings write. Each dirty form compares
     // only its own edited fields; unrelated setup changes do not manufacture conflicts.
-    await fields.value?.refreshAfterSettings(relinkingMetadata && command.outcome.value?.confirmation === 'confirmed');
+    // A retained hidden draft supplies no read grant. Only currently admitted
+    // metadata joins the settings command's existing causal catch-up read.
+    if (showMetadata.value) {
+        await fields.value?.refreshAfterSettings(relinkingMetadata && command.outcome.value?.confirmation === 'confirmed');
+    }
     if (active && resource === props.resourceId && context.isCurrent(scope)) emit('saved');
 
     function mayRead(): boolean {
@@ -314,7 +323,9 @@ function chooseImage(file: File | null): void {
  * chosen. Retain that file after rejection or uncertain delivery; only a confirmed
  * command clears it, while the shared refresh owner admits subsequent authority. */
 async function upload(): Promise<void> {
-    if (blocked.value || headerConflict.value) return;
+    // Retaining a local File/chooser through a narrowed projection is not a
+    // write grant. Stale component callbacks need this current authority too.
+    if (blocked.value || !data.value?.capabilities.editHeader || headerConflict.value) return;
 
     // Native missing-file feedback happens before a request. The chosen file's
     // retained token must still exist; a later settings read cannot replace it.
@@ -345,7 +356,7 @@ async function upload(): Promise<void> {
  * The current settings token protects the stored image and the server retains
  * authority over the write and its post-commit file cleanup. */
 async function removeImage(): Promise<void> {
-    if (blocked.value) return;
+    if (blocked.value || !data.value?.capabilities.editHeader) return;
     if (data.value && window.confirm(messages.value.t('packing.confirmRemoveImage'))) {
         pendingAction.value = 'removeImage';
         try {
@@ -448,7 +459,7 @@ async function automate(paused: boolean): Promise<void> {
 
 /** Delete only after the command owner has approved departure of every mounted draft.
  * A confirmed deletion retains its destination/consent through failed navigation;
- * recovery repeats delivery, while the controller remains the deletion policy owner. */
+ * recovery repeats admitted reads/delivery, while the controller remains the deletion policy owner. */
 async function remove(): Promise<void> {
     if (blocked.value) return;
     pendingAction.value = 'remove';
@@ -490,7 +501,8 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
         <!-- One receipt owner supplies shared notifications and contextual recovery. -->
         <div aria-live="polite">
             <CommandFeedback :feedback="command.feedback" :disabled="controlsPending"
-                :notice-retry-at="command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"
+                :notice-retry-at="destination.target.value ? destination.retryAt.value
+                    : command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"
                 :notice-read-error="command.notice.value === 'state.savedRefreshFailed' ? settings.error.value : undefined" />
         </div>
         <StatusNotice v-if="settings.error.value" kind="warning"
@@ -503,27 +515,31 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
              This remains plain content until the authoritative tab list exists;
              changing its attributes preserves the same focused field nodes. -->
         <div
-            v-if="showGeneral"
-            v-show="panel === 'general'"
+            v-if="showGeneral || image || retainedMetadata"
+            v-show="showGeneral && panel === 'general'"
             id="pilot-settings-general"
             :role="data ? 'tabpanel' : undefined"
             :aria-labelledby="data ? 'pilot-settings-tab-general' : undefined"
         >
-            <section v-if="showMetadata" class="mb-4">
+            <section v-if="showMetadata || retainedMetadata" v-show="showMetadata" class="mb-4">
                 <component :is="metadataComponent"
                     ref="fields"
                     v-bind="metadataProps"
-                    :disabled="!!blocked"
+                    :disabled="!!blocked || !showMetadata"
                     :busy="controlsPending"
-                    :active="panel === 'general'"
+                    :active="showMetadata && panel === 'general'"
                     @saved="metadataSaved"
                     @access-lost="emit('accessLost')"
                 />
             </section>
-            <EntityHeaderEditor v-if="data?.capabilities.editHeader"
+            <!-- A user's chosen File retains its actual native chooser through
+                 narrow grant loss. Hidden/disabled controls carry no old server
+                 authority; regrant restores this same visible FileList. -->
+            <EntityHeaderEditor v-if="data?.capabilities.editHeader || image"
+                v-show="data?.capabilities.editHeader"
                 input-id="pilot-header-image" :labels="headerLabels" :selected-file="image"
-                :has-image="!!data.headerUrl" :expanded="!data.editableFields.length"
-                :conflict="headerConflict" :disabled="!!blocked" :reading="settings.isFetching.value"
+                :has-image="!!data?.headerUrl" :expanded="!data?.editableFields.length"
+                :conflict="headerConflict" :disabled="!!blocked || !data?.capabilities.editHeader" :reading="settings.isFetching.value"
                 :upload-pending="pendingAction === 'upload' && command.pending.value"
                 :remove-pending="pendingAction === 'removeImage' && command.pending.value"
                 @choose="chooseImage" @review="reviewHeader" @upload="upload" @remove="removeImage" />
@@ -579,7 +595,7 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                 {{ messages.t('common.retry') }}
             </ActionButton
             ><ActionButton
-                v-if="settings.error.value || command.uncertain.value || awaitingAuthority || command.notice.value === 'state.savedRefreshFailed'"
+                v-if="settings.error.value || command.uncertain.value || fields?.unknown || awaitingAuthority || command.notice.value === 'state.savedRefreshFailed'"
                 variant="outline-secondary"
                 :state="refreshAction"
                 @click="refreshSettings"

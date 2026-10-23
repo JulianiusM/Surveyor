@@ -2,7 +2,7 @@
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {defineComponent} from 'vue';
+import {defineComponent, ref} from 'vue';
 import type {Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {QueryObserver, VueQueryPlugin} from '@tanstack/vue-query';
@@ -50,6 +50,7 @@ afterEach(async () => {
     for (const cleanup of cleanups.splice(0)) await cleanup();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
     document.body.innerHTML = '';
 });
 
@@ -86,6 +87,27 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
     });
     await flushPromises();
     return {wrapper, context, router, request};
+}
+
+/** Keep the originating route while its small logical owner unmounts. The real
+ * shell then presents the same application-owned confirmed receipt as fallback. */
+async function confirmedReadVisit(read: (request: Request) => Promise<Response>) {
+    const visit = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async request =>
+        new URL(request.url).pathname === '/api/v1/session' ? read(request)
+            : json({entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'}}));
+    let completion!: ReturnType<typeof useConfirmedNavigation>;
+    const showOwner = ref(true);
+    const ConfirmedOwner = defineComponent({template: '<p>Confirmed command</p>', setup() {
+        completion = useConfirmedNavigation();
+        return {};
+    }});
+    const ConfirmedHost = defineComponent({components: {ConfirmedOwner},
+        template: '<div><ConfirmedOwner v-if="showOwner" /></div>', setup() { return {showOwner}; }});
+    visit.router.addRoute({path: '/frontend-pilot/confirmed-read-fixture', component: ConfirmedHost});
+    await visit.router.push('/frontend-pilot/confirmed-read-fixture');
+    await flushPromises();
+    visit.request.mockClear();
+    return {...visit, completion, showOwner, origin: visit.router.currentRoute.value.fullPath};
 }
 
 describe('server-owned page entry and canonical navigation', () => {
@@ -278,6 +300,142 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(deliveries).toBe(2);
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/confirmed-destination');
         expect(completion.target.value).toBeNull();
+    });
+
+    it('retains confirmed delivery and its read deadline across owner unmount, then retries only the eligible read and navigation', async () => {
+        let failRead = true;
+        const visit = await confirmedReadVisit(async () => {
+            if (!failRead) return json(session);
+            return new Response(JSON.stringify({type: 'about:blank', title: 'Read unavailable', status: 429,
+                code: 'RATE_LIMITED', messageKey: 'api:errors.RATE_LIMITED', params: {},
+                detail: 'Please wait.', requestId: 'confirmed-read-cooldown'}),
+            {status: 429, headers: {'Content-Type': 'application/problem+json', 'Retry-After': '1',
+                'X-Surveyor-Context': session.context}});
+        });
+        const family = ['confirmed-dependency', session.context] as const;
+        const observer = new QueryObserver(visit.context.queryClient, {queryKey: [...family, 'visible'],
+            queryFn: () => visit.context.api.bootstrap(), initialData: session, staleTime: Infinity, retry: false});
+        const hiddenRead = vi.fn(async () => session);
+        const hidden = new QueryObserver(visit.context.queryClient, {queryKey: [...family, 'hidden'],
+            queryFn: hiddenRead, initialData: session, staleTime: Infinity, enabled: false});
+        const stopRead = observer.subscribe(() => {});
+        const stopHidden = hidden.subscribe(() => {});
+        cleanups.push(async () => { stopRead(); stopHidden(); });
+        vi.useFakeTimers();
+        const notice = {kind: 'success' as const, messageKey: 'packing.deleted'};
+        expect(await visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin, notice, false, [family])).toBe(false);
+        expect(visit.router.currentRoute.value.path).toBe(visit.origin);
+        expect(visit.completion.target.value).toBe('/frontend-pilot/help');
+        expect(visit.completion.notice.value).toEqual(notice);
+        expect(visit.completion.retryAction.disabled.value).toBe(true);
+        expect(visit.completion.retryAt.value).toBeGreaterThan(Date.now());
+        expect(await visit.completion.retry()).toBe(false);
+        expect(visit.request).toHaveBeenCalledOnce();
+        expect(hiddenRead).not.toHaveBeenCalled();
+
+        // The original control's timer retires with that component. The shell's
+        // existing fallback observes the same cache-owned deadline and receipt.
+        visit.showOwner.value = false;
+        await flushPromises();
+        const deadline = visit.wrapper.get('header [data-read-retry-at]');
+        const timestamp = deadline.get('time').attributes('datetime');
+        expect(timestamp).toBeDefined();
+        expect(Date.parse(timestamp!)).toBeGreaterThan(Date.now());
+        const retry = visit.wrapper.get('header .status-notice button');
+        expect(retry.attributes('disabled')).toBeDefined();
+        await retry.trigger('click');
+        expect(visit.request).toHaveBeenCalledOnce();
+        await vi.advanceTimersByTimeAsync(1001);
+        await flushPromises();
+        expect(retry.attributes('disabled')).toBeUndefined();
+        expect(visit.request).toHaveBeenCalledOnce();
+        failRead = false;
+        await retry.trigger('click');
+        await flushPromises();
+        expect(visit.router.currentRoute.value.path).toBe('/frontend-pilot/help');
+        expect(visit.request).toHaveBeenCalledTimes(2);
+        expect(visit.request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+        expect(hiddenRead).not.toHaveBeenCalled();
+    });
+
+    it('retires a confirmed read dependency when its actor changes during a held read without delivering the destination', async () => {
+        const held = deferredResponse();
+        const visit = await confirmedReadVisit(async () => held.response);
+        const family = ['confirmed-dependency', session.context] as const;
+        const observer = new QueryObserver(visit.context.queryClient, {queryKey: [...family, 'visible'],
+            queryFn: () => visit.context.api.bootstrap(), initialData: session, staleTime: Infinity, retry: false});
+        const stopRead = observer.subscribe(() => {});
+        cleanups.push(async () => { stopRead(); });
+        const delivery = visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin, null, false, [family]);
+        await flushPromises();
+        try {
+            expect(visit.request).toHaveBeenCalledOnce();
+            expect(visit.completion.pending.value).toBe(true);
+            expect(visit.context.mayChangeIdentity()).toBe(false);
+            expect(await visit.completion.retry()).toBe(false);
+            visit.context.session.value = {...session, context: 'replacement-confirmed-read-context'};
+            await flushPromises();
+            expect(visit.completion.target.value).toBeNull();
+        } finally { held.resolve(json(session)); }
+        expect(await delivery).toBe(false);
+        expect(visit.router.currentRoute.value.path).toBe(visit.origin);
+        expect(visit.request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it('delivers a confirmed receipt without forcing a hidden dependency or requiring an absent query family', async () => {
+        const visit = await confirmedReadVisit(async () => json(session));
+        const family = ['confirmed-dependency', session.context] as const;
+        const read = vi.fn(async () => session);
+        const observer = new QueryObserver(visit.context.queryClient, {queryKey: [...family, 'hidden'],
+            queryFn: read, initialData: session, staleTime: Infinity, enabled: false});
+        const stopRead = observer.subscribe(() => {});
+        cleanups.push(async () => { stopRead(); });
+        expect(await visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin, null, false,
+            [family, ['absent-confirmed-dependency']])).toBe(true);
+        expect(visit.router.currentRoute.value.path).toBe('/frontend-pilot/help');
+        expect(read).not.toHaveBeenCalled();
+        expect(visit.request).not.toHaveBeenCalled();
+    });
+
+    it('keeps confirmed dependency Retry closed during a temporary shared read barrier without consuming its receipt', async () => {
+        const heldSession = deferredResponse();
+        let sessionReads = 0;
+        const visit = await confirmedReadVisit(async function readSession(): Promise<Response> {
+            return ++sessionReads === 1 ? heldSession.response : json(session);
+        });
+        const family = ['confirmed-dependency', session.context] as const;
+        const observer = new QueryObserver(visit.context.queryClient, {queryKey: [...family, 'visible'],
+            queryFn: () => visit.context.api.bootstrap(), initialData: session, staleTime: Infinity,
+            enabled: false, meta: {surveyorRead: {mayRead: () => visit.context.mayRead()}}});
+        const stopRead = observer.subscribe(() => {});
+        cleanups.push(async () => { stopRead(); });
+        // The actual session owner closes resource-read admission while its
+        // bootstrap is held; the public readonly projection stays untouched.
+        const restoringSession = visit.context.refreshSession();
+        try {
+            await flushPromises();
+            expect(visit.context.readsReady.value).toBe(false);
+            expect(visit.context.sessionRead.value.pending).toBe(true);
+            expect(await visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin, null, false, [family])).toBe(false);
+            expect(visit.completion.target.value).toBe('/frontend-pilot/help');
+            expect(visit.completion.retryAction.disabled.value).toBe(true);
+            expect(await visit.completion.retry()).toBe(false);
+            expect(visit.request).toHaveBeenCalledOnce();
+            expect(visit.router.currentRoute.value.path).toBe(visit.origin);
+        } finally {
+            heldSession.resolve(json(session));
+            await restoringSession;
+        }
+
+        // This is a paused mounted observer, distinct from an absent/hidden
+        // dependency. Reopening admission permits its real read and delivery.
+        await flushPromises();
+        expect(visit.context.readsReady.value).toBe(true);
+        expect(visit.context.sessionRead.value.pending).toBe(false);
+        expect(visit.completion.retryAction.disabled.value).toBe(false);
+        expect(await visit.completion.retry()).toBe(true);
+        expect(visit.request).toHaveBeenCalledTimes(2);
+        expect(visit.router.currentRoute.value.path).toBe('/frontend-pilot/help');
     });
 
     it('protects a pending confirmed destination and retires a cancelled receipt on another actor', async () => {

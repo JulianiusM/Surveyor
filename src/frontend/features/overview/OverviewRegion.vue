@@ -47,14 +47,18 @@ const activityApi = useActivityApi(context);
 // from this owner, keeping their presentation independent of feature endpoints.
 const packingInteraction: PilotOverviewCardInteraction = {migrated: true, readHeader: packingApi.header.bind(packingApi)};
 const nativeInteraction: PilotOverviewCardInteraction = {migrated: false};
+// Typed identity is presentation only: different entity families may share a UUID.
+// The existing command remains the only request, authority and outcome owner.
+const pendingRemoval = shallowRef<{type: components['schemas']['OverviewCard']['type']; id: string} | null>(null);
 
 function cardInteraction(card: components['schemas']['OverviewCard']): PilotOverviewCardInteraction {
-    if (card.type === 'event') return {migrated: true, readHeader: eventApi.header.bind(eventApi), duplicateUrl: card.url + '/duplicate'};
-    if (card.type === 'drivers') return {migrated: true, readHeader: driversApi.header.bind(driversApi), duplicateUrl: card.url + '/duplicate'};
-    if (card.type === 'survey') return {migrated: true, readHeader: surveyApi.header.bind(surveyApi), duplicateUrl: card.url + '/duplicate'};
-    if (card.type === 'activity') return {migrated: true, readHeader: activityApi.header.bind(activityApi), duplicateUrl: card.url + '/duplicate'};
+    const removePending = pendingRemoval.value?.type === card.type && pendingRemoval.value.id === card.id;
+    if (card.type === 'event') return {migrated: true, readHeader: eventApi.header.bind(eventApi), duplicateUrl: card.url + '/duplicate', removePending};
+    if (card.type === 'drivers') return {migrated: true, readHeader: driversApi.header.bind(driversApi), duplicateUrl: card.url + '/duplicate', removePending};
+    if (card.type === 'survey') return {migrated: true, readHeader: surveyApi.header.bind(surveyApi), duplicateUrl: card.url + '/duplicate', removePending};
+    if (card.type === 'activity') return {migrated: true, readHeader: activityApi.header.bind(activityApi), duplicateUrl: card.url + '/duplicate', removePending};
     if (card.type !== 'packing') return nativeInteraction;
-    return {...packingInteraction, duplicateUrl: card.url + '/duplicate'};
+    return {...packingInteraction, duplicateUrl: card.url + '/duplicate', removePending};
 }
 const {messages} = context;
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
@@ -426,6 +430,7 @@ function navigationHref(values: Record<string, string | undefined>): string {
 /** Locale/actor replacement cannot reuse private cards, scroll origins or a failed request. */
 function retirePresentation(): void {
     retireReads();
+    pendingRemoval.value = null;
     lastConfirmed.value = null;
     deniedRead.value = null;
     returnPosition = undefined;
@@ -635,13 +640,21 @@ async function automate(card: components['schemas']['OverviewCard'], paused: boo
 }
 
 /** Deliver permanent deletion through the existing confirmed-navigation owner.
- * A failed destination retains its receipt for navigation-only Retry; the
+ * A failed destination retains its receipt for read/delivery Retry; the
  * deleted card cannot become another eligible DELETE just because delivery failed. */
 async function remove(card: components['schemas']['OverviewCard']): Promise<void> {
     if (actionsBlocked.value) return;
     const success = card.type === 'event' ? 'event.deleted' : card.type === 'drivers' ? 'drivers.deleted'
         : card.type === 'survey' ? 'survey.deleted' : card.type === 'activity' ? 'activity.deleted' : 'packing.deleted';
-    await removal.remove({operation: deleteCard, confirmation: 'overview.confirmDelete', success});
+    const intent = {type: card.type, id: card.id};
+    pendingRemoval.value = intent;
+    try {
+        await removal.remove({operation: deleteCard, confirmation: 'overview.confirmDelete', success});
+    } finally {
+        // Actor retirement can clear this presentation before the admitted write
+        // settles. An old completion cannot clear a newer initiating gesture.
+        if (pendingRemoval.value === intent) pendingRemoval.value = null;
+    }
 
     async function deleteCard(commandScope: PilotRequestScope): Promise<void> {
         if (card.type === 'event') await eventApi.deleteEvent(card.id, commandScope);
@@ -662,6 +675,7 @@ function page(next: number): void {
         :aria-busy="!!displayed && (overview.isFetching.value || !!pendingRead)">
         <h3 class="visually-hidden js-overview-heading" tabindex="-1">{{ title }}</h3>
         <StatusNotice v-if="destination.target.value" kind="success"
+            :retry-at="destination.retryAt.value"
             :action="{state: destination.retryAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="destination.retry">
             {{ destinationNotice }}
         </StatusNotice>

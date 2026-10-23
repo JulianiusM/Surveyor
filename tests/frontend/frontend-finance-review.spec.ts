@@ -219,6 +219,22 @@ describe('P8A organizer finance forms', () => {
         expect(mounted.request).toHaveBeenCalledTimes(1);
     });
 
+    it('retires removed explicit creation selections without adding newly admitted participants', async () => {
+        const mounted = await mountForm(FinancePoolEditor, {pool: undefined});
+        await mounted.dialog.get('input[name="name"]').setValue('Retained creation draft');
+        await mounted.dialog.get('input[name="assignAll"]').setValue(false);
+        const newcomer = {id: '9', name: 'New participant', email: null};
+        await mounted.wrapper.setProps({participants: [participants[0]!, newcomer]});
+        expect(mounted.dialog.find('input[name="registrations"][value="8"]').exists()).toBe(false);
+        expect(mounted.dialog.get<HTMLInputElement>('input[name="registrations"][value="7"]').element.checked).toBe(true);
+        expect(mounted.dialog.get<HTMLInputElement>('input[name="registrations"][value="9"]').element.checked).toBe(false);
+        expect(mounted.dialog.get<HTMLInputElement>('input[name="name"]').element.value).toBe('Retained creation draft');
+        await mounted.dialog.get('form').trigger('submit');
+        await flushPromises();
+        expect(await (mounted.request.mock.calls[0]![0] as Request).json()).toMatchObject({assignAll: false, registrations: ['7']});
+        expect(mounted.request).toHaveBeenCalledOnce();
+    });
+
     it('retains the mounted organizer File and draft while a new language is read, blocking commands until its current receipt arrives', async () => {
         let finish: (() => void) | undefined;
         const mounted = await mountFrontendEvent(FinanceSection, async request => {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {computed, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
-import {usePilot} from '../../app/context';
+import {useActionState, usePilot} from '../../app/context';
 import {belongsToQueryFamily, eventKeys, overviewKeys} from '../../app/queryKeys';
 import {evictQueryFamilies, refetchFreshQueries} from '../../app/queryCache';
 import {isReadDenial} from '../../app/transport';
@@ -31,6 +31,11 @@ const admin = computed(() => route.path.endsWith('/admin'));
 const key = computed(() => eventKeys.detail(context.session.value?.context, eventId.value, admin.value));
 const section = useEventSection(key, readEvent, computed(() => true));
 const event = section.data;
+// The page GET can finish before its selected subsection reads. Retain only
+// this initiating presentation lifetime; each query keeps its own authority.
+const refreshingPage = ref(false);
+const pageReadAction = useActionState({eligible: () => section.readAction.isAvailable(),
+    pending: () => refreshingPage.value || section.query.isFetching.value});
 const financeEnabled = computed(() => !!event.value && (admin.value
     ? event.value.capabilities.manageAssignments : !!event.value.registration && event.value.hasInvoicePools));
 const editorOpen = ref(false);
@@ -92,10 +97,18 @@ function settingsAccessLost(): void {
 /** UI events leave failed-read presentation with its query. Causal command
  * follow-ups still call the rejecting refresh below to preserve saved/stale outcomes. */
 async function refreshPresentation(mode: 'dependencies' | 'page' = 'dependencies'): Promise<void> {
+    if (mode === 'page') {
+        if (!pageReadAction.isAvailable()) return;
+        refreshingPage.value = true;
+    }
     try {
         await refresh(mode);
     } catch {
         // The affected query retains its durable failure and recovery action.
+    } finally {
+        // Ordinary command callbacks retain their narrow dependency read. Only
+        // the explicit page gesture owns this whole-page pending/focus claim.
+        if (mode === 'page') refreshingPage.value = false;
     }
 }
 
@@ -144,7 +157,7 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
                 :read-error="section.query.error.value"
                 :retry-at="section.retryAt.value"
                 :last-updated-at="event ? section.query.dataUpdatedAt.value : undefined"
-                :action="{state: section.readAction, label: messages.t('common.refresh')}"
+                :action="{state: pageReadAction, label: messages.t('common.refresh')}"
                 @action="refreshPresentation('page')"
             >
                 {{ section.failure.value }}
@@ -152,7 +165,7 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
             <LoadingSkeleton v-if="section.loading.value" v-bind="route.meta.loadingSkeleton" />
 
             <template v-if="event">
-                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="section.readAction"
+                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="pageReadAction"
                     @refresh="refreshPresentation('page')" />
                 <!-- One bounded projection drives both page intents. Registration,
                      roster, management and export remain independent capabilities. -->

@@ -186,6 +186,7 @@ function expand(event: MouseEvent): void {
                         class="btn-sm"
                         variant="danger"
                         :disabled="disabled"
+                        :pending="interaction.removePending" :show-spinner="false"
                         @click="emit('remove')"
                         ><i class="bi bi-trash me-1" aria-hidden="true"></i
                         >{{ messages.t('overview.delete') }}</ActionButton

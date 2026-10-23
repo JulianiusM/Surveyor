@@ -4,7 +4,7 @@ import {computed, onBeforeUnmount, ref, watch} from 'vue';
 import type {ComputedRef} from 'vue';
 import type {PilotContext, PilotQueryAdmission, PilotQueryReadPolicy, PilotQueryRefreshOptions} from '../../types/FrontendPilotUiTypes';
 import {belongsToQueryFamily} from './queryKeys';
-import {UnconfirmedResponseError} from './transport';
+import {ApiFailure, UnconfirmedResponseError} from './transport';
 
 /** Admit a first GET for each mounted key visit, including cached terminal failure.
  * Later automatic resumes use that visit's terminal policy. Eligibility stays with
@@ -103,7 +103,7 @@ export async function refetchFreshQueries(client: QueryClient, filter: QueryFilt
     // existing observer metadata instead; a closed region remains ineligible.
     const selectedFamily = filter.type === 'active' ? {...filter, type: 'all' as const} : filter;
     for (const query of client.getQueryCache().findAll(selectedFamily)) {
-        if (query.isStatic() || (filter.type === 'active' || query.isDisabled()) && !hasEligibleReadObserver(query)) continue;
+        if (!mayRefreshQuery(query, filter.type === 'active')) continue;
         // A sibling can retire during cancellation. Preserve the caller's active
         // filter at dispatch instead of resurrecting that inactive cached observer.
         const selected = {...filter, queryKey: query.queryKey, exact: true};
@@ -126,7 +126,45 @@ export async function refetchFreshQueries(client: QueryClient, filter: QueryFilt
     // must not acknowledge an unknown command merely because Promise.all([])
     // resolves. Optional refresh is for a caller whose own required read succeeded.
     if (!reads.length && !options.allowEmpty) throw new UnconfirmedResponseError();
-    await Promise.all(reads);
+    try {
+        await Promise.all(reads);
+    } catch (error) {
+        // Preserve the first observed failure, but keep the initiating action
+        // pending until every already-dispatched dependent read has settled.
+        await Promise.allSettled(reads);
+        throw error;
+    }
+}
+
+/** Read the existing failure of the same eligible observers a dependency refresh
+ * would dispatch. The latest server deadline controls a multi-region Retry; hidden
+ * or inactive snapshots cannot close a mounted consumer's unrelated recovery. */
+export function queryFamilyReadError(client: QueryClient, families: readonly (readonly unknown[])[]): Error | null {
+    let failure: Error | null = null;
+    // Inspect actual query state rather than copying errors into a navigation
+    // receipt. Terminal-paused but eligible mounted readers still participate.
+    for (const query of client.getQueryCache().getAll()) {
+        if (!belongsToSelectedFamily(query, families) || !mayRefreshQuery(query, true) || !query.state.error) continue;
+        const candidate = query.state.error;
+        const selectedDeadline = failure instanceof ApiFailure ? failure.retryAt ?? 0 : 0;
+        const candidateDeadline = candidate instanceof ApiFailure ? candidate.retryAt ?? 0 : 0;
+        if (!failure || candidateDeadline > selectedDeadline) failure = candidate;
+    }
+    return failure;
+}
+
+/** Keep explicit dependency dispatch and its Retry presentation on one observer
+ * eligibility contract, including terminal suspension and static projections. */
+function mayRefreshQuery(query: Parameters<typeof matchQuery>[1], activeOnly: boolean): boolean {
+    return !query.isStatic() && (!(activeOnly || query.isDisabled()) || hasEligibleReadObserver(query));
+}
+
+/** Feature callers select prefixes; this cache owner keeps tuple shapes private. */
+function belongsToSelectedFamily(query: Parameters<typeof belongsToQueryFamily>[0], families: readonly (readonly unknown[])[]): boolean {
+    for (const family of families) {
+        if (belongsToQueryFamily(query, family)) return true;
+    }
+    return false;
 }
 
 /** Each actual observer owns its visibility/activity and disposal policy. Looking at
@@ -149,6 +187,21 @@ function hasEligibleReadObserver(query: Parameters<typeof matchQuery>[1]): boole
 function isNetworkReadSuccess(event: QueryCacheNotifyEvent): event is Extract<QueryCacheNotifyEvent, {type: 'updated'}>
     & {action: {type: 'success'; data: unknown; manual?: boolean}} {
     return event.type === 'updated' && event.action.type === 'success' && !event.action.manual;
+}
+
+/** Mark caller-selected projections stale after a confirmed command without
+ * detaching observed recovery controls or forcing hidden/inactive reads. Cancel
+ * first so an older held response cannot restore the pre-command projection. */
+export async function invalidateQueryFamilies(client: QueryClient, families: readonly (readonly unknown[])[]): Promise<void> {
+    function belongsToAffectedFamily(query: Parameters<typeof belongsToQueryFamily>[0]): boolean {
+        return belongsToSelectedFamily(query, families);
+    }
+    const filter = {predicate: belongsToAffectedFamily};
+    // Both mutations begin in this turn. Cancellation reverts a held fetch before
+    // invalidation, and invalidation never launches a GET outside read admission.
+    const cancellation = client.cancelQueries(filter);
+    const invalidation = client.invalidateQueries({...filter, refetchType: 'none'});
+    await Promise.all([cancellation, invalidation]);
 }
 
 /** Retire a denied family's snapshots without disconnecting mounted recovery controls.
@@ -195,11 +248,7 @@ export async function evictQueryFamilies(client: QueryClient, families: readonly
         // A producing denial belongs to the admission owner. Removing a paused
         // observer here would lose that receipt before its subtree can render it.
         if (preservedFamily && belongsToQueryFamily(query, preservedFamily)) return false;
-        // Family prefixes keep this cache owner independent of feature tuple shapes.
-        for (const family of families) {
-            if (belongsToQueryFamily(query, family)) return true;
-        }
-        return false;
+        return belongsToSelectedFamily(query, families);
     }
 
     const filter = {predicate: belongsToAffectedFamily, type};

@@ -40,7 +40,7 @@ const action = useActionState({eligible: () => props.active && (!props.pool || !
 const recovery = useActionState({eligible: () => props.active, blocked: () => command.recoveryAction.disabled.value,
     pending: () => command.recovering.value});
 watch(() => props.pool, updateSavedBaseline);
-watch([() => props.participants, command.pending, command.uncertain], synchronizeAllParticipants);
+watch([() => props.participants, command.pending, command.uncertain], synchronizeParticipants);
 watch([() => props.eventId, context.epoch, () => context.session.value?.context], resetDraft);
 
 /** Seed one admitted form from saved settings. The creation defaults match the
@@ -78,15 +78,19 @@ function restoreDraft(): void {
     inspected.value = false;
 }
 
-/** Automatic enrollment displays every current participant as selected. A
- * refreshed chooser must not appear to exclude a person the server will enroll. */
-function synchronizeAllParticipants(): void {
-    if (props.pool || !draft.assignAll || command.pending.value || command.uncertain.value) return;
+/** Reconcile creation enrollment with the admitted roster. Automatic selection
+ * includes current people; explicit choices retain surviving IDs without adding
+ * newcomers or submitting removed, no-longer-rendered checkbox values. */
+function synchronizeParticipants(): void {
+    if (props.pool || command.pending.value || command.uncertain.value) return;
     const registrations = props.participants.map(participant => participant.id);
-    // This updates only the automatic checkbox projection. Independent text and
-    // explicit enrollment drafts retain their values and dirty comparison.
-    draft.registrations = registrations;
-    baseline.value = JSON.stringify({...JSON.parse(baseline.value), registrations});
+    const admitted = new Set(registrations);
+    // Pending/unknown submission owns its captured values. Otherwise release
+    // retired IDs from both the visible draft and its clean comparison baseline.
+    draft.registrations = draft.assignAll ? registrations : draft.registrations.filter(id => admitted.has(id));
+    const saved = JSON.parse(baseline.value);
+    saved.registrations = saved.assignAll ? registrations : saved.registrations.filter((id: string) => admitted.has(id));
+    baseline.value = JSON.stringify(saved);
 }
 
 /** Default controls future enrollment independently of the current selection.

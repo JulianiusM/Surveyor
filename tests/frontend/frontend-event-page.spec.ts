@@ -50,6 +50,129 @@ async function submitRegistration(mounted: Awaited<ReturnType<typeof registratio
 }
 
 describe('Event page read dependencies', () => {
+    it('keeps page Refresh pending after one dependent read fails while another selected read is held', async () => {
+        const view = createFrontendEventView({requireDietaryInfo: false,
+            registration: {id: '17', arrivalDate: '2027-06-01', departureDate: '2027-06-03',
+                dietary: [], allergyNotes: '', dietComment: ''},
+            capabilities: {...createFrontendEventView().capabilities, participants: true, items: true}});
+        let refreshing = false;
+        let finishThings: (() => void) | undefined;
+        const roster = {participants: [], totals: [], dateTotals: [], allergies: [], comments: [],
+            generatedAt: '2026-10-16T00:00:00Z'};
+        const mounted = await mountFrontendEvent(EventPage, async request => {
+            const path = new URL(request.url).pathname;
+            if (path.endsWith('/things-to-do')) {
+                if (!refreshing) return json({items: []});
+                return new Promise<Response>(resolve => { finishThings = () => resolve(json({items: []})); });
+            }
+            if (!path.endsWith('/participants')) return json(view);
+            if (!refreshing) return json(roster);
+            return new Response(JSON.stringify({type: 'about:blank', title: 'Please wait', status: 429,
+                code: 'RATE_LIMITED', messageKey: 'api:errors.RATE_LIMITED', params: {},
+                detail: 'The roster is temporarily unavailable.', requestId: 'dependent-refresh-failure'}),
+            {status: 429, headers: {'Content-Type': 'application/problem+json', 'Retry-After': '1',
+                'X-Surveyor-Context': createFrontendEventSession().context}});
+        }, {});
+        cleanups.push(mounted.dispose);
+        await vi.waitFor(() => expect(mounted.context.queryClient.isFetching()).toBe(0));
+        const refresh = mounted.wrapper.get<HTMLButtonElement>('button[aria-label="Refresh"]');
+        const draft = mounted.wrapper.get<HTMLInputElement>('#departureDate');
+        await draft.setValue('2027-06-02');
+        const before = mounted.request.mock.calls.length;
+        refreshing = true;
+        await refresh.trigger('click');
+        await vi.waitFor(() => expect(finishThings).toBeTypeOf('function'));
+        try {
+            // Real roster decoding has already published a query-owned error.
+            // The separate Things GET still belongs to this same page gesture.
+            const actor = mounted.context.session.value?.context;
+            await vi.waitFor(() => expect(mounted.context.queryClient.getQueryState(
+                eventKeys.participants(actor, frontendEventId))?.error).toBeInstanceOf(ApiFailure));
+            expect(mounted.context.queryClient.getQueryState(eventKeys.detail(actor, frontendEventId))?.fetchStatus).toBe('idle');
+            expect(mounted.context.queryClient.getQueryState(eventKeys.things(actor, frontendEventId))?.fetchStatus).toBe('fetching');
+            expect(refresh.attributes('aria-busy')).toBe('true');
+            expect(refresh.element.disabled).toBe(true);
+            refresh.element.click();
+            await flushPromises();
+            expect(mounted.request.mock.calls.length).toBe(before + 3);
+            expect(draft.element.value).toBe('2027-06-02');
+        } finally {
+            refreshing = false;
+            finishThings!();
+            await flushPromises();
+        }
+        expect(refresh.attributes('aria-busy')).toBe('false');
+        expect(mounted.wrapper.get('#departureDate').element).toBe(draft.element);
+        expect(draft.element.value).toBe('2027-06-02');
+        expect(mounted.context.queryClient.getQueryState(eventKeys.participants(
+            mounted.context.session.value?.context, frontendEventId))?.error).toBeInstanceOf(ApiFailure);
+    });
+
+    it.each(['unclaimed', 'deliberate focus', 'retired actor'] as const)(
+        'keeps page Refresh pending through a held roster read and respects %s', async completion => {
+            const view = createFrontendEventView({requireDietaryInfo: false,
+                registration: {id: '17', arrivalDate: '2027-06-01', departureDate: '2027-06-03',
+                    dietary: [], allergyNotes: '', dietComment: ''},
+                capabilities: {...createFrontendEventView().capabilities, participants: true, items: false}});
+            let holdRoster = false;
+            let finishRoster: (() => void) | undefined;
+            const roster = {participants: [], totals: [], dateTotals: [], allergies: [], comments: [],
+                generatedAt: '2026-10-16T00:00:00Z'};
+            const mounted = await mountFrontendEvent(EventPage, async request => {
+                if (!new URL(request.url).pathname.endsWith('/participants')) return json(view);
+                if (!holdRoster) return json(roster);
+                return new Promise<Response>(resolve => { finishRoster = () => resolve(json(roster)); });
+            }, {});
+            cleanups.push(mounted.dispose);
+            await vi.waitFor(() => expect(mounted.context.queryClient.isFetching()).toBe(0));
+            const refresh = mounted.wrapper.get<HTMLButtonElement>('button[aria-label="Refresh"]');
+            const departure = mounted.wrapper.get<HTMLInputElement>('#departureDate');
+            await departure.setValue('2027-06-02');
+            const before = mounted.request.mock.calls.length;
+            const focus = vi.spyOn(refresh.element, 'focus');
+            refresh.element.focus();
+            focus.mockClear();
+            holdRoster = true;
+            await refresh.trigger('click');
+            await vi.waitFor(() => expect(finishRoster).toBeTypeOf('function'));
+            try {
+                // The primary Event GET is already complete. Only its selected
+                // dependent roster read is held; it still belongs to this click.
+                expect(mounted.context.queryClient.getQueryState(eventKeys.detail(
+                    mounted.context.session.value?.context, frontendEventId))?.fetchStatus).toBe('idle');
+                expect(refresh.element.disabled).toBe(true);
+                expect(refresh.attributes('aria-busy')).toBe('true');
+                expect(focus).not.toHaveBeenCalled();
+                refresh.element.click();
+                await flushPromises();
+                expect(mounted.request.mock.calls.length).toBe(before + 2);
+                expect(departure.element.value).toBe('2027-06-02');
+
+                // happy-dom retains focus on disabling; model the browser's
+                // BODY release explicitly before checking the shared owner.
+                document.body.tabIndex = -1;
+                document.body.focus();
+                document.body.removeAttribute('tabindex');
+                expect(document.activeElement).toBe(document.body);
+                if (completion === 'deliberate focus') departure.element.focus();
+                if (completion === 'retired actor') mounted.context.epoch.value++;
+            } finally {
+                holdRoster = false;
+                finishRoster!();
+                await flushPromises();
+            }
+            expect(mounted.wrapper.get('button[aria-label="Refresh"]').element).toBe(refresh.element);
+            expect(refresh.attributes('aria-busy')).toBe('false');
+            expect(departure.element.value).toBe(completion === 'retired actor' ? '' : '2027-06-02');
+            if (completion === 'unclaimed') {
+                expect(document.activeElement).toBe(refresh.element);
+                expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+            } else {
+                expect(focus).not.toHaveBeenCalled();
+                if (completion === 'deliberate focus') expect(document.activeElement).toBe(departure.element);
+            }
+        });
+
     it.each(['UTC', 'America/Los_Angeles', 'Asia/Tokyo'])('retranslates civil summary dates and instant deadlines in %s without changing values', async zone => {
         vi.stubEnv('TZ', zone);
         const view = createFrontendEventView({bindingDeadline: '2027-06-01T12:34:00Z', timezone: 'Europe/Berlin'});
