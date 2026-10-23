@@ -10,7 +10,8 @@ import FinanceLedgerFooter from './FinanceLedgerFooter.vue';
 type Invoice = components['schemas']['FinanceInvoice'];
 // Both audiences receive their server-authorized records. Filters affect this
 // display only; proof access and participant commands keep their own authority.
-const props = defineProps<{invoices: Invoice[]; admin?: boolean; disabled?: boolean; readOnly?: boolean}>();
+const props = defineProps<{invoices: Invoice[]; admin?: boolean; disabled?: boolean; readOnly?: boolean;
+    refreshing?: boolean; closingInvoiceId?: string | null}>();
 const emit = defineEmits<{retract: [invoice: Invoice]; closeInvoice: [invoice: Invoice]; refresh: [];
     review: [invoice: Invoice, action: 'approve' | 'decline' | 'revise' | 'reject' | 'close']}>();
 const {messages, locale} = usePilot();
@@ -212,6 +213,7 @@ function recorderName(invoice: Invoice): string {
                             </ActionButton>
                             <ActionButton
                                 v-else-if="invoice.canClose"
+                                :pending="closingInvoiceId === invoice.id" :show-spinner="false"
                                 variant="outline-success"
                                 class="btn-sm"
                                 :disabled="disabled"
@@ -236,6 +238,7 @@ function recorderName(invoice: Invoice): string {
             :pages="pages"
             :disabled="disabled"
             invoices
+            :pending="refreshing"
             @previous="page--"
             @next="page++"
             @refresh="emit('refresh')"

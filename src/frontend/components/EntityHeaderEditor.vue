@@ -30,10 +30,12 @@ const {messages} = usePilot();
                     }}</ActionButton></StatusNotice
                 >
                 <div class="d-flex flex-wrap gap-2">
-                    <ActionButton :disabled="disabled || conflict" @click="emit('upload', $event)">{{
+                    <ActionButton :disabled="disabled || conflict" :pending="uploadPending" :show-spinner="false"
+                        @click="emit('upload', $event)">{{
                         labels.upload
                     }}</ActionButton
                     ><ActionButton v-if="hasImage" variant="outline-danger" :disabled="disabled"
+                        :pending="removePending" :show-spinner="false"
                         @click="emit('remove', $event)">{{ labels.remove }}</ActionButton>
                 </div>
             </div>

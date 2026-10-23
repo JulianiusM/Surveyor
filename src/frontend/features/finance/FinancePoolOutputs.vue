@@ -100,13 +100,19 @@ function calculationSaved(notice: PilotPlainMessageKey): void {emit('saved', not
                     <template #notice><p v-if="notificationCount !== null" class="mb-0 mt-1">{{ messages.t('finance.settlementEmailDeliveryRequestedForPayerS', {count: notificationCount}) }}</p></template>
                 </CommandFeedback>
                 <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="inspectSaved">
-                    <template #uncertain><ActionButton v-if="inspected" variant="outline-warning" class="mt-2" :state="command.recoveryAction" @click="acknowledge">{{ messages.t('finance.reviewedSavedShares') }}</ActionButton></template>
+                    <template #uncertain>
+                        <!-- Acknowledgement is local review; the saved-data read
+                             blocks it without claiming pending focus for it. -->
+                        <ActionButton v-if="inspected" variant="outline-warning" class="mt-2"
+                            :disabled="command.recoveryAction.disabled.value" @click="acknowledge">{{ messages.t('finance.reviewedSavedShares') }}</ActionButton>
+                    </template>
                 </CommandFeedback>
                 <section v-if="inspected && command.uncertain.value" class="border border-secondary rounded p-3 mb-3" data-finance-output-inspection>
                     <h3 class="fs-6">{{ messages.t('finance.savedSettlementTotals') }}</h3>
                     <p v-if="pool.needsRecalculation" class="text-warning small">{{ messages.t('finance.recalculationRequired') }}</p>
                     <FinanceTotals :pool="pool" />
-                    <FinanceShares v-if="shares.length" :shares="shares" admin read-only @refresh="inspectSaved" />
+                    <FinanceShares v-if="shares.length" :shares="shares" admin read-only
+                        :refreshing="command.recovering.value" @refresh="inspectSaved" />
                     <p v-else class="text-secondary small mb-0">{{ messages.t('finance.noParticipantSharesWereGenerated') }}</p>
                 </section>
                 <template v-if="selected === 'notify'">

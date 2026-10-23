@@ -6,7 +6,7 @@ import FormField from '../../components/FormField.vue';
 
 // The same field owner serves creation and permission-filtered properties. The
 // caller retains values; absent fields never render a hidden writable mirror.
-defineProps<{values: EntityMetadataValues; fields?: readonly string[]; prefix: string; disabled?: boolean}>();
+defineProps<{values: EntityMetadataValues; fields?: readonly string[]; prefix: string; disabled?: boolean; pending?: boolean}>();
 const {messages} = usePilot();
 const flags = [
     {field: 'allowRegDateUpdatesAfterDeadline', label: 'event.dateUpdates', icon: 'bi-calendar-range'},
@@ -37,11 +37,13 @@ const propertyInputs = [
             :lexical-number="input.type === 'number'"
             :max-length="'max' in input ? input.max : undefined" :required="input.required" :required-marker="false"
             :min="input.type === 'number' ? 1 : undefined" :step="input.type === 'datetime-local' ? 1 : undefined"
-            @update:model-value="values[input.field] = $event" />
+            @update:model-value="values[input.field] = $event"
+            :pending="pending" />
 
         <FormField v-if="fields.includes('description')" :id="prefix + '-description'" class="col-12" name="description"
             :model-value="String(values.description ?? '')" :label="messages.t('packing.description')" label-class=""
-            multiline :rows="4" :max-length="16000" @update:model-value="values.description = $event" />
+            multiline :rows="4" :max-length="16000" @update:model-value="values.description = $event"
+            :pending="pending" />
 
         <FormField v-if="fields.includes('deadlineTz')" :id="prefix + '-timezone'" class="col-12"
             :label="messages.t('event.timezone')" :label-for="prefix + '-timezone-btn'" label-class="" :required-marker="false">
@@ -66,34 +68,40 @@ const propertyInputs = [
              retained. These flags configure distinct server-enforced deadline rules. -->
         <FormField :id="prefix + '-title'" class="mb-3" name="title" :model-value="String(values.title ?? '')"
             :label="messages.t('event.title')" label-icon="bi-tag" label-class="" required :required-marker="false"
-            :max-length="255" @update:model-value="values.title = $event" />
+            :max-length="255" @update:model-value="values.title = $event"
+            :pending="pending" />
 
         <div class="row mb-3">
             <FormField :id="prefix + '-start'" class="col-md-6" name="startDate" type="date"
                 :model-value="String(values.startDate ?? '')" :label="messages.t('event.startDate')"
                 label-icon="bi-calendar-event" label-class="" required :required-marker="false"
-                @update:model-value="values.startDate = $event" />
+                @update:model-value="values.startDate = $event"
+                :pending="pending" />
             <FormField :id="prefix + '-end'" class="col-md-6" name="endDate" type="date"
                 :model-value="String(values.endDate ?? '')" :label="messages.t('event.endDate')"
                 label-icon="bi-calendar2-event" label-class="" required :required-marker="false"
-                @update:model-value="values.endDate = $event" />
+                @update:model-value="values.endDate = $event"
+                :pending="pending" />
         </div>
         <div class="row mb-3">
             <FormField :id="prefix + '-location'" class="col-md-8" name="location"
                 :model-value="String(values.location ?? '')" :label="messages.t('event.location')" label-icon="bi-geo-alt" label-class=""
-                :max-length="255" :placeholder="messages.t('event.locationPlaceholder')" @update:model-value="values.location = $event" />
+                :max-length="255" :placeholder="messages.t('event.locationPlaceholder')" @update:model-value="values.location = $event"
+                :pending="pending" />
             <!-- Keep raw capacity spelling, zero and the absence of constraints.
                  Explicit lexical handling avoids Vue's number-input blur rewrite;
                  only the existing server coerces the submitted capacity. -->
             <FormField :id="prefix + '-capacity'" class="col-md-4" name="maxParticipants" type="number"
                 lexical-number
                 :model-value="String(values.maxParticipants ?? '')" :label="messages.t('event.maxParticipants')"
-                label-icon="bi-people" label-class="" @update:model-value="values.maxParticipants = $event" />
+                label-icon="bi-people" label-class="" @update:model-value="values.maxParticipants = $event"
+                :pending="pending" />
         </div>
         <div class="row mb-3">
             <FormField :id="prefix + '-deadline'" class="col-md-8" name="bindingDeadline" type="datetime-local" :step="1"
                 :model-value="String(values.bindingDeadline ?? '')" :label="messages.t('event.bindingDeadline')"
-                label-icon="bi-hourglass-split" label-class="" @update:model-value="values.bindingDeadline = $event">
+                label-icon="bi-hourglass-split" label-class="" @update:model-value="values.bindingDeadline = $event"
+                :pending="pending">
                 <template #label>{{ messages.t('event.bindingDeadline') }}<small class="ms-1">{{ messages.t('event.deadlineHint') }}</small></template>
             </FormField>
             <FormField :id="prefix + '-timezone'" class="col-md-4" :label="messages.t('event.timezone')"
@@ -116,6 +124,7 @@ const propertyInputs = [
         </div>
         <FormField :id="prefix + '-description'" class="mb-3" name="description" :model-value="String(values.description ?? '')"
             :label="messages.t('event.description')" label-icon="bi-pencil-square" label-class=""
-            multiline :rows="4" :max-length="16000" @update:model-value="values.description = $event" />
+            multiline :rows="4" :max-length="16000" @update:model-value="values.description = $event"
+            :pending="pending" />
     </template>
 </template>

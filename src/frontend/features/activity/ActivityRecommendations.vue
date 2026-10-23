@@ -46,6 +46,9 @@ const baseline = ref('');
 const warnings = shallowRef<Preview['warnings']>([]);
 const previewFailed = ref(false);
 const previewing = ref(false);
+// Only the deliberate initiating action owns transient button focus. Its handler
+// spans preview/command handoffs; background entry/job maintenance has no claim.
+const pendingControl = ref<'reload' | 'generate' | 'save' | null>(null);
 const frozen = shallowRef<components['schemas']['ActivityRecommendationApplication'] | null>(null);
 const confirmation = ref(false);
 const manualSlot = ref<string | null>(null);
@@ -91,7 +94,7 @@ const counts = computed(() => ({PENDING: rows.value.filter(row => row.value.stat
     REJECTED: rows.value.filter(row => row.value.status === 'REJECTED').length}));
 const statuses = ['PENDING', 'APPROVED', 'REJECTED'] as const;
 const snapshotAction = useActionState({eligible: () => retryRead.value && !revoked.value,
-    pending: () => snapshot.isFetching.value, blocked: () => command.recoveryAction.disabled.value});
+    pending: () => snapshot.isFetching.value || command.recovering.value, blocked: () => command.recoveryAction.disabled.value});
 const jobAction = useActionState({eligible: () => retryJob.value && !revoked.value,
     pending: () => job.isFetching.value});
 const previewAction = useActionState({eligible: () => !blocked.value});
@@ -224,9 +227,14 @@ watch(() => context.hydrated.value && context.mayRead(), ready => { if (ready) v
  * A canceled confirmation keeps every row and its current warning state. */
 async function reload(): Promise<void> {
     if (blocked.value || dirty.value && !window.confirm(messages.value.t('draft.discard'))) return;
-    const value = await command.run(scope => advancedCommand(api.recommendationWorkspace(props.planId, scope), scope),
-        false, true, {success: null});
-    if (value) publishWorkspace(value, true);
+    // Native-equivalent maintenance starts only after accepted discard. Its
+    // initiating Reload stays distinct from automatic entry/job maintenance.
+    pendingControl.value = 'reload';
+    try {
+        const value = await command.run(scope => advancedCommand(api.recommendationWorkspace(props.planId, scope), scope),
+            false, true, {success: null});
+        if (value) publishWorkspace(value, true);
+    } finally { pendingControl.value = null; }
 }
 
 /** A retained domain job is observed through its own identity. No generation
@@ -290,14 +298,17 @@ watch([job.data, command.pending, command.uncertain], finishObservedJob);
 async function generate(): Promise<void> {
     if (blocked.value || running.value || assignmentMode.value === 'FREE') return;
     if (dirty.value && !window.confirm(messages.value.t('draft.discard'))) return;
-    const value = await command.run(scope => advancedCommand(api.generateRecommendations(props.planId, scope), scope), false, true);
-    if (value && active) {
-        // Confirmed dispatch consumes the deliberate discard decision. Edits
-        // made after this baseline still survive the eventual job completion.
-        baseline.value = JSON.stringify(recommendationReview(rows.value));
-        explicitlyDispatched.add(value.job.id);
-        observeJob(value.job, true);
-    }
+    pendingControl.value = 'generate';
+    try {
+        const value = await command.run(scope => advancedCommand(api.generateRecommendations(props.planId, scope), scope), false, true);
+        if (value && active) {
+            // Confirmed dispatch consumes the deliberate discard decision. Edits
+            // made after this baseline still survive the eventual job completion.
+            baseline.value = JSON.stringify(recommendationReview(rows.value));
+            explicitlyDispatched.add(value.job.id);
+            observeJob(value.job, true);
+        }
+    } finally { pendingControl.value = null; }
 }
 
 /** Every draft change invalidates prior warning authority. New warnings may
@@ -513,6 +524,7 @@ async function manualPreview(values: ActivityRecommendationRow[]): Promise<compo
  * and its exact overlap digest; no mutable current draft is substituted later. */
 async function save(): Promise<void> {
     if (blocked.value || !workspace.value) return;
+    pendingControl.value = 'save';
     previewing.value = true;
     sequence++;
     previewAbort?.abort();
@@ -537,6 +549,7 @@ async function save(): Promise<void> {
         }
     } finally {
         previewing.value = false;
+        pendingControl.value = null;
     }
 }
 function cancelConfirmation(): void { confirmation.value = false; frozen.value = null; }
@@ -592,12 +605,14 @@ function statusLabel(status: typeof statuses[number]): string {
                     type="button"
                     class="btn-sm" variant="outline-secondary"
                     data-recommendations-refresh
+                    :pending="pendingControl === 'reload'" :show-spinner="false"
                     :disabled="blocked"
                     @click="reload"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>{{ messages.t('activity.recommendations.reload') }}</ActionButton>
                 <ActionButton
                     type="button"
                     class="btn-sm" variant="outline-primary"
                     data-recommendations-auto
+                    :pending="pendingControl === 'generate'" :show-spinner="false"
                     :disabled="blocked || running || assignmentMode === 'FREE'"
                     :title="assignmentMode === 'FREE' ? messages.t('activity.recommendations.freeHint') : ''"
                     @click="generate"><i class="bi bi-stars me-1" aria-hidden="true"></i>{{ messages.t('activity.recommendations.auto') }}</ActionButton>
@@ -605,6 +620,7 @@ function statusLabel(status: typeof statuses[number]): string {
                     type="button"
                     class="btn-sm" variant="primary"
                     data-recommendations-apply
+                    :pending="pendingControl === 'save'" :show-spinner="false"
                     :disabled="blocked || !workspace"
                     @click="save"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('activity.saveChanges') }}</ActionButton>
             </div>

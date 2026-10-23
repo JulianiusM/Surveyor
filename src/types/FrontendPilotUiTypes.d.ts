@@ -1,4 +1,4 @@
-import type {ComputedRef, Ref, ShallowRef} from 'vue';
+import type {ComponentPublicInstance, ComputedRef, Ref, ShallowRef} from 'vue';
 import type {QueryClient} from '@tanstack/vue-query';
 import type {i18n} from 'i18next';
 import type {NavigationFailure, RouteLocationNormalized} from 'vue-router';
@@ -55,6 +55,21 @@ export interface PilotActionState {
     disabled: ComputedRef<boolean>;
     pending: ComputedRef<boolean>;
     isAvailable(): boolean;
+}
+
+/** Native pending disabling can release focus on actions and retained fields.
+ * Their shared presentation lifetime keeps no draft, request or authority state. */
+export type PilotPendingFocusControl = HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+export interface PilotPendingFocusSource {
+    element: Readonly<Ref<PilotPendingFocusControl | null>>;
+    pending: Readonly<Ref<boolean>>;
+    isAvailable(): boolean;
+}
+
+/** A distinct native field keeps its existing directives and attributes while
+ * explicitly supplying its actual control to the common focus lifetime. */
+export interface PilotFormFieldControlSlot {
+    controlRef(control: Element | ComponentPublicInstance | null): void;
 }
 
 export interface PilotRead<T> { data: T; etag: string | null; }

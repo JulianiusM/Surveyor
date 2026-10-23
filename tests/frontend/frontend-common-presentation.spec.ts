@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {computed, createSSRApp, defineComponent, markRaw} from 'vue';
+import {computed, createSSRApp, defineComponent, markRaw, ref} from 'vue';
 import type {Component} from 'vue';
 import {renderToString} from 'vue/server-renderer';
 import {createMemoryHistory, createRouter} from 'vue-router';
@@ -15,7 +15,8 @@ import EntityDescription from '../../src/frontend/components/EntityDescription.v
 import FormField from '../../src/frontend/components/FormField.vue';
 import FileField from '../../src/frontend/components/FileField.vue';
 import ActionButton from '../../src/frontend/components/ActionButton.vue';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import AppHeader from '../../src/frontend/components/AppHeader.vue';
+import {createPilotContext, pilotContextKey, useActionState} from '../../src/frontend/app/context';
 import {render} from '../../src/frontend/app/entry-server';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import type {components} from '../../src/types/api/v1';
@@ -45,8 +46,9 @@ afterEach(() => {
 /** Mount the actual presentation with its request-local translator and route scope.
  * Any accidental network dispatch is rejected instead of substituting application data. */
 async function mounted(component: Component, props: Record<string, unknown> = {},
-    bootstrap: Partial<FrontendPilotBootstrap> = {}, path = '/frontend-pilot/home') {
-    const request = vi.fn(rejectUnexpectedRequest);
+    bootstrap: Partial<FrontendPilotBootstrap> = {}, path = '/frontend-pilot/home',
+    requestFetch: typeof fetch = rejectUnexpectedRequest) {
+    const request = vi.fn(requestFetch);
     const context = createPilotContext({session, initialUrl: path, ...bootstrap}, true, request);
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
@@ -95,8 +97,8 @@ function accountSession(kind: 'account' | 'guest'): components['schemas']['Sessi
 
 /** Happy DOM refuses blur() on a disabled button. Focusing the body reproduces
  * Chromium's unclaimed native focus release without changing application state. */
-function releaseDisabledFocus(button: HTMLButtonElement): void {
-    expect(button.disabled).toBe(true);
+function releaseDisabledFocus(button: HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): void {
+    expect(button.matches(':disabled')).toBe(true);
     document.body.tabIndex = -1;
     document.body.focus();
     document.body.removeAttribute('tabindex');
@@ -104,6 +106,42 @@ function releaseDisabledFocus(button: HTMLButtonElement): void {
 }
 
 describe('common frontend presentation', () => {
+    it.each([false, true])('retains locale selector focus after its actual preference command unless the user moves elsewhere (%s)', async cancelled => {
+        let finish!: (response: Response) => void;
+        const held = new Promise<Response>(function holdLocaleResponse(resolve) { finish = resolve; });
+        const {wrapper, context, request} = await mounted(AppHeader, {}, {}, '/frontend-pilot/home',
+            function changePreference() { return held; });
+        const select = wrapper.get<HTMLSelectElement>('#pilot-locale');
+        select.element.focus();
+        const focus = vi.spyOn(select.element, 'focus');
+
+        try {
+            await select.setValue('de');
+            releaseDisabledFocus(select.element);
+            const dispatched = request.mock.calls[0]![0] as Request;
+            expect(dispatched.method).toBe('PUT');
+            expect(new URL(dispatched.url).pathname).toBe('/api/v1/locale');
+            expect(await dispatched.json()).toEqual({locale: 'de'});
+            if (cancelled) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
+            finish(new Response(JSON.stringify({...session, locale: 'de'}), {headers: {
+                'Content-Type': 'application/json', 'X-Surveyor-Context': session.context,
+            }}));
+            await flushPromises();
+            expect(wrapper.get<HTMLSelectElement>('#pilot-locale').element).toBe(select.element);
+            expect(select.element.disabled).toBe(false);
+            expect(select.element.value).toBe('de');
+            expect(context.locale.value).toBe('de');
+            expect(request).toHaveBeenCalledOnce();
+            if (cancelled) {
+                expect(document.activeElement).toBe(document.body);
+                expect(focus).not.toHaveBeenCalled();
+            } else {
+                expect(document.activeElement).toBe(select.element);
+                expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+            }
+        } finally { finish(new Response()); await flushPromises(); }
+    });
+
     it('keeps native availability and pending focus restoration for a standalone action without application context', async () => {
         const wrapper = mount(ActionButton, {attachTo: document.body, slots: {default: 'Standalone action'}});
         cleanups.push(() => wrapper.unmount());
@@ -119,14 +157,22 @@ describe('common frontend presentation', () => {
         expect(button.disabled).toBe(false);
     });
 
-    it('restores only pending-disabled button focus after the native control becomes available', async () => {
-        const {wrapper, request} = await mounted(ActionButton);
+    it.each([
+        {showSpinner: true, unstyled: false},
+        {showSpinner: false, unstyled: false},
+        {showSpinner: false, unstyled: true},
+    ])('restores pending-disabled focus with spinner $showSpinner and caller-owned appearance $unstyled', async presentation => {
+        const {wrapper, request} = await mounted(ActionButton, {...presentation, class: 'list-group-item'});
         const button = wrapper.get<HTMLButtonElement>('button').element;
         button.focus();
         const focus = vi.spyOn(button, 'focus');
         await wrapper.setProps({pending: true});
         expect(button.disabled).toBe(true);
         expect(button.getAttribute('aria-busy')).toBe('true');
+        expect(wrapper.find('.spinner-border').exists()).toBe(presentation.showSpinner);
+        expect(wrapper.classes()).toContain('list-group-item');
+        expect(wrapper.classes().includes('btn')).toBe(!presentation.unstyled);
+        expect(wrapper.classes().includes('btn-primary')).toBe(!presentation.unstyled);
 
         // Explicitly reproduce Chromium's native blur to exercise the production
         // restoration rather than assume the DOM emulator supplied that behavior.
@@ -137,6 +183,47 @@ describe('common frontend presentation', () => {
         expect(button.disabled).toBe(false);
         expect(document.activeElement).toBe(button);
         expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it('does not claim focus when another operation only blocks this button', async () => {
+        const {wrapper, request} = await mounted(ActionButton, {showSpinner: false});
+        const button = wrapper.get<HTMLButtonElement>('button').element;
+        button.focus();
+        const focus = vi.spyOn(button, 'focus');
+
+        // A sibling command may disable the form without making this focused
+        // control the initiating operation. Releasing that block owns no focus.
+        await wrapper.setProps({disabled: true});
+        releaseDisabledFocus(button);
+        expect(button.getAttribute('aria-busy')).toBe('false');
+        await wrapper.setProps({disabled: false});
+        await flushPromises();
+        expect(document.activeElement).toBe(document.body);
+        expect(focus).not.toHaveBeenCalled();
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it('keeps focus with an action whose owning state starts and settles before its next render', async () => {
+        const pending = ref(false);
+        const host = defineComponent({components: {ActionButton},
+            setup() { return {state: useActionState({pending: () => pending.value})}; },
+            template: '<ActionButton :state="state">Immediate action</ActionButton>',
+        });
+        const {wrapper, request} = await mounted(host);
+        const button = wrapper.get<HTMLButtonElement>('button').element;
+        button.focus();
+        const focus = vi.spyOn(button, 'focus');
+
+        // No disabled DOM state is painted for a same-turn completion. That
+        // unbroken focus needs no later restoration or background focus claim.
+        pending.value = true;
+        pending.value = false;
+        await flushPromises();
+        expect(button.disabled).toBe(false);
+        expect(button.getAttribute('aria-busy')).toBe('false');
+        expect(document.activeElement).toBe(button);
+        expect(focus).not.toHaveBeenCalled();
         expect(request).not.toHaveBeenCalled();
     });
 
@@ -204,6 +291,186 @@ describe('common frontend presentation', () => {
         expect(document.activeElement).toBe(other);
         expect(focus).not.toHaveBeenCalled();
     });
+
+    it.each([
+        {multiline: false},
+        {multiline: true},
+        {type: 'number', lexicalNumber: true},
+    ])('restores the same retained form control after its initiating pending submission (%j)', async presentation => {
+        const {wrapper, request} = await mounted(FormField,
+            {id: 'retained-input', label: 'Retained field', modelValue: '12', ...presentation});
+        const control = wrapper.get<HTMLInputElement | HTMLTextAreaElement>('input, textarea').element;
+        control.focus();
+        const focus = vi.spyOn(control, 'focus');
+
+        // The existing form owner supplies its actual pending and native disable
+        // policy. A rejected result retains this very field and its model value.
+        await wrapper.setProps({pending: true, disabled: true});
+        releaseDisabledFocus(control);
+        await wrapper.setProps({pending: false, disabled: false});
+        await flushPromises();
+        expect(wrapper.get('input, textarea').element).toBe(control);
+        expect(control.value).toBe('12');
+        expect(document.activeElement).toBe(control);
+        expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+        expect(wrapper.emitted('update:modelValue')).toBeUndefined();
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it('does not claim a form field disabled only by another operation', async () => {
+        const {wrapper} = await mounted(FormField, {id: 'sibling-input', label: 'Sibling field', modelValue: 'Retained'});
+        const control = wrapper.get<HTMLInputElement>('input').element;
+        control.focus();
+        const focus = vi.spyOn(control, 'focus');
+        await wrapper.setProps({disabled: true});
+        releaseDisabledFocus(control);
+        await wrapper.setProps({disabled: false});
+        await flushPromises();
+        expect(document.activeElement).toBe(document.body);
+        expect(focus).not.toHaveBeenCalled();
+    });
+
+    it('honors effective fieldset disabling without a second field availability owner', async () => {
+        const pending = ref(false);
+        const blocked = ref(false);
+        const host = defineComponent({components: {FormField},
+            setup() { return {pending, blocked}; },
+            template: '<fieldset :disabled="blocked"><FormField id="fieldset-input" label="Fieldset field" '
+                + 'model-value="Retained" :pending="pending" /></fieldset>',
+        });
+        const {wrapper} = await mounted(host);
+        const control = wrapper.get<HTMLInputElement>('input').element;
+        const fieldset = wrapper.get<HTMLFieldSetElement>('fieldset').element;
+        const nativeMatches = control.matches.bind(control);
+        // Happy DOM omits inherited fieldset disabling from :disabled. Model
+        // that browser selector boundary only; the real ancestor and pending
+        // render/settlement still belong to the mounted production components.
+        vi.spyOn(control, 'matches').mockImplementation(function matchesEffectiveDisabled(selector: string): boolean {
+            return selector === ':disabled' ? control.disabled || fieldset.disabled : nativeMatches(selector);
+        });
+        control.focus();
+        const focus = vi.spyOn(control, 'focus');
+        pending.value = true;
+        blocked.value = true;
+        await flushPromises();
+        expect(control.disabled).toBe(false);
+        expect(fieldset.disabled).toBe(true);
+        releaseDisabledFocus(control);
+
+        // Pending settlement cannot restore into a still-disabled ancestor. Later
+        // release of that unrelated lock also owns no new focus restoration.
+        pending.value = false;
+        await flushPromises();
+        expect(control.matches(':disabled')).toBe(true);
+        expect(document.activeElement).toBe(document.body);
+        blocked.value = false;
+        await flushPromises();
+        expect(control.matches(':disabled')).toBe(false);
+        expect(document.activeElement).toBe(document.body);
+        expect(focus).not.toHaveBeenCalled();
+    });
+
+    it('shares pending focus with an explicitly bound native control slot without replacing its model', async () => {
+        const pending = ref(false);
+        const disabled = ref(false);
+        const value = ref('2026-10-23');
+        const host = defineComponent({components: {FormField},
+            setup() { return {pending, disabled, value}; },
+            template: '<FormField id="custom-date" label="Arrival" :pending="pending" :disabled="disabled">'
+                + '<template #control="{controlRef}"><input :ref="controlRef" id="custom-date" type="date" '
+                + 'v-model="value" :disabled="disabled" data-existing-directive="retained" /></template>'
+                + '<p>Existing field guidance</p></FormField>',
+        });
+        const {wrapper, request} = await mounted(host);
+        const control = wrapper.get<HTMLInputElement>('input').element;
+        control.focus();
+        const focus = vi.spyOn(control, 'focus');
+        pending.value = true;
+        disabled.value = true;
+        await flushPromises();
+        releaseDisabledFocus(control);
+        pending.value = false;
+        disabled.value = false;
+        await flushPromises();
+        expect(wrapper.get<HTMLInputElement>('input').element).toBe(control);
+        expect(control.getAttribute('data-existing-directive')).toBe('retained');
+        expect(value.value).toBe('2026-10-23');
+        expect(control.value).toBe(value.value);
+        expect(wrapper.text()).toContain('Existing field guidance');
+        expect(document.activeElement).toBe(control);
+        expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it('never discovers or claims an unbound custom control slot', async () => {
+        const pending = ref(false);
+        const host = defineComponent({components: {FormField},
+            setup() { return {pending}; },
+            template: '<FormField id="unbound-control" label="Distinct control" :pending="pending">'
+                + '<template #control><input id="unbound-control" :disabled="pending" /></template></FormField>',
+        });
+        const {wrapper} = await mounted(host);
+        const control = wrapper.get<HTMLInputElement>('input').element;
+        control.focus();
+        const focus = vi.spyOn(control, 'focus');
+        pending.value = true;
+        await flushPromises();
+        releaseDisabledFocus(control);
+        pending.value = false;
+        await flushPromises();
+        expect(control.disabled).toBe(false);
+        expect(document.activeElement).toBe(document.body);
+        expect(focus).not.toHaveBeenCalled();
+    });
+
+    it('releases the actual custom control ref when its slot replaces the pending field', async () => {
+        const pending = ref(false);
+        const generation = ref(0);
+        const host = defineComponent({components: {FormField},
+            setup() { return {pending, generation}; },
+            template: '<FormField id="replacement-control" label="Replaced control" :pending="pending">'
+                + '<template #control="{controlRef}"><input :ref="controlRef" :key="generation" '
+                + 'id="replacement-control" :disabled="pending" /></template></FormField>',
+        });
+        const {wrapper} = await mounted(host);
+        const control = wrapper.get<HTMLInputElement>('input').element;
+        control.focus();
+        const focus = vi.spyOn(control, 'focus');
+        pending.value = true;
+        await flushPromises();
+        releaseDisabledFocus(control);
+        generation.value++;
+        await flushPromises();
+        const replacement = wrapper.get<HTMLInputElement>('input').element;
+        expect(replacement).not.toBe(control);
+        expect(control.isConnected).toBe(false);
+        pending.value = false;
+        await flushPromises();
+        expect(replacement.disabled).toBe(false);
+        expect(document.activeElement).toBe(document.body);
+        expect(focus).not.toHaveBeenCalled();
+    });
+
+    it.each(['other-focus', 'identity', 'initializing', 'unmounted'] as const)(
+        'does not restore a form field after %s retires its pending focus', async retirement => {
+            const {wrapper, context} = await mounted(FormField, {id: 'retired-input', label: 'Retired field'});
+            const control = wrapper.get<HTMLInputElement>('input').element;
+            const other = document.createElement('button');
+            document.body.append(other);
+            control.focus();
+            const focus = vi.spyOn(control, 'focus');
+            await wrapper.setProps({pending: true, disabled: true});
+            releaseDisabledFocus(control);
+            if (retirement === 'other-focus') { other.focus(); other.blur(); }
+            else if (retirement === 'identity') context.epoch.value++;
+            else if (retirement === 'initializing') context.hydrated.value = false;
+            if (retirement === 'unmounted') wrapper.unmount();
+            else await wrapper.setProps({pending: false, disabled: false});
+            await flushPromises();
+            expect(document.activeElement).toBe(document.body);
+            expect(focus).not.toHaveBeenCalled();
+        },
+    );
 
     it('preserves escaped description lines and releases its separator with absent content', async () => {
         const {wrapper, request} = await mounted(EntityDescription, {

@@ -361,7 +361,9 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
         <form ref="form" :id="formId" novalidate @submit.prevent="save">
             <fieldset :disabled="disabled || busy || pending || refreshing || unknown || awaitingAuthority || lostAuthority"
                 :aria-busy="pending || refreshing || metadata.isFetching.value">
-                <slot :values="draft.values" :fields="fields" />
+                <!-- Enter belongs to this save, while reads and sibling settings
+                     retain their independent broader fieldset blocking policy. -->
+                <slot :values="draft.values" :fields="fields" :pending="pending" />
             </fieldset>
             <section v-if="draft.remote && !lostAuthority" class="border border-warning rounded p-3 mb-3">
                 <!-- A lost response requires review even when authority is unchanged. Describe

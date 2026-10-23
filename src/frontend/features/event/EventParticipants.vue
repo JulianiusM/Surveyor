@@ -29,6 +29,9 @@ const api = useEventApi(context);
 const id = useId();
 const open = ref(false);
 const filter = ref('');
+// Removal uses a saved row; the separate date dialog and other roster controls
+// retain their existing availability without inheriting its pending focus claim.
+const removingId = ref<string | null>(null);
 // Read-only notes retain selection only. Their displayed values always come
 // from the current admitted roster, independently of the local search filter.
 const detailsSelection = ref<DetailsSelection | null>(null);
@@ -42,7 +45,7 @@ const available = useActionState({eligible: mayUseSection, blocked: () => comman
 const management = useActionState({eligible: () => !!props.manageRegistrations && mayUseSection(),
     blocked: () => command.action.disabled.value});
 const refreshAction = useActionState({eligible: () => section.readAction.isAvailable(),
-    blocked: () => command.recoveryAction.disabled.value, pending: () => section.query.isFetching.value});
+    blocked: () => command.recoveryAction.disabled.value, pending: () => section.query.isFetching.value || command.recovering.value});
 const rows = computed(filteredRows);
 const dateTotals = computed(() => (section.data.value?.dateTotals ?? []).map(total => ({key: total.date, count: total.count})));
 const hasSummary = computed(() => !!section.data.value?.allergies.length || !!section.data.value?.comments.length);
@@ -170,8 +173,11 @@ async function removeRegistration(row: Participant): Promise<void> {
     if (!management.isAvailable()) return;
     if (!window.confirm(messages.value.t('event.organizer.deleteRegistrationConfirm'))) return;
     // Freeze this row's identity before I/O, independently of later query updates.
-    await command.run(scope => api.removeRegistration(props.eventId, row.id, scope), true, false,
-        {success: 'event.organizer.registrationDeleted'});
+    removingId.value = row.id;
+    try {
+        await command.run(scope => api.removeRegistration(props.eventId, row.id, scope), true, false,
+            {success: 'event.organizer.registrationDeleted'});
+    } finally { removingId.value = null; }
 }
 
 /** Clipboard delivery never submits a registration command or changes its row. */
@@ -283,8 +289,10 @@ async function refresh(): Promise<void> {
                                                         :state="management" @click="editDates(row)"><i class="bi bi-calendar2-week" aria-hidden="true"></i> {{ messages.t('event.organizer.editDates') }}</ActionButton>
                                                     <ActionButton v-if="row.email" variant="outline-light"
                                                         :state="available" :disabled="clipboard.pending.has(row.id)"
+                                                        :pending="clipboard.pending.has(row.id)" :show-spinner="false"
                                                         @click="copyEmail(row)"><i class="bi bi-clipboard" aria-hidden="true"></i> {{ messages.t('event.organizer.copyEmail') }}</ActionButton>
                                                     <ActionButton v-if="manageRegistrations" variant="outline-danger"
+                                                        :pending="command.pending.value && removingId === row.id" :show-spinner="false"
                                                         :state="management" @click="removeRegistration(row)"><i class="bi bi-trash" aria-hidden="true"></i> {{ messages.t('event.organizer.deleteRegistration') }}</ActionButton>
                                                 </div>
                                             </td>
@@ -336,17 +344,19 @@ async function refresh(): Promise<void> {
             </div>
             <form :id="`${id}-date-form`" @submit.prevent="saveDates">
                 <FormField :id="`${id}-arrival`" class="mb-3" :label="messages.t('event.organizer.arrival')"
-                    label-class="" required :required-marker="false">
-                    <template #control>
-                        <input :id="`${id}-arrival`" v-model="edit.arrivalDate" class="form-control text-bg-dark"
+                    label-class="" required :required-marker="false"
+                    :pending="command.pending.value && !removingId">
+                    <template #control="{controlRef}">
+                        <input :id="`${id}-arrival`" :ref="controlRef" v-model="edit.arrivalDate" class="form-control text-bg-dark"
                             type="date" name="arrivalDate" required :min="startDate" :max="endDate"
                             :disabled="management.disabled.value" />
                     </template>
                 </FormField>
                 <FormField :id="`${id}-departure`" class="mb-0" :label="messages.t('event.organizer.departure')"
-                    label-class="" required :required-marker="false">
-                    <template #control>
-                        <input :id="`${id}-departure`" v-model="edit.departureDate" class="form-control text-bg-dark"
+                    label-class="" required :required-marker="false"
+                    :pending="command.pending.value && !removingId">
+                    <template #control="{controlRef}">
+                        <input :id="`${id}-departure`" :ref="controlRef" v-model="edit.departureDate" class="form-control text-bg-dark"
                             type="date" name="departureDate" required :min="startDate" :max="endDate"
                             :disabled="management.disabled.value" />
                     </template>
@@ -357,7 +367,8 @@ async function refresh(): Promise<void> {
                 <div class="d-flex gap-2">
                     <ActionButton variant="outline-secondary"
                         :disabled="command.pending.value || command.recovering.value" @click="closeDates">{{ messages.t('common.cancel') }}</ActionButton>
-                    <ActionButton type="submit" :form="`${id}-date-form`" :state="management"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.saveDates') }}</ActionButton>
+                    <ActionButton type="submit" :form="`${id}-date-form`" :state="management"
+                        :pending="command.pending.value && !removingId" :show-spinner="false"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.saveDates') }}</ActionButton>
                 </div>
             </template>
         </AppDialog>

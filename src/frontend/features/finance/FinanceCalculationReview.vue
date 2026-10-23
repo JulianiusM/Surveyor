@@ -138,7 +138,10 @@ function close(): void {
             <CommandFeedback :feedback="command.feedback" part="uncertain"
                              :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="inspectSaved">
                 <template #uncertain>
-                    <ActionButton v-if="inspected" variant="outline-warning" class="mt-2" :state="command.recoveryAction" @click="acknowledge">
+                    <!-- Acknowledgement is local review. A sibling saved-data
+                         read blocks it without giving it a pending focus claim. -->
+                    <ActionButton v-if="inspected" variant="outline-warning" class="mt-2"
+                        :disabled="command.recoveryAction.disabled.value" @click="acknowledge">
                         {{ messages.t('finance.reviewedSavedShares') }}
                     </ActionButton>
                 </template>
@@ -149,7 +152,8 @@ function close(): void {
                 <h3 class="fs-6">{{ messages.t('finance.savedSettlementTotals') }}</h3>
                 <p>{{ messages.t(pool.status === 'CLOSED' ? 'finance.closed' : pool.status === 'OPEN' ? 'finance.openForInvoices' : 'finance.organizerInvoicesOnly') }}</p>
                 <p v-if="pool.needsRecalculation" class="text-warning small">{{ messages.t('finance.recalculationRequired') }}</p>
-                <FinanceShares v-if="savedShares.length" :shares="savedShares" admin read-only @refresh="inspectSaved" />
+                <FinanceShares v-if="savedShares.length" :shares="savedShares" admin read-only
+                    :refreshing="command.recovering.value" @refresh="inspectSaved" />
                 <p v-else class="text-secondary small mb-0">{{ messages.t('finance.noParticipantSharesWereGenerated') }}</p>
             </section>
             <LoadingSkeleton v-if="previewing" variant="table" :columns="4" :rows="3" />

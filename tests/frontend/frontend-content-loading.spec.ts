@@ -405,6 +405,8 @@ describe('help and overview progressive content', () => {
         const {wrapper, context, request} = await mounted('/frontend-pilot', readRegion);
         const ownerView = wrapper.get('[data-collection="owner"][data-region="main"]');
         const participantView = wrapper.get('[data-collection="participant"][data-region="main"]');
+        const participantForm = participantView.get('form');
+        const participantRefresh = participantForm.get('button.ms-auto');
         const input = participantView.get<HTMLInputElement>('input[type="search"]');
         input.element.focus();
         expect(request).toHaveBeenCalledTimes(2);
@@ -428,9 +430,16 @@ describe('help and overview progressive content', () => {
         expect(participantView.find('[data-loading-skeleton]').exists()).toBe(false);
         expect(participantView.text()).toContain(context.messages.value.t('overview.emptyParticipant'));
         expect(wrapper.findAll('.accordion-button .badge').map(badge => badge.text())).toEqual(['0', '1']);
-        // Initial authority now confirms the native empty region. This untouched
-        // field is no local draft; its toolbar disappears only after its own read.
-        expect(participantView.find('form').exists()).toBe(false);
+        // Empty authority releases only untouched search/filter/count controls.
+        // The same form and Refresh remain mounted so future reads do not replace
+        // that control or remove deliberate recovery from an empty collection.
+        expect(participantView.get('form').element).toBe(participantForm.element);
+        expect(participantForm.get('button').element).toBe(participantRefresh.element);
+        expect(participantForm.findAll('button')).toHaveLength(1);
+        expect(participantRefresh.text()).toBe(context.messages.value.t('common.refresh'));
+        expect(participantRefresh.attributes('disabled')).toBeUndefined();
+        expect(participantForm.find('input[type="search"],[aria-live="polite"]').exists()).toBe(false);
+        expect(participantForm.text()).not.toContain(context.messages.value.t('overview.filter'));
         expect(input.element.isConnected).toBe(false);
         expect(ownerView.find('form').exists()).toBe(true);
     });

@@ -4,10 +4,10 @@ documentation-metadata
 audience: maintainers; API developers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-20
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Original decimal-string money/factor/identifier choices restored with explicitly preserved accepted command precision; P0-P8 shared operations, native isolation and later-phase exclusions retained; actual execution belongs to paired review
-source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/controller/activityController.ts; src/modules/activity/; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
+verification-scope: Implemented P0-P10 contract guidance reconciled, including P9 calculation/settlement/output ownership; original decimal-string precision decisions, native isolation and separate cutover authority retained; execution belongs to paired review
+source-anchors: contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/; src/controller/packingController.ts; src/controller/activityController.ts; src/controller/eventPoolController.ts; src/modules/activity/; src/routes/api/v1/; src/frontend/app/transport.ts; src/frontend/features/; src/types/; tests/integration/packing-public-actions.spec.ts; tests/integration/packing-coexistence.spec.ts; tests/integration/finance-api.spec.ts; tests/e2e/frontend-pilot-api.spec.ts; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md
 next-review: next-contract-migration-or-authorized-cutover
 -->
 
@@ -70,6 +70,17 @@ self-payer boundaries. The organizer projection includes current settings, assig
 coverage choices disclose only the assigned names/contact details already available in the native eligible OPEN-pool
 chooser; top-level organizer rosters, unrelated pools and other participants' invoice details stay private.
 Current coverage inputs remain separate from the saved applied roster and pending closed-pool groups.
+
+The [P9 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p9-implementation-trigger-2026-10-22) subsequently
+implemented fresh calculation previews, first closure/recalculation, saved-input rollback, signed saved-share
+settlement and settlement notifications through the existing EventPool controller and invoice domain/DBAL owners.
+The browser submits the exact reviewed preview revision; a stale calculation requires a deliberate new review.
+Rollback restores pool-local inputs while retaining saved shares/transfers and external attendance/invoice changes.
+Settlement records or reverses the complete saved payment/refund status without a browser calculation engine.
+Notification receipts count queued recipients, not successful external delivery. Existing native PDF exports retain
+their authorized document boundary, both variants and the complete saved ledger independently of display filters.
+The [P10 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p10-implementation-trigger-2026-10-23) integrates
+existing generated feature operations and Overview projections across the application; it adds no parallel backend.
 
 Help has one canonical release-owned tree: native English at `docs/user-guide/`, with pilot language corpora in its
 catalog-selected directories such as `en/` and `de/`. Staged maintainer documents are never runtime sources.
@@ -285,8 +296,10 @@ operation. That owner retains recorder attribution, membership, proof-type and r
 JSON review/allocation commands use the same prepared acknowledgement boundary without postcommit admission.
 Existing precommit revision/lifecycle conflicts remain definite rejections; a successful shared write followed by
 lost delivery remains uncertain, without replay or speculative rollback. Confirmed writes remain saved through a
-failed follow-up read. P9 calculation, settlement and notification commands and separately authorized cutover remain
-outside this implementation.
+failed follow-up read. P9 calculation, settlement, rollback and notification consumers retain this reconcile-only
+boundary around their existing business operations. They do not add replay, stronger legacy completion guarantees,
+principal-language persistence or full email/PDF localization. Default-route cutover, native retirement,
+production-guide publication and deployment remain separately authorized actions.
 
 ## Coexistence, rollout, and verification
 

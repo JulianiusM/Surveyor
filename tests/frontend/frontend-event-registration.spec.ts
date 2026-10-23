@@ -23,6 +23,33 @@ async function enterDates(wrapper: Awaited<ReturnType<typeof mountFrontendEvent>
 }
 
 describe('Event participant registration', () => {
+    it.each(['save', 'cancel'] as const)('marks only registration %s pending while the shared command blocks both controls', async kind => {
+        const event = createFrontendEventView({requireDietaryInfo: false, registration: {id: '17', arrivalDate: '2027-06-01',
+            departureDate: '2027-06-03', dietary: [], allergyNotes: '', dietComment: ''}});
+        let settle!: (response: Response) => void;
+        const mounted = await mountFrontendEvent(EventRegistration, async () => new Promise<Response>(resolve => { settle = resolve; }),
+            {event, refresh: async () => {}});
+        cleanups.push(mounted.dispose);
+        const save = button(mounted.wrapper, 'Update');
+        const cancel = button(mounted.wrapper, 'Cancel registration');
+        const initiator = kind === 'save' ? save : cancel;
+        const sibling = kind === 'save' ? cancel : save;
+        if (kind === 'save') await mounted.wrapper.get('form').trigger('submit');
+        else await cancel.trigger('click');
+        await flushPromises();
+        try {
+            expect(initiator.attributes('disabled')).toBeDefined();
+            expect(sibling.attributes('disabled')).toBeDefined();
+            expect(initiator.attributes('aria-busy')).toBe('true');
+            expect(sibling.attributes('aria-busy')).toBe('false');
+            expect(initiator.find('.spinner-border').exists()).toBe(true);
+            expect(sibling.find('.spinner-border').exists()).toBe(false);
+        } finally {
+            settle(json({changed: true}));
+            await flushPromises();
+        }
+    });
+
     it('retranslates saved attendance without replacing the independent date draft', async () => {
         vi.stubEnv('TZ', 'America/Los_Angeles');
         const event = createFrontendEventView({registration: {id: '17', arrivalDate: '2027-06-01',

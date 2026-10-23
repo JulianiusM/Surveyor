@@ -2,6 +2,8 @@
 import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue';
 import {usePilot} from '../app/context';
 import {useDraftProtection} from '../composables/command';
+import {usePendingFocus} from '../composables/pendingFocus';
+import ActionButton from './ActionButton.vue';
 
 const props = withDefaults(defineProps<{
     value: string | number | null;
@@ -38,6 +40,10 @@ const original = ref('');
 const editableOriginal = ref('');
 const token = ref('');
 const pending = ref(false);
+// Enter/Ctrl+Enter can disable the focused editor before a rejected save retains
+// its draft. Reuse the action focus lifetime instead of copying DOM recovery;
+// ordinary blur saves and successful removal acquire no replacement focus.
+usePendingFocus({element: input, pending, isAvailable: isEditorAvailable});
 const remoteChanged = computed(() => editing.value && String(props.value ?? '') !== original.value);
 const dirty = computed(() => editing.value && local.value.trim() !== editableOriginal.value);
 watch(() => props.token, latest => {
@@ -60,6 +66,12 @@ watch(
         if (!allowed && !pending.value && !dirty.value) cancel();
     },
 );
+
+/** A retained readable conflict can stay focused for review, but field/write
+ * admission loss and initialization never authorize a deferred focus claim. */
+function isEditorAvailable(): boolean {
+    return editing.value && props.editable && props.writeAdmission && !props.disabled && context.hydrated.value;
+}
 
 /** Capture the displayed value and comparison token once on editor entry.
  * Display permission remains distinct from command admission; the original
@@ -164,24 +176,24 @@ defineExpose({begin});
                 @keydown.enter.prevent="commit"
                 @keydown.esc.prevent="cancel"
             />
-            <button v-if="!editable && !remoteChanged" type="button"
-                class="btn btn-sm btn-outline-secondary mt-1" :disabled="pending || disabled" @click="cancel">
+            <ActionButton v-if="!editable && !remoteChanged"
+                class="btn-sm mt-1" variant="outline-secondary" :disabled="pending || disabled" @click="cancel">
                 {{ messages.t('common.cancel') }}
-            </button>
+            </ActionButton>
             <div v-if="remoteChanged" class="pilot-inline-conflict small text-warning mt-1">
                 {{ messages.t('draft.readConflict') }}
                 <div>{{ messages.t('draft.conflictValue', {value: String(value ?? '')}) }}</div>
-                <button
-                    type="button"
-                    class="btn btn-sm btn-outline-warning"
+                <ActionButton
+                    class="btn-sm"
+                    variant="outline-warning"
                     @mousedown.prevent
                     @click="review"
                 >
                     {{ messages.t('draft.review') }}
-                </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @click="cancel">
+                </ActionButton>
+                <ActionButton class="btn-sm ms-1" variant="outline-secondary" @click="cancel">
                     {{ messages.t('common.cancel') }}
-                </button>
+                </ActionButton>
             </div>
         </template>
         <slot v-else>{{ value }}</slot>

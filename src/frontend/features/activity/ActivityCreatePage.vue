@@ -108,7 +108,7 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
         resource-param="planId"
         description-name="description"
         header-name="headerImg">
-        <template #root-fields="{title, updateTitle, disabled}">
+        <template #root-fields="{title, updateTitle, disabled, pending}">
             <!-- The shared fieldset contains the row's negative gutter margin.
             Keep native form-relative top spacing without moving other consumers. -->
             <div class="row g-3 mb-3 mt-0">
@@ -122,7 +122,7 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
                     required
                     :disabled="disabled"
                     @update:model-value="updateTitle"
-                />
+                    :pending="pending" />
                 <FormField
                     id="startDate"
                     v-model="startDate"
@@ -133,7 +133,7 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
                     label-class=""
                     required
                     :disabled="disabled"
-                />
+                    :pending="pending" />
                 <FormField
                     id="endDate"
                     v-model="endDate"
@@ -144,10 +144,10 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
                     label-class=""
                     required
                     :disabled="disabled"
-                />
+                    :pending="pending" />
             </div>
         </template>
-        <template #default="{disabled}">
+        <template #default="{disabled, pending}">
             <hr />
             <div id="slotArea">
                 <div v-for="week in weeks" :key="week[0]" class="table-responsive mb-4">
@@ -175,19 +175,24 @@ const source: FrontendListCreationSource<components['schemas']['ActivityDuplicat
                                             :data-slot-id="slot.id">
                                             <FormField :id="'initial-slot-' + slot.id + '-title'" v-model="slot.title" :name="null"
                                                 :label="messages.t('packing.title')" label-class="small mb-0" control-class="form-control-sm"
-                                                :placeholder="messages.t('packing.title')" required :disabled="disabled" />
+                                                :placeholder="messages.t('packing.title')" required :disabled="disabled"
+                                                :pending="pending" />
                                             <FormField :id="'initial-slot-' + slot.id + '-description'" v-model="slot.description" :name="null"
                                                 :label="messages.t('packing.description')" label-class="small mb-0" control-class="form-control-sm"
-                                                :placeholder="messages.t('packing.description')" :disabled="disabled" />
+                                                :placeholder="messages.t('packing.description')" :disabled="disabled"
+                                                :pending="pending" />
                                             <FormField :id="'initial-slot-' + slot.id + '-start'" v-model="slot.startTime" :name="null" type="time"
                                                 :label="messages.t('activity.startTime')" label-class="small mb-0" control-class="form-control-sm"
-                                                :placeholder="messages.t('activity.startTime')" :disabled="disabled" />
+                                                :placeholder="messages.t('activity.startTime')" :disabled="disabled"
+                                                :pending="pending" />
                                             <FormField :id="'initial-slot-' + slot.id + '-end'" v-model="slot.endTime" :name="null" type="time"
                                                 :label="messages.t('activity.endTime')" label-class="small mb-0" control-class="form-control-sm"
-                                                :placeholder="messages.t('activity.endTime')" :disabled="disabled" />
+                                                :placeholder="messages.t('activity.endTime')" :disabled="disabled"
+                                                :pending="pending" />
                                             <FormField :id="'initial-slot-' + slot.id + '-capacity'" v-model="slot.maxAssignees" :name="null"
                                                 type="number" lexical-number :min="1" :label="messages.t('activity.maxParticipants')"
-                                                label-class="small mb-0" control-class="form-control-sm" :disabled="disabled" />
+                                                label-class="small mb-0" control-class="form-control-sm" :disabled="disabled"
+                                                :pending="pending" />
                                             <ActionButton
                                                 type="button"
                                                 class="btn-sm align-self-end" variant="outline-danger"

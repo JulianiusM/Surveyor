@@ -427,6 +427,51 @@ describe('Activity production frontend consumers', () => {
         expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
     });
 
+    it('retains the failed role-creation suggestion focus without marking slot Save pending or changing its styling', async () => {
+        let settle!: (response: Response) => void;
+        const {wrapper, request} = await mounted(ActivityPage, async input => {
+            if (input.method === 'GET') return json(view);
+            return new Promise<Response>(resolve => { settle = resolve; });
+        });
+        await wrapper.get('[data-slot-edit]').trigger('click');
+        await flushPromises();
+        const search = document.querySelector<HTMLInputElement>('#slotEditorRoleInput')!;
+        search.value = 'New role';
+        search.dispatchEvent(new Event('input', {bubbles: true}));
+        await flushPromises();
+        const create = document.querySelector<HTMLButtonElement>('#slotEditorRoleSuggestions button')!;
+        const save = document.querySelector<HTMLButtonElement>('#slotEditorSave')!;
+        create.focus();
+        create.click();
+        await flushPromises();
+        expect(create.disabled).toBe(true);
+        expect(create.getAttribute('aria-busy')).toBe('true');
+        expect(create.classList.contains('list-group-item-action')).toBe(true);
+        expect(create.classList.contains('btn')).toBe(false);
+        expect(create.querySelector('.spinner-border')).toBeNull();
+        expect(save.disabled).toBe(true);
+        expect(save.getAttribute('aria-busy')).toBe('false');
+
+        // happy-dom does not perform Chromium's native disabled-button blur.
+        // Simulate that boundary here; integrated Reload E2E verifies the real
+        // browser mechanics against the built backend and persisted data.
+        document.body.tabIndex = -1;
+        document.body.focus();
+        document.body.removeAttribute('tabindex');
+        expect(document.activeElement).toBe(document.body);
+        settle(new Response(JSON.stringify({type: 'about:blank', title: 'Validation failed', status: 400,
+            detail: 'Role creation was rejected.', requestId: 'fixture', code: 'VALIDATION_FAILED',
+            messageKey: 'api:errors.VALIDATION_FAILED', params: {}}),
+        {status: 400, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context}}));
+        await flushPromises();
+        expect(create.isConnected).toBe(true);
+        expect(create.disabled).toBe(false);
+        expect(create.getAttribute('aria-busy')).toBe('false');
+        expect(document.activeElement).toBe(create);
+        expect(search.value).toBe('New role');
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'POST')).toHaveLength(1);
+    });
+
     it('keeps the native default of one when optional new-slot capacity is blank', async () => {
         let submitted: unknown;
         const {wrapper} = await mounted(ActivityPage, async request => {

@@ -43,16 +43,20 @@ afterEach(() => {
  * Only HTTP is substituted; persistence and real browser delivery belong to application E2E. */
 async function mounted(workflow: FrontendProfileWorkflow | undefined,
                        path = '/frontend-pilot/users/profile/migrate/show',
-                       read: typeof fetch = rejectUnexpectedRequest) {
+                       read: typeof fetch = rejectUnexpectedRequest,
+                       readAdmission?: (request: Request) => Promise<Response>) {
     const request = vi.fn(function deliverWorkflowRequest(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
         const received = input as Request;
         const pathname = new URL(received.url).pathname;
         // These shared reads contain no capability or private preview. Keep their
         // actor header tied to the captured request after an explicit retirement.
         if (pathname === '/api/v1/session' && read === rejectUnexpectedRequest) return Promise.resolve(json(session));
-        if (pathname === '/api/v1/profiles/workflow-entry')
-            return Promise.resolve(json({entry: {kind: 'render'}}, 200,
+        if (pathname === '/api/v1/profiles/workflow-entry') {
+            // A focused lifecycle case may hold this genuine production-client
+            // read separately from session verification; other cases stay immediate.
+            return readAdmission ? readAdmission(received) : Promise.resolve(json({entry: {kind: 'render'}}, 200,
                 received.headers.get('X-Surveyor-Context') ?? session.context));
+        }
         if (pathname === '/api/v1/profiles/entry') return Promise.resolve(json({kind: 'render'}));
         return read(input, init);
     });
@@ -165,6 +169,80 @@ async function guardedWorkflow() {
 }
 
 describe('SPA profile workflows', () => {
+    it('keeps token submission blocked while authority Refresh awaits its entry read after session verification', async function holdsWorkflowAuthority() {
+        let finishAdmission!: (response: Response) => void;
+        const admissionResponse = new Promise<Response>(resolve => { finishAdmission = resolve; });
+        const {host, context, request} = await mounted({kind: 'token', token: ''},
+            '/frontend-pilot/users/profile/migrate/request', async function verifySession(input) {
+                expect(new URL((input as Request).url).pathname).toBe('/api/v1/session');
+                return json(session);
+            }, async function holdAuthorityAdmission(received) {
+                expect(received.method).toBe('GET');
+                return admissionResponse;
+            });
+        const refresh = host.querySelector<HTMLButtonElement>('button[aria-label="Refresh"]')!;
+        const issueToken = Array.from(host.querySelectorAll<HTMLButtonElement>('main button'))
+            .find(button => text(button) === context.messages.value.t('profile.showMigrationToken'))!;
+        refresh.click();
+        await flushPromises();
+        try {
+            // Session verification has restored ordinary read eligibility, but
+            // the existing recovery lease still awaits its own fresh entry read.
+            expect(context.mayRead()).toBe(true);
+            expect(refresh.disabled).toBe(true);
+            expect(refresh.getAttribute('aria-busy')).toBe('true');
+            expect(issueToken.disabled).toBe(true);
+            expect(issueToken.getAttribute('aria-busy')).toBe('false');
+            expect(issueToken.querySelector('.spinner-border')).toBeNull();
+            issueToken.click();
+            await flushPromises();
+            expect(request.mock.calls.map(([input]) => (input as Request).method)).toEqual(['GET', 'GET']);
+        } finally {
+            finishAdmission(json({entry: {kind: 'render'}}));
+            await flushPromises();
+        }
+        expect(refresh.disabled).toBe(false);
+        expect(refresh.getAttribute('aria-busy')).toBe('false');
+        expect(issueToken.disabled).toBe(false);
+        expectPrivateCache(context);
+    });
+
+    it('blocks authority Refresh without making it busy while the token command is pending', async function separatesWorkflowRefresh() {
+        let finishToken!: (response: Response) => void;
+        const response = new Promise<Response>(resolve => { finishToken = resolve; });
+        const {host, context, request} = await mounted({kind: 'token', token: ''},
+            '/frontend-pilot/users/profile/migrate/request', async function holdTokenCommand(input) {
+                const received = input as Request;
+                expect(received.method).toBe('POST');
+                expect(new URL(received.url).pathname).toBe('/api/v1/profiles/migration/token');
+                return response;
+            });
+        const refresh = host.querySelector<HTMLButtonElement>('button[aria-label="Refresh"]')!;
+        const issueToken = Array.from(host.querySelectorAll<HTMLButtonElement>('main button'))
+            .find(button => text(button) === context.messages.value.t('profile.showMigrationToken'))!;
+        issueToken.click();
+        await flushPromises();
+        try {
+            // Both controls share admission, but only this explicit token command
+            // owns progress. Refresh cannot dispatch or borrow its busy/focus state.
+            expect(issueToken.disabled).toBe(true);
+            expect(issueToken.getAttribute('aria-busy')).toBe('true');
+            expect(issueToken.querySelector('.spinner-border')).not.toBeNull();
+            expect(refresh.disabled).toBe(true);
+            expect(refresh.getAttribute('aria-busy')).toBe('false');
+            expect(refresh.querySelector('.spinner-border')).toBeNull();
+            refresh.click();
+            await flushPromises();
+            expect(request).toHaveBeenCalledOnce();
+        } finally {
+            finishToken(json({token}));
+            await flushPromises();
+        }
+        expect(host.querySelector('h3')?.textContent).toBe(token);
+        expect(refresh.disabled).toBe(false);
+        expectPrivateCache(context);
+    });
+
     it.each([
         {kind: 'entry', path: 'profile/migrate/show', field: 'token'},
         {kind: 'deactivate', path: 'profile/delete', field: 'name'},

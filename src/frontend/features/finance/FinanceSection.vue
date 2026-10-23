@@ -55,12 +55,18 @@ const review = ref<{invoice: Invoice; action: 'approve' | 'decline' | 'revise' |
 const settlement = ref<Share | null>(null);
 const settlementPending = ref(false);
 const refreshVersion = ref(0);
+// One shared section read serves all ledgers. Retain only its initiating display
+// key so a neighboring Refresh/Close button cannot claim the user's focus.
+const refreshingControl = ref<string | null>(null);
+const closingInvoiceId = ref<string | null>(null);
 const key = computed(() => [...eventKeys.finance(context.session.value?.context, props.eventId, props.admin), locale.value]);
 const section = useEventSection(key, readFinance, computed(() => props.enabled), computed(() => open.value), retainLocaleSnapshot);
 const selection = computed(() => section.data.value?.shares.find(share => share.id === selectedShareId.value) ?? null);
 const command = useCommand(section.refresh, false, {dirty: () => false, unknownMessage: 'draft.leaveUnknown'});
 const refreshAction = useActionState({eligible: () => section.readAction.isAvailable(),
-    blocked: () => command.recoveryAction.disabled.value, pending: () => section.query.isFetching.value || command.recovering.value});
+    blocked: () => command.recoveryAction.disabled.value || refreshingControl.value !== null,
+    pending: () => refreshingControl.value === 'section'
+        || (refreshingControl.value === null && (section.query.isFetching.value || command.recovering.value))});
 const available = useActionState({eligible: () => props.enabled && section.current.value,
     blocked: () => command.action.disabled.value});
 watch([() => props.eventId, () => props.admin, context.epoch, () => context.session.value?.context], retireLocalState);
@@ -157,20 +163,32 @@ async function closeInvoice(invoice: Invoice): Promise<void> {
     });
     if (!window.confirm(`${subject}\n${question}`)) return;
     // Capture this admitted row before the asynchronous request and saved refresh.
-    await command.run(scope => api.close(props.eventId, invoice.poolId, invoice.id, scope),
-        true, false, {success: 'finance.invoiceClosed'});
+    closingInvoiceId.value = invoice.id;
+    try {
+        await command.run(scope => api.close(props.eventId, invoice.poolId, invoice.id, scope),
+            true, false, {success: 'finance.invoiceClosed'});
+    } finally { closingInvoiceId.value = null; }
 }
-async function refresh(): Promise<void> {
+/** Refresh saved ledgers for one deliberate initiating surface. Command recovery
+ * and breakdown delivery finish before that surface releases its pending state. */
+async function refresh(source = 'section'): Promise<void> {
     if (!refreshAction.isAvailable()) return;
-    await command.reconcileSafely(async () => {
-        await section.refresh();
-        // Explicit Refresh adopts current ledger ordering/status filters.
-        // Routine command reads leave the action row in its original position.
-        refreshVersion.value++;
-        // A displayed saved explanation participates in this section's explicit
-        // refresh, while collapsed/unselected rows stay genuinely lazy.
-        await breakdown.value?.refresh();
-    });
+    // Keep only this display key; the existing read/command owners still capture
+    // actor authority and distinguish confirmed saves from uncertain writes.
+    refreshingControl.value = source;
+    try {
+        await command.reconcileSafely(readSavedLedgers);
+    } finally { refreshingControl.value = null; }
+}
+
+/** One explicit section read updates every saved ledger without replaying its
+ * commands. A visible breakdown participates; unselected rows remain lazy. */
+async function readSavedLedgers(): Promise<void> {
+    await section.refresh();
+    // Explicit Refresh adopts current ledger ordering/status filters. Routine
+    // command reads leave the action row in its original position.
+    refreshVersion.value++;
+    await breakdown.value?.refresh();
 }
 function revealHistory(): void { submissionOpen.value = true; }
 </script>
@@ -183,7 +201,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                 :feedback="command.feedback"
                 part="uncertain"
                 :action="{state: refreshAction, label: messages.t('common.refresh')}"
-                @action="refresh"
+                @action="refresh()"
             />
         </div>
         <div class="accordion-item bg-dark text-white border-secondary-subtle">
@@ -203,7 +221,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                         :retry-at="section.retryAt.value"
                         :last-updated-at="section.updatedAt.value"
                         :action="{state: refreshAction, label: messages.t('common.refresh')}"
-                        @action="refresh"
+                        @action="refresh()"
                     >
                         {{ section.failure.value }}
                     </StatusNotice>
@@ -335,8 +353,9 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                 :invoices="section.data.value.invoices.filter(invoice => invoice.poolId === pool.id)"
                                                 admin
                                                 :disabled="refreshAction.disabled.value"
+                                                :refreshing="refreshingControl === 'history:' + pool.id"
                                                 @review="beginReview"
-                                                @refresh="refresh"
+                                                @refresh="refresh('history:' + pool.id)"
                                             />
                                             <FinanceShares
                                                 v-if="pool.status === 'CLOSED'"
@@ -345,10 +364,11 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                 settlement
                                                 :pending-share-id="settlementPending ? settlement?.id : null"
                                                 :refresh-version="refreshVersion"
+                                                :refreshing="refreshingControl === 'shares:' + pool.id"
                                                 :disabled="available.disabled.value"
                                                 @inspect="inspect"
                                                 @settle="beginSettlement"
-                                                @refresh="refresh"
+                                                @refresh="refresh('shares:' + pool.id)"
                                             />
                                             <FinancePoolOutputs :event-id="eventId" :pool="pool" :active="available.available.value"
                                                                 :shares="section.data.value.shares.filter(share => share.poolId === pool.id)"
@@ -404,9 +424,11 @@ function revealHistory(): void { submissionOpen.value = true; }
                                             <FinanceHistory
                                                 :invoices="section.data.value.invoices"
                                                 :disabled="available.disabled.value"
+                                                :closing-invoice-id="command.pending.value ? closingInvoiceId : null"
+                                                :refreshing="refreshingControl === 'history'"
                                                 @retract="beginRetraction"
                                                 @close-invoice="closeInvoice"
-                                                @refresh="refresh"
+                                                @refresh="refresh('history')"
                                             />
                                         </div>
                                     </div>
@@ -445,8 +467,9 @@ function revealHistory(): void { submissionOpen.value = true; }
                                 :pools="section.data.value.pools"
                                 :disabled="available.disabled.value"
                                 :refresh-version="refreshVersion"
+                                :refreshing="refreshingControl === 'shares'"
                                 @inspect="inspect"
-                                @refresh="refresh"
+                                @refresh="refresh('shares')"
                             />
                         </template>
                     </template>
@@ -487,7 +510,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                 :feedback="command.feedback"
                 part="uncertain"
                 :action="{state: refreshAction, label: messages.t('common.refresh')}"
-                @action="refresh"
+                @action="refresh()"
             />
             <p class="fw-semibold">
                 {{ messages.t('finance.countedInvoiceDetails', {invoiceId: retraction.id, amount: financeMoney(retraction.amount, locale)}) }}
@@ -504,7 +527,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                 >
                     {{ messages.t('common.cancel') }}
                 </ActionButton>
-                <ActionButton variant="danger" :state="available" @click="retract">{{ messages.t('finance.confirmRetraction') }}</ActionButton>
+                <ActionButton variant="danger" :state="available" :pending="command.pending.value" :show-spinner="false" @click="retract">{{ messages.t('finance.confirmRetraction') }}</ActionButton>
             </template>
         </AppDialog>
     </section>

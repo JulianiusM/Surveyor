@@ -49,7 +49,8 @@ async function refresh(): Promise<void> {
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'assignments')">{{ messages.t('finance.participantsFactors') }}</ActionButton>
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'adjustments')">{{ messages.t('finance.surchargesRebates') }}</ActionButton>
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'takeovers')">{{ messages.t('finance.manageTakeovers2') }}</ActionButton>
-            <ActionButton v-if="pool.status !== 'CLOSED'" variant="outline-warning" class="btn-sm" :state="action" @click="changeSubmissionState">
+            <ActionButton v-if="pool.status !== 'CLOSED'" variant="outline-warning" class="btn-sm" :state="action"
+                :pending="command.pending.value" :show-spinner="false" @click="changeSubmissionState">
                 {{ messages.t(pool.status === 'OPEN' ? 'finance.closeParticipantInvoices' : 'finance.openParticipantInvoices') }}
             </ActionButton>
         </div>

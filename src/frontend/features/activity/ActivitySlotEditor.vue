@@ -4,6 +4,7 @@ import type {components} from '../../../types/api/v1';
 import type {ActivitySlotDraft} from '../../../types/FrontendActivityTypes';
 import {usePilot} from '../../app/context';
 import {useCommand} from '../../composables/command';
+import {usePendingFocus} from '../../composables/pendingFocus';
 import {useActivityApi} from './api';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
@@ -28,6 +29,10 @@ const baseline = JSON.stringify(draft);
 const openingTimeRange = props.slot ? [draft.startTime, draft.endTime].filter(Boolean).join(' – ') : '';
 const token = ref(props.slot?.editToken ?? '');
 const search = ref('');
+// Role creation and slot Save use the same command owner. Only the control that
+// initiated that operation owns pending focus; suggestion styling stays native.
+const creatingRole = ref(false);
+const roleInput = ref<HTMLInputElement | null>(null);
 const capabilities = computed(() => props.slot?.capabilities ?? {editTitle: !draft.id, editDescription: !draft.id,
     editMeta: !draft.id, editCapacity: !draft.id, editRoles: !draft.id});
 // The opening field set belongs to this editor visit. A later grant loss must
@@ -41,9 +46,14 @@ const initialFocus = computed(() => capabilities.value.editTitle ? '#slotEditorT
 const conflict = computed(() => !!draft.id && (!props.slot || props.slot.editToken !== token.value));
 const command = useCommand(props.refresh, false, {dirty: () => JSON.stringify(draft) !== baseline, unknownMessage: 'draft.leaveUnknown'});
 const blocked = computed(() => props.disabled || command.action.disabled.value || permissionLost.value);
+// This native search has a separate Enter-to-create operation and deliberately
+// sits outside FormField's label/control layout. Register its explicit node with
+// the same focus owner without changing suggestions, key handling or draft data.
+usePendingFocus({element: roleInput, pending: creatingRole, isAvailable: isRoleInputAvailable});
 const suggestions = computed(() => search.value.trim() ? props.allRoles.filter(role => !draft.roles.includes(role.id)
     && (role.title + ' ' + (role.description ?? '')).toLowerCase().includes(search.value.trim().toLowerCase())).slice(0, 10) : []);
 function close(): void { if (command.mayLeave()) emit('close'); }
+function isRoleInputAvailable(): boolean { return context.hydrated.value && !blocked.value; }
 /** Selecting a known plan role changes only this slot's unsaved role set. */
 function chooseRole(id: string): void {
     if (blocked.value) return;
@@ -70,13 +80,16 @@ async function createRole(): Promise<void> {
         command.setError('activity.roleCreationDenied', 'transient');
         return;
     }
-    const result = await command.run(scope => api.createRole(props.planId, name, scope), true, true,
-        {success: 'common.added'});
-    // Read delivery supplies the persisted ID. Success without that projection
-    // stays visibly saved; it never invents a role ID from the search label.
-    await nextTick();
-    const created = props.allRoles.find(role => role.title.toLowerCase() === name.toLowerCase());
-    if (result && created) chooseRole(created.id);
+    creatingRole.value = true;
+    try {
+        const result = await command.run(scope => api.createRole(props.planId, name, scope), true, true,
+            {success: 'common.added'});
+        // Read delivery supplies the persisted ID. Success without that projection
+        // stays visibly saved; it never invents a role ID from the search label.
+        await nextTick();
+        const created = props.allRoles.find(role => role.title.toLowerCase() === name.toLowerCase());
+        if (result && created) chooseRole(created.id);
+    } finally { creatingRole.value = false; }
 }
 
 /** Submit only fields currently admitted to this editor. Each native operation
@@ -127,7 +140,7 @@ async function reviewUnknown(): Promise<void> {
                 :required-marker="false"
                 :disabled="blocked"
                 control-class="form-control-sm"
-            />
+                :pending="command.pending.value && !creatingRole" />
             <div v-if="openingCapabilities.editMeta" class="row g-3">
                 <FormField
                     id="slotEditorStartTime"
@@ -139,7 +152,7 @@ async function reviewUnknown(): Promise<void> {
                     label-class=""
                     :disabled="blocked"
                     control-class="form-control-sm"
-                />
+                    :pending="command.pending.value && !creatingRole" />
                 <FormField
                     id="slotEditorEndTime"
                     :name="null"
@@ -150,7 +163,7 @@ async function reviewUnknown(): Promise<void> {
                     label-class=""
                     :disabled="blocked"
                     control-class="form-control-sm"
-                />
+                    :pending="command.pending.value && !creatingRole" />
             </div>
             <FormField
                 v-if="openingCapabilities.editCapacity"
@@ -165,7 +178,7 @@ async function reviewUnknown(): Promise<void> {
                 label-class=""
                 :disabled="blocked"
                 control-class="form-control-sm"
-            />
+                :pending="command.pending.value && !creatingRole" />
             <FormField
                 v-if="openingCapabilities.editDescription"
                 id="slotEditorDescription"
@@ -178,7 +191,7 @@ async function reviewUnknown(): Promise<void> {
                 label-class=""
                 :disabled="blocked"
                 control-class="form-control-sm"
-            />
+                :pending="command.pending.value && !creatingRole" />
             <div v-if="openingCapabilities.editRoles" class="mb-3">
                 <label class="form-label" for="slotEditorRoleInput">{{ messages.t('activity.slotRoles') }}</label>
                 <div id="slotEditorRoleChips" class="border rounded p-2 minh-38">
@@ -203,6 +216,7 @@ async function reviewUnknown(): Promise<void> {
                     </span>
                     <input
                         id="slotEditorRoleInput"
+                        ref="roleInput"
                         v-model="search"
                         class="form-control form-control-sm text-bg-dark"
                         :placeholder="messages.t('activity.roleSearch')"
@@ -215,21 +229,23 @@ async function reviewUnknown(): Promise<void> {
                 <!-- Native suggestions remain clickable through blur and close only
                 after an explicit selection, cleared search or editor dismissal. -->
                 <div v-if="search.trim()" id="slotEditorRoleSuggestions" class="list-group mt-1">
-                    <button
+                    <ActionButton
                         v-for="role in suggestions"
                         :key="role.id"
                         type="button"
                         class="list-group-item list-group-item-action d-flex align-items-center justify-content-between text-bg-dark"
+                        unstyled
                         :disabled="blocked"
                         @click="chooseRole(role.id)">{{ messages.t('activity.addRole', {name: role.title}) }}<i class="bi bi-plus-circle" aria-hidden="true"></i>
-                    </button>
-                    <button
+                    </ActionButton>
+                    <ActionButton
                         v-if="!suggestions.length"
                         type="button"
                         class="list-group-item list-group-item-action d-flex align-items-center justify-content-between text-bg-dark"
+                        unstyled :pending="creatingRole" :show-spinner="false"
                         :disabled="blocked"
                         @click="createRole">{{ messages.t('activity.createRole', {name: search.trim()}) }}<i class="bi bi-magic" aria-hidden="true"></i>
-                    </button>
+                    </ActionButton>
                 </div>
             </div>
             <div class="small text-secondary">
@@ -259,6 +275,7 @@ async function reviewUnknown(): Promise<void> {
                 type="submit"
                 form="slotEditorForm"
                 class="btn-sm" variant="primary"
+                :pending="command.pending.value && !creatingRole" :show-spinner="false"
                 :disabled="blocked || conflict">{{ messages.t('common.save') }}</ActionButton>
         </template>
     </AppDialog>

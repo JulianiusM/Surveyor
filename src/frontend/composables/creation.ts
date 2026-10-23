@@ -17,6 +17,9 @@ export function useCreationCommand<Result>(options: PilotCreationOptions<Result>
     const destination = useConfirmedNavigation();
     const submitted = ref(false);
     const admittingSubmission = ref(false);
+    // Admission Retry and Create share their read fence, but only the initiating
+    // action owns pending presentation. Create spans its admission/write handoff.
+    const submissionPurpose = ref<'submission' | 'recovery' | null>(null);
     const leavingAfterSubmission = ref(false);
     const submissionAdmissionError = ref<Error | null>(null);
     const submissionAdmittedAt = ref<number>();
@@ -29,9 +32,12 @@ export function useCreationCommand<Result>(options: PilotCreationOptions<Result>
     });
     const blocked = computed(() => submitted.value || command.action.disabled.value
         || admittingSubmission.value || !submissionRetryAvailable.value);
-    const submissionRetryAction = useActionState({eligible: mayAdmitSubmission, pending: () => admittingSubmission.value});
-    const createAction = useActionState({eligible: mayCreate, pending: () => command.pending.value || admittingSubmission.value,
-        blocked: () => command.action.disabled.value});
+    const submissionRetryAction = useActionState({eligible: mayAdmitSubmission,
+        pending: () => admittingSubmission.value && submissionPurpose.value === 'recovery',
+        blocked: () => admittingSubmission.value});
+    const createAction = useActionState({eligible: mayCreate,
+        pending: () => command.pending.value || submissionPurpose.value === 'submission',
+        blocked: () => command.action.disabled.value || admittingSubmission.value});
 
     function mayAdmitSubmission(): boolean {
         return !submitted.value && context.mayRead() && submissionRetryAvailable.value;
@@ -74,8 +80,17 @@ export function useCreationCommand<Result>(options: PilotCreationOptions<Result>
         }
     }
 
+    /** Retry only the admission read. The retained draft still needs a separate
+     * deliberate Create, while sibling controls keep the same shared read fence. */
     async function retrySubmissionAdmission(): Promise<void> {
-        if (submissionRetryAction.isAvailable()) await admitSubmission('recovery');
+        if (!submissionRetryAction.isAvailable()) return;
+        // Presentation identifies this read without collecting or submitting.
+        submissionPurpose.value = 'recovery';
+        try {
+            await admitSubmission('recovery');
+        } finally {
+            submissionPurpose.value = null;
+        }
     }
 
     /** Collect after admission, send once, then transfer only the confirmed
@@ -83,21 +98,30 @@ export function useCreationCommand<Result>(options: PilotCreationOptions<Result>
     async function submit(collect: PilotCreationCollector<Result>): Promise<Result | undefined> {
         // Admission may redirect or wait for another actor. Collect the mounted
         // draft only after that check, using the current feature eligibility.
-        if (!createAction.isAvailable() || !(await admitSubmission('submission')) || !options.eligible()) return;
-        const operation = collect();
-        if (!operation) return;
-        const scope = context.capture();
-        const origin = route.fullPath;
+        if (!createAction.isAvailable()) return;
+        submissionPurpose.value = 'submission';
+        try {
+            if (!(await admitSubmission('submission')) || !options.eligible()) return;
+            const operation = collect();
+            if (!operation) return;
+            const scope = context.capture();
+            const origin = route.fullPath;
 
-        // Dispatch once for the captured actor. Confirmation remains final even
-        // when loading its destination fails; Retry must navigate without replay.
-        const result = await command.run(operation, false);
-        if (result) {
-            submitted.value = true;
-            await destination.navigate(options.destination(result), scope, origin,
-                {kind: 'success', messageKey: options.success});
+            // Dispatch once for the captured actor. The initiating presentation
+            // spans preflight and write, without adding another command lease.
+            const result = await command.run(operation, false);
+            submissionPurpose.value = null;
+            if (result) {
+                // Confirmation hands off to the existing destination receipt.
+                // Failed lazy delivery must not make Create available again.
+                submitted.value = true;
+                await destination.navigate(options.destination(result), scope, origin,
+                    {kind: 'success', messageKey: options.success});
+            }
+            return result;
+        } finally {
+            submissionPurpose.value = null;
         }
-        return result;
     }
 
     /** Call only after a committed feature-route/actor change. A canceled route

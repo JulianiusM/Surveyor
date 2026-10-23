@@ -317,6 +317,7 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
                     <!-- Feature-owned text and checkbox values survive reads; confirmation releases both together. -->
                     <form class="row gy-3 justify-content-center" @submit.prevent="submit">
                         <FormField id="name" v-model="fields.name" class="col-md-6" required :disabled="blocked"
+                            :pending="command.pending.value && !switchTarget"
                             :label="messages.t('profile.profileName')" :label-icon="mode === 'edit' ? 'bi-key' : 'bi-person-circle'"
                             :placeholder="messages.t('profile.profileNamePlaceholder')" />
                         <div v-if="mode === 'edit'" class="col-md-6">

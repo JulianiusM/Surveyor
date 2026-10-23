@@ -1,4 +1,4 @@
-import {expect, test, type Locator} from '@playwright/test';
+import {expect, test, type Locator, type Route} from '@playwright/test';
 import type {components} from '../../src/types/api/v1';
 import {createTranslator} from '../../src/modules/localization/translator';
 import {closeModalForE2E, expectUsableFrontendLayout, expectVisiblePresentation, openModalForE2E,
@@ -7,7 +7,7 @@ import {createActivityOverlapForE2E, expectActivityTabKeyboard, observeActivityC
     readActivityForE2E} from '../keywords/frontendActivityE2EKeywords';
 import {captureAdvancedActivityPresentation, createActivitySwapPairsForE2E, createAdvancedActivityForE2E, openActivityRulesForE2E, readActivityRecommendationsForE2E,
     readActivityRequirementsForE2E, stageActivitySwapForE2E} from '../keywords/frontendActivityAdvancedE2EKeywords';
-import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {createBrowserReadGate, waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 
 /** Check a real control's visible hit target without dispatching its operation.
@@ -24,6 +24,81 @@ async function expectReachableActivityControl(control: Locator): Promise<void> {
         const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
         return !!hit && element.contains(hit);
     })).toBe(true);
+}
+
+for (const locale of ['en', 'de'] as const) {
+    for (const width of [1280, 390]) {
+        test(`retains ${locale} Rules Reload focus without a spinner or scroll jump at ${width}px`, async ({page}) => {
+            await page.setViewportSize({width, height: 900});
+            const plan = await createAdvancedActivityForE2E(page.request);
+            const messages = createTranslator(locale);
+            await page.goto(`/frontend-pilot${plan.path}?locale=${locale}`, {waitUntil: 'domcontentloaded'});
+            await waitForPilotHydration(page);
+            await page.getByRole('tab', {name: messages.t('activity.rules'), exact: true}).click();
+            await expect(page.locator('[data-requirements-dirty]')).toHaveText(messages.t('activity.requirements.savedBadge'));
+            const reload = page.locator('[data-requirements-refresh]');
+            const otherControl = page.locator('#requiredShifts');
+            const endpoint = `**/api/v1/activity-plans/${plan.id}/requirements`;
+
+            // Hold only delivery of a genuine authorized backend response. Both
+            // cycles use the built application, session and saved requirements;
+            // no client fixture can stand in for this integrated read workflow.
+            for (const moveFocus of [false, true]) {
+                const delivery = createBrowserReadGate();
+                const received = createBrowserReadGate();
+                const delivered = createBrowserReadGate();
+                let intercepted = false;
+                async function holdRequirementsDelivery(route: Route): Promise<void> {
+                    if (route.request().method() !== 'GET') return route.continue();
+                    intercepted = true;
+                    try {
+                        const response = await route.fetch();
+                        expect(response.status()).toBe(200);
+                        received.release();
+                        await delivery.promise;
+                        await route.fulfill({response});
+                    } finally { delivered.release(); }
+                }
+                await page.route(endpoint, holdRequirementsDelivery);
+                try {
+                    await reload.scrollIntoViewIfNeeded();
+                    await reload.focus();
+                    await expect(reload).toBeFocused();
+                    const originalButton = await reload.elementHandle();
+                    const before = await page.evaluate(() => ({x: scrollX, y: scrollY}));
+                    await reload.click();
+                    await received.promise;
+                    await expect(reload).toBeDisabled();
+                    await expect(reload).toHaveAttribute('aria-busy', 'true');
+                    await expect(reload.locator('.spinner-border')).toHaveCount(0);
+
+                    // Chromium drops native disabled-button focus to BODY. A
+                    // deliberate later focus owner must cancel restoration.
+                    await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true);
+                    if (moveFocus) await otherControl.focus();
+                    const waiting = moveFocus ? await page.evaluate(() => ({x: scrollX, y: scrollY})) : before;
+                    const completion = page.waitForResponse(response => response.request().method() === 'GET'
+                        && new URL(response.url()).pathname === `/api/v1/activity-plans/${plan.id}/requirements`);
+                    delivery.release();
+                    expect((await completion).status()).toBe(200);
+                    await expect(reload).toBeEnabled();
+                    await expect(reload).toHaveAttribute('aria-busy', 'false');
+                    if (moveFocus) await expect(otherControl).toBeFocused();
+                    else {
+                        await expect(reload).toBeFocused();
+                        expect(await originalButton!.evaluate(element => element === document.activeElement)).toBe(true);
+                    }
+                    const after = await page.evaluate(() => ({x: scrollX, y: scrollY}));
+                    expect(after.x).toBe(waiting.x);
+                    expect(after.y).toBe(waiting.y);
+                } finally {
+                    delivery.release();
+                    await page.unroute(endpoint, holdRequirementsDelivery);
+                    if (intercepted) await delivered.promise;
+                }
+            }
+        });
+    }
 }
 
 for (const width of [1280, 390]) {

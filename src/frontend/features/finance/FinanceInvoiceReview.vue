@@ -166,7 +166,9 @@ function acknowledge(): void {
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: recovery, label: messages.t('common.refresh')}" @action="inspectSaved">
             <template #uncertain>
-                <ActionButton v-if="inspected" variant="outline-warning" class="mt-2" :state="recovery" @click="acknowledge">{{ messages.t('draft.review') }}</ActionButton>
+                <!-- Local acknowledgement stays blocked during a saved-data read
+                     without borrowing that read action's spinner or focus. -->
+                <ActionButton v-if="inspected" variant="outline-warning" class="mt-2" :disabled="recovery.disabled.value" @click="acknowledge">{{ messages.t('draft.review') }}</ActionButton>
             </template>
         </CommandFeedback>
         <FinanceHistory v-if="inspected && command.uncertain.value" :invoices="currentInvoice ? [currentInvoice] : []" admin read-only disabled @refresh="inspectSaved" />
@@ -184,17 +186,20 @@ function acknowledge(): void {
                         input-mode="decimal" min="0.01" :max="operation === 'revise' ? '99999999.99' : undefined" step="0.01" class="mb-3"
                         :label="messages.t(operation === 'approve' ? 'finance.correctedAmount2' : 'finance.amount')"
                         :required="operation === 'revise'" :required-marker="false"
-                        :placeholder="operation === 'approve' ? messages.t('finance.keep', {fmtMoney: financeMoney(invoice.amount, locale)}) : undefined" />
+                        :placeholder="operation === 'approve' ? messages.t('finance.keep', {fmtMoney: financeMoney(invoice.amount, locale)}) : undefined"
+                        :pending="command.pending.value" />
                     <FormField :id="`${id}-description`" v-model="draft.description" class="mb-3" name="correctedDescription" multiline :rows="3"
                         :label="messages.t(operation === 'approve' ? 'finance.correctedDescription2' : 'finance.description')" :max-length="4000"
-                        :placeholder="operation === 'approve' ? messages.t('finance.leaveBlankToKeepSubmittedDescription') : undefined">
+                        :placeholder="operation === 'approve' ? messages.t('finance.leaveBlankToKeepSubmittedDescription') : undefined"
+                        :pending="command.pending.value">
                         <small v-if="operation === 'revise'" class="text-secondary">{{ messages.t('finance.leaveThisEmptyToRestoreTheOriginalDescription') }}</small>
                     </FormField>
                 </template>
                 <template v-if="rejection">
                     <p v-if="operation === 'reject'" class="small text-secondary">{{ messages.t('finance.rejectingRemovesThisAcceptedCostFromThePoolTotal') }}</p>
                     <FormField :id="`${id}-reason`" v-model="draft.reason" name="rejectionReason" class="mb-3" multiline :rows="3"
-                        :label="messages.t('finance.rejectionReason')" :max-length="4000" required :required-marker="false" />
+                        :label="messages.t('finance.rejectionReason')" :max-length="4000" required :required-marker="false"
+                        :pending="command.pending.value" />
                 </template>
                 <p v-if="operation === 'approve' || operation === 'decline' || operation === 'close'">
                     {{ messages.t(operation === 'approve' ? 'finance.confirmAcceptInvoice' : operation === 'decline'
@@ -216,7 +221,9 @@ function acknowledge(): void {
                 {{ messages.t('finance.backToEdit') }}
             </ActionButton>
             <ActionButton v-else variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t(completed ? 'common.close' : 'common.cancel') }}</ActionButton>
-            <ActionButton v-if="!completed" type="submit" :form="`${id}-form`" :state="actionState" :variant="rejection ? 'danger' : reviewing ? 'warning' : 'primary'">
+            <ActionButton v-if="!completed" type="submit" :form="`${id}-form`" :state="actionState"
+                :pending="command.pending.value" :show-spinner="false"
+                :variant="rejection ? 'danger' : reviewing ? 'warning' : 'primary'">
                 {{ messages.t(retroactive && !reviewing ? 'finance.continue' : operation === 'revise' ? 'finance.confirmCorrection'
                     : operation === 'reject' ? 'finance.confirmRejection' : 'finance.confirm') }}
             </ActionButton>

@@ -27,15 +27,18 @@ const fields = reactive({arrivalDate: '', departureDate: '', dietary: [] as Diet
 const baseline = ref('');
 let ownerId: string | null = null;
 const validation = ref(false);
+// Save and Cancel share protection and server refresh, while their initiating
+// buttons retain separate pending/focus and existing spinner presentation.
+const pendingControl = ref<'save' | 'cancel' | null>(null);
 const command = useCommand(props.refresh, false, {dirty: isDirty, unknownMessage: 'draft.leaveUnknown'});
 // Native displays a usable form to every admitted profile. The deliberate write
 // owns its current permission rejection; the projection never grants authority.
 const saveAction = useActionState({eligible: () => command.action.isAvailable(),
-    pending: () => command.pending.value});
+    pending: () => command.pending.value && pendingControl.value === 'save'});
 // Cancellation follows its own participant admission; losing registration-write
 // permission must not silently remove the native participant cancellation action.
 const cancelAction = useActionState({eligible: () => !!props.event.registration && command.action.isAvailable(),
-    pending: () => command.pending.value});
+    pending: () => command.pending.value && pendingControl.value === 'cancel'});
 const blocked = computed(() => command.action.disabled.value);
 watch(() => [props.event.id, props.event.registration], receiveRegistration, {immediate: true});
 watch(() => context.epoch.value, retireActor, {flush: 'sync'});
@@ -110,13 +113,16 @@ async function save(): Promise<void> {
     // Confirmation acknowledges these captured values even if the following GET
     // fails. Only a fresh read can supply a changed registration or current grants.
     const submitted = {...fields, dietary: [...fields.dietary]};
-    const result = await command.run(writeRegistration, true, false,
-        {success: 'event.registration.saved'});
-    if (result) {
-        Object.assign(fields, submitted);
-        baseline.value = snapshot();
-        if (command.notice.value !== 'state.savedRefreshFailed') resetFields(props.event.registration);
-    }
+    pendingControl.value = 'save';
+    try {
+        const result = await command.run(writeRegistration, true, false,
+            {success: 'event.registration.saved'});
+        if (result) {
+            Object.assign(fields, submitted);
+            baseline.value = snapshot();
+            if (command.notice.value !== 'state.savedRefreshFailed') resetFields(props.event.registration);
+        }
+    } finally { pendingControl.value = null; }
     function writeRegistration(scope: PilotRequestScope) { return api.saveRegistration(eventId, input, scope); }
 }
 
@@ -124,9 +130,14 @@ async function save(): Promise<void> {
 async function cancel(): Promise<void> {
     if (!cancelAction.isAvailable() || !window.confirm(messages.value.t('event.registration.cancelConfirm'))) return;
     const eventId = props.event.id;
-    const result = await command.run(removeRegistration, true, false,
-        {success: 'event.registration.cancelled'});
-    if (result) resetFields(null);
+    // Retain the cancellation initiator until its whole confirmed-save/read
+    // lifecycle completes; the sibling Save remains blocked without becoming busy.
+    pendingControl.value = 'cancel';
+    try {
+        const result = await command.run(removeRegistration, true, false,
+            {success: 'event.registration.cancelled'});
+        if (result) resetFields(null);
+    } finally { pendingControl.value = null; }
     function removeRegistration(scope: PilotRequestScope) { return api.cancelRegistration(eventId, scope); }
 }
 </script>
@@ -163,12 +174,14 @@ async function cancel(): Promise<void> {
                     type="date" required label-class="" :required-marker="!event.registration" :min="event.startDate"
                     :max="event.endDate" :disabled="blocked"
                     :label-icon="event.registration ? 'bi-pencil' : 'bi-box-arrow-in-right'"
-                    :label="messages.t(event.registration ? 'event.registration.changeArrival' : 'event.registration.arrival')" />
+                    :label="messages.t(event.registration ? 'event.registration.changeArrival' : 'event.registration.arrival')"
+                    :pending="saveAction.pending.value" />
                 <FormField id="departureDate" name="departureDate" v-model="fields.departureDate" class="col-md-6"
                     type="date" required label-class="" :required-marker="!event.registration" :min="event.startDate"
                     :max="event.endDate" :disabled="blocked"
                     :label-icon="event.registration ? 'bi-pencil' : 'bi-box-arrow-right'"
-                    :label="messages.t(event.registration ? 'event.registration.changeDeparture' : 'event.registration.departure')" />
+                    :label="messages.t(event.registration ? 'event.registration.changeDeparture' : 'event.registration.departure')"
+                    :pending="saveAction.pending.value" />
 
                 <!-- Dietary sections exist only when this Event requires them.
                      Their selections remain local until one deliberate save. -->
@@ -206,7 +219,8 @@ async function cancel(): Promise<void> {
                         :max-length="4000" :disabled="blocked" label-class="" :required-marker="false"
                         :required="fields.dietary.includes('ALLERGIES')"
                         :label="messages.t('event.registration.allergies')"
-                        :placeholder="messages.t('event.registration.allergyPlaceholder')" />
+                        :placeholder="messages.t('event.registration.allergyPlaceholder')"
+                        :pending="saveAction.pending.value" />
 
                     <template v-if="event.allowDietComment">
                         <hr />
@@ -225,7 +239,8 @@ async function cancel(): Promise<void> {
                         <FormField id="dietComment" name="dietComment" v-model="fields.dietComment" class="mt-2"
                             :max-length="4000" :disabled="blocked" label-class=""
                             :label="messages.t('event.registration.comment')"
-                            :placeholder="messages.t('event.registration.commentPlaceholder')" />
+                            :placeholder="messages.t('event.registration.commentPlaceholder')"
+                            :pending="saveAction.pending.value" />
                     </template>
                 </div>
 

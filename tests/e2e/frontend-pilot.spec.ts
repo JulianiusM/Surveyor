@@ -249,10 +249,17 @@ for (const width of [1280, 390]) {
                 const description = row.locator('td').nth(3);
                 const action = row.locator('td').last().getByRole('button', {name: 'Remove', exact: true});
                 const initiator = pilot ? action : description;
-                await row.evaluate(function centerScrollableRow(element) { element.scrollIntoView({block: 'center', inline: 'nearest'}); });
+                await row.evaluate(function centerScrollableRow(element) {
+                    element.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'instant'});
+                });
                 // Horizontal overflow is part of the native mobile table. Reach
-                // the real control without dropping columns or changing styles.
-                await initiator.scrollIntoViewIfNeeded();
+                // the real control without dropping columns or changing styles;
+                // nearest-edge alignment can clip a fractional cell border.
+                // Settle fixture positioning before sampling; authored smooth
+                // scrolling would otherwise outlive these consecutive reads.
+                await initiator.evaluate(function centerInitiatingControl(element) {
+                    element.scrollIntoView({block: 'center', inline: 'center', behavior: 'instant'});
+                });
                 await expect(initiator).toBeInViewport({ratio: 1});
                 const before = await capturePageFeedbackGeometry(page, info, `${label}-sticky-before`, row, initiator, 0);
                 expect(before.scrollY).toBeGreaterThan(400);
@@ -667,6 +674,88 @@ async function packingCommand(page: Page, id: string, suffix: string, method: st
         && result.request().method() === method);
     await action();
     expect((await response).status()).toBe(status);
+}
+
+/** The existing feature chooses its actual operation; this shared browser check
+ * only delays genuine backend bytes and observes the retained native control. */
+interface HeldControlOperation {
+    endpoint: string;
+    method: 'PATCH' | 'PUT';
+    status: number;
+    activate(): Promise<unknown>;
+}
+
+/** Observe native pending blur and restoration across one real operation. The
+ * feature still owns commands, reads, draft values and its available lifecycle. */
+async function expectRetainedControlFocus(page: Page, control: Locator, operation: HeldControlOperation,
+    deliberateFocus?: Locator): Promise<void> {
+    const pattern = `**${operation.endpoint}`;
+    const received = readGate();
+    const delivery = readGate();
+    const delivered = readGate();
+    let intercepted = false;
+    let actualStatus: number | undefined;
+    let responseFailure: unknown;
+    async function holdActualDelivery(route: Route): Promise<void> {
+        if (route.request().method() !== operation.method) return route.continue();
+        intercepted = true;
+        try {
+            // The shared controller/persistence operation decides the result
+            // before the test pauses delivery of those unchanged response bytes.
+            const response = await route.fetch();
+            actualStatus = response.status();
+            received.release();
+            await delivery.promise;
+            await route.fulfill({response});
+        } catch (failure) {
+            // Surface a genuine origin failure at the observation boundary;
+            // no failed route may strand the test behind its delivery gate.
+            responseFailure = failure;
+            received.release();
+            throw failure;
+        } finally {delivered.release();}
+    }
+    await page.route(pattern, holdActualDelivery);
+    try {
+        // Preserve the reader's position when a header control is outside the
+        // current viewport. The actual keyboard/change action follows below.
+        await control.evaluate(element => (element as HTMLElement).focus({preventScroll: true}));
+        await expect(control).toBeFocused();
+        const original = await control.elementHandle();
+        const before = await page.evaluate(() => ({x: scrollX, y: scrollY}));
+        await operation.activate();
+        await received.promise;
+        if (responseFailure) throw responseFailure;
+        expect(actualStatus).toBe(operation.status);
+        await expect(control).toBeDisabled();
+        await expect.poll(() => page.evaluate(() => document.activeElement === document.body)).toBe(true);
+        // Keep this intentional focus move separate from the browser's smooth
+        // focus-scroll animation, which can outlive command response delivery.
+        if (deliberateFocus) await deliberateFocus.evaluate(function focusDeliberately(element) {
+            (element as HTMLElement).focus({preventScroll: true});
+        });
+        // A deliberate later focus/scroll choice becomes the user's current
+        // context. Command completion must preserve that choice independently.
+        const waiting = deliberateFocus ? await page.evaluate(() => ({x: scrollX, y: scrollY})) : before;
+        const result = page.waitForResponse(response => response.request().method() === operation.method
+            && new URL(response.url()).pathname === operation.endpoint);
+        delivery.release();
+        expect((await result).status()).toBe(operation.status);
+        await expect(control).toBeEnabled();
+        expect(await control.evaluate((element, originalControl) => element === originalControl, original)).toBe(true);
+        if (deliberateFocus) await expect(deliberateFocus).toBeFocused();
+        else {
+            await expect(control).toBeFocused();
+            expect(await original!.evaluate(element => element === document.activeElement)).toBe(true);
+        }
+        expect(await page.evaluate(() => ({x: scrollX, y: scrollY}))).toEqual(waiting);
+    } finally {
+        // Release any waiting real delivery and its exact interceptor together,
+        // including when an assertion fails before response completion.
+        delivery.release();
+        await page.unroute(pattern, holdActualDelivery);
+        if (intercepted) await delivered.promise;
+    }
 }
 
 test('preserves native existing-capacity edits through the real browser and persistence', async ({page}) => {
@@ -1479,10 +1568,13 @@ test('pilot retains a dirty draft across a locale refresh and requires review af
         data: {title: `Remote ${list.title}`, description: 'Remote description to compare'},
     });
     expect(changed.status()).toBe(200);
-    const stale = page.waitForResponse(response => response.url().endsWith(`/packing-lists/${list.id}/metadata`)
-        && response.request().method() === 'PATCH' && response.status() === 412);
-    await dialog.getByRole('button', {name: 'Save properties', exact: true}).click();
-    await stale;
+    // Enter in a native field inherits disabling from the metadata fieldset.
+    // The actual stale response must return focus to this same retained input.
+    const metadataTitle = dialog.locator('[name="title"]');
+    await expectRetainedControlFocus(page, metadataTitle, {
+        endpoint: `/api/v1/packing-lists/${list.id}/metadata`, method: 'PATCH', status: 412,
+        activate() { return metadataTitle.press('Enter'); },
+    });
     await expect(description).toHaveValue('Local description to preserve');
     await expect(dialog.getByRole('button', {name: 'Review changes', exact: true})).toBeDisabled();
     await expect(dialog.getByRole('button', {name: 'Save properties', exact: true})).toBeDisabled();
@@ -1555,7 +1647,10 @@ test('pilot edits items with conflict review, quick-adds, reorders and removes a
     expect((await page.request.patch(`/api/v1/packing-lists/${resource.id}/items/${original.id}`, {
         headers: {...headers(session), 'If-Match': original.editToken}, data: {title: 'Remote tent title'},
     })).status()).toBe(200);
-    await packingCommand(page, resource.id, `/items/${original.id}`, 'PATCH', () => title.press('Enter'), 412);
+    await expectRetainedControlFocus(page, title, {
+        endpoint: `/api/v1/packing-lists/${resource.id}/items/${original.id}`, method: 'PATCH', status: 412,
+        activate() { return title.press('Enter'); },
+    });
     await expect(title).toHaveValue('Local tent title');
     await expect(row).toContainText('Remote tent title');
     const previousViewport = page.viewportSize()!;
@@ -1570,6 +1665,19 @@ test('pilot edits items with conflict review, quick-adds, reorders and removes a
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
     await page.setViewportSize(previousViewport);
     await captureState(page, testInfo, 'inline-stale-review', conflict);
+    await row.getByRole('button', {name: 'Review changes', exact: true}).click();
+    // Another real competing update rejects a newly reviewed attempt. Deliberate
+    // focus movement while it is pending must win over restoring the editor.
+    const refreshedItem = (await readPacking(page.request, resource.id)).items.find(item => item.id === original.id)!;
+    expect((await page.request.patch(`/api/v1/packing-lists/${resource.id}/items/${original.id}`, {
+        headers: {...headers(session), 'If-Match': refreshedItem.editToken}, data: {title: 'Another remote tent title'},
+    })).status()).toBe(200);
+    await expectRetainedControlFocus(page, title, {
+        endpoint: `/api/v1/packing-lists/${resource.id}/items/${original.id}`, method: 'PATCH', status: 412,
+        activate() { return title.press('Enter'); },
+    }, page.locator('.navbar-brand'));
+    await expect(title).toHaveValue('Local tent title');
+    await expect(row).toContainText('Another remote tent title');
     await row.getByRole('button', {name: 'Review changes', exact: true}).click();
     await packingCommand(page, resource.id, `/items/${original.id}`, 'PATCH', () => title.press('Enter'));
     await expect(row.locator('td').nth(2)).toHaveText('Local tent title');
@@ -1617,11 +1725,18 @@ test('pilot edits items with conflict review, quick-adds, reorders and removes a
     await expect(page.locator('tr[data-item-id]').first()).toHaveAttribute('data-item-id', added.id);
     expect((await readPacking(page.request, resource.id)).items.sort((a, b) => a.position - b.position).map(item => item.id))
         .toEqual([added.id, original.id]);
-    await packingCommand(page, resource.id, `/items/${added.id}`, 'PATCH', () => addedRow.getByRole('switch', {name: 'All', exact: true}).click());
-    await expect(addedRow.getByRole('switch', {name: 'All', exact: true})).toBeChecked();
+    const everyone = addedRow.getByRole('switch', {name: 'All', exact: true});
+    await expectRetainedControlFocus(page, everyone, {
+        endpoint: `/api/v1/packing-lists/${resource.id}/items/${added.id}`, method: 'PATCH', status: 200,
+        activate() { return everyone.press('Space'); },
+    });
+    await expect(everyone).toBeChecked();
     await expect(addedRow.locator('td').nth(1)).toHaveText('Everyone');
-    await packingCommand(page, resource.id, `/items/${added.id}`, 'PATCH', () => addedRow.getByRole('switch', {name: 'All', exact: true}).click());
-    await expect(addedRow.getByRole('switch', {name: 'All', exact: true})).not.toBeChecked();
+    await expectRetainedControlFocus(page, everyone, {
+        endpoint: `/api/v1/packing-lists/${resource.id}/items/${added.id}`, method: 'PATCH', status: 200,
+        activate() { return everyone.press('Space'); },
+    }, page.locator('.navbar-brand'));
+    await expect(everyone).not.toBeChecked();
 
     const guest = await browser.newContext({baseURL});
     try {
@@ -2516,6 +2631,23 @@ test('Help preserves reading position on Refresh, locale changes and history whi
     await expect(search).toHaveValue('retained search draft');
     expect(await page.evaluate(() => Math.abs(window.scrollY - 200))).toBeLessThanOrEqual(3);
     expect(await page.evaluate(() => document.documentElement.dataset.helpDocument)).toBe(documentIdentity);
+
+    // Verify genuine preference delivery only after the original uncached
+    // translation assertions. Earlier cycles would prime that article's cache.
+    const localeSelect = page.locator('#pilot-locale');
+    await expectRetainedControlFocus(page, localeSelect, {
+        endpoint: '/api/v1/locale', method: 'PUT', status: 200,
+        activate() { return localeSelect.selectOption('en'); },
+    });
+    await expect(localeSelect).toHaveValue('en');
+    await expectRetainedControlFocus(page, localeSelect, {
+        endpoint: '/api/v1/locale', method: 'PUT', status: 200,
+        activate() { return localeSelect.selectOption('de'); },
+    }, search);
+    await expect(localeSelect).toHaveValue('de');
+    await expect(search).toHaveValue('retained search draft');
+    expect(await page.evaluate(() => document.documentElement.dataset.helpDocument)).toBe(documentIdentity);
+    await page.evaluate(() => window.scrollTo({top: 200, behavior: 'instant'}));
     await captureState(page, info, 'help-preserved-reading-position', undefined, {viewportOnly: true});
 });
 

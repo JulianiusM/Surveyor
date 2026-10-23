@@ -32,6 +32,9 @@ const editorOpen = ref(false);
 const answers = reactive<Record<string, Exclude<SurveyAnswer, null>>>({});
 const baseline = ref<Record<string, Exclude<SurveyAnswer, null>>>({});
 const combination = reactive<{weekday: WeekDay; nthWeek: WeekInMonth}>({weekday: 'MON', nthWeek: '1'});
+// Both forms share command protection, but only the deliberate initiating form
+// owns its pending spinner and temporary focus.
+const pendingControl = ref<'ballot' | 'combination' | null>(null);
 const ballotDirty = computed(() => Object.keys(answers).some(id => answers[id] !== baseline.value[id]));
 const combinationDirty = computed(() => combination.weekday !== 'MON' || combination.nthWeek !== '1');
 const {list, data, denied, refresh: readFresh, isActive} = useListDetail({
@@ -43,9 +46,9 @@ const {command, blocked, readAction, retryAt, refresh, retireSettingsAccess, rev
     error: () => list.error.value, refresh: refreshBallot,
 }, {dirty: () => ballotDirty.value || combinationDirty.value, unknownMessage: 'draft.leaveUnknown'});
 const ballotAction = useActionState({eligible: () => !!data.value?.capabilities.submitBallot,
-    pending: () => command.pending.value, blocked: () => blocked.value});
+    pending: () => command.pending.value && pendingControl.value === 'ballot', blocked: () => blocked.value});
 const combinationAction = useActionState({eligible: () => !!data.value?.capabilities.addCombination,
-    pending: () => command.pending.value, blocked: () => blocked.value});
+    pending: () => command.pending.value && pendingControl.value === 'combination', blocked: () => blocked.value});
 usePageTitle(() => messages.value.t('survey.documentTitle', {title: data.value?.title ?? messages.value.t('app.survey')}), true);
 watch(data, value => {
     if (!command.pending.value && !command.recovering.value) receiveBallot(value);
@@ -124,13 +127,16 @@ async function refreshBallot(): Promise<void> {
 async function submitBallot(): Promise<void> {
     if (!ballotAction.isAvailable() || !data.value) return;
     const submitted = Object.fromEntries(data.value.combinations.map(item => [item.id, answers[item.id] ?? 'no']));
-    await command.run(async scope => {
-        const result = await api.submitBallot(surveyId.value, {answers: submitted}, scope);
-        // Mutation confirmation is sufficient to release local edits, but only
-        // the fresh GET below supplies the next shared result/authority snapshot.
-        if (isActive() && context.isCurrent(scope)) baseline.value = {...submitted};
-        return result;
-    }, true, false, {success: 'survey.ballotSaved'});
+    pendingControl.value = 'ballot';
+    try {
+        await command.run(async scope => {
+            const result = await api.submitBallot(surveyId.value, {answers: submitted}, scope);
+            // Mutation confirmation is sufficient to release local edits, but only
+            // the fresh GET below supplies the next shared result/authority snapshot.
+            if (isActive() && context.isCurrent(scope)) baseline.value = {...submitted};
+            return result;
+        }, true, false, {success: 'survey.ballotSaved'});
+    } finally { pendingControl.value = null; }
 }
 
 /** Every admitted profile can add a recurring combination. Unknown creation
@@ -140,9 +146,12 @@ async function addCombination(): Promise<void> {
     // Capture both select values before sending. Only confirmed creation releases
     // them; rejected and unknown outcomes retain the visible combination draft.
     const submitted = {...combination};
-    const result = await command.run(scope => api.addCombination(surveyId.value, submitted, scope), true, true,
-        {success: 'survey.combinationAdded'});
-    if (result) Object.assign(combination, {weekday: 'MON', nthWeek: '1'});
+    pendingControl.value = 'combination';
+    try {
+        const result = await command.run(scope => api.addCombination(surveyId.value, submitted, scope), true, true,
+            {success: 'survey.combinationAdded'});
+        if (result) Object.assign(combination, {weekday: 'MON', nthWeek: '1'});
+    } finally { pendingControl.value = null; }
 }
 </script>
 

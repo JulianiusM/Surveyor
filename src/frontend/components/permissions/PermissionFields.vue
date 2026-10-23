@@ -4,6 +4,7 @@ import type {components} from '../../../types/api/v1';
 import {permissionLabel} from '../../../modules/localization/permissionLabels';
 import type {MessageKey} from '../../../types/LocalizationTypes';
 import {usePilot} from '../../app/context';
+import ActionButton from '../ActionButton.vue';
 
 const props = defineProps<{
     modelValue: number;
@@ -59,15 +60,17 @@ function toggle(bit: number, event: Event): void {
                     role="group"
                     :aria-label="messages.t('permissions.presets')"
                 >
-                    <button
+                    <ActionButton
                         v-for="preset in presets"
                         :key="preset.key"
                         type="button"
-                        class="btn btn-sm btn-outline-light"
+                        class="btn-sm"
+                        variant="outline-light"
+                        :disabled="disabled"
                         @click="emit('update:modelValue', preset.mask)"
                     >
                         {{ label(preset.key) }}
-                    </button>
+                    </ActionButton>
                 </div>
             </details>
             <div
@@ -75,9 +78,10 @@ function toggle(bit: number, event: Event): void {
                 role="group"
                 :aria-label="messages.t('permissions.selectPermissions')"
             >
-                <button
+                <ActionButton
                     type="button"
-                    class="btn btn-outline-light"
+                    variant="outline-light"
+                    :disabled="disabled"
                     :title="messages.t('permissions.selectAll')"
                     @click="
                         emit(
@@ -87,15 +91,16 @@ function toggle(bit: number, event: Event): void {
                     "
                 >
                     {{ messages.t('common.all') }}
-                </button>
-                <button
+                </ActionButton>
+                <ActionButton
                     type="button"
-                    class="btn btn-outline-light"
+                    variant="outline-light"
+                    :disabled="disabled"
                     :title="messages.t('permissions.clearAll')"
                     @click="emit('update:modelValue', 0)"
                 >
                     {{ messages.t('common.none') }}
-                </button>
+                </ActionButton>
             </div>
         </div>
         <fieldset v-for="group in groups" :key="group.category" class="mb-3">

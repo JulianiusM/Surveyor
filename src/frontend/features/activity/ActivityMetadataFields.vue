@@ -60,7 +60,7 @@ defineExpose(useMetadataEditorHandle(editor));
         @saved="emit('saved')"
         @close="emit('close')"
         @access-lost="emit('accessLost')">
-        <template #default="{values, fields}">
+        <template #default="{values, fields, pending}">
             <details
                 v-for="(group, index) in admittedGroups(fields)"
                 :key="group.label"
@@ -84,6 +84,7 @@ defineExpose(useMetadataEditorHandle(editor));
                         :type="field.endsWith('Date') ? 'date' : 'text'"
                         :required="field !== 'description'"
                         :required-marker="false"
+                        :pending="pending"
                         :max-length="field === 'description' ? 16000 : field === 'title' ? 255 : undefined"
                         @update:model-value="values[field] = $event"
                     />

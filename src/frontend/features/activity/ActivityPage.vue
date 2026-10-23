@@ -43,6 +43,10 @@ const roleSlotId = ref<string | null>(null);
 const review = shallowRef<ActivityAssignmentReview | null>(null);
 const reviewOpen = ref(false);
 const previewPending = ref(false);
+// Presentation identity spans one deliberate schedule gesture, including its
+// warning-read/command handoff. Shared command and preview owners retain actual
+// admission, cancellation and request lifetimes; no sibling claims its focus.
+const pendingControl = ref<string | null>(null);
 const requirementMode = ref<components['schemas']['ActivityView']['assignmentMode'] | null>(null);
 let previewAbort: AbortController | undefined;
 let active = true;
@@ -164,22 +168,35 @@ async function reorder(order: components['schemas']['ActivityOrderInput']['order
 /** Confirm the native destructive slot action before its independent server check. */
 async function removeSlot(slot: components['schemas']['ActivitySlotView']): Promise<void> {
     // Existing controller deletion retains its own assignment cleanup semantics.
-    if (!blocked.value && slot.capabilities.remove && window.confirm(messages.value.t('activity.deleteSlot')))
-        await command.run(scope => api.deleteSlot(planId.value, slot.id, scope), true, false, {success: 'common.removed'});
+    if (!blocked.value && slot.capabilities.remove && window.confirm(messages.value.t('activity.deleteSlot'))) {
+        pendingControl.value = `delete:${slot.id}`;
+        try {
+            await command.run(scope => api.deleteSlot(planId.value, slot.id, scope), true, false, {success: 'common.removed'});
+        } finally { pendingControl.value = null; }
+    }
 }
 /** Organizer removal remains immediate and operates on an admitted assignment ID. */
 async function removeAssignment(id: string): Promise<void> {
-    if (!blocked.value) await command.run(scope => api.removeAssignment(planId.value, id, scope), true, false,
-        {success: 'common.removed'});
+    if (blocked.value) return;
+    // Assignment identity belongs to this gesture, independently of any row
+    // removed or replaced by the command's subsequent saved projection.
+    pendingControl.value = `assignment:${id}`;
+    try {
+        await command.run(scope => api.removeAssignment(planId.value, id, scope), true, false,
+            {success: 'common.removed'});
+    } finally { pendingControl.value = null; }
 }
 
 /** Read fresh warnings before Join or an available named role. Native role review
  * concerns the role's unoccupied position even when the actor already joined. */
 async function assign(slot: components['schemas']['ActivitySlotView'], assigned: boolean, role?: string): Promise<void> {
     if (blocked.value) return;
+    pendingControl.value = `assign:${slot.id}:${role ?? ''}`;
     if (!assigned) {
-        await command.run(scope => api.assign(planId.value, slot.id, {assigned, ...(role ? {role} : {})}, scope), true, false,
-            {success: 'common.updated'});
+        try {
+            await command.run(scope => api.assign(planId.value, slot.id, {assigned, ...(role ? {role} : {})}, scope), true, false,
+                {success: 'common.updated'});
+        } finally { pendingControl.value = null; }
         return;
     }
     const scope = context.capture();
@@ -204,6 +221,7 @@ async function assign(slot: components['schemas']['ActivitySlotView'], assigned:
             command.setError(failure instanceof ApiFailure ? failure : 'state.loadFailed');
     } finally {
         if (previewAbort === controller) previewPending.value = false;
+        pendingControl.value = null;
     }
 }
 
@@ -263,6 +281,7 @@ async function confirmAssignment(): Promise<void> {
                         :key="planId"
                         :view="data"
                         :disabled="blocked"
+                        :pending-control="pendingControl"
                         :patch="patch"
                         :reorder="reorder"
                         @edit="openEditor($event.day, $event.id)"

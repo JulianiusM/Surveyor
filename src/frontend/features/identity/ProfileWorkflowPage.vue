@@ -59,10 +59,16 @@ const admission = usePageEntry<components['schemas']['ProfileWorkflowEntry']>({
 const admissionRetryAt = useReadRetryAt(() => admission.error.value, admission.retryAvailable);
 const command = useCommand(refreshAdmission, true, {dirty: isDirty, busy: () => reading.value,
     unknownMessage: 'auth.leaveUnknown', problemKey: workflowProblemKey});
+// Authority Refresh shares the existing recovery admission and lease. A sibling
+// token/destructive command only blocks it; that command never owns its spinner.
+const refreshAction = useActionState({eligible: () => command.recoveryAction.isAvailable(),
+    pending: () => command.recovering.value});
 const previewAction = useActionState({eligible: mayReadPreview, pending: () => reading.value});
 const workflowAction = useActionState({eligible: maySubmitWorkflow,
     pending: () => reading.value || command.pending.value,
-    blocked: () => finished.value || command.uncertain.value || completion.target.value !== null});
+    // Session verification can finish before the fresh workflow entry read.
+    // Keep the command owner's recovery fence visible throughout that gap.
+    blocked: () => finished.value || command.recovering.value || command.uncertain.value || completion.target.value !== null});
 const previewVisit = computed(() => routeKind.value === 'entry' && route.hash === previewHash.value ? preview.value : undefined);
 const denied = computed(() => previewVisit.value?.kind === 'denied' ? previewVisit.value : undefined);
 const workflow = computed<Presentation | undefined>(workflowPresentation);
@@ -281,7 +287,7 @@ function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, 
         </StatusNotice>
         <CommandFeedback :feedback="command.feedback" part="error" />
         <CommandFeedback :feedback="command.feedback" part="uncertain"
-            :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refreshWorkflowAuthority">
+            :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refreshWorkflowAuthority">
             <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
         </CommandFeedback>
         <StatusNotice v-if="completion.target.value" kind="success"
@@ -289,7 +295,7 @@ function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, 
         <section class="card bg-dark text-white mb-3">
             <h1 class="card-header text-center"><i class="bi me-2" :class="destructive ? 'bi-trash-fill' : 'bi-archive-fill'" aria-hidden="true"></i>{{ heading }}</h1>
             <div class="card-body">
-                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="command.recoveryAction"
+                <EntityListToolbar :refresh-label="messages.t('common.refresh')" :state="refreshAction"
                     @refresh="refreshWorkflowAuthority" />
                 <template v-if="workflow.kind === 'token'">
                     <div class="text-center mb-4">

@@ -119,7 +119,11 @@ describe('P9 saved calculation review', () => {
     });
 
     it('keeps unknown calculation locked during saved inspection and never retries its write', async () => {
-        const refresh = vi.fn(async () => {});
+        let holdRefresh = false;
+        let finishRefresh: (() => void) | undefined;
+        const refresh = vi.fn(async () => {
+            if (holdRefresh) await new Promise<void>(resolve => {finishRefresh = resolve;});
+        });
         const mounted = await mountReview(async request => {
             if (request.method === 'GET') return json(preview);
             throw new Error('Committed response lost');
@@ -129,6 +133,16 @@ describe('P9 saved calculation review', () => {
         await button(mounted.dialog, 'Refresh').trigger('click'); await flushPromises();
         expect(mounted.dialog.find('[data-finance-calculation-inspection]').exists()).toBe(true);
         expect(refresh).toHaveBeenCalledTimes(1);
+        holdRefresh = true;
+        await button(mounted.dialog, 'Refresh').trigger('click'); await flushPromises();
+        try {
+            const acknowledge = button(mounted.dialog, 'I have checked the saved shares');
+            expect(button(mounted.dialog, 'Refresh').attributes('aria-busy')).toBe('true');
+            expect(acknowledge.attributes('disabled')).toBeDefined();
+            expect(acknowledge.attributes('aria-busy')).toBe('false');
+            expect(acknowledge.find('.spinner-border').exists()).toBe(false);
+        } finally {finishRefresh?.(); await flushPromises();}
+        expect(refresh).toHaveBeenCalledTimes(2);
         await button(mounted.dialog, 'I have checked the saved shares').trigger('click'); await flushPromises();
         expect(mounted.wrapper.emitted('close')).toHaveLength(1);
         expect(mounted.request.mock.calls.filter(([request]) => (request as Request).method === 'POST')).toHaveLength(1);
@@ -146,6 +160,36 @@ describe('P9 saved calculation review', () => {
 });
 
 describe('P9 saved outputs and rollback', () => {
+    it.each(['notify', 'rollback'] as const)('keeps local %s acknowledgement blocked without borrowing a repeated saved read', async operation => {
+        let holdRefresh = false;
+        let finishRefresh: (() => void) | undefined;
+        const refresh = vi.fn(async () => {
+            if (holdRefresh) await new Promise<void>(resolve => {finishRefresh = resolve;});
+        });
+        const mounted = await mountFrontendEvent(FinancePoolOutputs, async () => {throw new Error('Lost command response');},
+            {eventId, pool: {...pool, status: 'CLOSED', needsRecalculation: true, canRollback: true}, shares: [],
+                active: true, hasPendingEdits: () => false, refresh});
+        cleanups.push(mounted.dispose);
+        await button(mounted.wrapper, operation === 'notify' ? 'Send settlement emails' : 'Roll back pool changes').trigger('click');
+        await flushPromises();
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        await button(dialog, operation === 'notify' ? 'Send settlement emails' : 'Restore last calculated settings').trigger('click');
+        await flushPromises();
+        await button(dialog, 'Refresh').trigger('click'); await flushPromises();
+        holdRefresh = true;
+        await button(dialog, 'Refresh').trigger('click'); await flushPromises();
+        try {
+            const acknowledge = button(dialog, 'I have checked the saved shares');
+            expect(button(dialog, 'Refresh').attributes('aria-busy')).toBe('true');
+            expect(acknowledge.attributes('disabled')).toBeDefined();
+            expect(acknowledge.attributes('aria-busy')).toBe('false');
+            expect(acknowledge.find('.spinner-border').exists()).toBe(false);
+        } finally {finishRefresh?.(); await flushPromises();}
+        expect(refresh).toHaveBeenCalledTimes(2);
+        await button(dialog, 'I have checked the saved shares').trigger('click'); await flushPromises();
+        expect(mounted.request).toHaveBeenCalledTimes(1);
+    });
+
     it.each([true, false])('reports rollback staleness=%s while keeping the completed command locked', async needsRecalculation => {
         const mounted = await mountFrontendEvent(FinancePoolOutputs, async () => json({needsRecalculation, externalChanges: needsRecalculation}),
             {eventId, pool: {...pool, status: 'CLOSED', needsRecalculation: true, canRollback: true}, shares: [],

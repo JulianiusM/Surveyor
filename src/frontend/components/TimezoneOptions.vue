@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed} from 'vue';
 import {usePilot} from '../app/context';
+import ActionButton from './ActionButton.vue';
 
 // Inline and standalone picker hosts render the same native search/chip/list
 // controls. The picker retains presentation search and the feature owns its zone.
@@ -20,13 +21,13 @@ const displayed = computed(() => matches.value.slice(0, 200));
             @input="emit('update:search', ($event.target as HTMLInputElement).value)" />
     </div>
     <details class="mb-2"><summary class="small">{{ messages.t('timezone.common') }}</summary><div class="d-flex flex-wrap gap-1 mt-2">
-        <button v-for="zone in common" :key="zone" type="button" class="btn btn-sm btn-outline-light" :disabled="disabled"
-            :aria-pressed="zone === selected" @click="emit('choose', zone)">{{ label(zone) }}</button>
+        <ActionButton v-for="zone in common" :key="zone" class="btn-sm" variant="outline-light" :disabled="disabled"
+            :aria-pressed="zone === selected" @click="emit('choose', zone)">{{ label(zone) }}</ActionButton>
     </div></details>
     <ul class="list-group list-group-flush text-bg-dark overflow-auto" style="max-height: 15rem">
-        <li v-for="zone in displayed" :key="zone" class="list-group-item text-bg-dark"><button type="button"
-            class="btn btn-outline-light text-start w-100" :disabled="disabled" :aria-pressed="zone === selected"
-            @click="emit('choose', zone)">{{ label(zone) }}</button></li>
+        <li v-for="zone in displayed" :key="zone" class="list-group-item text-bg-dark"><ActionButton
+            class="text-start w-100" variant="outline-light" :disabled="disabled" :aria-pressed="zone === selected"
+            @click="emit('choose', zone)">{{ label(zone) }}</ActionButton></li>
         <li v-if="!matches.length" class="list-group-item text-bg-dark">{{ messages.t('timezone.noMatches') }}</li>
     </ul>
     <p class="small text-secondary mt-2 mb-0" aria-live="polite">{{ matches.length > displayed.length

@@ -98,7 +98,9 @@ function acknowledge(): void {
             unknown-message="finance.weCouldNotConfirmWhetherYourInvoiceWasSaved"
             :action="{state: recovery, label: messages.t('finance.checkInvoiceHistory')}" @action="inspectHistory">
             <template #uncertain>
-                <ActionButton v-if="inspected" variant="outline-warning" class="mt-2" :state="recovery" @click="acknowledge">
+                <!-- History inspection blocks this local acknowledgement, but
+                     its pending read belongs only to the inspection control. -->
+                <ActionButton v-if="inspected" variant="outline-warning" class="mt-2" :disabled="recovery.disabled.value" @click="acknowledge">
                     {{ messages.t('finance.reviewedHistory') }}
                 </ActionButton>
             </template>
@@ -111,7 +113,8 @@ function acknowledge(): void {
             <fieldset class="border-0 p-0 m-0" :disabled="action.disabled.value">
                 <FormField :id="`${id}-amount`" v-model="draft.amount" name="amount" type="number" lexical-number
                     input-mode="decimal" min="0.01" max="99999999.99" step="0.01" class="mb-3"
-                    :label="messages.t('finance.amount')" required :required-marker="false" />
+                    :label="messages.t('finance.amount')" required :required-marker="false"
+                    :pending="command.pending.value" />
                 <FormField :id="`${id}-participant`" class="mb-3" :label="messages.t('finance.paidByParticipantOptional')">
                     <template #control>
                         <select :id="`${id}-participant`" v-model="draft.registrationId" name="registrationId" class="form-select text-bg-dark"
@@ -129,7 +132,8 @@ function acknowledge(): void {
                     <small :id="`${id}-participant-help`" class="text-secondary">{{ messages.t('finance.organizerInvoiceAttributionHelp') }}</small>
                 </FormField>
                 <FormField :id="`${id}-description`" v-model="draft.description" class="mb-3" name="description"
-                    :label="messages.t('finance.description')" multiline :rows="3" :max-length="4000" required :required-marker="false" />
+                    :label="messages.t('finance.description')" multiline :rows="3" :max-length="4000" required :required-marker="false"
+                    :pending="command.pending.value" />
                 <FileField :id="`${id}-proof`" name="proof" class="mb-3" :label="messages.t('finance.proofOptional')"
                     :selected-file="proof" accept="image/jpeg,image/png,image/gif,application/pdf" :described-by="`${id}-proof-help`" @choose="proof = $event">
                     <small :id="`${id}-proof-help`" class="text-secondary">{{ messages.t('finance.attachAnImageOrPDFReceiptOrLeaveThis') }}</small>
@@ -138,7 +142,8 @@ function acknowledge(): void {
         </form>
         <template #footer>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.cancel') }}</ActionButton>
-            <ActionButton type="submit" :form="`${id}-form`" :state="action">{{ messages.t('finance.addInvoiceAmount') }}</ActionButton>
+            <ActionButton type="submit" :form="`${id}-form`" :state="action"
+                :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.addInvoiceAmount') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

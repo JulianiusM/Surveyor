@@ -29,6 +29,9 @@ const api = useFinanceApi(context);
 const id = useId();
 const draft = reactive({registrationId: '', amount: '', note: '', subtractFromPool: true});
 const inspected = ref(false);
+// Saved row identity selects the initiating remove control only; the existing
+// independent removal command still owns pending status and unknown receipts.
+const removingId = ref<string | null>(null);
 const dirty = computed(() => !!draft.registrationId || !!draft.amount || !!draft.note || !draft.subtractFromPool);
 const command = useCommand(props.refresh, true, {dirty: () => dirty.value, unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
 const removal = useCommand(props.refresh, false, {dirty: () => false, unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
@@ -67,8 +70,11 @@ async function remove(adjustment: NonNullable<components['schemas']['FinancePool
     const question = `${messages.value.t('finance.removeThisSavedAdjustment')}\n${personName(adjustment.registrationId)} · ${financeMoney(adjustment.amount, locale.value)}\n${adjustment.note}`;
     if (!window.confirm(question)) return;
     // A captured ID cannot accidentally remove a newly rendered neighboring row.
-    await removal.run(scope => api.removeAdjustment(props.eventId, props.pool.id, adjustment.id, scope), true, false,
-        {success: 'finance.adjustmentRemovedClosedPoolsRequireRecalculation'});
+    removingId.value = adjustment.id;
+    try {
+        await removal.run(scope => api.removeAdjustment(props.eventId, props.pool.id, adjustment.id, scope), true, false,
+            {success: 'finance.adjustmentRemovedClosedPoolsRequireRecalculation'});
+    } finally { removingId.value = null; }
 }
 /** One deliberate saved-list read reconciles both independent receipts without
  * issuing a second request or replaying either financial command. */
@@ -121,6 +127,7 @@ function close(): void {
                     <p class="small mb-0">{{ adjustment.note }}</p>
                 </div>
                 <ActionButton variant="outline-danger" class="btn-sm align-self-start" :state="action"
+                              :pending="removal.pending.value && removingId === adjustment.id" :show-spinner="false"
                               :aria-label="messages.t('finance.removeFor', {kind: messages.t(Number(adjustment.amount) < 0 ? 'finance.rebate' : 'finance.surcharge'), name: personName(adjustment.registrationId)})"
                               @click="remove(adjustment)">
                     {{ messages.t('finance.remove') }}
@@ -145,8 +152,10 @@ function close(): void {
                 </FormField>
                 <FormField :id="`${id}-amount`" v-model="draft.amount" :name="null" type="number" lexical-number
                     input-mode="decimal" step="0.01" class="mb-3" :label="messages.t('finance.amountNegativeForARebate')"
-                    :described-by="`${id}-help`" required :required-marker="false" />
-                <FormField :id="`${id}-note`" v-model="draft.note" class="mb-3" :label="messages.t('finance.note')" required :required-marker="false" :max-length="4000" />
+                    :described-by="`${id}-help`" required :required-marker="false"
+                    :pending="command.pending.value" />
+                <FormField :id="`${id}-note`" v-model="draft.note" class="mb-3" :label="messages.t('finance.note')" required :required-marker="false" :max-length="4000"
+                    :pending="command.pending.value" />
                 <div class="form-check">
                     <input :id="`${id}-redistribute`" v-model="draft.subtractFromPool" class="form-check-input" type="checkbox" />
                     <label :for="`${id}-redistribute`" class="form-check-label">{{ messages.t('finance.redistributeWithinPool') }}</label>
@@ -158,7 +167,8 @@ function close(): void {
         <template #footer>
             <ActionButton variant="outline-secondary" :state="action" @click="discard">{{ messages.t('finance.discardEdits') }}</ActionButton>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value || removal.pending.value || removal.recovering.value" @click="close">{{ messages.t('common.close') }}</ActionButton>
-            <ActionButton :form="`${id}-form`" type="submit" :state="action">{{ messages.t('finance.addSurchargeOrRebate') }}</ActionButton>
+            <ActionButton :form="`${id}-form`" type="submit" :state="action"
+                :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.addSurchargeOrRebate') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

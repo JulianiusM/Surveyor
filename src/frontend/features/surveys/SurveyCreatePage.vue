@@ -151,9 +151,11 @@ function collectCreation() {
                  row keeps its selections while add/remove changes neighboring rows. -->
             <form v-if="baseline !== null" id="surveyForm" class="row gy-4 justify-content-center" @submit.prevent="create">
                 <FormField id="title" v-model="fields.title" name="title" class="col-md-12" :label="messages.t('survey.title')"
-                    label-icon="bi-tag" required :disabled="blocked || !admitted" />
+                    label-icon="bi-tag" required :disabled="blocked || !admitted"
+                    :pending="createAction.pending.value" />
                 <FormField id="description" v-model="fields.description" name="description" class="col-md-12"
-                    :label="messages.t('survey.description')" label-icon="bi-pencil-square" label-class="" multiline :disabled="blocked || !admitted" />
+                    :label="messages.t('survey.description')" label-icon="bi-pencil-square" label-class="" multiline :disabled="blocked || !admitted"
+                    :pending="createAction.pending.value" />
                 <FileField id="headerImg" name="headerImg" class="col-12" :label="messages.t('survey.headerOptional')"
                     label-icon="bi-card-image" :selected-file="image" :disabled="blocked || !admitted" hydration-draft @choose="image = $event" />
                 <div class="col-12">

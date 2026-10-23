@@ -111,6 +111,49 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
 }
 
 describe('identity forms and packing overview navigation', () => {
+    it.each([false, true])('retains a rejected login field focus claim unless a later keyboard action cancels it (%s)', async cancelled => {
+        let finish!: (response: Response) => void;
+        const held = new Promise<Response>(resolve => { finish = resolve; });
+        const {wrapper, request} = await mounted('/frontend-pilot/users/login', async () => held);
+        const password = wrapper.get<HTMLInputElement>('#password');
+        await wrapper.get('#username').setValue('Entered account');
+        await password.setValue('Unaccepted-password1');
+        password.element.focus();
+        const focus = vi.spyOn(password.element, 'focus');
+
+        try {
+            // The built identity workflow covers Enter's native implicit submission.
+            // This DOM runner dispatches the same form event through the actual
+            // identity command and generated HTTP decoder, holding only delivery.
+            await wrapper.findAll('form')[0].trigger('submit');
+            expect(password.element.disabled).toBe(true);
+            expect(request).toHaveBeenCalledOnce();
+            // Happy DOM does not release native focus on disabling like Chromium.
+            document.body.tabIndex = -1;
+            document.body.focus();
+            document.body.removeAttribute('tabindex');
+            expect(document.activeElement).toBe(document.body);
+            if (cancelled) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
+
+            finish(json({type: 'about:blank', title: 'Rejected', status: 401,
+                detail: 'Invalid username/email or password.', requestId: 'held-focus-rejection',
+                code: 'INVALID_CREDENTIALS', messageKey: 'api:errors.INVALID_CREDENTIALS', params: {}}, 401));
+            await flushPromises();
+            expect(wrapper.get('#password').element).toBe(password.element);
+            expect(password.element.disabled).toBe(false);
+            expect(password.element.value).toBe('');
+            expect(wrapper.get<HTMLInputElement>('#username').element.value).toBe('Entered account');
+            expect(request).toHaveBeenCalledOnce();
+            if (cancelled) {
+                expect(document.activeElement).toBe(document.body);
+                expect(focus).not.toHaveBeenCalled();
+            } else {
+                expect(document.activeElement).toBe(password.element);
+                expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+            }
+        } finally { finish(json({changed: false})); }
+    });
+
     it.each([429, 503])('retains reset admission retry timing and checks once after the server deadline (%s)', async status => {
         vi.useFakeTimers();
         vi.setSystemTime(Date.UTC(2026, 9, 11, 6, 0, 0));
@@ -1129,9 +1172,12 @@ describe('identity forms and packing overview navigation', () => {
     });
 
     it('requires an explicit guest recovery/new-identity choice before issuing either command', async () => {
+        let finishRecovery!: (response: Response) => void;
+        const heldRecovery = new Promise<Response>(resolve => { finishRecovery = resolve; });
         const {wrapper, request} = await mounted(`/frontend-pilot/packing/${eventId}/guest`, async req => {
             if (req.method === 'GET') return json({id: eventId, title: 'Guest fixture'});
             if (req.url.endsWith('/guest-email-exists')) return json({exists: true});
+            if (req.url.endsWith('/guest-recovery')) return heldRecovery;
             return json({changed: true});
         });
         await wrapper.get('#guest-name').setValue('Guest name');
@@ -1143,12 +1189,24 @@ describe('identity forms and packing overview navigation', () => {
         expect(dialog.textContent).toContain('Guest account found!');
         expect(request.mock.calls.map(([req]) => (req as Request).method).filter(method => method === 'POST')).toHaveLength(1);
         const recover = [...dialog.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.includes('Recover guest account'))!;
-        recover.click();
-        await flushPromises();
-        const commands = request.mock.calls.map(([req]) => req as Request).filter(req => req.method === 'POST');
-        expect(commands.map(req => new URL(req.url).pathname)).toEqual(['/api/v1/auth/guest-email-exists', '/api/v1/auth/guest-recovery']);
-        expect(await commands[1].json()).toEqual({email: 'guest@example.test', next: `/frontend-pilot/packing/${eventId}`});
-        expect(wrapper.get('.alert-success').text()).toContain('The link(s) to your guest account(s)');
+        try {
+            recover.click();
+            await flushPromises();
+            // Mail recovery closes its chooser but retains the blocked form.
+            // That sibling command must not borrow Continue's busy/focus owner.
+            const continueGuest = wrapper.get<HTMLButtonElement>('form button[type="submit"]');
+            expect(continueGuest.element.disabled).toBe(true);
+            expect(continueGuest.attributes('aria-busy')).toBe('false');
+            expect(continueGuest.find('.spinner-border').exists()).toBe(false);
+            expect(wrapper.get<HTMLInputElement>('#guest-name').element.value).toBe('Guest name');
+            expect(wrapper.get<HTMLInputElement>('#guest-email').element.value).toBe('guest@example.test');
+            const commands = request.mock.calls.map(([req]) => req as Request).filter(req => req.method === 'POST');
+            expect(commands.map(req => new URL(req.url).pathname)).toEqual(['/api/v1/auth/guest-email-exists', '/api/v1/auth/guest-recovery']);
+            expect(await commands[1].json()).toEqual({email: 'guest@example.test', next: `/frontend-pilot/packing/${eventId}`});
+            finishRecovery(json({changed: true}));
+            await flushPromises();
+            expect(wrapper.get('.alert-success').text()).toContain('The link(s) to your guest account(s)');
+        } finally { finishRecovery(json({changed: true})); }
     });
 
     it('retains the Your profiles journey through its migrated destination and protects pending identity changes', async () => {

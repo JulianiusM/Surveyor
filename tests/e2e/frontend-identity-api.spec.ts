@@ -1,4 +1,4 @@
-import {test, expect, type APIRequestContext, type APIResponse, type Response, type Request} from '@playwright/test';
+import {test, expect, type APIRequestContext, type APIResponse, type Response, type Request, type Route} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
@@ -166,6 +166,58 @@ test('native form rejections and mounted pilot constraints retain the shared typ
             headers: {...headers(before), 'X-Surveyor-Locale': 'en'}, maxRedirects: 0});
         expect(api.status()).toBe(testCase.apiStatus);
         expect(await api.json()).toMatchObject({code: testCase.code, status: testCase.apiStatus, params: {}});
+    }
+
+    // Enter disables the still-focused native password input. Hold only delivery
+    // of a real controller rejection to inspect that browser focus transition;
+    // intentional secret clearing and a later keyboard gesture remain independent.
+    await page.goto('/frontend-pilot/users/login?locale=en');
+    await waitForPilotHydration(page);
+    const passwordControl = page.locator('#password');
+    const retainedPassword = await passwordControl.elementHandle();
+    for (const cancelled of [false, true]) {
+        let release!: () => void;
+        let received!: () => void;
+        const held = new Promise<void>(resolve => { release = resolve; });
+        const receivedRejection = new Promise<void>(resolve => { received = resolve; });
+        async function holdCredentialRejection(route: Route): Promise<void> {
+            const response = await route.fetch();
+            expect(response.status()).toBe(401);
+            expect(await response.json()).toMatchObject({code: 'INVALID_CREDENTIALS'});
+            received();
+            await held;
+            await route.fulfill({response});
+        }
+        await page.locator('#username').fill(username);
+        await passwordControl.fill('Deliberately-wrong-password1');
+        await passwordControl.focus();
+        await page.route('**/api/v1/auth/login', holdCredentialRejection);
+        try {
+            const delivered = page.waitForResponse(response => response.url().endsWith('/api/v1/auth/login'));
+            await passwordControl.press('Enter');
+            await receivedRejection;
+            await expect(passwordControl).toBeDisabled();
+            expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+            if (cancelled) await page.keyboard.press('Tab');
+            const pendingFocus = await page.evaluateHandle(() => document.activeElement);
+            const scroll = await page.evaluate(() => ({x: window.scrollX, y: window.scrollY}));
+
+            release();
+            expect((await delivered).status()).toBe(401);
+            await expect(passwordControl).toBeEnabled();
+            await expect(passwordControl).toHaveValue('');
+            await expect(page.locator('#username')).toHaveValue(username);
+            expect(await passwordControl.evaluate((element, retained) => element === retained, retainedPassword)).toBe(true);
+            if (cancelled) {
+                expect(await page.evaluate(target => document.activeElement === target, pendingFocus)).toBe(true);
+                await expect(passwordControl).not.toBeFocused();
+            } else await expect(passwordControl).toBeFocused();
+            expect(await page.evaluate(() => ({x: window.scrollX, y: window.scrollY}))).toEqual(scroll);
+            await pendingFocus.dispose();
+        } finally {
+            release();
+            await page.unroute('**/api/v1/auth/login', holdCredentialRejection);
+        }
     }
 
     // The enhanced transport owns context/CSRF and generated input admission;

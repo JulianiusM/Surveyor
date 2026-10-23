@@ -99,7 +99,7 @@ function stage(): void {
         issue.value = failure instanceof RecommendationDraftError ? failure.messageKey : 'activity.recommendations.selectParticipant';
     }
 }
-/** Native modal labels append browser-local attendance bounds to the admitted name. */
+/** Append shared civil-day attendance labels to the admitted participant name. */
 function participantLabel(person: components['schemas']['ActivityRecommendations']['participantOptions'][number]): string {
     // Missing bounds retain native start/end wording; the submitted profile ID
     // stays separate from this purely presentational label.

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Full-application contribution contracts reconciled without phase or cutover instructions in production payloads; Finance ownership, actual command precision, generated catalog ownership and obsolete-validator retirement retained; no publication or new execution claim
+verification-scope: Full-application contribution contracts reconciled, including shared native-control pending focus and initiating state independent of spinner presentation; Finance ownership, actual command precision, generated catalog ownership and obsolete-validator retirement retained; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -177,15 +177,58 @@ localized labels; a placeholder is inadequate. Repeated table fields can take th
 headings while retaining an explicit accessible association for each control, including the shared field's
 visually hidden label where that preserves the established row layout. Do not duplicate a visible label in every
 cell merely because the same control also serves standalone forms.
-Matching Bootstrap command/filter buttons use `ActionButton` with their
-existing variant, size, form and disabled policy. Passing only `disabled` retains a native no-spinner workflow; do not
-add pending presentation merely because the shared component supports it.
+When a form disables its focused field during submission, pass that form's actual initiating `pending` to
+`FormField`. This input only joins the shared focus lifetime; it changes no disabling, model, native validation,
+normalization or secret-clearing policy. Creation and metadata wrappers forward the same pending state through
+their field slots. Native number/date controls that retain distinct Vue directives explicitly bind the scoped
+`#control="{controlRef}"` input with `:ref="controlRef"`; the field never discovers descendants or adopts a component
+proxy. Readonly inputs that can still initiate Enter submission use the same form pending state.
 
-The shared button keeps native disabling during pending work. If that disabling releases its existing focus,
-completion restores only the same mounted, available control with no scroll movement, while focus remains unclaimed.
+Matching Bootstrap command/filter buttons use `ActionButton` with their
+existing variant, size, form and disabled policy. Pass the initiating operation's actual `state` or `pending` even
+when its native presentation has no spinner; `:show-spinner="false"` keeps that existing appearance independently of
+pending disabling, accessibility and focus handling. Broader blocking conditions remain separate `disabled`
+inputs. A sibling command's lock must not masquerade as this control's initiating work or claim its focus.
+Preserve an existing query-read progress indicator where its original contract uses one. When a local marker
+identifies a different initiating control, its siblings remain blocked without borrowing that pending state.
+An existing specialized button appearance, such as Activity's list-group role suggestions, uses `unstyled` with
+its caller-owned classes. This omits only the default Bootstrap button classes; the same actual button retains
+initialization, disabling, accessibility and focus ownership. A styling difference alone does not justify a
+second action implementation or a native-control exception.
+
+Pending spans the complete initiating action, including every selected fresh read. An ordinary
+`command.reconcileSafely` does not itself set `command.recovering`; its protected recovery branch does.
+Use the existing read/command state when it covers that lifetime. When one handler awaits several independently
+settling reads, its owner may retain a presentation-only initiating marker through `finally`, as Overview and
+Finance do. This marker selects the control or row; it stores no request, snapshot, draft, permission or command
+lease. Matching Save/Cancel, ballot/combination and repeated-row actions likewise identify their actual initiator
+while siblings retain their separate blocking policy.
+The shared Event picker distinguishes Previous, Next and Retry from filter/background discovery. Creation keeps
+Create pending across its admission/write handoff while a read-only admission Retry only blocks Create. Profile
+workflow authority Refresh likewise stays distinct from token/destructive commands; submission remains blocked
+until its complete protected authority read finishes, including after session verification has already completed.
+
+`usePendingFocus` is the one transient focus owner for `ActionButton`, `FormField`, `InlineCell` and distinct native
+controls such as the locale select, Packing Everyone switch and Activity role-entry input. Callers supply their
+actual control reference, initiating pending state and existing availability. Native disabling remains unchanged.
+If that disabling releases its existing focus, completion restores only the same mounted, available control with
+no scroll movement, while focus remains unclaimed. Effective native disabling includes an enclosing fieldset.
 Any deliberate pointer/key action, another focused control, window blur, actor retirement or unmount cancels
 restoration. A command started elsewhere never claims focus. The control owns only this transient DOM reference;
 operation admission, drafts, requests and results remain with their existing owners.
+An inline editor's ordinary blur save has no focused initiating input; a successful editor removal owns no
+replacement focus. Main identity submission, recovery mail, guest registration and profile switching likewise
+retain distinct initiating state even when one command blocks their sibling controls.
+The pending observer runs before its own component render: capture precedes native disabling, and completion's
+`nextTick` waits for the queued enabling patch. A synchronous observer can schedule restoration before that patch;
+an action that starts and finishes in one render turn needs no restoration because no disabled state is painted.
+
+Built-browser checks retain their actual cold-read and cache conditions: additional locale cycles must not prime
+an article before its first-load assertions. Position the actual target in a horizontally scrollable surface before
+measuring complete visibility, and settle fixture movement before sampling geometry. When a deliberate focus move
+only establishes the target for a later no-scroll assertion, `focus({preventScroll: true})` separates that choice
+from unfinished native focus scrolling. Keep genuine response delivery and the original node, focus, scroll,
+availability and persistence assertions; fixture setup does not justify weaker checks or longer deadlines.
 
 Durable feature warnings use `StatusNotice`,
 with feature-owned content, visibility and warning intent rather than a new timer or command owner.
@@ -425,7 +468,8 @@ authorized downloads of the complete saved ledger, independent of browser filter
    only changed data cannot restore an image after a validated terminal response.
 
    Use the existing context-owned `useActionState` for an operation's live eligibility, pending and blocked inputs.
-   Pass that state to `ActionButton` (or its disabled/pending refs to a native control), and call its `isAvailable()`
+   Pass that state to `ActionButton`, select spinner presentation independently and keep unrelated blocking in its
+   disabled policy. A distinct native control receives only its applicable disabled/pending refs. Call `isAvailable()`
    before dispatch. The control and handler must share this decision, including session revalidation and cooldowns;
    an enabled-looking action must not silently stop at an undisclosed read gate. `usePageEntry` and `useCommand`
    expose their own action states so callers reuse their lifecycle decisions. Keep read admission

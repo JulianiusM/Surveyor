@@ -29,6 +29,9 @@ const api = props.operations;
 const data = computed(() => props.settings);
 const blocked = computed(() => props.blocked);
 const controlsPending = computed(() => props.controlsPending);
+// The dialog's command is shared across panels and rows. Keep only the local
+// initiating presentation identity, so blocked siblings never claim its focus.
+const pendingAction = ref<{kind: 'defaults' | 'add' | 'save' | 'remove'; id?: string} | null>(null);
 type Settings = EntityAccessEditorProps['settings'];
 type Defaults = components['schemas']['PermissionDefaults'];
 type DefaultsSnapshot = PilotMetadataSnapshot<Defaults>;
@@ -262,10 +265,16 @@ async function saveDefaults(): Promise<void> {
     const patch = {...defaultsPatch.value};
     const token = defaults.value.etag;
     const previousRead = completedSettingsReads;
-    const result = await command.run((scope) =>
-        api.setDefaults(props.resourceId, patch, token, scope),
-        true, false, {success: 'permissions.updated'},
-    );
+    pendingAction.value = {kind: 'defaults'};
+    let result: unknown;
+    try {
+        result = await command.run((scope) =>
+            api.setDefaults(props.resourceId, patch, token, scope),
+            true, false, {success: 'permissions.updated'},
+        );
+    } finally {
+        pendingAction.value = null;
+    }
 
     // Show the confirmed choice even when refresh failed. If a newer settings read
     // did complete, reconcile its authoritative values and tokens through their owner.
@@ -303,12 +312,18 @@ async function saveAdmin(id: string): Promise<void> {
     // The conflict gate requires explicit regrant review before addAdmin is reachable.
     const submitted = draft.value;
     const previousRead = completedSettingsReads;
-    const result = await command.run((scope) =>
-        adminRemoved(id)
-            ? api.addAdmin(props.resourceId, {profileId: id, mask: submitted}, draft.token, scope)
-            : api.updateAdmin(props.resourceId, id, submitted, draft.token, scope),
-        true, false, {success: 'permissions.updated'},
-    );
+    pendingAction.value = {kind: 'save', id};
+    let result: unknown;
+    try {
+        result = await command.run((scope) =>
+            adminRemoved(id)
+                ? api.addAdmin(props.resourceId, {profileId: id, mask: submitted}, draft.token, scope)
+                : api.updateAdmin(props.resourceId, id, submitted, draft.token, scope),
+            true, false, {success: 'permissions.updated'},
+        );
+    } finally {
+        pendingAction.value = null;
+    }
 
     // Preserve the accepted mask independently of refresh, then reconcile a completed
     // newer read so concurrent grant changes cannot be hidden by the held write result.
@@ -324,6 +339,7 @@ async function saveAdmin(id: string): Promise<void> {
  * confirm the server removal against that row's latest admitted mask token;
  * this does not silently acknowledge or recreate a conflicting permission draft. */
 async function removeAdmin(id: string): Promise<void> {
+    if (blocked.value) return;
     // Remote removal has already happened. Closing this retained local draft
     // issues no DELETE and must not accidentally recreate its reviewed mask.
     if (adminRemoved(id)) {
@@ -335,10 +351,15 @@ async function removeAdmin(id: string): Promise<void> {
     // An existing row needs explicit confirmation and that admitted row's token.
     // The command owns refresh/error recovery instead of optimistically deleting it.
     if (data.value && window.confirm(messages.value.t('packing.confirmRemoveAdmin'))) {
-        await command.run((scope) =>
-            api.removeAdmin(props.resourceId, id, data.value!.access!.admins.find(admin => admin.profileId === id)!.editToken, scope),
-            true, false, {success: 'permissions.adminRemoved'},
-        );
+        pendingAction.value = {kind: 'remove', id};
+        try {
+            await command.run((scope) =>
+                api.removeAdmin(props.resourceId, id, data.value!.access!.admins.find(admin => admin.profileId === id)!.editToken, scope),
+                true, false, {success: 'permissions.adminRemoved'},
+            );
+        } finally {
+            pendingAction.value = null;
+        }
     }
 }
 
@@ -358,8 +379,10 @@ async function addAdmin(): Promise<void> {
     // Use the admitted preset and root baseline for a deliberate new grant.
     // Clear the form only after confirmation; unknown delivery retains its choice.
     const mask = data.value.access.presets.find((value) => value.key === preset.value)?.mask ?? 0;
-    if (
-        await command.run((scope) =>
+    pendingAction.value = {kind: 'add'};
+    let result: unknown;
+    try {
+        result = await command.run((scope) =>
             api.addAdmin(
                 props.resourceId,
                 {profileId: selectedProfile.value, mask},
@@ -367,10 +390,11 @@ async function addAdmin(): Promise<void> {
                 scope,
             ),
             true, false, {success: 'permissions.adminAdded'},
-        )
-    ) {
-        cancelAddAdmin();
+        );
+    } finally {
+        pendingAction.value = null;
     }
+    if (result) cancelAddAdmin();
 }
 
 /** Preserve the native two-letter avatar derived from the admitted display name. */
@@ -462,6 +486,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                     <div class="d-flex justify-content-end border-top border-secondary pt-3">
                         <ActionButton
                             type="submit"
+                            :pending="pendingAction?.kind === 'defaults' && command.pending.value" :show-spinner="false"
                             :disabled="blocked || (defaultsConflict)"
                             >{{ messages.t('packing.updatePermissions') }}</ActionButton
                         >
@@ -546,12 +571,16 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                         <ActionButton
                                             class="btn-sm"
                                             variant="outline-danger"
+                                            :pending="pendingAction?.kind === 'remove' && pendingAction.id === admin.profileId && command.pending.value"
+                                            :show-spinner="false"
                                             :disabled="blocked"
                                             @click="removeAdmin(admin.profileId)"
                                             ><i class="bi bi-trash me-1" aria-hidden="true"></i
                                             >{{ messages.t(adminRemoved(admin.profileId) ? 'packing.discardAdminDraft' : 'packing.removeAssignment') }}</ActionButton
                                         ><ActionButton
                                             class="btn-sm"
+                                            :pending="pendingAction?.kind === 'save' && pendingAction.id === admin.profileId && command.pending.value"
+                                            :show-spinner="false"
                                             :disabled="
                                                 blocked ||
                                                 adminConflict(admin.profileId)
@@ -634,7 +663,8 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                 :disabled="blocked"
                                 @click="cancelAddAdmin"
                                 >{{ messages.t('common.cancel') }}</ActionButton
-                            ><ActionButton type="submit" :disabled="blocked">{{
+                            ><ActionButton type="submit" :disabled="blocked"
+                                :pending="pendingAction?.kind === 'add' && command.pending.value" :show-spinner="false">{{
                                 messages.t('packing.add')
                             }}</ActionButton>
                         </div>

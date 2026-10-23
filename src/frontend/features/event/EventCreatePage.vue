@@ -161,7 +161,8 @@ function collectCreation() {
                  fields or chooser. Retry admits authority; it never creates. -->
             <form v-if="baseline !== null" id="eventForm" @submit.prevent="create">
                 <fieldset :disabled="blocked || !definitions">
-                    <EventFields :values="fields" prefix="event-create" :disabled="blocked || !definitions" />
+                    <EventFields :values="fields" prefix="event-create" :disabled="blocked || !definitions"
+                        :pending="createAction.pending.value" />
 
                     <!-- The selected File and chooser share the feature's draft lifetime. -->
                     <div class="row mb-3">

@@ -60,6 +60,9 @@ export interface EntityHeaderEditorProps {
     conflict: boolean;
     disabled: boolean;
     reading: boolean;
+    /** Only the initiating header command owns its button's temporary focus. */
+    uploadPending?: boolean;
+    removePending?: boolean;
 }
 
 /** A shared event editor displays the feature's original/local/current relationship. */
@@ -76,6 +79,7 @@ export interface EntityEventEditorProps {
     active: boolean;
     conflict: boolean;
     disabled: boolean;
+    pending?: boolean;
 }
 
 /** Feature-specific lifecycle explanations supplement the shared action labels. */
@@ -101,6 +105,8 @@ export interface EntityLifecycleActionsProps {
     canRemove: boolean;
     duplicateTo: string;
     disabled: boolean;
+    /** Broader dialog blocking stays separate from this initiating operation. */
+    pendingAction?: 'archive' | 'automation' | 'remove' | null;
     contextHint?: string;
     exportLink?: {url: string; label: string};
     /** Only entities with an admitted automatic schedule expose this distinct action. */

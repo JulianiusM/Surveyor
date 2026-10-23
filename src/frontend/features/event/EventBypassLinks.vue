@@ -26,6 +26,9 @@ const expanded = ref(false);
 const creating = ref(false);
 const expiry = ref('');
 const uses = ref('1');
+// A revoke belongs to one saved row. Creation and sibling link buttons remain
+// disabled by the same command without claiming that row's transient focus.
+const revokingId = ref<string | null>(null);
 
 // Initial reads admit the count before disclosure. Recurring reads follow the
 // expanded/visible lifetime without clearing an in-progress creation draft.
@@ -35,7 +38,7 @@ const command = useCommand(section.refresh, true, {dirty: () => creating.value &
 const clipboard = useEventClipboard();
 const available = useActionState({eligible: mayUseLinks, blocked: () => command.action.disabled.value});
 const refreshAction = useActionState({eligible: () => section.readAction.isAvailable(),
-    blocked: () => command.recoveryAction.disabled.value, pending: () => section.query.isFetching.value});
+    blocked: () => command.recoveryAction.disabled.value, pending: () => section.query.isFetching.value || command.recovering.value});
 watch([() => props.eventId, context.epoch, () => context.session.value?.context], retireLocalState);
 watch(section.denied, denied => { if (denied) retireLocalState(); });
 
@@ -86,8 +89,11 @@ async function revoke(link: Link): Promise<void> {
     if (!available.isAvailable() || link.status === 'revoked') return;
     if (!window.confirm(messages.value.t('event.organizer.revokeConfirm'))) return;
     // A desired-state revoke may reconcile through a fresh authorized list read.
-    await command.run(scope => api.revokeLink(props.eventId, link.id, scope), true, false,
-        {success: 'event.organizer.linkRevoked'});
+    revokingId.value = link.id;
+    try {
+        await command.run(scope => api.revokeLink(props.eventId, link.id, scope), true, false,
+            {success: 'event.organizer.linkRevoked'});
+    } finally { revokingId.value = null; }
 }
 
 /** Recovery reads the current links first. A creation can have succeeded without
@@ -171,9 +177,11 @@ function statusClass(status: Link['status']): string {
                                         <td class="text-end">
                                             <div class="btn-group btn-group-sm">
                                                 <ActionButton variant="outline-light" :state="available"
+                                                    :pending="clipboard.pending.has(link.id)" :show-spinner="false"
                                                     :disabled="link.status !== 'active' || clipboard.pending.has(link.id)"
                                                     @click="copyLink(link)"><i class="bi bi-clipboard me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.copy') }}</ActionButton>
                                                 <ActionButton variant="outline-danger" :state="available"
+                                                    :pending="command.pending.value && revokingId === link.id" :show-spinner="false"
                                                     :disabled="link.status === 'revoked'"
                                                     @click="revoke(link)"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.revoke') }}</ActionButton>
                                             </div>
@@ -209,17 +217,19 @@ function statusClass(status: Link['status']): string {
                     <!-- Shared labels wrap the existing native directives; Uses
                          retains number coercion and expiry retains its local draft. -->
                     <FormField :id="`${id}-uses`" class="col-md-6" :label="messages.t('event.organizer.uses')"
-                        label-icon="bi-hash" label-class="" :required-marker="false">
-                        <template #control>
-                            <input :id="`${id}-uses`" v-model="uses" class="form-control text-bg-dark" type="number"
+                        label-icon="bi-hash" label-class="" :required-marker="false"
+                        :pending="command.pending.value && !revokingId">
+                        <template #control="{controlRef}">
+                            <input :id="`${id}-uses`" :ref="controlRef" v-model="uses" class="form-control text-bg-dark" type="number"
                                 min="1" step="1" placeholder="1" :disabled="command.action.disabled.value" />
                         </template>
                         <small class="text-secondary d-block">{{ messages.t('event.organizer.singleUse') }}</small>
                     </FormField>
                     <FormField :id="`${id}-expires`" class="col-md-6" :label="messages.t('event.organizer.expiresLocal')"
-                        label-icon="bi-calendar2-event" label-class="" :required-marker="false">
-                        <template #control>
-                            <input :id="`${id}-expires`" v-model="expiry" class="form-control text-bg-dark"
+                        label-icon="bi-calendar2-event" label-class="" :required-marker="false"
+                        :pending="command.pending.value && !revokingId">
+                        <template #control="{controlRef}">
+                            <input :id="`${id}-expires`" :ref="controlRef" v-model="expiry" class="form-control text-bg-dark"
                                 type="datetime-local" :disabled="command.action.disabled.value" />
                         </template>
                         <small class="text-secondary d-block">{{ messages.t('event.organizer.expiresHelp') }}</small>
@@ -229,7 +239,10 @@ function statusClass(status: Link['status']): string {
             <template #footer>
                 <ActionButton variant="outline-secondary"
                     :disabled="command.pending.value || command.recovering.value" @click="closeCreate">{{ messages.t('common.cancel') }}</ActionButton>
-                <ActionButton type="submit" :form="`${id}-create-form`" :state="command.action">{{ messages.t('event.organizer.create') }}</ActionButton>
+                <!-- Creation and revocation share command admission, while only
+                     this form's operation owns its original pending spinner. -->
+                <ActionButton type="submit" :form="`${id}-create-form`" :disabled="command.action.disabled.value"
+                    :pending="command.pending.value && !revokingId">{{ messages.t('event.organizer.create') }}</ActionButton>
             </template>
         </AppDialog>
     </section>

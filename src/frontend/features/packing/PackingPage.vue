@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import {computed, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue';
+import {computed, onBeforeUnmount, onMounted, onUpdated, reactive, ref, shallowRef, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {FrontendListQuickAddValues} from '../../../types/FrontendListTypes';
+import type {FrontendListPendingControl, FrontendListQuickAddValues} from '../../../types/FrontendListTypes';
 import {usePackingApi} from './api';
 import {usePilot} from '../../app/context';
 import {evictQueryFamilies, retireQueryFamily} from '../../app/queryCache';
@@ -11,6 +11,7 @@ import {usePageTitle} from '../../composables/pageTitle';
 import {readPacked, writePacked} from './packed';
 import {listProblemKey, useListCommands, useListDetail} from '../../composables/listDetail';
 import {useListReorder} from '../../composables/listReorder';
+import {usePendingFocus} from '../../composables/pendingFocus';
 import ActionButton from '../../components/ActionButton.vue';
 import InlineCell from '../../components/InlineCell.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -45,6 +46,12 @@ const packedReadFailed = ref(false);
 const packedStorageUnavailable = computed(() => packedReadFailed.value || pendingPackedWrites.size > 0);
 const editing = ref(0);
 const freshItem = reactive<FrontendListQuickAddValues & {title: string}>({title: '', description: '', maxAssignees: 1});
+// Presentation identity only: request authority and completion remain with the
+// shared command. A disabled sibling must never claim this initiator's focus.
+const pendingControl = ref<FrontendListPendingControl | null>(null);
+// The raw Everyone switch retains its exact row markup. Capture only the actual
+// initiating native node; no row value or command result is mirrored here.
+const requiredControl = shallowRef<HTMLInputElement | null>(null);
 const quickAddDirty = computed(
     () => !!freshItem.title || !!freshItem.description || freshItem.maxAssignees !== 1,
 );
@@ -78,6 +85,18 @@ const {command, blocked, readAction, retryAt, refresh, retireSettingsAccess, rev
     unknownMessage: 'draft.leaveUnknown',
     problemKey: listProblemKey,
 });
+const changingRequired = computed(() => command.pending.value && pendingControl.value?.kind === 'required');
+usePendingFocus({element: requiredControl, pending: changingRequired, isAvailable: command.action.isAvailable});
+// Marker settlement precedes shared nextTick restoration, so keep the live node
+// through finally. Actual row removal or actor/resource retirement releases it.
+onUpdated(retireDetachedRequiredControl);
+onBeforeUnmount(retireRequiredControl);
+watch([listId, context.epoch, () => context.session.value?.context], retireRequiredControl, {flush: 'sync'});
+
+function retireRequiredControl(): void { requiredControl.value = null; }
+function retireDetachedRequiredControl(): void {
+    if (requiredControl.value && !requiredControl.value.isConnected) retireRequiredControl();
+}
 
 /** Packed state is optional browser-local presentation using the native keys.
  * SSR never probes browser storage. A rejected getter becomes an unavailable
@@ -245,62 +264,87 @@ async function patch(
  * The server owns idempotency and capacity; unknown delivery is reviewed through
  * the shared command owner instead of automatically toggled or retried. */
 async function assign(item: Item): Promise<void> {
-    await command.run((scope) => api.assign(listId.value, item.id, !item.selfAssigned, scope), true, false,
-        {success: item.selfAssigned ? 'packing.itemUnassigned' : 'packing.itemAssigned'});
+    if (!command.action.isAvailable()) return;
+    // Capture this admitted row's control before its desired-state command can
+    // replace membership during the saved refresh.
+    pendingControl.value = {kind: 'assign', id: item.id};
+    try {
+        await command.run((scope) => api.assign(listId.value, item.id, !item.selfAssigned, scope), true, false,
+            {success: item.selfAssigned ? 'packing.itemUnassigned' : 'packing.itemAssigned'});
+    } finally { pendingControl.value = null; }
 }
 /** Capture the requested Everyone value while displaying the last admitted row.
  * The existing item token protects this sparse write; a later admitted list read
  * supplies a replacement shared value, rather than an optimistic checkbox. */
 async function toggleRequired(item: Item, event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
+    const input = event.currentTarget as HTMLInputElement;
     const value = input.checked;
 
     // Retain the last admitted item value while the requested change is pending,
     // rejected or uncertain. The captured DOM choice is command input only.
     input.checked = item.requiredByAll;
-    await command.run((scope) =>
-        api.updateItem(listId.value, item.id, {requiredByAll: value}, item.editToken, scope),
-        true, false, {success: 'common.updated'},
-    );
+    if (!command.action.isAvailable()) return;
+    requiredControl.value = input;
+    pendingControl.value = {kind: 'required', id: item.id};
+    try {
+        await command.run((scope) =>
+            api.updateItem(listId.value, item.id, {requiredByAll: value}, item.editToken, scope),
+            true, false, {success: 'common.updated'},
+        );
+    } finally { pendingControl.value = null; }
 }
 /** Native item deletion needs deliberate confirmation before its independently authorized command. */
 async function removeItem(item: Item): Promise<void> {
-    if (window.confirm(messages.value.t('packing.confirmDeleteItem'))) {
-        await command.run((scope) => api.deleteItem(listId.value, item.id, scope), true, false,
-            {success: 'packing.itemDeleted'});
+    // Confirmation precedes both presentation ownership and dispatch. A blocked
+    // sibling gesture cannot overwrite the active command's initiating row.
+    if (command.action.isAvailable() && window.confirm(messages.value.t('packing.confirmDeleteItem'))) {
+        pendingControl.value = {kind: 'delete', id: item.id};
+        try {
+            await command.run((scope) => api.deleteItem(listId.value, item.id, scope), true, false,
+                {success: 'packing.itemDeleted'});
+        } finally { pendingControl.value = null; }
     }
 }
+/** Remove one admitted saved assignment without touching the Quick Add draft. */
 async function removeAssignment(assignmentId: string): Promise<void> {
     // Native manager removal submits immediately; its server permission/ownership
     // checks remain authoritative and the shared command still prevents replay.
-    await command.run((scope) => api.removeAssignment(listId.value, assignmentId, scope), true, false,
-        {success: 'common.removed'});
+    if (!command.action.isAvailable()) return;
+    pendingControl.value = {kind: 'assignment', id: assignmentId};
+    try {
+        await command.run((scope) => api.removeAssignment(listId.value, assignmentId, scope), true, false,
+            {success: 'common.removed'});
+    } finally { pendingControl.value = null; }
 }
 /** Submit the native Quick Add draft once through the shared creation command.
  * Only a confirmed result clears the entered fields; a missing response retains
  * both that draft and explicit review, since a read cannot identify its new row. */
 async function addItem(): Promise<void> {
-    const result = await command.run((scope) =>
-        api.addItem(
-            listId.value,
-            {
-                // Quick-add posts raw native form values. Creation's collection-row
-                // trimming is a different workflow; a blank optional capacity uses one.
-                title: freshItem.title,
-                description: freshItem.description,
-                maxAssignees: Number(freshItem.maxAssignees) || 1,
-                requiredByAll: false,
-            },
-            scope,
-        ),
-        true,
-        true,
-        {success: 'common.added'},
-    );
+    if (!command.action.isAvailable()) return;
+    pendingControl.value = {kind: 'add'};
+    try {
+        const result = await command.run((scope) =>
+            api.addItem(
+                listId.value,
+                {
+                    // Quick-add posts raw native form values. Creation's collection-row
+                    // trimming is a different workflow; a blank optional capacity uses one.
+                    title: freshItem.title,
+                    description: freshItem.description,
+                    maxAssignees: Number(freshItem.maxAssignees) || 1,
+                    requiredByAll: false,
+                },
+                scope,
+            ),
+            true,
+            true,
+            {success: 'common.added'},
+        );
 
-    // Confirmation still counts when the follow-up read fails. Unknown delivery
-    // yields no result here and must keep the captured creation draft for review.
-    if (result) Object.assign(freshItem, {title: '', description: '', maxAssignees: 1});
+        // Confirmation still counts when the follow-up read fails. Unknown delivery
+        // yields no result here and must keep the captured creation draft for review.
+        if (result) Object.assign(freshItem, {title: '', description: '', maxAssignees: 1});
+    } finally { pendingControl.value = null; }
 }
 
 const reorder = useListReorder({
@@ -413,6 +457,7 @@ const reorder = useListReorder({
                                     >
                                     <EntityAssignees v-else :assignees="item.assignees"
                                         :removable="item.capabilities.removeAssignments" :disabled="blocked"
+                                        :pending-assignment-id="command.pending.value && pendingControl?.kind === 'assignment' ? pendingControl.id : null"
                                         :remove-label="messages.t('packing.removeAssignment')" @remove="removeAssignment" />
                                 </td>
                                 <!-- Native item editors have no HTML length caps. Their
@@ -477,6 +522,7 @@ const reorder = useListReorder({
                                          Preserve that presentation; the server rechecks
                                          ACCESS_VIEW before every assignment command. -->
                                     <EntityAssignmentActions :assigned="item.selfAssigned" :full="isFull(item)" :disabled="blocked"
+                                        :pending="command.pending.value && pendingControl?.kind === 'assign' && pendingControl.id === item.id"
                                         :everyone="item.requiredByAll ? messages.t('packing.everyone') : undefined"
                                         :assign-label="messages.t('packing.assign')" :remove-label="messages.t('packing.unassign')"
                                         :full-label="messages.t('packing.full')" @toggle="assign(item)" />
@@ -484,6 +530,7 @@ const reorder = useListReorder({
                                         v-if="item.capabilities.removeItem"
                                         class="btn-sm ms-1"
                                         variant="outline-danger"
+                                        :pending="command.pending.value && pendingControl?.kind === 'delete' && pendingControl.id === item.id" :show-spinner="false"
                                         :disabled="blocked"
                                         :aria-label="messages.t('packing.deleteItem')"
                                         @click="removeItem(item)"
@@ -499,8 +546,10 @@ const reorder = useListReorder({
                 <template v-if="data.capabilities.addItem">
                     <hr />
                     <EntityQuickAdd v-model:description="freshItem.description" v-model:capacity="freshItem.maxAssignees"
+                        :pending="command.pending.value && pendingControl?.kind === 'add'"
                         :disabled="blocked" @submit="addItem">
                         <FormField id="quick-title" v-model="freshItem.title" class="col-md-4" :name="null"
+                            :pending="command.pending.value && pendingControl?.kind === 'add'"
                             :label="messages.t('packing.title')" :placeholder="messages.t('packing.itemExample')"
                             required :disabled="blocked" />
                     </EntityQuickAdd>

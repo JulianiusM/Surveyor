@@ -335,6 +335,75 @@ describe('Overview independent schedule controls', () => {
 });
 
 describe('visible resource recovery', () => {
+    it('retains initiating Overview Refresh through an independently held sibling region read', async function retainsFamilyRefresh() {
+        const ownerResponse = deferred<Response>();
+        const participantResponse = deferred<Response>();
+        let refreshing = false;
+        let ownerReads = 0;
+        let participantReads = 0;
+
+        /** Both production regions retain their own delivered data. Only HTTP
+         * completion is held, so their shared family reconciliation remains real. */
+        async function readIndependentRegions(request: Request): Promise<Response> {
+            const collection = new URL(request.url).searchParams.get('collection') === 'participant' ? 'participant' : 'owner';
+            if (!refreshing) return json({...region(request), collection});
+            if (collection === 'owner') { ownerReads++; return ownerResponse.promise; }
+            participantReads++;
+            return participantResponse.promise;
+        }
+
+        const {wrapper} = await mounted(OverviewPage, {}, readIndependentRegions);
+        const owner = wrapper.get('[data-collection="owner"][data-region="main"]');
+        const participant = wrapper.get('[data-collection="participant"][data-region="main"]');
+        const refresh = owner.get<HTMLButtonElement>('button.ms-auto');
+        expect(refresh.element.disabled).toBe(false);
+        refresh.element.focus();
+        expect(document.activeElement).toBe(refresh.element);
+        const focus = vi.spyOn(refresh.element, 'focus');
+        refreshing = true;
+        try {
+            await refresh.trigger('click');
+            await vi.waitFor(() => expect([ownerReads, participantReads]).toEqual([1, 1]));
+            expect(refresh.element.disabled).toBe(true);
+            expect(refresh.attributes('aria-busy')).toBe('true');
+            expect(refresh.find('.spinner-border').exists()).toBe(true);
+
+            // Happy DOM retains disabled focus; reproduce Chromium's unclaimed
+            // body focus so the actual shared restoration boundary is exercised.
+            document.body.tabIndex = -1;
+            document.body.focus();
+            document.body.removeAttribute('tabindex');
+            expect(document.activeElement).toBe(document.body);
+
+            const request = new Request('http://localhost/api/v1/overview?collection=owner');
+            ownerResponse.resolve(json({...region(request), items: [{...card, title: 'Owner refresh complete'}]}));
+            await flushPromises();
+            expect(owner.text()).toContain('Owner refresh complete');
+            expect(participant.text()).toContain(card.title);
+            // This region's own query has settled, but its initiating operation
+            // still awaits the sibling. Neither focus nor availability releases early.
+            expect(owner.get('button.ms-auto').element).toBe(refresh.element);
+            expect(refresh.element.disabled).toBe(true);
+            expect(refresh.attributes('aria-busy')).toBe('true');
+            expect(refresh.find('.spinner-border').exists()).toBe(true);
+            expect(document.activeElement).toBe(document.body);
+            expect(focus).not.toHaveBeenCalled();
+            await refresh.trigger('click');
+            expect([ownerReads, participantReads]).toEqual([1, 1]);
+
+            participantResponse.resolve(json({...region(request), collection: 'participant'}));
+            await flushPromises();
+            expect(refresh.element.disabled).toBe(false);
+            expect(refresh.attributes('aria-busy')).toBe('false');
+            expect(document.activeElement).toBe(refresh.element);
+            expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+        } finally {
+            // A failed assertion must not strand a query during shared cleanup.
+            ownerResponse.resolve(json({...region(new Request('http://localhost/')), collection: 'owner'}));
+            participantResponse.resolve(json({...region(new Request('http://localhost/')), collection: 'participant'}));
+        }
+    });
+
     it('admits a new mounted GET after a cached terminal denial without waiting for cache expiry', async function admitsColdRead() {
         let denied = true;
         let reads = 0;
@@ -1093,6 +1162,134 @@ describe('visible resource recovery', () => {
         const native = nativeOverviewRegion(projection);
         expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value)
             .toBe(native.querySelector<HTMLInputElement>('input[type="search"]')!.value);
+    });
+
+    it.each(['next', 'previous', 'retry'] as const)('marks only the initiating picker %s action pending on a retained middle page', async action => {
+        type Options = Awaited<ReturnType<PilotEventPickerSource['search']>>;
+        const held = deferred<Options>();
+        let phase: 'ready' | 'reject' | 'held' = 'ready';
+        let heldCursor: string | undefined;
+        function pageOptions(cursor?: string): Options {
+            const page = Number(cursor?.replace('page-', '') ?? 1);
+            return {items: [event], selected: null, nextCursor: `page-${page + 1}`};
+        }
+        const search = vi.fn<PilotEventPickerSource['search']>(async query => {
+            if (phase === 'reject') throw new ApiFailure(400, null, null, 'Temporary page rejection', true);
+            if (phase === 'held') { heldCursor = query.cursor; return held.promise; }
+            return pageOptions(query.cursor);
+        });
+        const {wrapper, context} = await mounted(EventPicker,
+            {prefix: 'pending-picker', inline: true, modelValue: null, source: pickerSource(search)});
+        function pagingButton(kind: 'next' | 'previous' | 'retry') {
+            const label = context.messages.value.t(kind === 'retry' ? 'common.retry'
+                : kind === 'next' ? 'eventPicker.nextPage' : 'eventPicker.previousPage');
+            return wrapper.findAll('button').find(button => button.text() === label)!;
+        }
+        // Page three keeps both neighboring controls mounted after either move.
+        for (let visit = 0; visit < 2; visit++) {
+            await pagingButton('next').trigger('click');
+            await flushPromises();
+        }
+        if (action === 'retry') {
+            phase = 'reject';
+            await pagingButton('next').trigger('click');
+            await flushPromises();
+        }
+        phase = 'held';
+        const initiator = pagingButton(action);
+        const element = initiator.element as HTMLButtonElement;
+        element.focus();
+        await initiator.trigger('click');
+        await flushPromises();
+        try {
+            expect(initiator.attributes('disabled')).toBeDefined();
+            expect(initiator.attributes('aria-busy')).toBe('true');
+            expect(initiator.find('.spinner-border').exists()).toBe(true);
+            for (const kind of ['next', 'previous'] as const) {
+                if (kind === action) continue;
+                const sibling = pagingButton(kind);
+                expect(sibling.attributes('disabled')).toBeDefined();
+                expect(sibling.attributes('aria-busy')).toBe('false');
+                expect(sibling.find('.spinner-border').exists()).toBe(false);
+            }
+            // happy-dom needs the browser's disabled-button focus loss simulated;
+            // the built Reload regression owns actual Chromium focus mechanics.
+            document.body.tabIndex = -1;
+            document.body.focus();
+            document.body.removeAttribute('tabindex');
+            expect(document.activeElement).toBe(document.body);
+        } finally {
+            held.resolve(pageOptions(heldCursor));
+            await flushPromises();
+        }
+        if (action !== 'retry') expect(document.activeElement).toBe(element);
+        else expect(element.isConnected).toBe(false);
+    });
+
+    it('keeps picker background reads and typed-filter debounce out of paging busy presentation', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        const held = deferred<Awaited<ReturnType<PilotEventPickerSource['search']>>>();
+        let hold = false;
+        const search = vi.fn<PilotEventPickerSource['search']>(async query => hold ? held.promise
+            : {items: [event], selected: null, nextCursor: query.cursor ? 'page-three' : 'page-two'});
+        const {wrapper, context} = await mounted(EventPicker,
+            {prefix: 'background-picker', inline: true, modelValue: null, source: pickerSource(search)});
+        function pagingButtons() {
+            return wrapper.findAll('button').filter(button => [context.messages.value.t('eventPicker.nextPage'),
+                context.messages.value.t('eventPicker.previousPage')].includes(button.text()));
+        }
+        await pagingButtons()[0]!.trigger('click');
+        await flushPromises();
+        hold = true;
+        const reading = context.queryClient.refetchQueries({type: 'active'});
+        await flushPromises();
+        try {
+            expect(pagingButtons()).toHaveLength(2);
+            for (const button of pagingButtons()) {
+                expect(button.attributes('disabled')).toBeDefined();
+                expect(button.attributes('aria-busy')).toBe('false');
+                expect(button.find('.spinner-border').exists()).toBe(false);
+            }
+        } finally {
+            held.resolve({items: [event], selected: null, nextCursor: 'page-three'});
+            await reading;
+            await flushPromises();
+        }
+        await wrapper.get('#background-picker-search').setValue('camp');
+        for (const button of pagingButtons()) {
+            expect(button.attributes('disabled')).toBeDefined();
+            expect(button.attributes('aria-busy')).toBe('false');
+        }
+    });
+
+    it('releases a picker page marker when a fresh cached target dispatches no read', async () => {
+        const held = deferred<Awaited<ReturnType<PilotEventPickerSource['search']>>>();
+        let hold = false;
+        const search = vi.fn<PilotEventPickerSource['search']>(async () => hold ? held.promise
+            : {items: [event], selected: null, nextCursor: 'page-two'});
+        const source: PilotEventPickerSource = {search,
+            filterKey: () => ['cached-picker'], pageKey: (_actor, _locale, _filters, query) => ['cached-picker', query.cursor ?? 'first']};
+        const {wrapper, context} = await mounted(EventPicker,
+            {prefix: 'cached-picker', inline: true, modelValue: null, source});
+        context.queryClient.setQueryData(['cached-picker', 'page-two'], {items: [event], selected: null, nextCursor: 'page-three'});
+        const next = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('eventPicker.nextPage'))!;
+        await next.trigger('click'); await flushPromises();
+        expect(search).toHaveBeenCalledOnce();
+
+        // That cached transition owns no pending read. A later background fetch
+        // must not inherit its former Next action's spinner or focus claim.
+        hold = true;
+        const reading = context.queryClient.refetchQueries({type: 'active'});
+        await flushPromises();
+        try {
+            expect(next.attributes('disabled')).toBeDefined();
+            expect(next.attributes('aria-busy')).toBe('false');
+            expect(next.find('.spinner-border').exists()).toBe(false);
+        } finally {
+            held.resolve({items: [event], selected: null, nextCursor: 'page-three'});
+            await reading;
+            await flushPromises();
+        }
     });
 
     it('renders event filters before discovery finishes and replaces only its loading rows', async () => {

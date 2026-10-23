@@ -203,7 +203,8 @@ function close(): void {
                 </FormField>
                 <p v-else class="fw-semibold">{{ choices.find(person => person.id === payerId)?.name }}</p>
                 <p v-if="payerCovered" class="small text-warning">{{ messages.t('finance.thisPayerIsAlreadyCoveredBySomeoneElse') }}</p>
-                <FormField :id="`${id}-search`" v-model="search" type="search" class="mb-3" :label="messages.t('finance.searchParticipants')" :placeholder="messages.t('finance.typeToFilter')" />
+                <FormField :id="`${id}-search`" v-model="search" type="search" class="mb-3" :label="messages.t('finance.searchParticipants')" :placeholder="messages.t('finance.typeToFilter')"
+                    :pending="command.pending.value" />
                 <div class="list-group list-group-flush border border-secondary-subtle rounded-3">
                     <div v-for="person in filtered" :key="person.id" class="list-group-item bg-dark text-white" :data-finance-beneficiary="person.id">
                         <div class="form-check">
@@ -222,7 +223,8 @@ function close(): void {
         </form>
         <template #footer>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.close') }}</ActionButton>
-            <ActionButton :form="`${id}-form`" type="submit" :state="action">{{ messages.t('finance.saveChanges') }}</ActionButton>
+            <ActionButton :form="`${id}-form`" type="submit" :state="action"
+                :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.saveChanges') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

@@ -39,6 +39,6 @@ function chooseEvent(value: string | null): void {
                 messages.t('draft.review')
             }}</ActionButton></StatusNotice
         >
-        <ActionButton type="submit" :disabled="disabled || conflict">{{ submitLabel }}</ActionButton>
+        <ActionButton type="submit" :disabled="disabled || conflict" :pending="pending" :show-spinner="false">{{ submitLabel }}</ActionButton>
     </form>
 </template>

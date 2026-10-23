@@ -30,6 +30,10 @@ const next = computed(() => props.destination);
 const fields = reactive({name: '', email: ''});
 const choiceOpen = ref(false);
 const checkingEmail = ref(false);
+// Registration and modal mail recovery share the command owner. Keep only the
+// initiating presentation tag here; admission, drafts and request lifetime stay
+// with the existing lookup and command fences.
+const registeringGuest = ref(false);
 const entryKey = computed(() => props.queryKey);
 const readAdmission = useQueryAdmission(context, entryKey,
     computed(() => context.hydrated.value && !props.entry));
@@ -79,6 +83,7 @@ watch(() => [resourceId.value, next.value], () => {
 usePageTitle(() => messages.value.t('auth.join', {title: guestEntry.value?.title ?? messages.value.t(props.titleKey)}), true);
 const blocked = computed(() => checkingEmail.value || command.action.disabled.value
     || completion.pending.value || completion.target.value !== null);
+const submittingGuest = computed(() => checkingEmail.value || command.pending.value && registeringGuest.value);
 const titleRetryAction = useActionState({eligible: mayRetryTitle, pending: () => entry.isFetching.value});
 
 function mayRetryTitle(): boolean {
@@ -111,14 +116,17 @@ async function register(): Promise<void> {
     choiceOpen.value = false;
     const origin = route.fullPath;
     const destination = next.value;
-    const result = await command.run(registerIdentity, false);
-    if (result) {
-        Object.assign(fields, {name: '', email: ''});
-        // The shared owner retains confirmed identity/navigation across a failed bootstrap;
-        // Retry must complete this journey without replaying guest registration.
-        await completeIdentityEntry(context, router, result,
-            {kind: 'redirect', url: destination, notice: null}, origin, completion);
-    }
+    registeringGuest.value = true;
+    try {
+        const result = await command.run(registerIdentity, false);
+        if (result) {
+            Object.assign(fields, {name: '', email: ''});
+            // The shared owner retains confirmed identity/navigation across a failed bootstrap;
+            // Retry must complete this journey without replaying guest registration.
+            await completeIdentityEntry(context, router, result,
+                {kind: 'redirect', url: destination, notice: null}, origin, completion);
+        }
+    } finally { registeringGuest.value = false; }
 }
 
 /** Native guest names are saved exactly as submitted. Email normalization remains the
@@ -259,6 +267,7 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                     :max-length="100"
                     autocomplete="nickname"
                     :disabled="blocked"
+                    :pending="submittingGuest"
                     ><div class="form-text text-bg-dark">{{ messages.t('auth.nameHint') }}</div></FormField
                 >
                 <FormField
@@ -276,6 +285,7 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                     :max-length="100"
                     autocomplete="email"
                     :disabled="blocked"
+                    :pending="submittingGuest"
                     ><div class="form-text text-bg-dark">{{ messages.t('auth.emailHint') }}</div></FormField
                 >
                 <div class="col-12 col-md-8 mt-2">
@@ -285,7 +295,7 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                             variant="success"
                             class="btn-lg d-inline-flex align-items-center justify-content-center gap-2"
                             :disabled="blocked || !guestEntry"
-                            :pending="command.pending.value || checkingEmail"
+                            :pending="submittingGuest"
                             ><i class="bi bi-check-lg" aria-hidden="true"></i
                             >{{ messages.t('auth.continueGuest') }}</ActionButton
                         >

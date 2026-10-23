@@ -204,11 +204,44 @@ test('revoked Packing admission cannot return through history while independent 
         await cardLink(page, resources.packing.id).click();
         await expect(page.getByRole('heading', {name: resources.packing.title, exact: true})).toBeVisible();
 
-        expect((await owner.request.delete(`/api/packing/${resources.packing.id}/admins/${guest.activeProfile!.id}`)).status()).toBe(200);
-        const denied = page.waitForResponse(response => new URL(response.url()).pathname === `/api/v1/packing-lists/${resources.packing.id}`
-            && response.status() === 403);
-        await page.getByRole('button', {name: 'Refresh', exact: true}).click();
-        await denied;
+        // Start from a genuinely admitted control. Entry and detail revalidation
+        // independently retire this view, so deleting first and then seeking its
+        // Refresh races correct denial. Delay this one real GET before sending
+        // it to the backend; authorization must observe the completed revocation.
+        const refresh = page.getByRole('button', {name: 'Refresh', exact: true});
+        await expect(refresh).toBeEnabled();
+        const requested = createBrowserReadGate();
+        const forward = createBrowserReadGate();
+        const delivered = createBrowserReadGate();
+        const detailPath = `/api/v1/packing-lists/${resources.packing.id}`;
+        const detailPattern = '**' + detailPath;
+        let reading = false;
+        await page.route(detailPattern, readAfterRevocation, {times: 1});
+
+        /** Preserve the real read and response; change only when server admission runs. */
+        async function readAfterRevocation(route: Route): Promise<void> {
+            reading = true;
+            requested.release();
+            await forward.promise;
+            try {
+                const response = await route.fetch();
+                await route.fulfill({response});
+            } finally { delivered.release(); }
+        }
+
+        try {
+            const denied = page.waitForResponse(response => response.request().method() === 'GET'
+                && new URL(response.url()).pathname === detailPath);
+            await refresh.click();
+            await requested.promise;
+            expect((await owner.request.delete(`/api/packing/${resources.packing.id}/admins/${guest.activeProfile!.id}`)).status()).toBe(200);
+            forward.release();
+            expect((await denied).status()).toBe(403);
+        } finally {
+            forward.release();
+            if (reading) await delivered.promise;
+            await page.unroute(detailPattern, readAfterRevocation);
+        }
         await expect(page.getByRole('heading', {name: resources.packing.title, exact: true})).toHaveCount(0);
         await openOverview(page);
         await expect(cardLink(page, resources.packing.id)).toHaveCount(0);

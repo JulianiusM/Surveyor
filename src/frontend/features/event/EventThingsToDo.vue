@@ -40,10 +40,14 @@ const section = useEventSection(key, readThings, computed(() => props.active !==
 const command = useCommand(section.refresh);
 const destination = useConfirmedNavigation();
 const removal = useEntityRemoval(command, destination);
-const available = useActionState({eligible: mayUseThings, pending: () => command.pending.value,
+// The single child command blocks the section. A delete spinner belongs only
+// to the selected child, independently of shared lifecycle/dropdown commands.
+const deletingChild = ref<{type: ChildType; id: string} | null>(null);
+const available = useActionState({eligible: mayUseThings,
     blocked: () => command.action.disabled.value || !!destination.target.value});
 const refreshAction = useActionState({eligible: () => section.readAction.isAvailable(),
-    blocked: () => command.recoveryAction.disabled.value || !!destination.target.value, pending: () => section.query.isFetching.value});
+    blocked: () => command.recoveryAction.disabled.value || !!destination.target.value,
+    pending: () => section.query.isFetching.value || command.recovering.value});
 const search = ref('');
 const selectedType = ref('all');
 const adminSearch = reactive({packing: '', activity: '', drivers: ''});
@@ -166,7 +170,12 @@ async function deleteChild(card: Card): Promise<void> {
     const childId = card.id;
     const success = type === 'packing' ? 'packing.deleted'
         : type === 'activity' ? 'event.organizer.activityDeleted' : 'event.organizer.driversDeleted';
-    await removal.remove({operation: removeChild, confirmation: 'event.organizer.deleteChildConfirm', success});
+    // Shared removal retains sibling-draft consent, confirmation and delivery;
+    // this tag selects only its current visible initiating child control.
+    deletingChild.value = {type, id: childId};
+    try {
+        await removal.remove({operation: removeChild, confirmation: 'event.organizer.deleteChildConfirm', success});
+    } finally { deletingChild.value = null; }
 
     function removeChild(scope: PilotRequestScope) {
         return api.deleteChild(eventId, type!, childId, scope, admin);
@@ -286,6 +295,7 @@ async function refresh(): Promise<void> {
                                                 class="btn-sm"
                                                 variant="outline-danger"
                                                 :state="available"
+                                                :pending="command.pending.value && deletingChild?.type === card.type && deletingChild.id === card.id"
                                                 :disabled="available.disabled.value"
                                                 @click="deleteChild(card)"
                                             >

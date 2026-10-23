@@ -191,7 +191,8 @@ function close(): void {
                     <p class="small text-secondary mb-0">{{ messages.t('finance.factorsApplyToTheParticipantDaysAttendedOrNights') }}</p>
                 </div>
                 <FormField :id="`${id}-search`" v-model="search" type="search" class="mb-2"
-                           :label="messages.t('finance.searchParticipants')" :placeholder="messages.t('finance.filterByNameOrEmail')" />
+                           :label="messages.t('finance.searchParticipants')" :placeholder="messages.t('finance.filterByNameOrEmail')"
+                    :pending="command.pending.value" />
                 <div class="pool-participant-list border border-secondary-subtle rounded-3 bg-black">
                     <div v-for="row in draft.rows" v-show="visible.includes(row)" :key="row.id" class="pool-participant-row p-3 border-bottom border-secondary-subtle" :data-finance-assignment="row.id">
                         <div class="form-check mb-0">
@@ -206,7 +207,8 @@ function close(): void {
                             input-mode="decimal" min="0" max="1000" step="0.0001" required :disabled="!draft.assignAll && !row.selected"
                             class="pool-factor-field" control-class="form-control-sm" label-class="small mb-1"
                             :label="messages.t('finance.shareFactor')" :required-marker="false" :described-by="`${id}-factor-help`"
-                            @update:model-value="markDirty" />
+                            @update:model-value="markDirty"
+                            :pending="command.pending.value" />
                         <div class="form-check form-switch mb-0">
                             <input :id="`${id}-exempt-${row.id}`" v-model="row.exempt" class="form-check-input" type="checkbox" :disabled="!draft.assignAll && !row.selected" @change="markDirty" />
                             <label :for="`${id}-exempt-${row.id}`" class="form-check-label">{{ messages.t('finance.exempt') }}</label>
@@ -220,7 +222,8 @@ function close(): void {
         <template #footer>
             <ActionButton variant="outline-secondary" :state="action" @click="discard">{{ messages.t('finance.discardEdits') }}</ActionButton>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.close') }}</ActionButton>
-            <ActionButton :form="`${id}-form`" type="submit" :state="action">{{ messages.t('finance.saveParticipantsFactors') }}</ActionButton>
+            <ActionButton :form="`${id}-form`" type="submit" :state="action"
+                :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.saveParticipantsFactors') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

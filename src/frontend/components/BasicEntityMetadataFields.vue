@@ -29,7 +29,7 @@ defineExpose(useMetadataEditorHandle(editor));
     <EntityMetadataEditor ref="editor" :form-id="prefix + '-metadata-form'" :resource-id="resourceId" :resource-title="resourceTitle"
         :disabled="disabled" :busy="busy" :active="active" :query-key="queryKey" :field-policy="fieldPolicy" :field-label="fieldLabel"
         :read="read" :save="save" @saved="emit('saved')" @close="emit('close')" @access-lost="emit('accessLost')">
-        <template #default="{values, fields}">
+        <template #default="{values, fields, pending}">
             <!-- Keep native disclosure and field nodes mounted during reads so
                  focused input remains the same feature-owned unsaved draft. -->
             <details class="entity-property-group mb-3" open>
@@ -37,10 +37,12 @@ defineExpose(useMetadataEditorHandle(editor));
                 <div class="row g-3 pt-3">
                     <FormField v-if="fields.includes('title')" :id="prefix + '-title'" class="col-md-6" name="title"
                         :model-value="String(values.title ?? '')" :label="messages.t('packing.title')" label-class=""
-                        required :required-marker="false" :max-length="255" @update:model-value="values.title = $event" />
+                        required :required-marker="false" :max-length="255" :pending="pending"
+                        @update:model-value="values.title = $event" />
                     <FormField v-if="fields.includes('description')" :id="prefix + '-description'" class="col-12" name="description"
                         :model-value="String(values.description ?? '')" :label="messages.t('packing.description')" label-class=""
-                        multiline :rows="4" :max-length="16000" @update:model-value="values.description = $event" />
+                        multiline :rows="4" :max-length="16000" :pending="pending"
+                        @update:model-value="values.description = $event" />
                 </div>
             </details>
         </template>

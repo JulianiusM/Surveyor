@@ -5,7 +5,7 @@ import ActionButton from '../../components/ActionButton.vue';
 // Matching histories and share ledgers retain their own filtering/paging state.
 // This common footer renders only the supplied visible range and local actions.
 withDefaults(defineProps<{page: number; size: number; total: number; pages: number;
-    invoices?: boolean; coverage?: boolean; refreshable?: boolean; refreshNeeded?: boolean; disabled?: boolean}>(), {refreshable: true});
+    invoices?: boolean; coverage?: boolean; refreshable?: boolean; refreshNeeded?: boolean; disabled?: boolean; pending?: boolean}>(), {refreshable: true});
 const emit = defineEmits<{previous: []; next: []; refresh: []}>();
 const {messages} = usePilot();
 </script>
@@ -21,6 +21,7 @@ const {messages} = usePilot();
             v-if="refreshable"
             :variant="refreshNeeded ? 'warning' : 'outline-light'"
             class="btn-sm"
+            :pending="pending" :show-spinner="false"
             :disabled="disabled"
             data-finance-ledger-refresh
             @click="emit('refresh')"

@@ -24,10 +24,13 @@ const {messages} = usePilot();
         <p v-if="automation?.paused">{{ automation.pausedHint }}</p>
         <div class="d-flex flex-wrap gap-2">
             <ActionButton v-if="canArchive" class="btn-sm" variant="outline-light" :disabled="disabled"
+                :pending="pendingAction === 'archive'" :show-spinner="false"
                 @click="emit('archive', false, $event)">{{ messages.t('common.archive') }}</ActionButton
             ><ActionButton v-if="canRestore" class="btn-sm" variant="outline-light" :disabled="disabled"
+                :pending="pendingAction === 'archive'" :show-spinner="false"
                 @click="emit('archive', true, $event)">{{ messages.t('common.restore') }}</ActionButton>
             <ActionButton v-if="automation" class="btn-sm" variant="outline-light" :disabled="disabled"
+                :pending="pendingAction === 'automation'" :show-spinner="false"
                 @click="emit('automate', !automation.paused, $event)">{{ automation.paused ? automation.resumeLabel : automation.pauseLabel }}</ActionButton>
         </div>
     </section>
@@ -40,6 +43,7 @@ const {messages} = usePilot();
             }}</RouterLink
             ><a v-if="exportLink" class="btn btn-outline-light" :href="exportLink.url" target="_blank" rel="noopener">{{ exportLink.label }}</a
             ><ActionButton v-if="canRemove" variant="outline-danger" :disabled="disabled"
+                :pending="pendingAction === 'remove'" :show-spinner="false"
                 @click="emit('remove', $event)">{{ labels.deletePermanently }}</ActionButton>
         </div>
     </section>

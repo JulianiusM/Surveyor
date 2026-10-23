@@ -4,7 +4,7 @@ import ActionButton from './ActionButton.vue';
 // Lists pass their admitted names and removable assignment IDs. This shared
 // presentation never treats the visible control as server authorization.
 defineProps<{assignees: {name: string; assignmentId: string | null}[];
-    removable: boolean; disabled: boolean; removeLabel: string}>();
+    removable: boolean; disabled: boolean; pendingAssignmentId?: string | null; removeLabel: string}>();
 const emit = defineEmits<{remove: [id: string]}>();
 </script>
 
@@ -18,7 +18,8 @@ const emit = defineEmits<{remove: [id: string]}>();
             <template v-if="removable && assignee.assignmentId !== null">
                 <slot name="remove" :assignment-id="assignee.assignmentId">
                     <ActionButton class="btn-sm" variant="outline-danger"
-                        :disabled="disabled" :aria-label="removeLabel" @click="emit('remove', assignee.assignmentId)">&times;</ActionButton>
+                        :disabled="disabled" :pending="pendingAssignmentId === assignee.assignmentId" :show-spinner="false"
+                        :aria-label="removeLabel" @click="emit('remove', assignee.assignmentId)">&times;</ActionButton>
                 </slot>
             </template>
         </li>

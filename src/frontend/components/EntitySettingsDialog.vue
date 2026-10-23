@@ -78,6 +78,9 @@ const event = ref<{original: string | null; value: string | null; token: string;
     confirmed?: string | null} | null>(null);
 const imageToken = ref<string | null>(null);
 const imageOriginal = ref<string | null>(null);
+// The shared command blocks every settings control, but only its initiating
+// action may recover focus. This presentation tag grants no command admission.
+const pendingAction = ref<'upload' | 'removeImage' | 'event' | 'archive' | 'automation' | 'remove' | null>(null);
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
 const settingsKey = computed(() => props.settingsKey);
 const settingsAdmission = useQueryAdmission(context, settingsKey,
@@ -323,10 +326,16 @@ async function upload(): Promise<void> {
 
     // The shared command distinguishes write confirmation from refresh failure.
     // Rejection/unknown delivery keeps the file; confirmation alone releases it.
-    const result = await command.run((scope) =>
-        api.uploadHeader(props.resourceId, image.value!, imageToken.value!, scope),
-        true, false, {success: 'metadata.imageUpdated'},
-    );
+    pendingAction.value = 'upload';
+    let result: unknown;
+    try {
+        result = await command.run((scope) =>
+            api.uploadHeader(props.resourceId, image.value!, imageToken.value!, scope),
+            true, false, {success: 'metadata.imageUpdated'},
+        );
+    } finally {
+        pendingAction.value = null;
+    }
     // The shared chooser observes this explicit draft release. Clear its visible
     // FileList after confirmation as well, including a saved-but-stale read result.
     if (result) image.value = null;
@@ -336,11 +345,17 @@ async function upload(): Promise<void> {
  * The current settings token protects the stored image and the server retains
  * authority over the write and its post-commit file cleanup. */
 async function removeImage(): Promise<void> {
+    if (blocked.value) return;
     if (data.value && window.confirm(messages.value.t('packing.confirmRemoveImage'))) {
-        await command.run((scope) =>
-            api.removeHeader(props.resourceId, data.value!.settingsToken, scope),
-            true, false, {success: 'metadata.imageRemoved'},
-        );
+        pendingAction.value = 'removeImage';
+        try {
+            await command.run((scope) =>
+                api.removeHeader(props.resourceId, data.value!.settingsToken, scope),
+                true, false, {success: 'metadata.imageRemoved'},
+            );
+        } finally {
+            pendingAction.value = null;
+        }
     }
 }
 /** Relink one explicitly reviewed event choice through the existing command owner.
@@ -364,6 +379,7 @@ async function saveEvent(): Promise<void> {
     const submitted = {value: event.value.value, original: event.value.original, token: event.value.token};
     const previousRead = completedSettingsReads;
     relinkingMetadata = true;
+    pendingAction.value = 'event';
     let result: components['schemas']['PackingEventChanged'] | undefined;
     try {
         result = await command.run((scope) =>
@@ -377,6 +393,7 @@ async function saveEvent(): Promise<void> {
         );
     } finally {
         relinkingMetadata = false;
+        pendingAction.value = null;
     }
 
     // The result may close this dialog entirely. Only a readable result can update
@@ -403,10 +420,16 @@ function reviewEvent(): void {
  * command. These are shared resource actions; personal visibility and permanent
  * deletion remain separate operations with their own confirmation and authority. */
 async function archive(restore: boolean): Promise<void> {
+    if (blocked.value) return;
     // The admitted schedule flag selects the common restoration warning.
     // Explicit feature wording retains Event's distinct attached-entity details.
-    await lifecycle.archive(props.resourceId, restore, !!data.value?.archive.inherited,
-        restore ? props.restoreConfirmation : props.archiveConfirmation, !!data.value?.archive.hasAutomaticSchedule);
+    pendingAction.value = 'archive';
+    try {
+        await lifecycle.archive(props.resourceId, restore, !!data.value?.archive.inherited,
+            restore ? props.restoreConfirmation : props.archiveConfirmation, !!data.value?.archive.hasAutomaticSchedule);
+    } finally {
+        pendingAction.value = null;
+    }
 }
 
 /** Automatic archival remains a separate shared lifecycle command. Resuming an
@@ -415,7 +438,12 @@ async function automate(paused: boolean): Promise<void> {
     if (blocked.value || !api.automate || !data.value?.capabilities.manageAutomation || !props.automationLabels) return;
     // Settings and child cards share confirmation/dispatch/feedback, while this
     // dialog retains current schedule admission and its related read dependencies.
-    await lifecycle.automate(props.resourceId, paused, props.automationLabels);
+    pendingAction.value = 'automation';
+    try {
+        await lifecycle.automate(props.resourceId, paused, props.automationLabels);
+    } finally {
+        pendingAction.value = null;
+    }
 }
 
 /** Delete only after the command owner has approved departure of every mounted draft.
@@ -423,8 +451,13 @@ async function automate(paused: boolean): Promise<void> {
  * recovery repeats delivery, while the controller remains the deletion policy owner. */
 async function remove(): Promise<void> {
     if (blocked.value) return;
-    await removal.remove({operation: deleteResource, confirmation: 'packing.confirmDelete',
-        success: props.deletedKey});
+    pendingAction.value = 'remove';
+    try {
+        await removal.remove({operation: deleteResource, confirmation: 'packing.confirmDelete',
+            success: props.deletedKey});
+    } finally {
+        pendingAction.value = null;
+    }
 }
 
 async function deleteResource(scope: PilotRequestScope): Promise<string> {
@@ -491,6 +524,8 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                 input-id="pilot-header-image" :labels="headerLabels" :selected-file="image"
                 :has-image="!!data.headerUrl" :expanded="!data.editableFields.length"
                 :conflict="headerConflict" :disabled="!!blocked" :reading="settings.isFetching.value"
+                :upload-pending="pendingAction === 'upload' && command.pending.value"
+                :remove-pending="pendingAction === 'removeImage' && command.pending.value"
                 @choose="chooseImage" @review="reviewHeader" @upload="upload" @remove="removeImage" />
         </div>
         <LoadingSkeleton v-if="initialLoading" variant="form" :rows="3" />
@@ -509,7 +544,8 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                     :title="messages.t('packing.linkedEvent')" :hint="messages.t('packing.eventHint')"
                     :extra-hint="eventExtraHint"
                     :submit-label="messages.t('packing.saveEvent')" :active="panel === 'event'"
-                    :conflict="eventConflict" :disabled="!!blocked" @review="reviewEvent" @save="saveEvent" />
+                    :conflict="eventConflict" :disabled="!!blocked" :pending="pendingAction === 'event' && command.pending.value"
+                    @review="reviewEvent" @save="saveEvent" />
             </section>
             <EntityAccessEditor v-if="data.access && accessSetup" ref="accessEditor" v-show="panel === 'access'"
                 :settings="data" :resource-id="resourceId" :command="command" :operations="accessSetup.operations"
@@ -530,7 +566,11 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
                     :export-link="data.capabilities.export ? exportLink : undefined"
                     :automation="data.capabilities.manageAutomation && api.automate && automationLabels ? {paused: data.archive.autoArchivePaused,
                         pauseLabel: automationLabels.pause, resumeLabel: automationLabels.resume, pausedHint: automationLabels.pausedHint} : undefined"
-                    :disabled="!!blocked" @archive="archive" @remove="remove" @automate="automate" />
+                    :disabled="!!blocked"
+                    :pending-action="command.pending.value
+                        && (pendingAction === 'archive' || pendingAction === 'automation' || pendingAction === 'remove')
+                        ? pendingAction : null"
+                    @archive="archive" @remove="remove" @automate="automate" />
             </div>
         </template>
         <template #footer

@@ -2,7 +2,7 @@
 import {computed, reactive, ref, watch} from 'vue';
 import {useRoute} from 'vue-router';
 import type {components} from '../../../types/api/v1';
-import type {FrontendListQuickAddValues} from '../../../types/FrontendListTypes';
+import type {FrontendListPendingControl, FrontendListQuickAddValues} from '../../../types/FrontendListTypes';
 import {useDriversApi} from './api';
 import {usePilot} from '../../app/context';
 import {evictQueryFamilies, retireQueryFamily} from '../../app/queryCache';
@@ -35,6 +35,9 @@ const key = computed(() => driversKeys.detail(context.session.value?.context, li
 const editorOpen = ref(false);
 const editing = ref(0);
 const freshItem = reactive<FrontendListQuickAddValues>({description: '', maxAssignees: 1});
+// Presentation identity only: the shared command remains the sole authority for
+// pending/unknown work. Sibling row controls must not claim another action's focus.
+const pendingControl = ref<FrontendListPendingControl | null>(null);
 const quickAddDirty = computed(
     () => !!freshItem.description || freshItem.maxAssignees !== 1,
 );
@@ -123,46 +126,66 @@ async function patch(
  * The server owns idempotency and capacity; unknown delivery is reviewed through
  * the shared command owner instead of automatically toggled or retried. */
 async function assign(item: Item): Promise<void> {
-    await command.run((scope) => api.assign(listId.value, item.id, !item.selfAssigned, scope), true, false,
-        {success: item.selfAssigned ? 'drivers.itemUnassigned' : 'drivers.itemAssigned'});
+    if (!command.action.isAvailable()) return;
+    // Capture this admitted row's control before its desired-state command can
+    // replace membership during the saved refresh.
+    pendingControl.value = {kind: 'assign', id: item.id};
+    try {
+        await command.run((scope) => api.assign(listId.value, item.id, !item.selfAssigned, scope), true, false,
+            {success: item.selfAssigned ? 'drivers.itemUnassigned' : 'drivers.itemAssigned'});
+    } finally { pendingControl.value = null; }
 }
 /** Native item deletion needs deliberate confirmation before its independently authorized command. */
 async function removeItem(item: Item): Promise<void> {
-    if (window.confirm(messages.value.t('drivers.confirmDeleteItem'))) {
-        await command.run((scope) => api.deleteItem(listId.value, item.id, scope), true, false,
-            {success: 'drivers.itemDeleted'});
+    // Confirmation precedes both presentation ownership and dispatch. A blocked
+    // sibling gesture cannot overwrite the active command's initiating row.
+    if (command.action.isAvailable() && window.confirm(messages.value.t('drivers.confirmDeleteItem'))) {
+        pendingControl.value = {kind: 'delete', id: item.id};
+        try {
+            await command.run((scope) => api.deleteItem(listId.value, item.id, scope), true, false,
+                {success: 'drivers.itemDeleted'});
+        } finally { pendingControl.value = null; }
     }
 }
+/** Remove one admitted saved assignment without touching the Quick Add draft. */
 async function removeAssignment(assignmentId: string): Promise<void> {
     // Native manager removal submits immediately; its server permission/ownership
     // checks remain authoritative and the shared command still prevents replay.
-    await command.run((scope) => api.removeAssignment(listId.value, assignmentId, scope), true, false,
-        {success: 'common.removed'});
+    if (!command.action.isAvailable()) return;
+    pendingControl.value = {kind: 'assignment', id: assignmentId};
+    try {
+        await command.run((scope) => api.removeAssignment(listId.value, assignmentId, scope), true, false,
+            {success: 'common.removed'});
+    } finally { pendingControl.value = null; }
 }
 /** Submit the native Quick Add draft once through the shared creation command.
  * Only a confirmed result clears the entered fields; a missing response retains
  * both that draft and explicit review, since a read cannot identify its new row. */
 async function addItem(): Promise<void> {
-    const result = await command.run((scope) =>
-        api.addItem(
-            listId.value,
-            {
-                // The readonly native title comes from this captured active
-                // profile. Authorship itself remains assigned by the server.
-                title: context.session.value?.activeProfile?.name ?? '',
-                description: freshItem.description,
-                maxAssignees: Number(freshItem.maxAssignees) || 1,
-            },
-            scope,
-        ),
-        true,
-        true,
-        {success: 'common.added'},
-    );
+    if (!command.action.isAvailable()) return;
+    pendingControl.value = {kind: 'add'};
+    try {
+        const result = await command.run((scope) =>
+            api.addItem(
+                listId.value,
+                {
+                    // The readonly native title comes from this captured active
+                    // profile. Authorship itself remains assigned by the server.
+                    title: context.session.value?.activeProfile?.name ?? '',
+                    description: freshItem.description,
+                    maxAssignees: Number(freshItem.maxAssignees) || 1,
+                },
+                scope,
+            ),
+            true,
+            true,
+            {success: 'common.added'},
+        );
 
-    // Confirmation still counts when the follow-up read fails. Unknown delivery
-    // yields no result here and must keep the captured creation draft for review.
-    if (result) Object.assign(freshItem, {description: '', maxAssignees: 1});
+        // Confirmation still counts when the follow-up read fails. Unknown delivery
+        // yields no result here and must keep the captured creation draft for review.
+        if (result) Object.assign(freshItem, {description: '', maxAssignees: 1});
+    } finally { pendingControl.value = null; }
 }
 
 const reorder = useListReorder({
@@ -256,7 +279,8 @@ const reorder = useListReorder({
                                 />
                                 <td class="text-center">
                                     <EntityAssignees :assignees="item.assignees" :removable="item.capabilities.removeAssignments"
-                                        :disabled="blocked" :remove-label="messages.t('packing.removeAssignment')" @remove="removeAssignment" />
+                                        :disabled="blocked" :pending-assignment-id="command.pending.value && pendingControl?.kind === 'assignment' ? pendingControl.id : null"
+                                        :remove-label="messages.t('packing.removeAssignment')" @remove="removeAssignment" />
                                 </td>
                                 <InlineCell
                                     class="text-center"
@@ -279,12 +303,14 @@ const reorder = useListReorder({
                                          Preserve that presentation; the server rechecks
                                          ACCESS_VIEW before every assignment command. -->
                                     <EntityAssignmentActions :assigned="item.selfAssigned" :full="isFull(item)" :disabled="blocked"
+                                        :pending="command.pending.value && pendingControl?.kind === 'assign' && pendingControl.id === item.id"
                                         :assign-label="messages.t('drivers.take')" :remove-label="messages.t('drivers.remove')"
                                         :full-label="messages.t('packing.full')" @toggle="assign(item)" />
                                     <ActionButton
                                         v-if="item.capabilities.removeItem"
                                         class="btn-sm ms-1"
                                         variant="outline-danger"
+                                        :pending="command.pending.value && pendingControl?.kind === 'delete' && pendingControl.id === item.id" :show-spinner="false"
                                         :disabled="blocked"
                                         :aria-label="messages.t('packing.deleteItem')"
                                         @click="removeItem(item)"
@@ -300,9 +326,11 @@ const reorder = useListReorder({
                 <template v-if="data.capabilities.addItem">
                     <hr />
                     <EntityQuickAdd v-model:description="freshItem.description" v-model:capacity="freshItem.maxAssignees"
+                        :pending="command.pending.value && pendingControl?.kind === 'add'"
                         :disabled="blocked" hint-class="text-muted" @submit="addItem">
                         <FormField id="quick-title" class="col-md-4" :name="null"
                             :model-value="context.session.value?.activeProfile?.name ?? ''" :label="messages.t('drivers.driver')"
+                            :pending="command.pending.value && pendingControl?.kind === 'add'"
                             read-only control-class="text-secondary" required :required-marker="false" :disabled="blocked" />
                     </EntityQuickAdd>
                 </template>

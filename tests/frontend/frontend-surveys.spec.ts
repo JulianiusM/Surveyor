@@ -93,6 +93,31 @@ describe('Survey production frontend consumers', () => {
         expect(body).toEqual({answers: {'11': 'no', '12': 'no'}});
     });
 
+    it.each(['ballot', 'combination'] as const)('marks only the initiating %s form pending while the shared command blocks both', async kind => {
+        let settle!: (response: Response) => void;
+        const {wrapper} = await mounted(SurveyPage, async request => {
+            if (request.method === 'GET') return json(survey);
+            return new Promise<Response>(resolve => { settle = resolve; });
+        });
+        const ballot = wrapper.get<HTMLButtonElement>('#survey-ballot button[type="submit"]');
+        const combination = wrapper.get<HTMLButtonElement>('#survey-add-combination button[type="submit"]');
+        const initiator = kind === 'ballot' ? ballot : combination;
+        const sibling = kind === 'ballot' ? combination : ballot;
+        await wrapper.get(kind === 'ballot' ? '#survey-ballot' : '#survey-add-combination').trigger('submit');
+        await flushPromises();
+        try {
+            expect(initiator.element.disabled).toBe(true);
+            expect(sibling.element.disabled).toBe(true);
+            expect(initiator.attributes('aria-busy')).toBe('true');
+            expect(sibling.attributes('aria-busy')).toBe('false');
+            expect(initiator.find('.spinner-border').exists()).toBe(true);
+            expect(sibling.find('.spinner-border').exists()).toBe(false);
+        } finally {
+            settle(json({changed: true}));
+            await flushPromises();
+        }
+    });
+
     it('preserves a dirty ballot while admitting a newly added combination and named remote result', async () => {
         let current = structuredClone(survey);
         const {wrapper, context} = await mounted(SurveyPage, async () => json(current));

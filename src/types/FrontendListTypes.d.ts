@@ -30,6 +30,10 @@ export interface FrontendListQuickAddValues {
     maxAssignees: number | string;
 }
 
+/** Only identify a matching list control's current initiating operation. Actual
+ * command authority, pending/unknown receipts and row data stay with their owners. */
+export type FrontendListPendingControl = {kind: 'add'} | {kind: 'assign' | 'delete' | 'assignment' | 'required'; id: string};
+
 /** Matching detail workflows supply their actual read and lifetime. The shared
  * command composition owns recovery/status only, never rows, drafts or grants. */
 export interface FrontendListCommandSource {

@@ -98,8 +98,10 @@ function acknowledgeHistory(): void {
             @action="inspectHistory"
         >
             <template #uncertain>
+                <!-- Reviewing saved history is local acknowledgement. A further
+                     history read blocks it without making it another read action. -->
                 <div v-if="inspected" class="mt-2">
-                    <ActionButton variant="outline-warning" :state="historyAction" @click="acknowledgeHistory">
+                    <ActionButton variant="outline-warning" :disabled="historyAction.disabled.value" @click="acknowledgeHistory">
                         {{ messages.t('finance.reviewedHistory') }}
                     </ActionButton>
                 </div>
@@ -137,14 +139,15 @@ function acknowledgeHistory(): void {
                     <!-- Shared lexical number controls preserve the visible amount through blur. -->
                     <FormField :id="`${id}-amount`" v-model="draft.amount" name="amount" type="number" lexical-number
                         input-mode="decimal" min="0.01" step="0.01" class="col-md-4" :label="messages.t('finance.amount')"
-                        required :required-marker="false" />
+                        required :required-marker="false"
+                        :pending="command.pending.value" />
                     <FormField
                         :id="`${id}-description`"
                         v-model="draft.description"
                         name="description"
                         class="col-md-4"
                         :label="messages.t('finance.description')"
-                    />
+                        :pending="command.pending.value" />
                     <FileField
                         :id="`${id}-proof`"
                         name="proof"
@@ -176,7 +179,7 @@ function acknowledgeHistory(): void {
                 </div>
             </div>
             <div class="d-flex justify-content-end mt-2">
-                <ActionButton type="submit" :state="submitAction">
+                <ActionButton type="submit" :state="submitAction" :pending="command.pending.value" :show-spinner="false">
                     <i class="bi bi-cloud-upload me-1" aria-hidden="true"></i>
                     {{ messages.t(command.pending.value ? 'finance.submitting' : command.uncertain.value ? 'finance.submissionUnconfirmed' : 'finance.submitInvoice') }}
                 </ActionButton>

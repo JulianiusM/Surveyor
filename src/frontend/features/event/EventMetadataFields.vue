@@ -65,14 +65,14 @@ defineExpose(useMetadataEditorHandle(editor));
         :resource-title="eventTitle" :disabled="disabled" :busy="busy" :active="active" :query-key="key"
         :field-policy="fieldPolicy" :field-label="fieldLabel" :prepare-patch="preparePatch" :read="read" :save="save"
         @saved="emit('saved')" @close="emit('close')" @access-lost="emit('accessLost')">
-        <template #default="{values, fields}">
+        <template #default="{values, fields, pending}">
             <!-- Event property families are permitted by the controller independently. -->
             <details v-for="(family, index) in admittedFamilies(fields)" :key="family.key"
                 class="entity-property-group mb-3" :open="index === 0">
                 <summary class="fw-semibold">{{ messages.t(family.label) }}</summary>
                 <EventFields :values="values"
                     :fields="fields.filter(field => (family.fields as readonly string[]).includes(field))"
-                    :prefix="'event-properties-' + family.key" :disabled="disabled || busy" />
+                    :prefix="'event-properties-' + family.key" :disabled="disabled || busy" :pending="pending" />
             </details>
         </template>
     </EntityMetadataEditor>

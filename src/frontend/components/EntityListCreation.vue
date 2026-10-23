@@ -285,13 +285,18 @@ function collectCreation() {
                 <fieldset :disabled="blocked || !formContext">
                     <!-- Features with dated roots supply their native title/date row;
                          title still belongs to this shared creation draft owner. -->
-                    <slot name="root-fields" :title="title" :update-title="(value: string) => title = value" :disabled="blocked || !formContext">
+                    <!-- Only Create's admission/write lifetime can own Enter focus;
+                         unrelated admission recovery still uses the wider blocked policy. -->
+                    <slot name="root-fields" :title="title" :update-title="(value: string) => title = value"
+                        :disabled="blocked || !formContext" :pending="createAction.pending.value">
                         <FormField id="create-title" v-model="title" class="mb-3" :name="null"
-                            :label="messages.t('packing.title')" label-icon="bi-tag" label-class="" required />
+                            :label="messages.t('packing.title')" label-icon="bi-tag" label-class="" required
+                            :pending="createAction.pending.value" />
                     </slot>
                     <div class="row mb-3">
                         <FormField id="create-description" v-model="description" class="col-md-12" :name="descriptionName ?? null"
-                            :label="messages.t('packing.descriptionOptional')" label-icon="bi-pencil-square" label-class="" multiline />
+                            :label="messages.t('packing.descriptionOptional')" label-icon="bi-pencil-square" label-class="" multiline
+                            :pending="createAction.pending.value" />
                     </div>
                     <div class="row mb-3">
                         <FileField id="create-header" class="col-12" :label="messages.t(headerLabel)"
@@ -316,7 +321,7 @@ function collectCreation() {
                             />
                         </div>
                     </div>
-                    <slot :disabled="blocked || !formContext"></slot>
+                    <slot :disabled="blocked || !formContext" :pending="createAction.pending.value"></slot>
                     <div :class="fullWidthSubmit ? 'd-grid mt-4' : 'd-flex justify-content-between align-items-center'">
                         <slot name="before-submit" :disabled="blocked || !formContext"></slot>
                         <ActionButton type="submit" variant="success" :state="createAction"

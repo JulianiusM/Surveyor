@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P10 cross-application navigation, Overview feedback/Refresh, shared pending-focus and lifecycle integration reviewed against retained P0-P9 history; finite execution evidence and separate P11 boundaries retained
+verification-scope: Authorized shared pending-control adoption and current guidance/test corrections reviewed against retained P0-P10 history; prior finite execution evidence retains its own scope and separate P11 boundaries
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,97 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## Shared-control adoption and guidance correction (2026-10-23)
+
+The maintainer directly instructed: implement the preceding conversational correction plan fully, review again
+and search other areas for similar problems. This authorizes the identified shared-control adoption, stale-test
+correction, reliability investigation and existing-guidance reconciliation. Native sources, backend business
+behavior, default routing, P11, native retirement, publication, deployment and excluded extensions retain their
+existing separate boundaries.
+
+The follow-up running-app review demonstrated that Activity Rules Reload passed its operation only as `disabled`.
+`ActionButton` therefore never entered its existing pending-focus lifetime, and Chromium left focus on `BODY`
+after completion. The shared owner now separates operation state from optional spinner presentation. Matching
+consumers supply actual initiating state through their existing shared wrappers and feature owners; no-spinner
+workflows opt out of the spinner independently. A sibling-only disabling condition does not acquire restoration
+authority. The same mounted-control, availability, actor-retirement, deliberate-interaction and no-scroll rules
+remain in that shared owner rather than per-feature focus helpers.
+Specialized Activity role suggestions now adopt that same button with caller-owned list-group styling; no
+duplicate action owner is needed. Matching Survey ballot/combination, Event registration Save/Cancel and saved-row
+commands identify their initiating form or row instead of making every blocked sibling busy. Shared list, Event
+and recommendation recovery controls retain their existing protected recovery state. Overview's held-sibling
+regression additionally found that ordinary reconciliation creates no protected recovery state: its presentation
+marker now spans every existing family read. Finance's keyed ledger controls pass their complete saved-read
+lifetime through the shared footer; its section action also waits for the selected breakdown and blocks overlapping
+Refresh dispatch. The shared focus observer now uses its own pre-render queue so completion waits for the actual
+enabling DOM patch; the held-sibling regression exposed the earlier synchronous scheduling gap. Same-turn actions
+with no disabled DOM patch retain focus without restoration. These markers and scheduling change no query,
+command lease, authority or private projection.
+The same audit separated Event picker Previous/Next/Retry, creation versus its read-only admission Retry and
+profile-workflow authority Refresh versus token/destructive commands. Creation keeps its initiating state through
+the existing admission/write handoff. Workflow submission now displays its existing recovery refusal throughout
+the entry read after session verification. Finance retains its inherited query-read indicator when no local
+initiator is known and suppresses borrowed toolbar progress for a known ledger action. These corrections preserve
+the existing request selection, operation order, private caches and recovery leases.
+
+Genuine built-browser probes also reproduced focus loss when Enter disabled a retained inline editor before a
+real 412 conflict, and when a login input received a real 401 credential rejection. The common algorithm now lives
+once in `usePendingFocus`, adopted by `ActionButton`, `InlineCell`, `FormField` and distinct native locale,
+Packing Everyone and Activity role-entry controls. Matching submitted fields receive their own form's pending
+state through existing creation/metadata/Quick Add wrappers; distinct native directives explicitly supply their
+actual input ref. Fieldset disabling, actor/availability loss, successful removal and deliberate interaction veto
+restoration. Field values, validation and intentional rejected-password clearing retain their existing owners.
+The same audit distinguishes identity submission from recovery mail and guest registration from modal recovery;
+readonly Drivers Quick Add can also initiate Enter and receives its actual form pending state. Modal form actions
+use their existing row-operation markers so unrelated removal/revocation only blocks them.
+
+The source audit also found an obsolete progressive-loading assertion requiring the complete empty Overview
+form to disappear. It now checks the same retained form and enabled Refresh button while omitting only the
+search/filter/count controls. Its independent reads, private-count timing, untouched blank-input removal and
+separate dirty-search contracts remain intact. The revoked-Packing E2E fixture no longer assumes Refresh survives
+after permission removal: it begins from admitted Refresh, pauses that genuine GET before backend admission,
+revokes through the owner and requires the real 403. History retirement and independent Activity access remain
+part of the same integrated workflow; neither deadlines nor retries were increased.
+
+Current guidance is reconciled with actual P9/P10 adoption. The API reference now includes the implemented
+calculation, settlement, rollback, notification and existing output boundaries, preserving earlier phase choices
+and direct implementation triggers. The staged playbook distinguishes initiating pending state from spinner
+presentation and unrelated blocking. The coverage map describes observable assertions rather than certifying
+execution. A stale final handoff referring to Drivers as the next migration was corrected to existing adoption
+across all five entity families, with deliberate feature exceptions retained.
+
+Final correction verification used supported Node.js **24.15.0** and guarded, task-owned MariaDB **10.11.14** schemas.
+
+| Check | Executed result and scope |
+|---|---|
+| Build and test compiler | Server, native assets, Vue client and SSR builds passed; final test typecheck passed. |
+| Normal quick suite | **1,995/1,995** tests in **89** files passed; genuine development-runtime integration passed **2/2** within its unchanged 30-second deadline. |
+| Database integration | **521/521** tests in **29** files passed before the final focus-only frontend extraction; backend sources remained unchanged. |
+| Isolated browser and disabled authentication | Client browser **49/49** passed with one CLI worker; the separate disabled-authentication built workflow passed **1/1**. |
+| Engineering review | Global **444**-file and frontend **161**-file checks reported no findings. |
+
+The 26.9-minute full built-application E2E run recorded **262 passed, 3 failed and 1 expected skip**. After fixture
+corrections, the management/Everyone and Help journeys passed; both sticky-control cases still failed because their
+setup scrolling had not finished. Explicit instant centering then passed both sticky cases (**2/2**). The retained
+case-history matrix therefore records **265 passed and 1 expected skip across 266 unique cases**, combining the full
+run and strict targeted renewals. This is not one uninterrupted green full run. Genuine held 401/412 rejection,
+fieldset-disabled metadata, Everyone PATCH and locale PUT journeys all have passing executions. Only the existing
+Packing/Help E2E spec changed after the full run; production bytes remained identical. The fixtures preserve real
+backend responses, complete-visibility, same-node, focus, scroll and persistence assertions without clamping results
+or extending deadlines.
+
+An earlier quick attempt failed two source-artifact checks after an unexpected untracked emitted JavaScript sibling
+appeared. Its bytes were archived; its writer remains unknown. The final scan covered **899** ordinary files,
+including ignored files under `src/`, `tests/`, `scripts/` and root files, checking non-declaration TypeScript files
+for emitted JavaScript/source-map siblings: **zero collisions**, with no recurrence. An earlier broad browser run
+also lost its server connection for an unexplained reason. Two later unchanged-native reproduction cases passed;
+that does not diagnose the earlier server exit.
+
+Four reviewers inspected **276 distinct original PNGs** across the finite native/Vue captures, retaining exact-path
+receipts in ignored correction artifacts. Those inspections and passing journeys establish their sampled states,
+widths, locales and actions, not every possible visual/behavioral combination. Earlier receipts below retain their
+original source and finite scopes. Production-guide publication and P11 remain separately authorized boundaries.
 
 ## P10 cross-application integration review (2026-10-23)
 
@@ -1220,7 +1311,7 @@ semantic review tied to its current identities and separate publication authoriz
 
 Use the existing [migration contribution handoff](FRONTEND_FOUNDATION_DESIGN.md#migration-contribution-handoff),
 [playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature-view) and [coverage map](TEST_COVERAGE.md) for each authorized
-next slice. Drivers adopts the already shared guest/entry/header/settings/metadata/access/lifecycle owners where
-their responsibilities match. Distinct ride, survey, activity and finance semantics stay in their owners. Inspect
+follow-up. All five implemented entity families already adopt the shared guest/entry/header/settings/metadata/access/lifecycle
+owners where their responsibilities match. Distinct ride, survey, activity and finance semantics stay in their owners. Inspect
 all current matching Vue consumers and adopt shared changes together; preserve native isolation, actual backend
 reuse and every existing phase-specific exception. The live phase plan is a contract, not inferred authorization.

@@ -48,7 +48,7 @@ const visible = computed(() => props.participants.filter(person => {
         || filter.value === 'unassigned' && person.assignedShifts === 0 || state(person) === filter.value;
 }));
 /** Saved participant overviews keep their native ISO dates; the live Rules
- * coverage consumer opts into the native browser date-label presentation. */
+ * coverage consumer opts into the approved shared civil-day presentation. */
 function attendance(person: components['schemas']['ActivityParticipant']): string {
     if (!person.attendance?.arrivalDate && !person.attendance?.departureDate) return messages.value.t('activity.fullPlan');
     // Presentation never changes the admitted civil dates or attendance count.

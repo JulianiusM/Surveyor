@@ -68,6 +68,13 @@ const command = useCommand(context.refreshSession, true, {dirty: isDirty,
     unknownMessage: 'auth.leaveUnknown', problemKey: identityProblemKey,
     recoveryEligible: () => sessionRetryAvailable.value});
 const reconciling = command.recovering;
+// The recovery form shares command protection with sign-in, but has its own
+// initiating button and existing no-spinner presentation.
+const recoveringAccess = ref(false);
+// The two mounted forms share one command lease. Only the submitted form owns
+// pending focus; the other form retains its existing disabled-only fence.
+const submittingIdentity = computed(() => command.pending.value && !recoveringAccess.value);
+const submittingRecovery = computed(() => command.pending.value && recoveringAccess.value);
 const formLocation = computed(() => {
     // A new return destination is a new native form visit, even when Vue reuses its
     // component. Locale presentation and fragment movement retain the current draft.
@@ -373,11 +380,16 @@ async function recover(): Promise<void> {
     if (blocked.value) return;
     const scope = context.capture();
     const origin = route.fullPath;
-    if (await command.run(requestRecovery, false)) {
-        clearFields();
-        await completePageEntry(context, router, '/frontend-pilot/guest/recovery',
-            'auth.recoverySent', 'success', scope, origin, confirmedNavigation);
-    }
+    recoveringAccess.value = true;
+    try {
+        // The receipt controls whether input may be released. Destination
+        // recovery never resends a mail request with uncertain delivery.
+        if (await command.run(requestRecovery, false)) {
+            clearFields();
+            await completePageEntry(context, router, '/frontend-pilot/guest/recovery',
+                'auth.recoverySent', 'success', scope, origin, confirmedNavigation);
+        }
+    } finally { recoveringAccess.value = false; }
 }
 
 function requestRecovery(scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
@@ -455,6 +467,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             :max-length="mode === 'forgot' ? undefined : 100"
                             autocomplete="username"
                             :disabled="blocked"
+                            :pending="submittingIdentity"
                         />
                         <FormField
                             v-if="mode === 'register'"
@@ -468,6 +481,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             :max-length="100"
                             autocomplete="nickname"
                             :disabled="blocked"
+                            :pending="submittingIdentity"
                         />
                         <FormField
                             v-if="mode === 'register'"
@@ -482,6 +496,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             :max-length="100"
                             autocomplete="email"
                             :disabled="blocked"
+                            :pending="submittingIdentity"
                         />
                         <FormField
                             v-if="['login', 'register', 'reset'].includes(mode)"
@@ -500,6 +515,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             :min-length="8"
                             :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
                             :disabled="blocked"
+                            :pending="submittingIdentity"
                         >
                             <small v-if="mode === 'register' && showPasswordCriteria" id="password-info" class="form-text">
                                 <ul class="list-unstyled mb-0 mt-1">
@@ -526,13 +542,14 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             :min-length="8"
                             autocomplete="new-password"
                             :disabled="blocked"
+                            :pending="submittingIdentity"
                         ><div v-if="repeatState === 'invalid'" id="password-repeat-info" class="invalid-feedback d-block">{{ messages.t('auth.passwordMismatch') }}</div></FormField>
                         <div v-if="mode === 'register'" class="col-md-6"></div>
                         <div class="d-grid mt-2" :class="['forgot', 'reset'].includes(mode) ? 'col-12' : 'col-6'">
                             <ActionButton
                                 type="submit"
                                 variant="success"
-                                :pending="command.pending.value"
+                                :pending="submittingIdentity"
                                 :disabled="blocked"
                                 ><i class="bi me-1" :class="submitIcon" aria-hidden="true"></i>{{ submitLabel }}</ActionButton
                             >
@@ -582,10 +599,12 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             required
                             autocomplete="email"
                             :disabled="blocked"
+                            :pending="submittingRecovery"
                         />
                         <div class="col-md-6 mt-auto">
                             <div class="d-grid">
-                                <ActionButton type="submit" variant="outline-primary" :disabled="blocked"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>{{
+                                <ActionButton type="submit" variant="outline-primary" :disabled="blocked"
+                                    :pending="submittingRecovery" :show-spinner="false"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>{{
                                     messages.t('auth.requestAccess')
                                 }}</ActionButton>
                             </div>

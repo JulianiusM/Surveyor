@@ -148,7 +148,9 @@ function acknowledge(): void {
         <CommandFeedback :feedback="command.feedback" part="uncertain"
             :action="{state: recovery, label: messages.t('common.refresh')}" @action="inspectSaved">
             <template #uncertain>
-                <ActionButton v-if="inspected" class="mt-2" variant="outline-warning" :state="recovery" @click="acknowledge">
+                <!-- Acknowledgement changes local review only. Another saved
+                     read blocks it without assigning that read's pending focus. -->
+                <ActionButton v-if="inspected" class="mt-2" variant="outline-warning" :disabled="recovery.disabled.value" @click="acknowledge">
                     {{ messages.t('draft.review') }}
                 </ActionButton>
             </template>
@@ -174,7 +176,8 @@ function acknowledge(): void {
                 <div class="row g-3">
                     <template v-if="!pool">
                         <FormField :id="`${id}-name`" v-model="draft.name" class="col-12" name="name"
-                            :label="messages.t('finance.poolName2')" required :required-marker="false" :max-length="255" />
+                            :label="messages.t('finance.poolName2')" required :required-marker="false" :max-length="255"
+                            :pending="command.pending.value" />
                         <FormField :id="`${id}-status`" class="col-12" :label="messages.t('finance.poolSubmissionState')">
                             <template #control>
                                 <select :id="`${id}-status`" v-model="draft.status" name="status" class="form-select text-bg-dark" required>
@@ -197,7 +200,8 @@ function acknowledge(): void {
                         </template>
                     </FormField>
                     <FormField :id="`${id}-description`" v-model="draft.description" class="col-12" name="description"
-                        :label="messages.t('finance.description')" />
+                        :label="messages.t('finance.description')"
+                        :pending="command.pending.value" />
                     <div class="col-12">
                         <div class="form-check form-switch">
                             <input :id="`${id}-rounding`" v-model="draft.roundUpShares" type="checkbox" name="roundUpShares" class="form-check-input" />
@@ -251,7 +255,8 @@ function acknowledge(): void {
         <template #footer>
             <ActionButton v-if="pool" variant="outline-secondary" :disabled="command.action.disabled.value" @click="restoreDraft">{{ messages.t('finance.discardEdits') }}</ActionButton>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t(pool ? 'common.close' : 'common.cancel') }}</ActionButton>
-            <ActionButton type="submit" :form="`${id}-form`" :state="action">
+            <ActionButton type="submit" :form="`${id}-form`" :state="action"
+                :pending="command.pending.value" :show-spinner="false">
                 {{ messages.t(pool ? 'finance.savePoolSettings' : 'finance.addPool') }}
             </ActionButton>
         </template>

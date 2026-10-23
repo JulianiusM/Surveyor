@@ -58,7 +58,7 @@ const source: FrontendListCreationSource<components['schemas']['PackingDuplicate
 <template>
     <EntityListCreation icon="bi-bag-plus" heading="packing.create" document-title="packing.createDocumentTitle" header-label="packing.headerOptional" not-found="packing.notFound"
         created="packing.created" leave-unknown="packing.leaveUnknown" creation-unknown="packing.creationUnknown" :source="source">
-        <template #default>
+        <template #default="{pending}">
             <div class="mb-3">
                 <label class="form-label"
                     ><i class="bi bi-list-ul me-1" aria-hidden="true"></i
@@ -84,13 +84,13 @@ const source: FrontendListCreationSource<components['schemas']['PackingDuplicate
                                     <FormField :id="'packing-row-' + row.key + '-title'" v-model="row.title" :name="null"
                                         :label="messages.t('packing.item') + ' ' + (index + 1)" label-class="visually-hidden" required
                                         :aria-label="messages.t('packing.item') + ' ' + (index + 1)"
-                                    />
+                                        :pending="pending" />
                                 </td>
                                 <td>
                                     <FormField :id="'packing-row-' + row.key + '-description'" v-model="row.description" :name="null"
                                         :label="messages.t('packing.description') + ' ' + (index + 1)" label-class="visually-hidden"
                                         :aria-label="messages.t('packing.description') + ' ' + (index + 1)"
-                                    />
+                                        :pending="pending" />
                                 </td>
                                 <td style="width: 110px">
                                     <FormField :id="'packing-row-' + row.key + '-capacity'" v-model="row.maxAssignees" :name="null"
@@ -98,7 +98,7 @@ const source: FrontendListCreationSource<components['schemas']['PackingDuplicate
                                         :label="messages.t('packing.maxNumber') + ' ' + (index + 1)" label-class="visually-hidden"
                                         :control-data="{'data-hydration-draft': true}"
                                         :aria-label="messages.t('packing.maxNumber') + ' ' + (index + 1)"
-                                    />
+                                        :pending="pending" />
                                 </td>
                                 <td class="text-center">
                                     <!-- Native Everyone text is descriptive rather than a

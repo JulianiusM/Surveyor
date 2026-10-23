@@ -96,6 +96,9 @@ interface NavigationRead {
     history: 'push' | 'replace';
 }
 const pendingRead = shallowRef<NavigationRead | null>(null);
+// Ordinary reconciliation owns no command recovery lease. This initiating
+// presentation lifetime spans every existing family read without copying data.
+const refreshingOverview = ref(false);
 const failedRead = shallowRef<NavigationRead | null>(null);
 const navigationError = shallowRef<Error | null>(null);
 let preparedRead: NavigationRead | undefined;
@@ -262,7 +265,9 @@ const navigationAction = useActionState({eligible: mayNavigateRegion, blocked: (
 const retryNavigationAction = useActionState({eligible: mayRetryNavigation,
     pending: () => !!pendingRead.value, blocked: () => blocked.value});
 const refreshAction = useActionState({eligible: mayRefreshRegion,
-    pending: () => overview.isFetching.value || !!pendingRead.value,
+    // Reconciliation refreshes the active family. This region may finish before
+    // its siblings; retain this initiating control through the complete read.
+    pending: () => refreshingOverview.value || overview.isFetching.value || !!pendingRead.value || command.recovering.value,
     blocked: () => command.recoveryAction.disabled.value});
 
 function mayNavigateRegion(): boolean {
@@ -282,8 +287,15 @@ function mayRefreshRegion(): boolean {
  * or replacing another region's command feedback with duplicate error state. */
 async function refreshOverview(): Promise<void> {
     if (!refreshAction.isAvailable()) return;
-    if (failedRead.value) { await retryNavigation(); return; }
-    await command.reconcileSafely();
+    refreshingOverview.value = true;
+    try {
+        // The same visible action also retries failed navigation. Keep either
+        // existing read owner admitted until the entire initiating action settles.
+        if (failedRead.value) { await retryNavigation(); return; }
+        await command.reconcileSafely();
+    } finally {
+        refreshingOverview.value = false;
+    }
 }
 
 /** Capture a read before awaiting its response. Input retires the generation immediately,

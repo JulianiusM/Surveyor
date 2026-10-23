@@ -113,7 +113,9 @@ export function useListCommands(source: FrontendListCommandSource, draft: PilotC
     const retryAt = useReadRetryAt(source.error, retryAvailable);
     const command = useCommand(refreshAfterCommand, false, draft);
     const blocked = computed(() => command.action.disabled.value);
-    const readAction = useActionState({eligible: mayRefresh, pending: source.reading,
+    // Fresh query delivery can settle before reconciliation releases the command
+    // recovery lock. Keep the initiating read pending through that whole lifetime.
+    const readAction = useActionState({eligible: mayRefresh, pending: () => source.reading() || command.recovering.value,
         blocked: () => command.recoveryAction.disabled.value});
     const retireSettingsAccess = useSettingsAccessRetirement({active: source.active, refresh});
 

@@ -12,6 +12,7 @@ const props = withDefaults(defineProps<{
     description: string;
     capacity: FrontendListQuickAddValues['maxAssignees'];
     disabled: boolean;
+    pending?: boolean;
     hintClass?: string;
 }>(), {hintClass: 'text-info'});
 const emit = defineEmits<{
@@ -39,21 +40,21 @@ function updateCapacity(value: FrontendListQuickAddValues['maxAssignees']): void
             <slot />
             <FormField id="quick-description" class="col-md-4" :name="null"
                 :model-value="description" :label="messages.t('packing.description')"
-                :placeholder="messages.t('packing.optional')" :disabled="disabled"
+                :placeholder="messages.t('packing.optional')" :disabled="disabled" :pending="pending"
                 @update:model-value="emit('update:description', $event)" />
-            <FormField id="quick-max" class="col-md-2" :label="messages.t('packing.maxNumber')">
-                <template #control>
+            <FormField id="quick-max" class="col-md-2" :label="messages.t('packing.maxNumber')" :pending="pending">
+                <template #control="{controlRef}">
                     <!-- Use Vue's actual native number directive for its
                          number/empty decoding and DOM update lifecycle. The
                          installed Vue normalizes leading zeros on change or
                          a later rerender, just like the original list inputs;
                          a string-only adapter would preserve a different draft. -->
-                    <input id="quick-max" v-model.number="capacityDraft" type="number" min="1"
+                    <input id="quick-max" :ref="controlRef" v-model.number="capacityDraft" type="number" min="1"
                         class="form-control text-bg-dark" :disabled="disabled" />
                 </template>
             </FormField>
             <div class="col-md-2 d-grid">
-                <ActionButton type="submit" variant="success" :disabled="disabled"
+                <ActionButton type="submit" variant="success" :disabled="disabled" :pending="pending" :show-spinner="false"
                     ><i class="bi bi-check-lg me-1" aria-hidden="true"></i
                     >{{ messages.t('packing.add') }}</ActionButton
                 >

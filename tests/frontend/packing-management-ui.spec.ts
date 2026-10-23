@@ -129,6 +129,24 @@ function deferredResponse() {
     return {response, resolve: resolveResponse};
 }
 
+/** Hold only the injected inline save result. The mounted editor still owns its
+ * real draft, pending rendering, native events and shared focus lifetime. */
+function deferredInlineSave() {
+    let resolveSave!: (confirmed: boolean) => void;
+    const result = new Promise<boolean>(function captureSave(resolve) { resolveSave = resolve; });
+    return {result, resolve: resolveSave};
+}
+
+/** Happy DOM does not release disabled input focus as Chromium does. Explicitly
+ * reproduce that unclaimed body focus, without adding a deliberate user event. */
+function releasePendingEditorFocus(input: HTMLInputElement | HTMLTextAreaElement): void {
+    expect(input.disabled).toBe(true);
+    document.body.tabIndex = -1;
+    document.body.focus();
+    document.body.removeAttribute('tabindex');
+    expect(document.activeElement).toBe(document.body);
+}
+
 /** Happy DOM has no layout engine. Model actual disclosure for focus/placement
  * contracts only; browser checks remain responsible for visual geometry. */
 function visibleFeedbackRects(this: HTMLElement): DOMRectList {
@@ -701,6 +719,199 @@ describe('progressive packing loading', () => {
 });
 
 describe('inline packing drafts', () => {
+    it.each([false, true])('retains only the initiating Everyone switch focus through its actual write and fresh read (%s)', async cancelled => {
+        const mutation = deferredResponse();
+        const refreshed = deferredResponse();
+        const editableItem = {...item, capabilities: {...item.capabilities, editRequired: true}};
+        let written = false;
+        const {wrapper, request} = await mounted(PackingPage, {}, async function saveEveryone(request): Promise<Response> {
+            if (request.method === 'PATCH') {
+                written = true;
+                expect(request.headers.get('If-Match')).toBe(item.editToken);
+                expect(await request.json()).toEqual({requiredByAll: true});
+                return mutation.response;
+            }
+            return written ? refreshed.response : json({...list, items: [editableItem]});
+        });
+        const control = wrapper.get<HTMLInputElement>('input[role="switch"]');
+        control.element.focus();
+        const focus = vi.spyOn(control.element, 'focus');
+
+        try {
+            await control.setValue(true);
+            // The existing checked-value policy displays admitted state until
+            // the real follow-up projection confirms the sparse token PATCH.
+            expect(control.element.checked).toBe(false);
+            releasePendingEditorFocus(control.element);
+            if (cancelled) document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
+            mutation.resolve(json({changed: true}));
+            await flushPromises();
+            expect(control.element.disabled).toBe(true);
+            expect(focus).not.toHaveBeenCalled();
+            expect(request.mock.calls.map(([value]) => (value as Request).method)).toEqual(['GET', 'PATCH', 'GET']);
+
+            refreshed.resolve(json({...list, items: [{...editableItem, requiredByAll: true, editToken: '"edit-required"'}]}));
+            await vi.waitFor(function settlesEveryone() { expect(control.element.disabled).toBe(false); });
+            expect(wrapper.get('input[role="switch"]').element).toBe(control.element);
+            expect(control.element.checked).toBe(true);
+            if (cancelled) {
+                expect(document.activeElement).toBe(document.body);
+                expect(focus).not.toHaveBeenCalled();
+            } else {
+                expect(document.activeElement).toBe(control.element);
+                expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+            }
+        } finally {
+            mutation.resolve(json({changed: true}));
+            refreshed.resolve(json({...list, items: [editableItem]}));
+            await flushPromises();
+        }
+    });
+
+    it('restores the same retained editor after a rejected Enter save and its fresh conflict read', async () => {
+        const rejected = deferredResponse();
+        const refreshed = deferredResponse();
+        let written = false;
+        const {wrapper, request} = await mounted(PackingPage, {}, async function readRejectedEdit(request): Promise<Response> {
+            if (request.method === 'PATCH') {
+                written = true;
+                return rejected.response;
+            }
+            return written ? refreshed.response : json(list);
+        });
+        const cell = wrapper.get('[data-item-id="' + itemId + '"]').findAll('td')[2]!;
+        await cell.trigger('dblclick');
+        const input = cell.get<HTMLInputElement>('input');
+        await input.setValue('Retained local tent');
+        expect(document.activeElement).toBe(input.element);
+        const focus = vi.spyOn(input.element, 'focus');
+
+        try {
+            await input.trigger('keydown', {key: 'Enter'});
+            await flushPromises();
+            releasePendingEditorFocus(input.element);
+            rejected.resolve(problem('PRECONDITION_FAILED', 412));
+            await flushPromises();
+
+            // A known rejection still awaits the existing authoritative read.
+            // The same pending input must not regain focus between those stages.
+            expect(input.element.disabled).toBe(true);
+            expect(document.activeElement).toBe(document.body);
+            expect(focus).not.toHaveBeenCalled();
+            expect(request.mock.calls.map(([value]) => (value as Request).method)).toEqual(['GET', 'PATCH', 'GET']);
+
+            refreshed.resolve(json({...list, items: [{...item, title: 'Remote tent', editToken: '"edit-remote-item"'}]}));
+            // Await the actual query/command/editor handoff, including the shared
+            // next-render focus completion, within the normal assertion deadline.
+            await vi.waitFor(function finishesRejectedEdit() {
+                expect(input.element.disabled).toBe(false);
+                expect(document.activeElement).toBe(input.element);
+            });
+            expect(cell.get<HTMLInputElement>('input').element).toBe(input.element);
+            expect(input.element.value).toBe('Retained local tent');
+            expect(cell.get('.pilot-inline-conflict').text()).toContain('Remote tent');
+            expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+        } finally {
+            rejected.resolve(problem('PRECONDITION_FAILED', 412));
+            refreshed.resolve(json(list));
+            await flushPromises();
+        }
+    });
+
+    it('restores a retained multiline editor after a rejected Ctrl+Enter save', async () => {
+        const held = deferredInlineSave();
+        const save = vi.fn(function saveDescription() { return held.result; });
+        const {wrapper} = await mounted(InlineCell, {value: 'Original description', token: '"original"',
+            editable: true, multiline: true, label: 'Description', save});
+        await wrapper.get('td').trigger('dblclick');
+        const input = wrapper.get<HTMLTextAreaElement>('textarea');
+        await input.setValue('Retained description\nSecond line');
+        expect(document.activeElement).toBe(input.element);
+        const focus = vi.spyOn(input.element, 'focus');
+
+        try {
+            await input.trigger('keydown', {key: 'Enter', ctrlKey: true});
+            releasePendingEditorFocus(input.element);
+            held.resolve(false);
+            await flushPromises();
+            expect(wrapper.get<HTMLTextAreaElement>('textarea').element).toBe(input.element);
+            expect(input.element.value).toBe('Retained description\nSecond line');
+            expect(document.activeElement).toBe(input.element);
+            expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+            expect(save).toHaveBeenCalledExactlyOnceWith('Retained description\nSecond line', '"original"');
+        } finally { held.resolve(false); await flushPromises(); }
+    });
+
+    it('does not reclaim focus after a retained editor was deliberately blurred to save', async () => {
+        const held = deferredInlineSave();
+        const save = vi.fn(function saveBlurredEditor() { return held.result; });
+        const {wrapper} = await mounted(InlineCell, {value: 'Tent', token: '"original"', editable: true, label: 'Title', save});
+        await wrapper.get('td').trigger('dblclick');
+        const input = wrapper.get<HTMLInputElement>('input');
+        await input.setValue('Retained local tent');
+        const focus = vi.spyOn(input.element, 'focus');
+        const other = document.createElement('button');
+        document.body.append(other);
+
+        try {
+            // Moving to another live control fires the actual blur-save event.
+            // Even returning to body later must not turn that save into a claim.
+            other.focus();
+            await flushPromises();
+            expect(input.element.disabled).toBe(true);
+            other.blur();
+            expect(document.activeElement).toBe(document.body);
+            held.resolve(false);
+            await flushPromises();
+            expect(input.element.disabled).toBe(false);
+            expect(input.element.value).toBe('Retained local tent');
+            expect(document.activeElement).toBe(document.body);
+            expect(focus).not.toHaveBeenCalled();
+            expect(save).toHaveBeenCalledExactlyOnceWith('Retained local tent', '"original"');
+        } finally { held.resolve(false); await flushPromises(); }
+    });
+
+    it.each(['pointer', 'keyboard', 'other-focus', 'window-blur', 'identity', 'write-admission',
+        'field-admission', 'blocked', 'initializing', 'unmounted', 'confirmed'] as const)(
+        'does not restore a pending inline editor after %s retires its focus claim', async retirement => {
+            const held = deferredInlineSave();
+            const save = vi.fn(function saveRetiredEditor() { return held.result; });
+            const {root, wrapper, context, update} = await mounted(InlineCell,
+                {value: 'Tent', token: '"original"', editable: true, label: 'Title', save});
+            await wrapper.get('td').trigger('dblclick');
+            const input = wrapper.get<HTMLInputElement>('input');
+            await input.setValue('Retained local tent');
+            const focus = vi.spyOn(input.element, 'focus');
+            const other = document.createElement('button');
+            document.body.append(other);
+
+            try {
+                await input.trigger('keydown', {key: 'Enter'});
+                releasePendingEditorFocus(input.element);
+                // Each boundary is independent: no later body focus may resurrect
+                // an interaction, obsolete identity, lost admission or removed node.
+                if (retirement === 'pointer') other.dispatchEvent(new Event('pointerdown', {bubbles: true}));
+                else if (retirement === 'keyboard') document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
+                else if (retirement === 'other-focus') { other.focus(); other.blur(); }
+                else if (retirement === 'window-blur') window.dispatchEvent(new Event('blur'));
+                else if (retirement === 'identity') context.epoch.value++;
+                else if (retirement === 'write-admission') await update({writeAdmission: false});
+                else if (retirement === 'field-admission') await update({editable: false});
+                else if (retirement === 'blocked') await update({disabled: true});
+                else if (retirement === 'initializing') context.hydrated.value = false;
+                else if (retirement === 'unmounted') root.unmount();
+                held.resolve(retirement === 'confirmed');
+                await flushPromises();
+                expect(document.activeElement).toBe(document.body);
+                expect(focus).not.toHaveBeenCalled();
+                expect(save).toHaveBeenCalledExactlyOnceWith('Retained local tent', '"original"');
+                if (retirement !== 'unmounted' && retirement !== 'confirmed')
+                    expect(wrapper.get<HTMLInputElement>('input').element.value).toBe('Retained local tent');
+                else expect(input.element.isConnected).toBe(false);
+            } finally { held.resolve(false); await flushPromises(); }
+        },
+    );
+
     it.each(['0', '-1', '', '1.5'])('sends the native raw capacity draft %j through the generated command boundary', async value => {
         const projection = {...list, items: [{...item, capabilities: {...item.capabilities, editCapacity: true, showCapacityEdit: true}}]};
         const sent: unknown[] = [];
@@ -2739,6 +2950,53 @@ describe('packing command forms', () => {
         expect(wrapper.get<HTMLInputElement>('#quick-max').element.value).toBe('1');
     });
 
+    it.each(['quick-title', 'quick-max'] as const)(
+        'restores the same %s field after Enter submits a rejected Quick Add', async controlId => {
+            const held = deferredResponse();
+            const sent: unknown[] = [];
+            const {wrapper} = await mounted(PackingPage, {}, async function receiveQuickAdd(request) {
+                if (request.method === 'POST') {
+                    sent.push(await request.json());
+                    return held.response;
+                }
+                return json(list);
+            });
+            await wrapper.get('#quick-title').setValue('  Retained ground sheet  ');
+            await wrapper.get('#quick-description').setValue('Dry');
+            await wrapper.get('#quick-max').setValue(3);
+            const input = wrapper.get<HTMLInputElement>('#' + controlId);
+            const original = input.element;
+            original.focus();
+            expect(document.activeElement).toBe(original);
+
+            try {
+                // Happy DOM does not perform implicit Enter submission. Dispatch
+                // its native form consequence after the actual focused key event;
+                // the complete feature command and HTTP client remain mounted.
+                await input.trigger('keydown', {key: 'Enter'});
+                await wrapper.get('form').trigger('submit');
+                await flushPromises();
+                expect(sent).toEqual([{title: '  Retained ground sheet  ', description: 'Dry', maxAssignees: 3, requiredByAll: false}]);
+                expect(wrapper.get('#' + controlId).element).toBe(original);
+                releasePendingEditorFocus(original);
+
+                // Rejection must retain both the exact native directive-owned
+                // numeric control and the default shared text input's draft.
+                held.resolve(problem('VALIDATION_FAILED', 400));
+                await flushPromises();
+                expect(wrapper.get('#' + controlId).element).toBe(original);
+                expect(original.disabled).toBe(false);
+                expect(document.activeElement).toBe(original);
+                expect(wrapper.get<HTMLInputElement>('#quick-title').element.value).toBe('  Retained ground sheet  ');
+                expect(wrapper.get<HTMLInputElement>('#quick-description').element.value).toBe('Dry');
+                expect(wrapper.get<HTMLInputElement>('#quick-max').element.value).toBe('3');
+                expect(sent).toHaveLength(1);
+            } finally {
+                held.resolve(problem('VALIDATION_FAILED', 400));
+                await flushPromises();
+            }
+        });
+
     it('matches native quick-add raw strings and optional blank capacity default', async () => {
         const sent: unknown[] = [];
         const {wrapper} = await mounted(PackingPage, {}, async request => {
@@ -3309,6 +3567,86 @@ describe('packing command forms', () => {
         expect(submitted?.data.items[0]?.title).toBe('Local tent');
         expect(submitted?.image).toBe('local.png');
         expect(submitted?.bytes).toBe('local image');
+    });
+
+    it('keeps admission Retry separate from Create and retains Create focus through its admission/write handoff', async function ownsCreationInitiator() {
+        const retryRead = deferredResponse();
+        const submissionRead = deferredResponse();
+        const submittedWrite = deferredResponse();
+        const entry: components['schemas']['PackingCreateEntry'] = {entry: {kind: 'render'}, selectedEvent: null,
+            context: {defaults, permissions: [], presets: []}};
+        let reads = 0;
+        let writes = 0;
+
+        /** Hold actual feature transport stages independently. Admission Retry
+         * must remain read-only; only a later explicit Create may send the draft. */
+        async function serveCreation(request: Request): Promise<Response> {
+            if (request.method === 'POST') { writes++; return submittedWrite.response; }
+            reads++;
+            if (reads === 2) return problem('VALIDATION_FAILED', 400);
+            if (reads === 3) return retryRead.response;
+            if (reads === 4) return submissionRead.response;
+            return json(entry);
+        }
+
+        const {wrapper, context} = await mounted(PackingCreatePage, {}, serveCreation, '/frontend-pilot/packing/create');
+        await wrapper.get('#create-title').setValue('Retained creation');
+        await wrapper.get('tbody input[aria-label="Item 1"]').setValue('Local tent');
+        const create = wrapper.get<HTMLButtonElement>('button[type="submit"].btn-success');
+        try {
+            await wrapper.get('form').trigger('submit');
+            await flushPromises();
+            expect(reads).toBe(2);
+            expect(writes).toBe(0);
+            const retry = button(wrapper, context.messages.value.t('common.retry'));
+            await retry.trigger('click');
+            await flushPromises();
+            expect(reads).toBe(3);
+            expect(retry.attributes('aria-busy')).toBe('true');
+            expect(retry.find('.spinner-border').exists()).toBe(true);
+            expect(create.element.disabled).toBe(true);
+            expect(create.attributes('aria-busy')).toBe('false');
+            expect(create.find('.spinner-border').exists()).toBe(false);
+
+            retryRead.resolve(json(entry));
+            await flushPromises();
+            expect(writes).toBe(0);
+            expect(create.element.disabled).toBe(false);
+            create.element.focus();
+            const focus = vi.spyOn(create.element, 'focus');
+            await wrapper.get('form').trigger('submit');
+            await flushPromises();
+            expect(reads).toBe(4);
+            expect(create.attributes('aria-busy')).toBe('true');
+            expect(create.element.disabled).toBe(true);
+
+            // Reproduce native disabled-focus release. The same initiating
+            // action must remain pending when admission hands off to its POST.
+            document.body.tabIndex = -1;
+            document.body.focus();
+            document.body.removeAttribute('tabindex');
+            submissionRead.resolve(json(entry));
+            await vi.waitFor(() => expect(writes).toBe(1));
+            await flushPromises();
+            expect(create.attributes('aria-busy')).toBe('true');
+            expect(create.element.disabled).toBe(true);
+            expect(document.activeElement).toBe(document.body);
+            expect(focus).not.toHaveBeenCalled();
+
+            submittedWrite.resolve(problem('VALIDATION_FAILED', 400));
+            await flushPromises();
+            expect(create.element.disabled).toBe(false);
+            expect(create.attributes('aria-busy')).toBe('false');
+            expect(document.activeElement).toBe(create.element);
+            expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+            expect(wrapper.get<HTMLInputElement>('#create-title').element.value).toBe('Retained creation');
+            expect(wrapper.get<HTMLInputElement>('tbody input[aria-label="Item 1"]').element.value).toBe('Local tent');
+            expect([reads, writes]).toEqual([4, 1]);
+        } finally {
+            retryRead.resolve(json(entry));
+            submissionRead.resolve(json(entry));
+            submittedWrite.resolve(problem('VALIDATION_FAILED', 400));
+        }
     });
 
     it.each([[429, false], [503, true]] as const)('recovers HTTP %s submission admission with a timed read-only Retry before a separate Create (duplicate: %s)', async (status, duplicate) => {

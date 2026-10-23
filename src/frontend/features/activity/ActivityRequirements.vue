@@ -101,7 +101,7 @@ function retained(profileId: string): boolean {
 }
 function selectedProfile(event: Event): string { return (event.target as HTMLSelectElement).value.replace(/^profile:/, ''); }
 
-/** Attendance labels use the native civil-date presentation without changing IDs. */
+/** Attendance labels share the approved civil-day presentation without changing IDs. */
 function attendance(profileId: string): string {
     const target = targets.value.find(person => person.profileId === profileId);
     if (!target) return '';
@@ -188,9 +188,12 @@ async function save(): Promise<void> {
             <span class="d-flex align-items-center gap-2">
                 <i class="bi bi-gear-wide-connected" aria-hidden="true"></i><span>{{ messages.t('activity.requirements.settings') }}</span></span>
             <div class="pilot-action-row">
-                <ActionButton type="button" class="btn-sm" variant="outline-secondary" data-requirements-refresh :disabled="readAction.disabled.value || command.pending.value || command.recovering.value" @click="reload">
+                <ActionButton type="button" class="btn-sm" variant="outline-secondary" data-requirements-refresh
+                    :pending="readAction.pending.value" :show-spinner="false"
+                    :disabled="readAction.disabled.value || command.pending.value || command.recovering.value" @click="reload">
                     <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>{{ messages.t('activity.requirements.reload') }}</ActionButton>
-                <ActionButton type="button" class="btn-sm" variant="success" data-requirements-save :disabled="blocked || !dirty" @click="save">
+                <ActionButton type="button" class="btn-sm" variant="success" data-requirements-save
+                    :pending="command.pending.value" :show-spinner="false" :disabled="blocked || !dirty" @click="save">
                     <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('activity.requirements.saveSettings') }}</ActionButton>
             </div>
         </div>
@@ -237,7 +240,8 @@ async function save(): Promise<void> {
                             class="col-sm-6 col-xl-3" type="number" lexical-number :min="0"
                             :label="messages.t('activity.requirements.baseline')" label-class=""
                             control-class="form-control-sm" group-class="input-group-sm"
-                            :placeholder="messages.t('activity.requirements.baselinePlaceholder')" :disabled="blocked">
+                            :placeholder="messages.t('activity.requirements.baselinePlaceholder')" :disabled="blocked"
+                            :pending="command.pending.value">
                             <template #append>
                                 <ActionButton type="button" variant="outline-info" data-requirements-baseline-calc :disabled="blocked" @click="calculate"><i class="bi bi-calculator me-1" aria-hidden="true"></i>{{ messages.t('activity.requirements.calculate') }}</ActionButton>
                             </template>
@@ -247,7 +251,10 @@ async function save(): Promise<void> {
                                 <option value="">{{ messages.t('common.none') }}</option><option value="CEIL">{{ messages.t('activity.requirements.ceil') }}</option><option value="ROUND">{{ messages.t('activity.requirements.round') }}</option><option value="FLOOR">{{ messages.t('activity.requirements.floor') }}</option>
                             </select></template>
                         </FormField>
-                        <FormField id="bindingDeadline" v-model="draft.bindingDeadline" :name="null" class="col-sm-6 col-xl-3" type="datetime-local" :label="messages.t('activity.requirements.deadline')" label-class="" control-class="form-control-sm" :placeholder="messages.t('activity.requirements.optional')" :disabled="blocked" />
+                        <FormField id="bindingDeadline" v-model="draft.bindingDeadline" :name="null"
+                            class="col-sm-6 col-xl-3" type="datetime-local" :label="messages.t('activity.requirements.deadline')"
+                            label-class="" control-class="form-control-sm" :placeholder="messages.t('activity.requirements.optional')" :disabled="blocked"
+                            :pending="command.pending.value" />
                     </div>
                     <hr />
                     <h6 class="pilot-section-heading">
@@ -261,7 +268,8 @@ async function save(): Promise<void> {
                                 v-model="row.value" :name="null" class="stay-requirement-item d-grid gap-1" type="number" lexical-number :min="0" :step="1"
                                 :label="messages.t('activity.dayCount', {count: row.stayDays})" label-class="small mb-0 text-nowrap"
                                 control-class="form-control-sm" :control-data="{'data-stay-days': row.stayDays}"
-                                :aria-label="messages.t('activity.requirements.stayLabel', {count: row.stayDays})" :disabled="blocked" />
+                                :aria-label="messages.t('activity.requirements.stayLabel', {count: row.stayDays})" :disabled="blocked"
+                                :pending="command.pending.value" />
                             <span v-if="!draft.stays.length" class="text-secondary small">{{ messages.t('activity.requirements.noStays') }}</span>
                         </div>
                     </div>
@@ -304,7 +312,8 @@ async function save(): Promise<void> {
                         <FormField v-for="row in draft.roles" :id="'roleRequirement-' + row.roleId" :key="row.roleId"
                             v-model="row.value" :name="null" class="col-md-3 d-grid gap-1" type="number" lexical-number :min="0" :step="1" placeholder="0"
                             :label="roleTitle(row.roleId)" label-class="small mb-0" control-class="form-control-sm"
-                            :control-data="{'data-role-id': row.roleId}" :disabled="blocked" />
+                            :control-data="{'data-role-id': row.roleId}" :disabled="blocked"
+                            :pending="command.pending.value" />
                     </div>
                     <hr />
                     <h6 class="pilot-section-heading mb-2">
@@ -334,7 +343,8 @@ async function save(): Promise<void> {
                             <FormField :id="'overrideRequired-' + row.key" v-model="row.value" :name="null"
                                 class="col-9 col-sm-5 col-lg-2 d-grid gap-1" type="number" lexical-number :min="0" :step="1"
                                 :label="messages.t('activity.requirements.requiredShifts')" label-class="small mb-0" control-class="form-control-sm"
-                                :control-data="{'data-override-target': 'required'}" :disabled="blocked || retained(row.profileId)" />
+                                :control-data="{'data-override-target': 'required'}" :disabled="blocked || retained(row.profileId)"
+                                :pending="command.pending.value" />
                             <div class="col-3 col-sm-2 col-lg-1 d-grid">
                                 <ActionButton type="button" class="btn-sm w-100" variant="outline-danger"
                                     :aria-label="messages.t('activity.requirements.removeOverride')"
@@ -346,7 +356,8 @@ async function save(): Promise<void> {
                     </div>
                     <div class="d-flex flex-wrap justify-content-end align-items-center gap-2 border-top border-secondary-subtle mt-3 pt-3">
                         <small class="text-secondary me-auto">{{ messages.t('activity.requirements.saveHint') }}</small>
-                        <ActionButton type="button" variant="success" data-requirements-save :disabled="blocked || !dirty" @click="save">
+                        <ActionButton type="button" variant="success" data-requirements-save
+                            :pending="command.pending.value" :show-spinner="false" :disabled="blocked || !dirty" @click="save">
                             <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('activity.requirements.saveRequirements') }}</ActionButton>
                     </div>
                 </form>

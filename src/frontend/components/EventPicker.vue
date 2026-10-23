@@ -44,6 +44,9 @@ const resolvedSelection = ref(props.current?.id === props.modelValue ? props.mod
 type Query = PilotEventPickerQuery;
 type Options = Awaited<ReturnType<PilotEventPickerSource['search']>>;
 let readGeneration = 0;
+// Admission still blocks every paging action during discovery. Only an explicit
+// initiating control owns its spinner/focus; filters and polling claim none.
+const pendingAction = ref<{kind: 'next' | 'previous' | 'retry'; generation: number} | null>(null);
 let completedRead: {generation: number; direction: typeof direction.value; cursor: string | undefined; page: number} | undefined;
 const confirmedPage = shallowRef<{family: string; result: Options; updatedAt: number}>();
 const invalidDates = computed(() => !!filters.from && !!filters.to && filters.from > filters.to);
@@ -90,7 +93,16 @@ const options = useQuery({
 const retryAvailable = useReadRetry(() => options.error.value);
 const retryAt = useReadRetryAt(() => options.error.value, retryAvailable);
 const readAction = useActionState({eligible: mayRequestOptions,
-    pending: () => searchPending.value || options.isFetching.value});
+    blocked: () => searchPending.value || options.isFetching.value});
+watch([options.isFetching, pendingAction], finishPendingAction, {flush: 'post'});
+
+/** Query settlement releases only this generation's presentation marker. Actual
+ * admission, retry state, result publication and cancellation stay query-owned. */
+function finishPendingAction(): void {
+    // A canceled old query cannot release a replacement visit. A fresh cached
+    // target may dispatch no request at all, so observe the marker itself too.
+    if (!options.isFetching.value && pendingAction.value?.generation === readGeneration) pendingAction.value = null;
+}
 
 function mayRequestOptions(): boolean { return mayReadOptions() && retryAvailable.value; }
 // TanStack placeholder data disappears on terminal pagination errors. Retain one confirmed
@@ -146,6 +158,7 @@ async function readOptions({signal}: QueryFunctionContext<readonly unknown[]>): 
  * their own requests; the last confirmed page remains readable while a new read is pending. */
 function retireReads(): void {
     readGeneration++;
+    pendingAction.value = null;
     completedRead = undefined;
     void context.queryClient.cancelQueries({queryKey: key.value, exact: true});
 }
@@ -256,6 +269,7 @@ function previous(): void {
 function requestPage(nextDirection: 'next' | 'previous', cursor: string | undefined, number: number): void {
     const previousKey = JSON.stringify(key.value);
     retireReads();
+    pendingAction.value = {kind: nextDirection, generation: readGeneration};
     direction.value = nextDirection;
     requestedCursor.value = cursor;
     requestedPage.value = number;
@@ -265,7 +279,9 @@ function requestPage(nextDirection: 'next' | 'previous', cursor: string | undefi
 }
 
 function retry(): void {
-    if (readAction.isAvailable()) void options.refetch();
+    if (!readAction.isAvailable()) return;
+    pendingAction.value = {kind: 'retry', generation: readGeneration};
+    void options.refetch();
 }
 /** Clear this browsing draft immediately without changing the selected event.
  * Reset the cursor/search generation together so delayed typing cannot restore
@@ -521,6 +537,7 @@ function details(event: PilotEventPickerOption): string {
                         class="btn-sm"
                         variant="outline-light"
                         :state="readAction"
+                        :pending="pendingAction?.kind === 'previous' && options.isFetching.value"
                         @click="previous"
                         >{{ messages.t('eventPicker.previousPage') }}</ActionButton
                     ><ActionButton
@@ -528,13 +545,17 @@ function details(event: PilotEventPickerOption): string {
                         class="btn-sm"
                         variant="outline-light"
                         :state="readAction"
+                        :pending="pendingAction?.kind === 'next' && options.isFetching.value"
                         @click="next"
-                        >{{ messages.t('eventPicker.nextPage') }}</ActionButton
-                    ><ActionButton
-                        v-if="options.error.value"
+                        >{{ messages.t('eventPicker.nextPage') }}</ActionButton>
+                    <!-- Query clears its prior error when Retry starts. Retain
+                         that initiating control until its own delivery settles. -->
+                    <ActionButton
+                        v-if="options.error.value || pendingAction?.kind === 'retry' && options.isFetching.value"
                         class="btn-sm"
                         variant="outline-secondary"
                         :state="readAction"
+                        :pending="pendingAction?.kind === 'retry' && options.isFetching.value"
                         @click="retry"
                         >{{ messages.t('common.retry') }}</ActionButton
                     >

@@ -514,12 +514,15 @@ describe('mounted Packing header upload selection', () => {
     it.each(['healthy', 'failed'] as const)('clears confirmed bytes on the same input after a %s follow-up read',
         async function confirmedHeaderSelection(followUp) {
             let writes = 0;
+            let releaseUpload!: () => void;
+            const uploadResponse = new Promise<void>(function holdUploadResponse(resolve) { releaseUpload = resolve; });
             const headerSettings = {...settings, editableFields: [],
                 capabilities: {...settings.capabilities, editHeader: true}};
             const mounted = await mountPackingView(list, async function headerUploadResponse(request): Promise<Response> {
                 const path = new URL(request.url).pathname;
                 if (request.method === 'PUT' && path.endsWith('/header')) {
                     writes++;
+                    if (writes === 1) await uploadResponse;
                     return json({changed: true});
                 }
                 if (path.endsWith('/settings')) {
@@ -543,9 +546,21 @@ describe('mounted Packing header upload selection', () => {
 
                 // The real settings command confirms the upload. Read failure
                 // cannot make its saved bytes another selected upload draft.
-                await editor.findAll('button').find(button => button.text() === 'Upload')!.trigger('click');
+                const upload = editor.findAll('button').find(button => button.text() === 'Upload')!;
+                upload.element.focus();
+                await upload.trigger('click');
+                await vi.waitFor(() => expect(writes).toBe(1));
+                // Actual command ownership reaches the shared button, while
+                // the established upload presentation remains free of spinners.
+                expect(upload.element.disabled).toBe(true);
+                expect(upload.attributes('aria-busy')).toBe('true');
+                expect(upload.find('.spinner-border').exists()).toBe(false);
+                releaseUpload();
                 await flushPromises();
                 expect(writes).toBe(1);
+                expect(upload.element.disabled).toBe(false);
+                expect(upload.attributes('aria-busy')).toBe('false');
+                expect(document.activeElement).toBe(upload.element);
                 expect(editor.get('input[type="file"]').element).toBe(input);
                 expect(input.files?.length).toBe(0);
                 expect(input.value).toBe('');
@@ -569,7 +584,7 @@ describe('mounted Packing header upload selection', () => {
                 } else {
                     expect(document.body.textContent).toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
                 }
-            } finally { await mounted.dispose(); }
+            } finally { releaseUpload(); await mounted.dispose(); }
         },
     );
 

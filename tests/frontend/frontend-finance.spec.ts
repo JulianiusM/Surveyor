@@ -392,6 +392,46 @@ describe('P7 finance saved reads and participant invoices', () => {
         expect(request.mock.calls.filter(([req]) => new URL((req as Request).url).pathname.includes('/shares/'))).toHaveLength(2);
     });
 
+    it.each(['section', 'ledger'] as const)('keeps only %s Refresh pending through its selected breakdown read and rejects overlap', async source => {
+        let holdBreakdown = false;
+        let finishBreakdown: (() => void) | undefined;
+        let sectionReads = 0;
+        const {wrapper} = await mountFinance(async request => {
+            if (new URL(request.url).pathname.includes('/shares/')) {
+                if (holdBreakdown) return new Promise<Response>(resolve => { finishBreakdown = () => resolve(json(breakdown)); });
+                return json(breakdown);
+            }
+            sectionReads++;
+            return json(snapshot);
+        });
+        await button(wrapper, 'Invoice pools & payments').trigger('click');
+        await button(wrapper, 'Submit an invoice & history').trigger('click');
+        await button(wrapper, 'View breakdown').trigger('click');
+        await flushPromises();
+        const refresh = wrapper.get<HTMLButtonElement>('button[aria-label="Refresh"]');
+        const ledgerRefresh = wrapper.get<HTMLButtonElement>('[data-finance-ledger-refresh]');
+        holdBreakdown = true;
+        await (source === 'section' ? refresh : ledgerRefresh).trigger('click');
+        await vi.waitFor(() => expect(finishBreakdown).toBeTypeOf('function'));
+        try {
+            // The section GET has already settled. Only the current saved
+            // explanation remains in flight; no artificial command lease is used.
+            expect(sectionReads).toBe(2);
+            expect(refresh.element.disabled).toBe(true);
+            expect(refresh.attributes('aria-busy')).toBe(source === 'section' ? 'true' : 'false');
+            expect(ledgerRefresh.attributes('aria-busy')).toBe(source === 'ledger' ? 'true' : 'false');
+            await (source === 'section' ? ledgerRefresh : refresh).trigger('click');
+            await flushPromises();
+            expect(sectionReads).toBe(2);
+        } finally {
+            finishBreakdown?.();
+            await flushPromises();
+        }
+        expect(refresh.element.disabled).toBe(false);
+        expect(refresh.attributes('aria-busy')).toBe('false');
+        expect(sectionReads).toBe(2);
+    });
+
     it('uses a distinct organizer projection with source totals and no participant submission or lifecycle commands', async () => {
         const organizer = {...snapshot, audience: 'organizer', registrationId: null,
             pools: [{...pool, status: 'CLOSED', canSubmit: false,
@@ -459,7 +499,11 @@ describe('P7 finance saved reads and participant invoices', () => {
     });
 
     it('locks unknown submission until history inspection and explicit review, without replay', async () => {
-        const refresh = vi.fn(async () => {});
+        let holdRefresh = false;
+        let finishRefresh: (() => void) | undefined;
+        const refresh = vi.fn(async () => {
+            if (holdRefresh) await new Promise<void>(resolve => {finishRefresh = resolve;});
+        });
         const mounted = await mountFrontendEvent(FinanceSubmission, async () => json(snapshot), {eventId, pools: [pool], active: true, refresh});
         cleanups.push(mounted.dispose);
         const upload = vi.spyOn(mounted.context.api, 'uploadJson').mockRejectedValue(new Error('Delivery lost'));
@@ -471,6 +515,16 @@ describe('P7 finance saved reads and participant invoices', () => {
         expect(refresh).toHaveBeenCalledTimes(1);
         expect(upload).toHaveBeenCalledTimes(1);
         expect(button(mounted.wrapper, 'Submission unconfirmed').attributes('disabled')).toBeDefined();
+        holdRefresh = true;
+        await button(mounted.wrapper, 'Check invoice history').trigger('click'); await flushPromises();
+        try {
+            const acknowledge = button(mounted.wrapper, 'I have checked the invoice history');
+            expect(button(mounted.wrapper, 'Check invoice history').attributes('aria-busy')).toBe('true');
+            expect(acknowledge.attributes('disabled')).toBeDefined();
+            expect(acknowledge.attributes('aria-busy')).toBe('false');
+            expect(acknowledge.find('.spinner-border').exists()).toBe(false);
+        } finally {finishRefresh?.(); await flushPromises();}
+        expect(refresh).toHaveBeenCalledTimes(2);
         await button(mounted.wrapper, 'I have checked the invoice history').trigger('click'); await flushPromises();
         expect(button(mounted.wrapper, 'Submit invoice').attributes('disabled')).toBeUndefined();
         expect(mounted.wrapper.get<HTMLInputElement>('input[name="amount"]').element.value).toBe('');

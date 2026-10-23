@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import {computed, ref} from 'vue';
+import type {ComponentPublicInstance} from 'vue';
+import type {PilotFormFieldControlSlot} from '../../types/FrontendPilotUiTypes';
+import {useClientInitialization} from '../app/context';
+import {usePendingFocus} from '../composables/pendingFocus';
 
 const props = withDefaults(
     defineProps<{
@@ -22,6 +26,7 @@ const props = withDefaults(
         step?: string | number;
         autocomplete?: string;
         disabled?: boolean;
+        pending?: boolean;
         readOnly?: boolean;
         controlClass?: string;
         placeholder?: string;
@@ -35,15 +40,31 @@ const props = withDefaults(
         state?: 'valid' | 'invalid';
         describedBy?: string;
     }>(),
-    {type: 'text', labelClass: 'mb-1', requiredMarker: true, modelValue: ''},
+    {type: 'text', labelClass: 'mb-1', requiredMarker: true, modelValue: '', pending: false},
 );
 const emit = defineEmits<{'update:modelValue': [value: string]; focus: []; blur: []}>();
 const control = ref<HTMLInputElement | HTMLTextAreaElement | null>(null);
+const controlSlot: PilotFormFieldControlSlot = {controlRef: receiveControl};
+const initialized = useClientInitialization();
+const pending = computed(isPending);
+// Enter submission can natively disable a still-focused field. Share the same
+// transient focus owner as actions and inline editors; the feature retains its
+// actual pending/disabled policies, model and any secret-clearing behavior.
+usePendingFocus({element: control, pending, isAvailable: isControlAvailable});
 const controlValue = computed({get: readValue, set: updateValue});
 const controlAttributes = computed(readControlAttributes);
 const inputAttributes = computed(readInputAttributes);
 
 function readValue(): string { return props.modelValue; }
+function isPending(): boolean { return props.pending; }
+function isControlAvailable(): boolean { return initialized.value && !props.disabled; }
+
+/** Custom native controls opt in with their actual ref while retaining their
+ * directives and models. No descendant lookup or component proxy becomes a
+ * second field owner; slot removal releases the previous DOM reference. */
+function receiveControl(element: Element | ComponentPublicInstance | null): void {
+    control.value = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element : null;
+}
 
 /** Textareas and both input lifecycles share names, validity and presentation.
  * Feature constraints and data hooks remain explicit inputs, so one branch
@@ -101,7 +122,7 @@ function updateValue(): void {
             <!-- Distinct controls can replace this slot. Matching lexical numbers
                  use the same native input below; intentional numeric directives
                  remain available without changing their established lifecycle. -->
-            <slot name="control">
+            <slot name="control" v-bind="controlSlot">
                 <textarea v-if="multiline"
                     ref="control"
                     v-model="controlValue"

@@ -23,6 +23,9 @@ const title = ref('');
 const text = ref('');
 const baseline = ref('');
 const editToken = ref('');
+// Removal identifies only its initiating saved-row control. Dialog/inline saves
+// retain their existing command lifetime and never borrow a delete focus claim.
+const removingId = ref<string | null>(null);
 const inlineEditors = ref<Record<string, InstanceType<typeof InlineCell> | null>>({});
 const current = computed(() => props.fields.find(field => field.id === id.value));
 const maySave = computed(() => id.value ? !!current.value?.capabilities.edit : props.manage);
@@ -64,8 +67,11 @@ async function save(): Promise<void> {
 /** Delete only the deliberately confirmed admitted shared field. */
 async function remove(field: components['schemas']['ActivityTextField']): Promise<void> {
     if (blocked.value || !field.capabilities.delete || !window.confirm(messages.value.t('activity.deleteTextField'))) return;
-    await command.run(scope => api.deleteTextField(props.planId, field.id, field.editToken, scope), true, false,
-        {success: 'common.removed'});
+    removingId.value = field.id;
+    try {
+        await command.run(scope => api.deleteTextField(props.planId, field.id, field.editToken, scope), true, false,
+            {success: 'common.removed'});
+    } finally { removingId.value = null; }
 }
 /** Reuse the same sparse shared-text operation for double-click and view-only pencil. */
 async function inline(field: components['schemas']['ActivityTextField'], value: string, token: string): Promise<boolean> {
@@ -101,6 +107,7 @@ async function reviewUnknown(): Promise<void> {
                         v-if="field.capabilities.delete"
                         type="button"
                         class="btn-sm text-field-delete" variant="outline-danger"
+                        :pending="command.pending.value && removingId === field.id" :show-spinner="false"
                         :data-text-field-id="field.id"
                         :disabled="blocked"
                         :aria-label="messages.t('packing.deleteItem')"
@@ -160,7 +167,7 @@ async function reviewUnknown(): Promise<void> {
                     :read-only="!!id && !current?.capabilities.editTitle"
                     :disabled="blocked"
                     control-class="form-control-sm"
-                />
+                    :pending="command.pending.value && !removingId" />
                 <FormField
                     id="textFieldText"
                     name="text"
@@ -171,7 +178,7 @@ async function reviewUnknown(): Promise<void> {
                     :rows="6"
                     :max-length="16000"
                     :disabled="blocked"
-                />
+                    :pending="command.pending.value && !removingId" />
                 <StatusNotice v-if="conflict" kind="warning">
                     <p>{{ messages.t('draft.readConflict') }}</p>
                     <p>{{ current?.title }}<br />{{ current?.text }}</p>
@@ -193,6 +200,7 @@ async function reviewUnknown(): Promise<void> {
                     type="submit"
                     form="textFieldForm"
                     class="btn-sm" variant="primary"
+                    :pending="command.pending.value && !removingId" :show-spinner="false"
                     :disabled="blocked || !maySave || conflict">
                     <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('common.save') }}</ActionButton>
             </template>

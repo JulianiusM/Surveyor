@@ -10,6 +10,7 @@ import {completeIdentityEntry, useConfirmedNavigation} from '../composables/page
 import {useCommand} from '../composables/command';
 import {useReadRetry} from '../composables/feedback';
 import {observePageNavigation} from '../composables/pageNavigation';
+import {usePendingFocus} from '../composables/pendingFocus';
 import type {PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {Locale} from '../../types/LocalizationTypes';
 import AppNavigationDropdown from './AppNavigationDropdown.vue';
@@ -32,6 +33,11 @@ const identityBlocked = computed(() => logoutCommand.action.disabled.value || co
 const expanded = ref(false);
 const changingLocale = ref(false);
 const localeAction = useActionState({eligible: () => ready.value, pending: () => changingLocale.value});
+const localeControl = ref<HTMLSelectElement | null>(null);
+// A confirmed language change retains this same selector. Its existing pending
+// preference lifetime shares focus recovery without changing locale ownership,
+// serialized requests or the user's current reading position.
+usePendingFocus({element: localeControl, pending: localeAction.pending, isAvailable: localeAction.isAvailable});
 let localeUrlNeedsSync = false;
 let active = true;
 const removeUpdateGuard = context.updates.registerGuard(() => !changingLocale.value);
@@ -315,6 +321,7 @@ async function retryCompletion(): Promise<void> {
                             }}</label>
                             <select
                                 id="pilot-locale"
+                                ref="localeControl"
                                 class="form-select form-select-sm pilot-locale"
                                 :value="locale"
                                 :disabled="localeAction.disabled.value"

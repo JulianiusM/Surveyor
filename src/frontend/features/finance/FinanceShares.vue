@@ -12,7 +12,7 @@ type Share = components['schemas']['FinanceShare'];
 // Organizer payer rows and personal pool rows share saved signed balances,
 // display filters and paging. The server supplies status/caption/coverage facts.
 const props = defineProps<{shares: Share[]; admin?: boolean; disabled?: boolean; readOnly?: boolean;
-    settlement?: boolean; pendingShareId?: string | null; refreshVersion?: number;
+    settlement?: boolean; pendingShareId?: string | null; refreshVersion?: number; refreshing?: boolean;
     pools?: Pick<components['schemas']['FinancePool'], 'id' | 'description'>[]}>();
 const emit = defineEmits<{inspect: [share: Share]; settle: [share: Share]; refresh: []}>();
 const {messages, locale} = usePilot();
@@ -226,6 +226,7 @@ function statusLabel(status: string): string {
             :pages="pages"
             :disabled="disabled || !!pendingShareId"
             :refresh-needed="refreshNeeded"
+            :pending="refreshing"
             @previous="changePage(-1)"
             @next="changePage(1)"
             @refresh="refreshDisplay"
