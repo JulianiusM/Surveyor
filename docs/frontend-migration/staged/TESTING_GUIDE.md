@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-20
+last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P8 numeric display and wire-shape boundaries reconciled with native-preserving fixtures, existing runner layers and finite evidence requirements; no publication or new execution claim
+verification-scope: Shared Windows fork IPC handoff and owned temporary-resource cleanup added to retained runner layers and finite evidence requirements; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; tests/integration/frontend-development-runtime.spec.ts; tests/integration/frontend-session-admission.spec.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts; tests/unit/civil-date.spec.ts; tests/e2e/frontend-calendar.spec.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -477,6 +477,16 @@ spec file. Use `tests/factories/` for valid production-shaped entities/inputs an
 assumptions. The scoped database-free server fixtures instead own and close their local HTTP listeners and any Vite
 instance they create.
 
+Use awaited teardown for each owned listener, Vite instance, database connection and temporary fixture after
+its children settle, including assertion failures. Remove temporary paths only after verifying their exact resolved
+location, ownership and inactive lifecycle; never sweep the user's temporary directory by name shape or age alone.
+An abrupt process exit or worker retirement after a timeout can interrupt asynchronous teardown. Inspect its
+remaining fixture after the run settles; preserve it when child settlement or ownership is uncertain.
+Preserve the current reviewed preparation receipt/output, supported runtime and required verification evidence.
+After reviewing their replacement, remove superseded ignored preparation copies and obsolete packaged dependency
+trees; retain any source, lockfiles or reports still needed to reproduce their results. Generated runtime contracts
+and current build outputs have a separate consumer lifecycle and are not disposable test leftovers.
+
 <!-- /delta:amendment-16 -->
 
 ## Vitest configuration — amendment-17
@@ -487,6 +497,15 @@ isolated unit/client files and scoped server-component integration with bounded 
 processes after observed native threaded-worker exits without a test result; Linux CI retains threads. The same
 concurrency bound, fresh file isolation and UTC environment apply to both pools; the native exit's precise cause
 has not been established.
+
+The shared Windows fork worker delivers transformed source through Vitest's existing IPC rather than its optional
+per-module temporary-file handoff. This prevents those files and their expensive replacement-style renames; it does
+not replace source transformation, mocking, fork isolation, application/database ordering or hook/assertion budgets.
+Atomic publication remains appropriate whenever a file handoff or persistent cache is used. The worker extends the
+public but experimental `ForksPoolWorker` export, changing only handoff selection and matching factory/worker names;
+review that contract on Vitest upgrades. Larger IPC messages trade serialization/memory for the removed filesystem
+work. Linux retains its existing thread pool.
+
 The database-backed `integration` project serializes its files because each rebuilds the same disposable schema.
 A full local Vitest run orders those projects so database resets do not overlap independent files. Keep database-backed
 fixture resets serialized; their requirement does not prohibit isolated database-free parallelism. Exact discovery,

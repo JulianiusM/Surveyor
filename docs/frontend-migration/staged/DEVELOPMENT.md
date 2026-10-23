@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-22
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P9 calculation, settlement and output guidance retained; inherited Finance prescriptions qualified by native/Vue owner, actual command precision and generated catalog ownership; no publication or new execution claim
+verification-scope: P9 calculation, settlement and output guidance retained; inherited Finance prescriptions qualified by native/Vue owner, actual command precision, generated catalog ownership and owned obsolete-validator retirement; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -74,11 +74,20 @@ retains the original toolchain choice and alternatives; executable package scrip
 | Existing server transport and feature `api.ts` | Decode declared transport, select generated validation and present outcomes around the existing business owner. |
 
 `scripts/generate-api.mjs` parses local YAML, rejects duplicate keys/remote references and uses Redocly to lint/bundle
-the description. openapi-typescript emits declarations without runtime enums. Strict Ajv 2020 plus ajv-formats
+the description. Its installed CLI children disable optional telemetry/update checks; actual lint/bundle failures
+remain fatal and tool/compiler versions are unchanged. openapi-typescript emits declarations without runtime enums.
+Strict Ajv 2020 plus ajv-formats
 compiles standalone validators and their required runtime helpers. Feature chunks load their own validators;
 neither the browser nor server startup compiles schemas. openapi-fetch consumes the generated paths while
 `app/transport.ts` supplies headers, runtime validation, cancellation and status classification, retaining the Response.
 Types alone cannot validate received JSON. Do not introduce another schema language, validator configuration or router.
+
+After all current outputs are written successfully, generation removes only recognized obsolete direct browser
+validator modules/declarations carrying its exact generated banner. Cleanup anchors to the selected output root's
+real directory, rejects redirected browser directories beneath it before publication and preserves current case-only
+filename aliases, links, foreign files and subdirectories.
+`--check` reports obsolete artifacts without writing or deleting files. Generated runtime artifacts remain separate
+from temporary test/review output; removing a retired validator does not change current schemas or validation rules.
 
 Use explicit scalars, object properties/required, arrays, local references, enums/const, bounds/patterns and simple
 tagged `oneOf` unions. JSON null uses a type union rather than OpenAPI 3.0 `nullable`. Mutation bodies reject unknown

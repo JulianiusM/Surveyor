@@ -56,10 +56,15 @@ the retained document and unchanged saved shares. Neither weakens deadlines or r
 native early-open race is independently reproduced and remains openly recorded as `IMP-086`; native preservation
 excludes its repair here. Vue already gates the editor on its admitted recommendation workspace.
 
-The generation investigation adopted only an invocation-local cache of successfully prepared output directories.
-Writes stay ordered, check mode stays read-only and failures retain their owning artifact. All **1,116** emitted
-artifacts match the original bytes. A compiler-option experiment changed diagnostics and was not adopted. This is
-a bounded readiness optimization, not a validation, API, technology or application-behavior decision.
+The generation investigation adopted an invocation-local cache of successfully prepared output directories.
+Writes stay ordered, check mode stays read-only and failures retain their owning artifact. The subsequent cleanup
+correction retires obsolete direct browser validators only after all current artifacts are written, checking the
+generator banner, regular-file ownership and physical directory containment. Current case-only filename aliases,
+foreign files, links and nested trees are preserved; redirected browser directories are rejected before publication,
+and check mode reports obsolete outputs without mutation. Real regeneration removed **12 obsolete files**; all **1,116 current artifacts** remain
+byte-identical. The real-compiler lifecycle regression and existing two-clean-tree comparison pass. A compiler-option
+experiment changed diagnostics and was not adopted. These are bounded tooling changes, with no API or application
+behavior change.
 
 All **539 distinct PNG images** in the **1,108 current captures** were actually inspected: the initial reviewed
 hash set plus two independently inspected 244-image partitions account for every original and verified duplicate.
@@ -78,27 +83,72 @@ excluded backend/native defects retain their central owners and explicit disposi
 
 The renewed checks use Node.js **24.15.0** and independently verified MariaDB **10.11.14** disposable schemas with
 strict SQL behavior and exact per-schema grants. The pre-existing local database is not reset. Logs, reports,
-case identities and image hashes remain in ignored `artifacts/frontend-review-20261022/`.
-The owned disposable database container and its temporary credential files were removed after verification.
+case identities and image hashes remain in ignored `artifacts/frontend-review-20261022/`; subsequent scoped loader
+diagnostics and engineering receipts are in `artifacts/frontend-reconciliation-20261022/`. Final normal-run,
+generation and completed-cleanup receipts are in `artifacts/frontend-test-cleanup-20261022/`.
 
 | Verification | Actual result and limit |
 |---|---|
 | Build and compiler | The full server/native/Vue client/SSR build and test compiler pass. All **1,002** distribution files are byte-identical before and after the supported-runtime rebuild. |
-| Database-free checks | The broad **1,880**-case run initially had seven timeouts. The complete affected loading-shell/development-runtime files pass on serial renewal; the final complete nine-case generation suite also passes, including future schemas and two clean trees. These are combined receipts, not one green broad run. |
-| Persistence/HTTP integration | The latest complete 29-file run passes **509** cases; **12** profile-administration cases remain unrun because their shared 30-second preparation hook times out, including on isolated renewal. `TEST-FRONTEND-PROFILE-PREPARATION` records this current blocker, not a pass or an excluded feature. An unsuccessful ordinary-import experiment was fully reverted. |
+| Database-free checks | The normal **88-file run passes all 1,881 cases**, including all ten generation cases. Every existing deadline remains: the future-contract and two-clean-tree cases retain 60 seconds, and the new cleanup lifecycle case retains 30 seconds. The earlier broad-run timeouts and intermediate two-case failure remain historical failures with their corrections below. |
+| Persistence/HTTP integration | The final normal **29-file run passes all 521 cases**, including all twelve profile-administration cases, in 403.40 seconds. Preparation, assertions and deadlines are unchanged. `TEST-FRONTEND-PROFILE-PREPARATION` closes on this executed evidence; earlier 509-pass/twelve-unrun and isolated-timeout checkpoints remain historical failures. |
 | Built client browser | All **49** distinct cases have a passing result across the broad run and unchanged one-case renewal after a closed-browser timeout. The broad run itself had 48 passes and one failure. |
 | Built-application E2E | All **255** distinct cases have a passing result across the broad run, corrected two-case renewal and separately configured disabled-authentication run. The broad run itself had **252 passes, two failures and one configuration skip**; case-identity reconciliation retains those facts. No assertion deadline was increased. |
-| Engineering/documentation | The full 443-source policy inventory has zero findings; the scoped 175-file readability review covers 586 nontrivial operations. Independent/root review checks actual sharing, comments and boundaries. Production freeze and amendment checks report zero findings; the live advisory report retains only its existing unregistered source fingerprint, and Help checks are clean. |
+| Engineering/documentation | The global declaration/DBAL/session inventory covers 443 sources with zero boundary findings; the separate scoped 175-file readability check covers 586 nontrivial operations with zero findings. Independent/root review checks actual sharing, comments and boundaries. An unrestricted all-source readability scan reports 371 comment and eight nested-anonymous-operation findings outside that 175-file scope; this review makes no code changes to those paths. Production freeze and amendment checks report zero findings; the live advisory report retains only its existing unregistered source fingerprint, and Help checks are clean. |
+
+Independent comparison reproduces all 379 broader readability findings against identical operations and rule
+conditions in both original source baselines. They are inherited findings, not newly introduced migration findings;
+this review neither repairs them nor supplies separate cleanup authorization.
 
 The reviewed architecture and current shared owners support subsequent authorized migrations without another
-foundation redesign. This review nevertheless withholds an unconditional readiness/parity sign-off while the
-twelve-case integration blocker remains open. It is not silently moved into a later phase or treated as accepted debt.
+foundation redesign. The twelve-case integration blocker is now resolved through the normal runner; no implemented
+pilot obligation found by this review is deferred. This scoped readiness finding retains the finite visual/E2E
+evidence above and does not approve P10, P11, publication, cutover or unseen behavior.
 
-Two untracked adjacent JavaScript test outputs appeared during final review: `frontend-drivers.spec.js` and
-`frontend-event-organizer.spec.js` under `tests/frontend/`. Their creator is unproven and no root/delegate command
-was identified as their emitter. They are preserved as unrelated changes; the configured Vitest projects select
-`.spec.ts` files. Their arrival invalidates earlier preparation input identities even though reviewed guide bytes
-are unchanged. Source-membership reconciliation does not approve these files or authorize their removal.
+An unchanged filesystem diagnostic records 192 timed temporary-file renames with **100.759 seconds cumulative
+elapsed time** in a **105.448-second** run; all measured asynchronous writes total **460 milliseconds**. The separate
+parent-only CPU profile is approximately **95.7% idle**. Independent repository/OS-temp, synchronous/asynchronous,
+extension and content probes reproduce the cost. Additional move probes narrow it to the replacement-enabled host
+file-move path used by Node; the responsible operating-system component remains unknown. Security software was not
+identified as the cause and its settings were not changed. A diagnostic native-loader configuration for already-built
+SSR modules still leaves all twelve administration cases unrun at the unchanged hook deadline, and its workflow
+worker exits unexpectedly after three passes. That earlier experiment is not adopted.
+
+The accepted correction uses Vitest's public fork-worker extension on Windows with its optional filesystem handoff
+disabled. Transformed source uses the existing IPC channel; fork execution, mocking, default file isolation,
+two-worker concurrency, guarded database ordering and all existing deadlines remain. Linux retains threads. A
+matching factory/worker identity also preserves explicit non-isolated reuse: 49 cases, including hoisted mocks,
+pass in one process. The focused filesystem trace records zero module-handoff renames, rather than merely faster
+renames. Atomic publication remains appropriate wherever file transport or persistent caching is used. The public
+extension API is experimental and must be reviewed on Vitest upgrades; IPC trades temporary file copies for message
+serialization and memory. No dependency patch, application import bypass or allowance increase was adopted.
+
+An intermediate full renewal passed 1,879 cases and failed two generation cases: a Redocly child exited with native
+code `0xC0000409` after printing successful lint, and the future-contract fixture exceeded its 60-second limit.
+No matching owned-PID fault record established the native component or proved an upstream cause. The generator now
+disables Redocly's documented optional telemetry/update checks only for its actual lint/bundle children, retaining
+their arguments, validation and fatal exit handling. Controlled lint/bundle calls pass in 0.721/0.602 seconds. The
+future-contract case now compiles the complete contract with its future additions once, preserving every baseline
+and future positive/negative assertion and both actual generated runtimes. Its focused renewal passes in 21.459
+seconds under the unchanged 60-second limit. No runtime/dependency upgrade, retry or compiler-option change was made.
+
+Completed, ownership-checked cleanup removed over **2.7 GB** of obsolete generated previews, inactive repository-owned
+Vitest and generation-fixture temporary roots, duplicate packaged dependency trees and stale diagnostics. Interrupted
+workers and asynchronous teardown abandoned after timeout can leave roots despite fixture `finally` blocks;
+repeated previews and packaged dependency copies had also accumulated without retirement. The eight additional
+generation roots had exact repository-file identity proofs; their one dependency junction was unlinked separately.
+Two empty roots without surviving ownership evidence were preserved. Current runtime/generated/build outputs, visual receipts, authorization receipts and
+still-needed historical source/lockfiles were retained. The staged testing guidance now requires owned fixture cleanup
+after child completion and retirement of superseded preparations/dependency copies, without a global temporary-file
+sweep. The generator itself now prevents the observed obsolete-validator accumulation. No native/backend cleanup or
+new infrastructure gate was introduced.
+
+At the earlier October 22 review checkpoint, two untracked JavaScript test files appeared under `tests/frontend/`:
+`frontend-drivers.spec.js` and `frontend-event-organizer.spec.js`. They were preserved at that checkpoint. Their
+creator remains unestablished; no root/delegate command was identified as their emitter. Both files were absent
+and the working tree was clean at the start of the subsequent reconciliation at HEAD `0d1c1c0`. The earlier
+763-input preparation receipt includes both paths and therefore describes older source membership; its input
+identity does not establish readiness for the current tree. Previously reviewed guide bytes were unchanged.
 
 ## P9 calculation, settlement and output implementation review (2026-10-22)
 

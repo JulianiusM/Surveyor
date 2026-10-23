@@ -489,21 +489,6 @@ describe('contract and catalog generation', () => {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {
             await prepareGenerationTree(temporary);
-            generate('generate-api.mjs', [], temporary);
-            const metadata = JSON.parse(await fs.readFile(path.join(temporary, '.generated/api/v1/operations.json'), 'utf8')) as ApiContractManifest;
-            expect(metadata.operations.some(operation => operation.requestMediaType === 'multipart/form-data')).toBe(true);
-            expect(metadata.operations.some(operation => Object.values(operation.responseMediaTypes).includes('application/octet-stream'))).toBe(true);
-
-            // Existing contracts keep their declared constraints. Exercise actual
-            // emitted validators rather than infer support from generator text.
-            const server: typeof import('../../.generated/api/v1/server.cjs') =
-                (await import(pathToFileURL(path.join(temporary, '.generated/api/v1/server.cjs')).href)).default;
-            expect(server.validateGetHelpPageParameters({path: {}, query: {q: 'packing'}, header: {}})).toBe(true);
-            expect(server.validatePackingCreateForm({data: {title: 'Packing fixture', description: null, eventId: null,
-                defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0},
-                items: [{title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false},
-                    {title: 'Water', description: null, maxAssignees: 2, requiredByAll: false}]}})).toBe(true);
-
             const source = path.join(temporary, 'contracts/api/v1/openapi.yaml');
             const futureContract = YAML.parseDocument(await fs.readFile(source, 'utf8'));
             const parameters = futureContract.getIn(['paths', '/packing-lists/create-entry', 'get', 'parameters']);
@@ -531,11 +516,14 @@ describe('contract and catalog generation', () => {
                 {'text/plain': {schema: {$ref: '#/components/schemas/PlainTextFixture'}}});
             await fs.writeFile(source, futureContract.toString());
 
-            // Use another output path so module caching cannot return the first
-            // generation's validators after the fixture contract has changed.
+            // Compile the complete contract and future additions together once.
+            // Unchanged operations retain all their assertions below; the separate
+            // two-clean-tree case covers unmodified contract determinism.
             const futureOutput = path.join(temporary, 'future-output');
             generate('generate-api.mjs', ['--output-root', futureOutput], temporary);
             const futureMetadata = JSON.parse(await fs.readFile(path.join(futureOutput, '.generated/api/v1/operations.json'), 'utf8')) as ApiContractManifest;
+            expect(futureMetadata.operations.some(operation => operation.requestMediaType === 'multipart/form-data')).toBe(true);
+            expect(futureMetadata.operations.some(operation => Object.values(operation.responseMediaTypes).includes('application/octet-stream'))).toBe(true);
             const operation = futureMetadata.operations.find(operation => operation.operationId === 'getPackingCreateEntry');
             expect(operation?.responseMediaTypes['200']).toBe('text/plain');
             expect(operation?.parameters.find(parameter => parameter.name === 'repeated')?.schema)
@@ -543,6 +531,15 @@ describe('contract and catalog generation', () => {
 
             const generatedServer = (await import(pathToFileURL(path.join(futureOutput, '.generated/api/v1/server.cjs')).href)).default;
             const generatedBrowser = await import(pathToFileURL(path.join(futureOutput, '.generated/api/v1/browser.mjs')).href);
+
+            // These existing operations are unchanged by the future fixture.
+            // Exercise their real validators alongside the new shapes below.
+            expect(generatedServer.validateGetHelpPageParameters({path: {}, query: {q: 'packing'}, header: {}})).toBe(true);
+            expect(generatedServer.validatePackingCreateForm({data: {title: 'Packing fixture', description: null, eventId: null,
+                defaultPermissions: {public: 0, guest: 0, authenticated: 0, participant: 0},
+                items: [{title: 'Tent', description: null, maxAssignees: 1, requiredByAll: false},
+                    {title: 'Water', description: null, maxAssignees: 2, requiredByAll: false}]}})).toBe(true);
+
             const input = {path: {}, query: {repeated: ['one', 'two'], structured: {label: 'Selection'},
                 choice: {kind: 'multiple', ids: [1, 2]}}, header: {'X-Future-Values': ['first', 'second']}};
             for (const validators of [generatedServer, generatedBrowser]) {
@@ -566,6 +563,112 @@ describe('contract and catalog generation', () => {
             await removeTemporary(temporary);
         }
     }, 60_000);
+
+    /** Exercise real compiler output ownership, read-only rejection and redirected
+     * directory safety inside one detached tree with explicitly released links. */
+    it('retires only obsolete owned browser validators and reports them without mutation in check mode', async function retiresBrowserArtifacts() {
+        const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
+        const browser = path.join(temporary, '.generated/api/v1/browser');
+        const apiDirectory = path.join(temporary, '.generated/api');
+        const linked = path.join(browser, 'validateLinked.mjs');
+        let linkCreated = false;
+        let redirected = false;
+        let redirectedAncestor = false;
+        try {
+            // Use the actual bounded session contract and compiler. This lifecycle
+            // check stays separate from the existing full-contract comparison.
+            await prepareWatcherTree(temporary);
+            generate('generate-api.mjs', [], temporary);
+            const module = await fs.readFile(path.join(browser, 'validateSessionView.mjs'), 'utf8');
+            const declaration = await fs.readFile(path.join(browser, 'validateSessionView.d.mts'), 'utf8');
+            const retired = path.join(browser, 'validateRetiredFixture.mjs');
+            const retiredDeclaration = path.join(browser, 'validateRetiredFixture.d.mts');
+            await fs.writeFile(retired, module);
+            await fs.writeFile(retiredDeclaration, declaration);
+
+            // Validator-like names do not grant ownership. Nested output and a
+            // directory link retain their real bytes and target as well.
+            const foreign = path.join(browser, 'validateForeign.mjs');
+            await fs.writeFile(foreign, '// Another owner\n');
+            const nested = path.join(browser, 'nested');
+            await fs.mkdir(nested);
+            await fs.writeFile(path.join(nested, 'validateRetiredFixture.mjs'), module);
+            const external = path.join(temporary, 'external');
+            await fs.mkdir(external);
+            await fs.writeFile(path.join(external, 'validateRetiredFixture.mjs'), module);
+            await fs.symlink(external, linked, process.platform === 'win32' ? 'junction' : 'dir');
+            linkCreated = true;
+
+            const manifest = path.join(temporary, '.generated/api/v1/operations.json');
+            const original = await fs.readFile(manifest, 'utf8');
+            const modified = (await fs.stat(manifest)).mtimeMs;
+            expect(() => generate('generate-api.mjs', ['--check'], temporary)).toThrow('Obsolete generated browser validator');
+            expect(await fs.readFile(retired, 'utf8')).toBe(module);
+            expect(await fs.readFile(retiredDeclaration, 'utf8')).toBe(declaration);
+            expect(await fs.readFile(manifest, 'utf8')).toBe(original);
+            expect((await fs.stat(manifest)).mtimeMs).toBe(modified);
+
+            // A case-only previous filename can address the current artifact on
+            // Windows. Publication must never retire that current file's alias.
+            await fs.rename(path.join(browser, 'validateSessionView.mjs'), path.join(browser, 'validateSessionVIEW.mjs'));
+            await fs.rename(path.join(browser, 'validateSessionView.d.mts'), path.join(browser, 'validateSessionVIEW.d.mts'));
+            await fs.writeFile(path.join(browser, 'validateSessionView.mjs'), module);
+            await fs.writeFile(path.join(browser, 'validateSessionView.d.mts'), declaration);
+            // On a case-sensitive filesystem these writes create distinct current
+            // siblings, so the old spelling really is obsolete and must disappear.
+            const names = await fs.readdir(browser);
+            const distinctCaseSiblings = names.includes('validateSessionView.mjs') && names.includes('validateSessionVIEW.mjs');
+
+            // Successful publication removes only the obsolete direct pair.
+            // Current artifacts and every excluded neighbor remain readable.
+            generate('generate-api.mjs', [], temporary);
+            await expect(fs.lstat(retired)).rejects.toMatchObject({code: 'ENOENT'});
+            await expect(fs.lstat(retiredDeclaration)).rejects.toMatchObject({code: 'ENOENT'});
+            expect(await fs.readFile(foreign, 'utf8')).toBe('// Another owner\n');
+            expect(await fs.readFile(path.join(nested, 'validateRetiredFixture.mjs'), 'utf8')).toBe(module);
+            expect(await fs.readFile(path.join(linked, 'validateRetiredFixture.mjs'), 'utf8')).toBe(module);
+            expect((await fs.lstat(linked)).isSymbolicLink()).toBe(true);
+            expect(await fs.readFile(path.join(browser, 'validateSessionView.mjs'), 'utf8')).toBe(module);
+            expect(await fs.readFile(path.join(browser, 'validateSessionView.d.mts'), 'utf8')).toBe(declaration);
+            if (distinctCaseSiblings) {
+                await expect(fs.lstat(path.join(browser, 'validateSessionVIEW.mjs'))).rejects.toMatchObject({code: 'ENOENT'});
+                await expect(fs.lstat(path.join(browser, 'validateSessionVIEW.d.mts'))).rejects.toMatchObject({code: 'ENOENT'});
+            }
+            expect(await fs.readFile(manifest, 'utf8')).toBe(original);
+
+            // A redirected browser directory is rejected before current outputs can be
+            // overwritten. Unlink owned junctions explicitly before tree cleanup.
+            await fs.unlink(linked);
+            linkCreated = false;
+            await fs.rename(browser, path.join(temporary, 'original-browser'));
+            await fs.symlink(external, browser, process.platform === 'win32' ? 'junction' : 'dir');
+            redirected = true;
+            const published = (await fs.stat(manifest)).mtimeMs;
+            expect(() => generate('generate-api.mjs', [], temporary)).toThrow('Refusing browser validator cleanup');
+            expect((await fs.stat(manifest)).mtimeMs).toBe(published);
+            expect(await fs.readFile(path.join(external, 'validateRetiredFixture.mjs'), 'utf8')).toBe(module);
+
+            // An ancestor junction is equally unsafe, even when the browser leaf
+            // itself is a regular directory. No artifact may be written through it.
+            await fs.unlink(browser);
+            redirected = false;
+            await fs.rename(apiDirectory, path.join(temporary, 'original-api'));
+            const externalBrowser = path.join(external, 'v1/browser');
+            await fs.mkdir(externalBrowser, {recursive: true});
+            await fs.writeFile(path.join(externalBrowser, 'validateRetiredFixture.mjs'), module);
+            await fs.symlink(external, apiDirectory, process.platform === 'win32' ? 'junction' : 'dir');
+            redirectedAncestor = true;
+            expect(() => generate('generate-api.mjs', [], temporary)).toThrow('Refusing browser validator cleanup');
+            await expect(fs.lstat(path.join(external, 'v1/operations.json'))).rejects.toMatchObject({code: 'ENOENT'});
+            expect(await fs.readFile(path.join(externalBrowser, 'validateRetiredFixture.mjs'), 'utf8')).toBe(module);
+        } finally {
+            if (redirectedAncestor) await fs.unlink(apiDirectory);
+            if (redirected) await fs.unlink(browser);
+            if (linkCreated) await fs.unlink(linked);
+            await removeDependencyLink(temporary);
+            await removeTemporary(temporary);
+        }
+    }, 30_000);
 
     it('generates identical artifacts from two clean trees and verifies them without rewriting', async () => {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));

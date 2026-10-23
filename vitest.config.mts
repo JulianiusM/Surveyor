@@ -1,5 +1,30 @@
 import {defineConfig} from 'vitest/config';
+import {ForksPoolWorker} from 'vitest/node';
+import type {PoolOptions, PoolRunnerInitializer} from 'vitest/node';
 import vue from '@vitejs/plugin-vue';
+
+const ipcForksName = 'forks-ipc';
+
+/** Reuse Vitest's fork execution and isolation, delivering transformed source
+ * through its existing IPC instead of optional temporary module-file copies.
+ * The exported worker extension is experimental; review it on Vitest upgrades. */
+class IpcForksWorker extends ForksPoolWorker {
+    // Match the public factory identity so explicit non-isolated runs can reuse
+    // workers through Vitest's ordinary equality check as well.
+    override readonly name = ipcForksName;
+    // Atomic file publication is valid for file transport, but each rename is
+    // costly on the measured Windows host. IPC removes that transport entirely.
+    override readonly cacheFs = false;
+}
+
+// A unique matching factory/worker name selects the public extension point;
+// the inherited fork entrypoint, serialization and process lifecycle stay intact.
+const ipcForks: PoolRunnerInitializer = {
+    name: ipcForksName,
+    createPoolWorker(options: PoolOptions): ForksPoolWorker {
+        return new IpcForksWorker(options);
+    },
+};
 
 // Node threads inherit the process timezone before Vitest applies test.env.
 // Establish the existing UTC test contract before workers start, including on
@@ -31,7 +56,7 @@ export default defineConfig({
         // worker's native state there; Linux CI retains its measured thread
         // performance. Both pools keep fresh file isolation and the same bounded
         // concurrency; database-backed files still own one resetter at a time.
-        pool: process.platform === 'win32' ? 'forks' : 'threads',
+        pool: process.platform === 'win32' ? ipcForks : 'threads',
         maxWorkers: 2,
         hookTimeout: 30_000,
         setupFiles: ['tests/support/env.ts'],

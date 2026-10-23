@@ -2406,7 +2406,8 @@ findings:
       against the separate exact-grant disposable schema. No prepared-schema override, widened deadline, shared
       database setting or runtime numeric validation was introduced.
   - id: TEST-FRONTEND-PROFILE-PREPARATION
-    status: open
+    status: closed
+    closed_on: 2026-10-22
     discovered_on: 2026-10-22
     severity: medium
     category: verification
@@ -2423,11 +2424,23 @@ findings:
         remains unfinished when the hook expires. It supplies no accepted source or test-configuration correction.
       - An unchanged loader trace records distributed latency across source-module requests, with little time in
         logged file reads and plugin transforms. Those timings omit other loader work and establish no single cause.
-    impact: Current whole-project integration acceptance is incomplete despite passing built-application profile
-      workflows. Source inspection and separate E2E results do not turn these twelve unrun integration cases into passes.
-    disposition: This is a current verification blocker, with evidence in the pilot review and ignored
-      artifacts/frontend-review-20261022 receipts. It is not an approved exclusion, later-phase deferral or
-      demonstrated application assertion defect. Native/backend source, assertions and deadlines remain unchanged.
+      - The subsequent filesystem trace records 192 temporary module-handoff renames taking 100.759 cumulative
+        seconds in a 105.448-second run, while measured asynchronous writes total 460 milliseconds. Independent
+        move probes reproduce the replacement-enabled host-path cost; the responsible OS component is unknown.
+    impact: The original whole-project renewal was incomplete despite passing built-application profile workflows.
+      It is superseded by the final normal integration run executing all twelve cases successfully.
+    disposition: Resolved by using Vitest's public fork-worker extension to send transformed modules through its
+      existing IPC on Windows instead of its optional temporary-file handoff. Default isolation, concurrency,
+      database ordering, native/backend sources, assertions and all existing deadlines are preserved; Linux retains
+      threads. Owned obsolete temporary/generated material was removed and lifecycle guidance reconciled before
+      considering any allowance change. No allowance change was necessary. The experimental extension requires
+      review on Vitest upgrades. Earlier failures remain evidence, not an exclusion or deferred frontend work.
+    verification: On Node.js 24.15.0 and an independently verified exact-grant disposable MariaDB 10.11.14 schema,
+      the final normal 29-file integration run passes all 521 cases, including all twelve administration cases,
+      in 403.40 seconds. The normal 88-file database-free run passes all 1881 cases, including ten generation cases.
+      A focused filesystem trace has zero module-handoff renames; 49 cases also pass with explicit non-isolated
+      single-worker reuse. Receipts are in ignored artifacts/frontend-test-cleanup-20261022 and
+      artifacts/frontend-reconciliation-20261022; the current pilot review records the bounded results.
     closes_when:
       - The complete existing profile-administration integration suite executes all twelve cases successfully
         against the actual application and supported disposable database, with its preparation and assertion

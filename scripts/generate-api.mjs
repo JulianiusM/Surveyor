@@ -151,9 +151,13 @@ try {
     const cli = path.join(root, 'node_modules/@redocly/cli/bin/cli.js');
     const entry = path.join(sourceDirectory, 'openapi.yaml');
     // The CLI is installed locally. No npx/network fallback can change generation inputs.
-    execFileSync(process.execPath, [cli, 'lint', entry, '--extends', 'minimal'], {cwd: root, stdio: 'pipe'});
+    // Local contract validation needs neither analytics nor remote update checks.
+    // Keep both real commands and their failures, removing only ancillary network work.
+    const cliOptions = {cwd: root, stdio: 'pipe', env: {...process.env,
+        REDOCLY_TELEMETRY: 'off', REDOCLY_SUPPRESS_UPDATE_NOTICE: 'true'}};
+    execFileSync(process.execPath, [cli, 'lint', entry, '--extends', 'minimal'], cliOptions);
     const bundled = path.join(temporary, 'openapi.json');
-    execFileSync(process.execPath, [cli, 'bundle', entry, '--output', bundled], {cwd: root, stdio: 'pipe'});
+    execFileSync(process.execPath, [cli, 'bundle', entry, '--output', bundled], cliOptions);
     document = JSON.parse(await fs.readFile(bundled, 'utf8'));
 } catch (error) {
     if (error.stdout) process.stderr.write(error.stdout);
@@ -352,6 +356,81 @@ for (const browser of [false, true]) {
     }
 }
 
+/** Inspect the physical browser directory without accepting redirected ancestors.
+ * Reuse this check before publication and deletion; file IDs distinguish even
+ * differently cased directories on case-sensitive Windows volumes. */
+async function inspectBrowserDirectory(actualRoot) {
+    // The selected output root may be an explicit alias, already canonicalized
+    // by the caller. Its physical directory and every output ancestor must stay plain.
+    const directories = [actualRoot];
+    for (const segment of `${artifactDirectory}/browser`.split('/')) {
+        directories.push(path.join(directories.at(-1), segment));
+    }
+
+    let identity;
+    for (const directory of directories) {
+        identity = await fs.lstat(directory, {bigint: true});
+        if (!identity.isDirectory() || identity.isSymbolicLink()) {
+            throw new Error('Refusing browser validator cleanup through a redirected output directory');
+        }
+    }
+    return {directory: directories.at(-1), identity};
+}
+
+/** Find retired direct browser outputs without changing them. Expected files
+ * are skipped before reading; foreign files, links and nested trees stay outside
+ * this generator's cleanup. Validate the real directory before publication. */
+async function obsoleteBrowserValidators() {
+    const directory = path.join(outputRoot, artifactDirectory, 'browser');
+    let information;
+    try {
+        information = await fs.lstat(directory);
+    } catch (error) {
+        if (error.code === 'ENOENT') return {directory, files: []};
+        throw error;
+    }
+
+    // Deletion must stay in the actual output root, even when an intermediate
+    // path was redirected. A fresh output tree has no older artifacts to retire.
+    const actualRoot = await fs.realpath(outputRoot);
+    const inspected = await inspectBrowserDirectory(actualRoot);
+    if (!information.isDirectory() || information.isSymbolicLink()) {
+        throw new Error('Refusing browser validator cleanup through a redirected output directory');
+    }
+
+    const currentBrowserPaths = [...output.keys()].filter(relative => relative.startsWith(`${artifactDirectory}/browser/`));
+    const files = [];
+    for (const entry of await fs.readdir(directory, {withFileTypes: true})) {
+        const relative = `${artifactDirectory}/browser/${entry.name}`;
+        if (output.has(relative) || !entry.isFile() || !/^validate.+\.(?:mjs|d\.mts)$/u.test(entry.name)) continue;
+
+        // A case-only contract rename can still address this same file on a
+        // case-insensitive volume. Compare exact file identities, including on
+        // case-sensitive Windows directories; bigint retains full file IDs.
+        let currentAlias = false;
+        for (const current of currentBrowserPaths) {
+            if (path.basename(current).toLowerCase() !== entry.name.toLowerCase()) continue;
+            try {
+                const candidateIdentity = await fs.lstat(path.join(directory, entry.name), {bigint: true});
+                const currentIdentity = await fs.lstat(path.join(outputRoot, current), {bigint: true});
+                currentAlias = currentIdentity.isFile() && candidateIdentity.isFile()
+                    && currentIdentity.dev === candidateIdentity.dev && currentIdentity.ino === candidateIdentity.ino;
+            } catch (error) {
+                if (error.code !== 'ENOENT') throw error;
+            }
+            if (currentAlias) break;
+        }
+        if (currentAlias) continue;
+
+        // Naming alone never grants cleanup ownership. Keep another producer's
+        // file even when it uses a validator-like filename.
+        if ((await fs.readFile(path.join(directory, entry.name), 'utf8')).startsWith(banner)) files.push(entry.name);
+    }
+    return {actualRoot, ...inspected, files};
+}
+
+const obsolete = await obsoleteBrowserValidators();
+
 // Reuse successful directory preparation within this invocation. Keep creation
 // lazy and writes ordered so a failure still stops at its owning artifact.
 const preparedDirectories = new Set();
@@ -368,5 +447,25 @@ for (const [relative, content] of output) {
         }
         await fs.writeFile(destination, content);
     }
+}
+
+// Retire old modules only after every current artifact is complete. Check mode
+// remains read-only, including when it reports an obsolete generated module.
+for (const filename of obsolete.files) {
+    if (check) throw new Error(`Obsolete generated browser validator: ${filename}`);
+    const destination = path.join(obsolete.directory, filename);
+    const information = await fs.lstat(destination);
+    // Recheck physical containment and ownership after publication; a changed
+    // path must not turn the earlier inventory into authority to delete it.
+    const logicalDirectory = path.join(outputRoot, artifactDirectory, 'browser');
+    const inspected = await inspectBrowserDirectory(obsolete.actualRoot);
+    const logicalIdentity = await fs.lstat(logicalDirectory, {bigint: true});
+    if (inspected.identity.dev !== obsolete.identity.dev || inspected.identity.ino !== obsolete.identity.ino
+        || !logicalIdentity.isDirectory() || logicalIdentity.isSymbolicLink()
+        || logicalIdentity.dev !== obsolete.identity.dev || logicalIdentity.ino !== obsolete.identity.ino || !information.isFile()
+        || information.isSymbolicLink() || !(await fs.readFile(destination, 'utf8')).startsWith(banner)) {
+        throw new Error(`Browser validator cleanup ownership changed: ${filename}`);
+    }
+    await fs.unlink(destination);
 }
 process.stdout.write(`API contract ${manifest.sourceHash.slice(0, 12)}: ${operations.length} operations, ${Object.keys(schemas).length} schemas (${check ? 'checked' : 'generated'}).\n`);
