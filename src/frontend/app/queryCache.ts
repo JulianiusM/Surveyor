@@ -6,6 +6,29 @@ import type {PilotContext, PilotQueryAdmission, PilotQueryReadPolicy, PilotQuery
 import {belongsToQueryFamily} from './queryKeys';
 import {ApiFailure, UnconfirmedResponseError} from './transport';
 
+/** Project the current key's actual invalidation state without another authority
+ * flag. Callers decide which controls require this freshness; the cache continues
+ * to own retained data, failures, invalidation and successful recovery. */
+export function useQueryInvalidation(client: QueryClient, key: ComputedRef<readonly unknown[]>): ComputedRef<boolean> {
+    const revision = ref(0);
+    const stopState = client.getQueryCache().subscribe(receiveState);
+    onBeforeUnmount(stopState);
+
+    /** Observe state/identity changes only for the consumer's current logical key.
+     * A prior locale/filter may remain invalidated without fencing its successor. */
+    function receiveState(event: QueryCacheNotifyEvent): void {
+        if ((event.type === 'updated' || event.type === 'added' || event.type === 'removed')
+            && matchQuery({queryKey: key.value, exact: true}, event.query)) revision.value++;
+    }
+
+    return computed(() => {
+        // Cache events invalidate this projection; every evaluation reads the
+        // library's actual state instead of mirroring its flag into Vue state.
+        revision.value;
+        return client.getQueryState(key.value)?.isInvalidated ?? false;
+    });
+}
+
 /** Admit a first GET for each mounted key visit, including cached terminal failure.
  * Later automatic resumes use that visit's terminal policy. Eligibility stays with
  * its actual observer so explicit command dependencies can read a paused terminal

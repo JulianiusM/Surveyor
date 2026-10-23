@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: full-application navigation and required-read delivery reconciled with shared frontend/backend ownership, Finance wire/read boundaries and Overview consumers; no publication or new execution claim
+verification-scope: approved composition, first-attempt consent and Overview write-freshness ownership reconciled with full-application navigation and shared frontend/backend boundaries; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -92,10 +92,21 @@ explicit review without automatic replay.
 A same-actor read pause does not retire a confirmed command. Preserve its returned result and failed-refresh warning
 so the feature can release completed input; actual captured-actor retirement still retires the result.
 
+Overview additionally derives the current Query's actual invalidation state through the shared query-cache owner.
+Its region/card consumers pause archive, restore, automation, personal visibility and Delete controls/dispatch while
+retaining readable cards and existing navigation/filter/paging/expansion/Refresh admission. This write-only boundary
+also applies to failed background reads and locale invalidation, including prolonged recovery, without another
+freshness store or deleted-entity registry.
+
 `command.ts`, `pageEntry.ts` and `feedback.ts` share status, departure protection, canonical delivery and receipt-owned
 messages. Pending/unknown status may outlive an editor without retaining its fields. Confirmed navigation retries
 only its required reads and destination delivery, never the confirmed command. The frontend feedback owner manages
 transient notice scheduling/cancellation; persistent conditions remain visible.
+
+`useEntityRemoval` retains original whole-page discard approval only through the first delivery attempt. Later Retry
+or another departure consults the same root draft guard again, including newer sibling edits or earlier unchanged
+drafts. A failed delivery retains the confirmed result and selected-read/navigation receipt independently of consent.
+
 `observePageNavigation` shares router subscriptions, latest pending destination and disposal across App, Header,
 Overview and page-entry/confirmed-transition consumers, retaining each caller's URL boundary and callbacks.
 The same navigation module coordinates Router scrolling with a mounted page's reactive render readiness. Help
@@ -189,6 +200,9 @@ and the existing review operation.
 
 Activity's basic components own dated slot drafts, local filters and warning-review intent. Existing `InlineCell`
 owns inline values, comparison and conflict recovery; optional tag/multiline inputs change presentation only.
+Its Enter/Ctrl+Enter handler leaves active text composition to the browser before preventing any default or saving.
+Activity's distinct role input applies that same composition boundary before selecting/creating a role. Ordinary
+shortcuts, blur and mouse actions retain their existing owners; the native reference remains unchanged.
 Active description flags retain that same editor through a remote empty value, and slot modals retain opening fields
 while current permission loss disables submission. Native client admission remains separate from server method grants.
 The schedule badge derives the complete saved-slot total independently of local filters. One pure browser-safe

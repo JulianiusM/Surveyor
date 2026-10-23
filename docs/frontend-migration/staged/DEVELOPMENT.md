@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Full-application contribution contracts reconciled, including confirmed-deletion read delivery, compound recovery and retained control/value lifetimes; shared focus, Finance ownership, actual command precision and generated owners retained; no publication or new execution claim
+verification-scope: Approved composing-Enter, first-attempt deletion consent and Overview write-freshness contracts reconciled with existing full-application owners; retained recovery, control/value and generated boundaries; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -183,6 +183,12 @@ normalization or secret-clearing policy. Creation and metadata wrappers forward 
 their field slots. Native number/date controls that retain distinct Vue directives explicitly bind the scoped
 `#control="{controlRef}"` input with `:ref="controlRef"`; the field never discovers descendants or adopts a component
 proxy. Readonly inputs that can still initiate Enter submission use the same form pending state.
+
+`InlineCell` checks `KeyboardEvent.isComposing` before preventing Enter's default action or committing input;
+the multiline shortcut retains Ctrl+Enter. Activity's role input uses the same ordering before its own select/create
+action. Composing Enter belongs to the browser; a later ordinary shortcut, mouse action and blur retain their
+existing behavior. Keep these guards in the actual shared inline and distinct role owners. The native reference
+remains unchanged under the approved Vue-only exception.
 
 Matching Bootstrap command/filter buttons use `ActionButton` with their
 existing variant, size, form and disabled policy. Pass the initiating operation's actual `state` or `pending` even
@@ -848,7 +854,11 @@ before unmount can defer its request or finish settlement, follow-up reads and c
 captured scope. Do not substitute cancellation of in-flight work or treat every dialog close as owner retirement.
 
 Obtain whole-page deletion consent before writing. Retain confirmed deletion/creation destination and its one-time
-receipt through failed navigation. Do not discard other drafts because a button was hidden or capability changed.
+receipt through failed navigation. `useEntityRemoval` releases its original discard approval when the first delivery
+attempt settles. A later Retry or other departure uses the existing root guard's current draft state, so an earlier
+approved draft can ask again and a new sibling draft remains protected. The confirmed result and receipt for required
+reads/navigation remain separate; recovery never repeats DELETE. Do not discard other drafts because a button
+was hidden or capability changed.
 Field write loss disables saving while readable drafts remain cancelable; actor/read denial retires protected state.
 Confirmation acknowledges submitted values; only a fresh admitted read restores grants/token and baseline.
 A saved command followed by failed refresh remains saved with stale authority, not a failed mutation.
@@ -973,6 +983,15 @@ Authorized cache data is presentation, not perpetual command permission. Control
 Identity/profile/resource/route generations retire reads, caches and tokens; late responses cannot repopulate them.
 Language-independent machine state uses one authority across languages. Locale-owned Help/Overview projections have
 their own locale keys; a prior-language grant cannot restore revoked edit authority.
+
+Overview derives its current key's actual `Query.state.isInvalidated` through `useQueryInvalidation`, in the existing
+query-cache owner. While that flag is set, `OverviewRegion` and `OverviewCard` block archive, restore, automation,
+personal visibility and Delete at both control and handler boundaries. Keep this write fence separate from existing
+navigation, search/filter, paging, expansion and Refresh admission; retained cards remain readable. A warm destination
+or reopened collection cannot authorize writes merely because it has cached data or navigation has already
+completed. Ordinary failed background reads and locale invalidation also pause these writes while their current Query
+remains invalidated; this accepted tradeoff can last through a prolonged read failure. Use that cache state directly,
+with key changes and subscription disposal, rather than another freshness flag, deleted-ID registry or data store.
 
 Presentation readiness and automatic-read admission are separate. Focus, visibility and reconnect recovery require
 a current successful session bootstrap before private queries resume. A pending, failed or cooldown-blocked bootstrap

@@ -6,16 +6,16 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P0-P10 phase history retained and current whole-frontend readiness correction routed to its paired review; P11, backend exclusions and cutover boundaries preserved; execution belongs to paired review
+verification-scope: P0-P10 phase history and individually approved R1-R3 readiness correction routed to current implementation review; P11, backend exclusions and cutover boundaries preserved; execution belongs to paired review
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
 
 ## Current disposition (2026-10-23)
 
-The [whole-frontend production-readiness review](PILOT_PARITY_REVIEW.md#whole-frontend-production-readiness-review-2026-10-23)
-owns the latest correction scope and execution limits. The completed phase receipts below retain their original
-inputs and acceptance boundaries rather than certifying later changed source.
+The [approved readiness implementation review](PILOT_PARITY_REVIEW.md#approved-readiness-implementation-review-2026-10-23)
+owns the latest R1-R3 correction scope and execution limits under their explicit individual approvals. The completed
+phase receipts below retain their original inputs and acceptance boundaries rather than certifying later changed source.
 
 The maintainer's October 20 [full-pilot correction](FRONTEND_FOUNDATION_DESIGN.md#reaffirmed-isolation-and-authorized-full-pilot-correction-2026-10-20)
 authorizes the reported fixes and equivalent gaps across every migrated area. Native isolation is an existing,

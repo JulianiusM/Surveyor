@@ -1,5 +1,5 @@
 import {expect, test} from '@playwright/test';
-import type {Locator, Page, Response, TestInfo} from '@playwright/test';
+import type {Dialog, Locator, Page, Response, Route, TestInfo} from '@playwright/test';
 import {writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {createE2EActivityPlan, createE2EDriversList, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
@@ -150,6 +150,92 @@ for (const type of ['packing', 'activity', 'drivers'] as const) {
         expect(projection.items.some(item => item.id === child.id)).toBe(false);
     });
 }
+
+test('protects a new attendance draft after confirmed child deletion fails its first destination delivery', async ({page}) => {
+    const {event, children} = await organizerFixture(page, true);
+    const child = children.find(value => value.path.startsWith('/packing/'))!;
+    await page.goto(`/frontend-pilot/event/${event.id}/admin?locale=en`, {waitUntil: 'domcontentloaded'});
+    await waitForPilotHydration(page);
+    // Create real SPA history before opening any modal. Browser Forward remains
+    // available above its overlay and reaches the same router draft guard.
+    const help = page.locator('header a.nav-link').filter({hasText: /^Help$/u});
+    const adminUrl = page.url();
+    await help.click();
+    await expect(page).toHaveURL(/\/frontend-pilot\/help(?:\?|$)/u);
+    await page.goBack();
+    await expect(page).toHaveURL(adminUrl);
+    const origin = await page.evaluate(() => performance.timeOrigin);
+    const original = page.url();
+    const deletes: string[] = [];
+    const documents: string[] = [];
+    page.on('request', request => {
+        if (request.method() === 'DELETE') deletes.push(new URL(request.url()).pathname);
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documents.push(request.url());
+    });
+
+    // A failed lazy-chunk delivery keeps the actual admitted organizer mounted.
+    // DELETE and every application read still use the prepared integrated backend.
+    let failedDelivery = 0;
+    const chunk = '**/OverviewPage-*.js';
+    async function failOverviewDelivery(route: Route): Promise<void> {
+        failedDelivery++;
+        await route.abort('failed');
+    }
+    await page.route(chunk, failOverviewDelivery);
+    try {
+        await page.locator('.dashboard-accordion-item > .accordion-header > button').first().click();
+        const row = page.locator('.dashboard-list .list-group-item')
+            .filter({has: page.getByRole('link', {name: child.title, exact: true})});
+        const operation = `/api/v1/events/${event.id}/things-to-do/packing/${child.id}`;
+        const deleted = page.waitForResponse(response => response.request().method() === 'DELETE'
+            && new URL(response.url()).pathname === operation);
+        page.once('dialog', confirmation => confirmation.accept());
+        await row.getByRole('button', {name: 'Delete', exact: true}).click();
+        expect((await deleted).status()).toBe(200);
+        await expect(page.getByRole('button', {name: createTranslator('en').t('common.retry'), exact: true})).toBeEnabled();
+        expect(failedDelivery).toBeGreaterThan(0);
+        await expect(page).toHaveURL(original);
+
+        // This edit begins after the original attempt has settled. Its own discard
+        // decision must therefore govern a later ordinary same-document departure.
+        const roster = page.locator('.event-participants');
+        await roster.locator('.accordion-button').click();
+        await roster.getByRole('button', {name: 'Edit dates', exact: true}).click();
+        const dates = page.getByRole('dialog');
+        const arrival = dates.locator('[name="arrivalDate"]');
+        await arrival.fill('2030-06-02');
+        const retained = await arrival.elementHandle();
+        const questions: string[] = [];
+        let permitDeparture = false;
+        async function answerDiscard(dialog: Dialog): Promise<void> {
+            questions.push(dialog.message());
+            if (permitDeparture) await dialog.accept();
+            else await dialog.dismiss();
+        }
+        page.on('dialog', answerDiscard);
+        await page.goForward();
+        await expect.poll(() => questions.length).toBe(1);
+        await expect(page).toHaveURL(original);
+        await expect(arrival).toHaveValue('2030-06-02');
+        expect(await arrival.evaluate((input, prior) => input === prior, retained)).toBe(true);
+        expect(deletes).toEqual([operation]);
+
+        permitDeparture = true;
+        await page.goForward();
+        await expect(page).toHaveURL(/\/frontend-pilot\/help(?:\?|$)/u);
+        expect(questions).toHaveLength(2);
+        expect(questions[1]).toBe(questions[0]);
+        expect(deletes).toEqual([operation]);
+        expect(documents).toEqual([]);
+        expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
+        const saved = await page.request.get(`/api/v1/events/${event.id}/participants`, {
+            headers: await frontendEventHeaders(page.request),
+        });
+        expect(saved.status()).toBe(200);
+        const projection = await saved.json() as components['schemas']['EventParticipants'];
+        expect(projection.participants[0]?.arrivalDate).toBe('2030-06-01');
+    } finally { await page.unroute(chunk, failOverviewDelivery); }
+});
 
 /** Capture actual authored component geometry, text and colors without replacing
  * the document or intercepting any application response. */

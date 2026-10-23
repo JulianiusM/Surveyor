@@ -109,9 +109,9 @@ export function useDraftProtection(draft: PilotCommandDraft) {
 
     /** An irreversible command must obtain the whole page's departure decision before
      * writing. Descendants delegate to the root, including sibling drafts behind a dialog.
-     * Keep this consent until its confirmed navigation finishes; its later route guard must
-     * not ask whether to discard an already deleted resource. Pending work still blocks
-     * departure, and automatic reload never treats this approval as a clean draft. */
+     * The caller retains this root lease through the write and first delivery attempt,
+     * then releases it so later departures review current drafts. Pending work still
+     * blocks departure; automatic reload never treats approval as a clean draft. */
     function prepareDeparture(): (() => void) | undefined {
         if (parent) return parent.prepareDeparture();
         if (!mayLeave()) return;
@@ -142,9 +142,9 @@ export function useDraftProtection(draft: PilotCommandDraft) {
         if (!mounted && !commands.size) disposeRoot();
     }
 
-    /** Confirmed deletion can close its child editor on a later denied read while this
-     * page remains mounted. Accepted consent belongs to the root's visit, not that child:
-     * release it after actual departure or actor retirement, never on failed delivery. */
+    /** Root consent can outlive a denied child editor. Retire remaining leases after
+     * actual departure; a failed navigation alone retires none. The command caller
+     * still releases its original consent when the first delivery attempt settles. */
     function retireDepartures(to: RouteLocationNormalized, _from: RouteLocationNormalized,
                               failure?: NavigationFailure | void): void {
         if (failure) return;

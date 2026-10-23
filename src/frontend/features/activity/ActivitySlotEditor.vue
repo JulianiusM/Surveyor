@@ -69,6 +69,19 @@ function roleTitle(id: string): string {
     return props.allRoles.find(role => role.id === id)?.title ?? String(id);
 }
 
+/** Select the first suggestion or create a role only on a completed Enter.
+ * Composition owns its native key handling and must not consume the model's
+ * unfinished search text through either existing role operation. */
+function selectRoleOnEnter(event: KeyboardEvent): Promise<void> | void {
+    // Check before preventDefault: accepting an IME candidate is not a role action.
+    if (event.isComposing) return;
+    event.preventDefault();
+
+    const suggestion = suggestions.value[0];
+    if (suggestion) chooseRole(suggestion.id);
+    else return createRole();
+}
+
 /** Create a plan role through its own existing operation, then select the fresh
  * projection. A missing receipt cannot trigger automatic creation or retry. */
 async function createRole(): Promise<void> {
@@ -222,7 +235,7 @@ async function reviewUnknown(): Promise<void> {
                         :placeholder="messages.t('activity.roleSearch')"
                         :disabled="blocked"
                         autocomplete="off"
-                        @keydown.enter.prevent="suggestions[0] ? chooseRole(suggestions[0].id) : createRole()"
+                        @keydown.enter="selectRoleOnEnter"
                         @keydown.esc.stop.prevent="search = ''"
                     />
                 </div>

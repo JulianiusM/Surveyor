@@ -108,6 +108,18 @@ function review(): void {
     editableOriginal.value = original.value.trim();
     void nextTick(() => input.value?.focus());
 }
+
+/** Submit an explicit Enter shortcut only after text composition has finished.
+ * The same boundary serves input Enter and textarea Ctrl+Enter; blur keeps its
+ * independent native save behavior through the existing commit owner. */
+function commitOnEnter(event: KeyboardEvent): Promise<void> | void {
+    // A composing Enter belongs to the browser/IME, including its default action.
+    // Guard before preventing it so no partial draft is saved or editor removed.
+    if (event.isComposing) return;
+    event.preventDefault();
+    return commit(event);
+}
+
 /** Submit only this editor's reviewed draft through its injected save owner.
  * Current write admission and declared field constraints are checked first;
  * rejected/unconfirmed writes keep the input, and pending blur/Enter cannot duplicate it. */
@@ -161,7 +173,7 @@ defineExpose({begin});
                 class="form-control form-control-sm text-bg-dark" :aria-label="label"
                 :disabled="pending || disabled || !editable" :required="required" :maxlength="maxLength"
                 :rows="rows ?? 5" :placeholder="placeholder" @input="local = ($event.target as HTMLTextAreaElement).value"
-                @blur="commit" @keydown.ctrl.enter.prevent="commit" @keydown.esc.prevent="cancel"></textarea>
+                @blur="commit" @keydown.ctrl.enter="commitOnEnter" @keydown.esc.prevent="cancel"></textarea>
             <input v-else
                 ref="input"
                 :value="local"
@@ -173,7 +185,7 @@ defineExpose({begin});
                 :maxlength="maxLength"
                 @input="local = ($event.target as HTMLInputElement).value"
                 @blur="commit"
-                @keydown.enter.prevent="commit"
+                @keydown.enter="commitOnEnter"
                 @keydown.esc.prevent="cancel"
             />
             <ActionButton v-if="!editable && !remoteChanged"

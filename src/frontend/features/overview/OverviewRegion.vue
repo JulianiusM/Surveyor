@@ -21,7 +21,7 @@ import {observePageNavigation} from '../../composables/pageNavigation';
 import {ApiFailure, isReadDenial, isTerminalReadFailure, ObsoleteRequestError} from '../../app/transport';
 import {overviewKeys} from '../../app/queryKeys';
 import {isPlainMessageKey} from '../../../modules/localization/translator';
-import {observeQueryReads, refetchFreshQueries, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
+import {observeQueryReads, refetchFreshQueries, refetchFreshQuery, retireQueryFamily, useQueryAdmission, useQueryInvalidation} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
@@ -53,12 +53,13 @@ const pendingRemoval = shallowRef<{type: components['schemas']['OverviewCard']['
 
 function cardInteraction(card: components['schemas']['OverviewCard']): PilotOverviewCardInteraction {
     const removePending = pendingRemoval.value?.type === card.type && pendingRemoval.value.id === card.id;
-    if (card.type === 'event') return {migrated: true, readHeader: eventApi.header.bind(eventApi), duplicateUrl: card.url + '/duplicate', removePending};
-    if (card.type === 'drivers') return {migrated: true, readHeader: driversApi.header.bind(driversApi), duplicateUrl: card.url + '/duplicate', removePending};
-    if (card.type === 'survey') return {migrated: true, readHeader: surveyApi.header.bind(surveyApi), duplicateUrl: card.url + '/duplicate', removePending};
-    if (card.type === 'activity') return {migrated: true, readHeader: activityApi.header.bind(activityApi), duplicateUrl: card.url + '/duplicate', removePending};
+    const writeState = {removePending, writesDisabled: overviewInvalidated.value};
+    if (card.type === 'event') return {...writeState, migrated: true, readHeader: eventApi.header.bind(eventApi), duplicateUrl: card.url + '/duplicate'};
+    if (card.type === 'drivers') return {...writeState, migrated: true, readHeader: driversApi.header.bind(driversApi), duplicateUrl: card.url + '/duplicate'};
+    if (card.type === 'survey') return {...writeState, migrated: true, readHeader: surveyApi.header.bind(surveyApi), duplicateUrl: card.url + '/duplicate'};
+    if (card.type === 'activity') return {...writeState, migrated: true, readHeader: activityApi.header.bind(activityApi), duplicateUrl: card.url + '/duplicate'};
     if (card.type !== 'packing') return nativeInteraction;
-    return {...packingInteraction, duplicateUrl: card.url + '/duplicate', removePending};
+    return {...packingInteraction, ...writeState, duplicateUrl: card.url + '/duplicate'};
 }
 const {messages} = context;
 const jitter = context.browser ? Math.round(Math.random() * 3000) : 0;
@@ -134,6 +135,7 @@ watch(
     },
 );
 const overviewKey = computed(() => overviewKeys.region(context.session.value?.context, context.locale.value, query.value));
+const overviewInvalidated = useQueryInvalidation(context.queryClient, overviewKey);
 const readAdmission = useQueryAdmission(context, overviewKey,
     computed(() => props.active !== false && context.hydrated.value && context.visible.value));
 const overview = useQuery({
@@ -263,6 +265,9 @@ const removal = useEntityRemoval(command, destination);
 const blocked = computed(() => command.action.disabled.value
     || !!destination.target.value);
 const actionsBlocked = computed(() => blocked.value || !!pendingRead.value || !overview.data.value || !displayed.value);
+// Invalidated snapshots stay readable but cannot authorize another mutation.
+// Keep this fence separate from navigation, expansion, paging and Refresh admission.
+const writesBlocked = computed(() => actionsBlocked.value || overviewInvalidated.value);
 // Filters can replace an earlier in-flight filter. Only their existing admission
 // and command locks apply; Refresh separately waits for current read progress.
 const navigationAction = useActionState({eligible: mayNavigateRegion, blocked: () => blocked.value});
@@ -608,7 +613,7 @@ async function setVisibility(
     card: components['schemas']['OverviewCard'],
     value: components['schemas']['OverviewVisibilityInput']['visibility'],
 ): Promise<void> {
-    if (actionsBlocked.value) return;
+    if (writesBlocked.value) return;
     const success = value === 'hidden' ? 'overview.visibilityHidden'
         : value === 'shown' ? 'overview.visibilityShown' : 'overview.visibilityDefault';
     await command.run((scope) => api.visibility(card.type, card.id, value, scope), true, false,
@@ -619,7 +624,7 @@ async function setVisibility(
  * Fresh server policy remains authoritative; the command refreshes affected
  * regions and cannot silently turn restore/archive into personal hiding. */
 async function archive(card: components['schemas']['OverviewCard'], restore: boolean): Promise<void> {
-    if (actionsBlocked.value) return;
+    if (writesBlocked.value) return;
     const lifecycle = card.type === 'event' ? eventLifecycle : card.type === 'drivers' ? driversLifecycle
         : card.type === 'survey' ? surveyLifecycle : card.type === 'activity' ? activityLifecycle : packingLifecycle;
     await lifecycle.archive(card.id, restore, card.inheritedArchived,
@@ -630,7 +635,7 @@ async function archive(card: components['schemas']['OverviewCard'], restore: boo
  * standalone Activity roots. Reuse their generated operations and this region's
  * command/refresh lifetime; card state never replaces server authorization. */
 async function automate(card: components['schemas']['OverviewCard'], paused: boolean): Promise<void> {
-    if (actionsBlocked.value || !card.automation?.canManage) return;
+    if (writesBlocked.value || !card.automation?.canManage) return;
 
     // Only these existing feature APIs support independent schedules. Other
     // cards stay inert even if an obsolete callback survives their replacement.
@@ -643,7 +648,7 @@ async function automate(card: components['schemas']['OverviewCard'], paused: boo
  * A failed destination retains its receipt for read/delivery Retry; the
  * deleted card cannot become another eligible DELETE just because delivery failed. */
 async function remove(card: components['schemas']['OverviewCard']): Promise<void> {
-    if (actionsBlocked.value) return;
+    if (writesBlocked.value) return;
     const success = card.type === 'event' ? 'event.deleted' : card.type === 'drivers' ? 'drivers.deleted'
         : card.type === 'survey' ? 'survey.deleted' : card.type === 'activity' ? 'activity.deleted' : 'packing.deleted';
     const intent = {type: card.type, id: card.id};

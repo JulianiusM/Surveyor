@@ -427,6 +427,66 @@ describe('Activity production frontend consumers', () => {
         expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
     });
 
+    it.each([
+        {kind: 'existing', initial: 'Kitchen', completed: 'Kitchen lead'},
+        {kind: 'new', initial: '仕', completed: '仕事'},
+    ])('leaves composing role Enter untouched before normal Enter selects the $kind role', async ({kind, initial, completed}) => {
+        let current = view;
+        const writes: unknown[] = [];
+        const {wrapper, request} = await mounted(ActivityPage, async function roleTransport(input) {
+            if (input.method === 'GET') return json(current);
+            expect(input.method).toBe('POST');
+            expect(new URL(input.url).pathname).toBe(`/api/v1/activity-plans/${planId}/roles`);
+            writes.push(await input.json());
+            current = {...current, allRoles: [...current.allRoles, {id: '2', title: completed, description: null}]};
+            return json({changed: true});
+        });
+        await wrapper.get('[data-slot-edit]').trigger('click');
+        await flushPromises();
+        const search = document.querySelector<HTMLInputElement>('#slotEditorRoleInput')!;
+        search.focus();
+        search.value = initial;
+        search.dispatchEvent(new Event('input', {bubbles: true}));
+        await flushPromises();
+        search.dispatchEvent(new Event('compositionstart', {bubbles: true}));
+        search.value = completed;
+        search.dispatchEvent(new InputEvent('input', {bubbles: true, isComposing: true,
+            inputType: 'insertCompositionText', data: completed}));
+
+        // A native composing key must neither select the old suggestion nor
+        // submit the model's unfinished role name through the real transport.
+        const composingEnter = new KeyboardEvent('keydown', {key: 'Enter', isComposing: true,
+            bubbles: true, cancelable: true});
+        expect(search.dispatchEvent(composingEnter)).toBe(true);
+        await flushPromises();
+        expect(composingEnter.defaultPrevented).toBe(false);
+        expect(writes).toEqual([]);
+        expect(document.querySelector('#slotEditorRoleChips .badge')).toBeNull();
+        expect(document.querySelector('#slotEditorRoleInput')).toBe(search);
+        expect(search.value).toBe(completed);
+
+        search.dispatchEvent(new Event('compositionend', {bubbles: true}));
+        search.dispatchEvent(new Event('input', {bubbles: true}));
+        await flushPromises();
+        search.blur();
+        await flushPromises();
+        // Blur still leaves suggestions and the unsaved role set untouched.
+        expect(writes).toEqual([]);
+        expect(document.querySelector('#slotEditorRoleChips .badge')).toBeNull();
+        expect(document.querySelector('#slotEditorRoleSuggestions')).not.toBeNull();
+        search.focus();
+        const enter = new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true});
+        expect(search.dispatchEvent(enter)).toBe(false);
+        await flushPromises();
+        expect(enter.defaultPrevented).toBe(true);
+        expect(document.querySelector('#slotEditorRoleChips .badge')?.textContent?.trim()).toBe(completed);
+        expect(document.querySelector('#slotEditorRoleInput')).toBe(search);
+        expect(search.value).toBe('');
+        expect(writes).toEqual(kind === 'new' ? [{name: completed}] : []);
+        expect(request.mock.calls.filter(([input]) => (input as Request).method !== 'GET')).toHaveLength(kind === 'new' ? 1 : 0);
+        expect(document.querySelector('#slotEditorForm')).not.toBeNull();
+    });
+
     it('retains a shared-text title draft and blocks partial saving after title authority is lost even when Review is attempted', async () => {
         let current: components['schemas']['ActivityView'] = {...view, textFields: [{id: otherId,
             title: 'Saved title', text: 'Saved instructions', editToken: '"text-opening"',

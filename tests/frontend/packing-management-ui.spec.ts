@@ -819,6 +819,57 @@ describe('inline packing drafts', () => {
         }
     });
 
+    it.each([
+        {multiline: false, completion: 'Enter'}, {multiline: true, completion: 'Enter'},
+        {multiline: false, completion: 'blur'}, {multiline: true, completion: 'blur'},
+    ])('leaves composing Enter to the browser before $completion saves multiline=$multiline', async ({multiline, completion}) => {
+        const save = vi.fn(async function saveCompletedComposition() { return true; });
+        const {wrapper} = await mounted(InlineCell, {value: 'Original', token: '"original"',
+            editable: true, multiline, label: 'Composing text', save});
+        await wrapper.get('td').trigger('dblclick');
+        const input = wrapper.get<HTMLInputElement | HTMLTextAreaElement>(multiline ? 'textarea' : 'input');
+        await input.trigger('compositionstart');
+        input.element.value = 'Original ni';
+        input.element.dispatchEvent(new InputEvent('input', {bubbles: true, isComposing: true,
+            inputType: 'insertCompositionText', data: 'ni'}));
+
+        // Exercise the production shortcut with the browser composition flag.
+        // This client boundary does not simulate an operating-system IME.
+        const composingEnter = new KeyboardEvent('keydown', {key: 'Enter', ctrlKey: multiline,
+            isComposing: true, bubbles: true, cancelable: true});
+        expect(input.element.dispatchEvent(composingEnter)).toBe(true);
+        await flushPromises();
+        expect(composingEnter.defaultPrevented).toBe(false);
+        expect(save).not.toHaveBeenCalled();
+        expect(wrapper.get(multiline ? 'textarea' : 'input').element).toBe(input.element);
+        expect(input.element.value).toBe('Original ni');
+        expect(input.element.disabled).toBe(false);
+
+        input.element.value = 'Original 日本語';
+        await input.trigger('compositionend');
+        await input.trigger('input');
+        if (multiline) {
+            // Plain Enter remains the textarea's own newline action; Ctrl+Enter
+            // alone owns explicit submission after composition has finished.
+            const newline = new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true});
+            expect(input.element.dispatchEvent(newline)).toBe(true);
+            expect(newline.defaultPrevented).toBe(false);
+            expect(save).not.toHaveBeenCalled();
+        }
+
+        if (completion === 'blur') await input.trigger('blur');
+        else {
+            const enter = new KeyboardEvent('keydown', {key: 'Enter', ctrlKey: multiline,
+                bubbles: true, cancelable: true});
+            expect(input.element.dispatchEvent(enter)).toBe(false);
+            expect(enter.defaultPrevented).toBe(true);
+        }
+        await flushPromises();
+        expect(save).toHaveBeenCalledExactlyOnceWith('Original 日本語', '"original"');
+        expect(input.element.isConnected).toBe(false);
+        expect(wrapper.emitted('editing')).toEqual([[true], [false]]);
+    });
+
     it('restores a retained multiline editor after a rejected Ctrl+Enter save', async () => {
         const held = deferredInlineSave();
         const save = vi.fn(function saveDescription() { return held.result; });
@@ -2311,7 +2362,7 @@ describe('packing command forms', () => {
         }
     });
 
-    it('keeps confirmed deletion navigation retryable after delivery failure without another DELETE or discard prompt', async () => {
+    it('rechecks retained drafts on confirmed deletion Retry without another DELETE', async () => {
         const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true, remove: true},
             access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
         let deletes = 0;
@@ -2336,11 +2387,13 @@ describe('packing command forms', () => {
         }});
         router.onError(() => {});
         await wrapper.get('#quick-title').setValue('Parent draft');
+        const parentDraft = wrapper.get<HTMLInputElement>('#quick-title').element;
         await button(wrapper, 'Entity settings').trigger('click');
         await flushPromises();
         await wrapper.get('#settings-defaults-participant-EDIT_TITLE').setValue(true);
         await wrapper.get('#pilot-settings-tab-actions').trigger('click');
-        const confirm = vi.fn(() => deletes === 0);
+        let approveRetryDeparture = false;
+        const confirm = vi.fn(() => deletes === 0 || approveRetryDeparture);
         vi.stubGlobal('confirm', confirm);
         await button(wrapper, 'Delete permanently').trigger('click');
         await flushPromises();
@@ -2355,14 +2408,31 @@ describe('packing command forms', () => {
         expect(request.mock.calls.filter(([input]) => new URL((input as Request).url).pathname === '/api/v1/overview')).toHaveLength(0);
 
         failNavigation = false;
-        await button(wrapper, 'Try again').trigger('click');
+        const retry = button(wrapper, 'Try again');
+        await retry.trigger('click');
+        await flushPromises();
+        // The first delivery attempt released its discard approval. Canceling
+        // the later departure preserves the same draft and confirmed receipt.
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/packing/' + id);
+        expect(wrapper.get('#quick-title').element).toBe(parentDraft);
+        expect(parentDraft.value).toBe('Parent draft');
+        expect(wrapper.get<HTMLInputElement>('#settings-defaults-participant-EDIT_TITLE').element.checked).toBe(true);
+        expect(button(wrapper, 'Try again').element).toBe(retry.element);
+        expect(retry.attributes('disabled')).toBeUndefined();
+        expect(confirm).toHaveBeenCalledTimes(3);
+        expect(confirm.mock.calls[2]).toEqual(['Discard changes?']);
+        expect(deletes).toBe(1);
+
+        approveRetryDeparture = true;
+        await retry.trigger('click');
         await flushPromises();
         expect(router.currentRoute.value.path).toBe('/frontend-pilot');
         expect(deletes).toBe(1);
-        expect(confirm).toHaveBeenCalledTimes(2);
+        expect(confirm).toHaveBeenCalledTimes(4);
+        expect(confirm.mock.calls[3]).toEqual(['Discard changes?']);
     });
 
-    it('retains navigation-only recovery in the shell when post-deletion reads close the private editor', async () => {
+    it('rechecks the retained parent draft through shell recovery after post-deletion denial closes the editor', async () => {
         const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true, remove: true},
             access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
         let deletes = 0;
@@ -2386,7 +2456,8 @@ describe('packing command forms', () => {
         await flushPromises();
         await wrapper.get('#settings-defaults-participant-EDIT_TITLE').setValue(true);
         await wrapper.get('#pilot-settings-tab-actions').trigger('click');
-        const confirm = vi.fn(() => deletes === 0);
+        let approveRetryDeparture = false;
+        const confirm = vi.fn(() => deletes === 0 || approveRetryDeparture);
         vi.stubGlobal('confirm', confirm);
         await button(wrapper, 'Delete permanently').trigger('click');
         await flushPromises();
@@ -2408,11 +2479,30 @@ describe('packing command forms', () => {
         expect(departure.defaultPrevented).toBe(true);
 
         failNavigation = false;
-        await button(root, context.messages.value.t('common.retry')).trigger('click');
+        const retry = button(root, context.messages.value.t('common.retry'));
+        await retry.trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/packing/' + id);
+        expect(wrapper.findComponent(PackingSettings).exists()).toBe(false);
+        expect(wrapper.find('#quick-title').exists()).toBe(false);
+        expect(wrapper.find('[data-item-id]').exists()).toBe(false);
+        // Shell recovery is hidden while its existing delivery owner is pending,
+        // then reappears with the same confirmed receipt after cancellation.
+        const renewedRetry = button(root, context.messages.value.t('common.retry'));
+        expect(renewedRetry.attributes('disabled')).toBeUndefined();
+        expect(confirm).toHaveBeenCalledTimes(3);
+        expect(confirm.mock.calls[2]).toEqual(['Discard changes?']);
+        expect(deletes).toBe(1);
+
+        // The denied private DOM stays retired. Explicitly accepting the root's
+        // retained draft decision permits only delivery of the confirmed result.
+        approveRetryDeparture = true;
+        await renewedRetry.trigger('click');
         await flushPromises();
         expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
         expect(deletes).toBe(1);
-        expect(confirm).toHaveBeenCalledTimes(2);
+        expect(confirm).toHaveBeenCalledTimes(4);
+        expect(confirm.mock.calls[3]).toEqual(['Discard changes?']);
     });
 
     it('retains pending command guards when an earlier denied read closes its editor', async () => {

@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Explicit full P10 integration trigger recorded after retained P9 history; native isolation, approval provenance and separate source/execution evidence preserved
+verification-scope: Direct R1-R3 readiness approvals recorded after retained P10 trigger and original choices; native isolation, approval provenance and separate source/execution evidence preserved
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -1002,6 +1002,34 @@ consumers. Backend controllers, domain operations and DBAL remain shared. This i
 P11, default-route cutover, native-source changes/removal, production-guide publication, deployment, excluded
 backend remedies, persisted principal language or full email/PDF localization. Implementation and executed
 evidence remain separately recorded in the plan and paired review.
+
+## Approved readiness corrections (2026-10-23)
+
+After the whole-frontend review, the maintainer individually approved **R1**, **R2** and **R3** in direct response
+to their complete final-message explanations. These identifiers belong to that review's requests, not earlier
+same-named decisions. The approval changes only the following boundaries; implementation and renewed execution
+belong to the paired review rather than being inferred from this record.
+
+- **R1 — composing Enter:** Vue inline editors and Activity role entry ignore submission/selection shortcuts
+  during active text composition, leaving that event's browser handling intact. Ordinary Enter after composition,
+  mouse actions and blur retain their existing behavior. This expressly supersedes inherited keyboard parity for
+  those Vue controls; the native reference remains unchanged. Matching inline consumers share their existing
+  control, while the role editor retains its distinct selection/creation owner.
+- **R2 — deletion departure consent:** the shared removal owner releases its original discard approval when the
+  first confirmed-delivery attempt settles. Later Retry or other departure checks current drafts through the
+  existing page guards. The previous implementation intentionally retained that consent through failed delivery;
+  the approved replacement protects subsequent edits and accepts that older already-approved drafts can prompt
+  again. The confirmed result and required-read/navigation receipt remain; DELETE is never replayed.
+- **R3 — invalidated Overview writes:** the shared cache exposes its actual invalidation flag reactively.
+  Overview uses that single source to pause archive, restore, automation, personal-visibility and Delete controls
+  and dispatch until recovery. Cached information remains readable, and navigation, filters, paging, expansion
+  and Refresh retain their existing availability rules. The maintainer explicitly accepts that background-read
+  failure and locale invalidation also pause these writes, potentially throughout a prolonged read failure.
+  No separate cache, deleted-item registry, permission store or backend implementation is authorized.
+
+All three decisions retain existing feature/command/query ownership and shared backend business behavior. They
+authorize no native-source change, excluded backend remedy, P11/default-route cutover, native retirement,
+production-guide publication or deployment.
 
 ## Cutover retirement inventory
 

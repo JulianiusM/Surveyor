@@ -78,9 +78,10 @@ async function captureCards(page: Page, info: TestInfo, label: string, region: L
     return presentations;
 }
 
-/** Delay an unchanged successful participation response so native browser focus
- * behavior is observable while the actual shared Refresh control is disabled. */
-async function holdParticipationRead(page: Page) {
+/** Delay one genuine collection read. Existing focus checks select participation;
+ * deletion recovery selects only the warm default owner destination. Timing is
+ * the sole substitution: the backend still supplies the unchanged response. */
+async function holdOverviewRead(page: Page, collection = 'participant', defaultOnly = false) {
     const received = createBrowserReadGate();
     const released = createBrowserReadGate();
     const delivered = createBrowserReadGate();
@@ -90,7 +91,8 @@ async function holdParticipationRead(page: Page) {
 
     async function holdResponse(route: Route): Promise<void> {
         const query = new URL(route.request().url()).searchParams;
-        if (started || query.get('collection') !== 'participant' || query.get('region') !== 'main') {
+        if (started || query.get('collection') !== collection || query.get('region') !== 'main'
+            || defaultOnly && (query.get('q') || query.get('eventId'))) {
             await route.continue();
             return;
         }
@@ -129,7 +131,7 @@ for (const width of [1280, 390]) {
         await expect(emptyParticipation).toContainText('You are not participating anywhere');
         await expect(emptyParticipation.getByRole('searchbox')).toHaveCount(0);
         const refreshEmpty = emptyParticipation.getByRole('button', {name: 'Refresh', exact: true});
-        const heldEmpty = await holdParticipationRead(page);
+        const heldEmpty = await holdOverviewRead(page);
         let refreshScroll = 0;
         try {
             await refreshEmpty.click();
@@ -143,7 +145,7 @@ for (const width of [1280, 390]) {
 
         // A deliberate move during another pending read cancels restoration.
         // The shared button must not pull focus back from a sibling's search.
-        const heldMoved = await holdParticipationRead(page);
+        const heldMoved = await holdOverviewRead(page);
         const search = owner.getByRole('searchbox');
         try {
             await refreshEmpty.click();
@@ -236,6 +238,61 @@ test('keeps parent grouping, personal placement, hidden-region history and count
     for (const resource of resources.filter(resource => resource.type !== 'event')) {
         await expect(owner.locator(`[data-id="${resource.id}"]`)).toBeVisible();
     }
+});
+
+test('blocks writes from a deleted warm Overview card until its genuine destination read arrives', async ({page}) => {
+    const {resources} = await mixedOverview(page.request);
+    const removed = resources.find(resource => resource.type === 'packing')!;
+    await page.goto('/frontend-pilot?locale=en', {waitUntil: 'domcontentloaded'});
+    await waitForPilotHydration(page);
+    await page.locator('header a.navbar-brand').click();
+    await expect(page).toHaveURL('/frontend-pilot');
+    const owner = page.locator('[data-collection="owner"][data-region="main"]');
+    await expect(owner.locator('.js-item')).toHaveCount(5);
+    await expect(owner).toHaveAttribute('aria-busy', 'false');
+    const origin = await page.evaluate(() => performance.timeOrigin);
+
+    // Leave the default key warm while selecting one real filtered projection.
+    // Its deletion follow-up can finish before the destination's own GET arrives.
+    await owner.getByRole('searchbox').fill(removed.title);
+    await owner.getByRole('button', {name: 'Search', exact: true}).click();
+    await expect(owner.locator('.js-item')).toHaveCount(1);
+    await expect(owner).toHaveAttribute('aria-busy', 'false');
+    const held = await holdOverviewRead(page, 'owner', true);
+    const deletes: string[] = [];
+    page.on('request', request => {
+        if (request.method() === 'DELETE') deletes.push(new URL(request.url()).pathname);
+    });
+    try {
+        const deleted = page.waitForResponse(response => response.request().method() === 'DELETE'
+            && new URL(response.url()).pathname === removed.endpoint);
+        page.once('dialog', confirmation => confirmation.accept());
+        await owner.getByRole('button', {name: 'Delete', exact: true}).click();
+        expect((await deleted).status()).toBe(200);
+        await held.received;
+        await expect(page).toHaveURL('/frontend-pilot');
+
+        // The retained card is readable while its real saved projection is held.
+        // Its native disabled control cannot submit a second destructive command.
+        const stale = owner.locator(`.js-item[data-id="${removed.id}"]`);
+        await expect(stale).toBeVisible();
+        const remove = stale.getByRole('button', {name: 'Delete', exact: true});
+        await expect(remove).toBeDisabled();
+        await remove.evaluate(function attemptDisabledRemoval(control) {
+            (control as HTMLButtonElement).click();
+        });
+        await expect(stale.locator('a.card-body')).toHaveAttribute('href', '/frontend-pilot' + removed.path);
+        await expect(owner.getByRole('searchbox')).toBeEnabled();
+        expect(deletes).toEqual([removed.endpoint]);
+    } finally { await held.finish(); }
+
+    await expect(owner.locator(`.js-item[data-id="${removed.id}"]`)).toHaveCount(0);
+    await expect(owner.locator('.js-item')).toHaveCount(4);
+    const survivor = resources.find(resource => resource.type === 'drivers')!;
+    await expect(owner.locator(`.js-item[data-id="${survivor.id}"]`)
+        .getByRole('button', {name: 'Delete', exact: true})).toBeEnabled();
+    expect(deletes).toEqual([removed.endpoint]);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
 });
 
 test('reconciles confirmed root deletion at the same Overview URL and from a filtered visit into its warm default cache', async ({page}) => {

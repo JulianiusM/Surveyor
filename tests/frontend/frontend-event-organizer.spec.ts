@@ -1,15 +1,21 @@
 // @vitest-environment happy-dom
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {DOMWrapper, flushPromises} from '@vue/test-utils';
+import {DOMWrapper, flushPromises, mount} from '@vue/test-utils';
 import {defineComponent, ref, type Component} from 'vue';
+import {createMemoryHistory, createRouter} from 'vue-router';
+import {VueQueryPlugin} from '@tanstack/vue-query';
+import I18NextVue from 'i18next-vue';
+import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import App from '../../src/frontend/app/App.vue';
 import {useDraftProtection} from '../../src/frontend/composables/command';
-import {createFrontendEventSession, frontendEventId as eventId} from '../factories/frontendEventFactory';
+import {createFrontendEventSession, createFrontendEventView, frontendEventId as eventId} from '../factories/frontendEventFactory';
 import {frontendEventJson as json, frontendEventButton as button, mountFrontendEvent} from '../keywords/frontendEventKeywords';
 import {eventKeys, overviewKeys} from '../../src/frontend/app/queryKeys';
 import EventParticipants from '../../src/frontend/features/event/EventParticipants.vue';
 import EventBypassLinks from '../../src/frontend/features/event/EventBypassLinks.vue';
 import EventThingsToDo from '../../src/frontend/features/event/EventThingsToDo.vue';
 import EventSettings from '../../src/frontend/features/event/EventSettings.vue';
+import EventPage from '../../src/frontend/features/event/EventPage.vue';
 import {copyEventText} from '../../src/frontend/features/event/clipboard';
 import AppDialog from '../../src/frontend/components/AppDialog.vue';
 import type {components} from '../../src/types/api/v1';
@@ -144,11 +150,109 @@ describe('Event organizer workflows', () => {
         expect(wrapper.text()).toContain('Changes saved');
         expect(router.currentRoute.value.path).toBe(`/frontend-pilot/event/${eventId}`);
         stopFailure();
+        // The first delivery attempt used the original approval. Retry must
+        // reconsider even that earlier sibling draft through its current guard.
+        confirmation.mockClear().mockReturnValue(false);
+        await button(wrapper, 'Try again').trigger('click'); await flushPromises();
+        expect(confirmation).toHaveBeenCalledWith('Discard changes?');
+        expect(router.currentRoute.value.path).toBe(`/frontend-pilot/event/${eventId}`);
+        expect(wrapper.get<HTMLInputElement>('[data-test="sibling-draft"]').element.value).toBe('Retain this draft');
+        expect(button(wrapper, 'Delete').attributes('disabled')).toBeDefined();
+        confirmation.mockReturnValue(true);
         await button(wrapper, 'Try again').trigger('click'); await flushPromises();
         expect(router.currentRoute.value.path).toBe('/frontend-pilot');
         expect(confirmation).toHaveBeenCalledTimes(2);
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'GET')).toHaveLength(1);
+    });
+
+    it('protects a new organizer attendance draft on canceled and accepted Back after confirmed child deletion delivery fails', async () => {
+        const event = createFrontendEventView({capabilities: {...createFrontendEventView().capabilities,
+            admin: true, participants: true, manageRegistrations: true, manageAssignments: true}});
+        // These are actual organizer capabilities: the backend's admin child
+        // projection exposes owner actions, independently of roster management.
+        const owned = {...card, capabilities: {...card.capabilities, duplicate: true, remove: true}};
+        const request = vi.fn(async function serveOrganizerJourney(input: RequestInfo | URL): Promise<Response> {
+            const received = input as Request;
+            const url = new URL(received.url);
+            if (received.method === 'DELETE') {
+                expect(url.pathname).toBe(`/api/v1/events/${eventId}/things-to-do/activity/${childId}`);
+                expect(url.searchParams.get('view')).toBe('admin');
+                return json({changed: true});
+            }
+            if (url.pathname.endsWith('/participants')) return json(roster);
+            if (url.pathname.endsWith('/registration-links')) return json({items: []});
+            if (url.pathname.endsWith('/things-to-do')) return json({items: [owned]});
+            if (url.pathname.endsWith('/finance/organizer')) return json({audience: 'organizer', registrationId: null,
+                pools: [], invoices: [], shares: []});
+            return json(event);
+        });
+        const context = createPilotContext({session}, true, request);
+        context.hydrated.value = true;
+        context.visible.value = true;
+        const placeholder = defineComponent({template: '<p>Destination</p>'});
+        const router = createRouter({history: createMemoryHistory(), routes: [
+            {path: '/frontend-pilot/event/:eventId/admin', component: EventPage},
+            {path: '/frontend-pilot', component: placeholder},
+            {path: '/frontend-pilot/help', component: placeholder},
+            {path: '/:pathMatch(.*)*', component: placeholder},
+        ]});
+        const origin = `/frontend-pilot/event/${eventId}/admin`;
+        await router.push('/frontend-pilot/help');
+        await router.push(origin);
+        const wrapper = mount(App, {attachTo: document.body, global: {
+            plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+            provide: {[pilotContextKey as symbol]: context},
+        }});
+        cleanups.push(async function disposeOrganizerJourney(): Promise<void> {
+            wrapper.unmount();
+            await context.queryClient.cancelQueries();
+            context.queryClient.clear();
+            context.updates.dispose();
+        });
+        await flushPromises();
+        router.onError(() => {});
+        router.beforeResolve(function rejectOverview(to): void {
+            if (to.path === '/frontend-pilot') throw new Error('Controlled Overview delivery failure');
+        });
+        const confirmation = vi.mocked(window.confirm);
+        await wrapper.findAll('.dashboard-accordion-button')[1]!.trigger('click');
+        const removal = button(wrapper.findAll('.dashboard-accordion-body')[1]!, 'Delete');
+        await removal.trigger('click');
+        await flushPromises();
+        expect(confirmation).toHaveBeenCalledWith('Delete this item?');
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
+        expect(router.currentRoute.value.path).toBe(origin);
+        expect(removal.attributes('disabled')).toBeDefined();
+        expect(wrapper.text()).toContain('Changes saved');
+
+        // This genuine roster dialog starts after the failed first delivery.
+        // The earlier deletion approval cannot authorize discarding its new input.
+        await wrapper.get('.event-participants .accordion-button').trigger('click');
+        await button(wrapper.get('.event-participants'), 'Edit dates').trigger('click');
+        await flushPromises();
+        const surface = new DOMWrapper(document.body);
+        const departure = surface.get<HTMLInputElement>('.pilot-dialog input[name="departureDate"]');
+        expect(departure.element.disabled).toBe(false);
+        await departure.setValue('2027-06-02');
+        confirmation.mockClear().mockReturnValue(false);
+        router.back();
+        await vi.waitFor(() => expect(confirmation).toHaveBeenCalledOnce());
+        await flushPromises();
+        expect(confirmation).toHaveBeenCalledWith('Discard changes?');
+        expect(router.currentRoute.value.path).toBe(origin);
+        expect(departure.element.isConnected).toBe(true);
+        expect(departure.element.value).toBe('2027-06-02');
+
+        // A later deliberate acceptance releases this draft through ordinary
+        // route departure; the confirmed deletion never becomes repeatable.
+        confirmation.mockClear().mockReturnValue(true);
+        router.back();
+        await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/frontend-pilot/help'));
+        expect(confirmation).toHaveBeenCalledOnce();
+        expect(departure.element.isConnected).toBe(false);
+        expect(request.mock.calls.filter(([input]) => (input as Request).method === 'DELETE')).toHaveLength(1);
+        expect(request.mock.calls.every(([input]) => ['GET', 'DELETE'].includes((input as Request).method))).toBe(true);
     });
 
     it.each([

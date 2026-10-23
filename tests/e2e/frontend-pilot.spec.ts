@@ -823,6 +823,48 @@ test('preserves native existing-capacity edits through the real browser and pers
     expect((await readPacking(page.request, resource.id)).items[0]!.maxAssignees).toBe(-2);
 });
 
+test('keeps composing inline Enter in the built editor until ordinary Enter commits the completed text', async ({page}) => {
+    const resource = await packing(page);
+    await waitForPilotHydration(page);
+    const item = (await readPacking(page.request, resource.id)).items[0]!;
+    const row = page.locator(`tr[data-item-id="${item.id}"]`);
+    await row.locator('td').nth(2).dblclick();
+    const title = row.getByRole('textbox', {name: 'Title', exact: true});
+    const retained = await title.elementHandle();
+    const origin = await page.evaluate(() => performance.timeOrigin);
+    const operation = `/api/v1/packing-lists/${resource.id}/items/${item.id}`;
+    const writes: string[] = [];
+    page.on('request', request => {
+        if (request.method() === 'PATCH' && new URL(request.url()).pathname === operation) writes.push(request.postData()!);
+    });
+
+    // Dispatch the browser composition contract against the genuine built control.
+    // This proves event/default behavior, not an operating-system IME integration.
+    await title.dispatchEvent('compositionstart', {data: ''});
+    await title.fill('未完');
+    const prevented = await title.evaluate(function composingEnter(input) {
+        const event = new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter',
+            bubbles: true, cancelable: true, isComposing: true});
+        input.dispatchEvent(event);
+        return event.defaultPrevented;
+    });
+    expect(prevented).toBe(false);
+    await expect(title).toHaveValue('未完');
+    expect(await title.evaluate((input, prior) => input === prior, retained)).toBe(true);
+    expect((await readPacking(page.request, resource.id)).items[0]!.title).toBe(item.title);
+    expect(writes).toEqual([]);
+
+    // Completing composition changes no commit policy: an ordinary Enter uses
+    // the existing single PATCH and its real saved-data reconciliation.
+    await title.fill('完成');
+    await title.dispatchEvent('compositionend', {data: '完成'});
+    await packingCommand(page, resource.id, `/items/${item.id}`, 'PATCH', () => title.press('Enter'));
+    await expect(row.locator('td').nth(2)).toHaveText('完成');
+    expect((await readPacking(page.request, resource.id)).items[0]!.title).toBe('完成');
+    expect(writes).toHaveLength(1);
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
+});
+
 test('accepts native Unicode titles without imposing a new browser length policy', async ({page}) => {
     await loginForE2E(page.request, createE2ELogin());
     const title = '\u{1f600}'.repeat(128);

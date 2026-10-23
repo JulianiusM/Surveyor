@@ -225,6 +225,8 @@ export interface PilotOverviewCardInteraction {
     duplicateUrl?: string;
     /** The owning collection identifies this Delete independently of sibling locks. */
     removePending?: boolean;
+    /** Optional collection freshness policy pauses mutations while preserving navigation. */
+    writesDisabled?: boolean;
 }
 
 /** A parent collection derives membership aggregates from this admitted query.

@@ -75,8 +75,8 @@ export function createEntityLifecycle(api: EntityLifecycleOperations,
 }
 
 /** Share permanent deletion across Settings, Overview and Event children. Consent
- * precedes the irreversible write and survives failed destination delivery; fields
- * remain with their mounted owners and Retry can only read/deliver after confirmation. */
+ * covers the irreversible write and its first delivery attempt; later departures
+ * review current drafts, while confirmed Retry can only read/deliver, never write. */
 export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'run' | 'prepareDeparture' | 'pending' | 'outcome' | 'action'>,
                                  destination: PilotConfirmedNavigation) {
     const context = usePilot();
@@ -116,9 +116,10 @@ export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'r
                     {kind: 'success', messageKey: request.success}, false, readFamilies);
             }
         } finally {
-            // A failed route load retains the shared confirmed destination and
-            // its consent. Neither Retry nor unmount may resubmit the DELETE.
-            if (!destination.target.value) releaseApprovedDeparture();
+            // The confirmed read/navigation receipt survives failed delivery,
+            // but the original draft approval ends with this first attempt.
+            // Retry or another departure must review the current mounted input.
+            releaseApprovedDeparture();
         }
 
         async function deleteResource(commandScope: PilotRequestScope): Promise<boolean> {
@@ -133,7 +134,7 @@ export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'r
     }
 
     /** A denial can retire the view before DELETE settles. Its admitted command
-     * keeps root consent until the existing settlement/destination owner finishes. */
+     * keeps root consent until its first settlement/delivery attempt finishes. */
     function releaseUnconfirmedDeparture(): void {
         if (!command.pending.value && command.outcome.value?.confirmation !== 'confirmed') releaseApprovedDeparture();
     }

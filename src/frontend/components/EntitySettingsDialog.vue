@@ -458,8 +458,9 @@ async function automate(paused: boolean): Promise<void> {
 }
 
 /** Delete only after the command owner has approved departure of every mounted draft.
- * A confirmed deletion retains its destination/consent through failed navigation;
- * recovery repeats admitted reads/delivery, while the controller remains the deletion policy owner. */
+ * A confirmed deletion retains its destination through failed navigation, while
+ * the original consent ends after the first delivery attempt. Recovery rechecks
+ * current drafts and repeats only admitted reads/delivery; the controller owns deletion policy. */
 async function remove(): Promise<void> {
     if (blocked.value) return;
     pendingAction.value = 'remove';

@@ -2,16 +2,16 @@
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {defineComponent, nextTick, reactive, type Component} from 'vue';
+import {computed, defineComponent, nextTick, reactive, type Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import * as pug from 'pug';
-import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import {createPilotContext, pilotContextKey, usePilot} from '../../src/frontend/app/context';
 import {helpKeys, overviewKeys, packingKeys} from '../../src/frontend/app/queryKeys';
-import {refetchFreshQueries} from '../../src/frontend/app/queryCache';
+import {refetchFreshQueries, useQueryInvalidation} from '../../src/frontend/app/queryCache';
 import {ApiFailure, ObsoleteRequestError} from '../../src/frontend/app/transport';
 import {useHelpApi} from '../../src/frontend/features/help/api';
 import {useOverviewApi} from '../../src/frontend/features/overview/api';
@@ -2225,6 +2225,259 @@ describe('mixed-family Overview integration', () => {
             totalEntities: 5, regionEntities: items.length, matchingEntities: items.length,
             totalCards: items.length, hasNext: false, items};
     }
+
+    it('projects only the current query invalidation and disposes its cache subscription with its consumer', async () => {
+        const stopped = vi.fn();
+        const projection = defineComponent({
+            props: {locale: {type: String, required: true}},
+            setup(props) {
+                const context = usePilot();
+                const key = computed(() => overviewKeys.region(session.context, props.locale,
+                    {collection: 'owner', region: 'main'}));
+                return {invalidated: useQueryInvalidation(context.queryClient, key)};
+            },
+            template: '<output>{{ invalidated }}</output>',
+        });
+        // Isolate this read-only projection's subscription while retaining the
+        // real cache's state reducer and notification delivery.
+        const {wrapper, root, context, request, update} = await mounted(projection, {locale: 'en'}, undefined,
+            '/frontend-pilot', '/before', undefined, function observeSubscription(context) {
+                const cache = context.queryClient.getQueryCache();
+                const subscribe = cache.subscribe.bind(cache);
+                vi.spyOn(cache, 'subscribe').mockImplementation(function subscribeProjection(listener) {
+                    const stop = subscribe(listener);
+                    return function stopProjection(): void { stopped(); stop(); };
+                });
+            });
+        const parameters = {collection: 'owner' as const, region: 'main' as const};
+        const english = overviewKeys.region(session.context, 'en', parameters);
+        const german = overviewKeys.region(session.context, 'de', parameters);
+        context.queryClient.setQueryData(english, {retained: true});
+        context.queryClient.setQueryData(german, {retained: true});
+        await context.queryClient.invalidateQueries({queryKey: english, exact: true, refetchType: 'none'});
+        await flushPromises();
+        expect(wrapper.text()).toBe('true');
+        await update({locale: 'de'});
+        expect(wrapper.text()).toBe('false');
+        await context.queryClient.invalidateQueries({queryKey: german, exact: true, refetchType: 'none'});
+        context.queryClient.setQueryData(english, {retained: true});
+        await flushPromises();
+        expect(wrapper.text()).toBe('true');
+        context.queryClient.removeQueries({queryKey: german, exact: true});
+        await flushPromises();
+        expect(wrapper.text()).toBe('false');
+        expect(request).not.toHaveBeenCalled();
+        expect(stopped).not.toHaveBeenCalled();
+        root.unmount();
+        expect(stopped).toHaveBeenCalledTimes(1);
+    });
+
+    it('pauses only Overview writes after a failed background read and restores them after fresh recovery', async () => {
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const scheduled = {...card, type: 'event' as const, children: {matching: 1, total: 1},
+            capabilities: {...card.capabilities, archive: true, remove: true, duplicate: true},
+            automation: {paused: false, canManage: true}};
+        const archived = {...card, id: eventId, type: 'packing' as const, archived: true,
+            capabilities: {...card.capabilities, restore: true, remove: true}};
+        let failing = false;
+        const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async function readBackgroundOverview(current): Promise<Response> {
+                if (failing) return new Response('{}', {status: 503,
+                    headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context, 'Retry-After': '1'}});
+                return json({...mixedRegion(current, [scheduled, archived]), hasNext: true, totalCards: 13,
+                    matchingEntities: 13, regionEntities: 13, totalEntities: 13});
+            });
+        const key = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'});
+        const retained = wrapper.findAllComponents(OverviewCard);
+        failing = true;
+        await context.queryClient.refetchQueries({queryKey: key, exact: true});
+        await flushPromises();
+        await vi.advanceTimersByTimeAsync(1001);
+        expect(context.queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+        expect(wrapper.findAllComponents(OverviewCard)[0].element).toBe(retained[0].element);
+        const writes = wrapper.findAll<HTMLButtonElement>('article button.dropdown-item, article button.btn-danger');
+        expect(writes.length).toBeGreaterThan(5);
+        expect(writes.every(button => button.element.disabled)).toBe(true);
+
+        // Retained callbacks must enforce the same fence as the visible controls.
+        // Exercise every mutation family, including restoration and automation.
+        retained[0].vm.$emit('archive', false);
+        retained[1].vm.$emit('archive', true);
+        retained[0].vm.$emit('automate', true);
+        retained[0].vm.$emit('visibility', 'hidden');
+        retained[0].vm.$emit('remove');
+        await flushPromises();
+        expect(request.mock.calls.filter(([value]) => (value as Request).method !== 'GET')).toHaveLength(0);
+        expect(wrapper.get<HTMLButtonElement>('button[data-type="all"]').element.disabled).toBe(false);
+        expect(wrapper.get('article a[data-overview-event]').attributes('aria-disabled')).toBe('false');
+        expect(wrapper.findAll('nav a').find(link => link.text() === 'Next')!.attributes('aria-disabled')).toBe('false');
+        expect(wrapper.get('article a.card-body').attributes('href')).toBe(card.url);
+
+        // Read failure retains the ordinary Refresh recovery path. A successful
+        // response with equal data clears the library's actual invalidation flag.
+        failing = false;
+        const refresh = wrapper.findAll<HTMLButtonElement>('button').find(button => button.text() === 'Refresh')!;
+        expect(refresh.element.disabled).toBe(false);
+        await refresh.trigger('click');
+        await flushPromises();
+        expect(context.queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+        expect(wrapper.findAll<HTMLButtonElement>('article button.dropdown-item, article button.btn-danger')
+            .every(button => !button.element.disabled)).toBe(true);
+    });
+
+    it('keeps read navigation admitted while cached Overview writes await invalidation recovery', async () => {
+        const selected = {...card, type: 'event' as const, children: {matching: 1, total: 1},
+            capabilities: {...card.capabilities, archive: true, remove: true}};
+        const {wrapper, router, context, request} = await mounted(OverviewRegion,
+            {collection: 'owner', region: 'main'}, async current => json(mixedRegion(current, [selected])));
+        const key = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'});
+        await context.queryClient.invalidateQueries({queryKey: key, exact: true, refetchType: 'none'});
+        await flushPromises();
+        expect(wrapper.get<HTMLButtonElement>('button.btn-danger').element.disabled).toBe(true);
+        expect(request).toHaveBeenCalledTimes(1);
+        await wrapper.get('a[data-overview-event]').trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.query.owner_main_event).toBe(otherId);
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(context.queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+        expect(wrapper.get<HTMLButtonElement>('button.btn-danger').element.disabled).toBe(false);
+    });
+
+    it('keeps warm locale Overview writes paused through a held refresh and ignores retired-key invalidation', async () => {
+        const selected = {...card, type: 'packing' as const, capabilities: {...card.capabilities, remove: true}};
+        const held = deferred<Response>();
+        let holdGerman = false;
+        let heldRequest: Request | undefined;
+        const {wrapper, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async function readLocaleOverview(current): Promise<Response> {
+                const url = new URL(current.url);
+                if (url.pathname === '/api/v1/locale') {
+                    const input = JSON.parse(await current.text());
+                    return json({...session, locale: input.locale});
+                }
+                if (holdGerman && current.headers.get('X-Surveyor-Locale') === 'de') {
+                    heldRequest = current;
+                    // A locale transition can cancel its first observer read before
+                    // the deliberate refresh dispatches. Each HTTP response owns a
+                    // separate body even when their delivery barrier is shared.
+                    return (await held.promise).clone();
+                }
+                return json(mixedRegion(current, [selected]));
+            });
+        const parameters = {collection: 'owner' as const, region: 'main' as const};
+        const english = overviewKeys.region(session.context, 'en', parameters);
+        const german = overviewKeys.region(session.context, 'de', parameters);
+        await context.changeLocale('de');
+        await flushPromises();
+        await context.changeLocale('en');
+        await flushPromises();
+        expect(context.queryClient.getQueryData(german)).toBeDefined();
+        holdGerman = true;
+        const transition = context.changeLocale('de');
+        try {
+            await flushPromises();
+            expect(heldRequest).toBeDefined();
+            expect(context.queryClient.getQueryState(german)?.isInvalidated).toBe(true);
+            expect(wrapper.text()).toContain(selected.title);
+            expect(wrapper.get<HTMLButtonElement>('button.btn-danger').element.disabled).toBe(true);
+        } finally {
+            held.resolve(heldRequest ? json(mixedRegion(heldRequest, [selected])) : json({}));
+            await transition;
+            await flushPromises();
+        }
+        expect(context.queryClient.getQueryState(german)?.isInvalidated).toBe(false);
+        expect(wrapper.get<HTMLButtonElement>('button.btn-danger').element.disabled).toBe(false);
+        const reads = request.mock.calls.length;
+        await context.queryClient.invalidateQueries({queryKey: english, exact: true, refetchType: 'none'});
+        await flushPromises();
+        expect(context.queryClient.getQueryState(english)?.isInvalidated).toBe(true);
+        expect(wrapper.get<HTMLButtonElement>('button.btn-danger').element.disabled).toBe(false);
+        expect(request).toHaveBeenCalledTimes(reads);
+    });
+
+    it('keeps a warm default Overview card unavailable while its post-deletion destination read is held', async () => {
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const held = deferred<Response>();
+        const selected = {...card, type: 'packing' as const, capabilities: {...card.capabilities, remove: true}};
+        let heldRequest: Request | undefined;
+        let deletes = 0;
+        const {wrapper, router, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+            async function holdWarmDestination(request): Promise<Response> {
+                if (request.method === 'DELETE') { deletes++; return json({changed: true}); }
+                if (deletes && !new URL(request.url).searchParams.get('q')) {
+                    heldRequest = request;
+                    return held.promise;
+                }
+                return json(mixedRegion(request, deletes ? [] : [selected]));
+            });
+        const defaultKey = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'});
+        await router.push('/frontend-pilot?owner_main_q=equipment');
+        await flushPromises();
+        try {
+            await wrapper.get('button.btn-danger').trigger('click');
+            await flushPromises();
+            expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+            expect(heldRequest).toBeDefined();
+            expect(context.queryClient.getQueryState(defaultKey)?.isInvalidated).toBe(true);
+            const retained = wrapper.get<HTMLButtonElement>('button.btn-danger');
+            expect(retained.element.disabled).toBe(true);
+            retained.element.click();
+            await flushPromises();
+            expect(deletes).toBe(1);
+            expect(request.mock.calls.filter(([value]) => (value as Request).method === 'DELETE')).toHaveLength(1);
+        } finally {
+            held.resolve(heldRequest ? json(mixedRegion(heldRequest, [])) : json({}));
+            await flushPromises();
+        }
+        expect(wrapper.find('article.js-item').exists()).toBe(false);
+    });
+
+    it('keeps a paused observed collection unavailable when reopened after another region confirms deletion', async () => {
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const held = deferred<Response>();
+        const selected = {...card, type: 'packing' as const, capabilities: {...card.capabilities, remove: true}};
+        const survivor = {...card, id: eventId, title: 'Unaffected membership'};
+        let heldRequest: Request | undefined;
+        let deletes = 0;
+        const {wrapper, context, request} = await mounted(OverviewPage, {},
+            async function holdReopenedCollection(request): Promise<Response> {
+                if (request.method === 'DELETE') { deletes++; return json({changed: true}); }
+                const participant = new URL(request.url).searchParams.get('collection') === 'participant';
+                if (deletes && participant) { heldRequest = request; return held.promise; }
+                // Participation never manufactures an owner-only Delete grant.
+                const selectedCard = participant ? {...selected, capabilities: {...selected.capabilities, remove: false}} : selected;
+                return json({...mixedRegion(request, deletes ? [survivor] : [selectedCard, survivor]),
+                    collection: participant ? 'participant' : 'owner'});
+            });
+        const participantKey = overviewKeys.region(session.context, 'en', {collection: 'participant', region: 'main'});
+        const disclosure = wrapper.get('[aria-controls="overview-participant"]');
+        await disclosure.trigger('click');
+        await wrapper.get('[data-collection="owner"] button.btn-danger').trigger('click');
+        await flushPromises();
+        expect(context.queryClient.getQueryState(participantKey)?.isInvalidated).toBe(true);
+        expect(request.mock.calls.filter(([value]) => new URL((value as Request).url).searchParams.get('collection') === 'participant')).toHaveLength(1);
+        try {
+            await disclosure.trigger('click');
+            await flushPromises();
+            expect(heldRequest).toBeDefined();
+            const retained = wrapper.get('[data-collection="participant"]');
+            expect(retained.findAll('article.js-item')).toHaveLength(2);
+            const visibility = retained.get<HTMLButtonElement>('article button.dropdown-item');
+            expect(visibility.element.disabled).toBe(true);
+            visibility.element.click();
+            await flushPromises();
+            expect(request.mock.calls.filter(([value]) => (value as Request).method === 'PUT')).toHaveLength(0);
+            expect(deletes).toBe(1);
+        } finally {
+            held.resolve(heldRequest ? json({...mixedRegion(heldRequest, [survivor]), collection: 'participant'}) : json({}));
+            await flushPromises();
+        }
+        const renewed = wrapper.get('[data-collection="participant"]');
+        expect(renewed.findAll('article.js-item')).toHaveLength(1);
+        expect(renewed.get<HTMLButtonElement>('article button.dropdown-item').element.disabled).toBe(false);
+        expect(context.queryClient.getQueryState(participantKey)?.isInvalidated).toBe(false);
+    });
 
     it('keeps all typed card destinations and authorized images through equal reads and one changed image version', async () => {
         const cards = mixedCards();

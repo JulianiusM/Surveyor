@@ -33,6 +33,9 @@ const emit = defineEmits<{
 }>();
 const context = usePilot();
 const {messages} = context;
+// A collection may require fresh data for writes while keeping retained cards
+// navigable. Other hosts retain their existing overall disabled contract.
+const writeDisabled = computed(() => props.disabled || props.interaction.writesDisabled);
 // This card owns image lifetime and presentation. The region supplies the feature
 // endpoint and SPA eligibility; adding a migrated feature does not add API imports here.
 const authorizedHeader = useAuthorizedImage(
@@ -123,7 +126,7 @@ function expand(event: MouseEvent): void {
                                 type="button"
                                 v-if="card.capabilities.archive"
                                 class="dropdown-item"
-                                :disabled="disabled"
+                                :disabled="writeDisabled"
                                 @click="emit('archive', false)"
                             >
                                 {{ messages.t('common.archive') }}</button
@@ -131,12 +134,12 @@ function expand(event: MouseEvent): void {
                                 type="button"
                                 v-if="card.capabilities.restore"
                                 class="dropdown-item"
-                                :disabled="disabled"
+                                :disabled="writeDisabled"
                                 @click="emit('archive', true)"
                             >
                                 {{ messages.t('common.restore') }}
                             </button>
-                            <button v-if="card.automation?.canManage" type="button" class="dropdown-item" :disabled="disabled"
+                            <button v-if="card.automation?.canManage" type="button" class="dropdown-item" :disabled="writeDisabled"
                                 @click="emit('automate', !card.automation.paused)">{{ messages.t(card.automation.paused ? 'event.organizer.resumeAutomation' : 'event.organizer.pauseAutomation') }}</button>
                             <hr v-if="personalVisibility" class="dropdown-divider"
                         /></template>
@@ -146,7 +149,7 @@ function expand(event: MouseEvent): void {
                             type="button"
                             v-if="card.visibility !== 'hidden'"
                             class="dropdown-item"
-                            :disabled="disabled"
+                            :disabled="writeDisabled"
                             @click="emit('visibility', 'hidden')"
                         >
                             {{ messages.t('overview.hide') }}
@@ -155,7 +158,7 @@ function expand(event: MouseEvent): void {
                             type="button"
                             v-if="card.visibility !== 'shown'"
                             class="dropdown-item"
-                            :disabled="disabled"
+                            :disabled="writeDisabled"
                             @click="emit('visibility', 'shown')"
                         >
                             {{ messages.t('overview.show') }}</button
@@ -163,7 +166,7 @@ function expand(event: MouseEvent): void {
                             type="button"
                             v-if="card.visibility !== 'default'"
                             class="dropdown-item"
-                            :disabled="disabled"
+                            :disabled="writeDisabled"
                             @click="emit('visibility', 'default')"
                         >
                             {{ messages.t('overview.follow') }}
@@ -185,7 +188,7 @@ function expand(event: MouseEvent): void {
                         v-if="interaction.migrated && card.capabilities.remove"
                         class="btn-sm"
                         variant="danger"
-                        :disabled="disabled"
+                        :disabled="writeDisabled"
                         :pending="interaction.removePending" :show-spinner="false"
                         @click="emit('remove')"
                         ><i class="bi bi-trash me-1" aria-hidden="true"></i
