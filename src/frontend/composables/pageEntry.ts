@@ -334,6 +334,14 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         return confirmed && confirmed.owner === owner ? confirmed.destination : null;
     }
 
+    /** The retained command owns its feedback identity as well as its destination.
+     * Expose only this logical owner's receipt, so a sibling cannot announce another
+     * operation and remounts translate the confirmed result without a second store. */
+    function notice(owner: unknown): components['schemas']['EntryNotice'] | null {
+        const confirmed = receipt.value;
+        return confirmed && confirmed.owner === owner ? confirmed.notice : null;
+    }
+
     function fallbackTarget(): string | null {
         const confirmed = receipt.value;
         return confirmed && !mountedOwners.value.has(confirmed.owner) ? confirmed.destination : null;
@@ -381,7 +389,7 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         if (context.browser) window.removeEventListener('beforeunload', protectPendingDeparture);
         if (confirmedNavigations.get(context.session) === navigation) confirmedNavigations.delete(context.session);
     }
-    const navigation = {pending, target, fallbackTarget, navigate, retry, retryFallback, retain, identifyOwner,
+    const navigation = {pending, target, notice, fallbackTarget, navigate, retry, retryFallback, retain, identifyOwner,
         mayRetry, mayRetryFallback, requiresSessionRefresh};
     return navigation;
 }
@@ -404,6 +412,7 @@ export function useConfirmedNavigation(identity?: string): PilotConfirmedNavigat
     const owner = navigation.identifyOwner(component, identity);
     onBeforeUnmount(navigation.retain(owner));
     const target = computed(() => navigation.target(owner));
+    const notice = computed(() => navigation.notice(owner));
     const fallbackTarget = computed(navigation.fallbackTarget);
     const sessionRetryAvailable = useReadRetry(() => context.sessionRead.value.error);
     // These states belong to each mounted control, while the receipt and its
@@ -426,7 +435,7 @@ export function useConfirmedNavigation(identity?: string): PilotConfirmedNavigat
     function retryFallback(): Promise<boolean> {
         return fallbackRetryAction.isAvailable() ? navigation.retryFallback() : Promise.resolve(false);
     }
-    return {pending: navigation.pending, target, fallbackTarget, navigate, retry, retryFallback, retryAction, fallbackRetryAction};
+    return {pending: navigation.pending, target, notice, fallbackTarget, navigate, retry, retryFallback, retryAction, fallbackRetryAction};
 }
 
 /** One reusable read/navigation boundary for server-owned page admission. A feature supplies

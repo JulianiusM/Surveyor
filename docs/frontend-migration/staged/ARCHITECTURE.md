@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-22
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: shared frontend/backend ownership, Finance decimal wire/read boundaries and current Overview schedule consumers source-reconciled; no publication or new execution claim
+verification-scope: full-application navigation boundary reconciled with shared frontend/backend ownership, Finance wire/read boundaries and Overview consumers; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; vitest.config.mts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -215,7 +215,7 @@ behavior. Versioned projections select scalars, including former-participant ove
 Versioned reads and guest identity completion cannot create an Event; the adapter does not strengthen inherited multi-step creation
 finality. Ordinary profile workflow and Event child-deletion commands follow the same SPA transport boundary,
 without importing their excluded backend repairs. Router owns ordinary migrated links; true provider/capability
-arrivals, outputs and unmigrated destinations retain explicit document ownership. Token issuance is deliberate
+arrivals and outputs retain explicit document ownership. Token issuance is deliberate
 command work, never Query, prefetch or history restoration; private output stays in its admitted mounted lifetime.
 Transfer/deactivation branches expose the same typed former-owner cleanup facts to native wording and generated
 catalog notices. Account/guest deletion uses that notice path too. Vue retains message keys through the

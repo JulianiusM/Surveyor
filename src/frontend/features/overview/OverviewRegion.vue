@@ -20,6 +20,7 @@ import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {observePageNavigation} from '../../composables/pageNavigation';
 import {ApiFailure, isReadDenial, isTerminalReadFailure, ObsoleteRequestError} from '../../app/transport';
 import {overviewKeys} from '../../app/queryKeys';
+import {isPlainMessageKey} from '../../../modules/localization/translator';
 import {observeQueryReads, refetchFreshQueries, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
@@ -42,9 +43,8 @@ const eventApi = useEventApi(context);
 const driversApi = useDriversApi(context);
 const surveyApi = useSurveysApi(context);
 const activityApi = useActivityApi(context);
-// The mixed projection already owns feature command dispatch. Keep its bounded
-// migration decision here too; card components receive operations, never import
-// feature APIs or grow a registry as subsequent route families migrate.
+// The mixed projection owns feature command dispatch. Cards receive operations
+// from this owner, keeping their presentation independent of feature endpoints.
 const packingInteraction: PilotOverviewCardInteraction = {migrated: true, readHeader: packingApi.header.bind(packingApi)};
 const nativeInteraction: PilotOverviewCardInteraction = {migrated: false};
 
@@ -63,8 +63,14 @@ const router = useRouter();
 // Visible/hidden regions coexist, including across collections. Keep confirmed
 // delivery scoped to this logical region through any actor-driven remount.
 const destination = useConfirmedNavigation(props.collection + ':' + props.region);
-// Remaining feature families retain native administration destinations until
-// their explicit migration phases; this region already shares Vue navigation.
+// A failed destination retains the feature's confirmed message in the same receipt.
+// Locale changes translate its identity without relabeling it as another card family.
+const destinationNotice = computed(() => {
+    const key = destination.notice.value?.messageKey;
+    return key ? messages.value.t(isPlainMessageKey(key) ? key : 'common.error') : null;
+});
+// Each collection/region retains its own navigation and command lifetime while
+// matching cards share the same migrated presentation and feature API owners.
 let readGeneration = 0;
 let mounted = true;
 const element = ref<HTMLElement | null>(null);
@@ -165,6 +171,10 @@ const filterTypes = computed(() => {
     // personal hide. Retain the validated choice so an empty result does not claim All types.
     return selected && selected !== 'all' && !types.includes(selected) ? [...types, selected] : types;
 });
+// Empty membership keeps the native omission of search/filter controls. Refresh
+// remains available independently, so this region can recover new remote content.
+const showSearchControls = computed(() => Boolean(!displayed.value || displayed.value.regionEntities || displayed.value.q
+    || displayed.value.type !== 'all' || searchPending.value || search.value));
 // Cards retain their identity when an equal JSON result is structurally shared.
 // An actual readable response supplies its successful-read timestamp and an
 // explicit presentation-recovery hint. Neither grants command authority; healthy
@@ -641,7 +651,7 @@ function page(next: number): void {
         <h3 class="visually-hidden js-overview-heading" tabindex="-1">{{ title }}</h3>
         <StatusNotice v-if="destination.target.value" kind="success"
             :action="{state: destination.retryAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="destination.retry">
-            {{ messages.t('packing.deleted') }}
+            {{ destinationNotice }}
         </StatusNotice>
         <!-- Lifecycle/visibility results use common notifications. Read
              failures and unknown outcomes retain this region's recovery surface. -->
@@ -652,61 +662,63 @@ function page(next: number): void {
             messages.t(displayed ? 'state.stale' : 'state.loadFailed')
         }}</StatusNotice>
         <!-- Pending authority and an unsent local search draft keep the
-             progressive controls mounted. Once an empty unfiltered region is confirmed
-             without a local draft, omit the toolbar as the native presentation does. -->
+             progressive search controls mounted. An empty unfiltered region keeps
+             Refresh through this same command/read owner. Its form stays mounted
+             so empty/populated transitions retain the focused Refresh button. -->
         <form
-            v-if="!displayed || displayed.regionEntities || displayed.q || displayed.type !== 'all' || searchPending || search"
             class="d-flex flex-wrap gap-2 mb-3 align-items-center"
             method="get" action="/frontend-pilot"
             @submit.prevent="submitSearch"
         >
-            <input v-for="[name, value] in nativeSearchFields" :key="name" type="hidden" :name="name" :value="value" />
-            <div class="input-group input-group-sm" style="max-width: 320px">
-                <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span
-                ><input
-                    :value="search"
-                    @input="editSearch"
-                    :name="prefix + 'q'"
-                    class="form-control"
-                    type="search"
-                    maxlength="200"
-                    :aria-label="
-                        messages.t('overview.collectionSearch', {
-                            title: title.toLocaleLowerCase(context.locale.value),
-                        })
-                    "
-                    :placeholder="
-                        messages.t('overview.collectionSearch', {
-                            title: title.toLocaleLowerCase(context.locale.value),
-                        }) + '…'
-                    "
-                />
-            </div>
-            <ActionButton type="submit" class="btn-sm" variant="outline-secondary" :state="navigationAction"
-                :name="prefix + 'type'" :value="query.type ?? 'all'">{{
-                messages.t('overview.search')
-            }}</ActionButton>
-            <!-- Preserve the native Filter disclosure and ordinary type submit buttons.
-                 Search stays first in DOM order so Enter retains the current type. The
-                 shared disclosure owns dismissal/focus; this region owns URL selection. -->
-            <AppNavigationDropdown :navigation="false" menu-tag="ul"
-                :label="messages.t('overview.filter')"
-                trigger-class="btn btn-outline-secondary btn-sm dropdown-toggle">
-                <li>
-                    <button class="dropdown-item" type="submit" :name="prefix + 'type'"
-                        value="all" data-type="all" :aria-pressed="(query.type ?? 'all') === 'all'" :disabled="navigationAction.disabled.value"
-                        @click.prevent="filterType('all')">{{ messages.t('overview.allTypes') }}</button>
-                </li>
-                <li><hr class="dropdown-divider" /></li>
-                <li v-for="type in filterTypes" :key="type">
-                    <button class="dropdown-item" type="submit" :name="prefix + 'type'"
-                        :value="type" :data-type="type" :aria-pressed="query.type === type" :disabled="navigationAction.disabled.value"
-                        @click.prevent="filterType(type)">{{ messages.t(`overview.types.${type}`) }}</button>
-                </li>
-            </AppNavigationDropdown>
-            <span v-if="displayed" class="small text-body-secondary" aria-live="polite">{{
-                messages.t('overview.matching', {count: displayed.matchingEntities})
-            }}</span>
+            <template v-if="showSearchControls">
+                <input v-for="[name, value] in nativeSearchFields" :key="name" type="hidden" :name="name" :value="value" />
+                <div class="input-group input-group-sm" style="max-width: 320px">
+                    <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span
+                    ><input
+                        :value="search"
+                        @input="editSearch"
+                        :name="prefix + 'q'"
+                        class="form-control"
+                        type="search"
+                        maxlength="200"
+                        :aria-label="
+                            messages.t('overview.collectionSearch', {
+                                title: title.toLocaleLowerCase(context.locale.value),
+                            })
+                        "
+                        :placeholder="
+                            messages.t('overview.collectionSearch', {
+                                title: title.toLocaleLowerCase(context.locale.value),
+                            }) + '…'
+                        "
+                    />
+                </div>
+                <ActionButton type="submit" class="btn-sm" variant="outline-secondary" :state="navigationAction"
+                    :name="prefix + 'type'" :value="query.type ?? 'all'">{{
+                    messages.t('overview.search')
+                }}</ActionButton>
+                <!-- Preserve the native Filter disclosure and ordinary type submit buttons.
+                     Search stays first in DOM order so Enter retains the current type. The
+                     shared disclosure owns dismissal/focus; this region owns URL selection. -->
+                <AppNavigationDropdown :navigation="false" menu-tag="ul"
+                    :label="messages.t('overview.filter')"
+                    trigger-class="btn btn-outline-secondary btn-sm dropdown-toggle">
+                    <li>
+                        <button class="dropdown-item" type="submit" :name="prefix + 'type'"
+                            value="all" data-type="all" :aria-pressed="(query.type ?? 'all') === 'all'" :disabled="navigationAction.disabled.value"
+                            @click.prevent="filterType('all')">{{ messages.t('overview.allTypes') }}</button>
+                    </li>
+                    <li><hr class="dropdown-divider" /></li>
+                    <li v-for="type in filterTypes" :key="type">
+                        <button class="dropdown-item" type="submit" :name="prefix + 'type'"
+                            :value="type" :data-type="type" :aria-pressed="query.type === type" :disabled="navigationAction.disabled.value"
+                            @click.prevent="filterType(type)">{{ messages.t(`overview.types.${type}`) }}</button>
+                    </li>
+                </AppNavigationDropdown>
+                <span v-if="displayed" class="small text-body-secondary" aria-live="polite">{{
+                    messages.t('overview.matching', {count: displayed.matchingEntities})
+                }}</span>
+            </template>
             <ActionButton
                 class="btn-sm ms-auto"
                 variant="outline-secondary"

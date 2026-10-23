@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-22
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Explicit full P9 implementation trigger recorded after retained P8 history; native isolation, original finance contract provenance and separate source/execution evidence preserved
+verification-scope: Explicit full P10 integration trigger recorded after retained P9 history; native isolation, approval provenance and separate source/execution evidence preserved
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -19,11 +19,11 @@ queries, transactions, locks and persistence.
 The [baseline](FRONTEND_MIGRATION_BASELINE.md) and its 121 edge-case IDs describe the native contract.
 The original step-two design was based on `0a3662ae0a6e99e0df0a38f603831d3ac9ff4b61`; the native comparison reference
 is `2dfa2573c64178f54684cc4877b5a945f66e24c8`. The reference does not identify a deployed site's version.
-Help/Packing were the original pilot obligation. P1 identity/common presentation, P2 Events, P3 Drivers, P4
-standalone Surveys and P5/P6 basic/advanced Activity extend that scope through their explicit phase triggers.
+Help/Packing were the original pilot obligation. Explicit phase triggers extend it through identity/common
+presentation, Events, Drivers, standalone Surveys, basic/advanced Activity, Finance and P10 integration.
 The [full plan](FRONTEND_FULL_IMPLEMENTATION_PLAN.md) owns the current and remaining phase contracts. The
-[paired review](PILOT_PARITY_REVIEW.md) records current implementation evidence and its limits. Other feature
-migration and default-route cutover remain future work.
+[paired review](PILOT_PARITY_REVIEW.md) records current implementation evidence and its limits. Default-route
+cutover, publication and native retirement remain separately authorized P11 work.
 
 ## Original decisions and dated amendments
 
@@ -988,6 +988,20 @@ original contracts. Native frontend sources, excluded backend remedies, output-l
 cutover, native removal, production-guide publication and deployment remain outside this instruction. Current
 implementation status belongs to the plan; actual execution, independent review and evidence limits belong to
 the paired review. This record supplies no additional approval or completed-verification claim.
+
+## Explicit P10 implementation trigger (2026-10-23)
+
+The maintainer directly requests full P10 implementation, retaining all policies and specifically approval,
+visual/behavioral parity and modularization/DRY. This authorizes the existing cross-application integration
+contract: complete migrated destinations, mixed-family Overview, shared actor/draft/recovery boundaries,
+representative native/Vue desktop/mobile comparison and staged-guidance reconciliation. It supersedes the P9
+receipt's exclusion of starting P10 without changing that receipt's original scope.
+
+Existing Vue navigation, query, command, image, draft, feedback and completion owners serve their matching
+consumers. Backend controllers, domain operations and DBAL remain shared. This instruction does not authorize
+P11, default-route cutover, native-source changes/removal, production-guide publication, deployment, excluded
+backend remedies, persisted principal language or full email/PDF localization. Implementation and executed
+evidence remain separately recorded in the plan and paired review.
 
 ## Cutover retirement inventory
 

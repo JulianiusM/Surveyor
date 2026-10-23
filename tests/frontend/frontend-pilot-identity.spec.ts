@@ -1566,12 +1566,14 @@ describe('identity forms and packing overview navigation', () => {
         expect(hiddenButtons().map(button => button.attributes('aria-expanded'))).toEqual(['true', 'true']);
         expect(queries().some(query => query.get('collection') === 'participant' && query.get('region') === 'hidden'
             && query.get('q') === 'tent')).toBe(true);
-        // Confirmed empty main regions omit their native toolbar. Each disclosed,
+        // Confirmed empty main regions omit native search/filter controls and retain
+        // their integrated Refresh action. Each disclosed,
         // filtered hidden region still owns its independent form and saved URL.
         for (const [collection, expected] of [['participant', 'tent'], ['owner', 'equipment']] as const) {
             const main = wrapper.get(`[data-collection="${collection}"][data-region="main"]`);
             const hidden = wrapper.get(`[data-collection="${collection}"][data-region="hidden"]`);
-            expect(main.find('form').exists()).toBe(false);
+            expect(main.find('input[type="search"], details').exists()).toBe(false);
+            expect(main.findAll('button').map(button => button.text())).toEqual(['Refresh']);
             expect(hidden.get<HTMLInputElement>('input[type="search"]').element.value).toBe(expected);
         }
         expect(router.currentRoute.value.query).toMatchObject({owner_hidden_q: 'equipment',

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-22
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P9 calculation, settlement and output guidance retained; inherited Finance prescriptions qualified by native/Vue owner, actual command precision, generated catalog ownership and owned obsolete-validator retirement; no publication or new execution claim
+verification-scope: Full-application contribution contracts reconciled without phase or cutover instructions in production payloads; Finance ownership, actual command precision, generated catalog ownership and obsolete-validator retirement retained; no publication or new execution claim
 source-anchors: docs/frontend-migration/documentation-boundary.json; docs/frontend-migration/check-documentation-boundary.mjs; docs/policies/DOCUMENTATION_POLICY.md; docs/policies/DEVELOPMENT_POLICY.md; src/frontend/; contracts/api/v1/; scripts/generate-api.mjs; src/modules/api/transport.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/modules/localization/translator.ts; src/routes/api/v1.ts; src/routes/api/v1/auth.ts; src/routes/frontendPilot.ts; tests/integration/frontend-session-admission.spec.ts; package.json; src/types/IdentityTypes.d.ts; src/types/FrontendPilotUiTypes.d.ts; src/modules/lib/civilDate.ts; src/types/CivilDateTypes.d.ts
 next-review: next-authorized-migration-slice-or-cutover
 -->
@@ -179,7 +179,15 @@ visually hidden label where that preserves the established row layout. Do not du
 cell merely because the same control also serves standalone forms.
 Matching Bootstrap command/filter buttons use `ActionButton` with their
 existing variant, size, form and disabled policy. Passing only `disabled` retains a native no-spinner workflow; do not
-add pending presentation merely because the shared component supports it. Durable feature warnings use `StatusNotice`,
+add pending presentation merely because the shared component supports it.
+
+The shared button keeps native disabling during pending work. If that disabling releases its existing focus,
+completion restores only the same mounted, available control with no scroll movement, while focus remains unclaimed.
+Any deliberate pointer/key action, another focused control, window blur, actor retirement or unmount cancels
+restoration. A command started elsewhere never claims focus. The control owns only this transient DOM reference;
+operation admission, drafts, requests and results remain with their existing owners.
+
+Durable feature warnings use `StatusNotice`,
 with feature-owned content, visibility and warning intent rather than a new timer or command owner.
 Its default live-region role follows the feedback kind. Pass an explicit null role only for an existing plain notice
 whose contract has no live-region announcement, rather than silently adding accessibility behavior during composition.
@@ -199,7 +207,7 @@ remove controls may use the existing list's slot without copying list markup or 
 Overview and administrator disclosures. Features retain which panel is open, panel markup, contents and reads; pass
 their existing disabled condition and control target. A visual trigger never owns query admission or a draft.
 
-Judge migration parity by the information, actions and steps users experience. Explicit requirements and approved
+Judge interface parity by the information, actions and steps users experience. Explicit requirements and approved
 changes are exceptions by default: integrated Refresh, complete localization, usable responsive layout and common
 non-jumping SPA notifications supersede incompatible native details. Native IDs, field names used only by an old
 document POST, exact margins and copied overflow are not contracts. Keep meaningful label/control associations,
@@ -221,7 +229,7 @@ layout and resource parameter inputs preserve existing Packing/Drivers defaults.
 non-table and multiline editors through explicit presentation inputs; its existing draft/conflict/save owner remains
 shared with list cells. Activity owns warning-review intent and cancellation separately from the shared command owner;
 the server's current preview and exact overlap acknowledgement remain authoritative. Participant progress is read-only
-in the basic Activity phase, and printable schedules retain their authorized document destination.
+in the basic Activity workflow, and printable schedules retain their authorized document destination.
 Settings receive optional linked-Event/archive hints and export links through the existing settings/lifecycle owners;
 defaults preserve other consumers. `FormField` accepts an explicit label target separately from its input ID/name
 when the visible label targets a separate actual control, such as a timezone button. Neither presentation inputs nor client guards grant method
@@ -350,7 +358,7 @@ Versioned JSON and
 multipart adapters prepare acknowledgements before entering the existing EventPool controller operation; page,
 method, participant and proof admission remain separate. Original backend normalization, revision checks and
 notifications remain shared without a new backend remedy or generalized comparison protocol. Native proof/download
-outputs keep their explicit destinations. P9's `FinanceCalculationReview` reads a fresh saved-input preview and
+outputs keep their explicit destinations. `FinanceCalculationReview` reads a fresh saved-input preview and
 captures its revision for close/recalculate. Its feature `drafts.ts` coordinates the existing settings, assignment
 and adjustment predicates without copying their values or widening the native guard. A background read cannot
 replace reviewed values; every apply attempt consumes confirmation authority until explicit Refresh preview.
@@ -362,8 +370,7 @@ rows during unknown-calculation inspection without exposing inert breakdown or s
 preserves shares/transfers and reports whether external changes still require calculation; email counts identify
 eligible queued recipients rather than successful external delivery. Calculation, settlement, rollback and email
 commands use the existing no-replay owner and explicit unknown-result review. Both PDF variants remain ordinary
-authorized downloads of the complete saved ledger, independent of browser filters. Native frontend sources,
-P10/P11, cutover and guide publication retain their separate authorization.
+authorized downloads of the complete saved ledger, independent of browser filters.
 
 1. **Identify its actual contract.** Trace the original accepted decision and all applicable dated amendments through
    their actual callers before treating a requirement as unresolved. Carry existing authorization into the handoff;
@@ -372,8 +379,8 @@ P10/P11, cutover and guide publication retain their separate authorization.
    controls. Include owner, guest and restricted actors; coercion; omission/null/false; no-op outcomes; destinations;
    feedback; focus; and hidden/empty/archived states. Peer features are evidence to inspect, not a universal policy.
    Classify every form and link, including shell, parent/context and destructive controls: ordinary migrated
-   command/navigation, initial or external capability arrival, provider handoff, output/download or unmigrated
-   destination. Inspect actual targets and side effects; an old anchor, token-related name or partial backend
+   command/navigation, initial or external capability arrival, provider handoff or output/download.
+   Inspect actual targets and side effects; an old anchor, token-related name or partial backend
    failure does not independently make an ordinary Vue workflow a document boundary.
 
 2. **Expose the smallest useful projection.** Author the operation/schema once in its v1 YAML. Reuse the owning
@@ -516,7 +523,7 @@ localization and visual behavior. No universal CRUD engine or wrapper per HTML e
 
 #### Worked composition: Event, Packing, Drivers, Surveys and Activity
 
-The implemented consumers illustrate the migration handoff without another controller or state store:
+The implemented consumers illustrate the ownership handoff without another controller or state store:
 
 | Feature supplies | Shared owner actually adopted |
 |---|---|
@@ -845,7 +852,7 @@ remain shared. An inactive account's activation resend belongs before the identi
 token must survive intended login rejection. Provider logout keeps its separate operation boundary.
 
 Profile administration uses `getIdentityProfile` for account/guest fields and `getIdentityProfiles` for the account-only
-roster. The original P1 implementation wrapped field editing and additional-profile creation in the identity
+roster. The original frontend implementation wrapped field editing and additional-profile creation in the identity
 completion transaction. The maintainer's A2 correction (2026-10-14) restores direct reuse of `updateProfile` and
 `createProfile`, with their native persistence/session-save behavior. Prepare the simple generated `MutationResult`
 before invoking either operation; deliver it without another context read, projection or save. This does not extend

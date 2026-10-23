@@ -119,6 +119,7 @@ export interface PilotConfirmedNavigation {
     retryAction: PilotActionState;
     fallbackRetryAction: PilotActionState;
     target: ComputedRef<string | null>;
+    notice: ComputedRef<components['schemas']['EntryNotice'] | null>;
     fallbackTarget: ComputedRef<string | null>;
     navigate(destination: string, scope?: PilotRequestScope, origin?: string,
              notice?: components['schemas']['EntryNotice'] | null, refreshSession?: boolean): Promise<boolean>;
@@ -196,9 +197,9 @@ export interface PilotEventPickerSource {
     filterKey(context: string | null | undefined, locale: string, filters: string): readonly unknown[];
 }
 
-/** The mixed Overview owner selects the feature's migrated presentation. Cards
+/** The card's host supplies feature operations and destination behavior. Cards
  * consume this bounded policy without importing another feature's API or choosing
- * an endpoint from its entity type. Unmigrated destinations retain native links. */
+ * an endpoint from its entity type; explicit document links retain ordinary navigation. */
 export interface PilotOverviewCardInteraction {
     migrated: boolean;
     lifecycle?: boolean;

@@ -885,16 +885,62 @@ describe('visible resource recovery', () => {
         expect(form.get<HTMLDetailsElement>('details').element.open).toBe(false);
     });
 
-    it.each([0, 2])('omits the native toolbar after confirming an unfiltered empty region (%s total entities)', async total => {
+    it.each([0, 2])('omits native search controls and retains Refresh after confirming an unfiltered empty region (%s total entities)', async total => {
         const projection = {...region(new Request('http://localhost/overview')), availableTypes: [], items: [],
             totalEntities: total, hiddenEntities: total, regionEntities: 0, matchingEntities: 0,
             totalCards: 0, hasNext: false};
         const native = nativeOverviewRegion(projection);
         const {wrapper} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'}, async () => json(projection));
         expect(native.querySelector('.js-overview-search')).toBeNull();
-        expect(wrapper.find('form').exists()).toBe(false);
+        expect(wrapper.find('input[type="search"]').exists()).toBe(false);
+        expect(wrapper.find('details').exists()).toBe(false);
+        expect(wrapper.findAll('button').map(button => button.text())).toEqual(['Refresh']);
         const nativeNotice = native.querySelector('.status-notice')!.textContent;
         expect(wrapper.text()).toContain(nativeNotice);
+    });
+
+    it.each(['main', 'hidden'] as const)('refreshes an empty %s region without losing its focused control or duplicating a pending read', async selectedRegion => {
+        const fresh = deferred<Response>();
+        let reads = 0;
+        const empty = {...region(new Request('http://localhost/overview')), region: selectedRegion,
+            availableTypes: [], items: [], totalEntities: 0, hiddenEntities: 0,
+            regionEntities: 0, matchingEntities: 0, totalCards: 0, hasNext: false};
+
+        /** Keep the read pending until a second visible Refresh attempt has
+         * exercised the existing action lock. The server alone supplies new membership. */
+        async function readEmptyRegion(): Promise<Response> {
+            reads++;
+            return reads === 1 ? json(empty) : fresh.promise;
+        }
+
+        const {wrapper, router, context} = await mounted(OverviewRegion,
+            {collection: 'owner', region: selectedRegion}, readEmptyRegion);
+        const refresh = wrapper.get<HTMLButtonElement>('button');
+        expect(refresh.text()).toBe('Refresh');
+        expect(refresh.attributes('type')).toBe('button');
+        expect(wrapper.find('input[type="search"], details, nav').exists()).toBe(false);
+        refresh.element.focus();
+        const origin = router.currentRoute.value.fullPath;
+        await refresh.trigger('click');
+        await flushPromises();
+        expect(refresh.element.disabled).toBe(true);
+        await refresh.trigger('click');
+        expect(reads).toBe(2);
+
+        // New remote content restores search/filter controls through the same
+        // owner, retaining the actual focused Refresh element and current URL.
+        fresh.resolve(json({...empty, availableTypes: ['survey'], items: [card], totalEntities: 1,
+            hiddenEntities: selectedRegion === 'hidden' ? 1 : 0, regionEntities: 1,
+            matchingEntities: 1, totalCards: 1}));
+        await flushPromises();
+        expect(wrapper.get('h4.card-title').text()).toBe(card.title);
+        expect(wrapper.find('input[type="search"]').exists()).toBe(true);
+        expect(wrapper.findAll('button').filter(button => button.text() === 'Refresh')[0]!.element).toBe(refresh.element);
+        expect(refresh.element.disabled).toBe(false);
+        expect(document.activeElement).toBe(refresh.element);
+        expect(router.currentRoute.value.fullPath).toBe(origin);
+        expect(context.capture().context).toBe(session.context);
+        expect(reads).toBe(2);
     });
 
     it.each([
@@ -907,7 +953,7 @@ describe('visible resource recovery', () => {
         const native = nativeOverviewRegion(projection);
         const {wrapper} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
             async () => json(projection), '/frontend-pilot?owner_main_q=' + encodeURIComponent(value.query));
-        expect(wrapper.find('form').exists()).toBe(!!native.querySelector('.js-overview-search'));
+        expect(wrapper.find('input[type="search"]').exists()).toBe(!!native.querySelector('.js-overview-search'));
         if (value.canonical) {
             expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value)
                 .toBe(native.querySelector<HTMLInputElement>('input[type="search"]')!.value);
@@ -976,7 +1022,7 @@ describe('visible resource recovery', () => {
         await flushPromises();
         expect(router.currentRoute.value.query.owner_main_q).toBe(value.canonical || undefined);
         const native = nativeOverviewRegion(confirmed);
-        expect(wrapper.find('form').exists()).toBe(!!native.querySelector('.js-overview-search'));
+        expect(wrapper.find('input[type="search"]').exists()).toBe(!!native.querySelector('.js-overview-search'));
         if (value.canonical) {
             expect(wrapper.get<HTMLInputElement>('input[type="search"]').element.value)
                 .toBe(native.querySelector<HTMLInputElement>('input[type="search"]')!.value);
@@ -1954,5 +2000,171 @@ describe('shared native disclosure interaction', () => {
         action.element.click();
         await nextTick();
         expect(wrapper.emitted('visibility')).toEqual([['hidden']]);
+    });
+});
+
+describe('mixed-family Overview integration', () => {
+    const families = [
+        {type: 'event', endpoint: 'events'},
+        {type: 'packing', endpoint: 'packing-lists'},
+        {type: 'drivers', endpoint: 'drivers-lists'},
+        {type: 'survey', endpoint: 'surveys'},
+        {type: 'activity', endpoint: 'activity-plans'},
+    ] as const;
+
+    /** Deliberately share a UUID across entity families. The rendered identity,
+     * image operation and commands must retain the type as well as the ID. */
+    function mixedCards(): components['schemas']['OverviewCard'][] {
+        return families.map(family => ({...card, type: family.type, title: `Mixed ${family.type}`,
+            url: `/frontend-pilot/${family.type}/${otherId}`,
+            headerUrl: `/api/v1/${family.endpoint}/${otherId}/header`, headerVersion: 'first-image',
+            capabilities: {archive: true, restore: false, duplicate: true, remove: true}}));
+    }
+
+    /** Supply one bounded response from HTTP, keeping the mounted production
+     * card grid, generated decoders and independently owned feature APIs intact. */
+    function mixedRegion(request: Request, items: components['schemas']['OverviewCard'][]) {
+        return {...region(request), availableTypes: families.map(family => family.type), pageSize: 12,
+            totalEntities: 5, regionEntities: items.length, matchingEntities: items.length,
+            totalCards: items.length, hasNext: false, items};
+    }
+
+    it('keeps all typed card destinations and authorized images through equal reads and one changed image version', async () => {
+        const cards = mixedCards();
+        const imageReads: string[] = [];
+        let nextImage = 0;
+        vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:mixed-image-${++nextImage}`);
+        const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+        /** Only the external HTTP boundary supplies bytes. All feature header
+         * operations must carry the same captured actor as the mixed JSON read. */
+        async function readMixedImages(request: Request): Promise<Response> {
+            const path = new URL(request.url).pathname;
+            expect(request.headers.get('X-Surveyor-Context')).toBe(session.context);
+            if (path.endsWith('/header')) {
+                imageReads.push(path);
+                return new Response(new Blob([path]), {headers: {'Content-Type': 'image/png',
+                    'X-Surveyor-Context': session.context}});
+            }
+            return json(mixedRegion(request, cards));
+        }
+
+        const {wrapper, context} = await mounted(OverviewRegion,
+            {collection: 'owner', region: 'main'}, readMixedImages);
+        await vi.waitFor(() => expect(wrapper.findAll('img')).toHaveLength(5));
+        expect(wrapper.findAll('article.js-item')).toHaveLength(5);
+        expect(imageReads.sort()).toEqual(families.map(family => `/api/v1/${family.endpoint}/${otherId}/header`).sort());
+        const images = new Map(families.map(family => [family.type,
+            wrapper.get(`article[data-type="${family.type}"] img`).attributes('src')]));
+        for (const family of families) {
+            const rendered = wrapper.get(`article[data-type="${family.type}"]`);
+            expect(rendered.get('a.card-body').attributes('href')).toBe(`/frontend-pilot/${family.type}/${otherId}`);
+            expect(rendered.get('a.btn-info').attributes('href')).toBe(`/frontend-pilot/${family.type}/${otherId}/duplicate`);
+            expect(rendered.get('img').attributes('src')).toMatch(/^blob:mixed-image-/u);
+            expect(rendered.get('img').attributes('alt')).toBe(`Mixed ${family.type}`);
+        }
+
+        // Successful equal JSON refreshes retain the five browser URLs. A new
+        // image version retires only that typed card, even with a shared UUID.
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await flushPromises();
+        expect(imageReads).toHaveLength(5);
+        expect(revoke).not.toHaveBeenCalled();
+        cards[0]!.headerVersion = 'replacement-image';
+        await context.queryClient.refetchQueries({queryKey: overviewKeys.all(session.context), type: 'active'});
+        await vi.waitFor(() => expect(imageReads).toHaveLength(6));
+        await flushPromises();
+        expect(revoke).toHaveBeenCalledExactlyOnceWith(images.get('event'));
+        for (const family of families.filter(family => family.type !== 'event'))
+            expect(wrapper.get(`article[data-type="${family.type}"] img`).attributes('src')).toBe(images.get(family.type));
+    });
+
+    it.each(families)('dispatches $type lifecycle and personal visibility through their actual owners', async family => {
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const cards = mixedCards().map(item => ({...item, headerUrl: null, headerVersion: null}));
+        const selected = cards.find(item => item.type === family.type)!;
+        const writes: {path: string; method: string; body: unknown}[] = [];
+
+        /** Saved fixture state changes only after a matching HTTP command. The
+         * following production refresh decides which controls/cards remain. */
+        async function serveMixedCommands(request: Request): Promise<Response> {
+            const path = new URL(request.url).pathname;
+            if (request.method !== 'GET') {
+                const body = request.method === 'PUT' ? await request.json() : null;
+                writes.push({path, method: request.method, body});
+                if (request.method === 'PUT') {
+                    selected.visibility = body.visibility;
+                    selected.overviewHidden = true;
+                    return json({visibility: body.visibility, overviewHidden: true, archived: false});
+                }
+                selected.archived = path.endsWith('/archive');
+                selected.capabilities.archive = !selected.archived;
+                selected.capabilities.restore = selected.archived;
+                return json({changed: true});
+            }
+            return json(mixedRegion(request, cards.filter(item => !item.overviewHidden)));
+        }
+
+        const {wrapper} = await mounted(OverviewRegion,
+            {collection: 'owner', region: 'main'}, serveMixedCommands);
+
+        /** Use the visible card action rather than invoke component internals;
+         * the real disclosure, command lock and confirmation stay adopted. */
+        async function choose(label: string): Promise<void> {
+            const rendered = wrapper.get(`article[data-type="${family.type}"]`);
+            const action = rendered.findAll('button').find(button => button.text() === label)!;
+            expect(action, label).toBeDefined();
+            (action.element.closest('details') as HTMLDetailsElement).open = true;
+            await action.trigger('click');
+            await flushPromises();
+        }
+
+        await choose('Archive for everyone');
+        await choose('Restore for everyone');
+        await choose('Hide for me');
+        expect(writes).toEqual([
+            {path: `/api/v1/${family.endpoint}/${otherId}/archive`, method: 'POST', body: null},
+            {path: `/api/v1/${family.endpoint}/${otherId}/restore`, method: 'POST', body: null},
+            {path: `/api/v1/overview/${family.type}/${otherId}/visibility`, method: 'PUT', body: {visibility: 'hidden'}},
+        ]);
+        expect(wrapper.find(`article[data-type="${family.type}"]`).exists()).toBe(false);
+        expect(wrapper.findAll('article.js-item')).toHaveLength(4);
+    });
+
+    it.each(families)('retains the confirmed $type deletion message through failed delivery and retries navigation only', async family => {
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const selected = {...card, type: family.type, title: `Delete ${family.type}`,
+            url: `/frontend-pilot/${family.type}/${otherId}`, capabilities: {...card.capabilities, remove: true}};
+        const writes: string[] = [];
+
+        async function serveDeletion(request: Request): Promise<Response> {
+            if (request.method === 'DELETE') {
+                writes.push(new URL(request.url).pathname);
+                return json({changed: true});
+            }
+            return json(mixedRegion(request, [selected]));
+        }
+
+        const {wrapper, router, context} = await mounted(OverviewRegion,
+            {collection: 'owner', region: 'main'}, serveDeletion, '/frontend-pilot?owner_main_q=delete');
+        const stopDelivery = router.beforeEach(to => to.query.owner_main_q ? undefined : false);
+        cleanups.push(stopDelivery);
+        await wrapper.get('button.btn-danger').trigger('click');
+        await flushPromises();
+        const notice = wrapper.get('.status-notice.alert-success');
+        expect(notice.text()).toContain(context.messages.value.t(`${family.type}.deleted`));
+        expect(writes).toEqual([`/api/v1/${family.endpoint}/${otherId}`]);
+        expect(wrapper.get<HTMLButtonElement>('button.btn-danger').element.disabled).toBe(true);
+
+        // The notice belongs to the retained confirmation, so its current locale
+        // can change without relabeling another family or repeating the DELETE.
+        context.locale.value = 'de';
+        await flushPromises();
+        expect(notice.text()).toContain(context.messages.value.t(`${family.type}.deleted`));
+        stopDelivery();
+        await notice.get('button').trigger('click');
+        await flushPromises();
+        expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+        expect(writes).toHaveLength(1);
     });
 });

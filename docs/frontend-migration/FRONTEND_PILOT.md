@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-22
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Current P0-P9 scope and shared financial calculation, settlement and output owners reconciled with source and retained earlier ownership contracts; actual execution and finite visual evidence belong to paired review
+verification-scope: P0-P10 opt-in application scope, shared Overview and cross-family navigation/recovery owners reconciled with source; actual execution and finite visual evidence belong to paired review
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; src/routes/frontendPilot.ts; src/routes/api/v1/; src/controller/packingController.ts; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/; src/modules/localization/; contracts/api/v1/; package.json; vite.config.mts; tests/frontend/; tests/integration/; tests/e2e/; src/types/FrontendPilotUiTypes.d.ts
 next-review: next-migration-slice-or-authorized-cutover
 -->
@@ -70,6 +70,16 @@ Both PDF variants remain authorized saved-ledger downloads. The
 [P9 review](PILOT_PARITY_REVIEW.md#p9-calculation-settlement-and-output-implementation-review-2026-10-22)
 owns actual execution and inspected visual/PDF evidence with its finite limits. P10/P11, native source changes,
 default-route cutover, guide publication and deployment retain their separate boundaries.
+
+The subsequent [P10 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p10-implementation-trigger-2026-10-23)
+integrates the full opt-in application through those existing feature owners. Shell, Overview, parent links,
+creation, duplication and administration use Vue destinations; provider/capability arrivals and authorized
+outputs retain their deliberate document boundaries. Mixed-family cards share authorized images, personal
+visibility, lifecycle and retained completion feedback. Empty regions retain integrated Refresh through their
+existing read owner. The [P10 assertion map](TEST_COVERAGE.md#p10-cross-application-assertion-map-2026-10-23)
+identifies cross-family navigation, actor/draft retirement, release recovery and unknown-result checks. Actual
+results and finite original-image acceptance belong to the paired review. P11, native source changes, publication
+and deployment remain separately authorized.
 
 The [direct E1/D1 reply](FRONTEND_FOUNDATION_DESIGN.md#direct-production-coexistence-exclusion-and-spa-correction-2026-10-16)
 excludes native/Vue production coexistence coordination and rejects the ordinary Event document-POST exception.
@@ -251,8 +261,8 @@ while showing current admitted values; explicit Refresh or filter/sort/page chan
 fresh saved-state inspection and acknowledgement without replay; recipient counts do not certify mail delivery.
 Both PDF variants use the complete authorized saved ledger independently of browser filters. Existing EventPool,
 calculation, settlement, notification and export owners retain business behavior and arithmetic.
-Native frontend sources and inherited backend defects remain outside this migration; P10/P11 and cutover retain
-their own authorization.
+Native frontend sources and inherited backend defects remain outside this migration; P11 and cutover retain
+their own authorization after P10 integration.
 
 ## Logical owners
 

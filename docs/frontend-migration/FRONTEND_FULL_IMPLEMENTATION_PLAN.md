@@ -4,14 +4,14 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers; AI agents
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-22
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Full P9 implementation and scoped review reconciled with retained P0-P8 history; P10/P11, backend exclusions and cutover boundaries preserved; execution belongs to paired review
+verification-scope: Full P10 integration scope reconciled with retained P0-P9 history; P11, backend exclusions and cutover boundaries preserved; execution belongs to paired review
 source-anchors: docs/frontend-migration/PROFILE.md; docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/PILOT_PARITY_REVIEW.md; docs/frontend-migration/staged/DEVELOPMENT.md; docs/policies/DEVELOPMENT_POLICY.md; docs/backlog/documentation-remediation.yml
 next-review: authorized-migration-follow-up-or-next-phase
 -->
 
-## Current disposition (2026-10-22)
+## Current disposition (2026-10-23)
 
 The maintainer's latest [full-pilot correction](FRONTEND_FOUNDATION_DESIGN.md#reaffirmed-isolation-and-authorized-full-pilot-correction-2026-10-20)
 authorizes the reported fixes and equivalent gaps across every migrated area. Native isolation is an existing,
@@ -42,7 +42,13 @@ verification. P8 is implemented. The subsequent
 [explicit P9 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p9-implementation-trigger-2026-10-22) authorizes
 the complete financial calculation, settlement and output phase. P9 is implemented; its
 [scoped implementation review](PILOT_PARITY_REVIEW.md#p9-calculation-settlement-and-output-implementation-review-2026-10-22)
-records execution, independent review and finite evidence limits. P10/P11 and cutover retain their separate authorization.
+records execution, independent review and finite evidence limits. P10/P11 and cutover retain their separate authorization
+at that historical checkpoint. The maintainer's subsequent
+[explicit P10 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p10-implementation-trigger-2026-10-23)
+starts the cross-application integration contract below; P11 and its separate cutover/publication/retirement actions
+remain outside that instruction. P10 is implemented; its
+[integration review](PILOT_PARITY_REVIEW.md#p10-cross-application-integration-review-2026-10-23)
+records actual scoped acceptance and the broad-run verification limitation.
 The historical receipts below preserve the scope and
 decisions that governed each earlier phase rather than supplying permission to start the next one.
 
@@ -442,6 +448,15 @@ existing [migration playbook](staged/DEVELOPMENT.md#adding-or-changing-a-feature
 
     **Completion:** the full interactive application is available through the new frontend, with no unexplained parity
     difference or unfinished navigation path.
+
+    **Current implementation:** Every entity family's creation/detail/duplicate/settings and Event administration
+    uses the existing opt-in router and server routes. Mixed-family Overview adopts feature-owned image and
+    lifecycle operations, shared retained completion feedback and independent query/count/hidden-region owners.
+    Empty regions retain manual Refresh without adding search/filter controls. Cross-family checks cover profile
+    changes, expiry, revocation, late delivery, drafts, unknown commands and route-specific release recovery.
+    Mapped staged guidance retains lasting contracts while removing obsolete phase instructions; no control
+    material is retired or production guide published. Executed acceptance and finite visual evidence belong to
+    the paired review rather than this source disposition.
 
 12. **P11 — Perform separately authorized cutover and retirement**  
     **Complexity:** High operational risk. **Prerequisites:** P10 acceptance.

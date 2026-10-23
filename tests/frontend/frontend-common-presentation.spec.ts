@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {createSSRApp, defineComponent} from 'vue';
+import {computed, createSSRApp, defineComponent, markRaw} from 'vue';
 import type {Component} from 'vue';
 import {renderToString} from 'vue/server-renderer';
 import {createMemoryHistory, createRouter} from 'vue-router';
@@ -14,6 +14,7 @@ import PageMessage from '../../src/frontend/components/PageMessage.vue';
 import EntityDescription from '../../src/frontend/components/EntityDescription.vue';
 import FormField from '../../src/frontend/components/FormField.vue';
 import FileField from '../../src/frontend/components/FileField.vue';
+import ActionButton from '../../src/frontend/components/ActionButton.vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {render} from '../../src/frontend/app/entry-server';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
@@ -92,7 +93,118 @@ function accountSession(kind: 'account' | 'guest'): components['schemas']['Sessi
     return {...session, kind, activeProfile: profile, profiles: kind === 'account' ? [profile] : [], logoutUrl: '/users/logout'};
 }
 
+/** Happy DOM refuses blur() on a disabled button. Focusing the body reproduces
+ * Chromium's unclaimed native focus release without changing application state. */
+function releaseDisabledFocus(button: HTMLButtonElement): void {
+    expect(button.disabled).toBe(true);
+    document.body.tabIndex = -1;
+    document.body.focus();
+    document.body.removeAttribute('tabindex');
+    expect(document.activeElement).toBe(document.body);
+}
+
 describe('common frontend presentation', () => {
+    it('keeps native availability and pending focus restoration for a standalone action without application context', async () => {
+        const wrapper = mount(ActionButton, {attachTo: document.body, slots: {default: 'Standalone action'}});
+        cleanups.push(() => wrapper.unmount());
+        const button = wrapper.get<HTMLButtonElement>('button').element;
+        expect(button.disabled).toBe(false);
+        button.focus();
+        await wrapper.setProps({pending: true});
+        expect(button.disabled).toBe(true);
+        releaseDisabledFocus(button);
+        await wrapper.setProps({pending: false});
+        await flushPromises();
+        expect(document.activeElement).toBe(button);
+        expect(button.disabled).toBe(false);
+    });
+
+    it('restores only pending-disabled button focus after the native control becomes available', async () => {
+        const {wrapper, request} = await mounted(ActionButton);
+        const button = wrapper.get<HTMLButtonElement>('button').element;
+        button.focus();
+        const focus = vi.spyOn(button, 'focus');
+        await wrapper.setProps({pending: true});
+        expect(button.disabled).toBe(true);
+        expect(button.getAttribute('aria-busy')).toBe('true');
+
+        // Explicitly reproduce Chromium's native blur to exercise the production
+        // restoration rather than assume the DOM emulator supplied that behavior.
+        releaseDisabledFocus(button);
+        expect(document.activeElement).toBe(document.body);
+        await wrapper.setProps({pending: false});
+        await flushPromises();
+        expect(button.disabled).toBe(false);
+        expect(document.activeElement).toBe(button);
+        expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    it.each(['pointer', 'keyboard', 'other-focus', 'window-blur'] as const)(
+        'releases pending-button focus after deliberate %s interaction even when focus later returns to body', async interaction => {
+            const {wrapper} = await mounted(ActionButton);
+            const button = wrapper.get<HTMLButtonElement>('button').element;
+            const other = document.createElement('button');
+            document.body.append(other);
+            button.focus();
+            const focus = vi.spyOn(button, 'focus');
+            await wrapper.setProps({pending: true});
+            releaseDisabledFocus(button);
+
+            // Leaving body after a real user action must not be confused with
+            // the browser's unclaimed focus loss when a control becomes disabled.
+            if (interaction === 'pointer') other.dispatchEvent(new Event('pointerdown', {bubbles: true}));
+            else if (interaction === 'keyboard') document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Tab', bubbles: true}));
+            else if (interaction === 'other-focus') { other.focus(); other.blur(); }
+            else window.dispatchEvent(new Event('blur'));
+            expect(document.activeElement).toBe(document.body);
+            await wrapper.setProps({pending: false});
+            await flushPromises();
+            expect(document.activeElement).toBe(document.body);
+            expect(focus).not.toHaveBeenCalled();
+        },
+    );
+
+    it.each(['unavailable', 'ineligible', 'initializing', 'identity', 'unmounted', 'unfocused'] as const)(
+        'never restores a pending button that becomes %s', async state => {
+            const {wrapper, context} = await mounted(ActionButton);
+            const button = wrapper.get<HTMLButtonElement>('button').element;
+            if (state !== 'unfocused') button.focus();
+            const focus = vi.spyOn(button, 'focus');
+            await wrapper.setProps({pending: true});
+            releaseDisabledFocus(button);
+
+            // Capability loss, initialization and disposal retain their actual
+            // action admission. A never-focused command owns no restoration at all.
+            if (state === 'unavailable') await wrapper.setProps({disabled: true});
+            else if (state === 'ineligible') await wrapper.setProps({state: markRaw({available: computed(() => false),
+                disabled: computed(() => true), pending: computed(() => false), isAvailable: () => false})});
+            else if (state === 'initializing') context.hydrated.value = false;
+            else if (state === 'identity') context.epoch.value++;
+            if (state === 'unmounted') wrapper.unmount();
+            else await wrapper.setProps({pending: false});
+            await flushPromises();
+            expect(document.activeElement).toBe(document.body);
+            expect(focus).not.toHaveBeenCalled();
+        },
+    );
+
+    it('leaves another focused control with its owner when pending completes', async () => {
+        const {wrapper} = await mounted(ActionButton);
+        const button = wrapper.get<HTMLButtonElement>('button').element;
+        const other = document.createElement('input');
+        document.body.append(other);
+        button.focus();
+        const focus = vi.spyOn(button, 'focus');
+        await wrapper.setProps({pending: true});
+        releaseDisabledFocus(button);
+        other.focus();
+        await wrapper.setProps({pending: false});
+        await flushPromises();
+        expect(document.activeElement).toBe(other);
+        expect(focus).not.toHaveBeenCalled();
+    });
+
     it('preserves escaped description lines and releases its separator with absent content', async () => {
         const {wrapper, request} = await mounted(EntityDescription, {
             description: 'First <img src=x onerror=alert(1)>\n\nLast & final line', separator: true,

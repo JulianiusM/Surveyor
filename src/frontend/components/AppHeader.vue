@@ -17,8 +17,8 @@ import ActionButton from './ActionButton.vue';
 import StatusNotice from './StatusNotice.vue';
 import CommandFeedback from './CommandFeedback.vue';
 
-// Remaining feature creation destinations migrate in their own increments.
-// The accepted identity destinations use their existing shared backend owners.
+// All feature creation and identity destinations use the shared Vue router.
+// Their existing backend owners retain admission and business decisions.
 const emit = defineEmits<{localeError: []; localeRecovered: []}>();
 const context = usePilot();
 const {messages, session, locale, ready, hydrated} = context;

@@ -21,6 +21,14 @@ beforeAll(async function prepareRouteComponents(): Promise<void> {
         import('../../src/frontend/features/help/HelpPage.vue'),
         import('../../src/frontend/features/packing/PackingEntry.vue'),
         import('../../src/frontend/features/packing/PackingCreatePage.vue'),
+        import('../../src/frontend/features/event/EventEntry.vue'),
+        import('../../src/frontend/features/event/EventCreatePage.vue'),
+        import('../../src/frontend/features/drivers/DriversEntry.vue'),
+        import('../../src/frontend/features/drivers/DriversCreatePage.vue'),
+        import('../../src/frontend/features/surveys/SurveyEntry.vue'),
+        import('../../src/frontend/features/surveys/SurveyCreatePage.vue'),
+        import('../../src/frontend/features/activity/ActivityEntry.vue'),
+        import('../../src/frontend/features/activity/ActivityCreatePage.vue'),
         import('../../src/frontend/features/identity/IdentityPage.vue'),
         import('../../src/frontend/features/identity/ProfileAdministrationPage.vue'),
         import('../../src/frontend/features/identity/ProfileWorkflowPage.vue'),
@@ -138,12 +146,22 @@ describe('retired route module recovery', () => {
 
 describe('dynamic-content automatic document replacement', () => {
     const packing = '/frontend-pilot/packing/22222222-2222-4222-8222-222222222222';
+    const families = ['packing', 'event', 'drivers', 'survey', 'activity'];
+    const activity = `/frontend-pilot/activity/${firstList}`;
+    const eventAdmin = `/frontend-pilot/event/${firstList}/admin`;
 
     it.each([
-        '/frontend-pilot/packing/create', `${packing}/duplicate`, `${packing}/guest`,
+        // Creation/copy/guest visits remain deliberate recovery in every family,
+        // even when their saved detail/admin counterpart is dynamic content.
+        ...families.flatMap(family => [`/frontend-pilot/${family}/create`,
+            `/frontend-pilot/${family}/${firstList}/duplicate`, `/frontend-pilot/${family}/${firstList}/guest`]),
         '/frontend-pilot/users/profile', '/frontend-pilot/users/profile/manage',
         '/frontend-pilot/users/profile/create', '/frontend-pilot/users/profile/migrate/request',
-        '/frontend-pilot/users/login', '/frontend-pilot/help', '/frontend-pilot/home',
+        '/frontend-pilot/users/profile/migrate/show', '/frontend-pilot/users/profile/delete', '/frontend-pilot/users/account/delete',
+        '/frontend-pilot/users/login', '/frontend-pilot/users/register', '/frontend-pilot/users/oidc/login',
+        '/frontend-pilot/users/forgot-password', '/frontend-pilot/users/reset-password/fixture-token',
+        '/frontend-pilot/users/activate/fixture-token', `/frontend-pilot/guest/${firstList}/login/fixture-token`,
+        '/frontend-pilot/guest/recovery', '/frontend-pilot/help', '/frontend-pilot/help/packing', '/frontend-pilot/home',
         '/frontend-pilot/message', '/frontend-pilot/missing-page',
     ])('keeps static %s during startup and release changes while allowing deliberate recovery', async path => {
         window.history.replaceState({}, '', path);
@@ -169,7 +187,8 @@ describe('dynamic-content automatic document replacement', () => {
         }
     });
 
-    it.each(['/frontend-pilot', packing])('retains one guarded automatic startup recovery for dynamic %s', async path => {
+    it.each(['/frontend-pilot', ...families.map(family => `/frontend-pilot/${family}/${firstList}`), eventAdmin])(
+        'retains one guarded automatic startup recovery for dynamic %s', async path => {
         window.history.replaceState({}, '', path);
         const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
         const {router, context} = createPilotApp({session, initialUrl: path}, true);
@@ -203,10 +222,10 @@ describe('dynamic-content automatic document replacement', () => {
         }
     });
 
-    it('uses the committed visit instead of retaining the initial dynamic classification', async () => {
-        window.history.replaceState({}, '', packing);
+    it('uses the committed cross-feature visit instead of retaining the initial dynamic classification', async () => {
+        window.history.replaceState({}, '', activity);
         const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {});
-        const {router, context} = createPilotApp({session, initialUrl: packing}, true);
+        const {router, context} = createPilotApp({session, initialUrl: activity}, true);
         try {
             await router.isReady();
             await router.push('/frontend-pilot/users/profile/migrate/request');
@@ -216,9 +235,9 @@ describe('dynamic-content automatic document replacement', () => {
             await router.push('/frontend-pilot/help');
             expect(context.updates.requestReload()).toBe(false);
 
-            // Returning to live collaborative content can recover the already
-            // detected release. Static visits did not consume its loop marker.
-            await router.push('/frontend-pilot');
+            // Another family's admitted dynamic destination can recover the
+            // same release. Static visits did not consume its loop marker.
+            await router.push(eventAdmin);
             expect(context.updates.requestReload()).toBe(true);
             expect(reload).toHaveBeenCalledOnce();
         } finally {

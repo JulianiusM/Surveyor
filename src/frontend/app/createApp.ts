@@ -133,9 +133,8 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
     const releaseInitialReloadGuard = initialReloadGuard
         ? context.updates.registerGuard(initialReloadGuard) : () => {};
     const app = createSSRApp(App);
-    // Identity, Overview, Help, Packing, Events, Drivers, Surveys and Activity
-    // share this router. Remaining feature families join only in their authorized
-    // increments; default routing retains its separately authorized cutover.
+    // Identity, Overview, Help and every entity family share this router.
+    // Default routing retains its separately authorized cutover.
     const router = createRouter({
         history: browser ? createWebHistory() : createMemoryHistory(),
         routes: pilotRoutes,

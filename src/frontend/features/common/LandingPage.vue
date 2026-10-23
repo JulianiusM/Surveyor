@@ -35,7 +35,7 @@ const welcomeText = computed(() => session.value?.activeProfile
     ? messages.value.t('landing.welcome', {name: session.value.activeProfile.name}) : messages.value.t('landing.intro'));
 
 // Preserve the native three-card/two-card rows. This is static feature copy, not a
-// permission or route registry; unfinished creation journeys stay ordinary links.
+// permission or route registry; each creation link uses the shared Vue router.
 const featureRows = [
     {classes: 'row row-cols-1 row-cols-md-2 row-cols-xl-3 g-4 mb-4', features: [
         {type: 'survey', points: [

@@ -4,9 +4,9 @@ documentation-metadata
 audience: frontend migration implementers; reviewers; test maintainers
 owner: project maintainers
 status: migration-pending
-last-verified: 2026-10-22
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: P9 reviewed calculation, signed settlement, outputs and privacy assertion map added to retained P0-P8, cached Activity and Overview coverage; test selection is not execution evidence or full parity certification
+verification-scope: P10 mixed-family navigation, Overview, actor/draft/recovery and route-update assertions added to retained P0-P9 maps; source selection is not execution evidence or exhaustive parity certification
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts; src/frontend/app/queryKeys.ts; src/frontend/app/context.ts
 next-review: feature-migration-or-test-boundary-change
 -->
@@ -85,7 +85,7 @@ beyond its declared assertions.
 | Localization, usability and notices | Direct R2/R3 require complete non-user UI catalogs and controlled declared/validated component placeholders. R4 rejects German-only adaptation in favor of locale-neutral usability; IMP-080 stays open until cutover. R7 replaces inherited local reveal/placement with common non-jumping SPA notification ownership. |
 | Identity completion R1 | Typed catalog notices replace the inherited-prose exception for implemented transfer/deactivation/account/guest deletion. Conditional former-owner details, native wording and existing business sequencing remain. |
 | Excluded backend remedies | General token, transfer, last-profile/deletion finality, native mixed-reset/activation, provider preparation, Event capacity and whole-session/permission remedies remain separately owned. E1 excludes native/Vue production coexistence coordination; it supplies no repair claim. |
-| Later scope and external evidence | S1 requires explicit phase triggers; separate October 18, 20 and 22 instructions supply P3–P9 triggers. P10/P11, principal-language persistence and full email/PDF/domain localization remain separately scoped. The [P9 review](PILOT_PARITY_REVIEW.md#p9-calculation-settlement-and-output-implementation-review-2026-10-22) records inspection of both rendered one-page PDF variants. That finite evidence does not establish long/multipage layout, live OIDC, successful SMTP/inbox, an exhaustive browser/locale/accessibility matrix, hosted CI, deployment, cutover, native removal or guide publication. |
+| Later scope and external evidence | S1 requires explicit phase triggers; separate October 18–23 instructions supply P3–P10 triggers. P11, principal-language persistence and full email/PDF/domain localization remain separately scoped. The [P9 review](PILOT_PARITY_REVIEW.md#p9-calculation-settlement-and-output-implementation-review-2026-10-22) records inspection of both rendered one-page PDF variants. That finite evidence does not establish long/multipage layout, live OIDC, successful SMTP/inbox, an exhaustive browser/locale/accessibility matrix, hosted CI, deployment, cutover, native removal or guide publication. |
 
 The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dated-amendments) retains original choices
 and dated approvals; [DEC-006](../decisions/DEC-006-FRONTEND-FRAMEWORK.md) owns durable technology and future-target
@@ -750,6 +750,32 @@ The unchanged [allocation/rounding](../../tests/unit/invoice-distribution.spec.t
 [shares PDF](../../tests/unit/invoice-shares-pdf.spec.ts) retain their existing boundaries rather than being
 reimplemented in the browser. Native frontend sources, stronger backend guarantees, full output localization,
 P10/P11, cutover and production-guide publication remain outside this implementation instruction.
+
+## P10 cross-application assertion map (2026-10-23)
+
+The [explicit P10 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p10-implementation-trigger-2026-10-23)
+authorizes integration of the migrated families. These source mappings describe assertion scope; the paired review
+owns actual execution, original-image inspection and remaining limits.
+
+| Contract | Production adoption and assertion boundary |
+|---|---|
+| OVR-01–06; ENT-07/09/10 | All five typed cards use the existing Overview projection, feature APIs, authorized-image owner and shared command/navigation owners. Mounted mixed-family cases deliberately share a UUID across types, check blob image retention/replacement and route the actual archive/restore/visibility operations. Failed delete delivery retains the original family's receipt and translates it after locale change; Retry sends no second DELETE. |
+| Independent regions, counts and focus | Mounted main/hidden cases preserve absent search/filter controls for an empty unfiltered region while retaining its existing Refresh owner. The built mixed-family journey distinguishes six admitted entities from five grouped cards, opens one child, restores expansion focus through Back and hides only its parent. Hidden disclosure/history stays independent of the other collection. |
+| Creation/detail/duplicate/administration paths | The navigation suite mounts actual shell, Overview, parent-header and Event-summary consumers against `pilotRoutes`, including all creation/duplicate/detail and Event administration destinations. Built cases open each family from real image-bearing cards, its settings and duplicate draft, plus Event administration, without a document request. Existing per-feature built creation cases retain actual submission coverage. |
+| PRF-01/02; REF-01–06 | Built profile switching retires a dirty Packing editor and held old-scope response plus warmed Overview membership. Browser cookie expiry retires dirty Activity settings and held private data. Revoked linked-Packing admission cannot revive through history; independently admitted Activity remains available. Standalone established-profile admission retains its deliberate native behavior. |
+| Unknown writes and release replacement | The built lost-response case commits one real Packing item, cancels then accepts departure into Activity creation and deliberately inspects the returned list through Refresh to see one saved row without replay. Ordinary same-actor cache freshness remains unchanged. The existing coordinator and expanded actual-router matrix cover all seven dynamic destinations, create/duplicate/guest and identity/static exclusions, and cross-family automatic-reload eligibility. Pending controls retain native disabling; shared focus recovery must not steal deliberately moved focus. |
+| Finite native/Vue presentation | English 1280px/390px cases compare matching actors, records and five authorized images. They retain original card and full-page captures, meaningful visible presentation comparisons, responsive fit and same-document history. Required Refresh and interface locale controls remain explicit approved additions; no full-image equality or unsampled-state claim follows. |
+
+Sources: [navigation consumers](../../tests/frontend/frontend-cross-application-navigation.spec.ts),
+[Overview/read/navigation](../../tests/frontend/frontend-refresh-navigation.spec.ts),
+[completion receipts](../../tests/frontend/frontend-page-entry.spec.ts),
+[actual route/update policy](../../tests/frontend/frontend-route-recovery.spec.ts),
+[common control presentation](../../tests/frontend/frontend-common-presentation.spec.ts),
+[built mixed-family journeys](../../tests/e2e/frontend-cross-application.spec.ts) and
+[built cross-family lifecycle](../../tests/e2e/frontend-cross-application-lifecycle.spec.ts).
+Existing [Overview persistence](../../tests/integration/entity-overview.spec.ts) and
+[profile persistence](../../tests/integration/frontend-profile-administration.spec.ts) exercise the shared database
+owners. No test or phase completion authorizes P11, native removal, publication or an excluded backend remedy.
 
 ## Verification selection for subsequent migration slices
 

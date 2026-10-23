@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-22
+last-verified: 2026-10-23
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Full implemented P0-P9 baseline, shared-owner and staged-guide review; renewed supported-runtime checks and finite built-app visual evidence; inherited native readiness defect and separate P10/P11 boundaries retained
+verification-scope: P10 cross-application navigation, Overview feedback/Refresh, shared pending-focus and lifecycle integration reviewed against retained P0-P9 history; finite execution evidence and separate P11 boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -17,6 +17,77 @@ The [foundation ledger](FRONTEND_FOUNDATION_DESIGN.md#original-decisions-and-dat
 and dated amendments. This record owns current findings, latest relevant evidence and concise historical dispositions.
 Superseded run counts, repeated failures, file inventories and capture transcripts remain in Git and ignored artifacts.
 There is no second maintained archive or approval request in this record.
+
+## P10 cross-application integration review (2026-10-23)
+
+The maintainer's [explicit P10 instruction](FRONTEND_FOUNDATION_DESIGN.md#explicit-p10-implementation-trigger-2026-10-23)
+authorizes the existing integration contract. The five entity families, Help, identity/profile workflows and
+participant/organizer Finance are available through the opt-in Vue application. Inspection of actual shell,
+Overview, parent, creation, duplicate, settings and Event administration consumers found no remaining ordinary
+native interactive destination. Provider/capability arrivals and authorized image/proof/PDF/print outputs retain
+their explicit boundaries. P11, native-source changes/removal, default routing, guide publication, deployment,
+principal-language persistence, full output localization and excluded backend remedies remain separate.
+
+The source review found and corrected two Overview integration defects. Failed delivery after a confirmed
+non-Packing deletion displayed Packing feedback; the shared completion owner now exposes only the matching
+logical owner's retained notice, and Overview translates that original feature message through locale changes.
+Retry completes navigation without another DELETE. An empty unfiltered region previously omitted manual Refresh
+with its search toolbar; it now keeps the existing Refresh/read owner and stable control while conditionally
+omitting search/filter/count fields. Empty wording, private counts and independent region lifetimes remain intact.
+
+Independent Chromium inspection then demonstrated that native disabling blurs a focused button. Keeping its
+element mounted alone did not establish focus preservation, despite Happy DOM's result. `ActionButton` now owns
+only the transient DOM reference needed to restore an unclaimed pending-control focus without scrolling. Another
+pointer/key action, another focused control, window blur, actor retirement, loss of availability or unmount wins.
+Optional context injection preserves standalone controls; there is no new request, draft, server snapshot or
+authority owner. Both native disabled semantics and initialization barriers remain. Mounted cases model the
+browser blur explicitly; the built mixed-family cases hold genuine responses to verify focus and deliberate moves.
+
+The [assertion map](TEST_COVERAGE.md#p10-cross-application-assertion-map-2026-10-23) records the exact source and
+test boundaries. Cross-family fixtures preserve deliberate standalone signed-in admission: removing an owner
+editor is distinct from denying readable standalone content. The revocation fixture therefore uses a linked
+Packing child whose Event admission depends on its explicit grant. Unknown commands commit once, protect canceled
+departure, then use deliberate Refresh to inspect saved state after accepted cross-family navigation without replay.
+Ordinary same-actor return can reuse its still-fresh admitted cache; this adds no forced-entry read policy.
+
+Root and independent reviews by `/root/navigation`, `/root/overview` and `/root/lifecycle_review` compare the
+original accepted owners and dated amendments, actual matching consumers, readability, type-only declarations,
+approval provenance and native isolation. Existing controllers/domain/DBAL remain the backend owners. No new
+approval conflict, alternate backend implementation or unresolved P10 navigation path was identified. These agent
+reviews establish their inspected scope only; the direct maintainer instruction supplies implementation authority.
+
+Staged Architecture/Development now describe complete opt-in navigation and shared focus behavior without obsolete
+phase/cutover instructions in production payloads. The unique-contract review found API/toolchain rationale and
+future language/output decisions retained in DEC-006, and session/public-grant, current-value/no-op, draft/read,
+uncertainty, deployment, Packed fallback, Finance/recommendation and Help contracts retained in mapped guidance.
+No control/profile material is retired, no new documentation destination is created, and frozen production guides
+remain unchanged. The existing profile/manifest remains the owner of exact preparation and any separately
+authorized publication.
+
+Verification uses Node.js **24.15.0** and an independently inspected MariaDB **10.11.14** instance with strict SQL
+mode and separate `surveyor_p10_test`/`surveyor_p10_e2e` schemas. Each credential has only its schema's grants;
+the pre-existing local database is not reset. Logs, case identities and original images remain under ignored
+`artifacts/frontend-p10-20261023/`.
+
+| Verification | Actual evidence and limit |
+|---|---|
+| Build/compiler | Full server/native/Vue client/SSR build passes. The final Vue client/SSR rebuild includes the shared focus correction. The test compiler checks the current authored tests. |
+| Focused database-free | Twelve relevant client suites pass **394 cases**, including the actual-router **54-case** update matrix, retained identity/command/navigation cases and all new mixed-family/focus cases. The genuine Express/Vite runtime fixture separately passes **2/2** on final source in **17.83 seconds** under its unchanged 30-second deadline. |
+| Persistence | Overview and profile-administration integration pass **21/21** through actual ORM/controller owners and their independently guarded schema. No backend remedy or new transaction guarantee is claimed. |
+| Isolated built browser | All **49/49** existing client-browser cases pass against current built assets. This is client evidence, separate from integrated E2E. |
+| Built application | **17 distinct cases** have a passing latest result across the selected broad run, seven-case renewal and one-case unknown-result renewal. They cover all five real creation/duplicate workflows, profile create/switch/edit, transfer/deactivation/preview/history, unknown Finance calculation and the seven new cross-family journeys. The 17-case run itself had **14 passes/3 failures**; the seven-case run had **6 passes/1 failure**. Corrected assertions use the actual Activity title control and Event archive fields, matched resting pointer state, and explicit saved-state Refresh rather than a forced-entry-read assumption. No application behavior or deadline was weakened to resolve those test errors. |
+| Visual review | `/root/navigation` individually inspected all **12 desktop originals**, `/root/lifecycle_review` all **12 phone originals**, and root the four full-page originals. Five native/Vue card pairs per width retain matching actors/data, authorized images, visible information and reachable controls at **1280px/390px**. No unexplained difference was found in these **24 English originals**. Required locale/Refresh controls, deliberate current search focus and native one-time setup flash remain explicit differences. This does not certify unseen actors, locales, dialogs, viewports, PDFs or external providers. |
+| Engineering/documentation | The complete 443-source declaration/DBAL/session inventory and all seven task-owned source readability files report zero findings; whitespace checks pass. Independent/root semantic review checks actual shared adoption and purposeful comments. Production freeze/amendment checks are clean; the live advisory report has no broken link, metadata, path or classification finding and retains its existing unregistered source fingerprint. |
+
+Three broad database-free attempts did not complete. The first parallel and later one-worker attempts exceeded
+the development-runtime fixture's unchanged 30-second deadline; another parallel attempt stalled without a final
+result. The owned parent/worker processes were stopped after progress ceased. Its focused final run passes
+unchanged, as do the 394 relevant cases above. The cause of the broad-run stalls is not established; this receipt
+does **not** call the full quick suite passed. Intermediate test/compiler failures and stopped attempts remain in
+the ignored logs. No existing runner configuration, deadline, retry policy, native source or dependency was changed.
+
+P10 is complete within these source and finite verification boundaries. P11 acceptance actions, default routing,
+publication, native retirement and deployment remain separate maintainer decisions.
 
 ## Full implemented-scope review and migration readiness (2026-10-22)
 
