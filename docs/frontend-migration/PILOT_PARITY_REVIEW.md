@@ -6,7 +6,7 @@ owner: frontend migration maintainers
 status: migration-pending
 last-verified: 2026-10-24
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Full interface corrections and further admission/navigation review independently checked; local database, built E2E, client/source-browser and compiler evidence distinguished from historical unrun receipts; P11 boundaries retained
+verification-scope: Rejected visual acceptance withdrawn; reported and related native-parity corrections with explicit actor/view coverage, shared invoice ownership and honest capture/test limits; P11 and native-isolation boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -1729,3 +1729,95 @@ mismatch; links, metadata, classification, profile structure and runtime Help au
 baseline was not rebased to conceal it. Independent reviewers and root checked actual adoption, native isolation,
 diagnostic privacy, recovery ownership, source readability and these execution claims. Previously deferred backend
 work remains in its existing owners; these finite local results do not certify every browser, input or deployment.
+
+## Repeated live visual inspection (2026-10-24)
+
+The maintainer rejected the first visual acceptance after finding four visible defects that the review missed.
+That acceptance is withdrawn. The original 211 captures and earlier test results retain their historical scope in
+`artifacts/visual-parity-2026-10-24/`; capture success did not establish visual parity.
+
+The repeated review follows the unchanged native frontend and the exact dated decisions: localized/readable
+responsive layouts, integrated Refresh, common SPA feedback, the October 20 Activity total/calendar decisions,
+and October 24 separate phone action rows/contextual wording. These decisions do not authorize unrelated section
+reordering or new headings. The existing five labeled Activity creation fields remain the specifically accepted
+usability correction. Help uses the separately reviewed runtime language corpora; exact prose/internal-key table
+equality is not claimed.
+
+| Finding | Resulting correction |
+|---|---|
+| IMP-094 | Ordinary flex action buttons and links center their icon/text group consistently. Native list/menu/accordion alignment retains its own composition. |
+| IMP-095–097 | Organizer Finance restores its persistent native management card/Create pool action. Compact headers use available title space; Event administration retains its native separate action row. Empty administrable collections lose the invented heading/toolbar while integrated Refresh stays in the existing collection header. |
+| IMP-098–100, 103 | Finance restores wide dialogs, native fields/context/warnings/labels, native NEW inline review and separate summary confirmation. One shared invoice owner retains drafts, captured inputs, command outcomes and recovery through filters/reads. Accepted correction/rejection/Close retain their native stages and actions. |
+| IMP-101–102 | Event registration restores native three/four choice grouping with readable translated labels. Help keeps natural table word/column sizing and local containment of actual overflow. |
+| IMP-104–105 | Activity grips stay beside slot title/time. Existing English/German Finance Help describes the restored controls and actual final actions. |
+| IMP-106–109 | Participant Finance returns before Participants/Things to do. Native takeover guidance, checkbox grouping and action cues return. Populated personal history retains reason/proof/action cues, and participant Close reuses the existing in-app review owner and participant-only operation. |
+
+Only the existing scoped owners changed. Participant Close gates a write using the current admitted row, while
+read/acknowledgement recovery remains available after an unknown Close is found saved as Closed. The superseded
+section pending mirror and duplicate selection copy were removed; the review owns the sole frozen invoice.
+Independent semantic reviewers traced actual callers, authority, reads, writes, declaration contracts and retirement,
+including hidden invoice-row draft/receipt lifetimes. Native frontend sources and shared financial business operations
+remain untouched. The earlier bounded Event 403 localization-key repair keeps its original authorization/status/data behavior.
+
+The actual native participant Close question has a blank amount because its participant table omits a marker read
+by the native handler. Strict Vue parity preserves that question, with the amount still visible in invoice history.
+IMP-110 records this inherited defect for separately authorized native/cutover work; it is not an approved alternate
+wording or a claimed repair.
+
+The local built Express application uses the existing prepared `cgd_e2e` schema on `127.0.0.1:3306`, MariaDB
+10.4.32, Node 24.13.0 and Chromium 151. Captures reuse real fictional accounts/resources: anonymous, owner,
+alternate active account profile, description-only delegated guest, and registered guests with open-pool, empty-history
+and populated-history admission. No schema reset, migration, database-account/grant change or production operation
+was performed. Separate selected E2E workflows create isolated fictional records through existing application routes.
+After real authentication/profile selection, the capture guard blocks interactive business commands. Existing
+recommendation-entry/warning maintenance remains explicitly admitted; normal sessions and request maintenance are
+real. This is not an all-GET run or a claim that the application performs no database writes.
+
+Visual review uses actual originals, consecutive crops at captured width, and independent scrollports on both axes.
+Reviewers inspect every distinct view/control/layout, long labels, group boundaries and scroll limits. Long repeated
+picker rows and repeated phone prose are sampled after their layout patterns are reviewed; receipts enumerate exact
+files and do not claim every repeated row/paragraph was read. No pixel threshold establishes native/Vue acceptance.
+Exact PNG-byte identity only relates already viewed images to a later fresh capture; changed regions require review.
+The new gallery/evidence owner is `artifacts/visual-parity-reinspection-2026-10-24/`.
+
+The complete frozen-runtime sweep finished with 109 distinct states, 474 successful originals, 221 English
+native/Vue pairs (including three targeted tablet pairs), 32 German Vue supplements and 960 independent-scroll
+frames. Its runtime/source identity is `0a4478f83700d79c477ea974704f255d2c83ce3ea24d78f0042a008c46a40292`,
+unchanged across the run. Capture failures, recorded errors and blocked interactive business commands are zero.
+Root reconciled all 109 states to the actual independent/root review receipts; no material Vue visual gap remains
+within the stated coverage and sampling limits. The gallery contains 253 comparison sheets. Capture counts and
+generated crop/frame counts are evidence availability, not a claim that every image or repeated paragraph was read.
+
+The final German Help boundary review then found nine passages/headings still quoting English control/status
+names. Only the existing German Finance guide changed; exact file hashes prove all other 1,292 unique runtime
+paths, including compiled/source assets, unchanged. Six actual Finance Help views were retaken with unchanged
+identity `b79d853e013d98cde6777e1466bc00188f8611bc441b0d2b84d9306cead80a21`. Independent reviewers read
+all seven changed sections and the generated contents heading at desktop/phone widths (26 additional images),
+plus changed main-gallery regions. Those label findings are closed. The manifest records each capture's identity
+and both completed runs; the complete sweep is not represented as a 109-state recapture on the later Help identity.
+
+Candidate, discovery, failed preparation and deliberately stopped partial runs retain their identities and limits.
+An empty personal-history fixture initially failed populated-history assertions; the capture now uses a separately
+identified existing registered guest with actual admitted proof-bearing invoices. No failed or absent screenshot
+counts as visually accepted. The earlier gallery now points to its replacement without removing historical captures.
+
+The full frontend selection passed 59 files / 1,544 tests before the final participant Close adaptation; all five
+Finance suites then passed 104 tests, followed by 47 focused Finance/allocation tests after the last guidance/icon
+copy. The final frontend client/SSR build includes 1,901 messages. The built-client fixture suite passed 100 checks
+before that final guidance/icon/catalog copy; those checks are not claimed as a rerun on the last catalog.
+Nine distinct selected real application workflows passed across the Finance runs, including the restored personal
+Close gate: Cancel sends no Close POST; explicit confirmation uses the participant operation, preserving original/
+corrected values, proof privacy and the same document. Initial failed attempts and corrected test setup remain in
+ignored evidence. The final test type check passes. The development check reports 452 sources, the complete
+27-file task-owned executable readability scope, 15 nontrivial operations and zero findings; global declaration
+contracts are also checked. Production/amendment boundaries and whitespace pass. The advisory documentation
+report retains only the existing source-baseline fingerprint mismatch; Help authoring, links, metadata,
+classification and profile structure have no findings. The baseline has not been rebased.
+
+During this task an added executable Help check incorrectly read maintained guide content. Independent review
+caught the Documentation Policy violation; the content reads/assertions were removed and replaced with seven
+synthetic Markdown-table fixtures using the same trusted renderer. Maintained Help visuals remain separate advisory
+evidence. No exception to the policy was authorized or retained.
+
+The full schema-resetting E2E suite, real OIDC/SMTP providers, other browser engines, physical devices and deployment
+were not verified by this bounded local inspection. Existing deferred backend work remains in its established owners.

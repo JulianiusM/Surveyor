@@ -8,6 +8,8 @@ import {closeModalForE2E, expectUsableFrontendLayout, loginForE2E, openModalForE
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {PERM} from '../../src/modules/lib/permissions';
+import {getGuestRegistrationNags} from '../../src/modules/lib/guestRegistrationNags';
+import {createTranslator} from '../../src/modules/localization/translator';
 
 /** Establish a distinct guest through the real Event identity boundary, then
  * prove this cookie jar cannot inherit the fixture owner's full permissions. */
@@ -275,7 +277,14 @@ test('carries a late-registration token through guest entry and spends it only o
         await page.goto(`/frontend-pilot/event/${event.id}?regToken=${encodeURIComponent(link.token)}&locale=en`, {waitUntil: 'domcontentloaded'});
         await waitForPilotHydration(page);
         await page.locator('#guest-name').fill(`P2 guest ${randomUUID().slice(0, 8)}`);
-        await page.getByRole('button', {name: 'Continue as guest', exact: true}).click();
+        // Event entry retains its configured native confirmation before identity
+        // creation; accepting it must still leave this registration token unused.
+        const confirmation = page.waitForEvent('dialog').then(async function acceptEventGuest(dialog) {
+            expect(dialog.type()).toBe('confirm');
+            expect(dialog.message()).toBe(getGuestRegistrationNags('event').submitConfirmation);
+            await dialog.accept();
+        });
+        await Promise.all([confirmation, page.getByRole('button', {name: 'Continue as guest', exact: true}).click()]);
         await expect(page).toHaveURL(new RegExp(`/frontend-pilot/event/${event.id}\\?regToken=`));
         await expect(page.locator('#arrivalDate')).toBeVisible();
         const before = await (await owner.get(`/api/v1/events/${event.id}/links`, {headers: await frontendEventHeaders(owner)})).json() as components['schemas']['EventRegistrationLinks'];
@@ -366,6 +375,14 @@ test('keeps native and versioned Event grants independent and requires both part
             expect((await actor.get(`/event/${event.id}/admin`)).status()).toBe(variant.admin ? 200 : 403);
             const entry = await (await actor.get(`/api/v1/events/${event.id}/entry?view=admin`, {headers: proof})).json() as components['schemas']['EventResourceEntry'];
             expect(entry.entry.kind).toBe(variant.admin ? 'render' : 'denied');
+            if (entry.entry.kind === 'denied') {
+                // The admitted denial names a real localized message rather than
+                // degrading to a generic failure in either document or Vue entry.
+                expect(entry.entry).toEqual({kind: 'denied', status: 403, messageKey: 'api:errors.FORBIDDEN'});
+                const deniedDocument = await actor.get(`/frontend-pilot/event/${event.id}/admin?locale=en`);
+                expect(deniedDocument.status()).toBe(403);
+                expect(await deniedDocument.text()).toContain(createTranslator('en').t('api:errors.FORBIDDEN'));
+            }
             for (const prefix of ['/api/event', '/api/v1/events']) {
                 expect((await actor.get(`${prefix}/${event.id}/participants`, {headers: proof})).status()).toBe(variant.roster ? 200 : 403);
                 expect((await actor.get(`${prefix}/${event.id}/links`, {headers: proof})).status()).toBe(variant.manage ? 200 : 403);

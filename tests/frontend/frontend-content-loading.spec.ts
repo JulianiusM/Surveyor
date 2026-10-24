@@ -399,14 +399,16 @@ describe('help and overview progressive content', () => {
     it('renders ready overview regions independently and confirms empty membership only after its own read', async () => {
         const participant = deferred<Response>();
         const owner = deferred<Response>();
+        let participantRead = participant.promise;
         function readRegion(request: Request): Promise<Response> {
-            return new URL(request.url).searchParams.get('collection') === 'owner' ? owner.promise : participant.promise;
+            return new URL(request.url).searchParams.get('collection') === 'owner' ? owner.promise : participantRead;
         }
         const {wrapper, context, request} = await mounted('/frontend-pilot/users/dashboard', readRegion);
         const ownerView = wrapper.get('[data-collection="owner"][data-region="main"]');
         const participantView = wrapper.get('[data-collection="participant"][data-region="main"]');
         const participantForm = participantView.get('form');
-        const participantRefresh = participantForm.get('button.ms-auto');
+        const participantHeading = wrapper.findAll('.entity-overview > .accordion-header')[0]!;
+        const participantRefresh = participantHeading.get<HTMLButtonElement>('button[aria-label="Refresh"]');
         const input = participantView.get<HTMLInputElement>('input[type="search"]');
         input.element.focus();
         expect(request).toHaveBeenCalledTimes(2);
@@ -431,17 +433,30 @@ describe('help and overview progressive content', () => {
         expect(participantView.text()).toContain(context.messages.value.t('overview.emptyParticipant'));
         expect(wrapper.findAll('.accordion-button .badge').map(badge => badge.text())).toEqual(['0', '1']);
         // Empty authority releases only untouched search/filter/count controls.
-        // The same form and Refresh remain mounted so future reads do not replace
-        // that control or remove deliberate recovery from an empty collection.
+        // The same Refresh stays in the existing collection heading. Empty
+        // membership adds neither a repeated visible title nor a control row.
         expect(participantView.get('form').element).toBe(participantForm.element);
-        expect(participantForm.get('button').element).toBe(participantRefresh.element);
-        expect(participantForm.findAll('button')).toHaveLength(1);
-        expect(participantRefresh.text()).toBe(context.messages.value.t('common.refresh'));
+        expect(participantHeading.get('button[aria-label="Refresh"]').element).toBe(participantRefresh.element);
+        expect(participantForm.findAll('button')).toHaveLength(0);
+        expect(participantForm.classes()).not.toContain('mb-3');
+        expect(participantForm.get('h3').classes()).toContain('visually-hidden');
+        expect(participantRefresh.attributes('aria-label')).toBe(context.messages.value.t('common.refresh'));
         expect(participantRefresh.attributes('disabled')).toBeUndefined();
         expect(participantForm.find('input[type="search"],[aria-live="polite"]').exists()).toBe(false);
         expect(participantForm.text()).not.toContain(context.messages.value.t('overview.filter'));
         expect(input.element.isConnected).toBe(false);
         expect(ownerView.find('form').exists()).toBe(true);
+
+        // The collection's actual existing read still discovers remote content,
+        // and keeps the same focused control after the empty/populated change.
+        participantRead = Promise.resolve(json(region('participant', [card])));
+        participantRefresh.element.focus();
+        await participantRefresh.trigger('click');
+        await flushPromises();
+        expect(participantView.text()).toContain(card.title);
+        expect(participantView.find('input[type="search"]').exists()).toBe(true);
+        expect(participantHeading.get('button[aria-label="Refresh"]').element).toBe(participantRefresh.element);
+        expect(document.activeElement).toBe(participantRefresh.element);
     });
 
     it('loads an explicitly opened hidden overview region before main-region counts arrive', async () => {

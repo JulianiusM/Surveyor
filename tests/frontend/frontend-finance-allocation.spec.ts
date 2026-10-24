@@ -39,11 +39,23 @@ describe('P8 independently saved allocation inputs', () => {
             writes.push(await request.json()); return json({changed: true});
         }, {eventId, pool: {...pool, status: 'OPEN'}, active: true, refresh: vi.fn(async () => {})});
         cleanups.push(mounted.dispose);
-        await button(mounted.wrapper, 'Close participant invoices').trigger('click');
+        const expense = button(mounted.wrapper, 'Add invoice / amount');
+        expect(expense.classes()).toContain('btn-primary');
+        expect(expense.get('.bi-plus-circle').attributes('aria-hidden')).toBe('true');
+        await expense.trigger('click');
+        expect(mounted.wrapper.emitted('edit')).toEqual([['expense']]);
+        expect(writes).toEqual([]);
+        const submission = button(mounted.wrapper, 'Close participant invoices');
+        expect(submission.classes()).toContain('btn-outline-light');
+        await submission.trigger('click');
         expect(writes).toEqual([]);
         confirm.mockReturnValue(true);
         await button(mounted.wrapper, 'Close participant invoices').trigger('click'); await flushPromises();
         expect(writes).toEqual([{status: 'ORGANIZER_ONLY', expectedRevision: 7}]);
+        await mounted.wrapper.setProps({pool: {...pool, status: 'ORGANIZER_ONLY'}});
+        expect(button(mounted.wrapper, 'Open participant invoices').classes()).toContain('btn-outline-light');
+        expect(mounted.wrapper.get('p.small.text-secondary').element.previousElementSibling)
+            .toBe(mounted.wrapper.get('.pilot-action-row').element);
         await mounted.wrapper.setProps({pool: {...pool, status: 'CLOSED'}});
         expect(mounted.wrapper.text()).not.toContain('Open participant invoices');
         expect(mounted.wrapper.text()).not.toContain('Close participant invoices');
@@ -199,6 +211,10 @@ describe('P8 independently saved allocation inputs', () => {
         });
         cleanups.push(mounted.dispose);
         const surface = body();
+        expect(surface.get('.modal-title').text()).toBe('Surcharges & rebates · Saved pool');
+        expect(surface.findAll('h3').map(heading => heading.text())).toContain('Add an adjustment');
+        expect(surface.get('input[type="number"]').attributes('placeholder')).toBe('e.g. 10.00 or -10.00');
+        expect(surface.get('input[id$="-note"]').attributes('placeholder')).toBe('Explain the surcharge or rebate');
         await surface.get('select').setValue('7');
         await surface.get('input[type="number"]').setValue('0');
         await surface.get('input[id$="-note"]').setValue('Unchanged adjustment draft');
@@ -290,6 +306,12 @@ describe('P8 independently saved allocation inputs', () => {
         }, {eventId, pool, registrationId: null, admin: true, initialPayerId: '7', open: true, active: true, refresh});
         cleanups.push(mounted.dispose);
         const surface = body();
+        expect(surface.get('.modal-title').text()).toBe('Manage takeovers · Saved pool');
+        expect(surface.get('[role="dialog"]').classes()).toContain('finance-takeover-dialog');
+        const calculationNotice = surface.get('.status-notice.alert-info');
+        expect(calculationNotice.text()).toBe(mounted.context.messages.value.t('finance.theseChangesAffectTheNextCalculationRecordedPaymentsStay'));
+        expect(calculationNotice.attributes('role')).toBe('status');
+        expect(calculationNotice.find('.btn-close').exists()).toBe(false);
         await surface.get('[data-finance-beneficiary="10"] input').setValue(true);
         const form = surface.get('form'); valid(form);
         await form.trigger('submit'); await flushPromises();

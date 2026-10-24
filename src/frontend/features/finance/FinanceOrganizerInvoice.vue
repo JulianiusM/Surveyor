@@ -91,8 +91,9 @@ function acknowledge(): void {
 </script>
 
 <template>
-    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t('finance.addInvoiceAmount')" :subtitle="pool.name"
-        :pending="command.pending.value || command.recovering.value" standard @close="close">
+    <AppDialog content-class="text-white finance-dialog" :open="open"
+        :title="messages.t('finance.poolDialogTitle', {title: messages.t('finance.addInvoiceAmount'), name: pool.name})"
+        :pending="command.pending.value || command.recovering.value" @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain"
             unknown-message="finance.weCouldNotConfirmWhetherYourInvoiceWasSaved"
@@ -143,7 +144,7 @@ function acknowledge(): void {
         <template #footer>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.cancel') }}</ActionButton>
             <ActionButton type="submit" :form="`${id}-form`" :state="action"
-                :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.addInvoiceAmount') }}</ActionButton>
+                :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.addExpense') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

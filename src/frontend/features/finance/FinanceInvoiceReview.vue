@@ -1,169 +1,37 @@
 <script setup lang="ts">
-import {computed, reactive, ref, useId, watch} from 'vue';
-import type {components} from '../../../types/api/v1';
-import type {PilotPlainMessageKey, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
-import {useActionState, usePilot} from '../../app/context';
-import {useCommand} from '../../composables/command';
-import {useFinanceApi} from './api';
-import {financeDecimal, protectFinanceNumberFromScroll} from './numbers';
+import type {FinanceInvoiceReviewInput, FinanceInvoiceReviewOwner} from '../../../types/FrontendFinanceReviewTypes';
+import type {PilotPlainMessageKey} from '../../../types/FrontendPilotUiTypes';
+import {usePilot} from '../../app/context';
 import {financeMoney} from './presentation';
+import {protectFinanceNumberFromScroll} from './numbers';
+import {useFinanceInvoiceReview} from './invoiceReview';
 import FinanceHistory from './FinanceHistory.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import FormField from '../../components/FormField.vue';
 
-// One selected invoice owns its edit/review lifetime. Fresh reads never replace
-// the captured revision or original evidence behind a confirmation already open.
-const props = defineProps<{
-    eventId: string;
-    invoice: components['schemas']['FinanceInvoice'];
-    currentInvoice?: components['schemas']['FinanceInvoice'];
-    pool: components['schemas']['FinancePool'];
-    action: 'approve' | 'decline' | 'revise' | 'reject' | 'close';
-    open: boolean;
-    active: boolean;
-    refresh: () => Promise<void>;
-}>();
+// An inline row supplies its existing feature owner. Standalone retroactive
+// dialogs create that same owner once for their captured selection instead.
+const props = defineProps<FinanceInvoiceReviewInput & {owner?: FinanceInvoiceReviewOwner}>();
 const emit = defineEmits<{close: []; saved: [notice: PilotPlainMessageKey]}>();
-const context = usePilot();
-const {messages, locale} = context;
-const api = useFinanceApi(context);
-const id = useId();
-const form = ref<HTMLFormElement | null>(null);
-const invoice = ref({...props.invoice});
-const closedPool = ref(props.pool.status === 'CLOSED');
-const operation = ref(props.action);
-const reviewing = ref(false);
-const inspected = ref(false);
-const completed = ref(false);
-const draft = reactive(initialDraft());
-const baseline = ref(JSON.stringify(draft));
-const capturedRevision = ref<components['schemas']['FinanceRevisionInput'] | null>(null);
-const capturedRejection = ref<components['schemas']['FinanceAcceptedRejectionInput'] | null>(null);
-const retroactive = computed(() => operation.value === 'revise' || operation.value === 'reject');
-const rejection = computed(() => operation.value === 'decline' || operation.value === 'reject');
-const command = useCommand(props.refresh, true, {dirty: () => JSON.stringify(draft) !== baseline.value,
-    unknownMessage: 'draft.leaveUnknown', recoveryEligible: () => props.active});
-const actionState = useActionState({eligible: () => props.active && !completed.value, blocked: () => command.action.disabled.value});
-const recovery = useActionState({eligible: () => props.active, blocked: () => command.recoveryAction.disabled.value,
-    pending: () => command.recovering.value});
-const title = computed(() => reviewing.value ? 'finance.confirmInvoiceChange' : operation.value === 'revise'
-    ? 'finance.correctInvoice' : operation.value === 'reject' ? 'finance.rejectInvoiceFromPool'
-        : operation.value === 'approve' ? 'finance.accept' : operation.value === 'decline' ? 'finance.reject' : 'finance.close');
-const effectiveAmount = computed(() => draft.amount ? draft.amount : invoice.value.correctedAmount ?? invoice.value.amount);
-watch([() => props.invoice.id, () => props.action], resetSelection);
-
-function initialDraft() {
-    // Saved wire precision must not change the former clean form spelling.
-    // Subsequent edits retain their exact lexical value until explicit reset.
-    return {amount: props.action === 'revise' ? financeDecimal(props.invoice.correctedAmount ?? props.invoice.amount) : '',
-        description: props.action === 'revise' ? props.invoice.correctedDescription ?? props.invoice.description ?? '' : '', reason: ''};
-}
-
-/** A different row or action starts a distinct review. Revalidation of the same
- * selected row preserves the original capture and all unfinished lexical input. */
-function resetSelection(): void {
-    invoice.value = {...props.invoice}; operation.value = props.action; closedPool.value = props.pool.status === 'CLOSED';
-    Object.assign(draft, initialDraft()); baseline.value = JSON.stringify(draft);
-    reviewing.value = false; inspected.value = false; completed.value = false;
-    capturedRevision.value = null; capturedRejection.value = null;
-}
-function close(): void {
-    if (!command.mayLeave()) return;
-    if (command.uncertain.value) command.acknowledge();
-    emit('close');
-}
-
-/** Freeze a retroactive change for its distinct final confirmation. Both review
- * stages keep the original pool revision rather than adopting a refresh token. */
-async function submit(): Promise<void> {
-    if (!actionState.isAvailable() || !form.value) return;
-    // Native NEW acceptance reads optional numeric corrections from a row's
-    // button, without HTML step/min validation. Preserve its positive-number
-    // contract; generated validation and the shared controller decide admission.
-    if (operation.value !== 'approve' && !form.value.reportValidity()) return;
-    if (rejection.value && !draft.reason.trim()) {
-        command.setError('finance.enterARejectionReasonBeforeRejectingThisInvoice');
-        return;
-    }
-    if (retroactive.value && !reviewing.value) {
-        // Blank correction text restores the original description. Rejection
-        // carries only its own required reason and cannot leak a correction.
-        capturedRevision.value = {confirmed: true, expectedRevision: invoice.value.revision,
-            correctedAmount: financeDecimal(draft.amount), correctedDescription: draft.description.trim() || null};
-        capturedRejection.value = {confirmed: true, expectedRevision: invoice.value.revision, rejectionReason: draft.reason.trim()};
-        reviewing.value = true;
-        return;
-    }
-    await save();
-}
-
-/** Dispatch exactly the reviewed operation once. Original evidence stays in the
- * server audit record; neither correction nor invoice closure settles a share. */
-async function save(): Promise<void> {
-    const row = invoice.value;
-    const selected = operation.value;
-    const acceptance = {...(draft.amount ? {correctedAmount: financeDecimal(draft.amount)} : {}),
-        ...(draft.description.trim() ? {correctedDescription: draft.description.trim()} : {})};
-    const decline = {rejectionReason: draft.reason.trim()};
-    const revision = capturedRevision.value;
-    const rejected = capturedRejection.value;
-    if (selected === 'revise' && !revision || selected === 'reject' && !rejected) return;
-    inspected.value = false;
-    // All fields, action and revision were captured before pending disables the
-    // form. Refresh may fail after confirmation without changing that outcome.
-    const notice = successNotice(selected);
-    const result = await command.run(dispatch, true, true, {success: notice});
-    if (!result) return;
-    // Retain a failed-read warning with its actual command owner. The completed
-    // fields remain visible and locked; closing cannot offer the saved write again.
-    baseline.value = JSON.stringify(draft);
-    completed.value = true;
-    if (command.outcome.value?.refresh !== 'failed') {
-        // The dialog retires on normal confirmation. Its parent receives the
-        // completed notice for the persistent common host before this unmounts.
-        emit('saved', notice);
-        emit('close');
-    }
-
-    /** Select one authored transport operation from the captured review. */
-    function dispatch(scope: PilotRequestScope) {
-        // Every branch receives only the fields admitted for its reviewed action.
-        if (selected === 'approve') return api.approve(props.eventId, row.poolId, row.id, acceptance, scope);
-        if (selected === 'decline') return api.decline(props.eventId, row.poolId, row.id, decline, scope);
-        if (selected === 'revise') return api.revise(props.eventId, row.poolId, row.id, revision!, scope);
-        if (selected === 'reject') return api.rejectAccepted(props.eventId, row.poolId, row.id, rejected!, scope);
-        return api.organizerClose(props.eventId, row.poolId, row.id, scope);
-    }
-}
-
-/** Report the existing action-specific receipt, including the closed-pool
- * distinction that changing source inputs leaves saved shares unchanged. */
-function successNotice(action: typeof props.action): PilotPlainMessageKey {
-    if (action === 'approve') return 'finance.invoiceAccepted2';
-    if (action === 'decline') return 'finance.invoiceRejected2';
-    if (action === 'close') return 'finance.invoiceClosed2';
-    // Retroactive source changes have a separate recalculation reminder.
-    if (action === 'revise') return closedPool.value ? 'finance.invoiceCorrectedClosed' : 'finance.invoiceCorrected';
-    return closedPool.value ? 'finance.invoiceRejectedClosed' : 'finance.invoiceRejectedFromThePool';
-}
-
-/** A stale review must be explicitly abandoned and reopened from current data.
- * Inspection alone never upgrades this review's captured calculation revision. */
-async function inspectSaved(): Promise<void> {
-    if (recovery.isAvailable() && await command.reconcileSafely(props.refresh)) inspected.value = true;
-}
-function acknowledge(): void {
-    if (!inspected.value || command.pending.value || command.recovering.value) return;
-    command.acknowledge();
-    emit('close');
-}
+const {messages, locale} = usePilot();
+const owner = props.owner ?? useFinanceInvoiceReview(props, {
+    close: () => emit('close'), saved: notice => emit('saved', notice),
+});
+const {id, form, invoice, closedPool, operation, reviewing, inspected, completed, draft,
+    capturedRevision, capturedRejection, capturedNew, retroactive, rejection, command, actionState, recovery,
+    title, effectiveAmount, submit, close, inspectSaved, acknowledge} = owner;
 </script>
 
 <template>
-    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t(title)" :pending="command.pending.value || command.recovering.value" standard @close="close">
-        <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
+    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t(title)" :pending="command.pending.value || command.recovering.value" @close="close">
+        <!-- Inline row owners persist through status/read updates. Their same
+             receipt moves between this dialog and the page host on Close. -->
+        <template v-if="inline" #feedback>
+            <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
+        </template>
+        <CommandFeedback v-if="!inline" :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: recovery, label: messages.t('common.refresh')}" @action="inspectSaved">
             <template #uncertainActions>
                 <!-- Local acknowledgement stays blocked during a saved-data read
@@ -171,15 +39,23 @@ function acknowledge(): void {
                 <ActionButton v-if="inspected" variant="outline-warning" :disabled="recovery.disabled.value" @click="acknowledge">{{ messages.t('draft.review') }}</ActionButton>
             </template>
         </CommandFeedback>
-        <FinanceHistory v-if="inspected && command.uncertain.value" :invoices="currentInvoice ? [currentInvoice] : []" admin read-only disabled @refresh="inspectSaved" />
-        <p class="fw-semibold">{{ messages.t('finance.countedInvoiceDetails', {invoiceId: invoice.id,
-            amount: financeMoney(invoice.correctedAmount ?? invoice.amount, locale)}) }} — {{ invoice.poolName }}</p>
-        <p class="small invoice-description">{{ invoice.description || messages.t('finance.noDescription') }}</p>
+        <FinanceHistory v-if="inspected && command.uncertain.value" :invoices="currentInvoice ? [currentInvoice] : []" :admin="!participant" read-only disabled @refresh="inspectSaved" />
+        <!-- Immediate presentation is shared with Close, independently of the
+             inline flag which owns NEW row drafts and cancellation semantics. -->
+        <p v-if="inline || operation === 'close'" class="fw-semibold">{{ messages.t('finance.invoiceNumber', {id: invoice.id}) }}</p>
+        <p v-else class="fw-semibold">{{ messages.t('finance.countedInvoiceDetails', {invoiceId: invoice.id,
+            amount: financeMoney(invoice.correctedAmount ?? invoice.amount, locale)}) }}</p>
+        <p v-if="!inline && !retroactive && operation !== 'close'" class="small invoice-description">{{ invoice.description || messages.t('finance.noDescription') }}</p>
+        <!-- Native confirmation keeps an entered correction's lexical spelling;
+             its untouched/rejected subject uses the displayed localized amount. -->
+        <p v-if="inline">{{ messages.t(operation === 'approve' ? 'finance.confirmAcceptInvoice' : 'finance.confirmRejectInvoice', {
+            amount: capturedNew?.action === 'approve' && capturedNew.amount ? capturedNew.amount : financeMoney(invoice.amount, locale),
+        }) }}</p>
         <form ref="form" :id="`${id}-form`" :novalidate="operation === 'approve'" @submit.prevent="submit"
               @wheel.capture.passive="protectFinanceNumberFromScroll" data-finance-invoice-review>
             <!-- The first stage remains mounted behind final review, preserving
                  its exact input and caret lifecycle when Back to edit is used. -->
-            <fieldset v-show="!reviewing" class="border-0 p-0 m-0" :disabled="actionState.disabled.value || reviewing">
+            <fieldset v-if="!inline" v-show="!reviewing" class="border-0 p-0 m-0" :disabled="actionState.disabled.value || reviewing">
                 <template v-if="operation === 'approve' || operation === 'revise'">
                     <p v-if="operation === 'revise'" class="small text-secondary">{{ messages.t('finance.correctTheEffectiveAmountOrDescriptionTheOriginalInvoice') }}</p>
                     <FormField :id="`${id}-amount`" v-model="draft.amount" name="correctedAmount" type="number" lexical-number
@@ -201,9 +77,13 @@ function acknowledge(): void {
                         :label="messages.t('finance.rejectionReason')" :max-length="4000" required :required-marker="false"
                         :pending="command.pending.value" />
                 </template>
+                <!-- Native own-history Close supplies no amount to this question.
+                     Keep that inherited presentation separate from organizer Close;
+                     the unchanged submitted/effective evidence stays in its row. -->
                 <p v-if="operation === 'approve' || operation === 'decline' || operation === 'close'">
                     {{ messages.t(operation === 'approve' ? 'finance.confirmAcceptInvoice' : operation === 'decline'
-                        ? 'finance.confirmRejectInvoice' : 'finance.confirmCloseInvoice', {amount: financeMoney(effectiveAmount, locale)}) }}
+                        ? 'finance.confirmRejectInvoice' : 'finance.confirmCloseInvoice', {amount: participant && operation === 'close'
+                            ? '' : financeMoney(operation === 'close' ? invoice.amount : effectiveAmount, locale)}) }}
                 </p>
             </fieldset>
             <template v-if="reviewing">
@@ -223,8 +103,8 @@ function acknowledge(): void {
             <ActionButton v-else variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t(completed ? 'common.close' : 'common.cancel') }}</ActionButton>
             <ActionButton v-if="!completed" type="submit" :form="`${id}-form`" :state="actionState"
                 :pending="command.pending.value" :show-spinner="false"
-                :variant="rejection ? 'danger' : reviewing ? 'warning' : 'primary'">
-                {{ messages.t(retroactive && !reviewing ? 'finance.continue' : operation === 'revise' ? 'finance.confirmCorrection'
+                :variant="inline || operation === 'close' || reviewing ? 'warning' : rejection ? 'danger' : 'primary'">
+                {{ messages.t(operation === 'close' ? 'finance.close' : inline ? operation === 'approve' ? 'finance.accept' : 'finance.reject' : retroactive && !reviewing ? 'finance.continue' : operation === 'revise' ? 'finance.confirmCorrection'
                     : operation === 'reject' ? 'finance.confirmRejection' : 'finance.confirm') }}
             </ActionButton>
         </template>

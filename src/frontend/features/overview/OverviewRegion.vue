@@ -4,7 +4,7 @@ import {isNavigationFailure, useRoute, useRouter} from 'vue-router';
 import type {LocationQuery, NavigationFailure, RouteLocationNormalized} from 'vue-router';
 import {useQuery} from '@tanstack/vue-query';
 import type {components, paths} from '../../../types/api/v1';
-import type {PilotOverviewCardInteraction, PilotOverviewCountRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
+import type {PilotOverviewCardInteraction, PilotOverviewCountRead, PilotOverviewRegionProps, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {overviewQueryParameters, useOverviewApi} from './api';
 import {usePackingApi} from '../packing/api';
 import {useEventApi} from '../event/api';
@@ -31,11 +31,7 @@ import AppNavigationDropdown from '../../components/AppNavigationDropdown.vue';
 import OverviewCard from './OverviewCard.vue';
 import OverviewItems from './OverviewItems.vue';
 
-const props = withDefaults(defineProps<{
-    collection: components['schemas']['OverviewRegion']['collection'];
-    region: components['schemas']['OverviewRegion']['region'];
-    active?: boolean;
-}>(), {active: true});
+const props = withDefaults(defineProps<PilotOverviewRegionProps>(), {active: true});
 const emit = defineEmits<{counts: [source: PilotOverviewCountRead | null, scope: PilotRequestScope]}>();
 const context = usePilot();
 const api = useOverviewApi(context);
@@ -676,123 +672,148 @@ function page(next: number): void {
 }
 </script>
 <template>
-    <!-- Keep initial skeleton status unsuppressed; only confirmed content is busy
-         during background reads, which leave cards and focused controls mounted. -->
-    <section ref="element" :id="regionId" class="js-overview-region" :data-collection="collection" :data-region="region"
-        :aria-busy="!!displayed && (overview.isFetching.value || !!pendingRead)">
-        <!-- Lifecycle/visibility results use common notifications. Read
-             failures and unknown outcomes retain this region's recovery surface. -->
-        <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value" />
-        <!-- The shared notice owner suppresses only the exact failed GET already
-             presented by common delivery recovery. Independent reads stay visible. -->
-        <StatusNotice v-if="readError || failedRead" kind="warning" :last-updated-at="lastUpdatedAt" :retry-at="retryAt"
-            :read-error="navigationError ?? readError"
-            :action="{state: refreshAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="refreshOverview">{{
-            messages.t(displayed ? 'state.stale' : 'state.loadFailed')
-        }}</StatusNotice>
-        <!-- Pending authority and an unsent local search draft keep the
-             progressive search controls mounted. An empty unfiltered region keeps
-             Refresh through this same command/read owner. Its form stays mounted
-             so empty/populated transitions retain the focused Refresh button. -->
-        <form
-            class="d-flex flex-wrap gap-2 mb-3 align-items-center"
-            method="get" :action="frontendOverviewPath"
-            @submit.prevent="submitSearch"
-        >
-            <!-- Empty collections retain a meaningful heading beside Refresh;
-                 populated collections integrate it with search and filters. -->
-            <h3 class="js-overview-heading mb-0" :class="showSearchControls ? 'visually-hidden' : 'h6'" tabindex="-1">{{ title }}</h3>
-            <template v-if="showSearchControls">
-                <input v-for="[name, value] in nativeSearchFields" :key="name" type="hidden" :name="name" :value="value" />
-                <div class="input-group input-group-sm" style="max-width: 320px">
-                    <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span
-                    ><input
-                        :value="search"
-                        @input="editSearch"
-                        :name="prefix + 'q'"
-                        class="form-control"
-                        type="search"
-                        maxlength="200"
-                        :aria-label="
-                            messages.t('overview.collectionSearch', {
-                                title: title.toLocaleLowerCase(context.locale.value),
-                            })
-                        "
-                        :placeholder="
-                            messages.t('overview.collectionSearch', {
-                                title: title.toLocaleLowerCase(context.locale.value),
-                            }) + '…'
-                        "
-                    />
-                </div>
-                <ActionButton type="submit" class="btn-sm" variant="outline-secondary" :state="navigationAction"
-                    :name="prefix + 'type'" :value="query.type ?? 'all'">{{
-                    messages.t('overview.search')
-                }}</ActionButton>
-                <!-- Preserve the native Filter disclosure and ordinary type submit buttons.
-                     Search stays first in DOM order so Enter retains the current type. The
-                     shared disclosure owns dismissal/focus; this region owns URL selection. -->
-                <AppNavigationDropdown :navigation="false" menu-tag="ul"
-                    :label="messages.t('overview.filter')"
-                    trigger-class="btn btn-outline-secondary btn-sm dropdown-toggle">
-                    <li>
-                        <button class="dropdown-item" type="submit" :name="prefix + 'type'"
-                            value="all" data-type="all" :aria-pressed="(query.type ?? 'all') === 'all'" :disabled="navigationAction.disabled.value"
-                            @click.prevent="filterType('all')">{{ messages.t('overview.allTypes') }}</button>
-                    </li>
-                    <li><hr class="dropdown-divider" /></li>
-                    <li v-for="type in filterTypes" :key="type">
-                        <button class="dropdown-item" type="submit" :name="prefix + 'type'"
-                            :value="type" :data-type="type" :aria-pressed="query.type === type" :disabled="navigationAction.disabled.value"
-                            @click.prevent="filterType(type)">{{ messages.t(`overview.types.${type}`) }}</button>
-                    </li>
-                </AppNavigationDropdown>
-                <span v-if="displayed" class="small text-body-secondary" aria-live="polite">{{
-                    messages.t('overview.matching', {count: displayed.matchingEntities})
-                }}</span>
-            </template>
-            <RefreshButton class="ms-auto" show-label :state="refreshAction" @refresh="refreshOverview" />
-        </form>
-        <LoadingSkeleton v-if="initialLoading" variant="cards" :rows="4" />
-        <template v-if="displayed">
-            <template v-if="displayed.parent">
-                <a
-                    class="btn btn-sm mb-3 btn-outline-secondary"
-                    :href="navigationHref({event: undefined, childPage: undefined})" :aria-disabled="navigationAction.disabled.value"
-                    @click="followNavigation($event, {event: undefined, childPage: undefined}, 'push', 'back')"
+    <!-- The collection supplies its existing accordion heading. Its Refresh
+         consumes this region's state/read owner and never moves on empty reads. -->
+    <slot name="header" :refresh-action="refreshAction" :refresh="refreshOverview" />
+    <div :id="collapseId" :class="{'accordion-collapse collapse show': collapseId}"
+        v-show="!collapseId || active">
+        <div :class="{'accordion-body': collapseId}">
+            <!-- Keep initial skeleton status unsuppressed; only confirmed content is busy
+                 during background reads, which leave cards and focused controls mounted. -->
+            <section ref="element" :id="regionId" class="js-overview-region" :data-collection="collection" :data-region="region"
+                :aria-busy="!!displayed && (overview.isFetching.value || !!pendingRead)">
+                <!-- Lifecycle/visibility results use common notifications. Read
+                     failures and unknown outcomes retain this region's recovery surface. -->
+                <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value" />
+                <!-- The shared notice owner suppresses only the exact failed GET already
+                     presented by common delivery recovery. Independent reads stay visible. -->
+                <StatusNotice v-if="readError || failedRead" kind="warning" :last-updated-at="lastUpdatedAt" :retry-at="retryAt"
+                    :read-error="navigationError ?? readError"
+                    :action="{state: refreshAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="refreshOverview">{{
+                    messages.t(displayed ? 'state.stale' : 'state.loadFailed')
+                }}</StatusNotice>
+                <!-- Pending authority and an unsent local search draft keep the
+                     progressive search controls mounted. An empty unfiltered region keeps
+                     Refresh through this same command/read owner. Its form and heading
+                     remain mounted across empty/populated transitions. -->
+                <form
+                    class="d-flex flex-wrap gap-2 align-items-center"
+                    :class="{'mb-3': showSearchControls || !$slots.header}"
+                    method="get" :action="frontendOverviewPath"
+                    @submit.prevent="submitSearch"
                 >
-                    <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>{{ messages.t('overview.back') }}
-                </a>
-                <OverviewCard
-                    :card="displayed.parent"
-                    :interaction="cardInteraction(displayed.parent)"
-                    :disabled="actionsBlocked"
-                    :navigation-state="navigationAction"
-                    :read-revision="imageReadRevision"
-                    :active="active"
-                    @visibility="setVisibility(displayed.parent, $event)"
-                    @archive="archive(displayed.parent, $event)"
-                    @automate="automate(displayed.parent, $event)"
-                    @remove="remove(displayed.parent)"
-                >
-                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                        <h4 class="h5 mb-0">
-                            {{
-                                messages.t('overview.linkedHeading', {
-                                    title,
-                                    count: displayed.totalChildren,
-                                })
-                            }}
-                        </h4>
+                    <!-- Native keeps this navigation focus target visually hidden;
+                         the existing collection heading already names empty membership. -->
+                    <h3 class="js-overview-heading visually-hidden mb-0" tabindex="-1">{{ title }}</h3>
+                    <template v-if="showSearchControls">
+                        <input v-for="[name, value] in nativeSearchFields" :key="name" type="hidden" :name="name" :value="value" />
+                        <div class="input-group input-group-sm" style="max-width: 320px">
+                            <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span
+                            ><input
+                                :value="search"
+                                @input="editSearch"
+                                :name="prefix + 'q'"
+                                class="form-control"
+                                type="search"
+                                maxlength="200"
+                                :aria-label="
+                                    messages.t('overview.collectionSearch', {
+                                        title: title.toLocaleLowerCase(context.locale.value),
+                                    })
+                                "
+                                :placeholder="
+                                    messages.t('overview.collectionSearch', {
+                                        title: title.toLocaleLowerCase(context.locale.value),
+                                    }) + '…'
+                                "
+                            />
+                        </div>
+                        <ActionButton type="submit" class="btn-sm" variant="outline-secondary" :state="navigationAction"
+                            :name="prefix + 'type'" :value="query.type ?? 'all'">{{
+                            messages.t('overview.search')
+                        }}</ActionButton>
+                        <!-- Preserve the native Filter disclosure and ordinary type submit buttons.
+                             Search stays first in DOM order so Enter retains the current type. The
+                             shared disclosure owns dismissal/focus; this region owns URL selection. -->
+                        <AppNavigationDropdown :navigation="false" menu-tag="ul"
+                            :label="messages.t('overview.filter')"
+                            trigger-class="btn btn-outline-secondary btn-sm dropdown-toggle">
+                            <li>
+                                <button class="dropdown-item" type="submit" :name="prefix + 'type'"
+                                    value="all" data-type="all" :aria-pressed="(query.type ?? 'all') === 'all'" :disabled="navigationAction.disabled.value"
+                                    @click.prevent="filterType('all')">{{ messages.t('overview.allTypes') }}</button>
+                            </li>
+                            <li><hr class="dropdown-divider" /></li>
+                            <li v-for="type in filterTypes" :key="type">
+                                <button class="dropdown-item" type="submit" :name="prefix + 'type'"
+                                    :value="type" :data-type="type" :aria-pressed="query.type === type" :disabled="navigationAction.disabled.value"
+                                    @click.prevent="filterType(type)">{{ messages.t(`overview.types.${type}`) }}</button>
+                            </li>
+                        </AppNavigationDropdown>
+                        <span v-if="displayed" class="small text-body-secondary" aria-live="polite">{{
+                            messages.t('overview.matching', {count: displayed.matchingEntities})
+                        }}</span>
+                    </template>
+                    <RefreshButton v-if="!$slots.header" class="ms-auto" show-label :state="refreshAction" @refresh="refreshOverview" />
+                </form>
+                <LoadingSkeleton v-if="initialLoading" variant="cards" :rows="4" />
+                <template v-if="displayed">
+                    <template v-if="displayed.parent">
                         <a
-                            v-if="query.q || (query.type && query.type !== 'all')"
-                            class="btn btn-sm btn-outline-secondary"
-                            :href="navigationHref({q: undefined, type: undefined, page: undefined, childPage: undefined})" :aria-disabled="navigationAction.disabled.value"
-                            @click="followNavigation($event, {q: undefined, type: undefined, page: undefined, childPage: undefined}, 'replace')"
-                            >{{ messages.t('overview.showAllLinked') }}</a
+                            class="btn btn-sm mb-3 btn-outline-secondary"
+                            :href="navigationHref({event: undefined, childPage: undefined})" :aria-disabled="navigationAction.disabled.value"
+                            @click="followNavigation($event, {event: undefined, childPage: undefined}, 'push', 'back')"
                         >
-                    </div>
+                            <i class="bi bi-arrow-left me-1" aria-hidden="true"></i>{{ messages.t('overview.back') }}
+                        </a>
+                        <OverviewCard
+                            :card="displayed.parent"
+                            :interaction="cardInteraction(displayed.parent)"
+                            :disabled="actionsBlocked"
+                            :navigation-state="navigationAction"
+                            :read-revision="imageReadRevision"
+                            :active="active"
+                            @visibility="setVisibility(displayed.parent, $event)"
+                            @archive="archive(displayed.parent, $event)"
+                            @automate="automate(displayed.parent, $event)"
+                            @remove="remove(displayed.parent)"
+                        >
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                <h4 class="h5 mb-0">
+                                    {{
+                                        messages.t('overview.linkedHeading', {
+                                            title,
+                                            count: displayed.totalChildren,
+                                        })
+                                    }}
+                                </h4>
+                                <a
+                                    v-if="query.q || (query.type && query.type !== 'all')"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    :href="navigationHref({q: undefined, type: undefined, page: undefined, childPage: undefined})" :aria-disabled="navigationAction.disabled.value"
+                                    @click="followNavigation($event, {q: undefined, type: undefined, page: undefined, childPage: undefined}, 'replace')"
+                                    >{{ messages.t('overview.showAllLinked') }}</a
+                                >
+                            </div>
+                            <OverviewItems
+                                :view="displayed"
+                                :disabled="actionsBlocked"
+                                :navigation-state="navigationAction"
+                                :read-revision="imageReadRevision"
+                                :active="active"
+                                :page-href="pageHref"
+                                :expand-href="expandHref"
+                                :card-interaction="cardInteraction"
+                                @visibility="setVisibility"
+                                @archive="archive"
+                                @automate="automate"
+                                @remove="remove"
+                                @page="page"
+                            />
+                        </OverviewCard>
+                    </template>
                     <OverviewItems
+                        v-else
                         :view="displayed"
                         :disabled="actionsBlocked"
                         :navigation-state="navigationAction"
@@ -805,27 +826,12 @@ function page(next: number): void {
                         @archive="archive"
                         @automate="automate"
                         @remove="remove"
+                        @expand="expand"
                         @page="page"
                     />
-                </OverviewCard>
-            </template>
-            <OverviewItems
-                v-else
-                :view="displayed"
-                :disabled="actionsBlocked"
-                :navigation-state="navigationAction"
-                :read-revision="imageReadRevision"
-                :active="active"
-                :page-href="pageHref"
-                :expand-href="expandHref"
-                :card-interaction="cardInteraction"
-                @visibility="setVisibility"
-                @archive="archive"
-                @automate="automate"
-                @remove="remove"
-                @expand="expand"
-                @page="page"
-            />
-        </template>
-    </section>
+                </template>
+            </section>
+            <slot />
+        </div>
+    </div>
 </template>

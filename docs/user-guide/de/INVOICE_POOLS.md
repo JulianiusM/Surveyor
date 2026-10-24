@@ -4,10 +4,10 @@ documentation-metadata
 audience: Veranstaltungsteilnehmer; Veranstaltungsorganisatoren
 owner: event invoice-pool maintainers
 status: current
-last-verified: 2026-10-22
+last-verified: 2026-10-24
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Current participant and organizer controls, exact localized labels, independent saves, calculation/settlement confirmation, saved-read recovery and deferred ledger filtering source-reconciled. Existing English email/PDF output behavior retained; no new browser execution claimed.
-current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinanceCalculationReview.vue; src/frontend/features/finance/FinancePoolOutputs.vue; src/frontend/features/finance/FinanceSettlement.vue; src/frontend/features/finance/FinanceShares.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/locales/de.json
+verification-scope: October24 native-parity restorations for organizer entry, invoice disclosure, inline review fields, final action labels and expense submission source-reconciled against current captured views. Earlier independent-save, calculation, settlement and saved-read recovery guidance retained.
+current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinanceCalculationReview.vue; src/frontend/features/finance/FinancePoolOutputs.vue; src/frontend/features/finance/FinanceSettlement.vue; src/frontend/features/finance/FinanceShares.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/frontend/features/finance/FinanceInvoiceRow.vue; src/frontend/features/finance/invoiceReview.ts; src/locales/de.json
 source-anchors: docs/user-guide/en/INVOICE_POOLS.md; src/frontend/features/finance/; src/locales/
 heading-anchors: 1:invoice-pools-and-payments; 2:choose-your-task; 3:participant; 3:organizer; 2:first-understand-the-two-kinds-of-status; 3:pool-status; 3:invoice-status; 2:who-can-use-invoice-pool-controls; 3:participants; 3:organizers; 2:participant-tasks; 3:submit-an-invoice; 4:no-open-pool-is-available; 3:check-your-invoice-history; 4:what-to-do-for-each-status; 3:retract-an-invoice-awaiting-review; 3:choose-whose-share-you-will-cover; 3:understand-your-final-share; 2:organizer-tasks; 3:create-an-invoice-pool; 4:creation-fields; 4:distribution-modes; 3:stop-or-resume-participant-submissions; 3:understand-the-pool-totals; 3:choose-participants-and-exemptions; 3:manage-takeovers-for-the-group; 3:add-a-surcharge; 3:add-an-organizer-expense; 3:review-submitted-invoices; 4:accept-without-correction; 4:accept-with-a-correction; 4:reject; 4:close-an-accepted-invoice; 4:correct-or-reject-an-accepted-or-closed-invoice; 4:notifications-and-late-review; 3:preview-a-calculation; 4:reconcile-costs-and-reimbursements; 3:close-the-pool-and-calculate-shares; 3:recalculate-a-closed-pool; 3:roll-back-pool-changes; 3:send-settlement-emails; 3:record-whether-a-share-is-settled; 3:export-saved-shares-as-a-pdf; 2:privacy-proof-access-storage-and-retention; 2:troubleshooting; 3:i-cannot-see-invoice-pools-and-payments; 3:i-can-see-invoice-history-but-cannot-submit; 3:my-invoice-is-not-included-in-the-total; 3:my-accepted-amount-or-description-changed; 3:i-cannot-select-somebody-in-manage-takeovers; 3:a-share-is-different-from-the-simple-equal-split; 3:the-pool-changed-but-the-shares-did-not; 3:a-recalculated-share-requires-payment-although-i-already-paid; 3:an-expected-email-did-not-arrive; 3:a-proof-is-unavailable
 next-review: invoice-pool-visible-UI-or-behavior-change
@@ -155,7 +155,7 @@ Mit **Rechnungen suchen** suchen Sie nach Rechnungsnummer, Pool, Betrag, Beschre
 #### Was bei welchem Status zu tun ist
 
 - **Prüfung ausstehend:** Warten Sie auf einen Organisator, oder wählen Sie bei falscher Einreichung **Zurückziehen**. Die ursprünglichen Angaben und die Historie können Sie nicht bearbeiten oder löschen.
-- **Angenommen:** Prüfen Sie mögliche Korrekturen. Wählen Sie **Schließen**, wenn keine weitere Besprechung zur Prüfung nötig ist.
+- **Angenommen:** Prüfen Sie Betrag und mögliche Korrekturen in **Dein Rechnungsverlauf**. Wählen Sie **Schließen**, wenn keine weitere Besprechung zur Prüfung nötig ist. Prüfen Sie die Rechnungsnummer unter **Rechnungsaktion bestätigen** und wählen Sie zur Bestätigung **Schließen**.
 - **Abgelehnt:** Lesen Sie den Grund. Fragen Sie bei Unklarheiten einen Organisator und reichen Sie während des offenen Pools Ersatz ein. Abgelehnter Datensatz und Beleg bleiben in der Historie.
 - **Abgeschlossen:** Es ist keine weitere Rechnungsaktion nötig. Die Kosten bleiben in den Poolsummen enthalten.
 - **Zurückgezogen:** Die Rechnung ist von Prüfung und Kosten ausgeschlossen. Reichen Sie bei Bedarf eine neue Rechnung ein, sofern der Pool noch offen ist.
@@ -233,7 +233,7 @@ Berechnungs-E-Mails und PDFs zeigen auf Englisch dieselben Angaben, denselben vo
 
 ## Aufgaben für Organisatoren
 
-Unter **Rechnungspools und Zahlungen** in der Veranstaltungsverwaltung können Sie Pools erstellen, ihre Eingaben ändern, Ausgaben erfassen und Rechnungen prüfen. Jeder Bearbeitungsdialog hat eine eigene Speicheraktion. Speichern aktualisiert die gespeicherten Angaben, ohne die Seite neu zu laden; warten Sie vor dem Verlassen auf die Bestätigung. **Schließen** fragt vor dem Verwerfen ungespeicherter Änderungen nach. **Änderungen verwerfen** stellt die gespeicherten Werte dieses Formulars wieder her.
+Unter **Rechnungspools** in der Veranstaltungsverwaltung können Sie Pools erstellen, ihre Eingaben ändern, Ausgaben erfassen und Rechnungen prüfen. Jeder Bearbeitungsdialog hat eine eigene Speicheraktion. Speichern aktualisiert die gespeicherten Angaben, ohne die Seite neu zu laden; warten Sie vor dem Verlassen auf die Bestätigung. **Schließen** fragt vor dem Verwerfen ungespeicherter Änderungen nach. **Änderungen verwerfen** stellt die gespeicherten Werte dieses Formulars wieder her.
 
 Berechnungsvorschau, Schließen und Neuberechnen eines Pools, Wiederherstellen gespeicherter Pooleinstellungen, Abrechnungs-E-Mails sowie das Erfassen von Zahlungen und Erstattungen sind im selben Pool verfügbar. Speichern Sie vor einer Berechnung jeden noch offenen Bearbeitungsdialog. Die Oberfläche verwendet Ihre gewählte Sprache; E-Mails und PDF-Inhalte bleiben englisch.
 
@@ -241,7 +241,7 @@ Berechnungsvorschau, Schließen und Neuberechnen eines Pools, Wiederherstellen g
 
 1. Öffnen Sie die Veranstaltung.
 2. Wählen Sie **Veranstaltungsverwaltung**.
-3. Öffnen Sie **Rechnungspools und Zahlungen**.
+3. Gehen Sie zu **Rechnungspools**.
 4. Wählen Sie **Pool erstellen**.
 5. Füllen Sie **Neuen Pool erstellen** aus.
    Wählen Sie bei **Rechnungseinreichungen** **Offen für Rechnungen** oder **Nur Rechnungen der Organisation**.
@@ -335,7 +335,7 @@ Die beiden Schalter zur automatischen Zuordnung unterscheiden sich:
 - **Allen Teilnehmenden zuordnen** wendet den Pool auf jede Veranstaltungsanmeldung einschließlich späterer Anmeldungen an.
 - **Standard für neue Teilnehmende** fügt künftige Anmeldungen automatisch hinzu, zwingt aber nicht alle bestehenden in den Pool.
 
-Ein befreiter Teilnehmer bleibt dem Pool zugeordnet, erhält aber keinen automatischen Base share. Er kann weiterhin Zuschläge, Rabatte, Rechnungsgutschriften oder eine Übernahmebeziehung haben. Sein Endergebnis kann daher positiv, null oder negativ sein.
+Ein befreiter Teilnehmer bleibt dem Pool zugeordnet, erhält aber keinen automatischen Grundanteil. Er kann weiterhin Zuschläge, Rabatte, Rechnungsgutschriften oder eine Übernahmebeziehung haben. Sein Endergebnis kann daher positiv, null oder negativ sein.
 
 Das Entfernen eines Teilnehmers aus dem Pool entfernt auch unvereinbare Übernahmen und Anpassungen für nicht mehr zugeordnete Anmeldungen. Prüfen Sie nach einer Änderung des Teilnehmerkreises die Anpassungsliste.
 
@@ -362,7 +362,7 @@ Es gelten dieselben Regeln wie bei der Selbstverwaltung: keine Selbstübernahme,
 
 Vor der Anteilsberechnung sendet eine Änderung **Invoice takeovers updated** an betroffene Zahler und Begünstigte mit E-Mail-Adresse. Die Nachricht nennt Veranstaltung, Pool, handelnde Person und hinzugefügte oder entfernte Übernahmen.
 
-Nach Schließung zeigt **Übernahmen** zuerst die in der gespeicherten Berechnung verwendeten Übernahmen. Organisatoränderungen erscheinen separat unter **Ausstehende Übernahmeänderungen** und lassen gespeicherte Anteile unverändert. **Übernahmeänderungen ausstehend** erscheint außerdem im zugeklappten Poolkopf und neben diesen Änderungen. Teilnehmer werden erst nach erfolgreichem **Neuberechnung anwenden** benachrichtigt, anhand des Unterschieds zwischen vorher angewendeten und endgültigen neuen Übernahmen. Zwischenänderungen, eine fehlgeschlagene Berechnung oder **Pooländerungen zurücksetzen** senden keine Übernahmemeldung. Diese Benachrichtigung ist unabhängig von **Email participants after this calculation**. Ältere Berechnungen ohne gespeicherten Übernahmenachweis kennzeichnen dessen Fehlen, statt ausstehende Änderungen als angewendet darzustellen. Ihre nächste erfolgreiche Berechnung legt einen Ausgangszustand fest, ohne frühere Verantwortungsänderungen zu erraten. Die aktuell bearbeitbaren Auswahlwerte stehen unter **Übernahmen für die nächste Berechnung**.
+Nach Schließung zeigt **Übernahmen** zuerst die in der gespeicherten Berechnung verwendeten Übernahmen. Organisatoränderungen erscheinen separat unter **Ausstehende Übernahmeänderungen** und lassen gespeicherte Anteile unverändert. **Übernahmeänderungen ausstehend** erscheint außerdem im zugeklappten Poolkopf und neben diesen Änderungen. Teilnehmer werden erst nach erfolgreichem **Neuberechnung anwenden** benachrichtigt, anhand des Unterschieds zwischen vorher angewendeten und endgültigen neuen Übernahmen. Zwischenänderungen, eine fehlgeschlagene Berechnung oder **Pooländerungen zurücksetzen** senden keine Übernahmemeldung. Diese Benachrichtigung ist unabhängig von **Teilnehmende nach dieser Berechnung per E-Mail benachrichtigen**. Ältere Berechnungen ohne gespeicherten Übernahmenachweis kennzeichnen dessen Fehlen, statt ausstehende Änderungen als angewendet darzustellen. Ihre nächste erfolgreiche Berechnung legt einen Ausgangszustand fest, ohne frühere Verantwortungsänderungen zu erraten. Die aktuell bearbeitbaren Auswahlwerte stehen unter **Übernahmen für die nächste Berechnung**.
 
 ### Einen Zuschlag hinzufügen
 
@@ -389,13 +389,13 @@ Anpassungen können nach Schließung hinzugefügt oder entfernt werden. Jede ges
 
 Verwenden Sie **Rechnung / Betrag hinzufügen** für gemeinsame Poolkosten, etwa eine außerhalb des Teilnehmerablaufs bezahlte Raumrechnung. Zum Erfassen ist keine Veranstaltungsanmeldung erforderlich. Sie können die Ausgabe ohne Personenzuordnung lassen oder den zahlenden Teilnehmer angeben.
 
-1. Öffnen Sie den Pool unter **Rechnungspools und Zahlungen**.
+1. Öffnen Sie den Pool unter **Rechnungspools**.
 2. Wählen Sie **Rechnung / Betrag hinzufügen**.
 3. Geben Sie einen positiven **Betrag** mit höchstens zwei Nachkommastellen ein.
 4. Wählen Sie unter **Bezahlt von (optional)** den zahlenden Teilnehmer oder behalten Sie **Keine Person — gemeinsame Poolausgabe**.
 5. Geben Sie eine erforderliche **Beschreibung** der Kosten ein.
 6. Fügen Sie unter **Beleg (optional)** bei Verfügbarkeit einen Beleg oder eine Rechnung hinzu.
-7. Wählen Sie **Rechnung / Betrag hinzufügen** und warten Sie auf Bestätigung.
+7. Wählen Sie **Ausgabe hinzufügen** und warten Sie auf Bestätigung.
 
 Die Rechnung ist sofort **Angenommen** und zählt bei jedem Poolstatus zu den Kosten. Die Übersicht zeigt den ausgewählten Teilnehmer oder ohne Zuordnung **Poolausgabe**, daneben **Erfasst von** mit dem Organisatornamen. Zahlender Teilnehmer und erfassender Organisator sind getrennte Angaben. Ohne Beleg steht dort **Kein Beleg beigefügt**. Der Beleg bleibt bei beiden Auswahlmöglichkeiten optional; es gelten dieselben Dateitypen und 10 MiB wie bei Teilnehmerbelegen. Beim Hinzufügen wird keine Erstellungs-E-Mail gesendet.
 
@@ -407,7 +407,7 @@ Sie können Organisatorausgaben zu geschlossenen Pools hinzufügen. Gespeicherte
 
 ### Eingereichte Rechnungen prüfen
 
-Öffnen Sie den Pool unter **Rechnungspools und Zahlungen**, um **Rechnungsverwaltung** zu erreichen. Neueste Einreichungen stehen zuerst.
+Öffnen Sie den Pool unter **Rechnungspools**. Klappen Sie bei Bedarf **Rechnungen** auf, um **Rechnungsverwaltung** zu erreichen. Die Anzahl der Rechnungen steht in der Überschrift. Neueste Einreichungen stehen zuerst.
 
 Verwenden Sie:
 
@@ -416,36 +416,36 @@ Verwenden Sie:
 - 25, 50 oder 100 Zeilen pro Seite.
 - **Zurück** und **Weiter** für längere Übersichten.
 
-Vergleichen Sie bei jeder Teilnehmereinreichung **Eingereichte Angaben** mit **Beleg ansehen**. **Annehmen** oder **Ablehnen** öffnet den jeweiligen Prüfungsdialog. **Teilnehmende Person / Herkunft** trennt die Teilnehmerzuordnung vom Organisatorhinweis **Erfasst von**. Organisatorrechnungen sind bereits angenommen, können ohne Beleg sein und zeigen ohne Teilnehmerauswahl **Poolausgabe**.
+Vergleichen Sie bei jeder Teilnehmereinreichung **Eingereichte Angaben** mit **Beleg ansehen**. Geben Sie Korrekturen oder den Ablehnungsgrund unter **Prüfung durch die Organisation** ein. **Annehmen** oder **Ablehnen** öffnet danach die abschließende Bestätigung. **Teilnehmende Person / Herkunft** trennt die Teilnehmerzuordnung vom Organisatorhinweis **Erfasst von**. Organisatorrechnungen sind bereits angenommen, können ohne Beleg sein und zeigen ohne Teilnehmerauswahl **Poolausgabe**.
 
 #### Ohne Korrektur akzeptieren
 
-1. Wählen Sie bei der Rechnung **Annehmen**.
-2. Lassen Sie im Dialog **Korrigierter Betrag** und **Korrigierte Beschreibung** leer.
-3. Prüfen Sie Rechnung und Betrag und wählen Sie **Bestätigen**.
+1. Lassen Sie **Korrigierter Betrag** und **Korrigierte Beschreibung** in der Rechnungszeile leer.
+2. Wählen Sie bei der Rechnung **Annehmen**.
+3. Prüfen Sie Rechnung und Betrag unter **Rechnungsaktion bestätigen** und wählen Sie **Annehmen**.
 
 Eingereichter Betrag und eingereichte Beschreibung werden die wirksamen akzeptierten Werte.
 
 #### Mit Korrektur akzeptieren
 
-1. Wählen Sie bei der Rechnung **Annehmen**.
-2. Geben Sie unter **Korrigierter Betrag** einen positiven Betrag ein, wenn der akzeptierte Betrag vom eingereichten abweicht.
-3. Geben Sie eine **Korrigierte Beschreibung** ein, wenn die akzeptierte Erklärung abweichen soll. Sie darf bis zu 4.000 Zeichen enthalten.
-4. Prüfen Sie Rechnung und korrigierten Betrag und wählen Sie **Bestätigen**.
+1. Geben Sie in der Rechnungszeile unter **Korrigierter Betrag** einen positiven Betrag ein, wenn der akzeptierte Betrag vom eingereichten abweicht.
+2. Geben Sie eine **Korrigierte Beschreibung** ein, wenn die akzeptierte Erklärung abweichen soll. Sie darf bis zu 4.000 Zeichen enthalten.
+3. Wählen Sie bei der Rechnung **Annehmen**.
+4. Prüfen Sie Rechnung und korrigierten Betrag unter **Rechnungsaktion bestätigen** und wählen Sie **Annehmen**.
 
 Surveyor erhält die ursprüngliche Einreichung und zeigt sie neben der Korrektur. Der korrigierte Betrag gilt für Poolsummen, Rechnungsgutschriften und endgültige Anteile. Ein leeres Korrekturfeld behält den entsprechenden eingereichten Wert.
 
 #### Ablehnen
 
-1. Wählen Sie bei der Rechnung **Ablehnen**.
-2. Geben Sie im Dialog einen **Ablehnungsgrund** ein. Er ist erforderlich und darf bis zu 4.000 Zeichen enthalten.
-3. Prüfen Sie die Rechnung und wählen Sie **Bestätigen**.
+1. Geben Sie in der Rechnungszeile einen **Ablehnungsgrund** ein. Er ist erforderlich und darf bis zu 4.000 Zeichen enthalten.
+2. Wählen Sie bei der Rechnung **Ablehnen**.
+3. Prüfen Sie die Rechnung unter **Rechnungsaktion bestätigen** und wählen Sie **Ablehnen**.
 
 Die Rechnung wird abgelehnt. Sie zählt nicht zu den Summen, bleibt aber mit Grund und Beleg sowohl in der Organisatorübersicht als auch der Historie des Einreichers.
 
 #### Eine akzeptierte Rechnung abschließen
 
-Wählen Sie bei einer angenommenen Rechnung **Schließen**, wenn ihre Prüfung abgeschlossen ist. Prüfen Sie Rechnung und Betrag im Dialog und wählen Sie **Bestätigen**. Die Rechnung wird abgeschlossen, bleibt aber in **Gesamtkosten des Pools** und der endgültigen Anteilsberechnung enthalten. Die Aktion bezahlt keinen Teilnehmeranteil.
+Wählen Sie bei einer angenommenen Rechnung **Schließen**, wenn ihre Prüfung abgeschlossen ist. Prüfen Sie Rechnung und Betrag unter **Rechnungsaktion bestätigen** und wählen Sie **Schließen**. Die Rechnung wird abgeschlossen, bleibt aber in **Gesamtkosten des Pools** und der endgültigen Anteilsberechnung enthalten. Die Aktion bezahlt keinen Teilnehmeranteil.
 
 Der zugeordnete Teilnehmer kann eine eigene angenommene Rechnung ebenfalls im Bereich **Dein Rechnungsverlauf** abschließen, auch wenn ein Organisator sie für ihn erfasst hat.
 
@@ -468,9 +468,9 @@ Bei einem geschlossenen Pool erfordert jede dieser Änderungen **Pool neu berech
 
 #### Benachrichtigungen und späte Prüfung
 
-Hat der zugeordnete Teilnehmer eine E-Mail-Adresse, sendet Surveyor eine Annahme-, Ablehnungs- oder Abschlussnachricht mit der angezeigten Bezeichnung des handelnden Organisators. Bei Organisatorrechnungen gehen diese bestehenden Prüfmeldungen an den ausgewählten Teilnehmer, nicht an die erfassende Person. Die gespeicherte Prüfung wird bestätigt, ohne auf E-Mail-Zustellung zu warten. Hat ein anderer Organisator dieselbe Rechnung bereits geprüft, laden Sie vor einer weiteren Aktion den gespeicherten Status neu. Prüfaktionen bleiben für Awaiting-review-Rechnungen auch im geschlossenen Pool verfügbar. Nachträgliche Annahme verlangt **Pool neu berechnen**, bevor die neuen Kosten in den festgeschriebenen Anteilen stehen.
+Hat der zugeordnete Teilnehmer eine E-Mail-Adresse, sendet Surveyor eine Annahme-, Ablehnungs- oder Abschlussnachricht mit der angezeigten Bezeichnung des handelnden Organisators. Bei Organisatorrechnungen gehen diese bestehenden Prüfmeldungen an den ausgewählten Teilnehmer, nicht an die erfassende Person. Die gespeicherte Prüfung wird bestätigt, ohne auf E-Mail-Zustellung zu warten. Hat ein anderer Organisator dieselbe Rechnung bereits geprüft, laden Sie vor einer weiteren Aktion den gespeicherten Status neu. Prüfaktionen bleiben für Rechnungen mit Status **Prüfung ausstehend** auch im geschlossenen Pool verfügbar. Nachträgliche Annahme verlangt **Pool neu berechnen**, bevor die neuen Kosten in den festgeschriebenen Anteilen stehen.
 
-Klären oder schließen Sie möglichst jede ungeprüfte Rechnung bewusst aus, bevor Sie den Pool schließen. Bei der Schließung werden Awaiting review, Rejected und Retracted ignoriert.
+Klären oder schließen Sie möglichst jede ungeprüfte Rechnung bewusst aus, bevor Sie den Pool schließen. Bei der Schließung werden **Prüfung ausstehend**, **Abgelehnt** und **Zurückgezogen** ignoriert.
 
 ### Eine Berechnung vorab ansehen
 
@@ -592,7 +592,7 @@ Nachdem der tatsächliche Transfer abgeschlossen ist:
 
 1. Prüfen Sie Zahler und den Betrag mit Vorzeichen unter **Berechneter Saldo**.
 2. Wählen Sie bei positivem Saldo **Zahlung erfassen**, bei negativem **Erstattung erfassen**.
-3. Prüfen Sie im gleichnamigen Dialog die zahlende Person, den Betrag mit Vorzeichen und die Transferrichtung.
+3. Prüfen Sie unter **Rechnungsaktion bestätigen** die zahlende Person, den Betrag mit Vorzeichen und die Transferrichtung.
 4. Wählen Sie erneut **Zahlung erfassen** beziehungsweise **Erstattung erfassen** und warten Sie auf Bestätigung.
 
 Vor der Bestätigung lassen **Abbrechen**, die Schließen-Schaltfläche, Escape und das Schließen über den Hintergrund den gespeicherten Zustand unverändert. Scrollen über einem fokussierten numerischen Rechnungsfeld verändert dessen Entwurfsbetrag nicht schrittweise.
@@ -624,8 +624,8 @@ Der Export erfordert Zugriff auf die Rechnungspoolverwaltung. Behandeln Sie die 
 Rechnungsdaten sind sensibel. Ein Beleg kann Privatadressen, Bank- oder Kartenangaben, Steuerkennzeichen, einzelne Einkäufe oder Namen Dritter enthalten.
 
 - Teilnehmer sehen ihre eigene Rechnungshistorie und eigene Belege.
-- Organisatoren mit **Manage Assignments** sehen alle Rechnungen und Belege der Veranstaltungspools.
-- Nicht zugeordnete Organisatorausgaben und optionale Belege erscheinen in der Organisatorübersicht ohne Teilnehmerhistorieneintrag. Wählt ein Organisator **Paid by participant (optional)**, erscheinen Rechnung und optionaler Beleg nach den bestehenden Zugriffsregeln auch in der Historie dieses Teilnehmers. Der gespeicherte Organisatorname bleibt unabhängig auf der Rechnung erhalten, wenn sein Profil später gelöscht wird.
+- Organisatoren mit **Zuweisungen verwalten** sehen alle Rechnungen und Belege der Veranstaltungspools.
+- Nicht zugeordnete Organisatorausgaben und optionale Belege erscheinen in der Organisatorübersicht ohne Teilnehmerhistorieneintrag. Wählt ein Organisator **Bezahlt von (optional)**, erscheinen Rechnung und optionaler Beleg nach den bestehenden Zugriffsregeln auch in der Historie dieses Teilnehmers. Der gespeicherte Organisatorname bleibt unabhängig auf der Rechnung erhalten, wenn sein Profil später gelöscht wird.
 - Andere Teilnehmer sehen weder Betrag, Beschreibung, Beleg, Korrektur noch Ablehnungsgrund fremder Rechnungen.
 - Teilnehmer eines offenen Pools sehen die zur Übernahmeverwaltung benötigten Namen, aber keine fremde Rechnungsübersicht.
 - Laden Sie nur die erforderlichen Nachweise hoch und vermeiden Sie sachfremde persönliche Angaben.
@@ -642,7 +642,7 @@ Fragen Sie Ihren Organisator oder Surveyor-Betreiber, wie lange Rechnungen aufbe
 
 ## Problemlösung
 
-### Ich sehe **Invoice pools & payments** nicht
+### Ich sehe **Rechnungspools und Zahlungen** nicht
 
 Prüfen Sie:
 
@@ -656,13 +656,13 @@ Einreichungen verlangen einen offenen, Ihrer Anmeldung zugeordneten Pool. Ein Or
 
 ### Meine Rechnung ist nicht in der Summe enthalten
 
-Nur Accepted und Closed zählen. Awaiting review, Rejected und Retracted sind ausgeschlossen. Bitten Sie einen Organisator um Prüfung einer noch ungeprüften Rechnung. Ist der Pool bereits geschlossen, muss er zusätzlich neu berechnet werden, bevor neu akzeptierte Kosten in den festgeschriebenen Anteilen stehen.
+Nur **Angenommen** und **Abgeschlossen** zählen. **Prüfung ausstehend**, **Abgelehnt** und **Zurückgezogen** sind ausgeschlossen. Bitten Sie einen Organisator um Prüfung einer noch ungeprüften Rechnung. Ist der Pool bereits geschlossen, muss er zusätzlich neu berechnet werden, bevor neu akzeptierte Kosten in den festgeschriebenen Anteilen stehen.
 
 ### Mein akzeptierter Betrag oder meine Beschreibung hat sich geändert
 
-Organisatoren können Betrag oder Beschreibung bei der Annahme korrigieren und spätere Korrekturen bei Accepted oder Closed bestätigen. Ihre Historie erhält und zeigt die ursprüngliche Einreichung. Fragen Sie den Organisator, wenn die Korrektur unerwartet ist.
+Organisatoren können Betrag oder Beschreibung bei der Annahme korrigieren und spätere Korrekturen bei **Angenommen** oder **Abgeschlossen** bestätigen. Ihre Historie erhält und zeigt die ursprüngliche Einreichung. Fragen Sie den Organisator, wenn die Korrektur unerwartet ist.
 
-### Ich kann unter **Manage takeovers** jemanden nicht auswählen
+### Ich kann unter **Übernahmen verwalten** jemanden nicht auswählen
 
 Die Person muss demselben offenen Pool zugeordnet sein. Sie können weder sich selbst noch bereits von einem anderen Zahler übernommene Personen wählen oder eine Kette von Übernahmebeziehungen erzeugen. Bitten Sie einen Organisator, eine bestehende Übernahme neu zuzuordnen.
 

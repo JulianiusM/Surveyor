@@ -46,6 +46,9 @@ const id = useId();
 const open = ref(props.admin);
 const submissionOpen = ref(false);
 const openPools = ref(new Set<string>());
+// Retain only mounted disclosure nodes so an explicit History intent can reveal
+// its existing ledger without copying query data or controlling ordinary clicks.
+const invoiceHistories = new Map<string, HTMLDetailsElement>();
 const selectedShareId = ref<string | null>(null);
 const breakdown = ref<{refresh: () => Promise<void>} | null>(null);
 const retraction = ref<Invoice | null>(null);
@@ -58,9 +61,8 @@ const refreshVersion = ref(0);
 // One shared section read serves all ledgers. Retain only its initiating display
 // key so a neighboring Refresh/Close button cannot claim the user's focus.
 const refreshingControl = ref<string | null>(null);
-const closingInvoiceId = ref<string | null>(null);
 const key = computed(() => [...eventKeys.finance(context.session.value?.context, props.eventId, props.admin), locale.value]);
-const section = useEventSection(key, readFinance, computed(() => props.enabled), computed(() => open.value), retainLocaleSnapshot);
+const section = useEventSection(key, readFinance, computed(() => props.enabled), computed(() => props.admin || open.value), retainLocaleSnapshot);
 const selection = computed(() => section.data.value?.shares.find(share => share.id === selectedShareId.value) ?? null);
 const command = useCommand(section.refresh, false, {dirty: () => false, unknownMessage: 'draft.leaveUnknown'});
 const refreshAction = useActionState({eligible: () => section.readAction.isAvailable(),
@@ -97,6 +99,7 @@ function retireDeniedFinance(failure: Error | null): void {
  * refresh preserves disclosure state and the independently owned invoice draft. */
 function retireLocalState(): void {
     selectedShareId.value = null; retraction.value = null; openPools.value = new Set();
+    invoiceHistories.clear();
     submissionOpen.value = false;
     creating.value = false; editor.value = null; review.value = null;
     settlement.value = null; settlementPending.value = false;
@@ -114,6 +117,48 @@ function togglePool(poolId: string): void {
     if (next.has(poolId)) next.delete(poolId); else next.add(poolId);
     openPools.value = next;
 }
+/** Select only this admitted pool's invoices for its editor and history. */
+function invoicesForPool(poolId: string): Invoice[] {
+    return section.data.value?.invoices.filter(invoice => invoice.poolId === poolId) ?? [];
+}
+/** Select this pool's admitted saved shares for context, ledger and outputs. */
+function sharesForPool(poolId: string): Share[] {
+    return section.data.value?.shares.filter(share => share.poolId === poolId) ?? [];
+}
+/** Use the shared saved-summary component presence rather than a balance guess. */
+function hasPreviousSettlement(pool: components['schemas']['FinancePool']): boolean {
+    // The domain summary retains this key when any saved payer has nonzero
+    // rounded prior credit, including opposite credits whose total is zero.
+    // That is the native share-column condition; its net amount is irrelevant.
+    return pool.summary?.saved.some(metric => metric.key === 'paymentCreditAmount') ?? false;
+}
+/** Match the native history disclosure without adding another saved-data owner. */
+function invoiceHistoryOpen(pool: components['schemas']['FinancePool']): boolean {
+    // Closed pools prioritize saved shares unless an invoice still needs review.
+    return pool.status !== 'CLOSED' || invoicesForPool(pool.id).some(invoice => invoice.status === 'NEW');
+}
+/** Describe the complete admitted invoice history before its ledger is opened. */
+function invoiceHistoryCaption(poolId: string): string {
+    const invoices = invoicesForPool(poolId);
+    const awaitingReview = invoices.filter(invoice => invoice.status === 'NEW').length;
+    // A pending review stays explicit even when the closed-pool ledger is folded.
+    return awaitingReview
+        ? messages.value.t('finance.invoiceCaptionAwaitingReview', {count: invoices.length, awaitingReview})
+        : messages.value.t('finance.invoiceCaption', {count: invoices.length});
+}
+/** Retain actual disclosure refs only for the currently mounted pool surfaces. */
+function rememberInvoiceHistory(poolId: string, element: unknown): void {
+    // Vue releases each ref on removal; these nodes never outlive their ledger.
+    if (element instanceof HTMLDetailsElement) invoiceHistories.set(poolId, element);
+    else invoiceHistories.delete(poolId);
+}
+/** Confirmed expense and recovery inspection reveal their admitted saved ledger. */
+function revealPoolHistory(poolId: string): void {
+    openPools.value.add(poolId);
+    // Open the same DOM disclosure; ordinary reads and clicks retain its choice.
+    const disclosure = invoiceHistories.get(poolId);
+    if (disclosure) disclosure.open = true;
+}
 function inspect(share: Share): void { if (available.isAvailable()) selectedShareId.value = share.id; }
 /** Capture the organizer's signed saved row before opening confirmation.
  * Revalidation can update current facts without replacing the reviewed intent. */
@@ -127,13 +172,13 @@ function closeSettlement(): void {settlement.value = null; settlementPending.val
 function beginRetraction(invoice: Invoice): void {
     if (available.isAvailable() && !props.admin && invoice.canRetract) retraction.value = {...invoice};
 }
-/** Capture the original invoice and revision. Background reads may update the
- * ledger but cannot silently substitute new values into a review in progress. */
+/** Select an admitted invoice for the shared review's single frozen capture.
+ * Saved query objects are replaced, never edited by these dialog fields. */
 function beginReview(invoice: Invoice, action: 'approve' | 'decline' | 'revise' | 'reject' | 'close'): void {
     if (!props.admin || !available.isAvailable()) return;
-    // The review component repeats its current eligibility checks; only this
-    // copy owns the human-reviewed values until dismissal or confirmation.
-    review.value = {invoice: {...invoice}, action};
+    // Keep only the selected reference here. The mounted review freezes its
+    // evidence/revision once and owns that capture through later saved reads.
+    review.value = {invoice, action};
 }
 function editPool(poolId: string, kind: 'settings' | 'expense' | 'assignments' | 'adjustments' | 'takeovers'): void {
     if (props.admin && available.isAvailable()) editor.value = {poolId, kind};
@@ -153,21 +198,13 @@ async function retract(): Promise<void> {
         true, false, {success: 'finance.invoiceRetracted'});
     if (result) retraction.value = null;
 }
-/** Close only an accepted attributed invoice. The controller preserves its cost,
- * retained proof and independent participant settlement status. */
-async function closeInvoice(invoice: Invoice): Promise<void> {
+/** Open the shared native final gate for this admitted own-history invoice.
+ * The review keeps its captured identity and owns the participant command. */
+function closeInvoice(invoice: Invoice): void {
     if (!available.isAvailable() || props.admin || !invoice.canClose) return;
-    const subject = messages.value.t('finance.invoiceNumber', {id: invoice.id});
-    const question = messages.value.t('finance.confirmCloseInvoice', {
-        amount: financeMoney(invoice.correctedAmount ?? invoice.amount, locale.value),
-    });
-    if (!window.confirm(`${subject}\n${question}`)) return;
-    // Capture this admitted row before the asynchronous request and saved refresh.
-    closingInvoiceId.value = invoice.id;
-    try {
-        await command.run(scope => api.close(props.eventId, invoice.poolId, invoice.id, scope),
-            true, false, {success: 'finance.invoiceClosed'});
-    } finally { closingInvoiceId.value = null; }
+    // Opening or canceling the gate does not dispatch. The shared review owner
+    // selects api.close and retains its own pending/unknown recovery lifetime.
+    review.value = {invoice, action: 'close'};
 }
 /** Refresh saved ledgers for one deliberate initiating surface. Command recovery
  * and breakdown delivery finish before that surface releases its pending state. */
@@ -194,7 +231,7 @@ function revealHistory(): void { submissionOpen.value = true; }
 </script>
 
 <template>
-    <section v-if="enabled" class="accordion accordion-dark mb-3" data-finance-section>
+    <section v-if="enabled" class="mb-3" :class="admin ? undefined : 'accordion accordion-dark'" data-finance-section>
         <div v-if="!retraction">
             <CommandFeedback
                 :feedback="command.feedback"
@@ -203,16 +240,30 @@ function revealHistory(): void { submissionOpen.value = true; }
                 @action="refresh()"
             />
         </div>
-        <div class="accordion-item bg-dark text-white border-secondary-subtle">
-            <h2 class="accordion-header d-flex align-items-center">
+        <div :class="admin ? 'card bg-dark text-white border-secondary-subtle' : 'accordion-item bg-dark text-white border-secondary-subtle'">
+            <!-- Organizer management is a persistent card, as in the native
+                 dashboard. Its existing creation/read owners share this header. -->
+            <div v-if="admin" class="card-header py-2 d-flex flex-wrap align-items-center justify-content-between gap-2" data-finance-management-header>
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-receipt" aria-hidden="true"></i>
+                    <span>{{ messages.t('finance.invoicePools') }}</span>
+                </div>
+                <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                    <RefreshButton :state="refreshAction" @refresh="refresh()" />
+                    <ActionButton variant="primary" class="btn-sm" :state="available" @click="creating = true">
+                        <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('finance.createPool') }}
+                    </ActionButton>
+                </div>
+            </div>
+            <h2 v-else class="accordion-header d-flex align-items-center">
                 <AppAccordionButton class="text-white" :expanded="open" :controls="`${id}-finance`" @click="open = !open">
                     <i class="bi bi-cash-coin me-2" aria-hidden="true"></i>
                     {{ messages.t('finance.invoicePoolsAndPayments') }}
                 </AppAccordionButton>
                 <RefreshButton class="mx-2" :state="refreshAction" @refresh="refresh()" />
             </h2>
-            <div v-show="open" :id="`${id}-finance`" class="accordion-collapse">
-                <div class="accordion-body">
+            <div v-show="admin || open" :id="`${id}-finance`" :class="admin ? 'card-body' : 'accordion-collapse'">
+                <div :class="admin ? undefined : 'accordion-body'">
                     <LoadingSkeleton v-if="section.loading.value" variant="table" :columns="4" :rows="3" />
                     <StatusNotice
                         v-if="section.query.error.value"
@@ -227,15 +278,15 @@ function revealHistory(): void { submissionOpen.value = true; }
                     </StatusNotice>
                     <template v-if="section.data.value">
                         <template v-if="admin">
-                            <div class="pilot-action-row mb-3">
-                                <ActionButton variant="primary" class="btn-sm" :state="available" @click="creating = true">{{ messages.t('finance.createPool') }}</ActionButton>
-                            </div>
                             <FinancePoolEditor
                                 :event-id="eventId" :participants="section.data.value.participants ?? []" :pools="section.data.value.pools"
                                 :open="creating" :active="available.available.value" :refresh="section.refresh"
                                 @close="creating = false"
                             />
-                            <p v-if="!section.data.value.pools.length" class="text-secondary">{{ messages.t('finance.emptyPools') }}</p>
+                            <p v-if="section.data.value.pools.length" class="text-secondary small mb-3">
+                                {{ messages.t('finance.openAPoolToReviewInvoicesAndSettlementUse') }}
+                            </p>
+                            <p v-else class="text-secondary mb-0">{{ messages.t('finance.noInvoicePoolsCreatedYet') }}</p>
                             <div class="accordion accordion-dark">
                                 <section
                                     v-for="pool in section.data.value.pools"
@@ -259,6 +310,9 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                         <span v-if="pool.isDefault" class="badge bg-primary text-dark">
                                                             {{ messages.t('finance.default') }}
                                                         </span>
+                                                        <span v-if="pool.needsRecalculation" class="badge bg-warning text-dark" data-finance-recalculation>
+                                                            {{ messages.t('finance.recalculationRequired') }}
+                                                        </span>
                                                         <span
                                                             v-if="pool.hasPendingTakeovers"
                                                             class="badge bg-warning text-dark"
@@ -268,9 +322,6 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                     </span>
                                                     <small class="text-secondary">
                                                         {{ pool.description || messages.t('finance.sharedEventCosts') }}
-                                                    </small>
-                                                    <small v-if="pool.needsRecalculation" class="text-warning">
-                                                        {{ messages.t('finance.recalculationRequired') }}
                                                     </small>
                                                 </span>
                                                 <span class="d-flex flex-wrap align-items-center gap-3 me-2">
@@ -295,6 +346,11 @@ function revealHistory(): void { submissionOpen.value = true; }
                                         class="accordion-collapse"
                                     >
                                         <div class="accordion-body">
+                                            <!-- This persistent saved-state warning is independent of
+                                                 transient command receipts and their shared host. -->
+                                            <StatusNotice v-if="pool.needsRecalculation" kind="warning">
+                                                <strong>{{ messages.t('finance.recalculationRequired2') }}</strong>{{ messages.t('finance.savedChangesHaveNotBeenAppliedToTheShares') }}
+                                            </StatusNotice>
                                             <FinancePoolActions :event-id="eventId" :pool="pool"
                                                                 :active="available.available.value" :refresh="section.refresh"
                                                                 @edit="kind => editPool(pool.id, kind)" />
@@ -304,10 +360,10 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                                :open="editor?.poolId === pool.id && editor.kind === 'settings'"
                                                                :active="available.available.value" :refresh="section.refresh" @close="editor = null" />
                                             <FinanceOrganizerInvoice :event-id="eventId" :pool="pool" :participants="section.data.value.participants ?? []"
-                                                                     :invoices="section.data.value.invoices.filter(invoice => invoice.poolId === pool.id)"
+                                                                      :invoices="invoicesForPool(pool.id)"
                                                                      :open="editor?.poolId === pool.id && editor.kind === 'expense'"
                                                                      :active="available.available.value" :refresh="section.refresh"
-                                                                     @history="openPools.add(pool.id)" @close="editor = null" />
+                                                                      @history="revealPoolHistory(pool.id)" @close="editor = null" />
                                             <FinanceAssignments :event-id="eventId" :pool="pool" :participants="section.data.value.participants ?? []"
                                                                 :open="editor?.poolId === pool.id && editor.kind === 'assignments'"
                                                                 :active="available.available.value" :refresh="section.refresh" @close="editor = null" />
@@ -327,6 +383,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                 <FinanceCoverage
                                                     :groups="pool.coverageGroups"
                                                     :known="pool.coverageKnown"
+                                                    :needs-recalculation="pool.status !== 'CLOSED' && pool.needsRecalculation"
                                                     :editable="pool.status !== 'CLOSED'" :disabled="available.disabled.value"
                                                     @edit="payerId => editCoverage(pool.id, payerId)"
                                                     data-finance-coverage-kind="applied"
@@ -337,62 +394,80 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                     <h4 class="fs-6 mt-3 mb-2">
                                                         {{ messages.t(pool.coverageKnown ? 'finance.pendingTakeoverChanges' : 'finance.takeoversForNextCalculation') }}
                                                     </h4>
-                                                    <p v-if="pool.hasPendingTakeovers" class="text-warning small">
-                                                        {{ messages.t('finance.takeoverChangesPendingDescription') }}
-                                                    </p>
+                                                    <StatusNotice v-if="pool.hasPendingTakeovers" kind="warning" data-pool-takeover-pending>
+                                                        <strong class="d-block">{{ messages.t('finance.takeoverChangesPendingIndicator') }}</strong>
+                                                        <small>{{ messages.t('finance.takeoverChangesPendingDescription') }}</small>
+                                                    </StatusNotice>
                                                     <FinanceCoverage
                                                         :groups="pool.pendingCoverageGroups"
                                                         known
+                                                        :needs-recalculation="pool.needsRecalculation"
                                                         editable :disabled="available.disabled.value"
                                                         @edit="payerId => editCoverage(pool.id, payerId)"
                                                         data-finance-coverage-kind="pending"
                                                     />
                                                 </template>
                                             </section>
-                                            <FinanceHistory
-                                                :invoices="section.data.value.invoices.filter(invoice => invoice.poolId === pool.id)"
-                                                admin
-                                                :disabled="refreshAction.disabled.value"
-                                                :refreshing="refreshingControl === 'history:' + pool.id"
-                                                @review="beginReview"
-                                                @refresh="refresh('history:' + pool.id)"
-                                            />
-                                            <FinanceShares
-                                                v-if="pool.status === 'CLOSED'"
-                                                :shares="section.data.value.shares.filter(share => share.poolId === pool.id)"
-                                                admin
-                                                settlement
-                                                :pending-share-id="settlementPending ? settlement?.id : null"
-                                                :refresh-version="refreshVersion"
-                                                :refreshing="refreshingControl === 'shares:' + pool.id"
-                                                :disabled="available.disabled.value"
-                                                @inspect="inspect"
-                                                @settle="beginSettlement"
-                                                @refresh="refresh('shares:' + pool.id)"
-                                            />
+                                            <!-- Native details preserves the reader's open choice on
+                                                 ordinary updates while keeping the ledger mounted. -->
+                                            <details :ref="element => rememberInvoiceHistory(pool.id, element)" class="mt-3"
+                                                     :open="invoiceHistoryOpen(pool)" data-finance-invoice-disclosure>
+                                                <summary class="fw-semibold">{{ invoiceHistoryCaption(pool.id) }}</summary>
+                                                <FinanceHistory
+                                                    :invoices="invoicesForPool(pool.id)"
+                                                    :event-id="eventId" :pool="pool" :refresh-saved="section.refresh"
+                                                    admin
+                                                    :disabled="refreshAction.disabled.value"
+                                                    :refreshing="refreshingControl === 'history:' + pool.id"
+                                                    @review="beginReview"
+                                                    @refresh="refresh('history:' + pool.id)"
+                                                />
+                                            </details>
+                                            <!-- Saved settlement context remains distinct from current
+                                                 source costs and the calculation commands below it. -->
+                                            <section v-if="pool.status === 'CLOSED'" class="mt-4" data-finance-settlement-context>
+                                                <template v-if="sharesForPool(pool.id).length">
+                                                    <h4 class="fs-6 mb-2">{{ messages.t('finance.sharesSettlement') }}</h4>
+                                                    <p v-if="pool.needsRecalculation" class="text-warning small">
+                                                        {{ messages.t('finance.recalculationRequiredTheseAreThePreviousCalculatedAmountsYou') }}
+                                                    </p>
+                                                    <p v-if="hasPreviousSettlement(pool)" class="text-secondary small">
+                                                        {{ messages.t('finance.previouslySettledRecordsPaymentsReceivedPositiveOrRefundsPaid') }}
+                                                    </p>
+                                                </template>
+                                                <p v-else class="text-secondary small">{{ messages.t('finance.noParticipantSharesWereGenerated') }}</p>
+                                                <FinanceShares
+                                                    :shares="sharesForPool(pool.id)"
+                                                    admin
+                                                    settlement
+                                                    :pending-share-id="settlementPending ? settlement?.id : null"
+                                                    :refresh-version="refreshVersion"
+                                                    :refreshing="refreshingControl === 'shares:' + pool.id"
+                                                    :disabled="available.disabled.value"
+                                                    @inspect="inspect"
+                                                    @settle="beginSettlement"
+                                                    @refresh="refresh('shares:' + pool.id)"
+                                                >
+                                                    <!-- Downloads describe these saved shares, independently
+                                                         of the update/calculation commands below them. -->
+                                                    <template #actions>
+                                                        <a class="btn btn-outline-light btn-sm"
+                                                           :href="`/event/${eventId}/export/invoice-pools/${pool.id}/shares`"
+                                                           :aria-label="messages.t('finance.exportNamedSharesPdfWithExample', {poolName: pool.name})" download>
+                                                            <i class="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>{{ messages.t('finance.exportPdfWithExample') }}
+                                                        </a>
+                                                        <a class="btn btn-outline-light btn-sm"
+                                                           :href="`/event/${eventId}/export/invoice-pools/${pool.id}/shares?example=false`"
+                                                           :aria-label="messages.t('finance.exportNamedSharesPdfWithoutExample', {poolName: pool.name})" download>
+                                                            <i class="bi bi-file-earmark-pdf me-1" aria-hidden="true"></i>{{ messages.t('finance.exportPdfWithoutExample') }}
+                                                        </a>
+                                                    </template>
+                                                </FinanceShares>
+                                            </section>
                                             <FinancePoolOutputs :event-id="eventId" :pool="pool" :active="available.available.value"
-                                                                :shares="section.data.value.shares.filter(share => share.poolId === pool.id)"
+                                                                :shares="sharesForPool(pool.id)"
                                                                 :refresh="section.refresh" :has-pending-edits="() => hasPendingEdits(pool.id)"
                                                                 @saved="command.setNotice" />
-                                            <div
-                                                v-if="pool.status === 'CLOSED' && section.data.value.shares.some(share => share.poolId === pool.id)"
-                                                class="pilot-action-row mt-3"
-                                            >
-                                                <a
-                                                    class="btn btn-outline-light btn-sm"
-                                                    :href="`/event/${eventId}/export/invoice-pools/${pool.id}/shares`"
-                                                    download
-                                                >
-                                                    {{ messages.t('finance.exportPdfWithExample') }}
-                                                </a>
-                                                <a
-                                                    class="btn btn-outline-light btn-sm"
-                                                    :href="`/event/${eventId}/export/invoice-pools/${pool.id}/shares?example=false`"
-                                                    download
-                                                >
-                                                    {{ messages.t('finance.exportPdfWithoutExample') }}
-                                                </a>
-                                            </div>
                                         </div>
                                     </div>
                                 </section>
@@ -424,7 +499,6 @@ function revealHistory(): void { submissionOpen.value = true; }
                                             <FinanceHistory
                                                 :invoices="section.data.value.invoices"
                                                 :disabled="available.disabled.value"
-                                                :closing-invoice-id="command.pending.value ? closingInvoiceId : null"
                                                 :refreshing="refreshingControl === 'history'"
                                                 @retract="beginRetraction"
                                                 @close-invoice="closeInvoice"
@@ -436,6 +510,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                             </div>
                             <section v-if="section.data.value.pools.some(pool => pool.canSubmit)" class="mt-4">
                                 <h3 class="fs-6">{{ messages.t('finance.takeovers') }}</h3>
+                                <p class="small text-secondary mb-2">{{ messages.t('finance.chooseWhoseShareYouWillCoverInEachPool') }}</p>
                                 <article
                                     v-for="pool in section.data.value.pools.filter(pool => pool.canSubmit)"
                                     :key="pool.id"
@@ -455,6 +530,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                                         variant="outline-light" class="btn-sm mt-2" :state="available"
                                         @click="editor = {poolId: pool.id, kind: 'takeovers'}"
                                     >
+                                        <i class="bi bi-person-check me-1" aria-hidden="true"></i>
                                         {{ messages.t('finance.manageTakeovers2') }}
                                     </ActionButton>
                                     <FinanceTakeovers :event-id="eventId" :pool="pool" :registration-id="section.data.value.registrationId" :admin="false"
@@ -481,6 +557,7 @@ function revealHistory(): void { submissionOpen.value = true; }
             :event-id="eventId" :invoice="review.invoice" :action="review.action"
             :current-invoice="section.data.value!.invoices.find(invoice => invoice.id === review!.invoice.id)"
             :pool="section.data.value!.pools.find(pool => pool.id === review!.invoice.poolId)!"
+            :participant="!admin"
             open :active="available.available.value" :refresh="section.refresh" @close="review = null"
             @saved="command.setNotice"
         />
@@ -501,7 +578,6 @@ function revealHistory(): void { submissionOpen.value = true; }
             :open="!!retraction"
             :title="messages.t('finance.retractInvoice')"
             :pending="command.pending.value || command.recovering.value"
-            standard
             @close="closeRetraction"
         >
             <!-- One renderer keeps the same receipt and expiry as its host moves

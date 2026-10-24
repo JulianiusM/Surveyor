@@ -8,6 +8,8 @@ export interface EntityHeaderProps {
     resourceId: string;
     title: string;
     icon: string;
+    /** Event administration keeps its native full title and following action row. */
+    separateActions?: boolean;
     imageVersion?: string | null;
     imageQueryKey: readonly unknown[];
     readImage: PilotImageRead;

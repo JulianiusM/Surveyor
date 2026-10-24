@@ -42,17 +42,19 @@ async function refresh(): Promise<void> {
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain"
                          :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refresh" />
-        <p v-if="pool.status === 'ORGANIZER_ONLY'" class="small text-secondary">{{ messages.t('finance.organizerOnlyPoolHelp') }}</p>
         <div class="pilot-action-row">
-            <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'expense')">{{ messages.t('finance.addInvoiceAmount') }}</ActionButton>
+            <ActionButton variant="primary" class="btn-sm" :state="action" @click="emit('edit', 'expense')">
+                <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('finance.addInvoiceAmount') }}
+            </ActionButton>
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'settings')">{{ messages.t('finance.poolSettings') }}</ActionButton>
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'assignments')">{{ messages.t('finance.participantsFactors') }}</ActionButton>
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'adjustments')">{{ messages.t('finance.surchargesRebates') }}</ActionButton>
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'takeovers')">{{ messages.t('finance.manageTakeovers2') }}</ActionButton>
-            <ActionButton v-if="pool.status !== 'CLOSED'" variant="outline-warning" class="btn-sm" :state="action"
+            <ActionButton v-if="pool.status !== 'CLOSED'" variant="outline-light" class="btn-sm" :state="action"
                 :pending="command.pending.value" :show-spinner="false" @click="changeSubmissionState">
                 {{ messages.t(pool.status === 'OPEN' ? 'finance.closeParticipantInvoices' : 'finance.openParticipantInvoices') }}
             </ActionButton>
         </div>
+        <p v-if="pool.status === 'ORGANIZER_ONLY'" class="small text-secondary">{{ messages.t('finance.organizerOnlyPoolHelp') }}</p>
     </div>
 </template>

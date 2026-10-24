@@ -107,7 +107,9 @@ function acknowledgeHistory(): void {
         </CommandFeedback>
         <!-- Keep the chooser mounted even when eligible pools disappear during
              the upload; its command may still be awaiting a final response. -->
-        <StatusNotice v-if="!eligible.length" kind="info">{{ messages.t('finance.noOpenPoolsForSubmissionsRightNow') }}</StatusNotice>
+        <StatusNotice v-if="!eligible.length" kind="info">
+            <i class="bi bi-info-circle me-2" aria-hidden="true"></i>{{ messages.t('finance.noOpenPoolsForSubmissionsRightNow') }}
+        </StatusNotice>
         <form
             v-show="eligible.length || hasDraft || command.pending.value || command.uncertain.value"
             @submit.prevent="submit"

@@ -65,7 +65,7 @@ function registerGuest(input: components['schemas']['GuestRegistrationInput'], s
     >
         <template #default="{guest}">
             <GuestEntryPage v-if="guestRoute" :entry="guest" :resource-id="eventId" :destination="destination"
-                title-key="app.event"
+                title-key="app.event" presentation="event"
                 :query-key="eventKeys.guest(context.session.value?.context, eventId)"
                 :read-entry="readGuestEntry" :register-guest="registerGuest" />
             <EventPage v-else />

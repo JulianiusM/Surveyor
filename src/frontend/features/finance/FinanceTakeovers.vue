@@ -8,6 +8,7 @@ import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import FormField from '../../components/FormField.vue';
+import StatusNotice from '../../components/StatusNotice.vue';
 
 // Both audiences share one chooser interaction. The server owns the admitted
 // roster and actual authority; personal callers can submit only their own payer.
@@ -42,7 +43,6 @@ const command = useCommand(props.refresh, false, {dirty: () => dirty.value, unkn
 const action = useActionState({eligible: () => props.active && (props.admin || props.pool.status === 'OPEN') && choices.value.some(person => person.id === payerId.value),
     blocked: () => command.action.disabled.value});
 const filtered = computed(filteredChoices);
-const selectedNames = computed(() => selected.value.map(value => choices.value.find(person => person.id === value)?.name ?? value).join(', '));
 const summary = computed(coverageSummary);
 
 /** Filter admitted beneficiary names/contact text without losing hidden
@@ -178,17 +178,21 @@ function close(): void {
 </script>
 
 <template>
-    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t('finance.manageTakeovers2')" :subtitle="pool.name" standard
+    <AppDialog content-class="text-white finance-dialog finance-takeover-dialog" :open="open"
+               :title="messages.t('finance.poolDialogTitle', {title: messages.t('finance.manageTakeovers2'), name: pool.name})"
                :pending="command.pending.value || command.recovering.value" @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refresh" />
         <p class="small text-secondary">{{ messages.t('finance.chooseAPayerThenTheParticipantsTheyWillCover') }}</p>
-        <p v-if="pool.status === 'CLOSED'" class="small text-warning">{{ messages.t('finance.theseChangesAffectTheNextCalculationRecordedPaymentsStay') }}</p>
+        <StatusNotice kind="info" class="small">
+            {{ messages.t(pool.status === 'CLOSED'
+                ? 'finance.theseChangesAffectTheNextCalculationRecordedPaymentsStay'
+                : 'finance.saveCoverageForOnePayerAtATimeCovered') }}
+        </StatusNotice>
         <p v-if="!admin && pool.status !== 'OPEN'" class="small text-warning">{{ messages.t('finance.participantTakeoverChangesAreOnlyAvailableWhileThePool') }}</p>
         <div class="border border-secondary-subtle rounded-3 p-3 mb-3">
             <strong class="d-block">{{ messages.t('finance.selectedCoverage') }}</strong>
             <span class="small text-secondary" role="status">{{ summary }}</span>
-            <span v-if="selectedNames" class="small text-secondary d-block">{{ selectedNames }}</span>
         </div>
         <form :id="`${id}-form`" data-finance-takeovers @submit.prevent="save">
             <fieldset class="border-0 p-0 m-0" :disabled="action.disabled.value && !!payerId">
@@ -201,30 +205,36 @@ function close(): void {
                         </select>
                     </template>
                 </FormField>
-                <p v-else class="fw-semibold">{{ choices.find(person => person.id === payerId)?.name }}</p>
                 <p v-if="payerCovered" class="small text-warning">{{ messages.t('finance.thisPayerIsAlreadyCoveredBySomeoneElse') }}</p>
                 <FormField :id="`${id}-search`" v-model="search" type="search" class="mb-3" :label="messages.t('finance.searchParticipants')" :placeholder="messages.t('finance.typeToFilter')"
                     :pending="command.pending.value" />
                 <div class="list-group list-group-flush border border-secondary-subtle rounded-3">
-                    <div v-for="person in filtered" :key="person.id" class="list-group-item bg-dark text-white" :data-finance-beneficiary="person.id">
-                        <div class="form-check">
-                            <input :id="`${id}-person-${person.id}`" v-model="selected" :value="person.id" type="checkbox" class="form-check-input" :disabled="!!blockedReason(person.id)" />
-                            <label :for="`${id}-person-${person.id}`" class="form-check-label">
-                                <strong>{{ person.name }}</strong>
-                                <small v-if="person.email" class="text-secondary d-block">{{ person.email }}</small>
-                            </label>
-                        </div>
-                        <small v-if="blockedReason(person.id) || reassignNotice(person.id)" class="text-secondary d-block">{{ blockedReason(person.id) || reassignNotice(person.id) }}</small>
-                    </div>
+                    <label v-for="person in filtered" :key="person.id" :for="`${id}-person-${person.id}`"
+                        class="list-group-item bg-dark text-white d-flex align-items-start gap-3 py-3" :data-finance-beneficiary="person.id">
+                        <input :id="`${id}-person-${person.id}`" v-model="selected" :value="person.id" type="checkbox"
+                            class="form-check-input mt-1 flex-shrink-0" :disabled="!!blockedReason(person.id)" />
+                        <span>
+                            <strong class="d-block">{{ person.name }}</strong>
+                            <small v-if="person.email" class="text-secondary d-block">{{ person.email }}</small>
+                            <small v-if="blockedReason(person.id) || reassignNotice(person.id)" class="text-warning d-block mt-1">{{ blockedReason(person.id) || reassignNotice(person.id) }}</small>
+                        </span>
+                    </label>
                 </div>
                 <p v-if="choices.length < 2" class="small text-secondary mt-2">{{ messages.t('finance.noOtherParticipantsAreAssignedToThisPool') }}</p>
-                <p class="small text-secondary mt-2 mb-0">{{ messages.t('finance.saveCoverageForOnePayerAtATimeCovered') }}</p>
             </fieldset>
         </form>
         <template #footer>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.close') }}</ActionButton>
             <ActionButton :form="`${id}-form`" type="submit" :state="action"
-                :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.saveChanges') }}</ActionButton>
+                :pending="command.pending.value" :show-spinner="false"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('finance.saveChanges') }}</ActionButton>
         </template>
     </AppDialog>
 </template>
+
+<style>
+/* Native takeover editing reserves the desktop viewport for its coverage picker.
+   The shared phone fullscreen rule and body-local scrolling remain its owners. */
+@media (min-width: 576px) {
+    .finance-takeover-dialog { height: calc(100dvh - 3.5rem); }
+}
+</style>

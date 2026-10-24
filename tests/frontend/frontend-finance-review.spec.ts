@@ -7,6 +7,7 @@ import FinanceInvoiceReview from '../../src/frontend/features/finance/FinanceInv
 import FinanceOrganizerInvoice from '../../src/frontend/features/finance/FinanceOrganizerInvoice.vue';
 import FinancePoolEditor from '../../src/frontend/features/finance/FinancePoolEditor.vue';
 import FinanceSection from '../../src/frontend/features/finance/FinanceSection.vue';
+import FinanceHistory from '../../src/frontend/features/finance/FinanceHistory.vue';
 import {ApiFailure} from '../../src/frontend/app/transport';
 import {createFrontendEventSession, frontendEventId as eventId} from '../factories/frontendEventFactory';
 import {frontendEventButton as button, frontendEventJson as json, mountFrontendEvent} from '../keywords/frontendEventKeywords';
@@ -52,6 +53,263 @@ async function selectProof(dialog: DOMWrapper<HTMLElement>) {
 }
 
 describe('P8A organizer finance forms', () => {
+    it('keeps participant Close recovery available after unknown delivery becomes a saved closed invoice without replay', async () => {
+        const refresh = vi.fn(async () => {});
+        const mounted = await mountForm(FinanceInvoiceReview, {invoice, currentInvoice: invoice,
+            action: 'close', participant: true, refresh}, async request => {
+            expect(new URL(request.url).pathname).toBe(`/api/v1/events/${eventId}/finance/pools/${poolId}/invoices/12/close`);
+            throw new TypeError('Close response lost');
+        });
+        await mounted.dialog.get('form').trigger('submit'); await flushPromises();
+        expect(mounted.dialog.get('.modal-footer button[type="submit"]').attributes('disabled')).toBeDefined();
+        refresh.mockImplementation(async () => {
+            await mounted.wrapper.setProps({currentInvoice: {...invoice, status: 'CLOSED', canClose: false}});
+        });
+        await button(mounted.dialog, 'Refresh').trigger('click'); await flushPromises();
+        expect(mounted.dialog.text()).toContain('Your invoice history');
+        expect(mounted.dialog.text()).not.toContain('Invoice administration');
+        expect(mounted.dialog.get('[data-finance-history] thead').text()).toContain('Pool');
+        expect(mounted.dialog.get('[data-finance-history] thead').text()).not.toContain('Participant / source');
+        expect(mounted.dialog.get('.modal-footer button[type="submit"]').attributes('disabled')).toBeDefined();
+        expect(button(mounted.dialog, 'Refresh').attributes('disabled')).toBeUndefined();
+        await button(mounted.dialog, mounted.context.messages.value.t('draft.review')).trigger('click');
+        await mounted.dialog.get('form').trigger('submit'); await flushPromises();
+        expect(mounted.wrapper.emitted('close')).toHaveLength(1);
+        expect(refresh).toHaveBeenCalledOnce();
+        expect(mounted.request).toHaveBeenCalledOnce();
+    });
+
+    it('does not admit an organizer revision through participant review inputs', async () => {
+        const mounted = await mountForm(FinanceInvoiceReview, {invoice, currentInvoice: invoice, action: 'revise', participant: true});
+        expect(mounted.dialog.get('.modal-footer button[type="submit"]').attributes('disabled')).toBeDefined();
+        await mounted.dialog.get('form').trigger('submit'); await flushPromises();
+        expect(mounted.request).not.toHaveBeenCalled();
+    });
+
+    it('presents accepted Close as the native original-amount warning gate while retaining its standalone command', async () => {
+        const mounted = await mountForm(FinanceInvoiceReview, {invoice: {...invoice, correctedAmount: '7.50'}, action: 'close'});
+        expect(mounted.dialog.get('.modal-title').text()).toBe('Confirm invoice action');
+        expect(mounted.dialog.get('p.fw-semibold').text()).toBe('Invoice #12');
+        expect(mounted.dialog.text()).toContain('Close this accepted invoice for 10.00?');
+        expect(mounted.dialog.text()).not.toContain('7.50');
+        expect(mounted.dialog.text()).not.toContain('<Original evidence>');
+        expect(mounted.dialog.text()).not.toContain('Saved pool');
+        const confirmation = mounted.dialog.get('.modal-footer button[type="submit"]');
+        expect(confirmation.text()).toBe('Close');
+        expect(confirmation.classes()).toContain('btn-warning');
+        expect(mounted.request).not.toHaveBeenCalled();
+        await confirmation.trigger('click');
+        await flushPromises();
+        expect(new URL((mounted.request.mock.calls[0]![0] as Request).url).pathname).toContain('/invoices/12/organizer-close');
+        expect(mounted.request).toHaveBeenCalledOnce();
+    });
+
+    it.each(['revise', 'reject'] as const)('keeps the native %s editor/review hierarchy and final warning priority', async action => {
+        const mounted = await mountForm(FinanceInvoiceReview, {invoice, action});
+        expect(mounted.dialog.get('p.fw-semibold').text()).toContain('Invoice #12');
+        expect(mounted.dialog.text()).not.toContain('Saved pool');
+        expect(mounted.dialog.find('p.invoice-description').exists()).toBe(false);
+        if (action === 'reject') {
+            expect(button(mounted.dialog, 'Continue').classes()).toContain('btn-danger');
+            await mounted.dialog.get('textarea[name="rejectionReason"]').setValue('Reviewed rejection');
+        } else await mounted.dialog.get('input[name="correctedAmount"]').setValue('12.50');
+        expect(button(mounted.dialog, 'Continue').attributes('type')).toBe('submit');
+        // As in the other dialog tests, submit the mounted form through the
+        // supplied reportValidity boundary; real click behavior is covered by P8.
+        await mounted.dialog.get('form').trigger('submit');
+        await flushPromises();
+        expect(mounted.dialog.get('.modal-title').text()).toBe('Confirm invoice change');
+        expect(button(mounted.dialog, action === 'revise' ? 'Confirm correction' : 'Confirm rejection').classes()).toContain('btn-warning');
+        expect(mounted.dialog.find('p.small.invoice-description').exists()).toBe(false);
+        expect(mounted.dialog.text()).not.toContain('Saved pool');
+        expect(mounted.request).not.toHaveBeenCalled();
+    });
+
+    it('captures only native inline approval values before a summary-only gate without imposing HTML amount precision', async () => {
+        const refresh = vi.fn(async () => {});
+        const mounted = await mountFrontendEvent(FinanceHistory, async () => json({changed: true}), {
+            eventId, pool, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: refresh,
+        });
+        cleanups.push(mounted.dispose);
+        const row = mounted.wrapper.get('[data-finance-invoice="12"]');
+        expect(row.get('td[data-label="Submitted details"]').text()).toContain('<Original evidence>');
+        const fields = row.get('td[data-label="Organizer review"]');
+        const amount = fields.get<HTMLInputElement>('input[type="number"]');
+        await amount.setValue('000.00123');
+        await fields.get('textarea[id$="-inline-description"]').setValue('  Reviewed correction  ');
+        await fields.get('textarea[id$="-inline-reason"]').setValue('Not an approval field');
+        const validity = vi.spyOn(HTMLFormElement.prototype, 'reportValidity').mockReturnValue(false);
+        await button(row, 'Accept').trigger('click');
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        expect(dialog.get('.modal-title').text()).toBe('Confirm invoice action');
+        expect(dialog.get('p.fw-semibold').text()).toBe('Invoice #12');
+        expect(dialog.text()).toContain('000.00123');
+        expect(dialog.find('input, textarea').exists()).toBe(false);
+        expect(mounted.request).not.toHaveBeenCalled();
+
+        // Even a programmatically changed background field cannot replace the
+        // command already captured for this explicit final confirmation.
+        amount.element.value = '999.00';
+        await amount.trigger('input');
+        await button(dialog, 'Accept').trigger('click');
+        await flushPromises();
+        expect(await (mounted.request.mock.calls[0]![0] as Request).json()).toEqual({
+            correctedAmount: '0.00123', correctedDescription: 'Reviewed correction',
+        });
+        expect(validity).not.toHaveBeenCalled();
+        expect(refresh).toHaveBeenCalledOnce();
+        expect(mounted.request).toHaveBeenCalledOnce();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
+        expect((button(row, 'Reject').element as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('adopts native inline fields in the live Section and retains its draft when rejection is missing or confirmation is canceled', async () => {
+        const mounted = await mountFrontendEvent(FinanceSection, async () => json({...snapshot,
+            invoices: [{...invoice, status: 'NEW'}]}), {eventId, admin: true, enabled: true});
+        cleanups.push(mounted.dispose);
+        await vi.waitFor(() => expect(mounted.context.queryClient.isFetching()).toBe(0));
+        await mounted.wrapper.get('[data-finance-pool] .accordion-button').trigger('click');
+        const row = mounted.wrapper.get('[data-finance-invoice="12"]');
+        const amount = row.get<HTMLInputElement>('input[type="number"]');
+        const reason = row.get<HTMLTextAreaElement>('textarea[id$="-inline-reason"]');
+        await amount.setValue('0013.50');
+        await button(row, 'Reject').trigger('click');
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
+        expect(document.body.textContent).toContain('Enter a rejection reason before rejecting this invoice.');
+        await reason.setValue('Missing receipt');
+        await button(row, 'Reject').trigger('click');
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        expect(dialog.find('textarea').exists()).toBe(false);
+        await button(dialog, 'Cancel').trigger('click');
+        await flushPromises();
+        expect(row.get('input[type="number"]').element).toBe(amount.element);
+        expect(amount.element.value).toBe('0013.50');
+        expect(reason.element.value).toBe('Missing receipt');
+        expect(mounted.request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it('uses the displayed German submitted amount for untouched approval and rejection summaries', async () => {
+        const mounted = await mountFrontendEvent(FinanceHistory, async () => json({changed: true}), {
+            eventId, pool, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: vi.fn(async () => {}),
+        });
+        cleanups.push(mounted.dispose);
+        mounted.context.locale.value = 'de';
+        await flushPromises();
+        const row = mounted.wrapper.get('[data-finance-invoice="12"]');
+        for (const action of ['accept', 'reject'] as const) {
+            if (action === 'reject') await row.get('textarea[id$="-inline-reason"]').setValue('Fehlender Beleg');
+            await button(row, mounted.context.messages.value.t(`finance.${action}`)).trigger('click');
+            const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+            expect(dialog.text()).toContain('10,00');
+            expect(dialog.text()).not.toContain('10.00');
+            await button(dialog, mounted.context.messages.value.t('common.cancel')).trigger('click');
+            await flushPromises();
+        }
+        expect(mounted.request).not.toHaveBeenCalled();
+    });
+
+    it('retains sorted inline row owners through paging, filtering and saved reads, retiring removed and actor-scoped input', async () => {
+        const rows = Array.from({length: 27}, (_, index) => ({...invoice, id: String(index + 20), status: 'NEW' as const,
+            createdAt: `2026-10-${String(index + 1).padStart(2, '0')}T10:00:00Z`}));
+        const mounted = await mountFrontendEvent(FinanceHistory, async () => json({changed: true}), {
+            eventId, pool, invoices: rows, admin: true, refreshSaved: vi.fn(async () => {}),
+        });
+        cleanups.push(mounted.dispose);
+        const original = mounted.wrapper.get('[data-finance-invoice="20"]');
+        const amount = original.get<HTMLInputElement>('input[type="number"]');
+        expect(mounted.wrapper.findAll('[data-finance-invoice]').filter(row => row.isVisible())[0]!.attributes('data-finance-invoice')).toBe('46');
+        await button(mounted.wrapper, 'Next').trigger('click');
+        expect(original.isVisible()).toBe(true);
+        await amount.setValue('0012.345');
+        await mounted.wrapper.get('input[type="search"]').setValue('No matching invoice');
+        expect(original.isVisible()).toBe(false);
+        await mounted.wrapper.setProps({invoices: rows.map(row => ({...row, description: 'Fresh admitted evidence'}))});
+        await mounted.wrapper.get('input[type="search"]').setValue('');
+        await button(mounted.wrapper, 'Next').trigger('click');
+        expect(original.isVisible()).toBe(true);
+        expect(original.get('input[type="number"]').element).toBe(amount.element);
+        expect(amount.element.value).toBe('0012.345');
+
+        await mounted.wrapper.setProps({invoices: rows.slice(1)});
+        expect(amount.element.isConnected).toBe(false);
+        await mounted.wrapper.setProps({invoices: rows});
+        const replacement = mounted.wrapper.get<HTMLInputElement>('[data-finance-invoice="20"] input');
+        expect(replacement.element.value).toBe('');
+        await replacement.setValue('009.00');
+        mounted.context.epoch.value++;
+        await flushPromises();
+        expect(replacement.element.isConnected).toBe(false);
+        expect(mounted.wrapper.get<HTMLInputElement>('[data-finance-invoice="20"] input').element.value).toBe('');
+        expect(mounted.request).not.toHaveBeenCalled();
+    });
+
+    it('retains a pending row owner across a saved status transition and keeps its completed failed-read receipt without enabling replay', async () => {
+        let finish!: (response: Response) => void;
+        const mounted = await mountFrontendEvent(FinanceHistory, () => new Promise<Response>(resolve => {finish = resolve;}), {
+            eventId, pool, invoices: [{...invoice, status: 'NEW'}], admin: true,
+            refreshSaved: vi.fn(async () => {throw new Error('Saved read unavailable');}),
+        });
+        cleanups.push(mounted.dispose);
+        const row = mounted.wrapper.get('[data-finance-invoice="12"]');
+        await button(row, 'Accept').trigger('click');
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        await button(dialog, 'Accept').trigger('click');
+        await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+        await mounted.wrapper.setProps({invoices: [invoice]});
+        expect(mounted.wrapper.get('[data-finance-invoice="12"]').element).toBe(row.element);
+        expect(row.findAll<HTMLButtonElement>('button').every(button => button.element.disabled)).toBe(true);
+        finish(json({changed: true}));
+        await flushPromises();
+        expect(dialog.text()).toContain('Your change was saved, but the refreshed data could not be loaded.');
+        await button(dialog, 'Close').trigger('click');
+        await flushPromises();
+        expect(document.body.textContent).toContain('Your change was saved, but the refreshed data could not be loaded.');
+        expect((button(row, 'Correct').element as HTMLButtonElement).disabled).toBe(false);
+        expect(mounted.request).toHaveBeenCalledOnce();
+    });
+
+    it('releases externally retired unsent NEW fields without leaving an invisible dirty navigation blocker', async () => {
+        const mounted = await mountFrontendEvent(FinanceHistory, async () => json({changed: true}), {
+            eventId, pool, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: vi.fn(async () => {}),
+        });
+        cleanups.push(mounted.dispose);
+        const row = mounted.wrapper.get('[data-finance-invoice="12"]');
+        await row.get('input[type="number"]').setValue('0013.25');
+        await row.get('textarea[id$="-inline-reason"]').setValue('Unsent explanation');
+        await mounted.wrapper.setProps({invoices: [invoice]});
+        expect(row.find('input, textarea').exists()).toBe(false);
+        expect((button(row, 'Correct').element as HTMLButtonElement).disabled).toBe(false);
+        const discard = vi.fn(() => false);
+        vi.stubGlobal('confirm', discard);
+        await mounted.router.push('/frontend-pilot/packing/another-list');
+        expect(mounted.router.currentRoute.value.path).toBe('/frontend-pilot/packing/another-list');
+        expect(discard).not.toHaveBeenCalled();
+        expect(mounted.request).not.toHaveBeenCalled();
+    });
+
+    it('keeps a status-updated row locked after unknown delivery until explicit fresh inspection and acknowledgement', async () => {
+        const refresh = vi.fn(async () => {});
+        const mounted = await mountFrontendEvent(FinanceHistory, async () => {throw new TypeError('Response lost');}, {
+            eventId, pool, invoices: [{...invoice, status: 'NEW'}], admin: true, refreshSaved: refresh,
+        });
+        cleanups.push(mounted.dispose);
+        const row = mounted.wrapper.get('[data-finance-invoice="12"]');
+        await button(row, 'Accept').trigger('click');
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        await button(dialog, 'Accept').trigger('click');
+        await flushPromises();
+        await mounted.wrapper.setProps({invoices: [invoice]});
+        expect(row.findAll<HTMLButtonElement>('button').every(button => button.element.disabled)).toBe(true);
+        await button(dialog, 'Refresh').trigger('click');
+        await flushPromises();
+        await button(dialog, mounted.context.messages.value.t('draft.review')).trigger('click');
+        await flushPromises();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
+        expect((button(row, 'Correct').element as HTMLButtonElement).disabled).toBe(false);
+        expect(refresh).toHaveBeenCalledOnce();
+        expect(mounted.request).toHaveBeenCalledOnce();
+    });
+
     it('identifies an overlong saved participant description during revision without writing or losing the reviewed draft', async () => {
         // Participant descriptions intentionally have no generated length cap.
         // Opening one for organizer correction can therefore seed this value
@@ -312,6 +570,7 @@ describe('P8A organizer finance forms', () => {
 
     it('retains exact optional proof, paid-by selection and lexical amount after rejection and unknown delivery, then inspects without replay', async () => {
         const mounted = await mountForm(FinanceOrganizerInvoice, {invoices: [invoice]});
+        expect(button(mounted.dialog, 'Add expense').attributes('type')).toBe('submit');
         const upload = vi.spyOn(mounted.context.api, 'uploadJson').mockRejectedValue(new ApiFailure(400, null, null, 'Rejected proof', true));
         const amount = mounted.dialog.get<HTMLInputElement>('input[name="amount"]');
         await amount.setValue('013.50'); await amount.trigger('change'); await amount.trigger('blur');

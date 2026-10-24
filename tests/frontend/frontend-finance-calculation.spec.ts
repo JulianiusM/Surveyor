@@ -226,9 +226,15 @@ describe('P9 saved outputs and rollback', () => {
             {eventId, pool: {...pool, status: 'CLOSED', needsRecalculation: true}, shares: [],
                 active: true, hasPendingEdits: () => false, refresh: async () => {}});
         cleanups.push(mounted.dispose);
+        const actions = mounted.wrapper.findAll('button');
+        expect(actions.map(action => action.text())).toEqual(['Send settlement emails', 'Recalculate pool', 'Roll back pool changes']);
+        expect(actions[0]!.element.parentElement).toBe(actions[1]!.element.parentElement);
+        expect(actions[2]!.element.parentElement).not.toBe(actions[1]!.element.parentElement);
         await button(mounted.wrapper, 'Send settlement emails').trigger('click'); await flushPromises();
         const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
         expect(dialog.text()).toContain('These emails describe the previous calculation');
+        expect(dialog.get('.status-notice.alert-warning').text()).toContain('These emails describe the previous calculation');
+        expect(dialog.find('.status-notice .bi').exists()).toBe(false);
         await button(dialog, 'Send settlement emails').trigger('click'); await flushPromises();
         expect(dialog.text()).toContain('Settlement email delivery requested for 2 payers.');
         expect(dialog.findAll('button').some(node => node.text() === 'Send settlement emails')).toBe(false);

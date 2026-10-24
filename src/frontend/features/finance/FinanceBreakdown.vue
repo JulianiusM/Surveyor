@@ -46,11 +46,10 @@ async function refresh(): Promise<void> {
 <template>
     <AppDialog content-class="text-white finance-dialog"
         open
-        :title="messages.t('finance.shareBreakdown')"
-        :subtitle="admin ? `${share.poolName} · ${share.payerName}` : share.poolName"
-        standard
+        :title="messages.t('finance.poolDialogTitle', {title: messages.t('finance.shareBreakdown'), name: share.poolName})"
         @close="emit('close')"
     >
+        <h3 class="fs-6">{{ admin ? share.payerName : share.poolName }}</h3>
         <LoadingSkeleton v-if="section.loading.value" variant="form" :rows="3" />
         <StatusNotice
             v-if="section.query.error.value"
@@ -66,9 +65,6 @@ async function refresh(): Promise<void> {
         <template v-if="section.data.value">
             <p v-if="section.data.value.settledShareNotice" class="small text-warning">
                 {{ section.data.value.settledShareNotice.description }}
-            </p>
-            <p v-if="section.data.value.needsRecalculation" class="small text-warning">
-                {{ messages.t('finance.poolTotalsReflectSavedChangesPaymentsDueAndRefunds') }}
             </p>
             <dl class="invoice-share-breakdown small mt-3 mb-3">
                 <template v-for="component in section.data.value.components" :key="component.key">

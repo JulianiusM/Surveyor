@@ -23,6 +23,16 @@ export interface PilotLoadingSkeleton {
     headerActions?: boolean;
 }
 
+/** A caller may explicitly retain native full title/action rows. Other entity
+ * and account headings keep their compact desktop presentation. */
+export interface PilotPageHeadingProps {
+    title: string;
+    icon?: string;
+    separateActions?: boolean;
+    /** Entity parent/settings controls retain their native mobile row width. */
+    fillActionRow?: boolean;
+}
+
 declare module 'vue-router' {
     interface RouteMeta {
         /** The declared page family owns both SSR and cold client placeholders. */
@@ -254,6 +264,15 @@ export interface PilotOverviewCountRead {
     scope: PilotRequestScope;
     key: readonly unknown[];
     updatedAt: number;
+}
+
+/** The existing region read owner can present its controls in the collection's
+ * accordion heading. Collapse geometry does not change its admission/lifetime. */
+export interface PilotOverviewRegionProps {
+    collection: components['schemas']['OverviewRegion']['collection'];
+    region: components['schemas']['OverviewRegion']['region'];
+    active?: boolean;
+    collapseId?: string;
 }
 
 /** Guards cover initial DOM drafts, mounted drafts and unresolved status after an editor retires.

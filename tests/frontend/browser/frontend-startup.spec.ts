@@ -9,6 +9,7 @@ import type {Response} from 'express';
 import {createBrowserReadGate as readGate, waitForPilotHydration} from '../../keywords/frontendDynamicKeywords';
 import type {components} from '../../../src/types/api/v1';
 import type {FrontendPilotBootstrap, FrontendPreparedDocument} from '../../../src/types/FrontendPilotTypes';
+import {createFrontendEventView} from '../../factories/frontendEventFactory';
 
 type Session = components['schemas']['SessionView'];
 const deliveries = new WeakMap<Page, {documents: number; commands: number; nativeStyles: number}>();
@@ -129,15 +130,43 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendPilo
     }
 }
 
+/** Both real Event intents share one bounded actor/read fixture. Capabilities
+ * retain their independent page adoption, and no Finance projection is admitted. */
+async function startupEventDocument(page: Page, locale: Session['locale'], admin: boolean) {
+    const id = '22222222-2222-4222-8222-222222222222';
+    const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Event presentation fixture'};
+    const session: Session = {...startupSession(locale), kind: 'account', activeProfile: profile, profiles: [profile],
+        context: 'event-heading-context-1234567890', csrfToken: 'event-heading-csrf-1234567890'};
+    const baseline = createFrontendEventView();
+    const event = createFrontendEventView({id, title: 'P2 Event 09fe4b5b',
+        capabilities: {...baseline.capabilities, admin, settings: admin, register: !admin}});
+    const eventEntry: components['schemas']['EventResourceEntry'] = {entry: {kind: 'render'}, guest: null};
+    const delivery = await startupDocument(page, `/frontend-pilot/event/${id}${admin ? '/admin' : ''}?locale=${locale}`,
+        {session, pageEntry: {kind: 'render'}, eventEntry});
+    await page.route(`**/api/v1/events/${id}**`, async route => {
+        const pathname = new URL(route.request().url()).pathname;
+        if (pathname !== `/api/v1/events/${id}` && pathname !== `/api/v1/events/${id}/entry`
+            && !(admin && pathname === `/api/v1/events/${id}/things-to-do`)) {
+            await route.abort('failed');
+            return;
+        }
+        const data = pathname.endsWith('/entry') ? eventEntry : pathname.endsWith('/things-to-do') ? {items: []} : event;
+        await route.fulfill({status: 200, contentType: 'application/json',
+            headers: {'X-Surveyor-Context': session.context!}, body: JSON.stringify(data)});
+    });
+    return {delivery, event};
+}
+
 /** Compile the unchanged native authored styles in memory for a temporary visual
  * comparator. Production delivery uses only Vite assets; no native file is changed
  * or served by this reference, and generated CSS is never an authored fixture. */
-function nativeStyleReference(): string {
-    if (referenceStyles !== undefined) return referenceStyles;
-    const base = compile(resolve('src/public/style/style.sass'), {logger: Logger.silent}).css;
-    const help = compile(resolve('src/public/style/help.sass'), {logger: Logger.silent}).css;
-    referenceStyles = base + '\n' + help + '\n' + readFileSync('src/frontend/styles/pilot.css', 'utf8');
-    return referenceStyles;
+function nativeStyleReference(includePilotOverrides = true): string {
+    if (referenceStyles === undefined) {
+        const base = compile(resolve('src/public/style/style.sass'), {logger: Logger.silent}).css;
+        const help = compile(resolve('src/public/style/help.sass'), {logger: Logger.silent}).css;
+        referenceStyles = base + '\n' + help;
+    }
+    return includePilotOverrides ? referenceStyles + '\n' + readFileSync('src/frontend/styles/pilot.css', 'utf8') : referenceStyles;
 }
 
 /** Hold the first real module request so static Help can be edited before failure.
@@ -511,7 +540,7 @@ for (const width of [1280, 390]) {
     });
 }
 
-for (const width of [1280, 390]) {
+for (const width of [1280, 1024, 390]) {
     for (const linked of [false, true]) {
         test(`entity headings remain centered with embedded actions at ${width}px (linked: ${linked})`, async ({page}, testInfo) => {
             await page.setViewportSize({width, height: 900});
@@ -521,7 +550,7 @@ for (const width of [1280, 390]) {
                 context: 'heading-browser-context-1234567890', csrfToken: 'heading-browser-csrf-1234567890'};
             const delivery = await startupDocument(page, '/frontend-pilot/packing/' + id, {session, pageEntry: {kind: 'render'}});
             const list: components['schemas']['PackingListView'] = {
-                entityType: 'packing', id, title: 'Equipment', description: null,
+                entityType: 'packing', id, title: 'E2E Core Packing List', description: null,
                 headerUrl: null, headerVersion: null, orderToken: '"fixture-order"',
                 currentEventId: linked ? profile.id : null, currentEventUrl: linked ? '/event/' + profile.id : null,
                 archived: false, inheritedArchived: false,
@@ -556,6 +585,22 @@ for (const width of [1280, 390]) {
             const heading = (await title.boundingBox())!;
             if (initialHeaderHeight !== undefined) expect(Math.abs(bounds.height - initialHeaderHeight)).toBeLessThan(1);
             expect(Math.abs(heading.x + heading.width / 2 - bounds.x - bounds.width / 2)).toBeLessThan(1);
+            // Ordinary Packing retains the native single desktop title/action
+            // row; a full-width Event dashboard is a distinct real caller below.
+            if (width >= 768) {
+                const lineHeight = await title.evaluate(element => Number.parseFloat(getComputedStyle(element).lineHeight));
+                expect(heading.height).toBeLessThanOrEqual(lineHeight + 1);
+                for (const control of await header.locator('a,button').all()) {
+                    const action = (await control.boundingBox())!;
+                    expect(Math.abs(action.y + action.height / 2 - heading.y - heading.height / 2)).toBeLessThan(1);
+                }
+            } else {
+                if (linked) expect((await header.getByRole('link', {name: 'Go to event', exact: true}).boundingBox())!.width)
+                    .toBeGreaterThanOrEqual(heading.width - 1);
+                const settings = (await header.getByRole('button', {name: 'Entity settings', exact: true}).boundingBox())!;
+                const compactRefresh = (await header.getByRole('button', {name: 'Refresh', exact: true}).boundingBox())!;
+                expect(settings.width + compactRefresh.width + 8).toBeGreaterThanOrEqual(heading.width - 1);
+            }
             for (const button of await header.locator('button').all()) {
                 await expect(button).toBeVisible();
                 expect(await button.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
@@ -575,6 +620,87 @@ for (const width of [1280, 390]) {
                 await expect(refresh).toBeFocused();
                 expect(await original!.evaluate(node => node === document.querySelector('main .pilot-page-heading-actions button[aria-label="Refresh"]'))).toBe(true);
             } finally { refreshed.release(); await original!.dispose(); }
+        });
+    }
+}
+
+for (const width of [1280, 1024, 390]) {
+    test(`Event administration uses its native full title and separate actions at ${width}px`, async ({page}, info) => {
+        await page.setViewportSize({width, height: 900});
+        const {delivery, event} = await startupEventDocument(page, 'en', true);
+        await page.goto(delivery.url);
+        await waitForPilotHydration(page);
+        const header = page.locator('main > section > .card-header');
+        const title = header.locator('h1');
+        await expect(title).toHaveText(`Event Dashboard — ${event.title}`);
+        const bounds = (await header.boundingBox())!;
+        const heading = (await title.boundingBox())!;
+        expect(heading.width).toBeGreaterThan(bounds.width - 40);
+        expect(Math.abs(heading.x + heading.width / 2 - bounds.x - bounds.width / 2)).toBeLessThan(1);
+        if (width >= 768) {
+            const lineHeight = await title.evaluate(element => Number.parseFloat(getComputedStyle(element).lineHeight));
+            expect(heading.height).toBeLessThanOrEqual(lineHeight + 1);
+        }
+        for (const name of ['Entity settings', 'Refresh']) {
+            const control = header.getByRole('button', {name, exact: true});
+            await expect(control).toBeVisible();
+            expect((await control.boundingBox())!.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+            expect(await control.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+        }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        await page.screenshot({path: info.outputPath('event-admin-full-title.png'), animations: 'disabled'});
+    });
+}
+
+for (const locale of ['en', 'de'] as const) {
+    for (const width of [1280, 390, 320]) {
+        test(`Event registration keeps native choice columns and contained labels at ${width}px in ${locale}`, async ({page}, info) => {
+            await page.setViewportSize({width, height: 900});
+            const {delivery} = await startupEventDocument(page, locale, false);
+            await page.goto(delivery.url);
+            await waitForPilotHydration(page);
+            const grids = page.locator('main .pilot-choice-grid');
+            await expect(grids).toHaveCount(3);
+            await expect(grids.first().locator('input[type="checkbox"]')).toHaveCount(4);
+            if (width === 390) {
+                // Native meal words fit at the normal phone width. Unequal
+                // intrinsic tracks must not split Vegetarian/Vegetarisch.
+                for (const label of await grids.first().locator('label').all()) {
+                    const lineCount = await label.evaluate(element => {
+                        const range = document.createRange();
+                        range.selectNodeContents(element);
+                        return new Set([...range.getClientRects()].map(rect => Math.round(rect.top))).size;
+                    });
+                    expect(lineCount).toBe(1);
+                }
+            }
+            const columns = width < 768 ? 3 : 4;
+            for (const grid of await grids.all()) {
+                const geometry = await grid.evaluate(element => {
+                    const bounds = element.getBoundingClientRect();
+                    const labels = [...element.querySelectorAll('label')].flatMap(label => {
+                        const range = document.createRange();
+                        range.selectNodeContents(label);
+                        return [...range.getClientRects()].map(rect => ({left: rect.left, right: rect.right}));
+                    });
+                    return {left: bounds.left, right: bounds.right,
+                        columns: getComputedStyle(element).gridTemplateColumns.split(/\s+/u).length,
+                        rows: [...element.children].map(choice => choice.getBoundingClientRect().top),
+                        controls: [...element.querySelectorAll('input')].map(input => {
+                            const rect = input.getBoundingClientRect();
+                            return {left: rect.left, right: rect.right};
+                        }), labels};
+                });
+                expect(geometry.columns).toBe(columns);
+                for (const rect of [...geometry.labels, ...geometry.controls]) {
+                    expect(rect.left).toBeGreaterThanOrEqual(geometry.left - 1);
+                    expect(rect.right).toBeLessThanOrEqual(geometry.right + 1);
+                }
+                for (const top of geometry.rows.slice(0, columns)) expect(Math.abs(top - geometry.rows[0]!)).toBeLessThan(1);
+                if (geometry.rows.length > columns) expect(geometry.rows[columns]!).toBeGreaterThan(geometry.rows[0]!);
+            }
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+            await page.screenshot({path: info.outputPath('event-registration-choice-grid.png'), animations: 'disabled'});
         });
     }
 }
@@ -1108,6 +1234,96 @@ for (const width of [1280, 390]) {
         await page.mouse.up();
         await expect(page.locator('.pilot-reorder-before, .pilot-reorder-after, .pilot-reorder-dragging')).toHaveCount(0);
         expect(delivery.observed.commands).toBe(0);
+    });
+}
+
+for (const width of [390, 1280]) {
+    test(`Help retains native table words and column sizing with local overflow at ${width}px`, async ({page}, info) => {
+        const {renderTrustedHelpMarkdown} = await import(pathToFileURL(resolve('dist/controller/helpController.js')).href) as
+            typeof import('../../../src/controller/helpController');
+        // Synthetic tables cover plain prose, emphasized first cells and wide
+        // data without coupling application checks to maintained Help articles.
+        // Both stylesheets render the same trusted Markdown and frame.
+        const patterns = [
+            '| Method | What you use | First-time setup |\n|---|---|---|\n'
+                + '| Local account | A saved username and secret phrase | Enter the details to continue. |\n'
+                + '| Organization sign-in | An external provider account | Follow the sign-in steps. |',
+            '| State | Who sees it | When you return |\n|---|---|---|\n'
+                + '| A shared title and **Group** setting | Everyone with access | The saved values reappear. |\n'
+                + '| **Checked?** and a row highlight | This example browser | The local selection reappears. |',
+            '| Field | What to enter |\n|---|---|\n'
+                + '| **Name** | A short name for this example. |\n'
+                + '| **Capacity** | A positive whole number. |',
+            '| List state | Participants | Drivers | Explanation |\n|---|---|---|---|\n'
+                + '| Example offers | 2 | 3 | The displayed values describe the example rows. |\n'
+                + '| Another example | 4 | 5 | Read the complete explanation beside these values. |',
+            '| Visible status | How it starts | What happens next | Included costs? |\n|---|---|---|---|\n'
+                + '| **Unreviewed** | An example entry is added. | A coordinator reviews the example entry. | No. |\n'
+                + '| **Completed** | The example has been reviewed. | Its saved information remains available. | Yes. |',
+            '| Preset | Permissions selected |\n|---|---|\n'
+                + '| **Limited** | Edit the example title and description. |\n'
+                + '| **Complete** | Edit the example and manage its assignments. |',
+        ];
+        const articleTables = patterns.map(markdown => renderTrustedHelpMarkdown(markdown, 'Help table fixture').content).join('\n');
+        // A future authored code value can exceed an ordinary word's intrinsic
+        // width. It uses the same local boundary without a code-only size floor.
+        const codeTable = renderTrustedHelpMarkdown('| Setting | Description |\n|---|---|\n'
+            + '| `AN_EXTENDED_CONFIGURATION_VALUE` | A readable description beside a complete code value. |',
+            'Help table fixture').content;
+        const delivery = await startupDocument(page, '/frontend-pilot/help?doc=fixture', {
+            session: startupSession(), help: {locale: 'en', title: 'Help table comparison', currentDoc: 'fixture.md',
+                content: articleTables + codeTable, docsList: [], docsGroups: [], toc: [{id: 'tables', title: 'Tables', level: 2}]},
+        });
+        await page.setViewportSize({width, height: 900});
+        await page.goto(delivery.url);
+        await waitForPilotHydration(page);
+        const tables = page.locator('.help-content table');
+        await expect(tables).toHaveCount(patterns.length + 1);
+        const copied = await tables.evaluateAll(elements => elements.map(table => ({
+            viewport: table.clientWidth, content: table.scrollWidth,
+            columns: [...table.querySelectorAll('thead th')].map(cell => cell.getBoundingClientRect().width),
+            rows: [...table.querySelectorAll('tr')].map(row => row.getBoundingClientRect().height),
+        })));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        if (width < 768) {
+            // Ordinary field/state tables remain visible together. Wider native
+            // words retain their width and the last column is reachable locally.
+            for (const index of [0, 1, 2, 5]) expect(copied[index]!.content - copied[index]!.viewport,
+                `Fitting synthetic table ${index}`).toBeLessThanOrEqual(6);
+            for (const index of [3, 4, 6]) {
+                expect(copied[index]!.content).toBeGreaterThan(copied[index]!.viewport + 20);
+                const table = tables.nth(index);
+                await table.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+                const rightEdge = await table.evaluate(element => ({viewport: element.getBoundingClientRect().right,
+                    last: element.querySelector('thead th:last-child')!.getBoundingClientRect().right}));
+                expect(rightEdge.last).toBeLessThanOrEqual(rightEdge.viewport + 1);
+                await table.evaluate(element => { element.scrollLeft = 0; });
+            }
+        }
+        await page.screenshot({path: info.outputPath('help-natural-tables.png'), fullPage: true, animations: 'disabled'});
+
+        // Keep the real Help markup/frame and substitute only the comparison
+        // stylesheet. This baseline deliberately excludes all pilot overrides.
+        await page.locator('link[rel="stylesheet"][href^="/app/"]').evaluateAll(links => {
+            for (const link of links) (link as HTMLLinkElement).disabled = true;
+        });
+        await page.evaluate(css => {
+            const style = document.createElement('style');
+            style.textContent = css;
+            document.head.append(style);
+        }, nativeStyleReference(false));
+        const native = await tables.evaluateAll(elements => elements.map(table => ({
+            columns: [...table.querySelectorAll('thead th')].map(cell => cell.getBoundingClientRect().width),
+            rows: [...table.querySelectorAll('tr')].map(row => row.getBoundingClientRect().height),
+        })));
+        for (let index = 0; index < copied.length; index++) {
+            expect(copied[index]!.columns).toHaveLength(native[index]!.columns.length);
+            for (let column = 0; column < native[index]!.columns.length; column++)
+                expect(Math.abs(copied[index]!.columns[column]! - native[index]!.columns[column]!)).toBeLessThan(1);
+            expect(copied[index]!.rows).toHaveLength(native[index]!.rows.length);
+            for (let row = 0; row < native[index]!.rows.length; row++)
+                expect(Math.abs(copied[index]!.rows[row]! - native[index]!.rows[row]!)).toBeLessThan(1);
+        }
     });
 }
 

@@ -177,8 +177,10 @@ test('keeps five-state personal history, attribution and retained proofs private
         expect((await participant.request.get(poolOnly.proofUrl!, {headers: await frontendEventHeaders(participant.request)})).status()).toBe(403);
 
         const participantPage = await participant.newPage();
-        const closeReviews: string[] = [];
-        participantPage.on('dialog', dialog => {closeReviews.push(dialog.message()); return dialog.accept();});
+        const closeRequests: string[] = [];
+        participantPage.on('request', request => {
+            if (request.method() === 'POST' && /\/invoices\/[^/]+\/close$/u.test(new URL(request.url()).pathname)) closeRequests.push(request.url());
+        });
         const nativeFinance = await openParticipantFinance(participantPage, event.id, false);
         await expectFinanceFormContract(nativeFinance.locator('#invoiceSubmitForm'), poolId);
         const nativeAmount = nativeFinance.locator('#invoiceSubmitForm').getByLabel('Amount', {exact: true});
@@ -200,19 +202,22 @@ test('keeps five-state personal history, attribution and retained proofs private
         const document = await observeFinanceDocument(participantPage);
         await expectFinanceFormContract(finance.locator('[data-finance-submission]'), poolId);
         const history = finance.locator('[data-finance-history]');
-        await expect(history.locator('[data-finance-invoice]')).toHaveCount(25);
+        // Persistent admitted row owners retain drafts/receipts while filter
+        // and page controls hide them. Count the same visible rows as native.
+        const visibleHistoryRows = history.locator('[data-finance-invoice]:visible');
+        await expect(visibleHistoryRows).toHaveCount(25);
         await history.getByRole('button', {name: 'Next', exact: true}).click();
-        await expect(history.locator('[data-finance-invoice]')).toHaveCount(3);
+        await expect(visibleHistoryRows).toHaveCount(3);
         await history.getByRole('button', {name: 'Previous', exact: true}).click();
         await history.getByLabel('Invoices per page', {exact: true}).selectOption('50');
-        await expect(history.locator('[data-finance-invoice]')).toHaveCount(28);
+        await expect(visibleHistoryRows).toHaveCount(28);
         const search = history.getByLabel('Search invoices', {exact: true});
         await search.fill('Corrected evidence');
-        await expect(history.locator('[data-finance-invoice]')).toHaveCount(1);
+        await expect(visibleHistoryRows).toHaveCount(1);
         await expect(history).toContainText('Corrected shared receipt');
         await expect(history).toContainText('Original: 20.00');
         await search.fill('evidence');
-        await expect(history.locator('[data-finance-invoice]')).toHaveCount(3);
+        await expect(visibleHistoryRows).toHaveCount(3);
         // Original amounts/descriptions and saved dates retain their financial
         // readability treatment outside dialogs as well as inside portals.
         expect(new Set(await readSecondaryInstructionColors(history))).toEqual(new Set(nativeHistoryColors));
@@ -222,11 +227,11 @@ test('keeps five-state personal history, attribution and retained proofs private
         await history.locator('.table-responsive').evaluate(node => node.scrollTo({left: 0, behavior: 'instant'}));
         await finance.locator('[data-finance-submission]').screenshot({path: info.outputPath('vue-participant-form-desktop.png'), animations: 'disabled'});
         await search.fill('Paid separately');
-        await expect(history.locator('[data-finance-invoice]')).toHaveCount(1);
+        await expect(visibleHistoryRows).toHaveCount(1);
         await expect(history).toContainText('Rejected');
         await search.fill('');
         await history.getByLabel('Filter invoice status', {exact: true}).selectOption('RETRACTED');
-        await expect(history.locator('[data-finance-invoice]')).toHaveCount(1);
+        await expect(visibleHistoryRows).toHaveCount(1);
         const retainedProof = await history.getByRole('link', {name: 'View proof', exact: true}).getAttribute('href');
         expect((await participant.request.get(retainedProof!, {headers: await frontendEventHeaders(participant.request)})).status()).toBe(200);
         expect((await other.request.get(retainedProof!, {headers: await frontendEventHeaders(other.request)})).status()).toBe(403);
@@ -250,12 +255,22 @@ test('keeps five-state personal history, attribution and retained proofs private
         expect((await retractResponse).status()).toBe(200);
         await expect(target).toContainText('Retracted');
         const corrected = history.locator(`[data-finance-invoice="${invoice('Corrected evidence').id}"]`);
+        await corrected.getByRole('button', {name: 'Close', exact: true}).click();
+        const closeReview = participantPage.getByRole('dialog');
+        await expect(closeReview).toHaveAccessibleName('Confirm invoice action');
+        await expect(closeReview).toContainText(`Invoice #${invoice('Corrected evidence').id}`);
+        await expect(closeReview).toContainText('Close this accepted invoice for ?');
+        expect(closeRequests).toEqual([]);
+        await closeReview.locator('.modal-footer').getByRole('button', {name: 'Cancel', exact: true}).click();
+        await expect(closeReview).toBeHidden();
+        expect(closeRequests).toEqual([]);
+        await expect(corrected).toContainText('Accepted');
+        await corrected.getByRole('button', {name: 'Close', exact: true}).click();
         const closeResponse = participantPage.waitForResponse(response => response.request().method() === 'POST'
             && response.url().endsWith(`/invoices/${invoice('Corrected evidence').id}/close`));
-        await corrected.getByRole('button', {name: 'Close', exact: true}).click();
+        await closeReview.locator('.modal-footer').getByRole('button', {name: 'Close', exact: true}).click();
         expect((await closeResponse).status()).toBe(200);
-        expect(closeReviews).toHaveLength(1);
-        expect(closeReviews[0]).toContain(`#${invoice('Corrected evidence').id}`);
+        expect(closeRequests).toHaveLength(1);
         await expect(corrected).toContainText('Closed');
         const saved = await readFinance(participant.request, event.id);
         expect(saved.invoices.find(row => row.id === invoice('Corrected evidence').id)).toMatchObject({status: 'CLOSED', amount: '20.00', correctedAmount: '18.00'});

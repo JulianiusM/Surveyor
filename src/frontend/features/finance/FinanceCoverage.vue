@@ -10,7 +10,8 @@ type Group = components['schemas']['FinancePool']['coverageGroups'][number];
 // Applied and pending rosters are separately supplied saved projections. This
 // reusable table emits only an explicitly enabled current-input edit shortcut;
 // it never writes relationships or treats a pending payer as applied.
-const props = defineProps<{groups: Group[]; known: boolean; registrationId?: string | null; editable?: boolean; disabled?: boolean}>();
+const props = defineProps<{groups: Group[]; known: boolean; registrationId?: string | null; editable?: boolean; disabled?: boolean;
+    needsRecalculation?: boolean}>();
 const emit = defineEmits<{edit: [payerId: string]}>();
 const {messages, locale} = usePilot();
 const id = useId();
@@ -79,7 +80,7 @@ function toggle(groupId: string, event: MouseEvent): void {
                 <FormField
                     :id="`${id}-search`"
                     v-model="search"
-                    class="mb-0"
+                    class="mb-0 finance-filter-search"
                     label-class="visually-hidden"
                     type="search"
                     control-class="form-control-sm"
@@ -100,6 +101,7 @@ function toggle(groupId: string, event: MouseEvent): void {
                         <tr>
                             <th scope="col">{{ messages.t('finance.payer') }}</th>
                             <th scope="col">{{ messages.t('finance.coveredParticipants') }}</th>
+                            <th v-if="editable" scope="col">{{ messages.t('finance.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -112,10 +114,6 @@ function toggle(groupId: string, event: MouseEvent): void {
                                 <small class="text-secondary d-block mt-1">
                                     {{ messages.t('finance.participantsCovered', {count: group.beneficiaries.length}) }}
                                 </small>
-                                <ActionButton v-if="editable" variant="outline-light" class="btn-sm mt-2" :disabled="disabled"
-                                              :aria-label="messages.t('finance.editTakeoversFor', {name: group.payerName})" @click="emit('edit', group.payerId)">
-                                    {{ messages.t('finance.edit') }}
-                                </ActionButton>
                             </th>
                             <td :data-label="messages.t('finance.coveredParticipants')">
                                 <div
@@ -156,6 +154,12 @@ function toggle(groupId: string, event: MouseEvent): void {
                                     </ActionButton>
                                 </div>
                             </td>
+                            <td v-if="editable" :data-label="messages.t('finance.actions')">
+                                <ActionButton variant="outline-light" class="btn-sm" :disabled="disabled"
+                                              :aria-label="messages.t('finance.editTakeoversFor', {name: group.payerName})" @click="emit('edit', group.payerId)">
+                                    <i class="bi bi-pencil me-1" aria-hidden="true"></i>{{ messages.t('finance.edit') }}
+                                </ActionButton>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
@@ -172,5 +176,10 @@ function toggle(groupId: string, event: MouseEvent): void {
                 @next="page++"
             />
         </template>
+        <!-- Only the caller's editable current coverage carries this notice;
+             saved applied rosters retain their previous-calculation meaning. -->
+        <p v-if="needsRecalculation" class="text-warning small mt-2 mb-0">
+            {{ messages.t('finance.theseSavedTakeoversApplyAfterRecalculationPreviousShareNotes') }}
+        </p>
     </div>
 </template>

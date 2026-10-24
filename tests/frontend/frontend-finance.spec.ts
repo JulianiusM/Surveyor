@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {flushPromises} from '@vue/test-utils';
+import {DOMWrapper, flushPromises} from '@vue/test-utils';
 import type {components} from '../../src/types/api/v1';
 import FinanceSection from '../../src/frontend/features/finance/FinanceSection.vue';
 import FinanceSubmission from '../../src/frontend/features/finance/FinanceSubmission.vue';
@@ -84,6 +84,30 @@ function holdLocaleRead(context: Awaited<ReturnType<typeof mountFinance>>['conte
 }
 
 describe('P7 finance saved reads and participant invoices', () => {
+    it.each([false, true])('keeps organizer management visible with header creation and native context (empty=%s)', async empty => {
+        const organizer: components['schemas']['FinanceView'] = {...snapshot, audience: 'organizer', registrationId: null,
+            pools: empty ? [] : [pool], invoices: [], shares: []};
+        const {wrapper, context, request} = await mountFinance(async () => json(organizer), true);
+        const header = wrapper.get('[data-finance-management-header]');
+        expect(header.text()).toContain('Invoice pools');
+        expect(header.find('[aria-expanded]').exists()).toBe(false);
+        expect(wrapper.get('.card-body').isVisible()).toBe(true);
+        expect(wrapper.text()).toContain(context.messages.value.t(empty
+            ? 'finance.noInvoicePoolsCreatedYet' : 'finance.openAPoolToReviewInvoicesAndSettlementUse'));
+        expect(wrapper.findAll('[data-finance-pool]')).toHaveLength(empty ? 0 : 1);
+
+        // Creation stays available directly in the management header even when
+        // there are no saved pools; opening/canceling it performs no command.
+        await button(header, 'Create pool').trigger('click');
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        expect(dialog.text()).toContain('Create a new pool');
+        await button(dialog, 'Cancel').trigger('click');
+        await flushPromises();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
+        expect(wrapper.get('.card-body').isVisible()).toBe(true);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
     it.each([false, true])('cancels and invalidates translated finance reads across Events without retiring machine or foreign-actor reads (admin=%s)', async admin => {
         const saved = {...snapshot, audience: admin ? 'organizer' as const : 'participant' as const,
             registrationId: admin ? null : snapshot.registrationId};
@@ -159,33 +183,59 @@ describe('P7 finance saved reads and participant invoices', () => {
         expect(recorded.get('a').attributes('title')).toBe('proof.pdf');
         expect(submitted.get('a').attributes('title')).toBe('Invoice proof');
         await mounted.wrapper.get('input[type="search"]').setValue('Organizer');
-        expect(mounted.wrapper.find('[data-finance-invoice="12"]').exists()).toBe(true);
-        expect(mounted.wrapper.find('[data-finance-invoice="13"]').exists()).toBe(false);
+        expect(mounted.wrapper.get('[data-finance-invoice="12"]').isVisible()).toBe(true);
+        expect(mounted.wrapper.get('[data-finance-invoice="13"]').isVisible()).toBe(false);
         await mounted.wrapper.get('input[type="search"]').setValue('Pool expense');
-        expect(mounted.wrapper.find('[data-finance-invoice="12"]').exists()).toBe(true);
+        expect(mounted.wrapper.get('[data-finance-invoice="12"]').isVisible()).toBe(true);
     });
 
-    it('confirms the captured invoice identity and corrected amount before closing its participant history row', async () => {
+    it('opens and cancels the native participant Close gate, then closes only the captured own invoice', async () => {
         let closed = false;
-        const confirm = vi.fn(() => false);
+        const confirm = vi.fn(() => true);
         vi.stubGlobal('confirm', confirm);
+        const accepted = {...invoice, correctedAmount: '11.25', status: 'APPROVED' as const, canRetract: false, canClose: true};
         const mounted = await mountFinance(async req => {
             if (req.method === 'POST') {
                 expect(new URL(req.url).pathname).toBe(`/api/v1/events/${eventId}/finance/pools/${poolId}/invoices/12/close`);
                 closed = true;
                 return json({changed: true});
             }
-            return json({...snapshot, invoices: [{...invoice, correctedAmount: '11.25',
-                status: closed ? 'CLOSED' : 'APPROVED', canRetract: false, canClose: !closed}]});
+            return json({...snapshot, invoices: [{...accepted, status: closed ? 'CLOSED' : 'APPROVED', canClose: !closed}]});
         });
         await button(mounted.wrapper, 'Invoice pools & payments').trigger('click');
         await button(mounted.wrapper, 'Submit an invoice & history').trigger('click');
-        await button(mounted.wrapper, 'Close').trigger('click');
-        expect(confirm).toHaveBeenCalledWith('Invoice #12\nClose this accepted invoice for 11.25?');
+        const row = mounted.wrapper.get('[data-finance-invoice="12"]');
+        expect(row.text()).toContain('11.25');
+        await button(row, 'Close').trigger('click');
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        expect(dialog.get('.modal-title').text()).toBe('Confirm invoice action');
+        expect(dialog.get('p.fw-semibold').text()).toBe('Invoice #12');
+        // The native participant question has no amount hook; the financial
+        // evidence stays in the row rather than becoming an unapproved repair.
+        expect(dialog.text()).toContain('Close this accepted invoice for ?');
+        expect(dialog.text()).not.toContain('11.25');
         expect(closed).toBe(false);
-        confirm.mockReturnValue(true);
-        await button(mounted.wrapper, 'Close').trigger('click'); await flushPromises();
+        await button(dialog, 'Cancel').trigger('click');
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
+        expect(confirm).not.toHaveBeenCalled();
+        expect(closed).toBe(false);
+
+        await button(row, 'Close').trigger('click');
+        const reopened = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        // A new saved row can move ahead in the ledger while the selected
+        // confirmation retains invoice12 and its own participant command.
+        mounted.context.queryClient.setQueryData([...eventKeys.finance(mounted.context.session.value?.context, eventId), 'en'],
+            {...snapshot, invoices: [{...invoice, id: '13', createdAt: '2026-10-21T10:00:00Z', status: 'REJECTED',
+                canRetract: false, rejectionReason: 'Historical rejection'}, accepted]});
+        await flushPromises();
+        expect(reopened.get('p.fw-semibold').text()).toBe('Invoice #12');
+        expect(mounted.wrapper.get('[data-finance-invoice="13"] small.text-danger-emphasis strong').text()).toBe('Reason:');
+        const submit = reopened.get('.modal-footer button[type="submit"]');
+        expect(submit.text()).toBe('Close');
+        expect(submit.classes()).toContain('btn-warning');
+        await submit.trigger('click'); await flushPromises();
         expect(closed).toBe(true);
+        expect(confirm).not.toHaveBeenCalled();
         expect(mounted.request.mock.calls.filter(([req]) => (req as Request).method === 'POST')).toHaveLength(1);
     });
 
@@ -195,9 +245,46 @@ describe('P7 finance saved reads and participant invoices', () => {
         });
         cleanups.push(mounted.dispose);
         await mounted.wrapper.get('input[type="search"]').setValue('receipt.owner@example.test');
-        expect(mounted.wrapper.find(`[data-finance-invoice="${invoice.id}"]`).exists()).toBe(true);
+        expect(mounted.wrapper.get(`[data-finance-invoice="${invoice.id}"]`).isVisible()).toBe(true);
         await mounted.wrapper.get('input[type="search"]').setValue('No admitted invoice');
-        expect(mounted.wrapper.find(`[data-finance-invoice="${invoice.id}"]`).exists()).toBe(false);
+        expect(mounted.wrapper.get(`[data-finance-invoice="${invoice.id}"]`).isVisible()).toBe(false);
+        expect(mounted.request).not.toHaveBeenCalled();
+    });
+
+    it.each([false, true])('distinguishes total-empty history from filtered-empty while retaining mounted controls through snapshots (admin=%s)', async admin => {
+        const mounted = await mountFrontendEvent(FinanceHistory, async () => json(snapshot), {invoices: [], admin});
+        cleanups.push(mounted.dispose);
+        const ledger = mounted.wrapper.get('[data-finance-history]');
+        const search = ledger.get<HTMLInputElement>('input[type="search"]');
+        const status = ledger.get<HTMLSelectElement>('select[id$="-status"]');
+        const size = ledger.get<HTMLSelectElement>('select[id$="-size"]');
+        const emptyText = admin ? 'No invoices yet.' : 'You have not submitted any invoices yet.';
+        expect(ledger.isVisible()).toBe(false);
+        expect(mounted.wrapper.get('[data-finance-history-empty]').text()).toBe(emptyText);
+
+        await mounted.wrapper.setProps({invoices: [invoice]});
+        expect(ledger.isVisible()).toBe(true);
+        expect(mounted.wrapper.find('[data-finance-history-empty]').exists()).toBe(false);
+        await search.setValue('No matching invoice');
+        await status.setValue('NEW');
+        await size.setValue('50');
+        expect(ledger.get('[data-finance-invoice]').isVisible()).toBe(false);
+        expect(ledger.text()).toContain('No invoices match these filters.');
+
+        // An admitted empty snapshot changes presentation, not the lifetime of
+        // the reader's filter inputs. Returning records still use that choice.
+        await mounted.wrapper.setProps({invoices: []});
+        expect(ledger.isVisible()).toBe(false);
+        expect(mounted.wrapper.get('[data-finance-history-empty]').text()).toBe(emptyText);
+        await mounted.wrapper.setProps({invoices: [invoice]});
+        expect(ledger.isVisible()).toBe(true);
+        expect(ledger.get('input[type="search"]').element).toBe(search.element);
+        expect(search.element.value).toBe('No matching invoice');
+        expect(status.element.value).toBe('NEW');
+        expect(size.element.value).toBe('50');
+        expect(ledger.text()).toContain('No invoices match these filters.');
+        await search.setValue('Original evidence');
+        expect(ledger.get(`[data-finance-invoice="${invoice.id}"]`).isVisible()).toBe(true);
         expect(mounted.request).not.toHaveBeenCalled();
     });
 
@@ -383,6 +470,8 @@ describe('P7 finance saved reads and participant invoices', () => {
         await button(wrapper, 'View breakdown').trigger('click'); await flushPromises();
         expect(request.mock.calls.filter(([req]) => new URL((req as Request).url).pathname.includes('/shares/'))).toHaveLength(1);
         expect(document.body.textContent).toContain('<Saved participant>');
+        const explanation = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        expect(explanation.find('.text-warning').exists()).toBe(false);
         // Read-only selection follows the current admitted row after refresh,
         // while the explanation itself participates in explicit Refresh.
         current = {...current, shares: [{...share, poolName: 'Renamed saved pool'}]};
@@ -449,6 +538,175 @@ describe('P7 finance saved reads and participant invoices', () => {
         expect(wrapper.find('a[href$="/admin#invoicePoolAccordion"]').exists()).toBe(false);
         expect(wrapper.find('[data-finance-pool-outputs]').exists()).toBe(true);
         expect(wrapper.findAll('button').some(item => item.text().trim() === 'Recalculate pool')).toBe(true);
+    });
+
+    it.each([
+        {poolStatus: 'CLOSED', invoiceStatus: 'APPROVED', open: false},
+        {poolStatus: 'CLOSED', invoiceStatus: 'NEW', open: true},
+        {poolStatus: 'OPEN', invoiceStatus: 'APPROVED', open: true},
+    ] as const)('retains native invoice disclosure admission and a reader-open ledger through Refresh ($poolStatus/$invoiceStatus)', async ({poolStatus, invoiceStatus, open}) => {
+        const organizer: components['schemas']['FinanceView'] = {...snapshot, audience: 'organizer', registrationId: null,
+            pools: [{...pool, status: poolStatus, canSubmit: false}], invoices: [{...invoice, status: invoiceStatus}]};
+        const {wrapper, request} = await mountFinance(async () => json(organizer), true);
+        await wrapper.get('[data-finance-pool] .accordion-button').trigger('click');
+        const disclosure = wrapper.get<HTMLDetailsElement>('[data-finance-invoice-disclosure]');
+        expect(disclosure.element.open).toBe(open);
+        expect(disclosure.get('summary').text()).toBe(invoiceStatus === 'NEW' ? 'Invoices (1) · 1 awaiting review' : 'Invoices (1)');
+
+        // Opening the native disclosure must not recreate its ledger or discard
+        // its controls when the shared read replaces the saved snapshot.
+        disclosure.element.open = true;
+        const ledger = disclosure.get('[data-finance-history]');
+        const search = ledger.get<HTMLInputElement>('input[type="search"]');
+        await search.setValue('Original evidence');
+        await ledger.get('[data-finance-ledger-refresh]').trigger('click');
+        await flushPromises();
+        expect(disclosure.element.open).toBe(true);
+        expect(disclosure.get('[data-finance-history]').element).toBe(ledger.element);
+        expect(search.element.value).toBe('Original evidence');
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it('keeps complete persistent pending-change guidance and associates PDF outputs with saved shares', async () => {
+        const organizer: components['schemas']['FinanceView'] = {...snapshot, audience: 'organizer', registrationId: null,
+            pools: [{...pool, status: 'CLOSED', canSubmit: false, needsRecalculation: true, hasPendingTakeovers: true}],
+            invoices: [{...invoice, status: 'APPROVED'}]};
+        const {wrapper, context, request} = await mountFinance(async () => json(organizer), true);
+        const badge = wrapper.get('[data-finance-recalculation]');
+        expect(badge.classes()).toContain('badge');
+        expect(badge.classes()).toContain('bg-warning');
+        expect(badge.text()).toBe('Recalculation required');
+        await wrapper.get('[data-finance-pool] .accordion-button').trigger('click');
+        const warnings = wrapper.findAll('[data-finance-pool] .status-notice.alert-warning');
+        expect(warnings).toHaveLength(2);
+        expect(warnings[0]!.text()).toContain(context.messages.value.t('finance.savedChangesHaveNotBeenAppliedToTheShares').trim());
+        expect(warnings[1]!.text()).toContain(context.messages.value.t('finance.takeoverChangesPendingIndicator'));
+        expect(warnings[1]!.text()).toContain(context.messages.value.t('finance.takeoverChangesPendingDescription'));
+        expect(warnings.every(warning => warning.attributes('role') === 'status' && !warning.find('.btn-close').exists())).toBe(true);
+        const coverage = wrapper.get('[data-finance-pool-coverage]');
+        const carryForward = context.messages.value.t('finance.theseSavedTakeoversApplyAfterRecalculationPreviousShareNotes');
+        expect(coverage.get('[data-finance-coverage-kind="pending"]').text()).toContain(carryForward);
+        expect(coverage.get('[data-finance-coverage-kind="applied"]').text()).not.toContain(carryForward);
+        expect(coverage.findAll('p').filter(paragraph => paragraph.text() === carryForward)).toHaveLength(1);
+
+        // Both variants remain direct full-ledger downloads beside the saved
+        // shares heading, independent of filtering and calculation commands.
+        const heading = wrapper.get('[data-finance-shares-heading]');
+        expect(heading.text()).toContain('Calculated shares');
+        const exports = heading.findAll('a[download]');
+        expect(exports.map(link => link.attributes('href'))).toEqual([
+            `/event/${eventId}/export/invoice-pools/${poolId}/shares`,
+            `/event/${eventId}/export/invoice-pools/${poolId}/shares?example=false`,
+        ]);
+        expect(exports.map(link => link.attributes('aria-label'))).toEqual([
+            'Export shares for <Saved pool> as PDF with example calculation',
+            'Export shares for <Saved pool> as PDF without example calculation',
+        ]);
+        expect(wrapper.get('[data-finance-pool-outputs]').find('a[download]').exists()).toBe(false);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it('reveals the same closed-pool invoice ledger after a confirmed organizer expense', async () => {
+        let saved = false;
+        const organizer: components['schemas']['FinanceView'] = {...snapshot, audience: 'organizer', registrationId: null,
+            pools: [{...pool, status: 'CLOSED', canSubmit: false}], invoices: [{...invoice, status: 'APPROVED'}]};
+        const {wrapper, context, request} = await mountFinance(async () => json({...organizer, invoices: saved
+            ? [...organizer.invoices, {...invoice, id: '13', status: 'APPROVED', organizerRecorded: true}]
+            : organizer.invoices}), true);
+        // XHR upload delivery has its own transport tests. This presentation
+        // scenario retains the real form, command and following admitted GET.
+        const upload = vi.spyOn(context.api, 'uploadJson').mockImplementation(async (operation, path) => {
+            expect(operation).toBe('recordEventOrganizerInvoice');
+            expect(path).toBe(`/events/${eventId}/finance/pools/${poolId}/invoices/organizer`);
+            saved = true;
+            return {changed: true};
+        });
+        await wrapper.get('[data-finance-pool] .accordion-button').trigger('click');
+        const disclosure = wrapper.get<HTMLDetailsElement>('[data-finance-invoice-disclosure]');
+        const ledger = disclosure.get('[data-finance-history]').element;
+        expect(disclosure.element.open).toBe(false);
+        await button(wrapper, 'Add invoice / amount').trigger('click');
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        await dialog.get('input[name="amount"]').setValue('10.00');
+        await dialog.get('textarea[name="description"]').setValue('New organizer expense');
+        const form = dialog.get<HTMLFormElement>('form[data-finance-organizer-invoice]');
+        vi.spyOn(form.element, 'reportValidity').mockReturnValue(true);
+        await form.trigger('submit');
+        await flushPromises();
+        expect(saved).toBe(true);
+        expect(disclosure.element.open).toBe(true);
+        expect(disclosure.get('[data-finance-history]').element).toBe(ledger);
+        expect(disclosure.get('summary').text()).toBe('Invoices (2)');
+        expect(disclosure.find('[data-finance-invoice="13"]').exists()).toBe(true);
+        expect(upload).toHaveBeenCalledTimes(1);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it.each([
+        {previous: undefined, expected: false},
+        {previous: '0.00', expected: true},
+        {previous: '-5.00', expected: true},
+    ])('uses saved component presence for prior-settlement context, including net-zero credits ($previous)', async ({previous, expected}) => {
+        const organizer: components['schemas']['FinanceView'] = {...snapshot, audience: 'organizer', registrationId: null,
+            pools: [{...pool, status: 'CLOSED', canSubmit: false, needsRecalculation: true,
+                summary: {primary: [], details: [], saved: previous === undefined ? []
+                    : [{key: 'paymentCreditAmount', label: 'Previously settled', amount: previous}]}}]};
+        const {wrapper, context, request} = await mountFinance(async () => json(organizer), true);
+        await wrapper.get('[data-finance-pool] .accordion-button').trigger('click');
+        const settlement = wrapper.get('[data-finance-settlement-context]');
+        expect(settlement.get('h4').text()).toBe('Shares & settlement');
+        expect(settlement.get('p.text-warning').text()).toBe(context.messages.value.t('finance.recalculationRequiredTheseAreThePreviousCalculatedAmountsYou'));
+        const priorContext = context.messages.value.t('finance.previouslySettledRecordsPaymentsReceivedPositiveOrRefundsPaid');
+        // A saved summary can retain this component when opposite payer credits
+        // cancel. Neither that net amount nor a negative balance selects it.
+        expect(settlement.text().includes(priorContext)).toBe(expected);
+        expect(settlement.find('[data-finance-shares]').exists()).toBe(true);
+        expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it('explains a closed pool with no generated shares without inventing a ledger or PDF output', async () => {
+        const organizer: components['schemas']['FinanceView'] = {...snapshot, audience: 'organizer', registrationId: null,
+            pools: [{...pool, status: 'CLOSED', canSubmit: false}], shares: []};
+        const {wrapper} = await mountFinance(async () => json(organizer), true);
+        await wrapper.get('[data-finance-pool] .accordion-button').trigger('click');
+        const settlement = wrapper.get('[data-finance-settlement-context]');
+        expect(settlement.text()).toBe('No participant shares were generated.');
+        expect(settlement.find('[data-finance-shares]').exists()).toBe(false);
+        expect(settlement.find('a[download]').exists()).toBe(false);
+        expect(wrapper.find('[data-finance-pool-outputs]').exists()).toBe(true);
+    });
+
+    it.each([false, true])('keeps stale row labels personal while organizer context supplies its pool warning (admin=%s)', async admin => {
+        const mounted = await mountFrontendEvent(FinanceShares, async () => json(snapshot), {shares: [share], admin});
+        cleanups.push(mounted.dispose);
+        const row = mounted.wrapper.get(`[data-finance-share="${share.id}"]`);
+        expect(row.text().includes('Recalculation required')).toBe(!admin);
+        expect(row.text()).toContain('Refund due');
+        expect(mounted.request).not.toHaveBeenCalled();
+    });
+
+    it('keeps coverage editing in its named action cell and emits only the selected current payer', async () => {
+        const mounted = await mountFrontendEvent(FinanceCoverage, async () => json(snapshot), {
+            groups: [{payerId: '7', payerName: 'Saved payer', beneficiaries: [{id: '8', name: 'Covered person'}]}],
+            known: true, editable: true,
+        });
+        cleanups.push(mounted.dispose);
+        expect(mounted.wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['Payer', 'Covered participants', 'Actions']);
+        const row = mounted.wrapper.get('[data-finance-coverage-payer="7"]');
+        const action = row.get('td[data-label="Actions"] button');
+        expect(row.get('th').find('button').exists()).toBe(false);
+        expect(action.attributes('aria-label')).toBe('Edit takeovers for Saved payer');
+        await action.trigger('click');
+        expect(mounted.wrapper.emitted('edit')).toEqual([['7']]);
+
+        await mounted.wrapper.setProps({disabled: true});
+        expect((action.element as HTMLButtonElement).disabled).toBe(true);
+        await action.trigger('click');
+        expect(mounted.wrapper.emitted('edit')).toHaveLength(1);
+        await mounted.wrapper.setProps({editable: false});
+        expect(mounted.wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['Payer', 'Covered participants']);
+        expect(row.find('td[data-label="Actions"]').exists()).toBe(false);
+        expect(mounted.request).not.toHaveBeenCalled();
     });
 
     it('captures reviewed retraction revision and preserves confirmed lifecycle outcome through failed refresh', async () => {

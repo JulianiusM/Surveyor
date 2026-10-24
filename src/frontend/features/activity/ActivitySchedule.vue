@@ -170,25 +170,27 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                     @dragleave="drag.leave(slot.id, $event)"
                                     @drop="drop(slot, $event)">
                                     <div class="d-flex justify-content-between align-items-start mb-0">
-                                        <i v-if="view.capabilities.reorderSlots" class="bi bi-grip-vertical text-bg-dark me-2" aria-hidden="true"></i>
-                                        <div class="d-flex flex-column flex-grow-1 me-2">
-                                            <InlineCell
-                                                tag="span"
-                                                class="fw-bold text-start"
-                                                :value="slot.title"
-                                                :token="slot.editToken"
-                                                :editable="true"
-                                                :write-admission="slot.capabilities.inlineMetadataAdmission"
-                                                :disabled="disabled"
-                                                :label="messages.t('packing.title')"
-                                                :save="(value, token) => patch(slot, 'title', value, token)"
-                                                @editing="editChanged"
-                                                @denied="emit('denied', $event)"
-                                            />
-                                            <small v-if="slot.startTime || slot.endTime" class="text-info d-flex align-items-center gap-1" data-time-range>
-                                                <i class="bi bi-clock-history" aria-hidden="true"></i>
-                                                <span>{{ slot.startTime?.slice(0, 5) || '??' }} – {{ slot.endTime?.slice(0, 5) || '??' }}</span>
-                                            </small>
+                                        <div class="d-flex flex-grow-1 me-2">
+                                            <i v-if="view.capabilities.reorderSlots" class="bi bi-grip-vertical text-bg-dark me-2" aria-hidden="true"></i>
+                                            <div class="d-flex flex-column flex-grow-1">
+                                                <InlineCell
+                                                    tag="span"
+                                                    class="fw-bold text-start"
+                                                    :value="slot.title"
+                                                    :token="slot.editToken"
+                                                    :editable="true"
+                                                    :write-admission="slot.capabilities.inlineMetadataAdmission"
+                                                    :disabled="disabled"
+                                                    :label="messages.t('packing.title')"
+                                                    :save="(value, token) => patch(slot, 'title', value, token)"
+                                                    @editing="editChanged"
+                                                    @denied="emit('denied', $event)"
+                                                />
+                                                <small v-if="slot.startTime || slot.endTime" class="text-info d-flex align-items-center gap-1" data-time-range>
+                                                    <i class="bi bi-clock-history" aria-hidden="true"></i>
+                                                    <span>{{ slot.startTime?.slice(0, 5) || '??' }} – {{ slot.endTime?.slice(0, 5) || '??' }}</span>
+                                                </small>
+                                            </div>
                                         </div>
                                         <div class="d-flex align-items-center gap-2">
                                             <span

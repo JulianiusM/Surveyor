@@ -38,6 +38,13 @@
 .pilot-app :is(.btn, .badge), .pilot-dialog :is(.btn, .badge) {
     max-width: 100%; white-space: normal; overflow-wrap: anywhere;
 }
+/* Bootstrap centers ordinary button text, but flex-based links otherwise start
+   at the left edge when the shared phone action row stretches them. Center the
+   whole icon/label group for every matching action, including portaled dialogs.
+   Picker, menu and accordion rows retain their separate native list alignment. */
+.pilot-app .btn:is(.d-flex, .d-inline-flex), .pilot-dialog .btn:is(.d-flex, .d-inline-flex) {
+    align-items: center; justify-content: center;
+}
 /* Wide semantic tables keep complete words and their existing scroll owner.
    Compact flex actions must not squeeze a label into separate letter fragments. */
 .pilot-app table :is(.btn, .badge), .pilot-dialog table :is(.btn, .badge) {
@@ -59,7 +66,7 @@
 }
 .pilot-app .card-header.d-flex > *, .pilot-dialog .card-header.d-flex > * { max-width: 100%; }
 .pilot-app .card-header.d-flex > :first-child:not(:only-child):not(.bi),
-.pilot-dialog .card-header.d-flex > :first-child:not(:only-child):not(.bi) { flex: 1 1 14rem; }
+.pilot-dialog .card-header.d-flex > :first-child:not(:only-child):not(.bi) { flex: 1 1 auto; }
 .pilot-app .card-header > .d-flex, .pilot-dialog .card-header > .d-flex { flex-wrap: wrap; }
 /* Settings, Rules and future matching sections share these two compositions.
    Headings and hints can take separate lines; actions retain their DOM order. */
@@ -67,10 +74,15 @@
 .pilot-section-heading > * { min-width: 0; max-width: 100%; }
 .pilot-action-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; max-width: 100%; }
 .card-header > .pilot-action-row { justify-content: flex-end; margin-inline-start: auto; }
-/* Short authored choices reflow as whole checkbox/label units. Available room,
-   rather than a locale or fixed column count, determines the number per row. */
-.pilot-choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr)); gap: .5rem; }
+/* Native's three/four choice columns give whole words their actual width.
+   Very narrow screens contain labels within the available three tracks. */
+.pilot-choice-grid { display: grid; grid-template-columns: repeat(3, minmax(min-content, 1fr)); gap: .5rem; }
 .pilot-choice-grid .form-check-label { overflow-wrap: normal; }
+@media (min-width: 768px) { .pilot-choice-grid { grid-template-columns: repeat(4, minmax(min-content, 1fr)); } }
+@media (max-width: 359.98px) {
+    .pilot-choice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .pilot-choice-grid .form-check-label { overflow-wrap: anywhere; }
+}
 /* A sticky host reserves its real height at its original position. The stack
    becomes empty on dismissal/expiry, releasing that space without a stale gap.
    Sticky positioning keeps results visible after scrolling past their origin;
@@ -127,10 +139,6 @@
     border-radius: var(--bs-border-radius); }
 .pilot-dialog .entity-property-group > summary { cursor: pointer; }
 .pilot-dialog .entity-settings-panel { min-width: 0; }
-/* Article tables keep their distinct reading/scrolling boundary. Other shared
-   text controls above already handle long labels without a locale exception. */
-.pilot-app .help-content th, .pilot-app .help-content td { overflow-wrap: anywhere; }
-.pilot-app .help-content table:has(td:first-child > strong) td:first-child { min-width: 9rem; overflow-wrap: normal; }
 .pilot-conflict-values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
 .pilot-conflict-values dd { overflow-wrap: anywhere; white-space: pre-wrap; }
 /* Only an active conflict needs reading room; the table's existing horizontal scroll
@@ -152,14 +160,9 @@
     /* Table answer groups remain one coherent row. Their existing table
        viewport reveals wide choices without changing label or radio order. */
     .pilot-app table .btn-group, .pilot-dialog table .btn-group { max-width: none; flex-wrap: nowrap; }
-    .pilot-app .help-content table:has(code), .pilot-app .help-content table:has(td:first-child > strong) {
-        display: block; overflow-x: auto;
-    }
-    .pilot-app .help-content table:has(code) th, .pilot-app .help-content table:has(code) td,
-    .pilot-app .help-content table:has(td:first-child > strong) th,
-    .pilot-app .help-content table:has(td:first-child > strong) td { min-width: 9rem; overflow-wrap: normal; }
-    .pilot-app .help-content table:has(code) :not(pre) > code,
-    .pilot-app .help-content table:has(td:first-child > strong) :not(pre) > code { white-space: nowrap; }
+    /* Help tables retain native natural column widths and word wrapping.
+       Only actual overflow scrolls locally, including ordinary prose tables. */
+    .pilot-app .help-content table { display: block; overflow-x: auto; }
 }
 /* Guest identity choices use the native centered default modal, not the wide settings layout. */
 .pilot-dialog.pilot-dialog-standard { width: min(500px, calc(100vw - 1rem)); }
@@ -176,13 +179,16 @@
 .pilot-skeleton-animated { animation: pilot-skeleton-pulse 1.6s ease-in-out infinite; }
 .pilot-skeleton-shapes.card { gap: 0; }
 .pilot-skeleton-page-header .pilot-skeleton-heading { width: 60%; height: clamp(1.75rem, 4vw, 2.5rem); margin: 0 auto; }
-/* Shared page headings retain their centered h1 proportions and the mobile
-   action row through admission. Geometry never exposes a real control/grant. */
-.pilot-skeleton-balanced-header { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr); align-items: center; gap: 1rem; padding: 1rem; }
-.pilot-skeleton-balanced-header > .pilot-skeleton-heading { grid-column: 2; width: 100%; font-size: calc(1.375rem + 1.5vw); height: 1.2em; }
-.pilot-skeleton-balanced-header > .pilot-skeleton-header-actions { grid-column: 3; justify-self: end; width: 2rem; height: 1.9375rem; }
+/* Compact entity/account headers keep their single desktop row. Event admin
+   follows its native full title plus action row, just like EventPage. This
+   geometry carries no record text or controls and grants no authority. */
+.pilot-skeleton-balanced-header { display: grid; grid-template-columns: minmax(0, 1fr) 2rem; align-items: center; gap: 1rem; padding: 1rem; }
+.pilot-skeleton-balanced-header > .pilot-skeleton-heading { grid-column: 1 / -1; grid-row: 1; width: 60%; justify-self: center; font-size: calc(1.375rem + 1.5vw); height: 1.2em; }
+.pilot-skeleton-balanced-header > .pilot-skeleton-header-actions { grid-column: 2; grid-row: 1; justify-self: end; width: 2rem; height: 1.9375rem; }
 /* Entity Settings uses the normal button height beside compact Refresh. */
 :is(.pilot-skeleton-list-detail, .pilot-skeleton-activity, .pilot-skeleton-survey, .pilot-skeleton-event, .pilot-skeleton-event-admin) .pilot-skeleton-header-actions { height: 2.375rem; }
+.pilot-skeleton-event-admin > .pilot-skeleton-balanced-header { grid-template-columns: minmax(0, 1fr); }
+.pilot-skeleton-event-admin .pilot-skeleton-header-actions { grid-column: 1; grid-row: 2; }
 @media (min-width: 1200px) {
     .pilot-skeleton-balanced-header > .pilot-skeleton-heading { font-size: 2.5rem; }
 }
@@ -225,7 +231,7 @@
 @media (max-width: 767.98px) {
     .pilot-skeleton-balanced-header { grid-template-columns: minmax(0, 1fr); }
     .pilot-skeleton-balanced-header > .pilot-skeleton-heading { grid-column: 1; }
-    .pilot-skeleton-balanced-header > .pilot-skeleton-header-actions { grid-column: 1; justify-self: center; }
+    .pilot-skeleton-balanced-header > .pilot-skeleton-header-actions { grid-column: 1; grid-row: 2; justify-self: center; }
     .pilot-skeleton-summary { grid-template-columns: minmax(0, 1fr); }
     .pilot-skeleton-form-footer-two-thirds { width: 100%; }
     /* The participant roster alone folds email into the name column below md.

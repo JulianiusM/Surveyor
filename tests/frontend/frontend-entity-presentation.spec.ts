@@ -102,6 +102,7 @@ describe('shared displayed entity header consumers', () => {
             // geometry and one responsive copy of the admitted parent URL.
             const header = mounted.wrapper.findComponent(EntityHeader);
             expect(header.exists()).toBe(true);
+            expect(Boolean(header.props('separateActions'))).toBe(false);
             expect(header.get('h1').text()).toBe(view.title);
             expect(mounted.context.pageTitle.value).toBe(`${view.title} | ${kind === 'event' ? 'Event' : 'Surveyor'}`);
             const image = header.get<HTMLImageElement>('img');
@@ -149,6 +150,7 @@ describe('shared displayed entity header consumers', () => {
         await mounted.router.push(`/frontend-pilot/event/${frontendEventId}/admin`);
         await flushPromises();
         const header = mounted.wrapper.getComponent(EntityHeader);
+        expect(header.props('separateActions')).toBe(true);
         expect(header.get('h1').text()).toBe(`Event Dashboard — ${view.title}`);
         expect(header.find('img').exists()).toBe(false);
         expect(header.get('.pilot-page-heading-actions button').text()).toBe(mounted.context.messages.value.t('packing.edit'));

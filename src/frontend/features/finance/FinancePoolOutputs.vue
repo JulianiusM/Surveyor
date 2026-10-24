@@ -11,6 +11,7 @@ import FinanceTotals from './FinanceTotals.vue';
 import ActionButton from '../../components/ActionButton.vue';
 import AppDialog from '../../components/AppDialog.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
+import StatusNotice from '../../components/StatusNotice.vue';
 
 // Financial review, deliberate mail delivery and local rollback have distinct
 // dialogs. Ordinary PDF links retain the existing authorized saved-ledger owner.
@@ -80,20 +81,26 @@ function calculationSaved(notice: PilotPlainMessageKey): void {emit('saved', not
 
 <template>
     <div class="border-top border-secondary-subtle mt-4 pt-3" data-finance-pool-outputs>
-        <strong>{{ messages.t(pool.status === 'CLOSED' ? 'finance.updateTheCalculatedShares' : 'finance.readyToCalculateShares') }}</strong>
-        <p class="text-secondary small">{{ messages.t(pool.status === 'CLOSED' ? 'finance.previewTheUpdatedSharesAndCarryRecordedPaymentsForward' : 'finance.reviewInvoicesAttendanceAndSavedAllocationSettingsBeforeClosing') }}</p>
-        <div class="pilot-action-row">
-            <ActionButton variant="warning" class="btn-sm" :state="action" @click="open('calculation')">{{ messages.t(pool.status === 'CLOSED' ? 'finance.recalculatePool' : 'finance.previewCalculation') }}</ActionButton>
-            <ActionButton v-if="pool.status === 'CLOSED'" variant="outline-info" class="btn-sm" :state="action" @click="open('notify')">{{ messages.t('finance.sendSettlementEmails') }}</ActionButton>
-            <template v-if="pool.status === 'CLOSED' && pool.needsRecalculation">
-                <ActionButton variant="outline-light" class="btn-sm" :disabled="action.disabled.value || !pool.canRollback" @click="open('rollback')">{{ messages.t('finance.rollBackPoolChanges') }}</ActionButton>
-                <small v-if="!pool.canRollback" class="text-secondary">{{ messages.t('finance.rollbackBecomesAvailableAfterThisPoolSNextSuccessful') }}</small>
-            </template>
+        <!-- Saved-calculation guidance and deliberate email/calculation intents
+             retain their native priority; shared action rows handle phone reflow. -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div class="flex-grow-1">
+                <strong>{{ messages.t(pool.status === 'CLOSED' ? 'finance.updateTheCalculatedShares' : 'finance.readyToCalculateShares') }}</strong>
+                <p class="text-secondary small mb-0">{{ messages.t(pool.status === 'CLOSED' ? 'finance.previewTheUpdatedSharesAndCarryRecordedPaymentsForward' : 'finance.reviewInvoicesAttendanceAndSavedAllocationSettingsBeforeClosing') }}</p>
+            </div>
+            <div class="pilot-action-row">
+                <ActionButton v-if="pool.status === 'CLOSED'" variant="outline-info" :state="action" @click="open('notify')">{{ messages.t('finance.sendSettlementEmails') }}</ActionButton>
+                <ActionButton variant="warning" :state="action" @click="open('calculation')">{{ messages.t(pool.status === 'CLOSED' ? 'finance.recalculatePool' : 'finance.previewCalculation') }}</ActionButton>
+            </div>
+        </div>
+        <div v-if="pool.status === 'CLOSED' && pool.needsRecalculation" class="pilot-action-row align-items-center mt-3">
+            <ActionButton variant="outline-light" :disabled="action.disabled.value || !pool.canRollback" @click="open('rollback')">{{ messages.t('finance.rollBackPoolChanges') }}</ActionButton>
+            <small v-if="!pool.canRollback" class="text-secondary">{{ messages.t('finance.rollbackBecomesAvailableAfterThisPoolSNextSuccessful') }}</small>
         </div>
         <FinanceCalculationReview v-if="selected === 'calculation'" :event-id="eventId" :pool="pool" open :active="active"
                                   :saved-shares="shares" :has-pending-edits="hasPendingEdits" :refresh="refresh" @close="selected = null" @saved="calculationSaved" />
-        <AppDialog v-if="selected === 'notify' || selected === 'rollback'" open standard content-class="text-white finance-dialog"
-                   :title="messages.t(selected === 'notify' ? 'finance.sendSettlementEmails' : 'finance.rollBackPoolChanges')" :subtitle="pool.name"
+        <AppDialog v-if="selected === 'notify' || selected === 'rollback'" open content-class="text-white finance-dialog"
+                   :title="messages.t('finance.poolDialogTitle', {title: messages.t(selected === 'notify' ? 'finance.sendSettlementEmails' : 'finance.rollBackPoolChanges'), name: pool.name})"
                    :pending="command.pending.value || command.recovering.value" @close="close">
             <div :data-finance-pool-output="selected">
                 <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'">
@@ -117,7 +124,7 @@ function calculationSaved(notice: PilotPlainMessageKey): void {emit('saved', not
                 </section>
                 <template v-if="selected === 'notify'">
                     <p>{{ messages.t('finance.sendEachPayerTheirSavedCalculatedSharePreviousSettlements') }}</p>
-                    <p v-if="pool.needsRecalculation" class="text-warning small">{{ messages.t('finance.theseEmailsDescribeThePreviousCalculationSavedPoolChanges') }}</p>
+                    <StatusNotice v-if="pool.needsRecalculation" kind="warning">{{ messages.t('finance.theseEmailsDescribeThePreviousCalculationSavedPoolChanges') }}</StatusNotice>
                     <p class="text-secondary small">{{ messages.t('finance.onlyPayersWithAnEmailAddressReceiveAMessage') }}</p>
                 </template>
                 <template v-else>

@@ -19,9 +19,12 @@ import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import {isReadDenial} from '../../app/transport';
 
-const props = defineProps<FrontendGuestEntryProps>();
+const props = withDefaults(defineProps<FrontendGuestEntryProps>(), {presentation: 'generic'});
 const context = usePilot();
 const {messages} = context;
+// Only the Event caller selects its linked-registration guidance and confirmation.
+// Titles and routes never infer this context; admission and commands stay injected.
+const eventPresentation = computed(() => props.presentation === 'event');
 const route = useRoute();
 const router = useRouter();
 const completion = useConfirmedNavigation();
@@ -114,6 +117,9 @@ async function readGuestAuthority(_scope: PilotRequestScope, isCurrent: () => bo
 async function register(): Promise<void> {
     if (blocked.value) return;
     choiceOpen.value = false;
+    // Match the native order: advisory email discovery/choice comes first, then
+    // Event's configured confirmation. Cancel keeps the draft and starts no command.
+    if (eventPresentation.value && !window.confirm(messages.value.t('auth.eventGuestConfirmation'))) return;
     const origin = route.fullPath;
     const destination = next.value;
     registeringGuest.value = true;
@@ -201,6 +207,18 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                 @action="refreshIdentityState">
                 <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
             </CommandFeedback>
+            <!-- Event guests need the native warning about access to their registration
+                 and linked planning data; other features retain their generic guidance. -->
+            <StatusNotice v-if="eventPresentation" kind="info" class="text-center border-info" :margin-bottom="4">
+                <div class="d-flex">
+                    <i class="bi bi-info-circle-fill me-2" aria-hidden="true"></i>
+                    <div class="flex-grow-1"></div>
+                    <div><strong>{{ messages.t('auth.eventAccountRecommendationTitle') }}: </strong>{{
+                        messages.t('auth.eventAccountRecommendation')
+                    }}</div>
+                    <div class="flex-grow-1"></div>
+                </div>
+            </StatusNotice>
             <div class="text-center mb-4">
                 <h3 class="mb-2">{{ messages.t('auth.guestIntro') }}</h3>
                 <ul class="list-unstyled small d-inline-block text-start mb-0">
@@ -241,7 +259,9 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                 <div class="d-flex">
                     <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>
                     <div class="flex-grow-1"></div>
-                    <div><strong>{{ messages.t('auth.headsUp') }}: </strong>{{ messages.t('auth.guestWarning') }}</div>
+                    <div><strong>{{ messages.t('auth.headsUp') }}: </strong>{{
+                        messages.t(eventPresentation ? 'auth.eventGuestWarning' : 'auth.guestWarning')
+                    }}</div>
                     <div class="flex-grow-1"></div>
                 </div>
             </StatusNotice>
@@ -279,7 +299,9 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                     autocomplete="email"
                     :disabled="blocked"
                     :pending="submittingGuest"
-                    ><div class="form-text text-bg-dark">{{ messages.t('auth.emailHint') }}</div></FormField
+                    ><div class="form-text text-bg-dark">{{
+                        messages.t(eventPresentation ? 'auth.eventEmailHint' : 'auth.emailHint')
+                    }}</div></FormField
                 >
                 <div class="col-12 col-md-8 mt-2">
                     <div class="d-grid">

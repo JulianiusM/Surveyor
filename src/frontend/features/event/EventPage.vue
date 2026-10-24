@@ -139,6 +139,7 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
             :resource-id="eventId"
             :title="admin ? messages.t('event.dashboard', {title: event?.title ?? ''}) : event?.title ?? ''"
             :icon="admin ? 'bi-speedometer2' : 'bi-calendar2-event'"
+            :separate-actions="admin"
             :image-version="event?.headerVersion"
             :image-query-key="key"
             :read-image="readHeader"
@@ -174,6 +175,10 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
 
                 <EventRegistration v-if="!admin" :event="event" :refresh="refresh" />
                 <EventBypassLinks v-if="admin && event.capabilities.manageRegistrations" :event-id="event.id" />
+                <!-- Native participant Finance precedes the roster and related
+                     content. Both page intents reuse its role-scoped owner. -->
+                <FinanceSection v-if="!admin && financeEnabled" :key="`${event.id}:${admin}`"
+                    :event-id="event.id" :admin="admin" :enabled="financeEnabled" />
                 <EventParticipants
                     v-if="event.capabilities.participants && (admin || !!event.registration)"
                     :event-id="event.id"
@@ -190,7 +195,7 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
                 <!-- Finance has its own role-scoped read. Participant submission
                      and saved accounting share presentation without broadening
                      this page's Event projection or organizer command authority. -->
-                <FinanceSection v-if="financeEnabled" :key="`${event.id}:${admin}`"
+                <FinanceSection v-if="admin && financeEnabled" :key="`${event.id}:${admin}`"
                     :event-id="event.id" :admin="admin" :enabled="financeEnabled" />
                 <template v-if="admin && event.capabilities.exportParticipants">
                     <hr />

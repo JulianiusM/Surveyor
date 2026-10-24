@@ -4,10 +4,10 @@ documentation-metadata
 audience: event participants; event organizers
 owner: event invoice-pool maintainers
 status: current
-last-verified: 2026-10-22
+last-verified: 2026-10-24
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Current participant and organizer controls, exact localized labels, independent saves, calculation/settlement confirmation, saved-read recovery and deferred ledger filtering source-reconciled. Existing English email/PDF output behavior retained; no new browser execution claimed.
-current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinanceCalculationReview.vue; src/frontend/features/finance/FinancePoolOutputs.vue; src/frontend/features/finance/FinanceSettlement.vue; src/frontend/features/finance/FinanceShares.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/locales/en.json
+verification-scope: October24 native-parity restorations for organizer entry, invoice disclosure, inline review fields, final action labels and expense submission source-reconciled against current captured views. Earlier independent-save, calculation, settlement and saved-read recovery guidance retained.
+current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinanceCalculationReview.vue; src/frontend/features/finance/FinancePoolOutputs.vue; src/frontend/features/finance/FinanceSettlement.vue; src/frontend/features/finance/FinanceShares.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/frontend/features/finance/FinanceInvoiceRow.vue; src/frontend/features/finance/invoiceReview.ts; src/locales/en.json
 source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/database/entities/event/EventInvoice.ts; src/modules/database/entities/event/EventInvoicePool.ts; src/modules/database/entities/event/EventInvoiceShare.ts; src/modules/database/entities/event/EventInvoiceSurcharge.ts; src/modules/database/entities/event/EventPoolAssignment.ts; src/modules/database/entities/event/EventPoolTakeover.ts; src/views/modules/module_invoice_pool.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/public/js/events.ts; src/modules/invoice/retention.ts; src/modules/lib/fileCommons.ts; tests/integration/invoice-workflows.spec.ts; tests/frontend/ui-behaviors.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/finance/; src/locales/
 next-review: invoice-pool-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
@@ -157,7 +157,7 @@ Use **Search invoices** to search the invoice number, pool, amount, description,
 #### What to do for each status
 
 - **Awaiting review:** wait for an organizer, or select **Retract** if you submitted the wrong invoice. You cannot edit its original details or delete its history.
-- **Accepted:** review any correction. Select **Close** when the accepted invoice needs no further review discussion.
+- **Accepted:** review the amount and any correction in **Your invoice history**. Select **Close** when the accepted invoice needs no further review discussion. Check the invoice number in **Confirm invoice action**, then select **Close** to confirm.
 - **Rejected:** read the reason. Contact an organizer when clarification is needed, then submit a replacement while the pool is open. The rejected record and proof remain in history.
 - **Closed:** no further invoice action is required. The cost remains included in pool totals.
 - **Retracted:** the invoice is excluded from review and costs. Submit a new invoice if a replacement is needed and the pool remains open.
@@ -256,7 +256,7 @@ recipient by name in both the greeting and the To field.
 
 ## Organizer tasks
 
-Use **Invoice pools & payments** in the event administration dashboard to create pools, edit their inputs, record expenses and review invoices. Each editing dialog has its own save action. Saving refreshes the saved information without reloading the page; wait for confirmation before leaving. **Close** asks before discarding unfinished changes, and **Discard edits** restores that form's saved values.
+Use **Invoice pools** in the event administration dashboard to create pools, edit their inputs, record expenses and review invoices. Each editing dialog has its own save action. Saving refreshes the saved information without reloading the page; wait for confirmation before leaving. **Close** asks before discarding unfinished changes, and **Discard edits** restores that form's saved values.
 
 Calculation previews, closing or recalculating a pool, restoring saved pool settings, settlement emails, and recording payments or refunds are available in the same pool. Save each unfinished editing dialog before calculating.
 
@@ -264,7 +264,7 @@ Calculation previews, closing or recalculating a pool, restoring saved pool sett
 
 1. Open the event.
 2. Select **Event administration dashboard**.
-3. Open **Invoice pools & payments**.
+3. Find **Invoice pools**.
 4. Select **Create pool**.
 5. Complete **Create a new pool**.
    Choose **Invoice submissions** as **Open for invoices** or **Organizer invoices only**.
@@ -453,13 +453,13 @@ Use **Add invoice / amount** for a cost that belongs in the shared pool, such as
 invoice workflow. You do not need an event registration to record it. You can leave the cost unassigned or identify
 the participant who paid.
 
-1. Open the pool under **Invoice pools & payments**.
+1. Open the pool under **Invoice pools**.
 2. Select **Add invoice / amount**.
 3. Enter a positive **Amount** with at most two decimal places.
 4. Under **Paid by participant (optional)**, select the participant who paid, or keep **No participant — shared pool expense**.
 5. Enter a required **Description** explaining the cost.
 6. Under **Proof (optional)**, attach a receipt or invoice when available.
-7. Select **Add invoice / amount** and wait for confirmation.
+7. Select **Add expense** and wait for confirmation.
 
 The invoice is immediately **Accepted** and included in pool costs in every pool state. The ledger shows the selected
 participant, or **Pool expense** when unassigned, alongside **Recorded by** with the organizer's name. The participant
@@ -480,7 +480,7 @@ You can add an organizer expense to a closed pool. Its saved shares and payments
 
 ### Review submitted invoices
 
-Open the pool under **Invoice pools & payments** to reach **Invoice administration**. Newest submissions appear first.
+Open the pool under **Invoice pools**, then expand **Invoices** if it is collapsed to reach **Invoice administration**. The invoice count appears in the disclosure heading. Newest submissions appear first.
 
 Use:
 
@@ -489,39 +489,38 @@ Use:
 - 25, 50, or 100 rows per page.
 - **Previous** and **Next** to move through longer ledgers.
 
-For each participant submission, compare **Submitted details** with **View proof**. Select **Accept** or **Reject** to open
-the corresponding review dialog. **Participant / source** shows participant
+For each participant submission, compare **Submitted details** with **View proof**. Enter any correction or rejection reason under **Organizer review**, then select **Accept** or **Reject** to open the final confirmation. **Participant / source** shows participant
 attribution separately from an organizer's **Recorded by** label. Organizer-entered invoices are already Accepted,
 can have no proof, and show **Pool expense** when no participant was selected.
 
 #### Accept without correction
 
-1. Select **Accept** on the invoice.
-2. Leave **Corrected amount** and **Corrected description** empty in the dialog.
-3. Review the invoice and amount, then select **Confirm**.
+1. Leave **Corrected amount** and **Corrected description** empty in the invoice row.
+2. Select **Accept** on the invoice.
+3. Review the invoice and amount in **Confirm invoice action**, then select **Accept**.
 
 The submitted amount and description become the effective accepted values.
 
 #### Accept with a correction
 
-1. Select **Accept** on the invoice.
-2. Enter a positive **Corrected amount** when the accepted total differs from the submitted amount.
-3. Enter a **Corrected description** when the accepted explanation should differ. It can contain up to 4,000 characters.
-4. Review the invoice and corrected amount, then select **Confirm**.
+1. In the invoice row, enter a positive **Corrected amount** when the accepted total differs from the submitted amount.
+2. Enter a **Corrected description** when the accepted explanation should differ. It can contain up to 4,000 characters.
+3. Select **Accept** on the invoice.
+4. Review the invoice and corrected amount in **Confirm invoice action**, then select **Accept**.
 
 Surveyor preserves the original submission and displays it beside the correction. The corrected amount is used for pool totals, invoice credit, and final shares. A blank corrected field keeps the corresponding submitted value.
 
 #### Reject
 
-1. Select **Reject** on the invoice.
-2. Enter a **Rejection reason** in the dialog. It is required and can contain up to 4,000 characters.
-3. Review the invoice, then select **Confirm**.
+1. Enter a **Rejection reason** in the invoice row. It is required and can contain up to 4,000 characters.
+2. Select **Reject** on the invoice.
+3. Review the invoice in **Confirm invoice action**, then select **Reject**.
 
 The invoice becomes Rejected. It is excluded from totals but remains in both the organizer ledger and the submitter’s history with the reason and proof.
 
 #### Close an accepted invoice
 
-Select **Close** on an Accepted invoice when its review record is finished, review the invoice and amount in the dialog, then select **Confirm**. The invoice becomes Closed but remains included in **Full pool total** and in the final share calculation. The action does not settle a participant share.
+Select **Close** on an Accepted invoice when its review record is finished, review the invoice and amount in **Confirm invoice action**, then select **Close**. The invoice becomes Closed but remains included in **Full pool total** and in the final share calculation. The action does not settle a participant share.
 
 The attributed participant may also close their own Accepted invoice from **Your invoice history**, including one
 recorded for them by an organizer.
@@ -730,7 +729,7 @@ After the real-world transfer is complete:
 
 1. Check the payer and signed **Calculated balance**.
 2. Select **Record payment** for a positive balance or **Record refund** for a negative balance.
-3. Review the dialog bearing the same action name, including the payer, signed amount and transfer direction.
+3. Review **Confirm invoice action**, including the payer, signed amount and transfer direction.
 4. Select **Record payment** or **Record refund** again and wait for confirmation.
 
 Before confirmation, **Cancel**, the close button, Escape, and backdrop dismissal leave saved state unchanged. Scrolling over a focused invoice number field does not step its draft amount.

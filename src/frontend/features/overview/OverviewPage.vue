@@ -12,6 +12,7 @@ import {overviewQueryParameters} from './api';
 import {frontendOverviewPath, frontendOverviewPageEntry} from '../../../modules/lib/frontendIdentity';
 import OverviewRegion from './OverviewRegion.vue';
 import AppAccordionButton from '../../components/AppAccordionButton.vue';
+import RefreshButton from '../../components/RefreshButton.vue';
 const context = usePilot();
 const {messages} = context;
 const route = useRoute();
@@ -187,51 +188,47 @@ function hiddenHref(collection: string): string {
                     <hr />
                     <div class="accordion accordion-dark">
                         <div class="accordion-item entity-overview overflow-visible">
-                            <h2 class="accordion-header">
-                                <AppAccordionButton
-                                    :expanded="open[collection]"
-                                    :controls="'overview-' + collection"
-                                    @click="open[collection] = !open[collection]"
-                                >
-                                    <i
-                                        class="bi me-2"
-                                        :class="
-                                            collection === 'participant'
-                                                ? 'bi-clipboard-check'
-                                                : 'bi-shield-check'
-                                        "
-                                        aria-hidden="true"
-                                    ></i>
-                                    {{
-                                        messages.t(
-                                            collection === 'participant'
-                                                ? 'overview.participation'
-                                                : 'overview.managed',
-                                        )
-                                    }}
-                                    <span v-if="counts[collection]" class="badge bg-secondary ms-2">{{
-                                        counts[collection].total
-                                    }}</span>
-                                    <!-- Unknown counts are not empty membership. The region announces
-                                         loading; keep this inline placeholder free of another live status. -->
-                                    <span v-else class="badge bg-secondary ms-2" aria-hidden="true">…</span>
-                                </AppAccordionButton>
-                            </h2>
-                            <div
-                                v-show="open[collection]"
-                                :id="'overview-' + collection"
-                                class="accordion-collapse collapse show"
+                            <OverviewRegion
+                                :collection="collection"
+                                region="main"
+                                :active="open[collection]"
+                                :collapse-id="'overview-' + collection"
+                                @counts="(source, scope) => updateCounts(collection, 'main', source, scope)"
                             >
-                                <div class="accordion-body">
-                                    <OverviewRegion
-                                        :collection="collection"
-                                        region="main"
-                                        :active="open[collection]"
-                                        @counts="
-                                            (source, scope) =>
-                                                updateCounts(collection, 'main', source, scope)
-                                        "
-                                    />
+                                <template #header="{refreshAction, refresh}">
+                                    <h2 class="accordion-header d-flex align-items-center">
+                                        <AppAccordionButton
+                                            :expanded="open[collection]"
+                                            :controls="'overview-' + collection"
+                                            @click="open[collection] = !open[collection]"
+                                        >
+                                            <i
+                                                class="bi me-2"
+                                                :class="
+                                                    collection === 'participant'
+                                                        ? 'bi-clipboard-check'
+                                                        : 'bi-shield-check'
+                                                "
+                                                aria-hidden="true"
+                                            ></i>
+                                            {{
+                                                messages.t(
+                                                    collection === 'participant'
+                                                        ? 'overview.participation'
+                                                        : 'overview.managed',
+                                                )
+                                            }}
+                                            <span v-if="counts[collection]" class="badge bg-secondary ms-2">{{
+                                                counts[collection].total
+                                            }}</span>
+                                            <!-- Unknown counts are not empty membership. The region announces
+                                                 loading; keep this inline placeholder free of another live status. -->
+                                            <span v-else class="badge bg-secondary ms-2" aria-hidden="true">…</span>
+                                        </AppAccordionButton>
+                                        <RefreshButton class="mx-2" :state="refreshAction" @refresh="refresh" />
+                                    </h2>
+                                </template>
+                                <template #default>
                                     <!-- An explicitly opened hidden region may start before main-region
                                          counts arrive. Confirmed membership retains the native empty rule. -->
                                     <div v-if="counts[collection]?.total || (!counts[collection] && hidden[collection])" class="mt-4">
@@ -269,8 +266,8 @@ function hiddenHref(collection: string): string {
                                             />
                                         </div>
                                     </div>
-                                </div>
-                            </div>
+                                </template>
+                            </OverviewRegion>
                         </div>
                     </div>
                 </section>

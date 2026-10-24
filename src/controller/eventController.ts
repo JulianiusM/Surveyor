@@ -892,7 +892,7 @@ export async function readEventResourceEntry(id: string, view: 'detail' | 'guest
         // Native Event detail admits an active profile independently of ACCESS_VIEW.
         // Its admin route additionally requires ACCESS_ADMIN; no roster data enters admission.
         if (view === 'admin' && !mayPerformEventMethod(await eventPermissions(row, session, manager), 'admin')) {
-            return {entry: {kind: 'denied', status: 403, messageKey: 'problem.forbidden'}, guest: null};
+            return {entry: {kind: 'denied', status: 403, messageKey: 'api:errors.FORBIDDEN'}, guest: null};
         }
         return {entry: {kind: 'render'}, guest: null};
     });

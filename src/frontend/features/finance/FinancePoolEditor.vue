@@ -149,8 +149,9 @@ function acknowledge(): void {
 </script>
 
 <template>
-    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t(pool ? 'finance.poolSettings' : 'finance.createANewPool')" :subtitle="pool?.name"
-        :pending="command.pending.value || command.recovering.value" standard @close="close">
+    <AppDialog content-class="text-white finance-dialog" :open="open"
+        :title="pool ? messages.t('finance.poolDialogTitle', {title: messages.t('finance.poolSettings'), name: pool.name}) : messages.t('finance.createANewPool')"
+        :pending="command.pending.value || command.recovering.value" @close="close">
         <!-- The shared dialog keeps this receipt renderer mounted across Close,
              moving confirmed feedback to the page host without copying it. -->
         <template #feedback>
@@ -199,36 +200,41 @@ function acknowledge(): void {
                             <p class="text-secondary small mt-2 mb-0">{{ messages.t('finance.poolSubmissionStateHelp') }}</p>
                         </FormField>
                     </template>
-                    <!-- Creation and later settings compose this one field group;
-                         their commands never collect another form's draft. -->
-                    <FormField :id="`${id}-distribution`" class="col-12" :label="messages.t('finance.shareDistributionMode')">
-                        <template #control>
-                            <select :id="`${id}-distribution`" v-model="draft.distribution" name="distribution" class="form-select text-bg-dark" required>
-                                <option value="TIME_BASED">{{ messages.t('finance.distributeAmongDaysAttended') }}</option>
-                                <option value="NIGHTS">{{ messages.t('finance.distributeAmongNightsStayed') }}</option>
-                                <option value="EQUAL">{{ messages.t('finance.distributeAmongParticipants') }}</option>
-                            </select>
-                        </template>
-                    </FormField>
-                    <FormField :id="`${id}-description`" v-model="draft.description" class="col-12" name="description"
-                        :label="messages.t('finance.description')"
-                        :pending="command.pending.value" />
-                    <div class="col-12">
-                        <div class="form-check form-switch">
-                            <input :id="`${id}-rounding`" v-model="draft.roundUpShares" type="checkbox" name="roundUpShares" class="form-check-input" />
-                            <label class="form-check-label" :for="`${id}-rounding`">{{ messages.t('finance.roundBaseSharesUp') }}</label>
+                    <!-- One base-settings group serves both dialogs. Creation
+                         places allocation beside it, with the same controls and
+                         draft ownership retained at every responsive width. -->
+                    <div :class="pool ? 'col-12' : 'col-md-8'">
+                        <div class="row g-3">
+                            <FormField :id="`${id}-distribution`" class="col-md-6" :label="messages.t('finance.shareDistributionMode')">
+                                <template #control>
+                                    <select :id="`${id}-distribution`" v-model="draft.distribution" name="distribution" class="form-select text-bg-dark" required>
+                                        <option value="TIME_BASED">{{ messages.t('finance.distributeAmongDaysAttended') }}</option>
+                                        <option value="NIGHTS">{{ messages.t('finance.distributeAmongNightsStayed') }}</option>
+                                        <option value="EQUAL">{{ messages.t('finance.distributeAmongParticipants') }}</option>
+                                    </select>
+                                </template>
+                            </FormField>
+                            <FormField :id="`${id}-description`" v-model="draft.description" class="col-md-6" name="description"
+                                :label="messages.t('finance.description')"
+                                :pending="command.pending.value" />
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    <input :id="`${id}-rounding`" v-model="draft.roundUpShares" type="checkbox" name="roundUpShares" class="form-check-input" />
+                                    <label class="form-check-label" :for="`${id}-rounding`">{{ messages.t('finance.roundBaseSharesUp') }}</label>
+                                </div>
+                                <p class="text-secondary small mt-2 mb-0">{{ messages.t('finance.selectedRoundEachBaseShareUpToTheNext') }}</p>
+                            </div>
+                            <div v-if="pool" class="col-12">
+                                <div class="form-check form-switch">
+                                    <input :id="`${id}-emails`" v-model="draft.sendCalculationEmails" type="checkbox" name="sendCalculationEmails" class="form-check-input" />
+                                    <label class="form-check-label" :for="`${id}-emails`">{{ messages.t('finance.sendCalculationEmailsAutomatically') }}</label>
+                                </div>
+                                <p class="text-secondary small mt-2 mb-0">{{ messages.t('finance.useThisAsTheDefaultWhenClosingOrRecalculating') }}</p>
+                            </div>
                         </div>
-                        <p class="text-secondary small mt-2 mb-0">{{ messages.t('finance.selectedRoundEachBaseShareUpToTheNext') }}</p>
                     </div>
-                    <div v-if="pool" class="col-12">
-                        <div class="form-check form-switch">
-                            <input :id="`${id}-emails`" v-model="draft.sendCalculationEmails" type="checkbox" name="sendCalculationEmails" class="form-check-input" />
-                            <label class="form-check-label" :for="`${id}-emails`">{{ messages.t('finance.sendCalculationEmailsAutomatically') }}</label>
-                        </div>
-                        <p class="text-secondary small mt-2 mb-0">{{ messages.t('finance.useThisAsTheDefaultWhenClosingOrRecalculating') }}</p>
-                    </div>
-                    <template v-else>
-                        <div class="col-12">
+                    <template v-if="!pool">
+                        <div class="col-md-4">
                             <p class="form-label text-secondary">{{ messages.t('finance.allocation') }}</p>
                             <FinanceEnrollmentFields
                                 :assign-all="draft.assignAll" :is-default="draft.isDefault" :subtract-personal-invoices="draft.subtractPersonalInvoices"
@@ -268,6 +274,7 @@ function acknowledge(): void {
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t(pool ? 'common.close' : 'common.cancel') }}</ActionButton>
             <ActionButton type="submit" :form="`${id}-form`" :state="action"
                 :pending="command.pending.value" :show-spinner="false">
+                <i class="bi me-1" :class="pool ? 'bi-save' : 'bi-plus-circle'" aria-hidden="true"></i>
                 {{ messages.t(pool ? 'finance.savePoolSettings' : 'finance.addPool') }}
             </ActionButton>
         </template>

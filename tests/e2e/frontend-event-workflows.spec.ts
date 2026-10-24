@@ -7,6 +7,7 @@ import {closeModalForE2E, dismissFrontendSuccessNotifications, openModalForE2E, 
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {PERM} from '../../src/modules/lib/permissions';
 import {createTranslator} from '../../src/modules/localization/translator';
+import {getGuestRegistrationNags} from '../../src/modules/lib/guestRegistrationNags';
 
 /** Seed attendance through the unchanged native operation, independently of the
  * Vue control being exercised. Each test owns a separately created Event. */
@@ -428,7 +429,14 @@ test('keeps deadline rejection drafts, admits independent exceptions and present
         await guest.goto(new URL(`/frontend-pilot/event/${event.id}?locale=en`, page.url()).href, {waitUntil: 'domcontentloaded'});
         await waitForPilotHydration(guest);
         await guest.locator('#guest-name').fill(`P2 full guest ${randomUUID().slice(0, 8)}`);
-        await guest.getByRole('button', {name: 'Continue as guest', exact: true}).click();
+        // Answer only this Event guest-entry warning. The owner's later
+        // registration-cancellation confirmation keeps its separate handler.
+        const confirmation = guest.waitForEvent('dialog').then(async function acceptEventGuest(dialog) {
+            expect(dialog.type()).toBe('confirm');
+            expect(dialog.message()).toBe(getGuestRegistrationNags('event').submitConfirmation);
+            await dialog.accept();
+        });
+        await Promise.all([confirmation, guest.getByRole('button', {name: 'Continue as guest', exact: true}).click()]);
         await expect(guest.getByText('This event is full.', {exact: true})).toBeVisible();
         await expect(guest.locator('#registrationForm')).toHaveCount(0);
     } finally {

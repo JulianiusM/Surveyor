@@ -48,6 +48,7 @@ describe('P9 signed saved-share settlement', () => {
     ] as const)('captures %s paid=%s for explicit confirmation and sends the intended marker once', async (amount, isPaid, status, label, desired) => {
         const mounted = await mountSettlement({...saved, amount, isPaid, status});
         expect(mounted.request).not.toHaveBeenCalled();
+        expect(mounted.dialog.get('.modal-title').text()).toBe('Confirm invoice action');
         expect(mounted.dialog.text()).toContain(amount);
         expect(mounted.dialog.text()).toContain('<Alice>');
         expect(mounted.dialog.find('alice').exists()).toBe(false);

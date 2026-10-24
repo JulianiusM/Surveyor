@@ -2177,6 +2177,490 @@ implementation_defects:
     closes_when:
       - A separately authorized native correction retains current participant choices when the dialog opens before
         a controlled delayed initial read, with real-browser coverage of the successful data arrival.
+  - id: IMP-087
+    status: closed
+    closed_on: 2026-10-24
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-parity
+    title: Vue Event guest entry loses contextual guidance and its configured confirmation
+    evidence: Same-actor live desktop/mobile comparisons omit the native account recommendation, linked-data warning
+      and recovery-email guidance. Source review also finds GST-02's Event confirmation absent before registration.
+    authorization: The direct live visual-parity task restores the accepted GST-02/native journey; no contrary
+      approved exception was found. Native and shared backend behavior remain unchanged.
+    documentation_contract: Event guests see their registration-specific guidance and confirm the personal-link
+      responsibility before registration; generic feature guest entry keeps its existing guidance.
+    disposition: Explicit Event context now selects localized guidance and confirmation in the existing shared Vue
+      guest-entry owner. Focused tests verify cancellation retains the draft and dispatches no registration.
+    closes_when:
+      - Fresh built desktop/mobile review accepts the contextual view and affected real guest workflows pass.
+    closure_evidence: Root and independent reviewers accepted the rebuilt English/German entry views; focused
+      cancel/accept checks and two actual built guest workflows passed with their token/capacity assertions retained.
+  - id: IMP-088
+    status: closed
+    closed_on: 2026-10-24
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-parity
+    title: Closed Vue finance pools expose invoice administration ahead of saved shares
+    evidence: Live matched closed-pool views show the Vue invoice ledger expanded while native folds it unless a
+      new invoice needs review. This pushes the saved shares away from their native position.
+    authorization: The direct visual-parity task retains the existing CLOSED/NEW disclosure contract; no approved
+      disclosure exception was found.
+    documentation_contract: Closed pools prioritize calculated shares while new invoices and an explicit History
+      action reveal the mounted invoice ledger.
+    disposition: The existing finance section now owns the native disclosure default and reveals its actual mounted
+      node for the existing organizer History intent, without copying invoice state or changing commands.
+    closes_when:
+      - Mounted lifecycle checks and fresh built organizer/participant visual review accept the restored journey.
+    closure_evidence: Mounted disclosure/lifetime checks passed; root and independent reviewers accepted rebuilt
+      closed/open organizer and registered-guest views at desktop and phone widths.
+  - id: IMP-089
+    status: closed
+    closed_on: 2026-10-24
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-parity
+    title: Vue finance reduces persistent stale-calculation and pending-coverage guidance
+    evidence: Live matched views replace native prominent warnings with small text and omit the explanation that
+      saved input changes have not updated calculated shares or prevented payment recording. The share-context
+      block also omits how earlier payments and refunds are credited into recalculation.
+    authorization: The direct visual-parity task preserves the existing domain-state guidance. Common transient
+      SPA feedback decisions do not authorize dropping these persistent warnings.
+    documentation_contract: Stale saved calculations and pending coverage changes remain visibly explained in
+      their pool context, independently of transient command messages.
+    disposition: Existing StatusNotice presentation and localized native wording restore full guidance and the
+      stale header badge and saved-share settlement explanations; calculation, payment and feedback lifecycles
+      retain their existing owners. Existing admitted summary membership selects prior-settlement context.
+    closes_when:
+      - Rendered warning assertions and fresh built English/German review confirm complete readable guidance.
+    closure_evidence: Focused checks include signed, zero-net and absent prior-settlement summaries; root and
+      independent reviewers accepted the rebuilt English/German stale and pending-coverage presentations.
+  - id: IMP-090
+    status: closed
+    closed_on: 2026-10-24
+    discovered_on: 2026-10-24
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-live-visual-parity
+    title: Vue saved-share PDF exports are separated from their calculated-share heading
+    evidence: Live closed-pool views place PDF outputs beneath update commands instead of beside Calculated shares
+      as in the native comparator; no explicit relocation approval was found.
+    authorization: The direct visual-parity task restores the existing output association without changing output
+      admission, saved payer selection or download routes.
+    documentation_contract: Organizer PDF downloads are associated with the saved calculated-share ledger.
+    disposition: The shared share heading now accepts the existing admitted output actions through an explicit slot,
+      retaining complete saved-ledger URLs and localized pool-specific accessible labels.
+    closes_when:
+      - Rendered route/heading assertions and fresh built desktop/mobile review confirm reachable exports.
+    closure_evidence: Heading/download assertions passed; rebuilt desktop/phone views retain the shared ledger's
+      admitted, reachable outputs. Root and independent visual review accepted their placement.
+  - id: IMP-091
+    status: closed
+    closed_on: 2026-10-24
+    discovered_on: 2026-10-24
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-live-visual-parity
+    title: Vue finance changes native action prominence and output grouping
+    evidence: Live pool comparisons show an outline add-invoice action instead of native primary styling, a warning
+      style for submission access, and recalculation, email and rollback controls grouped in a different order.
+    authorization: The direct visual-parity task restores the existing native presentation; no approved exception
+      for these action priorities was found.
+    documentation_contract: Finance actions retain their native visual priorities and grouping with the approved
+      responsive phone action rows.
+    disposition: Existing pool action/output components retain their injected command states and operations while
+      restoring native action styling, helper placement, email/calculation order and the separate rollback row.
+    closes_when:
+      - Focused component checks and fresh built open/closed desktop/mobile comparisons accept the presentation.
+    closure_evidence: Action-state and ordering checks passed within the final five-file/89-test Finance subset;
+      root and independent visual review accepted open/closed desktop/phone controls and calculation preview.
+  - id: IMP-092
+    status: closed
+    closed_on: 2026-10-24
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-parity
+    title: Event administration denial falls back to a generic failure message
+    evidence: Matched unauthorized-profile views return 403 but Vue hides the permission reason. The versioned
+      admission projection names problem.forbidden, which is absent from the generated catalog.
+    authorization: The live authorization-state parity task permits this bounded presentation adaptation. The
+      existing permission check, status, private projection and native route remain unchanged.
+    documentation_contract: A denied Event administrator sees a localized permission explanation.
+    disposition: The existing controller projection now names the existing plain api:errors.FORBIDDEN catalog
+      message. The grants workflow also checks the denied envelope and rendered 403 document.
+    closes_when:
+      - The built grants workflow and fresh English/German denied-view comparison accept the explanation.
+    closure_evidence: The actual built permission-grants workflow passed its unchanged grant matrix plus explicit
+      denial envelope/localized SSR assertions; root and independent review accepted the English/German 403 views.
+  - id: IMP-093
+    status: closed
+    closed_on: 2026-10-24
+    discovered_on: 2026-10-24
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-live-visual-parity
+    title: Vue total-empty invoice history renders unused ledger controls
+    evidence: Matched open-pool views show native audience-specific empty text while Vue displays a full empty
+      administration table, search, filters and paging around it.
+    authorization: The live visual-parity task restores native empty-state presentation without changing admitted
+      invoices, query filters or the existing refresh/command owners.
+    documentation_contract: A total-empty history displays its audience-correct message; filtered-empty history
+      retains the ledger and current filters.
+    disposition: The shared history owner selects total-empty presentation while keeping the ledger/filter nodes
+      mounted across empty/nonempty read snapshots.
+    closes_when:
+      - Mounted total-empty/filtered-empty lifetime checks and matched built open-pool views pass review.
+    closure_evidence: Mounted tests preserve filter-node identity across empty/nonempty reads and filtered-empty
+      controls; root and independent review accepted rebuilt open-pool English desktop/phone and German phone views.
+  - id: IMP-094
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Stretched Vue Home and guest actions align their contents inconsistently
+    evidence: The maintainer rejected the first visual acceptance. Home and guest-entry flex links omit horizontal
+      content centering, so approved full-width phone action rows start their icon/text at the left edge while
+      ordinary buttons center them. The shared ActionButton alone does not own these links.
+    authorization: The maintainer directly requests consistent app-wide button alignment and related-issue review.
+    documentation_contract: Matching ordinary action buttons center their icon/text group, including when stretched;
+      native picker/menu/accordion list alignment remains a separate composition.
+    disposition: Correct matching flex actions in the existing Vue stylesheet and inspect every actual caller.
+    closes_when:
+      - Fresh live Home and every generic/Event guest-entry caller show consistent desktop/phone alignment.
+  - id: IMP-095
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Vue organizer Finance replaces the native management card and create action hierarchy
+    evidence: The maintainer identifies the visibly different Create pool action. Native has an always-visible
+      Invoice pools card with heading-adjacent plus/Create pool and contextual help; Vue uses another accordion,
+      a renamed heading and a body-left plain button, dropping the help sentence.
+    authorization: The direct reinspection request restores the native management structure. Required integrated
+      Refresh uses the same existing admitted read owner in that card header; no business or permission change.
+    documentation_contract: Organizer Finance retains its native card/create hierarchy; participant Finance keeps
+      its separate native disclosure journey.
+    disposition: Restore the existing FinanceSection composition and admitted action without a new state owner.
+    closes_when:
+      - Fresh open/closed and create/settings-dialog views match the native structure at desktop and phone widths.
+  - id: IMP-096
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Fixed Vue heading side tracks force unnecessary entity-title wrapping
+    evidence: The maintainer identifies Event titles wrapping with enough available space. PageHeading reserves
+      25/50/25 columns even when the left side is empty; the native Event heading uses the full width above actions.
+    authorization: The direct correction includes Event titles and analogous shared headings/loading states.
+    documentation_contract: Entity titles use available native heading space; controls retain their admitted
+      capabilities, responsive reachability and existing read/command lifetimes.
+    disposition: Correct the shared heading geometry and its loading counterpart, reviewing all entity/profile callers.
+    closes_when:
+      - Long-title desktop/tablet comparisons and readable phone/profile views show no unnecessary wrap or new header row.
+  - id: IMP-097
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Empty Vue Overview adds an Administrable entities heading and standalone Refresh row
+    evidence: The maintainer identifies the extra header. OverviewRegion makes its navigation-focus h3 visible for
+      empty regions and renders an otherwise unnecessary toolbar absent from the native collection.
+    authorization: The direct correction removes that added structure while retaining the approved integrated
+      healthy-view Refresh requirement, including empty results, through its existing region owner.
+    documentation_contract: Overview uses its existing collection/accordion headings without a duplicate visible title.
+    disposition: Present the same region-owned Refresh beside the existing collection accordion heading; preserve
+      mounted read controls, collapse admission and empty/populated focus lifetime.
+    closes_when:
+      - Empty/filtered/populated/alternate-profile live comparisons and mounted lifetime checks accept the hierarchy.
+  - id: IMP-098
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Vue Finance field wrappers and pool editor lose native field geometry and context
+    evidence: Related review finds native search flex rules applied to an input inside a Vue FormField wrapper,
+      leaving coverage/share searches narrow; pool creation also stacks the native desktop 8/4 columns and omits
+      the creation plus icon. A pending-coverage helper sentence and editable coverage Actions column are missing.
+      Fresh adjustment-dialog originals also show reordered helper/saved rows, missing subheading/placeholders,
+      stacked native 6/6 fields and a checkbox replacing the native switch.
+      Dialog review also finds a renamed Add expense submission and a plain settlement-email warning replacing
+      the native warning panel; these retain the same existing command and warning text owners.
+    authorization: The maintainer directly requests related-issue corrections and a complete repeated visual review.
+    documentation_contract: Existing Finance fields retain native useful track widths and contextual instructions,
+      with approved responsive reflow and the same selected values/drafts.
+    disposition: Apply the existing flex dimensions to actual Vue wrapper items and restore native editor/helper
+      composition without new accounting, read, command or authority owners.
+    closes_when:
+      - Fresh full-width Finance crops and related dialogs show native field structure with readable reachable controls.
+  - id: IMP-099
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Native large Finance dialogs are constrained to the standard width in Vue
+    evidence: Fresh preflight native/Vue originals show create/settings/factors/adjustments/takeovers at 800px native
+      but 500px Vue on desktop. The standard-size opt-in also constrains a fullscreen phone dialog. Native pool
+      management/action mixins explicitly use modal-lg; the existing shared Vue dialog already supports that size.
+      The native takeover chooser also fills the available dialog height, while Vue collapses its desktop body.
+    authorization: The direct Finance structure correction and related-issue review restore the actual native-large
+      consumers through the existing shared dialog; genuine standard confirmation/guest dialogs retain their size.
+    documentation_contract: Each Finance dialog uses its native field capacity while retaining approved mobile
+      action rows, focus/pending-dismissal, portal and feedback lifetimes.
+    disposition: Remove the mismatched size opt-in only for actual native-large consumers; inspect dialog titles,
+      field order, footer controls and full body reachability at both widths.
+    closes_when:
+      - Fresh native/Vue management and related action-dialog pairs show equivalent readable sizing and structure.
+  - id: IMP-100
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: high
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Vue new-invoice review hides native inline fields behind an extra editable dialog
+    evidence: A fresh nonempty OPEN-pool comparison shows the native corrected amount, description and rejection
+      reason inline beside Accept/Reject; Vue substitutes No corrections and opens another editable dialog. Native
+      events.ts captures only the chosen action's fields, then opens one summary-only confirmation. Accepted-row
+      actions/proof icons and cell widths also differ, with a clipped Close action in the Vue desktop ledger.
+    authorization: The direct parity correction and related-issue review restore this native journey. Independent
+      tracing found no P8/P9 approval for moving those fields or adding an editable step. Retroactive review retains
+      its separate captured-revision/final-review contract; backend business owners and validation stay unchanged.
+    documentation_contract: New invoices expose their native action-specific review fields and final confirmation;
+      filtering, paging and same-ID reads preserve lexical drafts and pending/unknown command receipts.
+    disposition: Reuse one Finance review draft/command owner for the native inline row and its summary gate;
+      existing retroactive dialogs adopt the same extracted logic rather than gaining a copied writable owner.
+    closes_when:
+      - Focused actual-row tests cover action-specific validation/capture, read/filter/page retention and retirement.
+      - Built acceptance/rejection and fresh live inline/default/edited/confirmation views preserve the native journey.
+  - id: IMP-101
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Vue Event registration forces short choices into fewer columns than native
+    evidence: Native initial and update registration forms use three choice columns below the medium breakpoint
+      and four above. The sole Vue registration grid uses a nine-rem floor that forces short phone choices into
+      two columns even where the native grouping fits. No approved dietary-badge or action-row exception changes this form.
+    authorization: The direct whole-app related-issue review restores native grouping; approved locale-neutral
+      usability still requires long translated labels to stay readable and inside the form.
+    documentation_contract: Registration preserves choice order, available width and native grouping without
+      changing selection, validation, attendance values or the existing save/cancel owners.
+    disposition: Correct the existing registration-only grid and inspect actual English/German labels at both widths.
+    closes_when:
+      - Built browser and fresh live registration views show three/four columns with contained readable choice labels.
+  - id: IMP-102
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Vue Help table overrides fragment ordinary words and add unnecessary scrolling
+    evidence: Readable live Getting Started and Drivers table regions split Method, Organization, Participants and
+      Drivers inside words where native keeps them whole. A strong-cell selector also forces every Packing state
+      column to nine rem, adding a horizontal pan to a three-column table that fits in native. Other genuinely wide
+      prose tables have no local overflow owner because the selector only recognizes code or strong first cells.
+    authorization: The direct whole-app visual reinspection restores native natural column sizing; approved
+      locale-neutral usability permits local containment of actual wide content without rewriting article HTML.
+    documentation_contract: Help retains natural word wrapping and readable columns, with local scrolling for
+      genuinely wide tables and unchanged trusted article content, navigation and reader lifetime.
+    disposition: Correct the existing shared Help stylesheet and compare fitting and naturally wide table patterns
+      against untouched native styles, including English/German phone views.
+    closes_when:
+      - Focused browser checks and fresh readable Help table regions confirm natural words and bounded overflow.
+  - id: IMP-103
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Vue accepted-invoice dialogs alter native review context and confirmation presentation
+    evidence: Live correction/rejection editor and final-review pairs add pool-name and original-description
+      paragraphs absent from native. Final rejection uses a danger action instead of native warning. Accepted Close
+      replaces Confirm invoice action, Invoice number, submitted-amount question and warning Close with a different
+      title, extra context, effective-amount question and primary Confirm. These differences were missed by the earlier audit.
+    authorization: The direct repeated visual-parity request includes related Finance journeys; independent native
+      source tracing confirms the shared native summary gate and no separate approval for these presentation changes.
+    documentation_contract: Accepted-invoice editors retain the native visible review steps and action hierarchy;
+      captured revisions, action-specific payloads, draft protection and existing command/recovery lifetimes remain.
+    disposition: Restore the existing review renderer without repurposing inline-row ownership for standalone Close;
+      retain immutable submitted evidence in history and the separate retroactive final-review gate.
+    closes_when:
+      - Focused and built native/Vue review checks retain original evidence, captured revisions and no replay.
+      - Fresh editor, final-review and Close originals match native context/actions at desktop and phone widths.
+  - id: IMP-104
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Activity phone slot header leaves its drag handle on an empty line
+    evidence: The repeated live phone comparison shows Vue's independently wrapping grip above the title/time
+      column, where native keeps the grip beside that column. The approved readable action reflow does not require
+      this empty line and the first audit did not identify it.
+    authorization: The direct related-issue correction restores the native handle/title relationship within the
+      approved responsive layout; no schedule width, action admission or command behavior changes.
+    documentation_contract: The existing slot header groups its decorative grip with its title/time column while
+      preserving the card drag owner, inline drafts/tokens, action cluster, callbacks and existing table viewport.
+    disposition: Add one presentation wrapper in ActivitySchedule, preserving the current schedule and page owners.
+    closes_when:
+      - Existing Activity tests and fresh native/Vue phone views retain controls with the grip beside the title.
+  - id: IMP-105
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Pilot Finance Help describes the superseded Vue review and expense controls
+    evidence: Readable live Finance Help still directs users to edit new-invoice correction/rejection fields inside
+      dialogs and press Confirm, although native parity restores inline fields and operation-specific final actions.
+      Organizer expense and Close footer labels also describe the previous Vue presentation.
+      The final German boundary review additionally found nine passages/headings quoting English current-control
+      or visible-status labels; exact source/locale review distinguished these from preserved email/PDF outputs.
+    authorization: The direct related-issue review covers instructions for the corrected controls. The active
+      frontend profile classifies localized runtime Help as implemented content; the October 24 decision requires
+      Help to follow visible labels within that existing corpus. Frozen native flat Help remains untouched.
+    documentation_contract: English/German runtime Finance Help describes the actual restored controls while
+      preserving approved SPA feedback, read-only recovery, draft protection and shared business semantics.
+    disposition: Correct only affected steps and labels in the existing localized INVOICE_POOLS articles; review
+      actual rendered instructions separately from synthetic executable Help tests.
+    closes_when:
+      - Independent source review and fresh rendered Help regions agree with the restored Finance journeys.
+  - id: IMP-106
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Participant Finance appears after the roster and related content instead of before them
+    evidence: Actual registered-guest open-pool views show native Registration, Finance, Participants, Things to do;
+      Vue instead places Finance last. Native event-view.pug and Vue EventPage confirm the ordering gap, with no
+      approved exception found by three reviewers.
+    authorization: The direct repeated whole-app visual review requires meaningful native section order. The
+      existing integrated Refresh, localization and responsive decisions do not authorize this reordering.
+    documentation_contract: Participant Finance follows registration, while organizer Finance retains its native
+      dashboard position. Both mutually exclusive intents reuse the same admitted Finance component and key.
+    disposition: Restore only EventPage child placement, retaining reads, permission guards, drafts and commands.
+    closes_when:
+      - Independent source review and fresh open/closed participant views confirm the native section order.
+  - id: IMP-107
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Participant Manage takeovers omits its native person icon
+    evidence: The actual open participant pool and native takeoverOverview button show a person-check icon;
+      the matching Vue participant action renders only its text.
+    authorization: The direct button-consistency and related-issue request restores the native decorative icon.
+    documentation_contract: The existing participant action retains its label, alignment, admission and handler.
+    disposition: Add the same decorative icon to the existing ActionButton without changing the command owner.
+    closes_when:
+      - The fresh participant pool view shows the icon and centered readable label at both widths.
+  - id: IMP-108
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Open takeover views omit native coverage guidance and alter the chooser presentation
+    evidence: Actual open-pool participant dialog pairs omit the native cyan one-payer-at-a-time and covered-payer
+      guidance. Vue also adds a standalone payer-name line where native relies on the Selected coverage summary,
+      and replaces the native padded checkbox/label rows and warning-colored availability reasons with denser rows.
+      The participant overview also omits the native paragraph explaining whose shares can be covered in each pool.
+      Source tracing confirms the missing open notice also affects organizers using an open pool.
+    authorization: The direct whole-app related-issue request restores native visible guidance and context; no
+      approved responsive, feedback or localization exception removes this information or adds the repeated row.
+    documentation_contract: The existing chooser displays the native status-appropriate notice and one coverage
+      summary, while retaining payer selection, choices, search, admission, drafts and save/recovery ownership.
+    disposition: Reuse the existing notice and catalog keys for open/closed context; remove only the redundant
+      participant name paragraph; restore checkbox-label grouping and warning emphasis without changing bindings,
+      availability calculations or command/query logic. Restore the overview paragraph through an English alias
+      to the existing native message and its German translation.
+    closes_when:
+      - Focused Finance checks and fresh English/German chooser pairs retain complete guidance and controls.
+  - id: IMP-109
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: See the repeated live inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-live-visual-reinspection
+    title: Participant invoice history loses native action cues and substitutes a browser Close confirmation
+    evidence: The populated existing participant history and Close probe show native's in-app Confirm invoice
+      action dialog, while Vue opens window.confirm. Shared row source also omits native participant Retract/Close
+      icons and the bold Reason prefix, and substitutes a different proof glyph. The no-open-pools information
+      notice also omits its native decorative info-circle.
+    authorization: The direct whole-app authorization-state and related-button review restores the native
+      participant journey through the existing shared invoice-review owner, preserving its participant-only API.
+    documentation_contract: One selected invoice owns its captured review and command; explicit confirmation,
+      cancellation, pending/unknown delivery and admitted read recovery preserve existing isolation and no replay.
+    disposition: Reuse FinanceInvoiceReview for participant Close, restrict its action to the current admitted
+      canClose row and existing participant transport, retain recovery after a saved CLOSED read, and remove the
+      superseded section pending mirror. Restore native row cues. Participant confirmation copies the comparator's
+      blank question amount; the inherited native defect is separately tracked as IMP-110, not silently repaired.
+    closes_when:
+      - Focused cancellation, captured participant dispatch and unknown-to-CLOSED recovery checks pass.
+      - Independent ownership review and fresh populated history/Close pairs confirm the native presentation.
+  - id: IMP-110
+    status: open
+    discovered_on: 2026-10-24
+    severity: low
+    owner: native frontend maintainers
+    package: separately-authorized-native-correction
+    title: Native participant invoice Close confirmation omits the displayed amount
+    evidence: Actual native desktop/phone Close probes show Close this accepted invoice for question-mark with no
+      amount. events.ts reads data-invoice-submitted-amount, but participantInvoiceOverview omits that marker;
+      only the organizer table emits it. The invoice amount remains visible in the participant history row.
+    authorization: No native correction or alternate participant confirmation wording is authorized by this
+      parity task. The existing native-isolation decision remains in force.
+    documentation_contract: Keep this inherited comparator defect distinct from the restored Vue modal owner;
+      do not claim that the native confirmation displays either submitted or corrected amount.
+    disposition: Deferred to separately authorized native/cutover work. Strict participant Vue parity reproduces
+      the existing blank question amount; neither source invoice values nor financial commands are changed.
+    closes_when:
+      - A separately authorized correction establishes and verifies the intended confirmation amount.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed

@@ -9,6 +9,8 @@ export interface FrontendGuestEntryProps {
     resourceId: string;
     destination: string;
     titleKey: MessageKey;
+    /** Select native contextual guidance and confirmation; features still own admission and commands. */
+    presentation?: 'generic' | 'event';
     queryKey: readonly unknown[];
     readEntry: (scope: PilotRequestScope, signal?: AbortSignal) => Promise<components['schemas']['GuestEntry']>;
     registerGuest: (input: components['schemas']['GuestRegistrationInput'], scope: PilotRequestScope) => Promise<components['schemas']['IdentityResult']>;

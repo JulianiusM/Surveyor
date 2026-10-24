@@ -88,8 +88,8 @@ function acknowledge(): void {
 </script>
 
 <template>
-    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t(wording.action)"
-        :subtitle="reviewed.poolName" :pending="busy" standard @close="close">
+    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t('finance.confirmInvoiceAction')"
+        :pending="busy" @close="close">
         <!-- Feedback uses the shared dialog host, outside the keyed ledger rows.
              Inspecting an unknown result never upgrades its original capture. -->
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
@@ -119,7 +119,7 @@ function acknowledge(): void {
             <ActionButton variant="secondary" :disabled="busy" @click="close">
                 {{ messages.t(completed ? 'common.close' : 'common.cancel') }}
             </ActionButton>
-            <ActionButton v-if="!completed" :state="action" @click="confirm" data-finance-confirm-settlement>
+            <ActionButton v-if="!completed" variant="warning" :state="action" @click="confirm" data-finance-confirm-settlement>
                 {{ messages.t(wording.action) }}
             </ActionButton>
         </template>

@@ -201,7 +201,9 @@
     display: none !important
 
 .takeover-overview-controls
-  .form-control
+  // Vue's FormField owns a wrapper; the wrapper is the flex item, while its
+  // input keeps Bootstrap's full width inside that allotted search track.
+  > .form-control, > .finance-filter-search
     flex: 1 1 16rem
     width: auto
 
@@ -304,7 +306,7 @@
   min-width: 0
 
 .share-ledger-controls
-  .form-control
+  > .form-control, > .finance-filter-search
     flex: 2 1 16rem
     width: auto
 
@@ -601,8 +603,9 @@
   flex: 1 1 34rem
   justify-content: flex-end
 
-  .form-control,
-  .form-select
+  > .form-control,
+  > .form-select,
+  > .finance-filter-search
     width: auto
 
 .invoice-ledger-search
@@ -648,7 +651,7 @@
   .invoice-ledger-controls
     justify-content: flex-start
 
-    .form-control
+    > .form-control, > .finance-filter-search
       flex: 1 1 100%
 
     .form-select

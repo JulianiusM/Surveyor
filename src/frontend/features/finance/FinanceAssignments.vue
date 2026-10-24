@@ -164,7 +164,8 @@ function close(): void {
 </script>
 
 <template>
-    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t('finance.participantsFactors')" :subtitle="pool.name" standard
+    <AppDialog content-class="text-white finance-dialog" :open="open"
+        :title="messages.t('finance.poolDialogTitle', {title: messages.t('finance.participantsFactors'), name: pool.name})"
                :pending="command.pending.value || command.recovering.value" @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refresh" />
@@ -223,7 +224,7 @@ function close(): void {
             <ActionButton variant="outline-secondary" :state="action" @click="discard">{{ messages.t('finance.discardEdits') }}</ActionButton>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.close') }}</ActionButton>
             <ActionButton :form="`${id}-form`" type="submit" :state="action"
-                :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.saveParticipantsFactors') }}</ActionButton>
+                :pending="command.pending.value" :show-spinner="false"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('finance.saveParticipantsFactors') }}</ActionButton>
         </template>
     </AppDialog>
 </template>

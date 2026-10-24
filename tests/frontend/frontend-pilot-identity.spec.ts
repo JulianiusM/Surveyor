@@ -1679,8 +1679,14 @@ describe('identity forms and packing overview navigation', () => {
         for (const [collection, expected] of [['participant', 'tent'], ['owner', 'equipment']] as const) {
             const main = wrapper.get(`[data-collection="${collection}"][data-region="main"]`);
             const hidden = wrapper.get(`[data-collection="${collection}"][data-region="hidden"]`);
+            const header = wrapper.findAll('.entity-overview').find(section =>
+                section.find(`[data-collection="${collection}"][data-region="main"]`).exists())!.get('.accordion-header');
             expect(main.find('input[type="search"], details').exists()).toBe(false);
-            expect(main.findAll('button').map(button => button.text())).toEqual(['Refresh']);
+            expect(main.findAll('button')).toHaveLength(0);
+            expect(main.get('h3').classes()).toContain('visually-hidden');
+            expect(main.get('form').classes()).not.toContain('mb-3');
+            expect(header.findAll('button[aria-label="Refresh"]')).toHaveLength(1);
+            expect(header.get('button[aria-label="Refresh"]').attributes('disabled')).toBeUndefined();
             expect(hidden.get<HTMLInputElement>('input[type="search"]').element.value).toBe(expected);
         }
         expect(router.currentRoute.value.query).toMatchObject({owner_hidden_q: 'equipment',

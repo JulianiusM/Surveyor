@@ -373,7 +373,11 @@ describe('visible resource recovery', () => {
         const {wrapper} = await mounted(OverviewPage, {}, readIndependentRegions);
         const owner = wrapper.get('[data-collection="owner"][data-region="main"]');
         const participant = wrapper.get('[data-collection="participant"][data-region="main"]');
-        const refresh = owner.get<HTMLButtonElement>('button.ms-auto');
+        const ownerHeader = wrapper.findAll('.entity-overview').find(section =>
+            section.find('[data-collection="owner"][data-region="main"]').exists())!.get('.accordion-header');
+        const refresh = ownerHeader.get<HTMLButtonElement>('button[aria-label="Refresh"]');
+        expect(owner.find('form button[aria-label="Refresh"]').exists()).toBe(false);
+        expect(owner.get('h3').classes()).toContain('visually-hidden');
         expect(refresh.element.disabled).toBe(false);
         refresh.element.focus();
         expect(document.activeElement).toBe(refresh.element);
@@ -400,7 +404,7 @@ describe('visible resource recovery', () => {
             expect(participant.text()).toContain(card.title);
             // This region's own query has settled, but its initiating operation
             // still awaits the sibling. Neither focus nor availability releases early.
-            expect(owner.get('button.ms-auto').element).toBe(refresh.element);
+            expect(ownerHeader.get('button[aria-label="Refresh"]').element).toBe(refresh.element);
             expect(refresh.element.disabled).toBe(true);
             expect(refresh.attributes('aria-busy')).toBe('true');
             expect(refresh.find('.spinner-border').exists()).toBe(true);

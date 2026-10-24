@@ -131,7 +131,7 @@ function close(): void {
 </script>
 
 <template>
-    <AppDialog :open="open" :title="messages.t('finance.calculationPreview')" :subtitle="pool.name"
+    <AppDialog :open="open" :title="messages.t('finance.poolDialogTitle', {title: messages.t('finance.calculationPreview'), name: pool.name})"
                content-class="text-white finance-dialog" :pending="command.pending.value || command.recovering.value" @close="close">
         <div data-finance-calculation-preview>
             <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />

@@ -111,10 +111,15 @@ function statusLabel(status: string): string {
         class="share-ledger border border-secondary-subtle rounded-3 p-3 mt-3"
         data-finance-shares
     >
-        <h3 class="fs-6 mb-3">
-            {{ messages.t(admin ? 'finance.calculatedShares' : 'finance.yourPoolShares') }}
-            <span v-if="admin" class="badge bg-secondary ms-2" data-finance-payer-count>{{ messages.t('finance.payersCount', {count: shares.length}) }}</span>
-        </h3>
+        <!-- The parent supplies only admitted actions for these saved rows;
+             this shared heading owns their responsive association with the ledger. -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3" data-finance-shares-heading>
+            <h3 class="fs-6 mb-0">
+                {{ messages.t(admin ? 'finance.calculatedShares' : 'finance.yourPoolShares') }}
+                <span v-if="admin" class="badge bg-secondary ms-2" data-finance-payer-count>{{ messages.t('finance.payersCount', {count: shares.length}) }}</span>
+            </h3>
+            <div v-if="$slots.actions" class="pilot-action-row"><slot name="actions" /></div>
+        </div>
         <p v-if="admin" class="text-secondary small">{{ messages.t('finance.statusDescribesPayer') }}</p>
         <StatusNotice v-if="refreshNotice" placement="notification" transient :renewal="refreshNotice" @dismiss="refreshNotice = 0">
             {{ messages.t('finance.theCurrentFiltersAndOrderingHaveBeenApplied') }}
@@ -124,7 +129,7 @@ function statusLabel(status: string): string {
                 :id="`${id}-search`"
                 v-model="search"
                 type="search"
-                class="mb-0"
+                class="mb-0 finance-filter-search"
                 label-class="visually-hidden"
                 control-class="form-control-sm"
                 :label="messages.t('finance.searchShares')"
@@ -165,7 +170,9 @@ function statusLabel(status: string): string {
                     <tr v-for="share in visible" :key="share.id" :data-finance-share="share.id">
                         <td :data-label="messages.t(admin ? 'finance.payer' : 'finance.pool')">
                             <strong class="d-block">{{ admin ? share.payerName : share.poolName }}</strong>
-                            <small v-if="share.needsRecalculation" class="text-warning d-block">
+                            <!-- Organizer context warns once for the saved pool;
+                                 personal ledgers retain their per-pool stale label. -->
+                            <small v-if="!admin && share.needsRecalculation" class="text-warning d-block">
                                 {{ messages.t('finance.recalculationRequired') }}
                             </small>
                             <small v-if="admin" class="text-secondary">

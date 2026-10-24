@@ -129,8 +129,8 @@ async function captureReviewSurface(surface: Locator, info: TestInfo, name: stri
 }
 
 /** Read the values and validation rules shared by the two real field sets.
- * Native NEW fields live in the row and Vue puts them in its review dialog;
- * textarea height, decimal keyboard hints and wrapper names are presentation. */
+ * NEW fields belong to the saved row on both surfaces; retroactive edits retain
+ * their separate editing stage before the final frozen review. */
 async function reviewFieldContracts(surface: Locator, selectors: string[]) {
     const contracts = [];
     for (const selector of selectors) {
@@ -223,7 +223,7 @@ async function inspectNativeReview(page: Page, info: TestInfo, eventId: string, 
         const confirmation = page.locator('#invoiceCommandConfirmModal');
         const wording = scene.action === 'approve' ? `Accept this invoice for ${scene.amount}?`
             : scene.action === 'decline' ? `Reject this invoice for ${invoice.amount}?`
-                : `Close this accepted invoice for ${invoice.correctedAmount ?? invoice.amount}?`;
+                : `Close this accepted invoice for ${invoice.amount}?`;
         await expect(confirmation.locator('[data-invoice-command-description]')).toHaveText(wording);
         await expect(confirmation.locator('[data-invoice-command-confirm]')).toHaveText(scene.button);
         await expect(confirmation.locator('[data-invoice-command-confirm]')).toBeEnabled();
@@ -250,33 +250,34 @@ async function inspectNativeReview(page: Page, info: TestInfo, eventId: string, 
     return editedContracts;
 }
 
-/** Compare Vue's actual combined review with the native fields/final facts.
+/** Compare Vue's actual inline or retroactive review with native fields/facts.
  * Cancellation is checked before the caller reopens and commits once, so
  * inspection never supplies consent to an earlier preview. */
 async function inspectVueReview(page: Page, info: TestInfo, eventId: string, poolId: string,
     invoice: ReviewInvoice, scene: ReviewScene, nativeContracts: Awaited<ReturnType<typeof reviewFieldContracts>>) {
     const pool = await openPool(page, eventId, poolId, true);
+    // Match the native disclosure step after the final NEW invoice is processed.
+    // The app deliberately starts a CLOSED pool's now-historical ledger folded.
+    const history = pool.locator('details').filter({has: page.locator('[data-finance-history]')});
+    if (await history.getAttribute('open') === null) await history.locator(':scope > summary').click();
+    await expect(history).toHaveJSProperty('open', true);
     const marker = await page.evaluate(() => performance.timeOrigin);
     const row = pool.locator(`[data-finance-invoice="${invoice.id}"]`);
+    await expect(row).toBeVisible();
+    const inline = scene.action === 'approve' || scene.action === 'decline';
+    const inlineContracts = inline ? await fillReviewFields(row, scene, true) : null;
+    await captureReviewSurface(row, info, `vue-p8-${scene.action}-row`);
     await row.getByRole('button', {name: scene.button, exact: true}).click();
     const dialog = page.getByRole('dialog');
     if (scene.action === 'revise') {
         expect(Number(await dialog.locator('[name="correctedAmount"]').inputValue())).toBe(Number(invoice.correctedAmount ?? invoice.amount));
         await expect(dialog.locator('[name="correctedDescription"]')).toHaveValue(invoice.correctedDescription ?? invoice.description!);
     }
-    const contracts = await fillReviewFields(dialog, scene);
-    // NEW decline adds native's already-enforced required reason to its semantic
-    // dialog field. Its native inline textarea communicates that through the
-    // placeholder and controller check rather than HTML's required attribute.
-    if (scene.action === 'decline') {
-        expect(nativeContracts[0]?.required).toBe(false);
-        expect(contracts[0]?.required).toBe(true);
-        expect(nativeContracts[0]?.placeholder).toBe('Required when rejecting');
-        expect(contracts[0]?.placeholder).toBe('');
-        expect({...contracts[0], required: false, placeholder: 'Required when rejecting'}).toEqual(nativeContracts[0]);
-    } else expect(contracts).toEqual(nativeContracts);
+    const contracts = inlineContracts ?? await fillReviewFields(dialog, scene);
+    expect(contracts).toEqual(nativeContracts);
     await expect(dialog).toContainText(`Invoice #${invoice.id}`);
-    await expect(dialog).toContainText(invoice.description!);
+    if (inline) await expect(dialog.locator('input, textarea')).toHaveCount(0);
+    await expect(row).toContainText(invoice.description!);
     const retroactive = scene.action === 'revise' || scene.action === 'reject';
     if (retroactive) {
         await captureReviewSurface(dialog, info, `vue-p8-${scene.action}-edit`);
@@ -286,14 +287,15 @@ async function inspectVueReview(page: Page, info: TestInfo, eventId: string, poo
         await dialog.getByRole('button', {name: 'Back to edit', exact: true}).click();
         expect(await reviewFieldContracts(dialog, reviewFieldSelectors(scene))).toEqual(contracts);
     } else {
-        const amount = scene.action === 'approve' ? Number(scene.amount).toFixed(2) : invoice.correctedAmount ?? invoice.amount;
+        const amount = scene.action === 'approve' ? scene.amount : invoice.amount;
         const wording = scene.action === 'approve' ? `Accept this invoice for ${amount}?`
             : scene.action === 'decline' ? `Reject this invoice for ${amount}?` : `Close this accepted invoice for ${amount}?`;
         await expect(dialog).toContainText(wording);
         await captureReviewSurface(dialog, info, `vue-p8-${scene.action}-confirmation`);
     }
 
-    // Dirty-close consent releases only this preview, never the business action.
+    // Inline Cancel closes only its summary, retaining the same row draft.
+    // A dirty retroactive editor still requires its ordinary discard consent.
     let discarded = false;
     async function discardPreview(prompt: Dialog): Promise<void> {
         expect(prompt.type()).toBe('confirm');
@@ -304,8 +306,9 @@ async function inspectVueReview(page: Page, info: TestInfo, eventId: string, poo
     try {
         await dialog.getByRole('button', {name: 'Cancel', exact: true}).click();
     } finally { page.off('dialog', discardPreview); }
-    expect(discarded).toBe(scene.action !== 'close');
+    expect(discarded).toBe(retroactive);
     await expect(dialog).not.toBeVisible();
+    if (inline) expect(await reviewFieldContracts(row, reviewFieldSelectors(scene, true))).toEqual(contracts);
     expect(await page.evaluate(() => performance.timeOrigin)).toBe(marker);
     return {pool, row};
 }
@@ -380,14 +383,16 @@ for (const width of [1280, 390]) {
                 // Reopen after cancellation, then send only the explicitly
                 // confirmed operation. The ordinary Vue document is retained.
                 const marker = await page.evaluate(() => performance.timeOrigin);
+                const inline = scene.action === 'approve' || scene.action === 'decline';
+                if (inline) await fillReviewFields(row, scene, true);
                 await row.getByRole('button', {name: scene.button, exact: true}).click();
                 const dialog = page.getByRole('dialog');
-                await fillReviewFields(dialog, scene);
+                if (!inline) await fillReviewFields(dialog, scene);
                 const retroactive = scene.action === 'revise' || scene.action === 'reject';
                 if (retroactive) await dialog.getByRole('button', {name: 'Continue', exact: true}).click();
                 const confirm = scene.action === 'revise' ? 'Confirm correction'
-                    : scene.action === 'reject' ? 'Confirm rejection' : 'Confirm';
-                await dialog.getByRole('button', {name: confirm, exact: true}).click();
+                    : scene.action === 'reject' ? 'Confirm rejection' : inline ? scene.button : 'Close';
+                await dialog.locator('.modal-footer').getByRole('button', {name: confirm, exact: true}).click();
                 await expect(dialog).not.toBeVisible();
                 await expect.poll(readSavedInvoice).toMatchObject({status: scene.status});
                 const result = await readSavedInvoice();
@@ -512,7 +517,7 @@ test('preserves native organizer form information and completes pool creation, a
         await expect(expense.locator('[name="amount"]')).toHaveValue('013.50');
         await expense.locator('[name="registrationId"]').selectOption(own.registrationId!);
         await expense.locator('[name="proof"]').setInputFiles(proof('p8-organizer.pdf'));
-        await expense.getByRole('button', {name: 'Add invoice / amount', exact: true}).click();
+        await expense.getByRole('button', {name: 'Add expense', exact: true}).click();
         await expect(expense.locator('[name="amount"]')).toHaveValue('');
         await expect(expense.locator('[name="proof"]')).toHaveValue('');
         await expense.getByRole('button', {name: 'Cancel', exact: true}).click();
@@ -523,11 +528,12 @@ test('preserves native organizer form information and completes pool creation, a
 
         const pending = (await readFinance(page.request, event.id)).invoices.find(row => row.description === 'P8 immutable original receipt')!;
         const row = pool.locator(`[data-finance-invoice="${pending.id}"]`);
+        await row.locator('.invoice-corrected-amount').fill('35');
+        await row.locator('.invoice-corrected-description').fill('P8 effective accepted receipt');
         await row.getByRole('button', {name: 'Accept', exact: true}).click();
         const review = page.getByRole('dialog');
-        await review.locator('[name="correctedAmount"]').fill('35');
-        await review.locator('[name="correctedDescription"]').fill('P8 effective accepted receipt');
-        await review.getByRole('button', {name: 'Confirm', exact: true}).click();
+        await expect(review.locator('input, textarea')).toHaveCount(0);
+        await review.getByRole('button', {name: 'Accept', exact: true}).click();
         await expect.poll(async () => (await readFinance(page.request, event.id)).invoices.find(invoice => invoice.id === pending.id)?.status).toBe('APPROVED');
         await expect(row).toContainText('P8 immutable original receipt');
         await expect(row).toContainText('P8 effective accepted receipt');
@@ -760,7 +766,7 @@ for (const width of [320, 390]) {
             await expense.locator('[name="registrationId"]').selectOption(ownId);
             await expect(expense.locator('[name="amount"]')).toHaveValue('013.50');
             await expense.screenshot({path: info.outputPath(`german-finance-expense-${width}.png`), animations: 'disabled'});
-            await expense.getByRole('button', {name: messages.t('finance.addInvoiceAmount'), exact: true}).click();
+            await expense.getByRole('button', {name: messages.t('finance.addExpense'), exact: true}).click();
             await expect(expense.locator('[name="amount"]')).toHaveValue('');
             const attributed = (await readFinance(participant.request, event.id, false)).invoices.find(invoice => invoice.description === 'Beleg der zahlenden Person')!;
             expect(attributed).toMatchObject({amount: '13.50', organizerRecorded: true, participantName: 'Zahlende Person am See'});
@@ -777,17 +783,19 @@ for (const width of [320, 390]) {
             await finance.getByRole('button', {name: messages.t('common.refresh'), exact: true}).first().click();
             const pending = (await readFinance(page.request, event.id)).invoices.find(invoice => invoice.description === 'Zu prüfender Teilnehmerbeleg')!;
             const row = pool.locator(`[data-finance-invoice="${pending.id}"]`);
+            // Optional NEW-invoice correction deliberately preserves the native
+            // accepted precision instead of applying retroactive step validation.
+            await row.locator('.invoice-corrected-amount').fill('22.333');
+            await expect(row.locator('.invoice-corrected-amount')).toHaveValue('22.333');
             await row.getByRole('button', {name: messages.t('finance.accept'), exact: true}).click();
             const review = page.getByRole('dialog');
             await expectUsableFrontendLayout(review);
-            // Optional NEW-invoice correction deliberately preserves the native
-            // accepted precision instead of applying retroactive step validation.
-            await review.locator('[name="correctedAmount"]').fill('22.333');
-            await expect(review.locator('[name="correctedAmount"]')).toHaveValue('22.333');
+            await expect(review.locator('input, textarea')).toHaveCount(0);
+            await expect(review).toContainText('22.333');
             await captureReviewSurface(review, info, `vue-p8-approve-german-${width}`);
             const approved = page.waitForResponse(response => response.request().method() === 'POST'
                 && response.url().endsWith(`/finance/pools/${poolId}/invoices/${pending.id}/approve`));
-            await review.getByRole('button', {name: messages.t('finance.confirm'), exact: true}).click();
+            await review.getByRole('button', {name: messages.t('finance.accept'), exact: true}).click();
             const approval = await approved;
             expect(approval.status()).toBe(200);
             expect(approval.request().postDataJSON()).toMatchObject({correctedAmount: '22.333'});
@@ -899,7 +907,7 @@ test('protects a committed organizer expense after response loss until deliberat
     try {
         const paused = new Promise<{requestId: string; responseStatusCode?: number}>(resolve => interception.once('Fetch.requestPaused', resolve));
         await interception.send('Fetch.enable', {patterns: [{urlPattern: new URL(endpoint, page.url()).href, requestStage: 'Response'}]});
-        const submit = expense.getByRole('button', {name: 'Add invoice / amount', exact: true});
+        const submit = expense.getByRole('button', {name: 'Add expense', exact: true});
         await submit.click();
         const committed = await paused;
         pausedId = committed.requestId;

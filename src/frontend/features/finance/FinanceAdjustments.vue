@@ -115,7 +115,8 @@ function close(): void {
 </script>
 
 <template>
-    <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t('finance.surchargesRebates')" :subtitle="pool.name" standard
+    <AppDialog content-class="text-white finance-dialog" :open="open"
+        :title="messages.t('finance.poolDialogTitle', {title: messages.t('finance.surchargesRebates'), name: pool.name})"
                :pending="command.pending.value || command.recovering.value || removal.pending.value || removal.recovering.value" @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refresh">
@@ -129,11 +130,12 @@ function close(): void {
         <CommandFeedback :feedback="removal.feedback" :part="removal.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="removal.feedback" part="uncertain" :action="{state: removal.recoveryAction, label: messages.t('common.refresh')}" @action="refresh" />
         <p v-if="pool.status === 'CLOSED'" class="small text-warning">{{ messages.t('finance.saveYourChangesHereThenPreviewRecalculatePoolExisting') }}</p>
+        <p class="small">{{ messages.t('finance.giveAParticipantAFixedSurchargePositiveAmountOr') }}</p>
         <ul v-if="pool.surcharges?.length" class="list-group list-group-flush mb-3">
             <li v-for="adjustment in pool.surcharges" :key="adjustment.id" :data-finance-adjustment="adjustment.id"
-                class="list-group-item bg-dark text-white d-flex flex-wrap justify-content-between gap-2">
-                <div>
-                    <strong class="d-block">{{ personName(adjustment.registrationId) }}</strong>
+                class="list-group-item bg-dark text-white d-flex justify-content-between align-items-start gap-2 px-0">
+                <div class="flex-grow-1">
+                    <strong class="me-2">{{ personName(adjustment.registrationId) }}</strong>
                     <span class="badge" :class="Number(adjustment.amount) < 0 ? 'bg-success' : 'bg-secondary'">
                         {{ messages.t('finance.adjustmentSummary', {kind: messages.t(Number(adjustment.amount) < 0 ? 'finance.rebate' : 'finance.surcharge'), amount: financeMoney(adjustment.amount, locale)}) }}
                     </span>
@@ -149,40 +151,45 @@ function close(): void {
             </li>
         </ul>
         <p v-else class="small text-secondary">{{ messages.t('finance.noSurchargesOrRebatesAddedYet') }}</p>
-        <p class="small">{{ messages.t('finance.giveAParticipantAFixedSurchargePositiveAmountOr') }}</p>
+        <h3 class="fs-6 mt-3">{{ messages.t('finance.addAnAdjustment') }}</h3>
         <form :id="`${id}-form`" data-finance-adjustments @submit.prevent="save" @wheel.capture.passive="protectFinanceNumberFromScroll">
             <fieldset class="border-0 p-0 m-0" :disabled="action.disabled.value">
                 <legend class="visually-hidden">{{ messages.t('finance.addSurchargeOrRebate') }}</legend>
-                <FormField :id="`${id}-participant`" class="mb-3" :label="messages.t('finance.participant5')">
-                    <template #control>
-                        <select :id="`${id}-participant`" v-model="draft.registrationId" class="form-select text-bg-dark" required>
-                            <option value="">{{ messages.t('finance.chooseParticipant') }}</option>
-                            <option v-if="draft.registrationId && !eligible.some(person => person.id === draft.registrationId)" :value="draft.registrationId" disabled>
-                                {{ personName(draft.registrationId) }}
-                            </option>
-                            <option v-for="person in eligible" :key="person.id" :value="person.id">{{ person.name }}</option>
-                        </select>
-                    </template>
-                </FormField>
-                <FormField :id="`${id}-amount`" v-model="draft.amount" :name="null" type="number" lexical-number
-                    input-mode="decimal" step="0.01" class="mb-3" :label="messages.t('finance.amountNegativeForARebate')"
-                    :described-by="`${id}-help`" required :required-marker="false"
-                    :pending="command.pending.value" />
-                <FormField :id="`${id}-note`" v-model="draft.note" class="mb-3" :label="messages.t('finance.note')" required :required-marker="false" :max-length="4000"
-                    :pending="command.pending.value" />
-                <div class="form-check">
-                    <input :id="`${id}-redistribute`" v-model="draft.subtractFromPool" class="form-check-input" type="checkbox" />
-                    <label :for="`${id}-redistribute`" class="form-check-label">{{ messages.t('finance.redistributeWithinPool') }}</label>
+                <div class="row g-3">
+                    <FormField :id="`${id}-participant`" class="col-sm-6" :label="messages.t('finance.participant5')">
+                        <template #control>
+                            <select :id="`${id}-participant`" v-model="draft.registrationId" class="form-select text-bg-dark" required>
+                                <option value="">{{ messages.t('finance.chooseParticipant') }}</option>
+                                <option v-if="draft.registrationId && !eligible.some(person => person.id === draft.registrationId)" :value="draft.registrationId" disabled>
+                                    {{ personName(draft.registrationId) }}
+                                </option>
+                                <option v-for="person in eligible" :key="person.id" :value="person.id">{{ person.name }}</option>
+                            </select>
+                        </template>
+                    </FormField>
+                    <FormField :id="`${id}-amount`" v-model="draft.amount" :name="null" type="number" lexical-number
+                        input-mode="decimal" step="0.01" class="col-sm-6" :label="messages.t('finance.amountNegativeForARebate')"
+                        :placeholder="messages.t('finance.adjustmentAmountExample')"
+                        :described-by="`${id}-help`" required :required-marker="false"
+                        :pending="command.pending.value" />
+                    <FormField :id="`${id}-note`" v-model="draft.note" class="col-12" :label="messages.t('finance.note')" required :required-marker="false" :max-length="4000"
+                        :placeholder="messages.t('finance.explainTheSurchargeOrRebate')" :pending="command.pending.value" />
+                    <div class="col-12">
+                        <div class="form-check form-switch">
+                            <input :id="`${id}-redistribute`" v-model="draft.subtractFromPool" class="form-check-input" type="checkbox" />
+                            <label :for="`${id}-redistribute`" class="form-check-label">{{ messages.t('finance.redistributeWithinPool') }}</label>
+                        </div>
+                        <p :id="`${id}-help`" class="small text-secondary mt-2">{{ messages.t('finance.selectedASurchargeReducesTheSharedTotalARebate') }}</p>
+                        <p v-if="draft.amount && Number(draft.amount) === 0" class="small text-warning">{{ messages.t('finance.enterAPositiveSurchargeOrANegativeRebateAmount') }}</p>
+                    </div>
                 </div>
-                <p :id="`${id}-help`" class="small text-secondary mt-2">{{ messages.t('finance.selectedASurchargeReducesTheSharedTotalARebate') }}</p>
-                <p v-if="draft.amount && Number(draft.amount) === 0" class="small text-warning">{{ messages.t('finance.enterAPositiveSurchargeOrANegativeRebateAmount') }}</p>
             </fieldset>
         </form>
         <template #footer>
             <ActionButton variant="outline-secondary" :state="action" @click="discard">{{ messages.t('finance.discardEdits') }}</ActionButton>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value || removal.pending.value || removal.recovering.value" @click="close">{{ messages.t('common.close') }}</ActionButton>
             <ActionButton :form="`${id}-form`" type="submit" :state="action"
-                :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.addSurchargeOrRebate') }}</ActionButton>
+                :pending="command.pending.value" :show-spinner="false"><i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('finance.addSurchargeOrRebate') }}</ActionButton>
         </template>
     </AppDialog>
 </template>
