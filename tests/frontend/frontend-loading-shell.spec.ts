@@ -2,7 +2,7 @@
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {createSSRApp, defineComponent, h, onMounted, ref} from 'vue';
+import {computed, createSSRApp, defineComponent, h, inject, onMounted, ref} from 'vue';
 import type {Component} from 'vue';
 import {renderToString} from 'vue/server-renderer';
 import {createMemoryHistory, createRouter, isNavigationFailure} from 'vue-router';
@@ -16,6 +16,7 @@ import StatusNotice from '../../src/frontend/components/StatusNotice.vue';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import {render} from '../../src/frontend/app/entry-server';
 import {createPilotApp, initializePilotApp} from '../../src/frontend/app/createApp';
+import {pageReadinessKey} from '../../src/frontend/composables/pageNavigation';
 import type {components} from '../../src/types/api/v1';
 
 const session: components['schemas']['SessionView'] = {
@@ -289,6 +290,47 @@ describe('shared skeleton accessibility', () => {
 });
 
 describe('lazy route delivery', () => {
+    it('does not wait for Help article readiness on an unmatched descendant error page', async () => {
+        const {router, context} = createPilotApp({session}, false);
+        cleanups.push(() => { router.options.history.destroy(); context.queryClient.clear(); });
+        await router.push('/frontend-pilot/help/unmatched/descendant#missing');
+        const from = router.resolve('/frontend-pilot');
+        // The catch-all renders CommonPage and cannot register Help readiness.
+        // Its ordinary fragment result must complete without waiting forever.
+        expect(await router.options.scrollBehavior!(router.currentRoute.value,
+            {...from, name: from.name ?? undefined}, null)).toEqual({el: '#missing'});
+    });
+
+    it.each(['anchor', 'history'] as const)('waits for the matched Help render before uppercase-path %s scrolling', async destination => {
+        const {app, router, context} = createPilotApp({session}, false);
+        const readiness = app.runWithContext(() => inject(pageReadinessKey));
+        expect(readiness).toBeDefined();
+        await router.push('/FRONTEND-PILOT/HELP/?doc=activity_plans#rules');
+        const current = router.currentRoute.value;
+        const ready = ref(false);
+        const release = readiness!.register({destination: computed(() => current.fullPath), ready});
+        const completed = vi.fn();
+        const saved = destination === 'history' ? {left: 0, top: 640} : null;
+        const from = router.resolve('/frontend-pilot/users/login');
+        const pending = Promise.resolve(router.options.scrollBehavior!(current,
+            {...from, name: from.name ?? undefined}, saved)).then(value => { completed(value); return value; });
+        try {
+            // The real route has matched Help, but its requested article has not
+            // rendered. History and anchors must use that same readiness owner.
+            await flushPromises();
+            expect(completed).not.toHaveBeenCalled();
+            const heading = document.createElement('h2');
+            heading.id = 'rules';
+            document.body.append(heading);
+            ready.value = true;
+            expect(await pending).toEqual(saved ?? {el: heading, top: 0});
+        } finally {
+            release();
+            router.options.history.destroy();
+            context.queryClient.clear();
+        }
+    });
+
     it('preserves local SPA positions while retaining real Help visits, anchors and browser restoration', async () => {
         const {router, context} = createPilotApp({session}, false);
         cleanups.push(() => { router.options.history.destroy(); context.queryClient.clear(); });

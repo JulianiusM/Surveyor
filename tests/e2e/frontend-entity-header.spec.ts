@@ -3,7 +3,7 @@ import type {APIRequestContext, Locator, Page, Request, TestInfo} from '@playwri
 import {readFileSync} from 'node:fs';
 import type {components} from '../../src/types/api/v1';
 import {createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectUsableFrontendLayout} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, expectEmbeddedFrontendRefresh, expectUsableFrontendLayout} from '../keywords/e2eCoreKeywords';
 import {createFrontendEventFixture, frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 
@@ -24,7 +24,7 @@ async function measureHeader(surface: Locator) {
             titleX: headingBox.x - box.x, titleY: headingBox.y - box.y,
             font: headingStyle.fontSize, weight: headingStyle.fontWeight, color: headingStyle.color,
             icons: icons.map(icon => [...icon.classList].filter(name => name.startsWith('bi-')).join(' ')),
-            controls: controls.map(control => ({text: control.textContent!.trim(),
+            controls: controls.map(control => ({text: control.textContent!.trim(), label: control.getAttribute('aria-label'),
                 width: control.getBoundingClientRect().width, height: control.getBoundingClientRect().height,
                 x: control.getBoundingClientRect().x - box.x, y: control.getBoundingClientRect().y - box.y,
                 color: getComputedStyle(control).color, background: getComputedStyle(control).backgroundColor,
@@ -71,11 +71,15 @@ async function compareHeader(page: Page, info: TestInfo, path: string, name: str
         await info.attach(`${name}-${pilot ? 'pilot' : 'native'}`, {path: imagePath, contentType: 'image/png'});
         if (pilot) {
             await expectUsableFrontendLayout(surface);
-            // Normalize the separately asserted parent route. Compare visible
-            // information/actions and paint, retaining raw layout as evidence.
-            const compared = parentPath ? {...measurement, controls: measurement.controls.map(function compareParent(control) {
-                return control.href === '/frontend-pilot' + parentPath ? {...control, href: parentPath} : control;
-            })} : measurement;
+            await expectEmbeddedFrontendRefresh(surface);
+            // The dated approved header addition is independently asserted above.
+            // Retain raw metrics/screenshots, excluding exactly that labelled
+            // control and its one asserted icon from the native meaning oracle.
+            expect(measurement.controls.filter(control => control.label === 'Refresh')).toHaveLength(1);
+            const compared = {...measurement, icons: measurement.icons.filter(icon => icon !== 'bi-arrow-clockwise'),
+                controls: measurement.controls.filter(control => control.label !== 'Refresh').map(function compareParent(control) {
+                return parentPath && control.href === '/frontend-pilot' + parentPath ? {...control, href: parentPath} : control;
+            })};
             expect(headerMeaning(compared)).toEqual(headerMeaning(native!));
             if (parent) {
                 await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'entity-header-parent';});

@@ -5,6 +5,7 @@ import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
 import {usePilot} from '../../app/context';
+import {resourceRouteIntent} from '../../composables/pageEntry';
 import {overviewKeys, activityKeys} from '../../app/queryKeys';
 import {useActivityApi} from './api';
 import ActivityPage from './ActivityPage.vue';
@@ -15,7 +16,7 @@ const context = usePilot();
 const api = useActivityApi(context);
 const route = useRoute();
 const planId = computed(() => String(route.params.planId).toLowerCase());
-const guestRoute = computed(() => route.path.endsWith('/guest'));
+const guestRoute = computed(() => resourceRouteIntent(route) === 'guest');
 
 // Initial admission belongs to one URL and identity. Reusing this wrapper for another
 // list, locale or explicit guest route gets its own query through the shared entry owner.

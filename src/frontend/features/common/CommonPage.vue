@@ -37,7 +37,7 @@ function resolvePresentation(): {page: FrontendCommonPage; renewal: unknown} {
     const initial = context.initialDocumentFor(route.fullPath)?.commonPage;
     if (initial) return {page: initial, renewal: initial};
 
-    if (route.path === '/frontend-pilot/message') {
+    if (route.matched.some(record => record.path === '/frontend-pilot/message')) {
         // Completion receipts bind the current actor and exact canonical destination.
         // Context-owned notices also retire on identity changes; neither source is URL text.
         const completion = context.pageCompletion.value;

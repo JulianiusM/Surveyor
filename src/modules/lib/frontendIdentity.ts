@@ -9,6 +9,18 @@ type IdentityProblemCode = components['schemas']['Problem']['code'];
  * Navigation, identity fallbacks and confirmed removal delivery share this destination. */
 export const frontendOverviewPath = '/frontend-pilot/users/dashboard';
 
+/** Mirror native Dashboard's account-or-guest profile admission using the current
+ * server-projected identity. This is presentation only: private Overview reads
+ * retain their independent server authorization and never run for this redirect. */
+export function frontendOverviewPageEntry(session: Pick<components['schemas']['SessionView'], 'kind' | 'activeProfile'>,
+    returnTo?: unknown): components['schemas']['PageEntryOutcome'] {
+    if (session.kind !== 'anonymous' && session.activeProfile) return {kind: 'render'};
+    // Preserve the full bounded destination, including filters and deliberate
+    // anchors, through the existing Login/notice delivery owners.
+    return {kind: 'redirect', url: `/frontend-pilot/users/login?next=${encodeURIComponent(safeFrontendReturn(returnTo))}`,
+        notice: {kind: 'info', messageKey: 'auth.loginRequired'}};
+}
+
 /**
  * Decode the existing guest-link flash boundary without carrying another identity's
  * private recovery link into a newly admitted document. Old unscoped strings and
@@ -123,7 +135,7 @@ export function safeFrontendReturn(input: unknown): string {
         const base = new URL('https://surveyor.invalid');
         const target = new URL(input, base);
         if (target.origin !== base.origin || !input.startsWith('/') || input.startsWith('//')
-            || !/^\/frontend-pilot(?:\/|$)/u.test(target.pathname)) return fallback;
+            || !/^\/frontend-pilot(?:\/|$)/iu.test(target.pathname)) return fallback;
         return target.pathname + target.search + target.hash;
     } catch { return fallback; }
 }

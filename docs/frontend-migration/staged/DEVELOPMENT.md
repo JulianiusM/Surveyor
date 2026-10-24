@@ -470,6 +470,15 @@ authorized downloads of the complete saved ledger, independent of browser filter
    as the feature body so JavaScript failure cannot leave a normal-looking action which cannot work.
    Preserve the native document title separately from a visible heading. Use catalog-owned complete journey titles
    with the existing `usePageTitle` owner where prefixes or branding differ, and verify initial/warm/locale updates.
+   Derive resource guest/admin/detail intent from the router's admitted canonical records through
+   `resourceRouteIntent`; a visitor's case or trailing slash must not select another operation. Express registrations
+   likewise capture their declared mode explicitly. Preserve original parameters, query and fragments rather than
+   lowercasing complete return URLs. Public Home and the authenticated personal Dashboard retain distinct admission.
+   Help's declared route metadata identifies its article readiness and locale-URL owner; an unmatched descendant has
+   no Help readiness provider and must not wait for one.
+   `navigatePageEntry` binds its lazy delivery to the captured actor and actual Router attempt. Identity retirement
+   cancels that obsolete attempt before commitment, while a later deliberate visit to the same URL remains independent.
+   Do not turn a temporarily absent authoritative session into an anonymous redirect or a private-read grant.
    `EntityEntryPage` owns cancellation/removal for a feature's explicit `deniedQueries` selection. Features return
    affected families and any inactive-only copies; they do not repeat eviction dispatch. Preserve the producing
    admission family when removing inactive visits: a paused observer can be inactive to Query while still owning

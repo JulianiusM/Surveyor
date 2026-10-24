@@ -5,6 +5,7 @@ import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
 import {usePilot} from '../../app/context';
+import {resourceRouteIntent} from '../../composables/pageEntry';
 import {overviewKeys, driversKeys} from '../../app/queryKeys';
 import {useDriversApi} from './api';
 import DriversPage from './DriversPage.vue';
@@ -15,7 +16,7 @@ const context = usePilot();
 const api = useDriversApi(context);
 const route = useRoute();
 const listId = computed(() => String(route.params.listId).toLowerCase());
-const guestRoute = computed(() => route.path.endsWith('/guest'));
+const guestRoute = computed(() => resourceRouteIntent(route) === 'guest');
 
 // Initial admission belongs to one URL and identity. Reusing this wrapper for another
 // list, locale or explicit guest route gets its own query through the shared entry owner.

@@ -528,7 +528,7 @@ test('Drivers settings UI saves metadata, defaults, administrators, images, even
     });
     await dialog.getByRole('button', {name: 'Delete permanently', exact: true}).click();
     expect((await removed).status()).toBe(200);
-    await expect(page).toHaveURL(/\/frontend-pilot$/u);
+    await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
     expect((await page.request.get(`/drivers/${resource.id}`)).status()).toBe(404);
     expect(await page.evaluate(() => document.documentElement.dataset.pilotDocument)).toBe('drivers-settings-review');
     expect(navigation).toEqual([]);

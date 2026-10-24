@@ -19,7 +19,20 @@ export function createEventPilotRouter(hooks: FrontendEntityDocumentHooks): Rout
         const query = typeof req.query.regToken === 'string' ? `?${new URLSearchParams({regToken: req.query.regToken})}` : '';
         res.redirect(`/frontend-pilot/event/${encodeURIComponent(String(req.params.eventId))}${query}`);
     });
-    router.get(['/:eventId', '/:eventId/guest', '/:eventId/admin'], asyncHandler(renderEvent));
+    for (const [path, view] of [['/:eventId', 'detail'], ['/:eventId/guest', 'guest'], ['/:eventId/admin', 'admin']] as const) {
+        /** Detail, guest and administration retain their registered intent even
+         * when Express accepts a different case or trailing-slash spelling. */
+        router.get(path, asyncHandler(async function renderEvent(req, res) {
+            const state = await hooks.bootstrap(req);
+            // Controller admission remains independent for every view. Query
+            // capabilities are forwarded unchanged and never select the view.
+            const token = typeof req.query.regToken === 'string' ? req.query.regToken : undefined;
+            const entry = await readEventResourceEntry(String(req.params.eventId), view, await captureApiActor(req), token);
+            state.eventEntry = entry;
+            if (await hooks.applyPageEntry(req, res, state, entry.entry)) return;
+            await renderFrontendPilot(res, req.originalUrl, state);
+        }));
+    }
 
     /** Native account-only creation carries its exact return URL through login. */
     async function renderCreation(req: Request, res: Response): Promise<void> {
@@ -37,18 +50,6 @@ export function createEventPilotRouter(hooks: FrontendEntityDocumentHooks): Rout
         state.pageEntry = {kind: 'render'};
         await renderFrontendPilot(res, req.originalUrl, state);
     }
-
-    /** Detail, guest and administration have separate server-owned admission. */
-    async function renderEvent(req: Request, res: Response): Promise<void> {
-        const state = await hooks.bootstrap(req);
-        const view = req.path.endsWith('/guest') ? 'guest' : req.path.endsWith('/admin') ? 'admin' : 'detail';
-        const token = typeof req.query.regToken === 'string' ? req.query.regToken : undefined;
-        const entry = await readEventResourceEntry(String(req.params.eventId), view, await captureApiActor(req), token);
-        state.eventEntry = entry;
-        if (await hooks.applyPageEntry(req, res, state, entry.entry)) return;
-        await renderFrontendPilot(res, req.originalUrl, state);
-    }
-
 
     return router;
 }

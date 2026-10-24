@@ -6,6 +6,7 @@ import type {QueryCacheNotifyEvent} from '@tanstack/vue-query';
 import type {components} from '../../types/api/v1';
 import type {PilotConfirmedNavigation, PilotContext, PilotIdentityConfirmation, PilotPageEntryDenial, PilotPageEntrySource, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
 import type {MessageKey} from '../../types/LocalizationTypes';
+import type {EntityRouteIntent} from '../../types/FrontendEntityEntryTypes';
 import {frontendDocumentUrl, safeFrontendReturn} from '../../modules/lib/frontendIdentity';
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import {canRetryRead, useActionState, usePilot} from '../app/context';
@@ -14,6 +15,16 @@ import {invalidateQueryFamilies, queryFamilyReadError, refetchFreshQueries, reti
 import {belongsToQueryFamily} from '../app/queryKeys';
 import {useReadRetry, useReadRetryAt} from './feedback';
 import {observePageNavigation} from './pageNavigation';
+
+/** Follow the router's canonical resource record, rather than reparsing its URL.
+ * Vue Router admits case and trailing-slash equivalents; all resource wrappers
+ * and Event's page must preserve that same guest/admin read and render intent. */
+export function resourceRouteIntent(route: RouteLocationNormalized): EntityRouteIntent {
+    // Matched records retain their declared spelling even when the visitor's
+    // path differs. No normalization changes parameters, query values or history.
+    if (route.matched.some(record => record.path.endsWith('/guest'))) return 'guest';
+    return route.matched.some(record => record.path.endsWith('/admin')) ? 'admin' : 'detail';
+}
 
 /** Admit SPA navigation only for an ordinary primary click. Modified clicks, downloads
  * and explicit targets retain their captured href and native tab/window behavior. */
@@ -62,11 +73,23 @@ export async function navigatePageEntry(context: PilotContext, router: Router,
         context.pageNotice.value = notice;
         return true;
     }
+    // Bind only this admitted Router attempt before lazy component delivery.
+    // A later deliberate visit can have the same URL but a different route
+    // object; this old actor must never cancel that newer user's navigation.
+    let admittedNavigation: RouteLocationNormalized | undefined;
+    const stopStart = router.beforeEach(function captureEntryNavigation(to, from): void {
+        if (!admittedNavigation && to.fullPath === destination
+            && frontendDocumentUrl(from.fullPath) === frontendDocumentUrl(expectedRoute)) admittedNavigation = to;
+    });
     // The shell retires document flashes on accepted departure. A canonical server
     // redirect carries those same flashes into its rendered destination. Capture at
     // the final commitment phase, so expiration/dismissal during lazy delivery cannot
     // revive an old message or private link when the destination eventually arrives.
-    const stopCarry = router.beforeResolve(function carryDestinationFeedback(to, from): void {
+    const stopCarry = router.beforeResolve(function carryDestinationFeedback(to, from): boolean | void {
+        // Identity retirement can occur while a lazy Login module is loading.
+        // Cancel this obsolete admission before commitment, rather than merely
+        // hiding its notice after it has moved the new actor to the wrong page.
+        if (to === admittedNavigation && !context.isCurrent(scope)) return false;
         if (to.fullPath !== destination || frontendDocumentUrl(from.fullPath) !== frontendDocumentUrl(expectedRoute)
             || !context.isCurrent(scope)) return;
         notice = outcome.notice ?? context.pageNotice.value;
@@ -87,6 +110,7 @@ export async function navigatePageEntry(context: PilotContext, router: Router,
         // handler. Admission must leave this visit intact rather than reject a watch callback.
         return false;
     } finally {
+        stopStart();
         stopCarry();
     }
 }

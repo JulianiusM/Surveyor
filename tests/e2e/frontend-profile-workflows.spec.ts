@@ -1,6 +1,6 @@
 import {test, expect, type Browser, type Page} from '@playwright/test';
 import {writeFile} from 'node:fs/promises';
-import {expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, readProfileWorkflowFixtureForE2E,
+import {expectEmbeddedFrontendRefresh, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, readProfileWorkflowFixtureForE2E,
     readVisiblePresentation, withProfileWorkflowFixtureForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 
@@ -27,6 +27,33 @@ function workflowPresentation() {
 }
 
 async function waitForWorkflowFonts(): Promise<void> { await document.fonts.ready; }
+
+/** The shared heading paints its card-header wrapper; native paints h1 itself.
+ * Measure the actual displayed header without requiring duplicate translucent
+ * backgrounds on a child and its parent. Raw element styles remain evidence. */
+async function readWorkflowHeadingPaint(page: Page) {
+    const heading = page.locator('main > .card h1');
+    await expect(heading).toHaveCount(1);
+    return heading.evaluate(element => {
+        const header = element.closest('.card-header');
+        if (!header) throw new Error('Workflow heading must belong to its card header.');
+        return {text: element.textContent!.replace(/\s+/gu, ' ').trim(),
+            ownBackground: getComputedStyle(element).backgroundColor,
+            headerBackground: getComputedStyle(header).backgroundColor};
+    });
+}
+
+/** Project only the uniquely asserted h1 paint to its measured header paint.
+ * Every other raw style, field, label, warning and geometry stays comparable. */
+function workflowHeaderPresentation(snapshot: Awaited<ReturnType<typeof readVisiblePresentation>>,
+    heading: Awaited<ReturnType<typeof readWorkflowHeadingPaint>>) {
+    const first = snapshot.content.elements[0];
+    expect(snapshot.content.elements.filter(element => element.text === heading.text)).toHaveLength(1);
+    expect(first?.text).toBe(heading.text);
+    expect(first?.style.background).toBe(heading.ownBackground);
+    return {...snapshot, content: {...snapshot.content, elements: snapshot.content.elements.map((element, index) =>
+        index === 0 ? {...element, style: {...element.style, background: heading.headerBackground}} : element)}};
+}
 
 /** Translate the same confirmed notice through the real locale command. Reading
  * another language must neither replace its DOM receipt nor replay the completed
@@ -319,6 +346,7 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
                 const native = await page.evaluate(workflowPresentation);
                 const nativeCard = await readVisiblePresentation(page.locator('main > .card'),
                     ['h1', 'h2', 'h3', 'h4', 'p', 'label', 'input', 'button', 'a', 'hr'], presentation.name === 'token');
+                const nativeHeadingPaint = await readWorkflowHeadingPaint(page);
                 const nativeFooter = await readVisiblePresentation(page.locator('footer'), ['a']);
                 const nativeFooterLinks = await page.locator('footer a').evaluateAll(links => links.map(link => link.getAttribute('href')));
                 const nativeHeading = await page.locator('main h1').innerText();
@@ -333,8 +361,14 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
                 const pilot = await page.evaluate(workflowPresentation);
                 const pilotCard = await readVisiblePresentation(page.locator('main > .card'),
                     ['h1', 'h2', 'h3', 'h4', 'p', 'label', 'input', 'button', 'a', 'hr'], presentation.name === 'token');
+                const pilotHeadingPaint = await readWorkflowHeadingPaint(page);
                 const pilotFooter = await readVisiblePresentation(page.locator('footer'), ['a']);
-                expectVisiblePresentation(nativeCard, pilotCard);
+                expect(nativeHeadingPaint.ownBackground).toBe(nativeHeadingPaint.headerBackground);
+                expect(pilotHeadingPaint.headerBackground).toBe(nativeHeadingPaint.headerBackground);
+                expect(pilotHeadingPaint.ownBackground).toBe('rgba(0, 0, 0, 0)');
+                await expectEmbeddedFrontendRefresh(page.locator('main > .card > .card-header'));
+                expectVisiblePresentation(workflowHeaderPresentation(nativeCard, nativeHeadingPaint),
+                    workflowHeaderPresentation(pilotCard, pilotHeadingPaint));
                 expectVisiblePresentation(nativeFooter, pilotFooter);
                 expect(await page.locator('footer a').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual(nativeFooterLinks);
                 expect(await page.locator('main h1').innerText()).toBe(nativeHeading);
@@ -369,7 +403,7 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
                 expect(writes).toEqual([]);
                 const evidence = testInfo.outputPath('presentation.json');
                 await writeFile(evidence, JSON.stringify({scenario: presentation.name, viewport, native, pilot,
-                    nativeCard, pilotCard, nativeFooter, pilotFooter, browserErrors}, null, 2));
+                    nativeCard, pilotCard, nativeHeadingPaint, pilotHeadingPaint, nativeFooter, pilotFooter, browserErrors}, null, 2));
                 await testInfo.attach('native-pilot-presentation', {path: evidence, contentType: 'application/json'});
             });
         });

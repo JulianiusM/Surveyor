@@ -167,6 +167,9 @@ describe('entity archival migration rehearsal', () => {
         await expectActiveRootsPreserved();
     });
 
+    // This case executes the complete real down/up DDL rehearsal, including its
+    // recovery up. Let that owned schema work finish before subsequent cases
+    // inspect it; the ordinary workflow deadline is not a migration-time budget.
     it('upgrades the preceding schema while preserving existing roots, relationships, contents and defaults', async () => {
         try {
             // All fixtures are active and have no private preferences, so down is permitted.
@@ -186,7 +189,7 @@ describe('entity archival migration rehearsal', () => {
             // Keep later preflight cases usable if a preservation assertion fails after the rehearsal.
             await migration.up(runner);
         }
-    });
+    }, 120_000);
 
     it('matches the profile UUID storage and collation and retains the preference uniqueness and cascade contract', async () => {
         // MariaDB requires compatible character storage for a string foreign key. Reading

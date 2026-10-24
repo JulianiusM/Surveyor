@@ -27,6 +27,8 @@ declare module 'vue-router' {
     interface RouteMeta {
         /** The declared page family owns both SSR and cold client placeholders. */
         loadingSkeleton?: PilotLoadingSkeleton;
+        /** Only a matched Help renderer supplies article/anchor readiness. */
+        helpPage?: boolean;
     }
 }
 

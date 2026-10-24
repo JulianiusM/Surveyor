@@ -511,7 +511,7 @@ for (const width of [1280, 390]) {
             && new URL(response.url()).pathname === `/api/v1/events/${event.id}`);
         // The Event's root Refresh owns this detail read. Personal Finance can
         // expose another independently scoped control with the same label.
-        await page.locator('main > section.card > .card-body > .d-flex.mb-1')
+        await page.locator('main > section.card > .card-header .pilot-page-heading-actions')
             .getByRole('button', {name: 'Refresh', exact: true}).click();
         expect((await refreshed).status()).toBe(200);
         await expect(page.locator('#arrivalDate')).toHaveValue(arrival);

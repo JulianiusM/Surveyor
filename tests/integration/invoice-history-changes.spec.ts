@@ -60,6 +60,8 @@ async function confirmation(poolId: string) {
 }
 
 describe('confirmed invoice revisions, rejection, and retraction', () => {
+    // Complete this real down/up/repeated-up DDL and its recovery before later
+    // workflow cases use the enum. Schema rehearsal has its own bounded budget.
     it('upgrades the status enum and safely downgrades before any invoices have been retracted', async () => {
         const {event, poolId, invoiceId} = await context();
         await invoiceOperations.acceptSavedInvoice(poolId, invoiceId);
@@ -81,7 +83,7 @@ describe('confirmed invoice revisions, rejection, and retraction', () => {
             expect(after.calculationSnapshot).toEqual(before.calculationSnapshot);
             expect((await runner.getTable('event_invoices'))!.findColumnByName('status')!.enum).toContain('RETRACTED');
         } finally { await migration.up(runner); await runner.release(); }
-    });
+    }, 120_000);
 
     it.each(['APPROVED', 'CLOSED'] as const)('corrects and rejects %s organizer costs in an open pool while retaining originals', async (status) => {
         const {event, poolId} = await context();

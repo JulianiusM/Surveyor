@@ -1072,6 +1072,7 @@
       },
       "auth": {
         "accountRequired": "You must be logged in as user to access this site.",
+        "loginRequired": "You must be logged in to access this site.",
         "sessionExpired": "Session has expired",
         "invalidGuestLink": "Invalid or mismatched token",
         "unconfirmedRequest": "The request may already have completed. Check your email or current account before starting it again.",

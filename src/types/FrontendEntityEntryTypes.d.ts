@@ -1,6 +1,10 @@
 import type {components} from './api/v1';
 import type {PilotRequestScope} from './FrontendPilotUiTypes';
 
+/** Resource intent comes from the admitted router record, independently of the
+ * equivalent case/trailing-slash spelling used for the current URL. */
+export type EntityRouteIntent = 'detail' | 'guest' | 'admin';
+
 /** Features select affected query families; the shared admission presentation owns
  * their cancellation/removal. Inactive copies can retire without discarding an
  * already mounted creation draft or canceling the denial-producing admission. */

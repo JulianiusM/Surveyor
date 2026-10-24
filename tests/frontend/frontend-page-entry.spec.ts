@@ -250,6 +250,27 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(context.personalLink.value).toBeNull();
     });
 
+    it.each([false, true])('retires admission before Router capture without canceling a newer deliberate visit (%s)', async deliberate => {
+        const profile = {id: firstId, name: 'Newly admitted account'};
+        const account: components['schemas']['SessionView'] = {...session, kind: 'account',
+            activeProfile: profile, profiles: [profile], logoutUrl: '/users/logout'};
+        const {context, router} = await mounted('/frontend-pilot', async () => json(account));
+        const destination = '/frontend-pilot/users/login?next=/frontend-pilot/users/dashboard';
+        const delivery = navigatePageEntry(context, router, {kind: 'redirect', url: destination,
+            notice: {kind: 'info', messageKey: 'auth.loginRequired'}});
+        // Real identity acceptance retires the actor synchronously before its
+        // authoritative GET. Router's existing guard pipeline has not run yet.
+        const admitted = context.acceptIdentity({session: account, personalLink: null, redirect: null});
+        const visit = deliberate ? router.push(destination) : undefined;
+        await admitted;
+        await delivery;
+        await visit;
+        await flushPromises();
+
+        expect(router.currentRoute.value.fullPath).toBe(deliberate ? destination : '/frontend-pilot');
+        expect(context.pageNotice.value).toBeNull();
+    });
+
     it('retains a confirmed destination after lazy delivery fails and retries only navigation', async () => {
         const {context, router} = await mounted(`/frontend-pilot/packing/${firstId}/guest`, async () => json({
             entry: {kind: 'render'}, guest: {id: firstId, title: 'Guest fixture'},

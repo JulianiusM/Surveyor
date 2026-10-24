@@ -2,7 +2,7 @@ import {expect, test, type Locator} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createE2ELogin} from '../factories/e2eCoreFactory';
-import {expectVisiblePresentation, loginForE2E, openModalForE2E,
+import {expectEmbeddedFrontendRefresh, expectVisiblePresentation, loginForE2E, openModalForE2E,
     readControlContracts, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
@@ -29,6 +29,26 @@ async function expectCompleteBallotContract(table: Locator, combinations: number
     })).toEqual(values);
 }
 
+/** The requested single-choice protection deliberately disables only the last
+ * creation Remove action. Preserve raw captures and compare every other field,
+ * label and style against native after asserting that exact state difference. */
+function expectSurveyCreationPresentation(native: Awaited<ReturnType<typeof readVisiblePresentation>>,
+    pilot: Awaited<ReturnType<typeof readVisiblePresentation>>): void {
+    const nativeRemove = native.content.elements.filter(isRemove);
+    const pilotRemove = pilot.content.elements.filter(isRemove);
+    expect(nativeRemove).toHaveLength(1);
+    expect(pilotRemove).toHaveLength(1);
+    expect(nativeRemove[0]!.field).toEqual({disabled: false});
+    expect(pilotRemove[0]!.field).toEqual({disabled: true});
+    const compared = {...pilot, content: {...pilot.content, elements: pilot.content.elements.map(element =>
+        isRemove(element) ? {...element, field: {...element.field!, disabled: false}} : element)}};
+    expectVisiblePresentation(native, compared);
+
+    function isRemove(element: typeof native.content.elements[number]): boolean {
+        return element.text === 'Remove' && !!element.field && 'disabled' in element.field;
+    }
+}
+
 for (const width of [1280, 390]) {
     test(`compares native Survey creation, ballots, named results and collaborative choices at ${width}px`, async ({page}, info) => {
         await page.setViewportSize({width, height: 900});
@@ -52,13 +72,17 @@ for (const width of [1280, 390]) {
             if (pilot) await waitForPilotHydration(page);
             await expect(page).toHaveTitle('Create Survey | Surveyor');
             await expect(page.locator('#combinationTable tr')).toHaveCount(1);
+            const creationRemove = page.locator('#combinationTable').getByRole('button', {name: 'Remove', exact: true});
+            await expect(creationRemove).toHaveCount(1);
+            if (pilot) await expect(creationRemove).toBeDisabled();
+            else await expect(creationRemove).toBeEnabled();
             const creation = await captureSurveyPresentation(page, info, `${label}-survey-create`, page.locator('#surveyForm'),
                 ['label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button']);
-            if (pilot) expectVisiblePresentation(native.creation!, creation);
+            if (pilot) expectSurveyCreationPresentation(native.creation!, creation);
             else native.creation = creation;
             const creationCard = await captureSurveyPresentation(page, info, `${label}-survey-create-card`,
                 page.locator('main .card').first(), ['h1', 'label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button']);
-            if (pilot) expectVisiblePresentation(native.creationCard!, creationCard);
+            if (pilot) expectSurveyCreationPresentation(native.creationCard!, creationCard);
             else native.creationCard = creationCard;
 
             await page.goto(`${prefix}${survey.path}?locale=en`, {waitUntil: 'domcontentloaded'});
@@ -69,6 +93,8 @@ for (const width of [1280, 390]) {
                 ['h1', 'button']);
             const layout = await readSurveyCardLayout(card);
             if (pilot) {
+                await expectEmbeddedFrontendRefresh(card.locator(':scope > .card-header'));
+                expect(header.content.elements.filter(element => element.refresh)).toHaveLength(1);
                 expectVisiblePresentation(native.header!, header);
                 expectSurveyCardLayout(nativeLayout!, layout);
             } else {

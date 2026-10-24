@@ -1175,7 +1175,7 @@ describe('authentication user stories', () => {
             await userController.sendPasswordForgotMail('frontend-link-account', {frontend: true, next: '//outside.invalid'});
             const resetUrl = new URL(reset.mock.calls[0][1]);
             expect(resetUrl.pathname).toMatch(/^\/frontend-pilot\/users\/reset-password\/[^/]+$/);
-            expect(resetUrl.searchParams.get('next')).toBe('/frontend-pilot');
+            expect(resetUrl.searchParams.get('next')).toBe('/frontend-pilot/users/dashboard');
 
             const session = {} as Request['session'];
             const link = await userController.registerGuest('Frontend Guest', '  FRONTEND-GUEST@example.test  ', session,

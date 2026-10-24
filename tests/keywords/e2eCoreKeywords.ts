@@ -75,6 +75,37 @@ export async function dismissFrontendSuccessNotifications(page: Page): Promise<v
     }
 }
 
+/** The 2026-10-23 approved Refresh placement adds one compact heading action.
+ * Verify its accessible target and actual geometry before projecting only that
+ * deliberate addition out of the unchanged native header comparison. */
+export async function expectEmbeddedFrontendRefresh(surface: Locator): Promise<void> {
+    const refresh = surface.locator('.pilot-page-heading-actions').getByRole('button', {name: 'Refresh', exact: true});
+    await expect(refresh).toHaveCount(1);
+    await expect(refresh).toBeVisible();
+    await expect(refresh).toBeEnabled();
+    await expect(refresh).toHaveAttribute('title', 'Refresh');
+    await expect(refresh.locator('.bi')).toHaveCount(1);
+    await expect(surface.locator('.bi-arrow-clockwise')).toHaveCount(1);
+    const geometry = await refresh.evaluate(function inspectRefresh(control) {
+        const header = control.closest('.card-header')!.getBoundingClientRect();
+        const own = control.getBoundingClientRect();
+        const heading = control.closest('.pilot-page-heading')!.querySelector('h1')!.getBoundingClientRect();
+        const actions = [...control.closest('.pilot-page-heading-actions')!.querySelectorAll('a,button')]
+            .filter(action => action !== control).map(action => action.getBoundingClientRect());
+        // Header controls can wrap together on narrow screens. They must stay
+        // inside the header and cannot paint over the title or another action.
+        return {width: own.width, height: own.height,
+            contained: own.left >= header.left - 1 && own.right <= header.right + 1
+                && own.top >= header.top - 1 && own.bottom <= header.bottom + 1,
+            overlaps: [heading, ...actions].some(box => Math.min(own.right, box.right) - Math.max(own.left, box.left) > 1
+                && Math.min(own.bottom, box.bottom) - Math.max(own.top, box.top) > 1)};
+    });
+    expect(geometry.width).toBeGreaterThanOrEqual(30);
+    expect(geometry.height).toBeGreaterThanOrEqual(30);
+    expect(geometry.contained).toBe(true);
+    expect(geometry.overlaps).toBe(false);
+}
+
 /** Read corresponding visible controls rather than framework-specific wrappers.
  * Callers select the surface and semantic elements whose presentation they own;
  * generated bearer text may differ. Raw styling and geometry remain visual review

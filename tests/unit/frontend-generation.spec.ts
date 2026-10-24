@@ -566,6 +566,8 @@ describe('contract and catalog generation', () => {
 
     /** Exercise real compiler output ownership, read-only rejection and redirected
      * directory safety inside one detached tree with explicitly released links. */
+    // Five real compiler processes and junction/case cleanup need their own
+    // offline batch budget; this case does not measure application latency.
     it('retires only obsolete owned browser validators and reports them without mutation in check mode', async function retiresBrowserArtifacts() {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         const browser = path.join(temporary, '.generated/api/v1/browser');
@@ -668,8 +670,10 @@ describe('contract and catalog generation', () => {
             await removeDependencyLink(temporary);
             await removeTemporary(temporary);
         }
-    }, 30_000);
+    }, 60_000);
 
+    // Three complete API/catalog compiler batches, standalone execution and byte
+    // comparisons need process/filesystem headroom; this is no request deadline.
     it('generates identical artifacts from two clean trees and verifies them without rewriting', async () => {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {
@@ -710,7 +714,7 @@ describe('contract and catalog generation', () => {
         } finally {
             await removeTemporary(temporary);
         }
-    }, 60_000);
+    }, 120_000);
 
     it('derives selected invoice text from its literal owner and tracks source changes without executing catalog code', async () => {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-invoice-'));
@@ -789,6 +793,8 @@ describe('contract and catalog generation', () => {
         }
     }, 30_000);
 
+    // Run all seven real generator processes, including the rejected catalogs,
+    // within one offline correctness case with local process/filesystem headroom.
     it('discovers one added locale file and rejects missing text, placeholder drift and active markup', async () => {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-'));
         try {
@@ -823,8 +829,10 @@ describe('contract and catalog generation', () => {
         } finally {
             await removeTemporary(temporary);
         }
-    }, 20_000);
+    }, 40_000);
 
+    // Six generator processes check the complete positive/negative node matrix;
+    // allow local process and filesystem overhead without weakening an assertion.
     it('validates authored node names in every translated and plural variant', async () => {
         const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'surveyor-generation-rich-'));
         try {
@@ -849,7 +857,7 @@ describe('contract and catalog generation', () => {
             await fs.writeFile(germanPath, JSON.stringify(german));
             expect(() => generate('generate-locales.mjs', ['--source', source, '--output-root', destination])).toThrow('Authored node drift');
         } finally { await removeTemporary(temporary); }
-    }, 20_000);
+    }, 40_000);
 
     it('compiles real consumers and required negative assertions with the installed TypeScript', () => {
         execFileSync(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--ignoreConfig',

@@ -5,6 +5,7 @@ import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
 import {usePilot} from '../../app/context';
+import {resourceRouteIntent} from '../../composables/pageEntry';
 import {overviewKeys, surveyKeys} from '../../app/queryKeys';
 import {useSurveysApi} from './api';
 import EntityEntryPage from '../../components/EntityEntryPage.vue';
@@ -15,7 +16,7 @@ const context = usePilot();
 const api = useSurveysApi(context);
 const route = useRoute();
 const surveyId = computed(() => String(route.params.surveyId).toLowerCase());
-const guestRoute = computed(() => route.path.endsWith('/guest'));
+const guestRoute = computed(() => resourceRouteIntent(route) === 'guest');
 const initial = context.initialDocumentFor(route.fullPath);
 const initialEntry: components['schemas']['SurveyResourceEntry'] | undefined = initial
     ? {entry: initial.pageEntry ?? {kind: 'render'}, guest: initial.guestEntry ?? null} : undefined;

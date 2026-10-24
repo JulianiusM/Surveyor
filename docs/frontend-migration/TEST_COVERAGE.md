@@ -860,3 +860,10 @@ Database-backed route and native/Vue comparator fixtures are adapted to the rest
 opened creation disclosure. Their raw captures and all matrix-control comparisons remain; only the asserted added
 disclosure heading/button is excluded from the native-equivalence text projection. Source adaptation is not an
 execution claim. The paired review records the actual final run and any unrun database suites.
+
+The subsequent readiness pass adds Router-equivalent guest/admin/message cases, Help anchor/history readiness and
+locale-URL checks, anonymous Dashboard Login admission and actor/route lifetime checks. Real HTTP regressions in
+profile administration cover registered server modes, resource guest intent and known Packing denials; built
+`frontend-route-admission` journeys cover direct/warm anonymous Login with the original document and a mixed-case
+Event administration arrival. Header comparison retains raw captures and explicitly tests the approved embedded
+Refresh control before projecting that single addition out of the native meaning comparison.

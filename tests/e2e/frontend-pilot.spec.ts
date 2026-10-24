@@ -298,7 +298,13 @@ for (const width of [1280, 390]) {
                 expect(after.documentMarker).toBe(marker);
                 if (pilot) {
                     expect(after.globalFocusEvents).toBe(0);
-                    expect(Math.abs(after.scrollY - before.scrollY)).toBeLessThanOrEqual(2);
+                    // Natural-flow feedback reserves space above the table.
+                    // Browser anchoring may compensate scrollY; the actual row
+                    // and initiating control must retain their viewport position.
+                    expect(Math.abs(after.row.y - before.row.y)).toBeLessThanOrEqual(2);
+                    expect(after.control).not.toBeNull();
+                    expect(before.control).not.toBeNull();
+                    expect(Math.abs(after.control!.y - before.control!.y)).toBeLessThanOrEqual(2);
                     expect(after.focusedGlobalAlert).toBe(false);
                 } else expect(after.globalFocusEvents).toBeGreaterThan(0);
 
@@ -516,17 +522,46 @@ for (const width of [1280, 390]) {
     });
 }
 
-test('keeps initial server notification outside flow through real hydration', async ({page}, info) => {
+test('keeps initial server notification space reserved through real hydration', async ({page}, info) => {
     await page.setViewportSize({width: 390, height: 844});
     const entry = readGate();
     const started = readGate();
+    const delivered = readGate();
+    let intercepted = false;
     const pattern = /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u;
+    const cardSelector = 'main > .card, main > [data-pilot-initial-loading] .card';
 
     async function holdEntry(route: Route): Promise<void> {
+        intercepted = true;
         started.release();
-        await entry.promise;
-        await route.continue();
+        try {
+            await entry.promise;
+            await route.continue();
+        } finally { delivered.release(); }
     }
+
+    /** Compare the real space above the Login card while the notice moves from
+     * its server origin into the mounted host. Neither owner may cover content. */
+    async function readNotificationGeometry(notice: Locator) {
+        await expect(page.locator(cardSelector), 'Expected exactly one initial or loaded Login card.').toHaveCount(1);
+        await expect(page.locator(cardSelector)).toBeVisible();
+        return notice.evaluate((element, selector) => {
+            const region = element.closest('.pilot-notice-region')!.getBoundingClientRect();
+            const alert = element.getBoundingClientRect();
+            const main = element.closest('main')!.getBoundingClientRect();
+            const header = document.querySelector('.pilot-app > header');
+            if (!header) throw new Error('Expected the real navigation header above the notice.');
+            const content = document.querySelectorAll(selector);
+            if (content.length !== 1) throw new Error('Expected exactly one initial or loaded Login card for notice geometry.');
+            const card = content[0]!.getBoundingClientRect();
+            return {originHeight: region.height, noticeHeight: alert.height,
+                reservedHeight: card.top - region.top, clearance: card.top - alert.bottom, cardY: card.top,
+                mainY: main.top, headerBottom: header.getBoundingClientRect().bottom,
+                scrollY: window.scrollY, text: element.textContent,
+                documentMarker: document.documentElement.dataset.pilotDocument};
+        }, cardSelector);
+    }
+
     await page.route(pattern, holdEntry);
     try {
         // The actual anonymous admission redirects with its real one-visit notice.
@@ -534,24 +569,43 @@ test('keeps initial server notification outside flow through real hydration', as
         await page.goto('/frontend-pilot/packing/create?locale=en', {waitUntil: 'commit'});
         await started.promise;
         const notice = page.locator('main .pilot-notification');
+        await expect(notice).toBeVisible();
         await expect(notice).toContainText('You must be logged in as user');
         await expect(notice.getByRole('button', {name: 'Dismiss notification'})).toBeDisabled();
-        const before = await notice.evaluate(element => ({
-            originHeight: element.parentElement!.getBoundingClientRect().height,
-            scrollY: window.scrollY, text: element.textContent,
-        }));
-        expect(before.originHeight).toBe(0);
+        await page.evaluate(() => document.fonts.ready);
+        await page.evaluate(() => { document.documentElement.dataset.pilotDocument = 'initial-notification'; });
+        const before = await readNotificationGeometry(notice);
+        await info.attach('initial-notification-before-geometry', {body: JSON.stringify(before, null, 2), contentType: 'application/json'});
+        expect(before.noticeHeight).toBeGreaterThan(0);
+        expect(before.originHeight).toBeGreaterThanOrEqual(before.noticeHeight);
+        expect(before.clearance).toBeGreaterThanOrEqual(0);
+        expect(before.reservedHeight).toBeGreaterThanOrEqual(before.noticeHeight);
+        expect(before.mainY).toBeGreaterThanOrEqual(before.headerBottom);
         await captureState(page, info, 'initial-notification-before-hydration', undefined, {viewportOnly: true});
 
         entry.release();
         await waitForPilotHydration(page);
         await expect(page.locator('[data-pilot-notices] .pilot-notification')).toHaveText(before.text!);
         await expect(page.locator('[data-pilot-notices] .btn-close')).toBeEnabled();
-        expect(await page.evaluate(() => window.scrollY)).toBe(before.scrollY);
-        expect(await page.locator('main > .pilot-notice-region').evaluate(element => element.getBoundingClientRect().height)).toBe(0);
+        const after = await readNotificationGeometry(page.locator('[data-pilot-notices] .pilot-notification'));
+        await info.attach('initial-notification-after-geometry', {body: JSON.stringify(after, null, 2), contentType: 'application/json'});
+        expect(after.scrollY).toBe(before.scrollY);
+        expect(after.originHeight).toBeGreaterThanOrEqual(after.noticeHeight);
+        expect(after.clearance).toBeGreaterThanOrEqual(0);
+        expect(Math.abs(after.noticeHeight - before.noticeHeight)).toBeLessThanOrEqual(1);
+        expect(Math.abs(after.reservedHeight - before.reservedHeight)).toBeLessThanOrEqual(1);
+        expect(after.mainY).toBeGreaterThanOrEqual(after.headerBottom);
+        // Static mobile navigation is expanded until its collapse control works.
+        // Its intentional hydration collapse moves the whole page; notice
+        // relocation and skeleton replacement must add no movement within it.
+        expect(Math.abs((after.mainY - after.headerBottom) - (before.mainY - before.headerBottom))).toBeLessThanOrEqual(1);
+        expect(Math.abs((after.cardY - after.mainY) - (before.cardY - before.mainY))).toBeLessThanOrEqual(1);
+        expect(Math.abs((after.cardY - before.cardY) - (after.headerBottom - before.headerBottom))).toBeLessThanOrEqual(1);
+        expect(after.documentMarker).toBe('initial-notification');
         await captureState(page, info, 'initial-notification-after-hydration', undefined, {viewportOnly: true});
     } finally {
         entry.release();
+        if (intercepted) await delivered.promise;
         await page.unroute(pattern, holdEntry);
     }
 });

@@ -12,7 +12,8 @@ import {createTranslator} from '../../src/modules/localization/translator';
 import settings from '../../src/modules/settings';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import type {components} from '../../src/types/api/v1';
-import {registerLocalAccount} from '../keywords/coreDomainKeywords';
+import {createActivityPlanWithSlot, createDriversListWithItem, createIntegrationEvent, createPackingListWithItem,
+    createSurveyWithCombinations, registerLocalAccount} from '../keywords/coreDomainKeywords';
 import {closeIntegrationDatabase, initializeIntegrationDatabase} from '../support/database';
 
 let listener: http.Server | undefined;
@@ -288,7 +289,8 @@ describe('admitted common documents through the actual Express application', () 
     it('keeps public Home at the pilot root and personal Overview at the native dashboard path', async function preservesHomeAndOverview() {
         const base = await applicationOrigin();
         const landing = await fetch(`${base}/frontend-pilot`);
-        const overview = await fetch(`${base}/frontend-pilot/users/dashboard`);
+        const actor = await accountActor();
+        const overview = await actor.agent.dispatch('/frontend-pilot/users/dashboard');
         expect(landing.status).toBe(200);
         expect(overview.status).toBe(200);
 
@@ -300,9 +302,122 @@ describe('admitted common documents through the actual Express application', () 
         const overviewState = await documentBootstrap(overviewHtml);
         expect(typeof landingState.landing?.quickCreate).toBe('string');
         expect(overviewState.landing).toBeUndefined();
+        expect(overviewState.pageEntry).toEqual({kind: 'render'});
         expect(overviewState.commonPage).toBeUndefined();
         expect(overviewHtml).toContain('data-pilot-initial-loading');
         expect(landingHtml).toContain('property="og:title"');
+    });
+
+    it.each(['/frontend-pilot/users/dashboard', '/FRONTEND-PILOT/USERS/DASHBOARD/'])(
+        'keeps anonymous Dashboard entry %s on the native Login journey', async path => {
+            const visitor = createHttpActor();
+            const target = path + '?owner_main_q=equipment&locale=de';
+            const response = await visitor.dispatch(target);
+            expect(response.status).toBe(302);
+            const destination = response.headers.get('location')!;
+            const url = new URL(destination, await applicationOrigin());
+            expect(url.pathname).toBe('/frontend-pilot/users/login');
+            expect(url.searchParams.get('next')).toBe(target);
+            expect(url.searchParams.get('locale')).toBe('de');
+
+            // The real cookie-backed flash reaches the first Login document once;
+            // it never manufactures an authenticated profile or an Overview shell.
+            const login = await visitor.dispatch(destination);
+            expect(login.status).toBe(200);
+            const html = await login.text();
+            const state = await documentBootstrap(html);
+            expect(state.session).toMatchObject({kind: 'anonymous', activeProfile: null});
+            expect(state.pageNotice).toEqual({kind: 'info', messageKey: 'auth.loginRequired'});
+            expect(html).not.toContain('data-loading-skeleton="overview"');
+            expect((await documentBootstrap(await (await visitor.dispatch(destination)).text())).pageNotice).toBeUndefined();
+        });
+
+    it.each([
+        ['/USERS/PROFILE/MANAGE/', null], ['/USERS/PROFILE/CREATE/', null], ['/USERS/PROFILE/DELETE/', null],
+        ['/USERS/PROFILE/', 'edit'], ['/USERS/ACCOUNT/DELETE/', 'delete-account'],
+    ] as const)('uses registered profile intent for admitted mixed-case route %s', async (path, admitted) => {
+        const actor = await guestActor();
+        const target = '/FRONTEND-PILOT' + path + '?locale=de';
+        const response = await actor.agent.dispatch(target);
+        if (!admitted) {
+            // Guests cannot gain account-only profile creation/management or
+            // deactivation by changing an otherwise valid URL's spelling.
+            expect(response.status).toBe(302);
+            const destination = new URL(response.headers.get('location')!, await applicationOrigin());
+            expect(destination.pathname).toBe('/frontend-pilot/users/login');
+            expect(destination.searchParams.get('next')).toBe(target);
+        } else {
+            expect(response.status).toBe(200);
+            const state = await documentBootstrap(await response.text());
+            expect(state.pageEntry).toEqual({kind: 'render'});
+            expect(state.session.activeProfile?.id).toBe(actor.session.activeProfile!.id);
+            expect(state.profileWorkflow?.kind).toBe(admitted === 'edit' ? undefined : admitted);
+        }
+    });
+
+    it.each(['/USERS/LOGIN/', '/USERS/REGISTER/'])(
+        'preserves configured provider entry for admitted mixed-case route %s', async path => {
+            const previous = settings.value;
+            const configured = vi.spyOn(settings, 'value', 'get').mockReturnValue({...previous,
+                localLoginEnabled: false, oidcEnabled: false});
+            try {
+                const target = '/FRONTEND-PILOT' + path + '?next=%2Ffrontend-pilot%2Fhelp&locale=de';
+                const response = await createHttpActor().dispatch(target);
+                expect(response.status).toBe(302);
+                const destination = new URL(response.headers.get('location')!, await applicationOrigin());
+                expect(destination.pathname).toBe('/frontend-pilot/users/oidc/login');
+                expect(destination.searchParams.get('next')).toBe('/frontend-pilot/help');
+                expect(destination.searchParams.get('locale')).toBe('de');
+            } finally { configured.mockReturnValue(previous); }
+        });
+
+    // Each family owns its real creation and two HTTP documents within the
+    // ordinary case deadline; sibling fixtures do not consume its assertion time.
+    it.each(['packing', 'drivers', 'survey', 'activity', 'event'] as const)(
+        'retains %s guest resource admission for every admitted case and trailing-slash equivalent', async family => {
+            const owner = await accountActor();
+            const ownerId = owner.session.activeProfile!.id;
+            let id: string;
+            if (family === 'packing') [id] = await createPackingListWithItem(ownerId);
+            else if (family === 'drivers') [id] = await createDriversListWithItem(ownerId);
+            else if (family === 'survey') [id] = await createSurveyWithCombinations(ownerId);
+            else if (family === 'activity') id = await createActivityPlanWithSlot(ownerId);
+            else id = await createIntegrationEvent(ownerId, 'Case-admitted Event');
+            const visitor = createHttpActor();
+            const canonical = await visitor.dispatch(`/frontend-pilot/${family}/${id}/guest?locale=de`);
+            expect(canonical.status, family).toBe(200);
+            const expected = await documentBootstrap(await canonical.text());
+            const response = await visitor.dispatch(`/FRONTEND-PILOT/${family.toUpperCase()}/${id}/GUEST/?locale=de`);
+            expect(response.status, family).toBe(200);
+            const state = await documentBootstrap(await response.text());
+            expect(state.pageEntry, family).toEqual({kind: 'render'});
+            expect(state.session.activeProfile, family).toBeNull();
+            const guest = family === 'event' ? state.eventEntry?.guest : state.guestEntry;
+            expect(guest, family).toEqual(family === 'event' ? expected.eventEntry?.guest : expected.guestEntry);
+            expect(guest?.id, family).toBe(id);
+        });
+
+    it('retains denied Event administration admission for an equivalent mixed-case route', async () => {
+        const owner = await accountActor();
+        const eventId = await createIntegrationEvent(owner.session.activeProfile!.id, 'Case-admitted Event');
+        // Admin admission must not fall back to participant detail for a valid
+        // alternative spelling. The real controller denies this unrelated guest.
+        const unrelated = await guestActor();
+        expect((await unrelated.agent.dispatch(`/frontend-pilot/event/${eventId}/admin`)).status).toBe(403);
+        const denied = await unrelated.agent.dispatch(`/FRONTEND-PILOT/EVENT/${eventId}/ADMIN/`);
+        expect(denied.status).toBe(403);
+        expect((await documentBootstrap(await denied.text())).eventEntry?.entry).toEqual({
+            kind: 'denied', status: 403, messageKey: 'problem.forbidden'});
+    });
+
+    it('keeps the localized Packing not-found outcome for an admitted uppercase namespace', async () => {
+        const visitor = createHttpActor();
+        const id = randomUUID();
+        const response = await visitor.dispatch(`/FRONTEND-PILOT/PACKING/${id}/?locale=de`);
+        expect(response.status).toBe(404);
+        const state = await documentBootstrap(await response.text());
+        expect(state.packingError).toBe('packing.notFound');
+        expect(state.commonPage).toBeUndefined();
     });
 
     it('renders an admitted HTML404 without interactive content or query-selected diagnostics', async function rendersSafeMissingDocument() {

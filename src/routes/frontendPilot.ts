@@ -8,8 +8,8 @@ import {renderFrontendPilot} from '../modules/frontendPilotRenderer';
 import {fetchHelpDoc, fetchHelpIndex, fetchHelpSearch, resolveHelpAssetSource} from '../controller/helpController';
 import type {FrontendIdentityRedirect, FrontendPilotBootstrap} from '../types/FrontendPilotTypes';
 import * as userController from '../controller/userController';
-import {frontendIdentityFeedback, frontendIdentityPageEntry, readGuestLinkHandoff, safeFrontendReturn} from '../modules/lib/frontendIdentity';
-import type {FrontendIdentityOperation, IdentityCompletionReceipt} from '../types/IdentityTypes';
+import {frontendIdentityFeedback, frontendIdentityPageEntry, frontendOverviewPageEntry, readGuestLinkHandoff, safeFrontendReturn} from '../modules/lib/frontendIdentity';
+import type {IdentityCompletionReceipt} from '../types/IdentityTypes';
 import {persistSession} from '../modules/lib/session';
 import {APIError, ExpectedError, ValidationError} from '../modules/lib/errors';
 import settings from '../modules/settings';
@@ -156,6 +156,10 @@ function flashPageNotice(req: Request, notice: components['schemas']['EntryNotic
 
 router.get('/users/dashboard', asyncHandler(async function renderOverviewPilot(req, res) {
     const state = await bootstrap(req);
+    // Match native Dashboard admission before emitting a personal-page shell.
+    // Existing redirect feedback owns its intentional anonymous-session save.
+    const entry = frontendOverviewPageEntry(state.session, typeof req.query.next === 'string' ? req.query.next : req.originalUrl);
+    if (await applyPageEntry(req, res, state, entry)) return;
     // Interactive Overview sends its authoritative session and shared shell first.
     // Mounted regions read their existing URL state independently through the same
     // authorized API/controller; a slow region cannot delay its siblings or this HTML.
@@ -195,17 +199,19 @@ router.use('/survey', createSurveysPilotRouter({bootstrap, applyPageEntry}));
 router.use('/activity', createActivityPilotRouter({bootstrap, applyPageEntry}));
 
 /** Preserve native account/guest admission before sending administration's progressive shell. */
-router.get(['/users/profile', '/users/profile/manage', '/users/profile/create'],
-    asyncHandler(async function renderProfileAdministration(req, res) {
+for (const [path, view] of [['/users/profile', 'edit'], ['/users/profile/manage', 'manage'], ['/users/profile/create', 'create']] as const) {
+    // Capture the declaration's intent. Express can match different case or a
+    // trailing slash without changing account-only versus guest admission.
+    router.get(path, asyncHandler(async function renderProfileAdministration(req, res) {
         const state = await bootstrap(req);
         const actor = await captureApiActor(req);
         // Guests edit their active profile, while creating/managing profiles is
         // the established full-account workflow. Login retains this exact return.
-        const view = req.path.endsWith('/manage') ? 'manage' : req.path.endsWith('/create') ? 'create' : 'edit';
         const entry = userController.getProfileAdministrationEntry(actor, view, req.originalUrl);
         if (await applyPageEntry(req, res, state, entry)) return;
         await renderFrontendPilot(res, req.originalUrl, state);
     }));
+}
 
 /**
  * Keep the established initial-document token issuance for direct arrivals.
@@ -233,13 +239,16 @@ router.get('/users/profile/migrate/show', asyncHandler(async function renderMigr
 
 
 /** Admit account-only deactivation or account/guest deletion with an initially empty confirmation. */
-router.get(['/users/profile/delete', '/users/account/delete'], asyncHandler(async function renderIdentityDeletion(req, res) {
-    const profile = req.path === '/users/profile/delete';
-    const state = await admitProfileWorkflow(req, res, profile);
-    if (!state) return;
-    state.profileWorkflow = {kind: profile ? 'deactivate' : 'delete-account', value: ''};
-    await renderFrontendPilot(res, req.originalUrl, state);
-}));
+for (const [path, kind] of [['/users/profile/delete', 'deactivate'], ['/users/account/delete', 'delete-account']] as const) {
+    // The registered operation owns its confirmation and admission; visitor
+    // spelling must never select the sibling destructive workflow.
+    router.get(path, asyncHandler(async function renderIdentityDeletion(req, res) {
+        const state = await admitProfileWorkflow(req, res, kind === 'deactivate');
+        if (!state) return;
+        state.profileWorkflow = {kind, value: ''};
+        await renderFrontendPilot(res, req.originalUrl, state);
+    }));
+}
 
 
 /** Use existing account/guest admission for private documents without a second business rule. */
@@ -311,14 +320,6 @@ router.get('/packing/:listId/guest', asyncHandler(async function renderGuestPilo
     state.guestEntry = result.guest ?? undefined;
     await renderFrontendPilot(res, req.originalUrl, state);
 }));
-
-/** Resolve configuration admission for the registered identity document entries. */
-function nativeIdentityOperation(req: Request): FrontendIdentityOperation {
-    if (req.path === '/users/login') return 'login';
-    if (req.path === '/users/register') return 'register';
-    if (req.path === '/users/forgot-password') return 'forgot';
-    return 'reset';
-}
 
 /** A native redirect carries the selected presentation language without mutating identity
  * or treating a GET language hint as a persisted browser preference. */
@@ -454,13 +455,16 @@ router.get('/users/activate/:token', asyncHandler(async function activateNativeI
     res.redirect(committed.result.status, committed.result.destination);
 }));
 
-router.get(['/users/login', '/users/register', '/users/forgot-password'],
-    asyncHandler(async function renderIdentityPilot(req, res) {
+for (const [path, operation] of [['/users/login', 'login'], ['/users/register', 'register'], ['/users/forgot-password', 'forgot']] as const) {
+    // Configuration follows the registered operation, including Express's
+    // equivalent case/trailing-slash matches; return destinations stay exact.
+    router.get(path, asyncHandler(async function renderIdentityPilot(req, res) {
         const state = await bootstrap(req);
-        const entry = frontendIdentityPageEntry(nativeIdentityOperation(req), settings.value, req.query.next);
+        const entry = frontendIdentityPageEntry(operation, settings.value, req.query.next);
         if (await applyPageEntry(req, res, state, entry)) return;
         await renderFrontendPilot(res, req.originalUrl, state);
     }));
+}
 
 /** GET forms remain usable with JavaScript disabled and hydrate into the same search page. */
 async function renderHelpPilot(req: Request, res: Response): Promise<void> {
@@ -492,7 +496,9 @@ router.get('/help/:doc', asyncHandler(renderHelpPilot));
 router.use(async function renderPackingAdmissionError(error: unknown, req: Request, res: Response, next: NextFunction) {
     // This adapter owns only the known native Packing admission outcomes. Other
     // routes and error categories continue through their existing error boundary.
-    if (!req.path.startsWith('/packing/') || !(error instanceof ExpectedError)) return next(error);
+    // Parameter loading can fail before its handler is entered. Match only this
+    // already-mounted namespace with Express's case equivalence in that case.
+    if (!/^\/packing\//iu.test(req.path) || !(error instanceof ExpectedError)) return next(error);
     const packingError = error.status === 404 ? 'packing.notFound'
         : error.status === 403 ? 'common.notAllowed'
             : error.message === 'You must be registered for the event to access this resource' ? 'packing.eventRegistrationRequired' : null;

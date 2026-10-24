@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-23
+last-verified: 2026-10-24
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Full interface follow-up, Home restoration and compact permissions independently reviewed; full frontend/unit results, final builds, finite built-client runs and database-test limits recorded; P11 boundaries retained
+verification-scope: Full interface corrections and further admission/navigation review independently checked; local database, built E2E, client/source-browser and compiler evidence distinguished from historical unrun receipts; P11 boundaries retained
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -1531,3 +1531,108 @@ creation disclosure. Raw captures and matrix-control comparisons remain; the sep
 is the sole text/geometry projection exception. These integration/E2E tests and the authored persistence regressions
 were **not run**: the available database account still exceeds the disposable schema boundary. No schema reset,
 database-user change, native/default-route cutover, guide publication or deployment occurred.
+
+## Local database execution and production-readiness review (2026-10-23)
+
+The subsequent direct instruction authorizes the existing local test accounts and available test-schema resets;
+the preceding unrun-test receipts remain historical. Initial integration used `127.0.0.1:3306/surveyor_test`;
+managed built-application E2E uses `127.0.0.1:3306/cgd_e2e`. Both use the existing `surveyor` account on local MariaDB
+10.4.32. The existing stopped `surveyor-frontend-foundation-mariadb` Docker fixture also supplies the documented
+MariaDB 10.11 baseline: `127.0.0.1:33318/surveyor_frontend_test`, existing `frontend_test` account, actual version
+10.11.14 and strict SQL sessions. Its declared password is read only into the local runner's memory/environment.
+No account/grant change, image pull, new container or non-test-data operation is part of this task. Local Node is 24.13.0; these executions
+do not certify the separate CI Node 24.15 environment, deployment or an exhaustive production configuration matrix.
+
+The additional review found and corrected three related admission/lifetime gaps. Personal Dashboard now requires
+the native account-or-guest active profile and sends anonymous visitors through the shared Login/notice/return
+journey before mounting private collection reads. Public Home retains its restored route and content. Resource
+guest/admin intent, Help readiness/locale URLs and completion-message intent follow admitted canonical Router
+records; Express handlers capture their declared operation rather than reinterpreting case/trailing-slash spelling.
+Safe internal returns preserve those admitted spellings, query values and fragments without loosening origin or
+namespace boundaries. Shared lazy page-entry navigation cancels its exact obsolete attempt after identity retirement,
+including retirement before the first guard, while a later deliberate visit to the same URL remains independent.
+A temporarily missing authoritative session grants neither private reads nor an invented anonymous redirect.
+
+All five resource wrappers, Event administration, identity/profile document modes and common Help/message consumers
+adopt those shared owners. Added tests exercise Router-equivalent spellings, known denials, anonymous direct/warm
+Login, actual Event administration and same-turn/lazy identity retirement. Independent nonauthors and root reviewed
+the settled source, actual caller adoption, authorization, comments, contracts, lifecycle and test boundaries; no
+further concrete analogous defect was identified within that scope. This is not an exhaustive state matrix or a
+repair of the explicitly excluded legacy backend operations.
+
+Initial system-test failures identified stale selectors for the removed standalone Refresh row and a comparator
+that had not accounted for its approved embedded replacement. Updated fixtures assert the visible, accessible
+heading control, hit area, icon and nonoverlap before excluding only that addition from native meaning comparison;
+raw captures and all remaining geometry/control comparisons remain. Source-browser stylesheet assertions now
+exercise the approved frontend-owned Sass composition rather than the removed native stylesheet links.
+
+The initial full runs also exposed outdated Dashboard destinations, the deliberately disabled final Survey-choice
+Remove control, and a workflow-heading comparator measuring a transparent Vue child rather than its painted header.
+Their replacements assert the approved behavior and actual header paint while retaining raw native/Vue captures,
+all other controls and real HTTP/session/persistence checks. Natural-flow feedback can change `scrollY` through
+browser anchoring; its initiating row and control must retain their actual viewport positions. Initial SSR feedback
+must reserve its measured height and leave the card clear both before and after hydration. Its mobile comparison
+measures the intentional expanded-to-collapsed navigation shell separately and rejects additional movement within
+the page. Module interception delays genuine delivery and drains its owned handler before cleanup.
+
+Local MariaDB 10.4 has non-strict default sessions. An ignored, opt-in runner configures `STRICT_TRANS_TABLES` on
+connections to the two exact authorized test schemas before publishing those connections; it neither changes
+global modes/grants nor substitutes SQL results. The Packing raw-input checks then pass. A remaining repeat-visibility
+failure originates in TypeORM's generated-ID hydration on MariaDB 10.4, which lacks the 10.5+ insert-returning path;
+the complete 35-case Packing file passes unchanged against the existing 10.11 fixture. No production DBAL repair or
+parent-permission fixture change is justified by that older-server result.
+
+Test-harness corrections retain the real operations and assertions. Five migration fixtures receive explicit
+120-second budgets for their actual down/up/repeated/recovery DDL batches; ordinary test deadlines remain five
+seconds. Profile administration's ten-request, five-resource batch becomes one independently timed case per resource family plus
+its separate administrator-denial case. The Activity attendance fixture now supplies the required arrival/departure
+dates before exercising saved-override removal; the unsafe identity-return assertion expects the restored Dashboard.
+Four compiler-fixture batches receive measured process-launch allowances without changing their commands,
+output comparisons or cleanup. An ignored Vitest wrapper preserves both original project inventories, plugins,
+isolation and defaults, selects one worker per child project, and allows the integration setup/reset hook 120 seconds.
+
+Executed evidence for this readiness pass, completed locally on 2026-10-24:
+
+- The complete database-free project contains **90 files and 2,121 cases**, with no skipped cases. Its first full
+  execution passed 2,117 cases; three compiler batches and one Event-capacity case exceeded their original deadlines.
+  The unchanged Event file then passed all 10 cases. The compiler file passed nine cases after its measured budget
+  corrections, and its remaining ownership-retirement case passed in 31.64 seconds after the final explicit
+  60-second batch allowance. Every current case has passing evidence; the original full-run receipt is retained as
+  a failed run rather than relabeled green. Selection: `vitest run --config
+  .generated/frontend-production-readiness-vitest.config.mts --project database-free`.
+- The complete **29-file, 539-case integration** selection ran against MariaDB **10.11.14**: 537 passed and two
+  five-second Profile-administration cases timed out while source-browser/compiler work competed. Its complete
+  28-case file then passed in a quiet run with unchanged assertions and five-second deadlines. Every current
+  integration case therefore has passing evidence, with zero skipped cases. Both the focused and complete-run
+  Packing files passed all 35 cases. Selection: the same ignored wrapper with `--project integration`, invoked
+  through `.generated/frontend-production-readiness-docker-runner.cjs`. Final artifacts are
+  `.generated/frontend-production-readiness-integration-baseline.{log,json}` and
+  `.generated/frontend-production-readiness-profile-administration-final.{log,json}`. Earlier 10.4 and timeout
+  receipts remain available. The existing Docker fixture was restored to its original stopped state afterward.
+- The complete isolated built-client corpus passed **87/87 scenarios**. A separate two-case capture run recorded
+  Home-to-Login at desktop/mobile sizes. Actual source-server browser integration passed **3/3**, exercising real
+  SSR assets, Help/identity navigation during locale refresh, Overview focus/node/selection retention and a saved
+  Packing command through the integrated backend. The owned source process was stopped afterward. These are
+  distinct client/integration boundaries, not built-application E2E substitutions.
+- The final complete built-application E2E run finished successfully in **28.1 minutes: 272 passed, zero failed,
+  one conditional scenario skipped**. That exact scenario passed separately with local login disabled; matching
+  its JUnit name and file proves **all 273 unique scenarios have passing evidence** across the two configurations.
+  Both runs use the real managed built server and prepared `cgd_e2e` schema. The final complete run opts into the
+  strict-session preload described above. Invocation: `playwright test --output=test-results/readiness-e2e-complete`
+  with `CI=1`, `NODE_OPTIONS=--require=<absolute-workspace>/.generated/readiness-strict-sql.cjs`, and separate HTML/JUnit
+  outputs. Results are `.generated/readiness-e2e-complete.{log,xml}` and
+  `.generated/readiness-e2e-disabled-login.{log,xml}`; the checked union is
+  `.generated/readiness-e2e-coverage-final.json`. The original failed complete and focused receipts remain intact.
+- Current server and client/SSR frontend builds passed, including the final client/SSR Vite rebuild after the last
+  production edit. Frontend, SSR and full test typechecks passed; the final test typecheck also includes the settled
+  E2E geometry and fixture corrections. Development-policy tests passed **26/26**; the production check reports
+  **446 sources, zero findings**. Whitespace and production-freeze/amendment checks pass. The advisory documentation
+  report retains its existing source-baseline mismatch rather than rebasing it; links, metadata, classifications,
+  profiles and Help authoring have no findings. Generated failure-report Markdown is kept in the existing ignored
+  report roots, outside maintained documentation.
+
+Final nonauthor and root review checked the current source changes, matching consumer adoption, actual execution
+receipts and documentation claims. The earlier unrelated backend exclusions remain open in their existing owners.
+No database user/grant change, non-test-data operation, native/default-route cutover, guide publication or deployment
+occurred. Passing this finite local corpus supplies readiness evidence for the exercised behavior, not an exhaustive
+browser/input/configuration matrix or authority to deploy.

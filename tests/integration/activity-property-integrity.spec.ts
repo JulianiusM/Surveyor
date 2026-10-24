@@ -36,8 +36,8 @@ describe('activity property and relationship integrity', () => {
     it('removes only explicitly named former-event overrides through the versioned shared settings operation', async () => {
         const oldEventId = await createIntegrationEvent(owner.id, 'Override original event');
         const newEventId = await createIntegrationEvent(owner.id, 'Override destination event');
-        await registerEventAttendance(oldEventId, previousParticipant, {});
-        await registerEventAttendance(oldEventId, currentParticipant, {});
+        await registerEventAttendance(oldEventId, previousParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
+        await registerEventAttendance(oldEventId, currentParticipant, {arrivalDate: '2027-06-01', departureDate: '2027-06-03'});
         const planId = await createEventActivityPlan(owner.id, oldEventId);
         await activityController.updateRequirements(planId, {assignmentMode: 'FREE', overrides: [
             {profileId: previousParticipant.id, requiredShifts: 2}, {profileId: currentParticipant.id, requiredShifts: 1},

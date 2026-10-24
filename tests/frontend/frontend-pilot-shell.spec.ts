@@ -50,8 +50,8 @@ async function renderHelp(data = help, url = '/frontend-pilot/help?doc=fixture',
     // and unavailable-JS behavior have their own real SSR/startup fixtures.
     context.hydrated.value = true;
     const router = createRouter({history: createMemoryHistory(), routes: [
-        {path: '/frontend-pilot/help', component: HelpPage},
-        {path: '/frontend-pilot/help/:doc', component: HelpPage},
+        {path: '/frontend-pilot/help', component: HelpPage, meta: {helpPage: true}},
+        {path: '/frontend-pilot/help/:doc', component: HelpPage, meta: {helpPage: true}},
     ]});
     await router.push(url);
     await router.isReady();
@@ -132,7 +132,7 @@ describe('native shell and help presentation contract', () => {
         } finally { wrapper.unmount(); }
     });
 
-    it.each(['/packing/fixture', '/packing/create', '/users/login', '/help/packing_lists'])
+    it.each(['/packing/fixture', '/packing/create', '/drivers/fixture', '/users/login', '/help/packing_lists'])
     ('preserves native contextual Help activation on %s without widening it to other routes', async nativePath => {
         const previousUrl = window.location.href;
         const nativeDocument = nativeGuestPage(resolveContextualHelpUrl(nativePath));
@@ -158,6 +158,8 @@ describe('native shell and help presentation contract', () => {
         }});
         try {
             const pilotHelp = wrapper.get('a[aria-label="Help for this page"]');
+            expect(pilotHelp.classes().includes('active')).toBe(nativeHelp.classList.contains('active'));
+            await router.push(`/frontend-pilot${nativePath}`.toUpperCase());
             expect(pilotHelp.classes().includes('active')).toBe(nativeHelp.classList.contains('active'));
             // Native header disclosures explicitly identify their trigger as a button.
             // Compare actual native markup instead of assuming a summary's implicit role.
@@ -973,7 +975,7 @@ describe('native shell and help presentation contract', () => {
         const {wrapper, context, router} = await renderHelp(help, '/frontend-pilot/help?locale=en', request);
         let finishRoute!: (component: Component) => void;
         const loadRoute = vi.fn(() => new Promise<Component>(resolve => { finishRoute = resolve; }));
-        router.addRoute({path: '/frontend-pilot/help/next-fixture', component: loadRoute});
+        router.addRoute({path: '/frontend-pilot/help/next-fixture', component: loadRoute, meta: {helpPage: true}});
         try {
             await wrapper.get('#pilot-locale').setValue('de');
             const navigation = router.push('/frontend-pilot/help/next-fixture?q=next&list=fixture-list&locale=en#fixture-task');
@@ -992,7 +994,25 @@ describe('native shell and help presentation contract', () => {
         } finally { wrapper.unmount(); context.queryClient.clear(); }
     });
 
-    it('replaces the pinned help locale after a confirmed language switch while preserving reload context', async () => {
+    it('keeps unmatched Help descendants outside article-locale URL synchronization', async () => {
+        const request = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify({...session, locale: 'de'}), {
+            headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},
+        }));
+        const {wrapper, context, router} = await renderHelp(help, '/frontend-pilot/help?locale=en', request);
+        router.addRoute({path: '/frontend-pilot/:pathMatch(.*)*', component: defineComponent({template: '<p>Unknown destination</p>'})});
+        const destination = '/frontend-pilot/help/unmatched/descendant?doc=fixture&locale=en#retained';
+        try {
+            await router.push(destination);
+            await wrapper.get('#pilot-locale').setValue('de');
+            await flushPromises();
+            expect(context.locale.value).toBe('de');
+            expect(router.currentRoute.value.fullPath).toBe(destination);
+            expect(request.mock.calls.map(([input]) => [(input as Request).method, new URL((input as Request).url).pathname]))
+                .toEqual([['PUT', '/api/v1/locale']]);
+        } finally { wrapper.unmount(); context.queryClient.clear(); }
+    });
+
+    it.each(['/frontend-pilot/help', '/FRONTEND-PILOT/HELP/'])('replaces the pinned help locale on %s after a confirmed language switch while preserving reload context', async path => {
         const request = vi.fn(async (input: RequestInfo | URL) => {
             const captured = input as Request;
             if (new URL(captured.url).pathname === '/api/v1/help') return helpResponse(captured);
@@ -1001,14 +1021,14 @@ describe('native shell and help presentation contract', () => {
             });
         });
         const {wrapper, context, router} = await renderHelp(help,
-            '/frontend-pilot/help?doc=fixture&q=search%20term&list=fixture-list&locale=en#fixture-task', request);
+            path + '?doc=fixture&q=search%20term&list=fixture-list&locale=en#fixture-task', request);
         try {
             await wrapper.get('#pilot-locale').setValue('de');
             await flushPromises();
             expect(request.mock.calls.map(([input]) => [(input as Request).method, new URL((input as Request).url).pathname]))
                 .toEqual([['PUT', '/api/v1/locale'], ['GET', '/api/v1/help']]);
             expect(context.locale.value).toBe('de');
-            expect(router.currentRoute.value.path).toBe('/frontend-pilot/help');
+            expect(router.currentRoute.value.path).toBe(path);
             expect(router.currentRoute.value.query).toEqual({doc: 'fixture', q: 'search term', list: 'fixture-list', locale: 'de'});
             expect(router.currentRoute.value.hash).toBe('#fixture-task');
             const reloadUrl = new URL(router.currentRoute.value.fullPath, 'https://surveyor.invalid');

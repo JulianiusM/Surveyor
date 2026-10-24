@@ -58,7 +58,7 @@ const helpRoute = computed(() => pilotHelpUrl(nativeHelpTarget.value, locale.val
 // on Packing and Drivers pages. Preserve its family precedence when a Help article
 // path also contains a feature name; Event has no corresponding native branch.
 const contextualHelpActive = computed(function nativeHelpActivation() {
-    const nativePath = route.path.replace(/^\/frontend-pilot(?=\/|$)/u, '');
+    const nativePath = route.path.toLowerCase().replace(/^\/frontend-pilot(?=\/|$)/u, '');
     if (nativePath.includes('/survey')) return false;
     if (nativePath.includes('/packing')) return nativeHelpTarget.value.includes('/packing');
     return !nativePath.includes('/activity') && nativePath.includes('/drivers') && nativeHelpTarget.value.includes('/drivers');
@@ -87,8 +87,7 @@ function synchronizeHelpLocale(): void {
     if (!active || !localeUrlNeedsSync || changingLocale.value || navigation.pending()) return;
     localeUrlNeedsSync = false;
     const current = router.currentRoute.value;
-    if ((current.path !== '/frontend-pilot/help' && !current.path.startsWith('/frontend-pilot/help/'))
-        || current.query.locale === locale.value) return;
+    if (!current.meta.helpPage || current.query.locale === locale.value) return;
     // Help also supports native locale-bearing links. Normalize the settled help
     // destination, preserving its article/search/fragment for a later reload.
     void router.replace({path: current.path, query: {...current.query, locale: locale.value}, hash: current.hash})

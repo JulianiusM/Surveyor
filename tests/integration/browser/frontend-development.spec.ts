@@ -29,9 +29,13 @@ test.describe('actual frontend development runtime', () => {
         expect(scripts.map(url => new URL(url, page.url()).pathname)).toContain('/app/src/frontend/app/entry-client.ts');
         expect(scripts.some(url => url.includes('/app/app/'))).toBe(false);
         await expect(page.locator('header .navbar-brand img')).toHaveAttribute('src', '/img/logo.png');
-        await expect(page.locator('head link[href="/style/style.css"]')).toHaveCount(1);
-        await expect(page.locator('head link[href="/style/help.css"]')).toHaveCount(1);
-        await expect(page.locator('head link[href^="/app/src/frontend/styles/pilot.css"]')).toHaveCount(1);
+        // Native isolation gives this frontend one owned cascade. Its actual
+        // source composition must style SSR before hydration and remain the
+        // same composition loaded by the client, without native stylesheets.
+        await expect(page.locator('head link[href^="/app/src/frontend/styles/application.sass"]')).toHaveCount(1);
+        await expect(page.locator('head link[href^="/style/"]')).toHaveCount(0);
+        await expect(page.locator('.pilot-app')).toHaveCSS('background-color', 'rgb(108, 117, 125)');
+        await expect(page.locator('.help-content')).toHaveCSS('color', 'rgb(233, 236, 239)');
         const helpPictures = await page.locator('.help-content img').evaluateAll(nodes => nodes.map(node => node.getAttribute('src')!));
         expect(helpPictures.length).toBeGreaterThan(0);
         expect(helpPictures.every(url => url.startsWith('/frontend-pilot/help/assets/'))).toBe(true);

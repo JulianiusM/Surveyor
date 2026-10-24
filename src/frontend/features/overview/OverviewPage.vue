@@ -4,18 +4,33 @@ import {RouterLink, useRoute, useRouter} from 'vue-router';
 import type {LocationQuery} from 'vue-router';
 import {usePilot} from '../../app/context';
 import {usePageTitle} from '../../composables/pageTitle';
-import {isOrdinaryNavigation} from '../../composables/pageEntry';
+import {isOrdinaryNavigation, navigatePageEntry} from '../../composables/pageEntry';
 import type {components} from '../../../types/api/v1';
 import type {PilotOverviewCountRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import {overviewKeys} from '../../app/queryKeys';
 import {overviewQueryParameters} from './api';
-import {frontendOverviewPath} from '../../../modules/lib/frontendIdentity';
+import {frontendOverviewPath, frontendOverviewPageEntry} from '../../../modules/lib/frontendIdentity';
 import OverviewRegion from './OverviewRegion.vue';
 import AppAccordionButton from '../../components/AppAccordionButton.vue';
 const context = usePilot();
 const {messages} = context;
 const route = useRoute();
 const router = useRouter();
+const entry = computed(() => {
+    const session = context.session.value;
+    return session ? frontendOverviewPageEntry(session,
+        typeof route.query.next === 'string' ? route.query.next : route.fullPath) : null;
+});
+watch(entry, followAdmission, {immediate: true});
+
+/** Warm navigation uses the same admitted identity and Login/notice delivery as
+ * the document route. No collection mounts or sends a private read beforehand. */
+async function followAdmission(outcome: components['schemas']['PageEntryOutcome'] | null): Promise<void> {
+    // A leaving component can observe the destination's route before unmount.
+    // Never reinterpret that later visit as another Dashboard return URL.
+    if (context.browser && outcome?.kind === 'redirect'
+        && route.matched.some(record => record.path === frontendOverviewPath)) await navigatePageEntry(context, router, outcome);
+}
 usePageTitle(() => messages.value.t('overview.documentTitle'), true);
 const hidden = ref<Record<string, boolean>>({});
 const open = ref<Record<string, boolean>>({participant: true, owner: true});
@@ -124,7 +139,7 @@ function hiddenHref(collection: string): string {
 }
 </script>
 <template>
-    <section class="card bg-dark text-white mb-3">
+    <section v-if="entry?.kind === 'render'" class="card bg-dark text-white mb-3">
         <!-- Native dashboard.pug keeps the greeting inside this italic wrapper. Its
              trailing margin belongs after the greeting, rather than between icon/text. -->
         <h1 class="card-header text-center">

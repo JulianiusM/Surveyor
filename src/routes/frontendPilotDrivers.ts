@@ -13,7 +13,19 @@ export function createDriversPilotRouter(hooks: FrontendEntityDocumentHooks): Ro
     const router = Router();
     router.get('/create', asyncHandler(renderCreation));
     router.get('/:listId/duplicate', asyncHandler(renderDuplicate));
-    router.get(['/:listId', '/:listId/guest'], asyncHandler(renderList));
+    for (const [path, intent] of [['/:listId', 'detail'], ['/:listId/guest', 'guest']] as const) {
+        /** The registered detail/guest route owns admission regardless of the
+         * equivalent URL spelling accepted by Express. */
+        router.get(path, asyncHandler(async function renderList(req, res) {
+            const state = await hooks.bootstrap(req);
+            // Keep controller authorization and original return URL unchanged;
+            // selecting this presentation never creates a guest identity.
+            const result = await readDriversResourceEntry(String(req.params.listId), intent, await captureApiActor(req));
+            if (await hooks.applyPageEntry(req, res, state, result.entry)) return;
+            state.guestEntry = result.guest ?? undefined;
+            await renderFrontendPilot(res, req.originalUrl, state);
+        }));
+    }
 
     /** Capture account admission and optional event selection before rendering. */
     async function renderCreation(req: Request, res: Response): Promise<void> {
@@ -30,16 +42,6 @@ export function createDriversPilotRouter(hooks: FrontendEntityDocumentHooks): Ro
         const state = await hooks.bootstrap(req);
         state.driversDuplicate = await readDriversDuplicate(String(req.params.listId), await captureApiActor(req), req.query.eventId);
         state.pageEntry = {kind: 'render'};
-        await renderFrontendPilot(res, req.originalUrl, state);
-    }
-
-    /** Guest and detail visits share read-only admission without creating identity. */
-    async function renderList(req: Request, res: Response): Promise<void> {
-        const state = await hooks.bootstrap(req);
-        const intent = req.path.endsWith('/guest') ? 'guest' : 'detail';
-        const result = await readDriversResourceEntry(String(req.params.listId), intent, await captureApiActor(req));
-        if (await hooks.applyPageEntry(req, res, state, result.entry)) return;
-        state.guestEntry = result.guest ?? undefined;
         await renderFrontendPilot(res, req.originalUrl, state);
     }
 

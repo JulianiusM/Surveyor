@@ -45,6 +45,9 @@ beforeAll(async () => {
 afterAll(closeIntegrationDatabase);
 
 describe('long free-text persistence and validation', () => {
+    // This populated-schema rehearsal executes down/up DDL for six columns and
+    // checks refusal/recovery. Await that bounded schema work before ordinary
+    // content cases begin, rather than applying their default workflow deadline.
     it('upgrades existing short and null values, stores longer content in every inherited column, and refuses lossy reversion', async () => {
         const planId = await createActivityPlanWithSlot(owner.id);
         const [slot] = await activityService.getActivitySlotsFlat(planId);
@@ -105,7 +108,7 @@ describe('long free-text persistence and validation', () => {
             await migration.up(runner);
             await runner.release();
         }
-    });
+    }, 120_000);
 
     it('creates and edits long event descriptions and saves allergy details and comments without truncation', async () => {
         const body = {

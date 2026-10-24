@@ -5,6 +5,7 @@ import type {components} from '../../../types/api/v1';
 import type {PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {EntityEntryRetirement} from '../../../types/FrontendEntityEntryTypes';
 import {usePilot} from '../../app/context';
+import {resourceRouteIntent} from '../../composables/pageEntry';
 import {eventKeys} from '../../app/queryKeys';
 import {useEventApi} from './api';
 import {eventDeniedQueries} from './useEventSection';
@@ -16,8 +17,8 @@ const context = usePilot();
 const api = useEventApi(context);
 const route = useRoute();
 const eventId = computed(() => String(route.params.eventId).toLowerCase());
-const guestRoute = computed(() => route.path.endsWith('/guest'));
-const intent = computed(() => guestRoute.value ? 'guest' : route.path.endsWith('/admin') ? 'admin' : 'detail');
+const guestRoute = computed(() => resourceRouteIntent(route) === 'guest');
+const intent = computed(() => resourceRouteIntent(route));
 const regToken = computed(() => typeof route.query.regToken === 'string' ? route.query.regToken : undefined);
 // A token-changing visit obtains its own canonical admission. This feature
 // family uses an ordinal; shared page entry also binds the exact document URL.

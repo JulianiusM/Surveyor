@@ -1,0 +1,110 @@
+// @vitest-environment happy-dom
+import {afterEach, describe, expect, it, vi} from 'vitest';
+import {flushPromises, mount} from '@vue/test-utils';
+import {defineComponent} from 'vue';
+import {createMemoryHistory, createRouter} from 'vue-router';
+import {VueQueryPlugin} from '@tanstack/vue-query';
+import I18NextVue from 'i18next-vue';
+import {pilotRoutes} from '../../src/frontend/app/createApp';
+import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
+import GuestEntryPage from '../../src/frontend/features/identity/GuestEntryPage.vue';
+import EventPage from '../../src/frontend/features/event/EventPage.vue';
+import {createFrontendEventSession, createFrontendEventView, frontendEventId} from '../factories/frontendEventFactory';
+
+const cleanups: Array<() => Promise<void>> = [];
+
+afterEach(async () => {
+    for (const cleanup of cleanups.splice(0)) await cleanup();
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+});
+
+/** Exercise actual route declarations, entry wrappers and generated HTTP decoding.
+ * Only delivery is substituted; a URL spelling cannot select a different intent. */
+async function visit(path: string, handler: (request: Request) => unknown) {
+    const session = createFrontendEventSession();
+    const request = vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(handler(input as Request)), {
+        headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context},
+    }));
+    const context = createPilotContext({session}, true, request);
+    context.hydrated.value = true;
+    context.visible.value = true;
+    const router = createRouter({history: createMemoryHistory(), routes: pilotRoutes});
+    await router.push(path);
+    await router.isReady();
+    const root = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
+        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+        provide: {[pilotContextKey as symbol]: context},
+    }});
+    cleanups.push(async () => {
+        root.unmount();
+        await context.queryClient.cancelQueries();
+        context.queryClient.clear();
+    });
+    await flushPromises();
+    return {root, request, router, context, session};
+}
+
+describe('matched resource route intent', () => {
+    it.each(['trailing slash', 'case'] as const)('presents only the current exact-destination completion on a %s message visit', async spelling => {
+        const canonical = '/frontend-pilot/message';
+        const path = spelling === 'case' ? canonical.toUpperCase() : canonical + '/';
+        const {root, request, context, session} = await visit(path, () => { throw new Error('Message visits do not read data'); });
+        context.pageCompletion.value = {context: session.context, destination: path,
+            kind: 'success', messageKey: 'auth.resetDone'};
+        await flushPromises();
+        expect(root.get('h1').text()).toBe('Success');
+        expect(root.get('.alert').text()).toBe(context.messages.value.t('auth.resetDone'));
+
+        // Equivalent route admission never broadens the receipt's exact actor
+        // and destination binding, or permits reconstruction from URL values.
+        context.pageCompletion.value = {...context.pageCompletion.value!, destination: canonical + '?other=receipt'};
+        await flushPromises();
+        expect(root.get('h1').text()).toBe(context.messages.value.t('common.errorHeading'));
+        expect(root.text()).not.toContain(context.messages.value.t('auth.resetDone'));
+        expect(request).not.toHaveBeenCalled();
+    });
+
+    for (const family of ['packing', 'drivers', 'activity', 'survey', 'event']) {
+        it.each(['trailing slash', 'case'] as const)(`retains ${family} guest admission and controls with %s`, async spelling => {
+            const canonical = `/frontend-pilot/${family}/${frontendEventId}/guest`;
+            const path = spelling === 'case' ? canonical.toUpperCase() : canonical + '/';
+            const admitted: URL[] = [];
+            const {root, request, router} = await visit(path, function admitGuest(request) {
+                admitted.push(new URL(request.url));
+                return {entry: {kind: 'render'}, guest: {id: frontendEventId, title: 'Public join fixture'}};
+            });
+            await vi.waitFor(() => expect(root.findComponent(GuestEntryPage).exists()).toBe(true));
+            expect(root.get('h1').text()).toBe('Join «Public join fixture»');
+            expect(root.findAll('form')).toHaveLength(1);
+            expect(admitted).toHaveLength(1);
+            expect(admitted[0]!.pathname).toMatch(/\/entry$/u);
+            expect(admitted[0]!.searchParams.get('view')).toBe('guest');
+            expect(router.currentRoute.value.fullPath).toBe(path);
+            expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+        });
+    }
+
+    it.each(['trailing slash', 'case'] as const)('retains Event administration admission, heading and reads with %s', async spelling => {
+        const canonical = `/frontend-pilot/event/${frontendEventId}/admin`;
+        const path = spelling === 'case' ? canonical.toUpperCase() : canonical + '/';
+        const reads: URL[] = [];
+        const view = createFrontendEventView();
+        const {root, request, router} = await visit(path, function readAdministration(request) {
+            const url = new URL(request.url);
+            reads.push(url);
+            if (url.pathname.endsWith('/entry')) return {entry: {kind: 'render'}, guest: null};
+            if (url.pathname.endsWith('/things-to-do')) return {items: []};
+            return view;
+        });
+        await vi.waitFor(() => expect(root.findComponent(EventPage).exists()).toBe(true));
+        await vi.waitFor(() => expect(root.get('h1').text()).toBe('Event Dashboard — Event fixture'));
+        const entry = reads.find(url => url.pathname.endsWith('/entry'));
+        const detail = reads.find(url => url.pathname.endsWith('/' + frontendEventId));
+        expect(entry?.searchParams.get('view')).toBe('admin');
+        expect(detail?.searchParams.get('view')).toBe('admin');
+        expect(root.find('#registrationForm').exists()).toBe(false);
+        expect(router.currentRoute.value.fullPath).toBe(path);
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+    });
+});

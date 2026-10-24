@@ -12,7 +12,19 @@ export function createActivityPilotRouter(hooks: FrontendEntityDocumentHooks): R
     const router = Router();
     router.get('/create', asyncHandler(renderCreation));
     router.get('/:planId/duplicate', asyncHandler(renderDuplicate));
-    router.get(['/:planId', '/:planId/guest'], asyncHandler(renderPlan));
+    for (const [path, intent] of [['/:planId', 'detail'], ['/:planId/guest', 'guest']] as const) {
+        /** The registered detail/guest route owns admission regardless of the
+         * equivalent URL spelling accepted by Express. */
+        router.get(path, asyncHandler(async function renderPlan(req, res) {
+            const state = await hooks.bootstrap(req);
+            // Keep controller authorization and original return URL unchanged;
+            // selecting this presentation never creates a guest identity.
+            const result = await readActivityResourceEntry(String(req.params.planId), intent, await captureApiActor(req));
+            if (await hooks.applyPageEntry(req, res, state, result.entry)) return;
+            state.guestEntry = result.guest ?? undefined;
+            await renderFrontendPilot(res, req.originalUrl, state);
+        }));
+    }
 
     /** Resolve account admission and the optional Event before seeding a draft. */
     async function renderCreation(req: Request, res: Response): Promise<void> {
@@ -29,16 +41,6 @@ export function createActivityPilotRouter(hooks: FrontendEntityDocumentHooks): R
         const state = await hooks.bootstrap(req);
         state.activityDuplicate = await readActivityDuplicate(String(req.params.planId), await captureApiActor(req), req.query.eventId);
         state.pageEntry = {kind: 'render'};
-        await renderFrontendPilot(res, req.originalUrl, state);
-    }
-
-    /** Detail and guest arrivals admit the current actor without creating identity. */
-    async function renderPlan(req: Request, res: Response): Promise<void> {
-        const state = await hooks.bootstrap(req);
-        const intent = req.path.endsWith('/guest') ? 'guest' : 'detail';
-        const result = await readActivityResourceEntry(String(req.params.planId), intent, await captureApiActor(req));
-        if (await hooks.applyPageEntry(req, res, state, result.entry)) return;
-        state.guestEntry = result.guest ?? undefined;
         await renderFrontendPilot(res, req.originalUrl, state);
     }
 

@@ -681,7 +681,7 @@ for (const width of [1280, 390]) {
                 await page.evaluate(() => {document.documentElement.dataset.pilotDocument = 'event-page-refresh';});
                 // Finance has its own independently scoped Refresh. This action
                 // belongs to the Event page and its complete projection family.
-                await page.locator('main > section.card > .card-body > .d-flex.mb-1')
+                await page.locator('main > section.card > .card-header .pilot-page-heading-actions')
                     .getByRole('button', {name: 'Refresh', exact: true}).click();
                 expect((await refreshed).status()).toBe(200);
                 response = await refreshedParticipants;
@@ -839,7 +839,8 @@ for (const width of [1280, 390]) {
                         return response.request().method() === 'GET' && url.pathname === path
                             && (view === null || url.searchParams.get('view') === view);
                     }));
-                await page.locator('main > section.card > .card-body > .d-flex.mb-1').getByRole('button', {name: createTranslator('de').t('common.refresh'), exact: true}).click();
+                await page.locator('main > section.card > .card-header .pilot-page-heading-actions')
+                    .getByRole('button', {name: createTranslator('de').t('common.refresh'), exact: true}).click();
                 for (const pending of refreshReads) {
                     const result = await pending;
                     expect(result.status()).toBe(200);

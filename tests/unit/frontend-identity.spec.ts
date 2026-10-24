@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {frontendIdentityPageEntry, readGuestLinkHandoff, safeFrontendReturn} from '../../src/modules/lib/frontendIdentity';
+import {frontendIdentityPageEntry, frontendOverviewPageEntry, readGuestLinkHandoff, safeFrontendReturn} from '../../src/modules/lib/frontendIdentity';
 import {createTranslator} from '../../src/modules/localization/translator';
 import {ApiProblem, validatedProblemBody} from '../../src/modules/api/problem';
 
@@ -8,13 +8,29 @@ describe('frontend identity destinations', () => {
         expect(safeFrontendReturn('/frontend-pilot/packing/abc?locale=de#items')).toBe('/frontend-pilot/packing/abc?locale=de#items');
         expect(safeFrontendReturn('/frontend-pilot/help/../packing')).toBe('/frontend-pilot/packing');
         expect(safeFrontendReturn('/frontend-pilot?locale=de')).toBe('/frontend-pilot?locale=de');
+        expect(safeFrontendReturn('/FRONTEND-PILOT/PACKING/abc?locale=de#items')).toBe('/FRONTEND-PILOT/PACKING/abc?locale=de#items');
     });
 
     it.each([undefined, null, [], 'https://outside.invalid', '//outside.invalid', '/\\outside.invalid',
-        '/frontend-pilot/../../users/login', '/frontend-pilot/../outside', '/frontend-pilotish',
+        '/frontend-pilot/../../users/login', '/frontend-pilot/../outside', '/frontend-pilotish', '/FRONTEND-PILOTish',
         '/frontend-pilot/\r\nLocation: https://outside.invalid', 'javascript:alert(1)'])
     ('keeps an unsafe or unrelated return inside the frontend: %j', value => {
         expect(safeFrontendReturn(value)).toBe('/frontend-pilot/users/dashboard');
+    });
+});
+
+describe('personal Dashboard page admission', () => {
+    it.each(['account', 'guest'] as const)('admits an existing %s profile without redirect or another read', kind => {
+        expect(frontendOverviewPageEntry({kind, activeProfile: {id: 'profile', name: 'Current profile'}})).toEqual({kind: 'render'});
+    });
+
+    it('keeps an anonymous visitor on the native Login journey with exact owned destination and typed notice', () => {
+        const destination = '/FRONTEND-PILOT/USERS/DASHBOARD/?owner_main_q=equipment&locale=de#overview-owner';
+        expect(frontendOverviewPageEntry({kind: 'anonymous', activeProfile: null}, destination)).toEqual({kind: 'redirect',
+            url: '/frontend-pilot/users/login?next=' + encodeURIComponent(destination),
+            notice: {kind: 'info', messageKey: 'auth.loginRequired'}});
+        expect(frontendOverviewPageEntry({kind: 'anonymous', activeProfile: null}, 'https://outside.invalid')).toMatchObject({
+            url: '/frontend-pilot/users/login?next=%2Ffrontend-pilot%2Fusers%2Fdashboard'});
     });
 });
 

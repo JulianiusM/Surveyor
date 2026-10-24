@@ -5,6 +5,7 @@ import {computed, createSSRApp, defineComponent, markRaw, ref} from 'vue';
 import type {Component} from 'vue';
 import {renderToString} from 'vue/server-renderer';
 import {createMemoryHistory, createRouter} from 'vue-router';
+import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import {resolve} from 'node:path';
 import * as pug from 'pug';
@@ -16,11 +17,13 @@ import FormField from '../../src/frontend/components/FormField.vue';
 import FileField from '../../src/frontend/components/FileField.vue';
 import ActionButton from '../../src/frontend/components/ActionButton.vue';
 import AppHeader from '../../src/frontend/components/AppHeader.vue';
-import {createPilotContext, pilotContextKey, useActionState} from '../../src/frontend/app/context';
+import {createPilotContext, observeInitialDocument, pilotContextKey, useActionState} from '../../src/frontend/app/context';
+import {pilotRoutes} from '../../src/frontend/app/createApp';
 import {render} from '../../src/frontend/app/entry-server';
 import {decodeBootstrap} from '../../src/frontend/app/serializeBootstrap';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendCommonPage, FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
+import type {PilotContext} from '../../src/types/FrontendPilotUiTypes';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 
 const session: components['schemas']['SessionView'] & {context: string; csrfToken: string} = {
@@ -70,6 +73,35 @@ async function mounted(component: Component, props: Record<string, unknown> = {}
 
 function rejectUnexpectedRequest(): Promise<Response> {
     return Promise.reject(new Error('A common presentation must not dispatch a feature or identity request.'));
+}
+
+/** Use actual route declarations and page components for warm admission. A held
+ * Login import isolates delivery lifetime without replacing its source admission. */
+async function dashboardJourney(login?: () => Promise<Component>, requestFetch: typeof fetch = rejectUnexpectedRequest) {
+    const request = vi.fn(requestFetch);
+    const anonymous: components['schemas']['SessionView'] = {...session, kind: 'anonymous', context: null, csrfToken: null,
+        activeProfile: null, profiles: [], logoutUrl: null};
+    const context: PilotContext = createPilotContext({session: anonymous, initialUrl: '/frontend-pilot'}, true, request);
+    context.hydrated.value = true;
+    const router = createRouter({history: createMemoryHistory(), routes: pilotRoutes.map(route =>
+        login && route.path === '/frontend-pilot/users/login' ? {path: route.path, meta: route.meta, component: login} : route)});
+    const stopDocument = observeInitialDocument(context, router);
+    await router.push('/frontend-pilot');
+    await router.isReady();
+    const wrapper = mount(defineComponent({
+        setup: () => ({ready: context.ready, epoch: context.epoch}),
+        template: '<RouterView v-if="ready" :key="epoch" />',
+    }), {attachTo: document.body, global: {
+        plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
+        provide: {[pilotContextKey as symbol]: context},
+    }});
+    cleanups.push(function disposeDashboardJourney() {
+        wrapper.unmount();
+        stopDocument();
+        context.queryClient.clear();
+    });
+    await flushPromises();
+    return {wrapper, context, router, request};
 }
 
 /** Native templates remain the independent text/layout oracle; scripts never run in this detached tree. */
@@ -124,12 +156,115 @@ describe('common frontend presentation', () => {
 
         // The distinct dashboard retains progressive private reads. The prior
         // explicit Home URL remains an alias for existing bookmarks.
-        const overview = await render('/frontend-pilot/users/dashboard', {session: selected});
-        expect(overview.html).toContain('data-loading-skeleton="overview"');
+        if (kind !== 'anonymous') {
+            const overview = await render('/frontend-pilot/users/dashboard', {session: selected, pageEntry: {kind: 'render'}});
+            expect(overview.html).toContain('data-loading-skeleton="overview"');
+        }
+        // Anonymous Dashboard HTTP admission redirects before SSR; the real
+        // Express integration covers its Login/notice/cookie journey separately.
         const alias = await render('/frontend-pilot/home', {session: selected, landing: {quickCreate: 'event'}});
         root.innerHTML = alias.html;
         expect(root.querySelector('main h1')?.textContent?.trim()).toBe('Surveyor');
         expect(root.querySelector('[data-loading-skeleton="overview"]')).toBeNull();
+    });
+
+    it.each(['/frontend-pilot/users/dashboard', '/FRONTEND-PILOT/USERS/DASHBOARD/'])(
+        'routes anonymous warm Dashboard entry %s to Login without a private read', async path => {
+            const target = path + '?owner_main_q=equipment&locale=de#overview-owner';
+            const {wrapper, context, router, request} = await dashboardJourney();
+            await router.push(target);
+            // The real Login route lazily imports its component; wait for that
+            // delivery rather than assuming one microtask finishes compilation.
+            await vi.waitFor(() => expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login'));
+            await flushPromises();
+
+            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+            expect(router.currentRoute.value.query.next).toBe(target);
+            expect(wrapper.find('#username').exists()).toBe(true);
+            expect(wrapper.find('.js-overview-region').exists()).toBe(false);
+            expect(context.pageNotice.value).toEqual({kind: 'info', messageKey: 'auth.loginRequired'});
+            expect(request).not.toHaveBeenCalled();
+        });
+
+    it('retires a held anonymous Login redirect when a later Home visit commits', async () => {
+        let release!: (component: Component) => void;
+        const destination = new Promise<Component>(resolve => { release = resolve; });
+        const {wrapper, context, router, request} = await dashboardJourney(() => destination);
+        try {
+            await router.push('/frontend-pilot/users/dashboard?owner_main_q=equipment');
+            await flushPromises();
+            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
+            expect(context.pageNotice.value).toBeNull();
+            await router.push('/frontend-pilot');
+            release(routePlaceholder);
+            await flushPromises();
+
+            expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot');
+            expect(wrapper.find('h1').text()).toBe('Surveyor');
+            expect(context.pageNotice.value).toBeNull();
+            expect(request).not.toHaveBeenCalled();
+        } finally { release(routePlaceholder); await flushPromises(); }
+    });
+
+    it('retires a held anonymous Login redirect when authoritative identity admission changes', async () => {
+        let release!: (component: Component) => void;
+        const destination = new Promise<Component>(resolve => { release = resolve; });
+        const account = accountSession('account');
+        const {context, router} = await dashboardJourney(() => destination, admitAccount);
+        try {
+            await router.push('/frontend-pilot/users/dashboard');
+            await flushPromises();
+            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
+            await context.acceptIdentity({session: account, personalLink: null, redirect: null});
+            await flushPromises();
+            release(routePlaceholder);
+            await flushPromises();
+
+            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
+            expect(context.pageNotice.value).toBeNull();
+        } finally { release(routePlaceholder); await flushPromises(); }
+
+        async function admitAccount(input: RequestInfo | URL): Promise<Response> {
+            if (new URL((input as Request).url).pathname !== '/api/v1/session') return rejectUnexpectedRequest();
+            return new Response(JSON.stringify(account), {headers: {'Content-Type': 'application/json'}});
+        }
+    });
+
+    it('leaves a deliberate Login visit available after an older admission redirect loses its actor', async () => {
+        let release!: (component: Component) => void;
+        const destination = new Promise<Component>(resolve => { release = resolve; });
+        const account = accountSession('account');
+        const {context, router} = await dashboardJourney(() => destination, admitAccount);
+        try {
+            await router.push('/frontend-pilot/users/dashboard');
+            await flushPromises();
+            await context.acceptIdentity({session: account, personalLink: null, redirect: null});
+            const deliberate = router.push('/frontend-pilot/users/login?next=/frontend-pilot/users/dashboard');
+            await flushPromises();
+            release(routePlaceholder);
+            await deliberate;
+            await flushPromises();
+
+            expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
+            expect(context.pageNotice.value).toBeNull();
+        } finally { release(routePlaceholder); await flushPromises(); }
+
+        async function admitAccount(input: RequestInfo | URL): Promise<Response> {
+            if (new URL((input as Request).url).pathname !== '/api/v1/session') return rejectUnexpectedRequest();
+            return new Response(JSON.stringify(account), {headers: {'Content-Type': 'application/json'}});
+        }
+    });
+
+    it('waits for identity admission without redirecting or reading private collections when no session is present', async () => {
+        const {context, router, request, wrapper} = await dashboardJourney();
+        context.session.value = null;
+        await router.push('/frontend-pilot/users/dashboard');
+        await flushPromises();
+
+        expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
+        expect(wrapper.find('.js-overview-region').exists()).toBe(false);
+        expect(context.pageNotice.value).toBeNull();
+        expect(request).not.toHaveBeenCalled();
     });
 
     it.each([false, true])('retains locale selector focus after its actual preference command unless the user moves elsewhere (%s)', async cancelled => {

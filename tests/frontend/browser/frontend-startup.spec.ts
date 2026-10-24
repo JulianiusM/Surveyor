@@ -215,9 +215,16 @@ for (const kind of ['anonymous', 'account', 'guest'] as const) {
             const overview = page.locator('header').getByRole('link', {name: 'Your overview', exact: true});
             await expect(overview).toHaveAttribute('href', '/frontend-pilot/users/dashboard');
             await overview.click();
-            await expect(page).toHaveURL(/\/frontend-pilot\/users\/dashboard$/u);
-            await expect(page.locator('main h1')).toHaveText(kind === 'anonymous' ? 'Welcome, !' : 'Welcome, Landing fixture!');
-            if (kind !== 'anonymous') {
+            if (kind === 'anonymous') {
+                await expect(page).toHaveURL(/\/frontend-pilot\/users\/login\?next=/u);
+                expect(new URL(page.url()).searchParams.get('next')).toBe('/frontend-pilot/users/dashboard');
+                await expect(page.locator('main #username')).toBeVisible();
+                await expect(page.locator('.js-overview-region')).toHaveCount(0);
+                expect(overviewReads).toEqual([]);
+                await page.screenshot({path: info.outputPath('anonymous-dashboard-login.png'), fullPage: true, animations: 'disabled'});
+            } else {
+                await expect(page).toHaveURL(/\/frontend-pilot\/users\/dashboard$/u);
+                await expect(page.locator('main h1')).toHaveText('Welcome, Landing fixture!');
                 await expect(page.locator('[data-collection="owner"][data-region="main"]')).toBeVisible();
                 await expect.poll(() => overviewReads.length).toBeGreaterThan(0);
             }
@@ -229,7 +236,10 @@ for (const kind of ['anonymous', 'account', 'guest'] as const) {
             await expandStartupNavigation(page);
             await page.locator('header').getByRole('button', {name: 'Overview', exact: true}).click();
             await page.locator('header').getByRole('link', {name: 'Your overview', exact: true}).click();
-            await expect(page).toHaveURL(/\/frontend-pilot\/users\/dashboard$/u);
+            await expect(page).toHaveURL(kind === 'anonymous'
+                ? /\/frontend-pilot\/users\/login\?next=/u
+                : /\/frontend-pilot\/users\/dashboard$/u);
+            if (kind === 'anonymous') expect(new URL(page.url()).searchParams.get('next')).toBe('/frontend-pilot/users/dashboard');
             await brand.click();
             await expect(page).toHaveURL(/\/frontend-pilot$/u);
             await expect(page.locator('main h1')).toHaveText('Surveyor');

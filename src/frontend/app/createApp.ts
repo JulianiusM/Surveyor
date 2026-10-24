@@ -111,8 +111,8 @@ export const pilotRoutes: readonly RouteRecordRaw[] = [
     {path: '/frontend-pilot/users/activate/:token', component: IdentityPage, meta: {...identityMessagePage, identityMode: 'activate'}},
     {path: '/frontend-pilot/guest/:guestId/login/:token', component: IdentityPage, meta: {...identityMessagePage, identityMode: 'guest-login'}},
     {path: '/frontend-pilot/guest/recovery', component: IdentityPage, meta: {...guestPage, identityMode: 'recovery'}},
-    {path: '/frontend-pilot/help', component: HelpPage},
-    {path: '/frontend-pilot/help/:doc', component: HelpPage},
+    {path: '/frontend-pilot/help', component: HelpPage, meta: {helpPage: true}},
+    {path: '/frontend-pilot/help/:doc', component: HelpPage, meta: {helpPage: true}},
     // Unknown opt-in destinations retain a readable 404 presentation;
     // Express owns the corresponding HTTP status on document requests.
     {path: '/frontend-pilot/:pathMatch(.*)*', component: CommonPage},
@@ -145,7 +145,9 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             // Only the admitted renderer can say when a delayed article exists.
             // Restore history after that render; a feature must not re-anchor
             // after Router has restored the reader's actual saved offset.
-            if (to.path.startsWith('/frontend-pilot/help') && (saved || to.hash)
+            // Router matching admits equivalent URL spellings. Only its Help
+            // records have an article readiness owner; catch-all errors do not.
+            if (to.meta.helpPage && (saved || to.hash)
                 && (saved || to.path !== from.path || to.hash !== from.hash
                     || JSON.stringify(resolvePilotHelpQuery(to.params.doc, to.query))
                         !== JSON.stringify(resolvePilotHelpQuery(from.params.doc, from.query)))) {
@@ -164,7 +166,7 @@ export function createPilotApp(bootstrap: FrontendPilotBootstrap, browser: boole
             // Help's query identifies a real article/search visit as well as its
             // selected locale. Only a different normalized document starts at top;
             // a locale-only URL synchronization must retain the reader's position.
-            if (to.path === from.path && to.path.startsWith('/frontend-pilot/help')
+            if (to.path === from.path && to.meta.helpPage
                 && JSON.stringify(resolvePilotHelpQuery(to.params.doc, to.query))
                     !== JSON.stringify(resolvePilotHelpQuery(from.params.doc, from.query))) {
                 return to.hash ? false : {top: 0};

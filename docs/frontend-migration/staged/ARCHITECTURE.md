@@ -29,6 +29,10 @@ router, QueryClient, locale instance and bootstrap. Private state never lives in
 Within the opt-in prefix, public Home is `/frontend-pilot` (`/home` remains an alias); personal Overview retains the
 native `/users/dashboard` suffix. Shell links, identity fallback and confirmed-removal delivery share the Overview
 destination constant. Home renders its existing request-captured suggestion without reading personal collections.
+Dashboard document and warm navigation share the native account-or-guest/profile Login journey. Missing authoritative
+identity does not manufacture anonymous admission. Resource guest/admin intent follows canonical Router records and
+explicit Express operation declarations, independently of equivalent case or trailing-slash URL spelling. Help route
+metadata identifies article readiness and locale-URL synchronization without classifying unmatched paths as articles.
 
 `serializeBootstrap.ts` escapes inert script-element JSON; `decodeBootstrap` validates every declared field before
 reactive state is created. Feature validators load with their view. Shared type-only contracts remain `.d.ts` files.

@@ -68,6 +68,9 @@ async function proofFile(): Promise<Express.Multer.File> {
 }
 
 describe('organizer invoice entries without event attendance', () => {
+    // These two cases execute actual down/up/repeated-up DDL, including recovery.
+    // Their owned schema work must settle before ordinary invoice cases inspect
+    // it; a workflow's default deadline does not measure migration correctness.
     it('migrates existing participant invoices without changing proofs, shares, payments, or calculation revisions', async () => {
         // Run the reversible legacy-schema check before this suite creates any organizer entries.
         const {event, poolId, firstId} = await context();
@@ -97,7 +100,7 @@ describe('organizer invoice entries without event attendance', () => {
             await migration.up(runner);
             await runner.release();
         }
-    });
+    }, 120_000);
 
     it('extends a legacy pool enum without changing costs, settlements, snapshots, or existing lifecycle states', async () => {
         const {event, poolId} = await context();
@@ -125,7 +128,7 @@ describe('organizer invoice entries without event attendance', () => {
             await migration.up(runner);
             await runner.release();
         }
-    });
+    }, 120_000);
 
     it('creates directly with organizer invoices only, records costs, and closes without ever opening participant invoices', async () => {
         const {event, firstId} = await eventContext();

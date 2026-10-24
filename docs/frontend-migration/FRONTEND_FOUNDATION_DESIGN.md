@@ -1083,6 +1083,15 @@ discarding input/files. Analogous transient notices and password-validation word
 receipt requirements. The paired review owns actual execution, independent review and limits; no general backend
 remedy, native cutover, publication or deployment is authorized.
 
+## Direct local test-account clarification and readiness review (2026-10-23)
+
+The maintainer explicitly requests database and E2E execution with the existing local test account and rejects
+blocking those runs because the account can access other local schemas. Existing runners may reset their configured
+local test schemas; no database-user/grant change, non-test-data reset or production operation follows from this
+instruction. The earlier unrun-test receipts retain their historical scope and do not constrain this authorization.
+The maintainer also requests another review for missed defects and successful tests before readiness assessment.
+Actual targets, executed results, fixes and remaining evidence limits belong to the paired review.
+
 ## Cutover retirement inventory
 
 The [boundary manifest](documentation-boundary.json) is the sole amendment-to-destination inventory.

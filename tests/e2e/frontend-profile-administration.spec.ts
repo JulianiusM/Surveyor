@@ -101,7 +101,7 @@ test('profile creation, switching and editing share the built application and na
     // The roster adopts the existing switch operation. Its new context retires
     // private state, and the next editor must read this newly selected profile.
     await profileRow.getByRole('button', {name: 'Switch to profile', exact: true}).click();
-    await expect(page).toHaveURL(/\/frontend-pilot(?:\?[^#]*)?$/u);
+    await expect(page).toHaveURL('/frontend-pilot/users/dashboard');
     await page.goto('/frontend-pilot/users/profile?locale=en');
     await waitForPilotHydration(page);
     await expect(page.locator('#name')).toHaveValue(name);

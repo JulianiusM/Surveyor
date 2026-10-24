@@ -13,7 +13,19 @@ export function createSurveysPilotRouter(hooks: FrontendEntityDocumentHooks): Ro
     const router = Router();
     router.get('/create', asyncHandler(renderCreation));
     router.get('/:surveyId/duplicate', asyncHandler(renderDuplicate));
-    router.get(['/:surveyId', '/:surveyId/guest'], asyncHandler(renderSurvey));
+    for (const [path, intent] of [['/:surveyId', 'detail'], ['/:surveyId/guest', 'guest']] as const) {
+        /** The registered detail/guest route owns admission regardless of the
+         * equivalent URL spelling accepted by Express. */
+        router.get(path, asyncHandler(async function renderSurvey(req, res) {
+            const state = await hooks.bootstrap(req);
+            // Keep controller authorization and original return URL unchanged;
+            // selecting this presentation never creates a guest identity.
+            const result = await readSurveyResourceEntry(String(req.params.surveyId), intent, await captureApiActor(req));
+            if (await hooks.applyPageEntry(req, res, state, result.entry)) return;
+            state.guestEntry = result.guest ?? undefined;
+            await renderFrontendPilot(res, req.originalUrl, state);
+        }));
+    }
 
     /** Preserve account-only creation and the exact login return destination. */
     async function renderCreation(req: Request, res: Response): Promise<void> {
@@ -33,16 +45,6 @@ export function createSurveysPilotRouter(hooks: FrontendEntityDocumentHooks): Ro
         // follows the established account-only creation journey.
         state.surveyDuplicate = await readSurveyDuplicate(String(req.params.surveyId), actor);
         state.pageEntry = {kind: 'render'};
-        await renderFrontendPilot(res, req.originalUrl, state);
-    }
-
-    /** Guests and signed-in profiles use the same standalone participation gate. */
-    async function renderSurvey(req: Request, res: Response): Promise<void> {
-        const state = await hooks.bootstrap(req);
-        const intent = req.path.endsWith('/guest') ? 'guest' : 'detail';
-        const result = await readSurveyResourceEntry(String(req.params.surveyId), intent, await captureApiActor(req));
-        if (await hooks.applyPageEntry(req, res, state, result.entry)) return;
-        state.guestEntry = result.guest ?? undefined;
         await renderFrontendPilot(res, req.originalUrl, state);
     }
 
