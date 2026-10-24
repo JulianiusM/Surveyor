@@ -7,6 +7,7 @@ import FinanceSubmission from '../../src/frontend/features/finance/FinanceSubmis
 import FinanceCoverage from '../../src/frontend/features/finance/FinanceCoverage.vue';
 import FinanceShares from '../../src/frontend/features/finance/FinanceShares.vue';
 import FinanceHistory from '../../src/frontend/features/finance/FinanceHistory.vue';
+import FinanceBreakdown from '../../src/frontend/features/finance/FinanceBreakdown.vue';
 import StatusNotice from '../../src/frontend/components/StatusNotice.vue';
 import {ApiFailure} from '../../src/frontend/app/transport';
 import {eventKeys} from '../../src/frontend/app/queryKeys';
@@ -84,6 +85,38 @@ function holdLocaleRead(context: Awaited<ReturnType<typeof mountFinance>>['conte
 }
 
 describe('P7 finance saved reads and participant invoices', () => {
+    it('keeps the participant disclosure and exact invoice draft through one independent heading Refresh', async () => {
+        let held = false;
+        let finish: (() => void) | undefined;
+        const mounted = await mountFinance(async () => {
+            if (!held) return json(snapshot);
+            return new Promise<Response>(resolve => {finish = () => resolve(json(snapshot));});
+        });
+        const {wrapper, request} = mounted;
+        await button(wrapper, 'Invoice pools & payments').trigger('click');
+        await button(wrapper, 'Submit an invoice & history').trigger('click');
+        const amount = wrapper.get<HTMLInputElement>('input[name="amount"]');
+        await amount.setValue('0012.340');
+        const heading = wrapper.get('.accordion-header');
+        const disclosure = heading.get('.accordion-button');
+        const refresh = heading.get<HTMLButtonElement>('button[aria-label="Refresh"]');
+        const before = request.mock.calls.length;
+        held = true;
+        try {
+            await refresh.trigger('click');
+            await vi.waitFor(() => expect(request.mock.calls.length).toBe(before + 1));
+            expect(refresh.element.disabled).toBe(true);
+            refresh.element.click();
+            expect(request.mock.calls.length).toBe(before + 1);
+            expect(disclosure.attributes('aria-expanded')).toBe('true');
+        } finally {finish?.(); await flushPromises();}
+        expect(refresh.element.disabled).toBe(false);
+        expect(disclosure.attributes('aria-expanded')).toBe('true');
+        expect(wrapper.get('input[name="amount"]').element).toBe(amount.element);
+        expect(amount.element.value).toBe('0012.340');
+        expect(request.mock.calls.every(([req]) => (req as Request).method === 'GET')).toBe(true);
+    });
+
     it.each([false, true])('keeps organizer management visible with header creation and native context (empty=%s)', async empty => {
         const organizer: components['schemas']['FinanceView'] = {...snapshot, audience: 'organizer', registrationId: null,
             pools: empty ? [] : [pool], invoices: [], shares: []};
@@ -457,6 +490,44 @@ describe('P7 finance saved reads and participant invoices', () => {
         expect(mounted.request).not.toHaveBeenCalled();
     });
 
+    it.each([
+        {admin: false, savedStale: true, locale: 'en', showsWarning: true},
+        {admin: false, savedStale: true, locale: 'de', showsWarning: true},
+        {admin: false, savedStale: false, locale: 'en', showsWarning: false},
+        {admin: true, savedStale: true, locale: 'en', showsWarning: false},
+        {admin: true, savedStale: false, locale: 'en', showsWarning: false},
+    ] as const)('preserves native audience context in a protected breakdown (admin=$admin, stale=$savedStale, locale=$locale)', async ({admin, savedStale, locale, showsWarning}) => {
+        const historyDescription = 'Retained settlement explanation';
+        const saved = {...breakdown, needsRecalculation: savedStale,
+            settledShareNotice: {label: 'Retained settlement', description: historyDescription}};
+        const mounted = await mountFrontendEvent(FinanceBreakdown, async request => {
+            const url = new URL(request.url);
+            expect(request.method).toBe('GET');
+            expect(url.pathname).toBe(`/api/v1/events/${eventId}/finance/pools/${poolId}/shares/${share.id}`);
+            expect(url.searchParams.get('audience')).toBe(admin ? 'organizer' : 'participant');
+            return json(saved);
+        }, {eventId, share: {...share, needsRecalculation: !savedStale}, admin});
+        cleanups.push(mounted.dispose);
+        // Supply the selected locale as fixture state; only the same protected
+        // explanation GET may repeat for its independently localized cache key.
+        if (locale === 'de') mounted.context.locale.value = 'de';
+        await vi.waitFor(() => expect(mounted.context.queryClient.isFetching()).toBe(0));
+        await flushPromises();
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        expect.soft(dialog.get('.modal-title').text()).toBe(locale === 'de'
+            ? 'Anteilsaufschlüsselung · Deine Poolanteile'
+            : `Share breakdown · ${admin ? pool.name : 'Your pool shares'}`);
+        expect(dialog.get('h3.fs-6').text()).toBe(admin ? share.payerName : share.poolName);
+        const warning = locale === 'de'
+            ? 'Neuberechnung erforderlich. Diese Beträge und Berechnungsgrundlagen stammen aus der gespeicherten Berechnung.'
+            : 'Recalculation required. These amounts and calculation inputs are from the saved calculation.';
+        expect(dialog.findAll('p.text-warning').map(paragraph => paragraph.text())).toEqual(showsWarning
+            ? [warning, historyDescription] : [historyDescription]);
+        expect(dialog.get('.invoice-share-breakdown').text()).toContain('Calculated balance');
+        expect(dialog.text()).toContain('<Saved note>');
+        expect(mounted.request).toHaveBeenCalledTimes(locale === 'de' ? 2 : 1);
+    });
+
     it('reads one personal projection, retains full history evidence and lazily reads only the selected saved share', async () => {
         let current = structuredClone(snapshot);
         const {wrapper, request} = await mountFinance(async req => json(new URL(req.url).pathname.includes('/shares/') ? breakdown : current));
@@ -471,7 +542,7 @@ describe('P7 finance saved reads and participant invoices', () => {
         expect(request.mock.calls.filter(([req]) => new URL((req as Request).url).pathname.includes('/shares/'))).toHaveLength(1);
         expect(document.body.textContent).toContain('<Saved participant>');
         const explanation = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
-        expect(explanation.find('.text-warning').exists()).toBe(false);
+        expect(explanation.get('p.text-warning').text()).toBe('Recalculation required. These amounts and calculation inputs are from the saved calculation.');
         // Read-only selection follows the current admitted row after refresh,
         // while the explanation itself participates in explicit Refresh.
         current = {...current, shares: [{...share, poolName: 'Renamed saved pool'}]};

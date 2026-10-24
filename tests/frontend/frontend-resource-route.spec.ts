@@ -9,6 +9,7 @@ import {pilotRoutes} from '../../src/frontend/app/createApp';
 import {createPilotContext, pilotContextKey} from '../../src/frontend/app/context';
 import GuestEntryPage from '../../src/frontend/features/identity/GuestEntryPage.vue';
 import EventPage from '../../src/frontend/features/event/EventPage.vue';
+import ActivityPage from '../../src/frontend/features/activity/ActivityPage.vue';
 import {createFrontendEventSession, createFrontendEventView, frontendEventId} from '../factories/frontendEventFactory';
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -46,6 +47,27 @@ async function visit(path: string, handler: (request: Request) => unknown, local
 }
 
 describe('matched resource route intent', () => {
+    it.each([
+        {locale: 'en', reason: 'You must be registered for the event to access this resource'},
+        {locale: 'de', reason: 'Du musst für die Veranstaltung angemeldet sein, um auf diese Ressource zuzugreifen'},
+    ] as const)('explains linked Activity admission denial in $locale without reading protected content', async wording => {
+        const {root, request} = await visit(`/frontend-pilot/activity/${frontendEventId}`, function denyLinkedPlan(input) {
+            const url = new URL(input.url);
+            if (input.method !== 'GET' || !url.pathname.endsWith(`/activity-plans/${frontendEventId}/entry`)) {
+                throw new Error('Denied Activity visits must not read protected content or send commands');
+            }
+            return {entry: {kind: 'denied', status: 400, messageKey: 'activity.eventRegistrationRequired'}, guest: null};
+        }, wording.locale);
+
+        await vi.waitFor(() => expect(root.text()).toContain(wording.reason));
+        expect(root.findComponent(ActivityPage).exists()).toBe(false);
+        expect(root.findComponent(GuestEntryPage).exists()).toBe(false);
+        expect(root.find('form').exists()).toBe(false);
+        expect(request).toHaveBeenCalledTimes(1);
+        const admittedRead = request.mock.calls[0]![0] as Request;
+        expect(new URL(admittedRead.url).searchParams.get('view')).toBe('detail');
+    });
+
     it.each(['trailing slash', 'case'] as const)('presents only the current exact-destination completion on a %s message visit', async spelling => {
         const canonical = '/frontend-pilot/message';
         const path = spelling === 'case' ? canonical.toUpperCase() : canonical + '/';

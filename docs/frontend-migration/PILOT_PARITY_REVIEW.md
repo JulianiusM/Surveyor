@@ -1821,3 +1821,104 @@ evidence. No exception to the policy was authorized or retained.
 
 The full schema-resetting E2E suite, real OIDC/SMTP providers, other browser engines, physical devices and deployment
 were not verified by this bounded local inspection. Existing deferred backend work remains in its established owners.
+
+## Reopened visual and responsiveness review (2026-10-24)
+
+The maintainer rejected the preceding repeated inspection after identifying missed and introduced regressions in
+long Event administration headers, mobile Refresh buttons, accordion headers, JavaScript-disabled fallback layout,
+the JavaScript-required notice, English profile-menu sizing and application responsiveness. The preceding visual
+acceptance is withdrawn. Its captures and test results retain only their recorded historical scope; their counts do
+not establish current visual or interaction quality.
+
+The direct request authorizes correction of these named regressions and review of analogous shared consumers.
+Existing native isolation, backend business/authorization ownership, drafts, read admission, cooldowns and command
+recovery remain constraints. The new review records reproduction, corrected owners, interaction profiles and actual
+fresh visual coverage under `artifacts/visual-parity-regression-2026-10-24/`. The bounded correction and repeated
+inspection below are complete. Whole-application acceptance remains withheld for the unresolved hang and Activity
+recommendation-workspace coverage limits; successful captures do not override them.
+
+Shared heading tracks now keep long desktop Event titles beside their actions, retaining the approved balanced
+centering. Refresh uses normal labelled full-width action rows below 768px, including standalone and accordion
+consumers; open and closed accordion boundaries include the independent Refresh control. Unsupported static
+enhancements stay hidden until initialization, while real Help navigation and GET search remain usable. The shell
+owns one JavaScript notice immediately below navigation, with the independent failure monitor and existing
+draft-aware deliberate recovery retained. English profile menus regain their native minimum; translated content
+still determines natural expansion and mobile containment.
+
+The related review restores personal-share headings above the ledger border, native phone calculation metrics,
+application confirmations for submission access and saved-adjustment removal, and the existing Activity
+registration-required denial text. Finance body actions now follow their native contexts through one shared
+presentation slot. Create-pool, takeover and actual confirmation footers stay distinct. Personal saved-share
+breakdowns regain the native title and stale-calculation warning from the existing protected response; organizer
+presentation stays audience-specific. Existing form associations, draft nodes, command/recovery owners and private
+reads remain the same. Matching existing English/German Invoice Help describes the restored confirmations.
+
+Two review mistakes are explicitly corrected. `IMP-119` classified approved balanced headings as a defect and
+introduced end alignment; that task change was removed after checking the unqualified October 23 instruction.
+Generic shared-dialog mechanics and separate mobile rows also did not authorize moving native body actions into
+pinned footers; the later placement corrections restore the actual native branches. Neither interpretation is a
+maintainer amendment. Earlier premature skeleton images, partial runs, helper failures and rejected approvals
+remain excluded from healthy-view acceptance.
+
+`IMP-117` remains open: bounded built/development profiling records cold delays without reproducing the reported
+persistent freeze. Concurrent inspection also produced navigation/test timeouts; isolated retakes do not establish
+their root cause or resolve that report. Automatic approval review rejected Activity recommendation POST allowance
+because normal workspace entry can maintain saved proposals. A1 is unanswered; every final live browser probe
+blocks all non-read requests after authentication/profile admission. Healthy recommendation-editor coverage is
+therefore incomplete. Ordinary authentication/session and GET-side server effects are not claimed to be absent.
+
+Automatic review separately rejected a delegated attempt to mark a new context receipt's scope/review flags as
+reviewed. Its raw receipt and flags remain unchanged; no retry or indirect rewrite was made. Unaffected checks
+continue under the existing caller-held authorization and actual policy/source reviews. That rejected bookkeeping
+action supplies no approval or visual acceptance.
+
+The final inspected build is `f7e20a5aa9e7a5143c9d715d03da7f0cc027e23275590712a2c73c3a2e4f5005`
+(1,294 fingerprinted runtime/source files), served by the actual built Express/MariaDB application on local port 3104
+against the already prepared fictional `cgd_e2e` data. Native frontend sources remain unchanged. The final matrix
+combines 51 accepted same-build critical-dialog preflight entries with 471 new shard attempts. All three completed
+capture runs retain unchanged build identities; the copied preflight images retain their original acceptance and
+file provenance. This is not a claim that every entry was recaptured in the final two shards.
+
+The matrix contains 522 entries across 118 named scenarios and seven actor states: anonymous, owner, alternate
+profile, limited Drivers administrator, and closed/open/history participant contexts. Names include aliases and
+shared content rather than 118 distinct layouts or complete workflows. There are 520 successful captures and two
+unavailable Vue recommendation-create views under A1. The captured English scope includes 236 complete native/Vue
+pairs and four unpaired views; 44 further captures are German Vue supplements. Desktop 1440px and phone 390px pairs,
+selected 1024px tablets, and separate 320/360/576/600/767/768px checks cover the admitted responsive states.
+
+Reviewers inspected original-width page crops and independent dialog/table scroll regions, distinguishing fresh
+manual reads from exact previously read image bytes. A final explicit-ledger join exposed 51 entries without
+recorded inspected-region evidence; all 51 received fresh inspection before closure. The final join has no missing
+successful entry or scene and no pending input ledger. That establishes recorded region provenance only: it does
+not certify every word, data row, possible state or complete healthy Activity workflow. Repeated lists/prose retain
+their stated sampling limits. Repetitive timezone frames were sampled; the exact control and beginning/middle/end
+selections remain in each reviewer's ledger. Hash equality transfers only inspected pixels, never native/Vue visual
+acceptance through a pixel threshold.
+
+The same-build supplements cover 20 collapsed/expanded organizer/personal breakdown states, 51 critical Finance
+body/true-footer contexts, 24 menu/startup cases, 38 intermediate/small-width cases, 12 hidden-item form/context
+images, 30 populated/empty/filter picker states, and 12 live Finance keyboard/Cancel cases. Their counts overlap the
+matrix and are not additive workflow totals. Actual Cancel restores the exact opener; saved-removal review keeps
+the same unfinished amount/note/form nodes and lexical values without a business request. Unsupported startup
+controls stay hidden, static Help/search remains usable, and both English and German menus/controls fit their
+tested widths. The existing button alignment, pool/Create structure and administrable-collection corrections were
+also checked in their matching native/Vue contexts.
+
+`IMP-111`–`IMP-116`, `IMP-118` and `IMP-120`–`IMP-127` close for their inspected corrections. `IMP-119` closes as a
+withdrawn misclassification with approved centering restored, not as an implemented end-alignment fix. `IMP-117`
+stays open, as does the separately deferred inherited native `IMP-110` question amount. The final report and
+per-reviewer ledgers in `artifacts/visual-parity-regression-2026-10-24/index.html` retain the actual scope, image
+hashes, explicit approved differences and exclusions; the previous review is superseded.
+
+The final full build, all three frontend/SSR/test type checks, 59 frontend files with 1,560 passing tests, and 150
+isolated built-client browser checks passed. Those intercepted browser fixtures are not database E2E. The
+engineering check covers 452 authored sources and all 20 task-owned executable readability files with zero findings;
+whitespace and production-guide/amendment boundary checks pass. The advisory documentation report retains the
+existing source-baseline fingerprint mismatch rather than being described as clean. No full schema-resetting E2E,
+real external provider, other browser engine, physical device, cutover or deployment was verified.
+
+Raw final diagnostics retain 24 intentional admission/missing-resource HTTP 400/403/404 observations, 30 blocked
+Activity recommendation POSTs with their matching request/console failures, and four native delegated-Drivers
+permission warnings. There are no uncaught page errors or top-level capture errors. These observations do not
+establish a hang remedy: controlled built runs and development cold-delay profiling did not reproduce the reported
+persistent freeze, and concurrent-run timeouts remain preserved with their original limits.

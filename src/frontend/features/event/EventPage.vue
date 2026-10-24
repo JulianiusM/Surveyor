@@ -139,7 +139,6 @@ async function refresh(mode: 'dependencies' | 'page' = 'dependencies'): Promise<
             :resource-id="eventId"
             :title="admin ? messages.t('event.dashboard', {title: event?.title ?? ''}) : event?.title ?? ''"
             :icon="admin ? 'bi-speedometer2' : 'bi-calendar2-event'"
-            :separate-actions="admin"
             :image-version="event?.headerVersion"
             :image-query-key="key"
             :read-image="readHeader"

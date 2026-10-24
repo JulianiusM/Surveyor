@@ -141,7 +141,7 @@ function acknowledge(): void {
                 </FileField>
             </fieldset>
         </form>
-        <template #footer>
+        <template #bodyActions>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.cancel') }}</ActionButton>
             <ActionButton type="submit" :form="`${id}-form`" :state="action"
                 :pending="command.pending.value" :show-spinner="false">{{ messages.t('finance.addExpense') }}</ActionButton>

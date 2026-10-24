@@ -220,7 +220,7 @@ function close(): void {
                 <p :id="`${id}-factor-help`" class="small text-secondary mt-2 mb-0">{{ messages.t('finance.factorsCanBeToWithUpToFourDecimal') }}</p>
             </fieldset>
         </form>
-        <template #footer>
+        <template #bodyActions>
             <ActionButton variant="outline-secondary" :state="action" @click="discard">{{ messages.t('finance.discardEdits') }}</ActionButton>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t('common.close') }}</ActionButton>
             <ActionButton :form="`${id}-form`" type="submit" :state="action"

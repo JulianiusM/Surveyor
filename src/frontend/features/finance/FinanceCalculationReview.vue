@@ -158,7 +158,7 @@ function close(): void {
             </section>
             <LoadingSkeleton v-if="previewing" variant="table" :columns="4" :rows="3" />
             <template v-if="preview">
-                <div class="row g-3 mb-3">
+                <div class="pool-preview-summary row g-3 mb-3">
                     <div class="col-6"><small class="text-secondary d-block">{{ messages.t('finance.paymentsDue') }}</small><strong class="fs-4">{{ financeMoney(preview.totals.outstandingAmount, locale) }}</strong></div>
                     <div class="col-6"><small class="text-secondary d-block">{{ messages.t('finance.refundsDue') }}</small><strong class="fs-4">{{ financeMoney(Number(preview.totals.creditAmount) ? `-${preview.totals.creditAmount}` : '0', locale) }}</strong></div>
                 </div>
@@ -199,7 +199,7 @@ function close(): void {
             <p class="text-secondary small mt-2">{{ messages.t('finance.thisChoiceAppliesToThisCalculationChangeTheDefault') }}</p>
             <p v-if="!recalculate" class="text-secondary small">{{ messages.t('finance.confirmingClosesThisPoolToNewInvoiceSubmissions') }}</p>
         </div>
-        <template #footer>
+        <template #bodyActions>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t(completed ? 'common.close' : 'common.cancel') }}</ActionButton>
             <ActionButton v-if="!completed" variant="outline-light" :state="readAction" @click="loadPreview">{{ messages.t('finance.refreshPreview') }}</ActionButton>
             <ActionButton v-if="!completed" variant="warning" :state="applyAction" @click="apply">{{ messages.t(recalculate ? 'finance.applyRecalculation' : 'finance.closePoolCalculate') }}</ActionButton>

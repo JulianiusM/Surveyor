@@ -1,6 +1,6 @@
 import {apiCompatibility} from '../../../.generated/api/v1/policy.mjs';
 import {validatePackingListView} from '../../../.generated/api/v1/browser/validatePackingListView.mjs';
-import {expect, test, type Dialog, type Page, type Route} from '@playwright/test';
+import {expect, test, type Dialog, type Locator, type Page, type Route} from '@playwright/test';
 import {readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
@@ -35,7 +35,8 @@ function startupSession(locale: Session['locale'] = 'en'): Session {
 /** Deliver real built SSR and fingerprinted client assets through one intercepted
  * origin. This selected browser boundary needs no Express server or schema reset.
  * API fixtures retain production decoding while refusing every command. */
-async function startupDocument(page: Page, path: string, bootstrap: FrontendPilotBootstrap) {
+async function startupDocument(page: Page, path: string, bootstrap: FrontendPilotBootstrap,
+                               documentHeaders?: Record<string, string>) {
     const renderer = await import(pathToFileURL(resolve('dist/modules/frontendPilotRenderer.js')).href) as {
         prepareFrontendPilot(response: Response, url: string, bootstrap: FrontendPilotBootstrap): Promise<FrontendPreparedDocument>;
     };
@@ -86,7 +87,7 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendPilo
             const document = request.url() === url ? html
                 : (await renderer.prepareFrontendPilot(response, pathname + requestedUrl.search, bootstrap)).html
                     .replace(/\s+integrity="[^"]*"/gu, '');
-            await route.fulfill({status: 200, contentType: 'text/html', body: document});
+            await route.fulfill({status: 200, contentType: 'text/html', headers: documentHeaders, body: document});
             return;
         }
         if (pathname.startsWith('/app/assets/')) {
@@ -132,14 +133,14 @@ async function startupDocument(page: Page, path: string, bootstrap: FrontendPilo
 
 /** Both real Event intents share one bounded actor/read fixture. Capabilities
  * retain their independent page adoption, and no Finance projection is admitted. */
-async function startupEventDocument(page: Page, locale: Session['locale'], admin: boolean) {
+async function startupEventDocument(page: Page, locale: Session['locale'], admin: boolean, title = 'P2 Event 09fe4b5b', settings = admin) {
     const id = '22222222-2222-4222-8222-222222222222';
     const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Event presentation fixture'};
     const session: Session = {...startupSession(locale), kind: 'account', activeProfile: profile, profiles: [profile],
         context: 'event-heading-context-1234567890', csrfToken: 'event-heading-csrf-1234567890'};
     const baseline = createFrontendEventView();
-    const event = createFrontendEventView({id, title: 'P2 Event 09fe4b5b',
-        capabilities: {...baseline.capabilities, admin, settings: admin, register: !admin}});
+    const event = createFrontendEventView({id, title,
+        capabilities: {...baseline.capabilities, admin, settings, register: !admin}});
     const eventEntry: components['schemas']['EventResourceEntry'] = {entry: {kind: 'render'}, guest: null};
     const delivery = await startupDocument(page, `/frontend-pilot/event/${id}${admin ? '/admin' : ''}?locale=${locale}`,
         {session, pageEntry: {kind: 'render'}, eventEntry});
@@ -209,6 +210,147 @@ async function settleStartup(page: Page): Promise<void> {
 async function expandStartupNavigation(page: Page): Promise<void> {
     const toggle = page.locator('header .navbar-toggler');
     if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+}
+
+/** Startup fallback belongs below the same actual header in every failure mode. */
+async function expectStartupNoticeBelowHeader(page: Page): Promise<void> {
+    const notice = page.locator('#surveyor-pilot-javascript-required');
+    await expect(notice).toBeVisible();
+    await expect(notice).toHaveCount(1);
+    expect(await notice.evaluate(element => element.previousElementSibling?.matches('.pilot-app-header'))).toBe(true);
+    const navigation = (await page.locator('.pilot-app-header').boundingBox())!;
+    const warning = (await notice.boundingBox())!;
+    expect(Math.abs(warning.y - navigation.y - navigation.height)).toBeLessThan(1);
+    expect(warning.x).toBeGreaterThanOrEqual(0);
+    expect(warning.x + warning.width).toBeLessThanOrEqual((await page.viewportSize())!.width);
+}
+
+/** Narrow Refresh uses the ordinary translated action row and normal hit area. */
+async function expectPhoneRefresh(refresh: Locator, expectedWidth: number, label: string): Promise<void> {
+    await expect(refresh).toBeVisible();
+    await expect(refresh).toContainText(label);
+    expect((await refresh.boundingBox())!.width).toBeGreaterThanOrEqual(expectedWidth - 1);
+    const style = await refresh.evaluate(element => {
+        const value = getComputedStyle(element);
+        return {fontSize: value.fontSize, padding: [value.paddingTop, value.paddingRight, value.paddingBottom, value.paddingLeft]};
+    });
+    expect(style).toEqual({fontSize: '16px', padding: ['6px', '12px', '6px', '12px']});
+}
+
+for (const locale of ['en', 'de'] as const) {
+    for (const width of [1280, 390]) {
+        test(`${locale} profile menu keeps natural desktop width and a complete phone row at ${width}px`, async ({page}) => {
+            await page.setViewportSize({width, height: 900});
+            const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Menu fixture'};
+            const session: Session = {...startupSession(locale), kind: 'account', activeProfile: profile, profiles: [profile],
+                context: 'menu-browser-context-1234567890', csrfToken: 'menu-browser-csrf-1234567890'};
+            const delivery = await startupDocument(page, '/frontend-pilot', {session, landing: {quickCreate: 'packing'}});
+            await page.goto(delivery.url);
+            await waitForPilotHydration(page);
+            await expandStartupNavigation(page);
+            const disclosure = page.locator('header .navbar-nav.ms-auto details');
+            await disclosure.locator('summary').click();
+            const menu = disclosure.locator('.dropdown-menu');
+            await expect(menu).toBeVisible();
+            const geometry = await menu.evaluate(element => {
+                const bounds = element.getBoundingClientRect();
+                return {width: bounds.width, parentWidth: element.parentElement!.getBoundingClientRect().width,
+                    left: bounds.left, right: bounds.right, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
+                    rootFont: Number.parseFloat(getComputedStyle(document.documentElement).fontSize),
+                    rows: [...element.querySelectorAll('.dropdown-item')].map(item => {
+                        const style = getComputedStyle(item);
+                        return {height: item.getBoundingClientRect().height, oneLineHeight: Number.parseFloat(style.lineHeight)
+                            + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)};
+                    })};
+            });
+            expect(geometry.rows).toHaveLength(5);
+            expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1);
+            expect(geometry.left).toBeGreaterThanOrEqual(0);
+            expect(geometry.right).toBeLessThanOrEqual(width);
+            if (width < 992) expect(Math.abs(geometry.width - geometry.parentWidth)).toBeLessThan(1);
+            else {
+                // The native English menu fits Bootstrap's10rem floor. German
+                // may grow for its whole labels without inheriting the old14rem gap.
+                if (locale === 'en') expect(geometry.width).toBeLessThanOrEqual(geometry.rootFont * 10 + 1);
+                expect(geometry.width).toBeLessThan(geometry.rootFont * 14);
+            }
+            for (const row of geometry.rows) expect(row.height).toBeLessThanOrEqual(row.oneLineHeight + 1);
+            await menu.locator('.dropdown-item').first().click({trial: true});
+            await disclosure.press('Escape');
+            await expect(disclosure.locator('summary')).toBeFocused();
+            await expect(menu).toBeHidden();
+            expect(delivery.observed.commands).toBe(0);
+        });
+    }
+}
+
+for (const locale of ['en', 'de'] as const) {
+    for (const width of [1280, 390, 576, 600, 767, 768]) {
+        test(`Overview accordion paints and contains its independent Refresh at ${width}px in ${locale}`, async ({page}) => {
+            await page.setViewportSize({width, height: 900});
+            const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Accordion fixture'};
+            const session: Session = {...startupSession(locale), kind: 'account', activeProfile: profile, profiles: [profile],
+                context: 'accordion-browser-context-1234567890', csrfToken: 'accordion-browser-csrf-1234567890'};
+            const delivery = await startupDocument(page, '/frontend-pilot/users/dashboard', {session, pageEntry: {kind: 'render'}});
+            const counts = {owner: 0, participant: 0};
+            const started = readGate();
+            const released = readGate();
+            let holdOwner = false;
+            await page.route('**/api/v1/overview?**', async function deliverOverviewRead(route) {
+                const query = new URL(route.request().url()).searchParams;
+                const collection = query.get('collection') === 'owner' ? 'owner' : 'participant';
+                counts[collection]++;
+                if (holdOwner && collection === 'owner') {started.release(); await released.promise;}
+                const projection: components['schemas']['OverviewRegion'] = {collection, region: 'main', q: '', type: 'all',
+                    availableTypes: [], page: 1, childPage: 1, eventId: null, pageSize: 24, totalEntities: 0, hiddenEntities: 0,
+                    regionEntities: 0, matchingEntities: 0, totalCards: 0, totalChildren: 0,
+                    hasPrevious: false, hasNext: false, parent: null, items: []};
+                await route.fulfill({status: 200, contentType: 'application/json',
+                    headers: {'X-Surveyor-Context': session.context!}, body: JSON.stringify(projection)});
+            });
+            try {
+                await page.goto(delivery.url);
+                await waitForPilotHydration(page);
+                const heading = page.locator('.pilot-accordion-heading').last();
+                const label = locale === 'en' ? 'Refresh' : 'Aktualisieren';
+                const refresh = heading.getByRole('button', {name: label, exact: true});
+                await expect(refresh).toBeEnabled();
+                const toggle = heading.locator('.accordion-button');
+                await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+                const bounds = (await heading.boundingBox())!;
+                const button = (await refresh.boundingBox())!;
+                const disclosure = (await toggle.boundingBox())!;
+                expect(await heading.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+                expect(button.x).toBeGreaterThanOrEqual(bounds.x);
+                expect(button.x + button.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+                expect(button.y).toBeGreaterThanOrEqual(bounds.y);
+                expect(button.y + button.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+                if (width < 768) {
+                    await expectPhoneRefresh(refresh, bounds.width - 16, label);
+                    expect(button.y).toBeGreaterThanOrEqual(disclosure.y + disclosure.height);
+                } else {
+                    expect(disclosure.x + disclosure.width).toBeLessThanOrEqual(button.x);
+                    expect(button.height).toBeLessThanOrEqual(32);
+                }
+                expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+                // The actual family Refresh reads each admitted collection once.
+                // Its pending/focus lifetime stays independent of the disclosure.
+                const before = {...counts};
+                holdOwner = true;
+                await refresh.click();
+                await started.promise;
+                await expect(refresh).toBeDisabled();
+                await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+                released.release();
+                await expect(refresh).toBeEnabled();
+                await expect(refresh).toBeFocused();
+                expect(counts.owner).toBe(before.owner + 1);
+                expect(counts.participant).toBe(before.participant + 1);
+                expect(delivery.observed.commands).toBe(0);
+            } finally { released.release(); }
+        });
+    }
 }
 
 for (const width of [1280, 1024, 390, 320]) {
@@ -585,8 +727,8 @@ for (const width of [1280, 1024, 390]) {
             const heading = (await title.boundingBox())!;
             if (initialHeaderHeight !== undefined) expect(Math.abs(bounds.height - initialHeaderHeight)).toBeLessThan(1);
             expect(Math.abs(heading.x + heading.width / 2 - bounds.x - bounds.width / 2)).toBeLessThan(1);
-            // Ordinary Packing retains the native single desktop title/action
-            // row; a full-width Event dashboard is a distinct real caller below.
+            // Desktop actions share the heading; phone navigation and each
+            // complete action use independent ordinary rows.
             if (width >= 768) {
                 const lineHeight = await title.evaluate(element => Number.parseFloat(getComputedStyle(element).lineHeight));
                 expect(heading.height).toBeLessThanOrEqual(lineHeight + 1);
@@ -598,8 +740,10 @@ for (const width of [1280, 1024, 390]) {
                 if (linked) expect((await header.getByRole('link', {name: 'Go to event', exact: true}).boundingBox())!.width)
                     .toBeGreaterThanOrEqual(heading.width - 1);
                 const settings = (await header.getByRole('button', {name: 'Entity settings', exact: true}).boundingBox())!;
-                const compactRefresh = (await header.getByRole('button', {name: 'Refresh', exact: true}).boundingBox())!;
-                expect(settings.width + compactRefresh.width + 8).toBeGreaterThanOrEqual(heading.width - 1);
+                const refresh = header.getByRole('button', {name: 'Refresh', exact: true});
+                await expectPhoneRefresh(refresh, heading.width, 'Refresh');
+                expect(settings.width).toBeGreaterThanOrEqual(heading.width - 1);
+                expect((await refresh.boundingBox())!.y).toBeGreaterThanOrEqual(settings.y + settings.height);
             }
             for (const button of await header.locator('button').all()) {
                 await expect(button).toBeVisible();
@@ -624,32 +768,92 @@ for (const width of [1280, 1024, 390]) {
     }
 }
 
-for (const width of [1280, 1024, 390]) {
-    test(`Event administration uses its native full title and separate actions at ${width}px`, async ({page}, info) => {
-        await page.setViewportSize({width, height: 900});
-        const {delivery, event} = await startupEventDocument(page, 'en', true);
-        await page.goto(delivery.url);
-        await waitForPilotHydration(page);
-        const header = page.locator('main > section > .card-header');
-        const title = header.locator('h1');
-        await expect(title).toHaveText(`Event Dashboard — ${event.title}`);
-        const bounds = (await header.boundingBox())!;
-        const heading = (await title.boundingBox())!;
-        expect(heading.width).toBeGreaterThan(bounds.width - 40);
-        expect(Math.abs(heading.x + heading.width / 2 - bounds.x - bounds.width / 2)).toBeLessThan(1);
-        if (width >= 768) {
-            const lineHeight = await title.evaluate(element => Number.parseFloat(getComputedStyle(element).lineHeight));
-            expect(heading.height).toBeLessThanOrEqual(lineHeight + 1);
+for (const locale of ['en', 'de'] as const) {
+    for (const width of [1280, 390]) {
+        for (const admin of [false, true]) {
+            test(`headers without settings preserve approved balanced centering for ${admin ? 'administration' : 'ordinary view'} at ${width}px in ${locale}`, async ({page}, info) => {
+                await page.setViewportSize({width, height: 900});
+                const {delivery, event} = await startupEventDocument(page, locale, admin, 'Shared regional meeting', false);
+                await page.goto(delivery.url);
+                await waitForPilotHydration(page);
+                const header = page.locator('main > section > .card-header');
+                const title = header.locator('h1');
+                await expect(title).toContainText(event.title);
+                await expect(header.getByRole('button', {
+                    name: locale === 'en' ? 'Entity settings' : 'Entitätseinstellungen', exact: true,
+                })).toHaveCount(0);
+                const refreshName = locale === 'en' ? 'Refresh' : 'Aktualisieren';
+                const refresh = header.getByRole('button', {name: refreshName, exact: true});
+                await expect(refresh).toBeVisible();
+                const bounds = (await header.boundingBox())!;
+                const heading = (await title.boundingBox())!;
+                const action = (await refresh.boundingBox())!;
+                if (width >= 768) {
+                    expect(Math.abs(action.y + action.height / 2 - heading.y - heading.height / 2)).toBeLessThan(1);
+                    // The approved balanced heading contract also applies when
+                    // no parent or settings action is available in either role.
+                    expect(Math.abs(heading.x + heading.width / 2 - bounds.x - bounds.width / 2)).toBeLessThan(1);
+                } else {
+                    expect(action.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+                    await expectPhoneRefresh(refresh, bounds.width - 34, refreshName);
+                }
+                expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+                await page.screenshot({path: info.outputPath('balanced-header-without-settings.png'), animations: 'disabled'});
+            });
         }
-        for (const name of ['Entity settings', 'Refresh']) {
-            const control = header.getByRole('button', {name, exact: true});
-            await expect(control).toBeVisible();
-            expect((await control.boundingBox())!.y).toBeGreaterThanOrEqual(heading.y + heading.height);
-            expect(await control.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-        }
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-        await page.screenshot({path: info.outputPath('event-admin-full-title.png'), animations: 'disabled'});
-    });
+    }
+}
+
+for (const locale of ['en', 'de'] as const) {
+    for (const width of [1280, 1024, 390, 320]) {
+        test(`long Event administration title retains every independent action at ${width}px in ${locale}`, async ({page}, info) => {
+            await page.setViewportSize({width, height: 900});
+            const text = locale === 'en' ? 'A shared regional planning meeting with several groups and a complete programme'
+                : 'Gemeinsames regionales Planungstreffen mit mehreren Gruppen und einem vollständigen Programm';
+            const {delivery, event} = await startupEventDocument(page, locale, true, text);
+            await page.goto(delivery.url);
+            await waitForPilotHydration(page);
+            const header = page.locator('main > section > .card-header');
+            const title = header.locator('h1');
+            await expect(title).toContainText(event.title);
+            const bounds = (await header.boundingBox())!;
+            const heading = (await title.boundingBox())!;
+            const settingsName = locale === 'en' ? 'Entity settings' : 'Entitätseinstellungen';
+            const refreshName = locale === 'en' ? 'Refresh' : 'Aktualisieren';
+            for (const name of [settingsName, refreshName]) {
+                const control = header.getByRole('button', {name, exact: true});
+                await expect(control).toBeVisible();
+                const action = (await control.boundingBox())!;
+                expect(action.x).toBeGreaterThanOrEqual(bounds.x);
+                expect(action.x + action.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+                expect(action.y).toBeGreaterThanOrEqual(bounds.y);
+                expect(action.y + action.height).toBeLessThanOrEqual(bounds.y + bounds.height);
+                if (width >= 768) {
+                    expect(heading.x + heading.width).toBeLessThanOrEqual(action.x + 1);
+                    expect(Math.abs(action.y + action.height / 2 - heading.y - heading.height / 2)).toBeLessThan(1);
+                } else {
+                    expect(action.y).toBeGreaterThanOrEqual(heading.y + heading.height);
+                    expect(action.width).toBeGreaterThanOrEqual(heading.width - 1);
+                }
+                expect(await control.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+            }
+            if (width < 768) {
+                const settings = (await header.getByRole('button', {name: settingsName, exact: true}).boundingBox())!;
+                const refresh = header.getByRole('button', {name: refreshName, exact: true});
+                await expectPhoneRefresh(refresh, heading.width, refreshName);
+                expect((await refresh.boundingBox())!.y).toBeGreaterThanOrEqual(settings.y + settings.height);
+            }
+            const textInside = await title.evaluate(element => {
+                const range = document.createRange();
+                range.selectNodeContents(element);
+                const bounds = element.getBoundingClientRect();
+                return [...range.getClientRects()].every(rect => rect.left >= bounds.left - 1 && rect.right <= bounds.right + 1);
+            });
+            expect(textInside).toBe(true);
+            expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+            await page.screenshot({path: info.outputPath('event-admin-long-title.png'), animations: 'disabled'});
+        });
+    }
 }
 
 for (const locale of ['en', 'de'] as const) {
@@ -731,36 +935,48 @@ test('lazy navigation shows header progress without inserting a line above the c
     } finally { entry.restore(); }
 });
 
-for (const width of [1280, 390]) {
-    test(`profile roster skeleton keeps the actual balanced heading geometry at ${width}px`, async ({page}, testInfo) => {
-        await page.setViewportSize({width, height: 900});
-        const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Profile fixture', isDefault: true};
-        const session: Session = {...startupSession(), kind: 'account', activeProfile: profile, profiles: [profile],
-            context: 'profile-heading-context-1234567890', csrfToken: 'profile-heading-csrf-1234567890'};
-        const delivery = await startupDocument(page, '/frontend-pilot/users/profile/manage', {session, pageEntry: {kind: 'render'}});
-        const profiles: components['schemas']['ProfileManagement'] = {profiles: [profile], activeProfileId: profile.id};
-        await page.route('**/api/v1/profiles', async route => {
-            await route.fulfill({status: 200, contentType: 'application/json', headers: {
-                'X-Surveyor-Context': session.context!}, body: JSON.stringify(profiles)});
+for (const locale of ['en', 'de'] as const) {
+    for (const width of [1280, 390, 576, 600, 767, 768]) {
+        test(`profile roster skeleton keeps the actual balanced heading geometry at ${width}px in ${locale}`, async ({page}, testInfo) => {
+            await page.setViewportSize({width, height: 900});
+            const profile = {id: '11111111-1111-4111-8111-111111111111', name: 'Profile fixture', isDefault: true};
+            const session: Session = {...startupSession(locale), kind: 'account', activeProfile: profile, profiles: [profile],
+                context: 'profile-heading-context-1234567890', csrfToken: 'profile-heading-csrf-1234567890'};
+            const delivery = await startupDocument(page, '/frontend-pilot/users/profile/manage', {session, pageEntry: {kind: 'render'}});
+            const profiles: components['schemas']['ProfileManagement'] = {profiles: [profile], activeProfileId: profile.id};
+            await page.route('**/api/v1/profiles', async route => {
+                await route.fulfill({status: 200, contentType: 'application/json', headers: {
+                    'X-Surveyor-Context': session.context!}, body: JSON.stringify(profiles)});
+            });
+            const entry = await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u);
+            try {
+                await page.goto(delivery.url, {waitUntil: 'commit'});
+                await entry.started;
+                const initial = (await page.locator('[data-pilot-initial-loading] .pilot-skeleton-page-header').boundingBox())!;
+                await page.screenshot({path: testInfo.outputPath('profile-initial-skeleton.png'), animations: 'disabled'});
+                entry.restore();
+                await waitForPilotHydration(page);
+                const header = page.locator('main > section > .pilot-page-heading');
+                const label = locale === 'en' ? 'Refresh' : 'Aktualisieren';
+                const refresh = header.getByRole('button', {name: label, exact: true});
+                await expect(refresh).toBeVisible();
+                const loaded = (await header.boundingBox())!;
+                if (width < 768) await expectPhoneRefresh(refresh, loaded.width - 32, label);
+                else {
+                    const heading = (await header.locator('h1').boundingBox())!;
+                    const action = (await refresh.boundingBox())!;
+                    expect(action.height).toBeLessThanOrEqual(32);
+                    expect(Math.abs(action.y + action.height / 2 - heading.y - heading.height / 2)).toBeLessThan(1);
+                }
+                expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+                await page.screenshot({path: testInfo.outputPath('profile-loaded-header.png'), animations: 'disabled'});
+                expect(Math.abs(loaded.height - initial.height)).toBeLessThan(1);
+                // Mobile navigation intentionally collapses only after hydration;
+                // header geometry must not add another shift within the page itself.
+                if (width >= 992) expect(Math.abs(loaded.y - initial.y)).toBeLessThan(1);
+            } finally { entry.restore(); }
         });
-        const entry = await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u);
-        try {
-            await page.goto(delivery.url, {waitUntil: 'commit'});
-            await entry.started;
-            const initial = (await page.locator('[data-pilot-initial-loading] .pilot-skeleton-page-header').boundingBox())!;
-            await page.screenshot({path: testInfo.outputPath('profile-initial-skeleton.png'), animations: 'disabled'});
-            entry.restore();
-            await waitForPilotHydration(page);
-            const header = page.locator('main > section > .pilot-page-heading');
-            await expect(header.getByRole('button', {name: 'Refresh', exact: true})).toBeVisible();
-            const loaded = (await header.boundingBox())!;
-            await page.screenshot({path: testInfo.outputPath('profile-loaded-header.png'), animations: 'disabled'});
-            expect(Math.abs(loaded.height - initial.height)).toBeLessThan(1);
-            // Mobile navigation intentionally collapses only after hydration;
-            // header geometry must not add another shift within the page itself.
-            if (width >= 992) expect(Math.abs(loaded.y - initial.y)).toBeLessThan(1);
-        } finally { entry.restore(); }
-    });
+    }
 }
 
 for (const locale of ['en', 'de'] as const) {
@@ -920,7 +1136,13 @@ test('initial startup retains editable static Help search and recovers only afte
         expect(delivery.observed.documents).toBe(2);
         expect(delivery.observed.commands).toBe(0);
         await expect(search).toHaveValue('');
-        await expect(recovery).toHaveCount(0);
+        // The shell now owns one permanent SSR/client notice below navigation.
+        // Successful guarded reload hides that same presentation; it does not
+        // remove/recreate the notice or introduce another recovery control.
+        await expect(recovery).toBeHidden();
+        await expect(page.locator('#surveyor-pilot')).toHaveAttribute('data-pilot-hydrated', 'true');
+        await expect(page.locator('#surveyor-pilot-javascript-required')).toHaveCount(1);
+        await expect(page.locator('[data-pilot-startup-reload]')).toHaveCount(1);
         await original!.dispose();
     } finally { module.restore(); page.off('dialog', answerRecovery); }
 });
@@ -1064,6 +1286,8 @@ test('initial startup exposes localized recovery before context creation when th
         module.fail();
         const recovery = page.locator('#surveyor-pilot-startup-recovery');
         await expect(recovery).toContainText('Diese Seite konnte nicht vollständig geladen werden.');
+        await expectStartupNoticeBelowHeader(page);
+        await expect(recovery.getByRole('button', {name: 'Seite neu laden', exact: true})).toBeVisible();
         await expect(page.locator('html')).toHaveAttribute('lang', 'de');
         await expect(search).toHaveValue('Behaltene Suchanfrage');
         expect(delivery.observed.documents).toBe(1);
@@ -1112,6 +1336,7 @@ test('initial startup shows an independent notice when the module entry cannot l
         module.fail();
         const notice = page.locator('#surveyor-pilot-javascript-required');
         await expect(notice).toBeVisible();
+        await expectStartupNoticeBelowHeader(page);
         await expect(notice).toContainText('Interactive features on this site require JavaScript.');
         await expect(notice.getByRole('link', {name: 'Help', exact: true})).toHaveAttribute('href', '/frontend-pilot/help?locale=en');
         await expect(notice.getByRole('button')).toHaveCount(0);
@@ -1134,7 +1359,48 @@ test('initial startup ends loading with a notice when entry initialization never
         await expect(page.locator('[data-pilot-initial-loading]')).toBeVisible();
         await page.clock.runFor(15_001);
         await expect(page.locator('#surveyor-pilot-javascript-required')).toBeVisible();
+        await expectStartupNoticeBelowHeader(page);
         await expect(page.locator('[data-pilot-initial-loading]')).toBeHidden();
+        expect(delivery.observed.documents).toBe(1);
+        expect(delivery.observed.commands).toBe(0);
+        // A late successful entry retires the same notice without a reload or
+        // replacing its SSR node after the independent deadline already fired.
+        const originalNotice = await page.locator('#surveyor-pilot-javascript-required').elementHandle();
+        module.restore();
+        await waitForPilotHydration(page);
+        await expect(page.locator('#surveyor-pilot-javascript-required')).toBeHidden();
+        expect(await originalNotice!.evaluate(element => element === document.getElementById('surveyor-pilot-javascript-required'))).toBe(true);
+        await originalNotice!.dispose();
+    } finally { module.restore(); }
+});
+
+test('a blocked inline monitor keeps safe fallback below navigation until the real entry hydrates', async ({page}) => {
+    const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Synthetic Help',
+        content: '<h2>Readable task</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
+    // Only the response's script policy blocks the inline monitor. The actual
+    // external entry and all later production modules retain their normal origin.
+    const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession(), help},
+        {'Content-Security-Policy': "script-src 'self'"});
+    const module = await failStartupModule(page, /\/app\/assets\/entry-client-[^/]+\.js(?:\?|$)/u);
+    const hydrationErrors: string[] = [];
+    page.on('console', message => {if (/hydration|mismatch/iu.test(message.text())) hydrationErrors.push(message.text());});
+    try {
+        await page.goto(delivery.url, {waitUntil: 'commit'});
+        await module.started;
+        await expectStartupNoticeBelowHeader(page);
+        await expect(page.locator('#surveyor-pilot')).not.toHaveAttribute('data-pilot-startup-observed');
+        await expect(page.locator('[data-pilot-startup-reload]')).toBeHidden();
+        await expect(page.locator('.pilot-refresh-button')).toBeHidden();
+        const search = page.getByRole('searchbox');
+        await search.fill('Retained while startup waits');
+        const original = await search.elementHandle();
+        module.restore();
+        await waitForPilotHydration(page);
+        await expect(page.locator('#surveyor-pilot-javascript-required')).toBeHidden();
+        await expect(search).toHaveValue('Retained while startup waits');
+        expect(await original!.evaluate(element => element === document.getElementById('pilot-help-search'))).toBe(true);
+        await original!.dispose();
+        expect(hydrationErrors).toEqual([]);
         expect(delivery.observed.documents).toBe(1);
         expect(delivery.observed.commands).toBe(0);
     } finally { module.restore(); }
@@ -1330,6 +1596,27 @@ for (const width of [390, 1280]) {
 test.describe('JavaScript unavailable', () => {
     test.use({javaScriptEnabled: false});
 
+    for (const locale of ['en', 'de'] as const) {
+        for (const width of [1280, 390]) {
+            test(`localized fallback follows navigation without dead Refresh controls at ${width}px in ${locale}`, async ({page}) => {
+                const help: components['schemas']['HelpPageData'] = {locale, title: 'Synthetic Help',
+                    content: '<h2>Readable task</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
+                const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession(locale), help});
+                await page.setViewportSize({width, height: 900});
+                await page.goto(delivery.url, {waitUntil: 'domcontentloaded'});
+                await expectStartupNoticeBelowHeader(page);
+                await expect(page.locator('.pilot-refresh-button')).toBeHidden();
+                await expect(page.locator('[data-pilot-startup-reload]')).toBeHidden();
+                await expect(page.locator('.help-content')).toContainText('Readable task');
+                await expect(page.getByRole('search')).toHaveAttribute('method', 'get');
+                await expect(page.getByRole('searchbox')).toBeEditable();
+                await expect(page.getByRole('search').getByRole('button')).toBeEnabled();
+                expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+                expect(delivery.observed.commands).toBe(0);
+            });
+        }
+    }
+
     for (const width of [390, 1280]) {
         test(`copied frontend styles preserve the native cascade before JavaScript at ${width}px`, async ({page}, testInfo) => {
             const help: components['schemas']['HelpPageData'] = {locale: 'en', title: 'Stylesheet comparison',
@@ -1375,6 +1662,8 @@ test.describe('JavaScript unavailable', () => {
         await page.setViewportSize({width: 390, height: 844});
         await page.goto(delivery.url, {waitUntil: 'domcontentloaded'});
         await expect(page.locator('#surveyor-pilot-javascript-required')).toBeVisible();
+        await expectStartupNoticeBelowHeader(page);
+        await expect(page.locator('.pilot-refresh-button')).toBeHidden();
         await expect(page.locator('.help-content')).toContainText('Readable without JavaScript');
         await expect(page.getByRole('search')).toHaveAttribute('method', 'get');
         await expect(page.getByRole('search')).toHaveAttribute('action', '/frontend-pilot/help');

@@ -376,6 +376,8 @@ describe('visible resource recovery', () => {
         const ownerHeader = wrapper.findAll('.entity-overview').find(section =>
             section.find('[data-collection="owner"][data-region="main"]').exists())!.get('.accordion-header');
         const refresh = ownerHeader.get<HTMLButtonElement>('button[aria-label="Refresh"]');
+        const disclosure = ownerHeader.get('.accordion-button');
+        expect(disclosure.attributes('aria-expanded')).toBe('true');
         expect(owner.find('form button[aria-label="Refresh"]').exists()).toBe(false);
         expect(owner.get('h3').classes()).toContain('visually-hidden');
         expect(refresh.element.disabled).toBe(false);
@@ -386,6 +388,9 @@ describe('visible resource recovery', () => {
         try {
             await refresh.trigger('click');
             await vi.waitFor(() => expect([ownerReads, participantReads]).toEqual([1, 1]));
+            // Refresh shares the painted heading without activating its sibling
+            // disclosure or dispatching a second read from a bubbled click.
+            expect(disclosure.attributes('aria-expanded')).toBe('true');
             expect(refresh.element.disabled).toBe(true);
             expect(refresh.attributes('aria-busy')).toBe('true');
             expect(refresh.find('.spinner-border').exists()).toBe(true);
@@ -419,6 +424,7 @@ describe('visible resource recovery', () => {
             expect(refresh.attributes('aria-busy')).toBe('false');
             expect(document.activeElement).toBe(refresh.element);
             expect(focus).toHaveBeenCalledExactlyOnceWith({preventScroll: true});
+            expect(disclosure.attributes('aria-expanded')).toBe('true');
         } finally {
             // A failed assertion must not strand a query during shared cleanup.
             ownerResponse.resolve(json({...region(new Request('http://localhost/')), collection: 'owner'}));

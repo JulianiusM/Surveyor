@@ -57,9 +57,7 @@ async function recoverHeaderAfterRead(): Promise<void> {
             class="card-img-top"
             style="object-fit: cover; height: 250px"
         />
-        <!-- Ordinary entity headings keep the native compact desktop row;
-             administration may explicitly retain its native full-title row. -->
-        <PageHeading :title="title" :icon="icon" :separate-actions="separateActions" fill-action-row>
+        <PageHeading :title="title" :icon="icon">
             <template v-if="parentUrl" #parent>
                 <RouterLink class="btn btn-outline-light entity-header-parent" :to="parentUrl">
                     <i class="bi bi-arrow-left-circle me-1" aria-hidden="true"></i>{{ messages.t('packing.goToEvent') }}
@@ -85,8 +83,8 @@ async function recoverHeaderAfterRead(): Promise<void> {
 </template>
 
 <style scoped>
-/* Native entity navigation/settings fill their mobile row. Refresh remains the
-   same compact feature-owned control beside Settings, including translated text. */
+/* Parent navigation fills its mobile row. Settings and Refresh use the same
+   shared phone action rows, with all admission retained by their feature. */
 @media (max-width: 767.98px) {
     .entity-header-parent { width: 100%; }
     .entity-header-settings { flex: 1 1 auto; }

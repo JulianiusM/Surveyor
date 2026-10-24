@@ -23,14 +23,10 @@ export interface PilotLoadingSkeleton {
     headerActions?: boolean;
 }
 
-/** A caller may explicitly retain native full title/action rows. Other entity
- * and account headings keep their compact desktop presentation. */
+/** Entity and account headings share intrinsic desktop tracks and phone action rows. */
 export interface PilotPageHeadingProps {
     title: string;
     icon?: string;
-    separateActions?: boolean;
-    /** Entity parent/settings controls retain their native mobile row width. */
-    fillActionRow?: boolean;
 }
 
 declare module 'vue-router' {

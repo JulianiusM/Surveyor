@@ -221,6 +221,7 @@
     "finance.remove": "remove",
     "finance.removeFor": "removeFor",
     "finance.removeThisSavedAdjustment": "removeThisSavedAdjustment",
+    "finance.removeAdjustment": "removeAdjustment",
     "finance.roundBaseSharesUp": "roundBaseSharesUp",
     "finance.saveChanges": "saveChanges",
     "finance.saveCoverageForOnePayerAtATimeCovered": "saveCoverageForOnePayerAtATimeCovered",
@@ -426,6 +427,7 @@
     "finance.reason": "reason",
     "finance.recalculationRequired": "recalculationRequired",
     "finance.recalculationRequired2": "recalculationRequired2",
+    "finance.recalculationRequiredTheseAmountsAndCalculationInputsAreFrom": "recalculationRequiredTheseAmountsAndCalculationInputsAreFrom",
     "finance.recalculationRequiredTheseAreThePreviousCalculatedAmountsYou": "recalculationRequiredTheseAreThePreviousCalculatedAmountsYou",
     "finance.savedChangesHaveNotBeenAppliedToTheShares": "savedChangesHaveNotBeenAppliedToTheShares",
     "finance.recordedBy": "recordedBy",
@@ -542,6 +544,7 @@
         "reviewedHistory": "I have checked the invoice history"
       },
       "activity": {
+        "eventRegistrationRequired": "You must be registered for the event to access this resource",
         "rulesDescription": "Configure requirements for this plan, review coverage per participant, and generate assignment suggestions.",
         "requirements": {
           "stepOne": "Step 1",

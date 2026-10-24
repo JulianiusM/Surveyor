@@ -46,7 +46,9 @@ async function refresh(): Promise<void> {
 <template>
     <AppDialog content-class="text-white finance-dialog"
         open
-        :title="messages.t('finance.poolDialogTitle', {title: messages.t('finance.shareBreakdown'), name: share.poolName})"
+        :title="messages.t('finance.poolDialogTitle', {
+            title: messages.t('finance.shareBreakdown'), name: admin ? share.poolName : messages.t('finance.yourPoolShares'),
+        })"
         @close="emit('close')"
     >
         <h3 class="fs-6">{{ admin ? share.payerName : share.poolName }}</h3>
@@ -63,6 +65,9 @@ async function refresh(): Promise<void> {
             {{ section.failure.value }}
         </StatusNotice>
         <template v-if="section.data.value">
+            <p v-if="!admin && section.data.value.needsRecalculation" class="small text-warning">
+                {{ messages.t('finance.recalculationRequiredTheseAmountsAndCalculationInputsAreFrom') }}
+            </p>
             <p v-if="section.data.value.settledShareNotice" class="small text-warning">
                 {{ section.data.value.settledShareNotice.description }}
             </p>
@@ -87,8 +92,10 @@ async function refresh(): Promise<void> {
                 </ul>
             </details>
         </template>
-        <template #footer>
+        <!-- Native read-only breakdowns finish within the scrolling content.
+             Keep this same close action available while loading or recovering. -->
+        <div class="pilot-action-row justify-content-end mt-3">
             <ActionButton variant="secondary" @click="emit('close')">{{ messages.t('common.close') }}</ActionButton>
-        </template>
+        </div>
     </AppDialog>
 </template>

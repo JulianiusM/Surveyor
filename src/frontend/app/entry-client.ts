@@ -4,7 +4,7 @@ import {decodeBootstrap} from './serializeBootstrap';
 import {createPilotApp, initializePilotApp} from './createApp';
 import {hasHydrationDrafts} from './mountPreservingDrafts';
 import {createTranslator, localeManifest} from '../../modules/localization/translator';
-import type {Locale, LocalizationContext} from '../../types/LocalizationTypes';
+import type {Locale} from '../../types/LocalizationTypes';
 import type {PilotContext} from '../../types/FrontendPilotUiTypes';
 // Client loading and SSR links consume one frontend-owned cascade composition.
 import '../styles/application.sass';
@@ -18,34 +18,16 @@ function updateDocumentLanguage(locale: Locale): void {
     document.documentElement.dir = localeManifest.find(entry => entry.locale === locale)?.direction ?? 'ltr';
 }
 
-/** Display recovery outside the unhydrated Vue tree without replacing its controls.
- * Catalog text enters plain text nodes; a failed decoder never grants bootstrap
- * values authority or transfers form data into another application/storage owner. */
-function showStartupRecovery(container: Element, messages: LocalizationContext, recover: () => void): void {
-    // The initial document can remain readable/editable when its first route or
-    // validator fails. Keep those original nodes and offer one explicit action.
-    const notice = document.getElementById('surveyor-pilot-javascript-required') ?? document.createElement('div');
-    notice.hidden = false;
-    notice.className = 'container-fluid py-3';
-    const alert = notice.querySelector<HTMLElement>('[role="alert"]') ?? document.createElement('div');
-    alert.id = 'surveyor-pilot-startup-recovery';
-    alert.className = 'alert alert-warning';
-    alert.setAttribute('role', 'alert');
-    const explanation = alert.querySelector<HTMLElement>('[data-pilot-startup-failure]') ?? document.createElement('p');
-    explanation.hidden = false;
-    explanation.textContent = messages.t('state.startupFailed');
-
-    // Deliberate recovery uses the existing reload owner when it exists. The
-    // caller obtains initial draft consent; command guards still decide departure.
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'btn btn-outline-light';
-    button.textContent = messages.t('state.refreshPage');
+/** Enable the shell's existing recovery control without replacing hydrated DOM.
+ * The entry owns deliberate reload consent; independent startup attributes own
+ * visibility, and the shell alone owns SSR/client markup and localized wording. */
+function showStartupRecovery(container: Element, recover: () => void): void {
+    // Static Help inputs and any partially mounted owners keep their original
+    // nodes. Attach the guarded action before making that capability visible.
+    const button = container.querySelector<HTMLButtonElement>('[data-pilot-startup-reload]');
+    if (!button) return;
     button.addEventListener('click', recover);
-    if (!explanation.parentNode) alert.append(explanation);
-    alert.append(button);
-    if (!alert.parentNode) notice.append(alert);
-    if (!notice.parentNode) container.before(notice);
+    container.setAttribute('data-pilot-startup-recovery-ready', 'true');
 }
 
 /** Protect initial DOM drafts before Router starts loading, validate bootstrap,
@@ -114,10 +96,8 @@ async function start(): Promise<void> {
         // Mounted guards now protect the restored models. Only after that handoff
         // may the temporary DOM guard and its beforeunload listener retire.
         container.setAttribute('data-pilot-hydrated', 'true');
-        // A policy may block the independent inline monitor while allowing the
-        // module entry. Proven success must also dismiss that safe default notice.
-        const javascriptNotice = document.getElementById('surveyor-pilot-javascript-required');
-        if (javascriptNotice) javascriptNotice.hidden = true;
+        // The same success marker dismisses the safe-default notice even when
+        // the independent inline monitor could not execute. Vue owns no hidden prop.
         application.releaseInitialReloadGuard();
         window.removeEventListener('beforeunload', protectInitialDrafts);
 
@@ -142,7 +122,7 @@ async function start(): Promise<void> {
     } catch (error) {
         // Keep available initial controls and surface recovery even when no component
         // mounted. Existing partial command owners, if any, retain their guards.
-        showStartupRecovery(container, messages, recoverStartup);
+        showStartupRecovery(container, recoverStartup);
         container.setAttribute('data-pilot-startup-failed', 'true');
         console.error('Frontend startup failed.', error);
     }

@@ -38,6 +38,24 @@ describe('admitted initial document delivery', () => {
         ]);
     }, 60_000);
 
+    it('renders one localized startup notice beneath the shared header in the same SSR tree', async () => {
+        for (const locale of ['en', 'de']) {
+            const result = await render('/frontend-pilot/help', {session: {...session, locale}, help: {
+                locale, title: 'Synthetic Help', content: '<p>Readable task.</p>', currentDoc: 'fixture.md',
+                docsList: [], docsGroups: [], toc: []}});
+            const document = new DOMParser().parseFromString(result.html, 'text/html');
+            const notice = document.querySelector('#surveyor-pilot-javascript-required')!;
+            expect(document.querySelectorAll('#surveyor-pilot-javascript-required')).toHaveLength(1);
+            expect(notice.previousElementSibling?.matches('.pilot-app-header')).toBe(true);
+            expect(notice.nextElementSibling?.id).toBe('pilot-main');
+            expect(notice.textContent).toContain(locale === 'de'
+                ? 'Interaktive Funktionen dieser Website benötigen JavaScript.' : 'Interactive features on this site require JavaScript.');
+            expect(notice.querySelector('a')?.getAttribute('href')).toBe(`/frontend-pilot/help?locale=${locale}`);
+            expect(notice.querySelector('[data-pilot-startup-reload]')?.getAttribute('type')).toBe('button');
+            expect(notice.querySelector('form')).toBeNull();
+        }
+    });
+
     it('renders initial public Help and first login with no stored anonymous evidence or self HTTP', async () => {
         const fetch = vi.fn(() => { throw new Error('SSR must render admitted request data without self HTTP'); });
         vi.stubGlobal('fetch', fetch);

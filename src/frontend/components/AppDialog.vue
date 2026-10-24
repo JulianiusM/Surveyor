@@ -50,14 +50,12 @@ watch(
 );
 
 /** Native Bootstrap dialogs initially focus their container, without highlighting Close.
- * A feature may instead request a body field, as the native event picker does. Keep
+ * A feature may instead request a field or confirmation Cancel control. Keep
  * Reka's trap and focus return, but do not let its first-control default change that
  * observable native entry behavior when no usable feature target is present. */
 function focusInitial(event: Event): void {
     if (!(event.target instanceof HTMLElement)) return;
-    const target = props.initialFocus ? event.target
-        .querySelector<HTMLElement>('.modal-body')
-        ?.querySelector<HTMLElement>(props.initialFocus) : null;
+    const target = props.initialFocus ? event.target.querySelector<HTMLElement>(props.initialFocus) : null;
     event.preventDefault();
     (target ?? event.target).focus({preventScroll: true});
 }
@@ -105,7 +103,15 @@ function restoreFocus(event: Event): void {
                 <div class="pilot-notice-region">
                     <div ref="noticeTarget" class="pilot-notice-stack" data-pilot-notices></div>
                 </div>
-                <div class="modal-body"><slot /></div>
+                <div class="modal-body">
+                    <slot />
+                    <!-- Native editors may finish within their scroll body.
+                         The caller keeps the same actions and operation owners;
+                         true confirmation/create footers retain their own slot. -->
+                    <div v-if="$slots.bodyActions" class="pilot-action-row justify-content-end mt-3">
+                        <slot name="bodyActions" />
+                    </div>
+                </div>
                 <footer v-if="$slots.footer" class="modal-footer" :class="footerClass"><slot name="footer" /></footer>
             </DialogContent>
         </DialogPortal>

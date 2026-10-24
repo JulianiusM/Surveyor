@@ -133,7 +133,7 @@ function calculationSaved(notice: PilotPlainMessageKey): void {emit('saved', not
                     <p class="text-secondary small">{{ messages.t('finance.changesToEventAttendanceRegistrationsOrInvoicesAreNot') }}</p>
                 </template>
             </div>
-            <template #footer>
+            <template #bodyActions>
                 <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t(completed ? 'common.close' : 'common.cancel') }}</ActionButton>
                 <ActionButton v-if="!completed" :variant="selected === 'notify' ? 'info' : 'warning'" :state="submitAction" @click="submit">{{ messages.t(selected === 'notify' ? 'finance.sendSettlementEmails' : 'finance.restoreLastCalculatedSettings') }}</ActionButton>
             </template>

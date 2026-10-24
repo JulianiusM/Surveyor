@@ -269,7 +269,7 @@ function acknowledge(): void {
                 </div>
             </fieldset>
         </form>
-        <template #footer>
+        <template #[pool?'bodyActions':'footer']>
             <ActionButton v-if="pool" variant="outline-secondary" :disabled="command.action.disabled.value" @click="restoreDraft">{{ messages.t('finance.discardEdits') }}</ActionButton>
             <ActionButton variant="secondary" :disabled="command.pending.value || command.recovering.value" @click="close">{{ messages.t(pool ? 'common.close' : 'common.cancel') }}</ActionButton>
             <ActionButton type="submit" :form="`${id}-form`" :state="action"

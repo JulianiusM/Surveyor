@@ -248,14 +248,14 @@ function revealHistory(): void { submissionOpen.value = true; }
                     <i class="bi bi-receipt" aria-hidden="true"></i>
                     <span>{{ messages.t('finance.invoicePools') }}</span>
                 </div>
-                <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                <div class="pilot-action-row justify-content-end">
                     <RefreshButton :state="refreshAction" @refresh="refresh()" />
                     <ActionButton variant="primary" class="btn-sm" :state="available" @click="creating = true">
                         <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('finance.createPool') }}
                     </ActionButton>
                 </div>
             </div>
-            <h2 v-else class="accordion-header d-flex align-items-center">
+            <h2 v-else class="accordion-header pilot-accordion-heading d-flex align-items-center">
                 <AppAccordionButton class="text-white" :expanded="open" :controls="`${id}-finance`" @click="open = !open">
                     <i class="bi bi-cash-coin me-2" aria-hidden="true"></i>
                     {{ messages.t('finance.invoicePoolsAndPayments') }}

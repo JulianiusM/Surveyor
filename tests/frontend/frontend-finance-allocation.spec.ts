@@ -31,8 +31,6 @@ function valid(form: {element: Element}): void { vi.spyOn(form.element as HTMLFo
 
 describe('P8 independently saved allocation inputs', () => {
     it('confirms submission access independently and submits the captured pool revision exactly once', async () => {
-        const confirm = vi.fn(() => false);
-        vi.stubGlobal('confirm', confirm);
         const writes: unknown[] = [];
         const mounted = await mountFrontendEvent(FinancePoolActions, async request => {
             expect(new URL(request.url).pathname).toBe(`/api/v1/events/${eventId}/finance/pools/${poolId}/submission-state`);
@@ -47,10 +45,15 @@ describe('P8 independently saved allocation inputs', () => {
         expect(writes).toEqual([]);
         const submission = button(mounted.wrapper, 'Close participant invoices');
         expect(submission.classes()).toContain('btn-outline-light');
-        await submission.trigger('click');
+        await submission.trigger('click'); await flushPromises();
         expect(writes).toEqual([]);
-        confirm.mockReturnValue(true);
-        await button(mounted.wrapper, 'Close participant invoices').trigger('click'); await flushPromises();
+        expect(document.activeElement).toBe(button(body(), 'Cancel').element);
+        await button(body(), 'Cancel').trigger('click'); await flushPromises();
+        expect(writes).toEqual([]);
+        await submission.trigger('click'); await flushPromises();
+        await mounted.wrapper.setProps({pool: {...pool, status: 'OPEN', revision: 8, name: 'Updated pool'}});
+        expect(body().get('[role="dialog"]').text()).toContain('Saved pool');
+        await button(body().get('[role="dialog"]'), 'Close participant invoices').trigger('click'); await flushPromises();
         expect(writes).toEqual([{status: 'ORGANIZER_ONLY', expectedRevision: 7}]);
         await mounted.wrapper.setProps({pool: {...pool, status: 'ORGANIZER_ONLY'}});
         expect(button(mounted.wrapper, 'Open participant invoices').classes()).toContain('btn-outline-light');
@@ -59,6 +62,63 @@ describe('P8 independently saved allocation inputs', () => {
         await mounted.wrapper.setProps({pool: {...pool, status: 'CLOSED'}});
         expect(mounted.wrapper.text()).not.toContain('Open participant invoices');
         expect(mounted.wrapper.text()).not.toContain('Close participant invoices');
+    });
+
+    it('holds submission confirmation while pending and retains its saved receipt after a failed following read', async () => {
+        let finish!: (response: Response) => void;
+        const refresh = vi.fn(async () => {throw new Error('Following read unavailable');});
+        const mounted = await mountFrontendEvent(FinancePoolActions, () => new Promise(resolve => {finish = resolve;}),
+            {eventId, pool: {...pool, status: 'ORGANIZER_ONLY'}, active: true, refresh});
+        cleanups.push(mounted.dispose);
+        await button(mounted.wrapper, 'Open participant invoices').trigger('click'); await flushPromises();
+        const dialog = body().get('[role="dialog"]');
+        const confirm = button(dialog, 'Open participant invoices');
+        expect(confirm.classes()).toContain('btn-warning');
+        await confirm.trigger('click'); await flushPromises();
+        expect(mounted.request).toHaveBeenCalledOnce();
+        expect(button(dialog, 'Cancel').attributes('disabled')).toBeDefined();
+        await confirm.trigger('click'); await button(dialog, 'Cancel').trigger('click'); await flushPromises();
+        expect(body().find('[role="dialog"]').exists()).toBe(true);
+        expect(mounted.request).toHaveBeenCalledOnce();
+        finish(json({changed: true})); await flushPromises();
+        expect(body().find('[role="dialog"]').exists()).toBe(false);
+        expect(refresh).toHaveBeenCalledOnce();
+        expect(body().text()).toContain('saved');
+        expect(body().text()).toContain('could not');
+        expect(mounted.request).toHaveBeenCalledOnce();
+    });
+
+    it('keeps unknown submission access locked after local cancellation until one explicit saved read', async () => {
+        const refresh = vi.fn(async () => {});
+        const mounted = await mountFrontendEvent(FinancePoolActions, async () => {throw new TypeError('Response lost');},
+            {eventId, pool: {...pool, status: 'OPEN'}, active: true, refresh});
+        cleanups.push(mounted.dispose);
+        await button(mounted.wrapper, 'Close participant invoices').trigger('click'); await flushPromises();
+        await button(body().get('[role="dialog"]'), 'Close participant invoices').trigger('click'); await flushPromises();
+        await button(body().get('[role="dialog"]'), 'Cancel').trigger('click'); await flushPromises();
+        expect(button(mounted.wrapper, 'Close participant invoices').attributes('disabled')).toBeDefined();
+        await button(mounted.wrapper, 'Close participant invoices').trigger('click'); await flushPromises();
+        expect(mounted.request).toHaveBeenCalledOnce();
+        await button(body(), 'Refresh').trigger('click'); await flushPromises();
+        expect(refresh).toHaveBeenCalledOnce();
+        expect(mounted.request).toHaveBeenCalledOnce();
+        expect(button(mounted.wrapper, 'Close participant invoices').attributes('disabled')).toBeUndefined();
+    });
+
+    it('cannot confirm an earlier access review for a replacement pool or actor', async () => {
+        const mounted = await mountFrontendEvent(FinancePoolActions, async () => json({changed: true}),
+            {eventId, pool: {...pool, status: 'OPEN'}, active: true, refresh: vi.fn(async () => {})});
+        cleanups.push(mounted.dispose);
+        await button(mounted.wrapper, 'Close participant invoices').trigger('click'); await flushPromises();
+        await mounted.wrapper.setProps({pool: {...pool, id: '33333333-3333-4333-8333-333333333333', status: 'OPEN'}});
+        await button(body().get('[role="dialog"]'), 'Close participant invoices').trigger('click'); await flushPromises();
+        expect(mounted.request).not.toHaveBeenCalled();
+        await button(body().get('[role="dialog"]'), 'Cancel').trigger('click'); await flushPromises();
+        await mounted.wrapper.setProps({pool: {...pool, status: 'OPEN'}});
+        await button(mounted.wrapper, 'Close participant invoices').trigger('click'); await flushPromises();
+        mounted.context.epoch.value++;
+        await button(body().get('[role="dialog"]'), 'Close participant invoices').trigger('click'); await flushPromises();
+        expect(mounted.request).not.toHaveBeenCalled();
     });
 
     it('restores individual enrollment after assign-all and retains confirmed lexical factors after a failed follow-up read', async () => {
@@ -228,8 +288,75 @@ describe('P8 independently saved allocation inputs', () => {
         expect(surface.get<HTMLInputElement>('input[id$="-note"]').element.value).toBe('Unchanged adjustment draft');
     });
 
+    it('reviews one saved adjustment without replacing its additive fields and confirms only its captured ID', async () => {
+        let finish!: (response: Response) => void;
+        const refresh = vi.fn(async () => {throw new Error('Following read unavailable');});
+        const mounted = await mountFrontendEvent(FinanceAdjustments, () => new Promise(resolve => {finish = resolve;}),
+            {eventId, pool: {...pool, surcharges: [{id: '51', registrationId: '7', amount: '3.00', note: 'Saved adjustment',
+                subtractFromPool: true}]}, participants, open: true, active: true, refresh});
+        cleanups.push(mounted.dispose);
+        const surface = body();
+        const amount = surface.get<HTMLInputElement>('input[id$="-amount"]');
+        const note = surface.get<HTMLInputElement>('input[id$="-note"]');
+        await amount.setValue('0012.340'); await note.setValue('Independent addition');
+        const trigger = button(surface, 'Remove'); trigger.element.focus();
+        await trigger.trigger('click'); await flushPromises();
+        expect(surface.get('[role="dialog"] h2').text()).toBe('Confirm invoice action');
+        expect(surface.get('[data-finance-removal-review]').text()).toContain('Remove Surcharge for Original payer');
+        expect(document.activeElement).toBe(button(surface, 'Cancel').element);
+        await button(surface, 'Cancel').trigger('click'); await flushPromises();
+        expect(mounted.request).not.toHaveBeenCalled();
+        expect(surface.get('input[id$="-amount"]').element).toBe(amount.element);
+        expect(amount.element.value).toBe('0012.340');
+        expect(note.element.value).toBe('Independent addition');
+        expect(document.activeElement).toBe(trigger.element);
+        await trigger.trigger('click'); await flushPromises();
+        await mounted.wrapper.setProps({pool: {...pool, surcharges: [{id: '52', registrationId: '8', amount: '-4.00',
+            note: 'Neighboring saved rebate', subtractFromPool: false}]}});
+        expect(surface.get('[data-finance-removal-review]').text()).toContain('Remove Surcharge for Original payer');
+        const confirm = button(surface, 'Remove adjustment');
+        expect(confirm.classes()).toContain('btn-warning');
+        await confirm.trigger('click'); await flushPromises();
+        expect(new URL((mounted.request.mock.calls[0][0] as Request).url).pathname).toContain('/adjustments/51/remove');
+        await confirm.trigger('click'); await button(surface, 'Cancel').trigger('click'); await flushPromises();
+        expect(mounted.request).toHaveBeenCalledOnce();
+        expect(surface.find('[data-finance-removal-review]').exists()).toBe(true);
+        finish(json({changed: true})); await flushPromises();
+        expect(surface.find('[data-finance-removal-review]').exists()).toBe(false);
+        expect(surface.get('input[id$="-amount"]').element).toBe(amount.element);
+        expect(amount.element.value).toBe('0012.340');
+        expect(note.element.value).toBe('Independent addition');
+        expect(surface.text()).toContain('saved');
+        expect(surface.text()).toContain('could not');
+        expect(refresh).toHaveBeenCalledOnce();
+    });
+
+    it('keeps an unknown removal locked after Cancel and cannot retarget a review to another pool', async () => {
+        const mounted = await mountFrontendEvent(FinanceAdjustments, async () => {throw new TypeError('Response lost');},
+            {eventId, pool: {...pool, surcharges: [{id: '51', registrationId: '7', amount: '3.00', note: 'Saved adjustment',
+                subtractFromPool: true}]}, participants, open: true, active: true, refresh: vi.fn(async () => {})});
+        cleanups.push(mounted.dispose);
+        const surface = body();
+        await button(surface, 'Remove').trigger('click'); await flushPromises();
+        await mounted.wrapper.setProps({pool: {...pool, id: '33333333-3333-4333-8333-333333333333'}});
+        await button(surface, 'Remove adjustment').trigger('click'); await flushPromises();
+        expect(mounted.request).not.toHaveBeenCalled();
+        await button(surface, 'Cancel').trigger('click'); await flushPromises();
+        await mounted.wrapper.setProps({pool: {...pool, surcharges: [{id: '51', registrationId: '7', amount: '3.00', note: 'Saved adjustment',
+            subtractFromPool: true}]}});
+        await button(surface, 'Remove').trigger('click'); await flushPromises();
+        await button(surface, 'Remove adjustment').trigger('click'); await flushPromises();
+        await button(surface, 'Cancel').trigger('click'); await flushPromises();
+        expect(button(surface, 'Remove').attributes('disabled')).toBeDefined();
+        expect(button(surface, 'Add surcharge or rebate').attributes('disabled')).toBeDefined();
+        await button(surface, 'Remove').trigger('click'); await flushPromises();
+        expect(mounted.request).toHaveBeenCalledOnce();
+        await button(surface, 'Refresh').trigger('click'); await flushPromises();
+        expect(mounted.request).toHaveBeenCalledOnce();
+        expect(button(surface, 'Remove').attributes('disabled')).toBeUndefined();
+    });
+
     it('protects one held inspection of an uncertain removal before allowing another Refresh or Close', async () => {
-        vi.stubGlobal('confirm', vi.fn(() => true));
         let finishRead!: () => void;
         const refresh = vi.fn(() => new Promise<void>(resolve => { finishRead = resolve; }));
         const mounted = await mountFrontendEvent(FinanceAdjustments, async request => {
@@ -242,6 +369,7 @@ describe('P8 independently saved allocation inputs', () => {
         await surface.get('input[id$="-note"]').setValue('Independent unfinished addition');
         await button(surface, 'Remove').trigger('click');
         await flushPromises();
+        await button(surface, 'Remove adjustment').trigger('click'); await flushPromises();
         expect(mounted.request).toHaveBeenCalledOnce();
         const inspection = button(surface, 'Refresh');
         await inspection.trigger('click');
@@ -253,9 +381,10 @@ describe('P8 independently saved allocation inputs', () => {
             expect(refresh).toHaveBeenCalledOnce();
             expect(inspection.attributes('aria-busy')).toBe('true');
             expect(inspection.attributes('disabled')).toBeDefined();
-            expect(button(surface, 'Close').attributes('disabled')).toBeDefined();
+            const close = surface.get('.modal-header button[aria-label="Close"]');
+            expect(close.attributes('disabled')).toBeDefined();
             await inspection.trigger('click');
-            await button(surface, 'Close').trigger('click');
+            await close.trigger('click');
             await flushPromises();
             expect(refresh).toHaveBeenCalledOnce();
             expect(mounted.wrapper.emitted('close')).toBeUndefined();

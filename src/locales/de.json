@@ -237,6 +237,7 @@
         "remove": "Entfernen",
         "removeFor": "{{kind}} für {{name}} entfernen",
         "removeThisSavedAdjustment": "Diese gespeicherte Anpassung entfernen?",
+        "removeAdjustment": "Anpassung entfernen",
         "reviewedAdjustments": "Ich habe die gespeicherten Anpassungen geprüft",
         "roundBaseSharesUp": "Grundanteile aufrunden",
         "saveChanges": "Änderungen speichern",
@@ -456,6 +457,7 @@
         "reason": "Grund:",
         "recalculationRequired": "Neuberechnung erforderlich",
         "recalculationRequired2": "Neuberechnung erforderlich.",
+        "recalculationRequiredTheseAmountsAndCalculationInputsAreFrom": "Neuberechnung erforderlich. Diese Beträge und Berechnungsgrundlagen stammen aus der gespeicherten Berechnung.",
         "recalculationRequiredTheseAreThePreviousCalculatedAmountsYou": "Neuberechnung erforderlich. Dies sind die bisher berechneten Beträge. Du kannst den Ausgleich weiterhin erfassen; bei der Neuberechnung werden diese Zahlungen und Erstattungen auf die aktualisierten Anteile angerechnet.",
         "savedChangesHaveNotBeenAppliedToTheShares": " Gespeicherte Änderungen wurden noch nicht auf die Anteile angewendet. Prüfe die aktualisierten Beträge vor der Neuberechnung in der Vorschau oder setze die Pooländerungen zurück. Zahlungen können weiterhin für die bisherigen Anteile erfasst werden.",
         "recordPayment": "Zahlung erfassen",
@@ -549,6 +551,7 @@
         "reviewedHistory": "Ich habe den Rechnungsverlauf geprüft"
       },
       "activity": {
+        "eventRegistrationRequired": "Du musst für die Veranstaltung angemeldet sein, um auf diese Ressource zuzugreifen",
         "rulesDescription": "Lege Anforderungen für diesen Plan fest, prüfe die persönliche Abdeckung und erstelle Zuweisungsvorschläge.",
         "requirements": {
           "stepOne": "Schritt 1",

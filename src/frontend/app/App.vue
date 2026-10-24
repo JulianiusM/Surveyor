@@ -128,6 +128,24 @@ function dismissPersonalLink(): void {
 <template>
     <div class="pilot-app d-flex flex-column min-vh-100 bg-secondary">
         <AppHeader @locale-error="localeError = true" @locale-recovered="localeError = false" />
+        <!-- SSR and hydration own this same notice directly below navigation.
+             The independent monitor selects its visibility through root startup
+             attributes; neither it nor the entry replaces Vue-owned markup. -->
+        <section id="surveyor-pilot-javascript-required" class="container-fluid py-3">
+            <div id="surveyor-pilot-startup-recovery" class="alert alert-warning" role="alert">
+                <p>{{ messages.t('state.javascriptRequired') }}</p>
+                <p data-pilot-startup-failure>{{ messages.t('state.startupFailed') }}</p>
+                <div class="pilot-action-row">
+                    <a class="btn btn-outline-light" :href="`/frontend-pilot/help?locale=${context.locale.value}`">{{ messages.t('app.help') }}</a>
+                    <!-- Entry exposes this existing node only after attaching its
+                         deliberately guarded reload callback. Without that module
+                         the notice keeps functional Help navigation alone. -->
+                    <button type="button" class="btn btn-outline-light" data-pilot-startup-reload>
+                        <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>{{ messages.t('state.refreshPage') }}
+                    </button>
+                </div>
+            </div>
+        </section>
         <main id="pilot-main" class="container-fluid flex-grow-1 py-3" tabindex="-1"
             :data-pilot-interactive="interactiveContent ? '' : undefined">
             <!-- The shared sticky host reserves space for visible results at its

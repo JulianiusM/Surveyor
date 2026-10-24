@@ -196,7 +196,7 @@ function hiddenHref(collection: string): string {
                                 @counts="(source, scope) => updateCounts(collection, 'main', source, scope)"
                             >
                                 <template #header="{refreshAction, refresh}">
-                                    <h2 class="accordion-header d-flex align-items-center">
+                                    <h2 class="accordion-header pilot-accordion-heading d-flex align-items-center">
                                         <AppAccordionButton
                                             :expanded="open[collection]"
                                             :controls="'overview-' + collection"

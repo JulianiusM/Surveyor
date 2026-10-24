@@ -19,49 +19,49 @@ function escapeHtml(value: string): string {
     return value.replace(/[&<>"']/g, function replaceCharacter(character) {return entities[character]!;});
 }
 
-/** Keep JavaScript failure visible independently of the module that initializes
- * Vue. The safe default also survives disabled scripts or a blocked inline monitor;
- * ordinary Help content/navigation remains available beside this notice. */
-function javascriptInitializationNotice(locale: string): string {
-    const messages = createTranslator(locale);
-    const helpUrl = `/frontend-pilot/help?locale=${encodeURIComponent(locale)}`;
-    // A definite failure hides the initial skeleton or partially mounted
-    // interactive content. Static Help, GET search and real links stay available.
-    return `<style>#surveyor-pilot-javascript-required:not([hidden]) ~ #surveyor-pilot #pilot-main[data-pilot-interactive] > :not(.pilot-page-notices){display:none!important}</style>
-<section id="surveyor-pilot-javascript-required" class="container-fluid py-3">
-<div class="alert alert-warning" role="alert"><p>${escapeHtml(messages.t('state.javascriptRequired'))}</p>
-<p data-pilot-startup-failure hidden>${escapeHtml(messages.t('state.startupFailed'))}</p>
-<a class="btn btn-outline-light" href="${helpUrl}">${escapeHtml(messages.t('app.help'))}</a></div></section>`;
+/** Keep startup presentation independent of module/CSS delivery. App.vue owns
+ * the same escaped notice markup in SSR and hydration; only root startup markers
+ * select visibility, so the monitor never races Vue's attribute reconciliation. */
+function javascriptInitializationStyles(): string {
+    // The default remains safe without either script. Observed startup may show
+    // skeletons while waiting, but definite failure hides dead interactive content.
+    // Static Help, GET search and real links retain their existing fallback.
+    return `<style>
+#surveyor-pilot[data-pilot-hydrated="true"] #surveyor-pilot-javascript-required,
+#surveyor-pilot[data-pilot-startup-observed="true"]:not([data-pilot-startup-failed="true"]) #surveyor-pilot-javascript-required,
+#surveyor-pilot:not([data-pilot-startup-failed="true"]) [data-pilot-startup-failure],
+#surveyor-pilot:not([data-pilot-startup-recovery-ready="true"]) [data-pilot-startup-reload]{display:none}
+#surveyor-pilot:not([data-pilot-hydrated="true"]):not([data-pilot-startup-observed="true"]) #pilot-main[data-pilot-interactive] > :not(.pilot-page-notices),
+#surveyor-pilot:not([data-pilot-hydrated="true"])[data-pilot-startup-failed="true"] #pilot-main[data-pilot-interactive] > :not(.pilot-page-notices){display:none!important}
+</style>`;
 }
 
 /** This deliberately independent classic script has no imports, authority, form
  * reads, storage or reload behavior. It observes the entry owner's success/failure
  * marker and bounded module delivery; recovery consent remains with that owner. */
 function javascriptInitializationMonitor(): string {
-    // Execute beside the rendered notice before loading the module entry. Hide the
-    // safe default only once this monitor has actually begun observing startup.
+    // Mark the root only after the independent monitor begins observing startup.
+    // The shell's same-tree notice remains default-safe without this script.
     return `<script>(function monitorPilotStartup() {
     var container = document.getElementById('surveyor-pilot');
-    var notice = document.getElementById('surveyor-pilot-javascript-required');
-    if (!container || !notice) return;
+    if (!container) return;
     var timeout;
     var observer = new MutationObserver(observeInitialization);
 
     function showInitializationFailure() {
         if (container.getAttribute('data-pilot-hydrated') === 'true') return;
-        notice.hidden = false;
-        notice.querySelector('[data-pilot-startup-failure]').hidden = false;
+        if (container.getAttribute('data-pilot-startup-failed') !== 'true') {
+            container.setAttribute('data-pilot-startup-failed', 'true');
+        }
     }
 
     function observeInitialization() {
         if (container.getAttribute('data-pilot-hydrated') === 'true') {
             clearTimeout(timeout);
-            notice.hidden = true;
             observer.disconnect();
             window.removeEventListener('error', failedEntryModule, true);
         } else if (container.getAttribute('data-pilot-startup-failed') === 'true') {
             clearTimeout(timeout);
-            showInitializationFailure();
         }
     }
 
@@ -72,7 +72,7 @@ function javascriptInitializationMonitor(): string {
         }
     }
 
-    notice.hidden = true;
+    container.setAttribute('data-pilot-startup-observed', 'true');
     observer.observe(container, {attributes: true, attributeFilter: ['data-pilot-hydrated', 'data-pilot-startup-failed']});
     window.addEventListener('error', failedEntryModule, true);
     timeout = window.setTimeout(showInitializationFailure, 15000);
@@ -142,9 +142,9 @@ export async function prepareFrontendPilot(res: Response, url: string, bootstrap
 <title>${title}</title>${landingMetadata}<link rel="icon" href="/img/favicon-32x32.png">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">`;
-    // All shells contain JS-only enhancements, including otherwise static Help.
-    // Keep the notice outside Vue's hydration tree and its default safe without JS.
-    const body = `${javascriptInitializationNotice(locale)}<div id="surveyor-pilot">${rendered.html}</div>
+    // The shell owns notice markup directly beneath its header. Independent
+    // fallback styles/monitor observe the outer root without inserting Vue children.
+    const body = `${javascriptInitializationStyles()}<div id="surveyor-pilot">${rendered.html}</div>
 <script id="surveyor-pilot-state" type="application/json">${rendered.state}</script>${javascriptInitializationMonitor()}`;
     // Express owns static assets, help content, and all rendered navigation. Vite must
     // see only its source assets: transforming the SSR tree would prefix /app onto

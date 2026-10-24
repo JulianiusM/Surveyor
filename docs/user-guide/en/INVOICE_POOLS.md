@@ -6,8 +6,8 @@ owner: event invoice-pool maintainers
 status: current
 last-verified: 2026-10-24
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: October24 native-parity restorations for organizer entry, invoice disclosure, inline review fields, final action labels and expense submission source-reconciled against current captured views. Earlier independent-save, calculation, settlement and saved-read recovery guidance retained.
-current-task-sources: src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinanceCalculationReview.vue; src/frontend/features/finance/FinancePoolOutputs.vue; src/frontend/features/finance/FinanceSettlement.vue; src/frontend/features/finance/FinanceShares.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/frontend/features/finance/FinanceInvoiceRow.vue; src/frontend/features/finance/invoiceReview.ts; src/locales/en.json
+verification-scope: October24 native-parity restorations for organizer entry, invoice disclosure, inline review fields, final action labels and expense submission; further review restores application confirmation dialogs for participant submission access and saved adjustment removal. Earlier independent-save, calculation, settlement and saved-read recovery guidance retained.
+current-task-sources: src/frontend/features/finance/FinancePoolActions.vue; src/frontend/components/AppDialog.vue; src/types/FrontendFinanceReviewTypes.d.ts; src/frontend/features/finance/FinanceSection.vue; src/frontend/features/finance/FinanceCalculationReview.vue; src/frontend/features/finance/FinancePoolOutputs.vue; src/frontend/features/finance/FinanceSettlement.vue; src/frontend/features/finance/FinanceShares.vue; src/frontend/features/finance/FinancePoolEditor.vue; src/frontend/features/finance/FinanceAssignments.vue; src/frontend/features/finance/FinanceAdjustments.vue; src/frontend/features/finance/FinanceTakeovers.vue; src/frontend/features/finance/FinanceOrganizerInvoice.vue; src/frontend/features/finance/FinanceInvoiceReview.vue; src/frontend/features/finance/FinanceInvoiceRow.vue; src/frontend/features/finance/invoiceReview.ts; src/locales/en.json
 source-anchors: tests/e2e/invoice-organizer-expenses.spec.ts; tests/integration/organizer-invoices.spec.ts; tests/frontend/invoice-organizer-attribution.spec.ts; src/modules/invoice/settlements.ts; src/modules/invoice/coverage.ts; src/migrations/1790985600000-AddInvoicePoolOrganizerOnlyState.ts; src/modules/invoice/takeovers.ts; tests/unit/invoice-presentation.spec.ts; src/modules/invoice/wording.ts; src/modules/invoice/locales/en.ts; src/modules/invoice/calculation.ts; src/modules/invoice/poolOperations.ts; src/modules/invoice/invoiceOperations.ts; src/modules/invoice/notifications.ts; src/modules/invoice/requests.ts; src/modules/invoice/proofs.ts; src/modules/invoice/exports.ts; src/modules/invoice/presentation.ts; src/types/InvoicePoolTypes.d.ts; src/types/EmailTypes.d.ts; src/migrations/1789689600000-AddInvoiceRetraction.ts; src/migrations/1789603200000-AddOrganizerInvoices.ts; src/modules/email.ts; src/public/js/shared/alerts.ts; src/public/js/notifications.ts; src/routes/event.ts; src/modules/lib/pdf.ts; src/migrations/1789516800000-AddInvoiceShareRounding.ts; src/modules/invoice/settlementEmail.ts; src/migrations/1789430400000-AddInvoiceSettlementSnapshots.ts; src/modules/invoice/distribution.ts; src/public/js/modules/invoice-submission.ts; src/migrations/1789344000000-AddInvoicePoolFactors.ts; src/routes/api/eventInvoices.ts; src/controller/eventPoolController.ts; src/modules/database/services/EventInvoiceService.ts; src/modules/database/entities/event/EventInvoice.ts; src/modules/database/entities/event/EventInvoicePool.ts; src/modules/database/entities/event/EventInvoiceShare.ts; src/modules/database/entities/event/EventInvoiceSurcharge.ts; src/modules/database/entities/event/EventPoolAssignment.ts; src/modules/database/entities/event/EventPoolTakeover.ts; src/views/modules/module_invoice_pool.pug; src/views/event/event-view.pug; src/views/event/event-dashboard.pug; src/public/js/events.ts; src/modules/invoice/retention.ts; src/modules/lib/fileCommons.ts; tests/integration/invoice-workflows.spec.ts; tests/frontend/ui-behaviors.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/finance/; src/locales/
 next-review: invoice-pool-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
@@ -307,14 +307,15 @@ Use these controls to change whether participants can submit invoices before the
 
 1. Open the uncalculated pool.
 2. Select **Close participant invoices**.
-3. Review and accept the browser's confirmation prompt.
+3. Under **Confirm invoice action**, check the pool name and select **Close participant invoices**.
 
 The pool shows **Organizer invoices only**. Participants can no longer submit invoices or edit takeovers; their
 existing invoice history remains available. Organizers can still add expenses, review invoices, change allocation
 inputs, and preview or calculate shares. This action keeps the existing costs and settings and does not calculate
 shares or record settlements.
 
-To allow participant submissions before calculation, select **Open participant invoices** and confirm. This also
+To allow participant submissions before calculation, select **Open participant invoices**, check the pool name under
+**Confirm invoice action**, and select **Open participant invoices** again. This also
 works for a pool created directly as **Organizer invoices only**. The pool becomes **Open for invoices**.
 Save or discard any open editing drafts first. If the pool changes while you review
 the action, reload and check its current state before trying again. Once **Close pool & calculate** has made the pool
@@ -443,7 +444,7 @@ The two adjustment modes behave differently:
 
 For example, split 100.00 equally between two participants with invoice credits disabled. A redistributed `-10.00` rebate for one participant makes the shared remainder 110.00: each base is 55.00, then the rebate leaves totals of 45.00 and 55.00. With redistribution cleared, the totals are 40.00 and 50.00. Factors affect the base split in either case; the fixed rebate is applied afterward.
 
-Use **Remove** on an incorrect adjustment and accept the browser's confirmation prompt, then add its replacement. Removing a saved adjustment keeps any unfinished new adjustment available. The note is shown in share details, so write it for the participant who will read the final calculation.
+Use **Remove** on an incorrect adjustment. Under **Confirm invoice action**, check the named participant and select **Remove adjustment**, then add its replacement. **Cancel** returns to the adjustment form. Removing a saved adjustment keeps any unfinished new adjustment available. The note is shown in share details, so write it for the participant who will read the final calculation.
 
 Adjustments can be added or removed after closure. Each saved change requires **Recalculate pool** before it affects the share rows. Review all adjustments before recalculating.
 

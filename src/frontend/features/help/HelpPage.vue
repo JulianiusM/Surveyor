@@ -155,7 +155,7 @@ function retainReadingSpace(): void {
         :style="{minHeight: retainedReadingHeight === undefined ? undefined : `${retainedReadingHeight}px`}">
         <div class="card-header d-flex justify-content-between align-items-center gap-2">
             <h1 class="card-title mb-0" :lang="contentLocale"><i class="bi bi-question-circle me-2" aria-hidden="true"></i>{{ pageTitle }}</h1>
-            <div class="d-flex align-items-center gap-2">
+            <div class="pilot-action-row">
                 <RouterLink :to="helpRoute('/help')" class="btn btn-sm btn-outline-light">
                     <i class="bi bi-house me-1" aria-hidden="true"></i>{{ messages.t('help.home') }}
                 </RouterLink>

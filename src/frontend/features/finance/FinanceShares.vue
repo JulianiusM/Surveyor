@@ -106,16 +106,20 @@ function statusLabel(status: string): string {
 </script>
 
 <template>
+    <!-- Personal shares retain the native heading outside the ledger border.
+         Organizer exports and payer count remain associated with their table. -->
+    <h6 v-if="shares.length && !admin" class="mt-3">{{ messages.t('finance.yourPoolShares') }}</h6>
     <section
         v-if="shares.length"
-        class="share-ledger border border-secondary-subtle rounded-3 p-3 mt-3"
+        class="share-ledger border border-secondary-subtle rounded-3 p-3"
+        :class="{'mt-3': admin}"
         data-finance-shares
     >
         <!-- The parent supplies only admitted actions for these saved rows;
              this shared heading owns their responsive association with the ledger. -->
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3" data-finance-shares-heading>
+        <div v-if="admin" class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3" data-finance-shares-heading>
             <h3 class="fs-6 mb-0">
-                {{ messages.t(admin ? 'finance.calculatedShares' : 'finance.yourPoolShares') }}
+                {{ messages.t('finance.calculatedShares') }}
                 <span v-if="admin" class="badge bg-secondary ms-2" data-finance-payer-count>{{ messages.t('finance.payersCount', {count: shares.length}) }}</span>
             </h3>
             <div v-if="$slots.actions" class="pilot-action-row"><slot name="actions" /></div>

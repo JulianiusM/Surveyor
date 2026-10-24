@@ -2661,6 +2661,336 @@ implementation_defects:
       the existing blank question amount; neither source invoice values nor financial commands are changed.
     closes_when:
       - A separately authorized correction establishes and verifies the intended confirmation amount.
+  - id: IMP-111
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Long-title Event desktop/tablet/phone pairs retain balanced titles and reachable
+      actions.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Event administration forces Settings and Refresh onto a separate desktop row
+    evidence: The maintainer rejects the long-header layout. EventPage passes separateActions for every admin view;
+      PageHeading assigns its action cluster to row two regardless of available width. No explicit fixed-row design
+      decision supports that implementation choice.
+    authorization: The direct regression correction requests a usable long-title header with its actions together.
+    disposition: Correct the existing shared heading and matching loading geometry without changing feature actions.
+    closes_when:
+      - Fresh long-title desktop and tablet views retain readable titles and reachable nonoverlapping actions.
+  - id: IMP-112
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Actual shared callers retain labelled normal mobile Refresh, independent read admission
+      and pending state.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Shared mobile Refresh remains a small appendage and standalone headers omit normal action rows
+    evidence: RefreshButton always uses btn-sm and normally omits its visible label. Header wrappers do not adopt
+      ordinary phone action rows; standalone profile Refresh remains centered at its small intrinsic width.
+    authorization: The maintainer explicitly requires Refresh to follow the same mobile rules as other buttons.
+    disposition: Reuse ActionButton and existing read admission with proper mobile size, label and action-row layout.
+    closes_when:
+      - Every actual shared caller is visually checked in both languages, including standalone and pending states.
+  - id: IMP-113
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Open/closed Overview and participant Finance retain continuous header boundaries and
+      independent controls.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Accordion styling ends at the toggle before its sibling Refresh button
+    evidence: Overview and participant Finance paint the active accordion background and boundary on the toggle
+      while the separately composed Refresh appears outside that visual header.
+    authorization: The maintainer directly identifies the broken accordion appearance and requests correction.
+    disposition: Share one complete heading presentation while keeping disclosure and Refresh as independent buttons.
+    closes_when:
+      - Open and closed desktop/phone accordions have continuous boundaries and independent single-dispatch actions.
+  - id: IMP-114
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Disabled, blocked, delayed and failed startup views retain usable static Help without
+      dead Refresh.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Static JavaScript-disabled Help exposes a dead compact Refresh control
+    evidence: Fresh no-JavaScript Help shows the disabled shared icon Refresh without an implemented HTML read
+      action. Its position and appearance conflict with normal controls and the approved no-dead-controls fallback.
+    authorization: The maintainer explicitly requests correction of fallback Refresh placement and conventions.
+    disposition: Present unsupported enhancements only after their existing initialization admission; retain real
+      static navigation and GET search without inventing a second fallback operation.
+    closes_when:
+      - Disabled, blocked, delayed and failed script views preserve usable static controls and no visible dead Refresh.
+  - id: IMP-115
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Actual startup states place the single notice below navigation and preserve deliberate
+      recovery.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: JavaScript-required and startup-failure notices appear above the application header
+    evidence: The renderer prepends its independent notice before the entire Vue container; client recovery can
+      create the same placement. Fresh disabled/blocked-script views visibly push navigation below the notice.
+    authorization: The maintainer specifically requires the JavaScript notice below the header.
+    disposition: Keep one shared shell presentation below navigation and independent failure detection, preserving
+      safe defaults, identical hydration markup and the existing draft-aware deliberate reload owner.
+    closes_when:
+      - Real disabled, failed, delayed and monitor-blocked startup views show correct ordering and recovery behavior.
+  - id: IMP-116
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: English and German desktop/phone menu widths fit their labels; English returns to the
+      native minimum.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: German-menu usability correction gives ordinary English profile menus an excessive minimum width
+    evidence: Fresh desktop comparison measures native English menu160px and Vue224px. The shared nav selector
+      forces a14rem floor for every language instead of letting actual labels determine necessary expansion.
+    authorization: The maintainer rejects this English regression while retaining the earlier usable German menus.
+    disposition: Restore the normal desktop minimum and natural translated sizing with normal mobile containment;
+      review both languages, keyboard access, long names and every matching navigation disclosure.
+    closes_when:
+      - Fresh English and German desktop/phone menus fit their actual content without clipping or oversized empty width.
+  - id: IMP-117
+    status: open
+    discovered_on: 2026-10-24
+    severity: high
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Reported repeated application hangs lack a reproduced root cause and correction evidence
+    evidence: The maintainer reports that the app repeatedly becomes unresponsive. Initial bounded built-app loads
+      and interactions do not reproduce a hang; that negative sample does not disprove the reported regression.
+    authorization: The direct request includes responsiveness-regression diagnosis and correction within existing
+      frontend owners; it does not authorize backend business or database redesign.
+    disposition: Profile ordinary and error-recovery interactions, warm navigation and the actual development path;
+      retain raw failures and identify the responsible owner before selecting a remedy.
+    closes_when:
+      - A reproduced cause is corrected and independently verified, or an explicit evidence limitation remains open.
+  - id: IMP-118
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Personal and organizer ledger pairs retain their audience-specific heading and border
+      placement.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Personal pool-share heading is inside the Vue ledger border instead of above it
+    evidence: Fresh native and Vue finance-guest phone tile04 places Your pool shares above the native bordered
+      ledger but inside the Vue border with an additional inset. Native participantShareSummary and FinanceShares
+      confirm the differing template structure; no specific placement exception was found in the approved design.
+    authorization: The current direct request authorizes correcting related visual parity defects within existing
+      frontend owners. Root and an independent nonauthor reviewed the bounded presentation-only remedy before editing.
+    disposition: Restore the personal heading above the existing ledger border while retaining organizer headings,
+      keyed rows, saved projections, filters, feedback, footer and their existing operation owners.
+    closes_when:
+      - Fresh personal and organizer ledger views confirm the corrected boundary and no related regression.
+  - id: IMP-119
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Withdrawn misclassification; approved balanced centering is restored and verified across
+      ordinary and administration views. No end-alignment fix or new design exception is accepted.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Ordinary entity headings without parent navigation or Settings are centered instead of following native alignment
+    evidence: Fresh guest and alternate-profile Event desktop views show the native heading at the end of the
+      header but Vue centers it. The ordinary native entityHeader emits no Settings placeholder; Event administration
+      separately uses a centered dashboard heading, including limited administrators without Settings.
+    authorization: The current direct request authorizes restoring analogous visual parity. Root and an independent
+      nonauthor reviewed an explicit presentation override preserving the administration intent before editing.
+    disposition: Restore ordinary desktop heading alignment from supplied presentation facts while preserving
+      centered administration and account headings and the existing phone layout. Derive no additional permissions.
+    closes_when:
+      - Ordinary and administration views with and without Settings confirm native alignment and unchanged actions.
+    review_correction: Final independent and root review on 2026-10-24 rejected the preceding classification and
+      proposed end alignment. The October23 correction plan explicitly requires balanced centered titles without
+      a Settings condition. The task-added end-alignment CSS/class, centerTitle contract/caller and corresponding
+      test expectation were removed to restore that approved choice. The preceding proposed disposition and
+      closes_when condition are historical agent interpretations, not maintainer approval or current requirements.
+      Final fresh centered-header verification passed; this finding closes as withdrawn, not repaired.
+      No new design exception is authorized.
+  - id: IMP-120
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Phone calculation totals stack with all values/actions retained; desktop composition
+      remains correct.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Calculation preview phone totals omit the native vertical summary layout
+    evidence: Fresh phone calculation views show two Vue metric columns where native stacks them. The existing
+      copied frontend Sass already supplies the native pool-preview-summary rule; the Vue row omits that class.
+    authorization: The current related-defect request authorizes adopting the existing native responsive rule;
+      root and an independent nonauthor reviewed the exact shared class adoption before editing.
+    disposition: Add the existing pool-preview-summary class to the existing calculation row without changing
+      totals, operations, feedback ownership or stylesheet rules.
+    closes_when:
+      - Fresh phone and desktop previews retain all amounts and actions with the matching responsive composition.
+  - id: IMP-121
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Actual EN/DE 576/600/767/768px standalone and accordion checks retain usable Refresh
+      rows.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Refresh remains a compact standalone icon between the phone and heading breakpoints
+    evidence: Actual 576px, 600px and 767px built profile views keep a 31px icon below the folded heading while
+      sibling profile actions use full rows. Refresh and its accordion row previously changed at 575.98px while
+      the owning heading folds through 767.98px. The corrected probe records actual innerWidth values.
+    authorization: The direct named mobile Refresh correction includes intermediate widths; root and an independent
+      nonauthor reviewed the narrow alignment of Refresh-containing layouts before editing.
+    disposition: Align Refresh label, normal metrics, containing action rows, accordion boundary and matching
+      skeleton bands with the existing heading breakpoint, preserving unrelated compact table/footer rules.
+    closes_when:
+      - EN and DE standalone and accordion cases pass actual 576px, 600px, 767px and 768px inspection.
+  - id: IMP-122
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Both application access gates match in EN/DE; Cancel, captured revisions and
+      pending/unknown guards pass.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Participant invoice-access confirmation uses a browser popup instead of the native application dialog
+    evidence: Eight fresh built native and Vue opening/cancellation probes confirm both access directions use
+      the native Confirm invoice action dialog but Vue calls window.confirm. Every business request was blocked;
+      opening and cancelling dispatched none.
+    authorization: The direct related visual-parity request authorizes restoring this existing confirmation
+      presentation while retaining captured revisions, command admission and recovery owners.
+    disposition: Adopt the shared application dialog with the same subject, question and explicit action label;
+      retain the existing command exactly once after deliberate confirmation and no command on cancellation.
+    closes_when:
+      - Both access directions match visually in EN and DE, with cancellation, captured revision and pending guards verified.
+  - id: IMP-123
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Removal gates match in EN/DE; live Cancel preserves exact draft nodes/values and sends
+      no command.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Saved adjustment removal uses a browser popup instead of the native application confirmation
+    evidence: Current Finance Help and the actual FinanceAdjustments removal handler use browser confirmation;
+      the native saved-adjustment handler opens the shared Confirm invoice action dialog with a labelled removal action.
+    authorization: The direct related visual-parity request includes this analogous confirmation presentation,
+      without authorizing adjustment writes during live visual capture or changing the additive draft owner.
+    disposition: Restore the shared application gate around the existing saved-row removal operation, retaining
+      the captured row ID, additive draft nodes, unknown outcome and no-replay guards. Correct existing Help wording.
+    closes_when:
+      - Native and Vue removal gates match in EN and DE and Cancel preserves the exact additive draft without a request.
+  - id: IMP-124
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Actual EN/DE denied entries retain the native registration reason without protected
+      detail admission.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Activity registration-required denial loses the native visible reason because its catalog key is missing
+    evidence: New anonymous direct-arrival desktop and phone comparisons show native Event-registration wording
+      but Vue displays Unable to complete the request. readActivityResourceEntry already returns
+      activity.eventRegistrationRequired; both interface catalogs omit it, so the shared plain-message admission
+      guard falls back to the generic error. Packing and Drivers retain the corresponding localized reason.
+    authorization: The direct whole-interface parity and related-defect review includes restoring this visible
+      native reason through the already approved complete-localization boundary. Root and an independent
+      nonauthor reviewed the exact controller outcome, catalog guard and minimal remedy before implementation.
+    disposition: Add the existing Activity outcome's English and German messages and verify the mounted denied
+      entry without changing controller admission, HTTP status, private projections or operations.
+    closes_when:
+      - Fresh EN native/Vue denial pairs and DE Vue supplements retain the reason, with no protected detail read or subtree.
+  - id: IMP-125
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Expanded/collapsed organizer and personal breakdowns retain body Close with reachable
+      phone scrolling.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Saved share breakdown moves the native after-content Close into a pinned dialog footer
+    evidence: Final settled native and Vue phone captures show the native Close after calculation details while
+      Vue pins it to the screen bottom. Shared dialog mechanics, overflowing-row usability and separate phone rows
+      do not authorize relocating this fitting single action. The original premature skeleton capture is excluded.
+    authorization: The direct related visual-parity request covers this existing presentation difference; root and
+      independent nonauthors traced the exact native template, approved decisions and sole shared caller before editing.
+    disposition: Put the same Close button and handler after the body content using the existing responsive action
+      row, retaining the shared dialog, protected read, feedback and Close availability during loading or read failure.
+    closes_when:
+      - Fresh organizer and participant breakdowns match native placement, including expanded details and phone scrolling.
+  - id: IMP-126
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Actual native body-action contexts and true footers match; draft, pending and
+      unknown-recovery checks pass.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Finance edit and output actions move native body rows into pinned dialog footers
+    evidence: The related IMP125 review traces native Settings edit, Factors, Adjustments, organizer expense,
+      calculation preview, Notify and Rollback actions inside the modal body, while Vue uses pinned footers.
+      Native Create pool, Takeovers and invoice/settlement/removal confirmations use actual footers and are distinct.
+    authorization: The direct related parity request covers restoring these presentation positions; root and
+      independent nonauthors reviewed the native branches, accepted decisions and unchanged operation owners.
+    disposition: Reuse one AppDialog body-action presentation slot and the same existing caller controls, form
+      associations, drafts, pending/recovery state and handlers. Preserve genuine native footer branches.
+    closes_when:
+      - Fresh desktop and phone views verify body action placement, local scrolling and retained true footers.
+      - Existing draft, cancellation, unknown-outcome and pending-operation checks pass on the corrected owners.
+  - id: IMP-127
+    status: closed
+    closed_on: 2026-10-24
+    closure_evidence: Personal title and stale warning follow the fresh protected response in EN/DE; organizer
+      context and lazy GET ownership remain intact.
+      See the bounded repeated inspection in docs/frontend-migration/PILOT_PARITY_REVIEW.md.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-visual-regression-review
+    title: Personal saved-share breakdown omits native stale-calculation context and uses the organizer title
+    evidence: Real organizer/personal expanded and collapsed comparisons show the native personal title Your pool
+      shares and saved-calculation warning, while Vue uses the organizer pool title and omits that warning. The
+      existing protected Breakdown response already supplies needsRecalculation; organizer native omits the warning.
+    authorization: The direct related parity request covers restoring the existing audience-specific presentation;
+      root and independent nonauthors inspected native payloads, protected reads and complete-localization ownership.
+    disposition: Use the existing personal title and the freshly admitted Breakdown stale flag for its native warning
+      in both languages, retaining organizer presentation, row privacy, data reads, operations and backend sources.
+    closes_when:
+      - Mounted stale/current and organizer/personal cases follow the fresh protected response and issue only the existing GET.
+      - Actual desktop and phone personal breakdowns show matching context and preserve reachable expanded details and Close.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed

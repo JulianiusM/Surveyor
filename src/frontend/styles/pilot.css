@@ -18,9 +18,14 @@
 .pilot-nav-dropdown[open] > .dropdown-menu { display: block; }
 .pilot-nav-dropdown .dropdown-menu-end { right: 0; left: auto; }
 .pilot-app .dropdown-menu, .pilot-dialog .dropdown-menu { max-width: calc(100vw - 2rem); }
-/* Profile actions need their real translated width instead of Bootstrap's narrow
-   minimum. Long labels and user-authored names still wrap within the viewport. */
-.pilot-nav-dropdown > .dropdown-menu { width: max-content; min-width: min(14rem, calc(100vw - 2rem)); }
+/* Keep the native minimum for short menus; translated labels choose their own
+   intrinsic width within the viewport rather than imposing an English gap. */
+.pilot-nav-dropdown > .dropdown-menu { width: max-content; min-width: min(10rem, calc(100vw - 2rem)); }
+@media (max-width: 991.98px) {
+    /* Collapsed navigation uses Bootstrap's normal-flow full row, independently
+       of desktop end alignment or the intrinsic width of translated labels. */
+    .pilot-nav-dropdown > .dropdown-menu { width: auto; max-width: 100%; }
+}
 .pilot-app :is(.dropdown-item, .dropdown-item-text, .dropdown-header),
 .pilot-dialog :is(.dropdown-item, .dropdown-item-text, .dropdown-header) { white-space: normal; overflow-wrap: anywhere; }
 .pilot-app-header :is(.navbar-collapse, .navbar-nav, .nav-item, .nav-link) { min-width: 0; }
@@ -74,6 +79,14 @@
 .pilot-section-heading > * { min-width: 0; max-width: 100%; }
 .pilot-action-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; max-width: 100%; }
 .card-header > .pilot-action-row { justify-content: flex-end; margin-inline-start: auto; }
+/* A disclosure and its independent read action share one painted heading.
+   Refresh stays a sibling button and never changes the disclosure state. */
+.pilot-app .pilot-accordion-heading { margin: 0; background: var(--bs-accordion-btn-bg);
+    border-radius: var(--bs-accordion-border-radius);
+    border-bottom: var(--bs-accordion-border-width) solid var(--bs-accordion-border-color); }
+.pilot-app .pilot-accordion-heading:has(> .accordion-button:not(.collapsed)) { background: var(--bs-accordion-active-bg); }
+.pilot-app .pilot-accordion-heading > .accordion-button { flex: 1 1 auto; width: auto; min-width: 0;
+    background: transparent; border-bottom: 0; box-shadow: none; }
 /* Native's three/four choice columns give whole words their actual width.
    Very narrow screens contain labels within the available three tracks. */
 .pilot-choice-grid { display: grid; grid-template-columns: repeat(3, minmax(min-content, 1fr)); gap: .5rem; }
@@ -179,16 +192,13 @@
 .pilot-skeleton-animated { animation: pilot-skeleton-pulse 1.6s ease-in-out infinite; }
 .pilot-skeleton-shapes.card { gap: 0; }
 .pilot-skeleton-page-header .pilot-skeleton-heading { width: 60%; height: clamp(1.75rem, 4vw, 2.5rem); margin: 0 auto; }
-/* Compact entity/account headers keep their single desktop row. Event admin
-   follows its native full title plus action row, just like EventPage. This
+/* Entity and account headers share the same desktop title/action row. This
    geometry carries no record text or controls and grants no authority. */
 .pilot-skeleton-balanced-header { display: grid; grid-template-columns: minmax(0, 1fr) 2rem; align-items: center; gap: 1rem; padding: 1rem; }
 .pilot-skeleton-balanced-header > .pilot-skeleton-heading { grid-column: 1 / -1; grid-row: 1; width: 60%; justify-self: center; font-size: calc(1.375rem + 1.5vw); height: 1.2em; }
 .pilot-skeleton-balanced-header > .pilot-skeleton-header-actions { grid-column: 2; grid-row: 1; justify-self: end; width: 2rem; height: 1.9375rem; }
 /* Entity Settings uses the normal button height beside compact Refresh. */
 :is(.pilot-skeleton-list-detail, .pilot-skeleton-activity, .pilot-skeleton-survey, .pilot-skeleton-event, .pilot-skeleton-event-admin) .pilot-skeleton-header-actions { height: 2.375rem; }
-.pilot-skeleton-event-admin > .pilot-skeleton-balanced-header { grid-template-columns: minmax(0, 1fr); }
-.pilot-skeleton-event-admin .pilot-skeleton-header-actions { grid-column: 1; grid-row: 2; }
 @media (min-width: 1200px) {
     .pilot-skeleton-balanced-header > .pilot-skeleton-heading { font-size: 2.5rem; }
 }
@@ -231,7 +241,20 @@
 @media (max-width: 767.98px) {
     .pilot-skeleton-balanced-header { grid-template-columns: minmax(0, 1fr); }
     .pilot-skeleton-balanced-header > .pilot-skeleton-heading { grid-column: 1; }
-    .pilot-skeleton-balanced-header > .pilot-skeleton-header-actions { grid-column: 1; grid-row: 2; justify-self: center; }
+    .pilot-skeleton-balanced-header > .pilot-skeleton-header-actions { grid-column: 1; grid-row: 2; justify-self: stretch; width: 100%; height: 2.375rem; }
+    /* Refresh follows the shared heading fold through narrow tablet widths.
+       Other action rows and table controls retain their own phone breakpoint. */
+    .pilot-action-row:has(> .pilot-refresh-button) { width: 100%; align-items: stretch; flex-direction: column; }
+    .pilot-action-row:has(> .pilot-refresh-button) > .btn { width: 100%; margin-inline: 0 !important; }
+    /* The whole accordion heading includes its normal-width Refresh row.
+       Inset margins retain a gutter inside the continuous painted boundary. */
+    .pilot-app .pilot-accordion-heading { flex-direction: column; align-items: stretch !important; }
+    .pilot-app .pilot-accordion-heading > .accordion-button { width: 100%; }
+    .pilot-app .pilot-accordion-heading > .pilot-refresh-button { width: auto; align-self: stretch; margin: .5rem !important; }
+    /* Entity headings have Settings and Refresh as separate narrow actions.
+       Decorative bands mirror their geometry without presenting live controls. */
+    :is(.pilot-skeleton-list-detail, .pilot-skeleton-activity, .pilot-skeleton-survey, .pilot-skeleton-event, .pilot-skeleton-event-admin) .pilot-skeleton-header-actions {
+        height: 5.25rem; background: linear-gradient(to bottom, currentColor 0 2.375rem, transparent 2.375rem 2.875rem, currentColor 2.875rem 5.25rem); }
     .pilot-skeleton-summary { grid-template-columns: minmax(0, 1fr); }
     .pilot-skeleton-form-footer-two-thirds { width: 100%; }
     /* The participant roster alone folds email into the name column below md.
