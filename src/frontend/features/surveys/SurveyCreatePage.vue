@@ -16,7 +16,6 @@ import ActionButton from '../../components/ActionButton.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PageMessage from '../../components/PageMessage.vue';
-import StatusNotice from '../../components/StatusNotice.vue';
 import CreationAdmissionNotices from '../../components/CreationAdmissionNotices.vue';
 import FormField from '../../components/FormField.vue';
 import FileField from '../../components/FileField.vue';
@@ -49,7 +48,7 @@ const submission = useCreationCommand<components['schemas']['SurveyCreated']>({
     destination: result => '/frontend-pilot/survey/' + result.id,
     success: 'survey.created', unknownMessage: 'survey.leaveUnknown',
 });
-const {command, destination, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
+const {command, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
     submissionRetryAt, submissionRetryAction, retrySubmissionAdmission} = submission;
 watch([sourceId, context.epoch], resetCreation, {flush: 'sync'});
 watch([entry.data, sourceId], receiveCreation, {immediate: true});
@@ -131,15 +130,13 @@ function collectCreation() {
 </script>
 
 <template>
-    <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" />
+    <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'uncertain' : 'error'"
+        error-kind="danger" unknown-message="survey.creationUnknown" />
     <PageMessage v-if="entry.outcome.value?.kind === 'denied'" kind="error" :message="messages.t('common.notAllowed')"
         :renewal="entry.outcome.value" />
     <section v-else class="card bg-dark text-white mb-3">
         <h1 class="card-header text-center"><i class="bi bi-clipboard-plus-fill me-2" aria-hidden="true"></i>{{ messages.t('survey.create') }}</h1>
         <div class="card-body">
-            <CommandFeedback :feedback="command.feedback" part="uncertain" unknown-message="survey.creationUnknown" />
-            <StatusNotice v-if="destination.target.value" kind="success"
-                :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">{{ messages.t('state.saved') }}</StatusNotice>
             <CreationAdmissionNotices
                 :read="{error: entry.error.value, lastUpdatedAt: entry.admittedAt.value, retryAt,
                     action: entry.retryAction, stale: admitted}"
@@ -171,7 +168,7 @@ function collectCreation() {
                         </table>
                     </div>
                 </div>
-                <div class="d-flex justify-content-between align-items-center">
+                <div class="pilot-action-row justify-content-between">
                     <ActionButton id="addCombinationBtn" variant="outline-info" :disabled="blocked || !admitted" @click="addRow"><i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('survey.addCombination') }}</ActionButton>
                     <ActionButton type="submit" variant="success" :state="createAction"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>{{ messages.t('survey.create') }}</ActionButton>
                 </div>

@@ -262,17 +262,16 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
 
 <template>
     <PageMessage v-if="entryFailure" kind="error" :message="entryFailure" :read-error="pageAdmission.error.value"
-        :retry-at="entryRetryAt" :transient="pageAdmission.outcome.value?.kind === 'denied'">
-        <ActionButton v-if="pageAdmission.error.value" variant="outline-light" :state="pageAdmission.retryAction"
-            @click="pageAdmission.retry">{{ messages.t('common.retry') }}</ActionButton>
-    </PageMessage>
+        :retry-at="entryRetryAt" :transient="pageAdmission.outcome.value?.kind === 'denied'"
+        :action="pageAdmission.error.value ? {state: pageAdmission.retryAction, label: messages.t('common.retry')} : undefined"
+        @action="pageAdmission.retry" />
     <LoadingSkeleton v-else-if="pageAdmission.outcome.value?.kind !== 'render'" v-bind="route.meta.loadingSkeleton" page />
     <PageMessage v-else-if="denied" kind="error" :message="messages.t('common.notAllowed')"
-        :read-error="projection.error.value" :retry-at="retryAt" :transient="false">
+        :read-error="projection.error.value" :retry-at="retryAt" :transient="false"
+        :action="{state: resourceRecovery, label: messages.t('common.retry')}" @action="recover">
         <CommandFeedback :feedback="command.feedback" part="uncertain">
             <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
         </CommandFeedback>
-        <ActionButton variant="outline-light" :state="resourceRecovery" @click="recover">{{ messages.t('common.retry') }}</ActionButton>
     </PageMessage>
     <section v-else class="card bg-dark text-white mb-3">
         <PageHeading class="card-header" :title="title" :icon="mode === 'create' ? 'bi-person-plus-fill' : 'bi-archive-fill'">
@@ -296,15 +295,11 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
                 :action="{state: resourceRecovery, label: messages.t('common.refresh'), class: 'ms-2'}" @action="recover">
                 <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
             </CommandFeedback>
-            <StatusNotice v-if="completion.target.value" kind="success"
-                :action="{state: completion.retryAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="completion.retry">
-                {{ messages.t('state.saved') }}
-            </StatusNotice>
             <LoadingSkeleton v-if="!data && !projection.error.value" v-bind="route.meta.loadingSkeleton" />
             <template v-if="data">
                 <!-- The account roster is projected explicitly; each action adopts the existing switch command. -->
                 <ul v-if="mode === 'manage'" class="list-group">
-                    <li v-for="owned in profiles" :key="owned.id" class="list-group-item d-flex justify-content-between align-items-start">
+                    <li v-for="owned in profiles" :key="owned.id" class="list-group-item pilot-action-row justify-content-between align-items-start">
                         <span class="ms-2 me-auto my-auto">{{ owned.name }}</span>
                         <ActionButton variant="primary" :disabled="blocked" :pending="command.pending.value && switchTarget === owned.id" @click="switchProfile(owned.id)">
                             <i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i>{{ messages.t('profile.switchProfile') }}
@@ -314,7 +309,9 @@ function changeProfile(scope: PilotRequestScope): Promise<components['schemas'][
                 <template v-else>
                     <p class="lead text-center mb-4"><i class="bi bi-exclamation-diamond-fill me-1" aria-hidden="true"></i>{{ messages.t(mode === 'edit' ? 'profile.profileIntro' : 'profile.createIntro') }}</p>
                     <StatusNotice v-if="remoteChanged" kind="warning">{{ messages.t('profile.remoteChanged') }}
-                        <ActionButton class="ms-2" variant="outline-light" :disabled="blocked" @click="reloadProfile">{{ messages.t('profile.reloadSettings') }}</ActionButton>
+                        <template #actions>
+                            <ActionButton variant="outline-light" :disabled="blocked" @click="reloadProfile">{{ messages.t('profile.reloadSettings') }}</ActionButton>
+                        </template>
                     </StatusNotice>
                     <!-- Feature-owned text and checkbox values survive reads; confirmation releases both together. -->
                     <form class="row gy-3 justify-content-center" @submit.prevent="submit">

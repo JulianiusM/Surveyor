@@ -29,9 +29,48 @@ async function expectCompleteBallotContract(table: Locator, combinations: number
     })).toEqual(values);
 }
 
+/** Assert the corrected occurrence label and actual field before projecting its
+ * exact wording difference from the unchanged native monthly-week/day labels. */
+async function expectOccurrenceControl(surface: Locator, creation: boolean): Promise<void> {
+    const label = creation ? surface.getByRole('columnheader', {name: 'Occurrence in month', exact: true})
+        : surface.locator('label').filter({hasText: /^Occurrence in month:$/u});
+    const control = surface.getByRole('combobox', {name: 'Occurrence in month', exact: true});
+    await expect(label).toHaveCount(1);
+    await expect(control).toHaveCount(1);
+    await expect(control.locator('option')).toHaveText(creation ? ['1', '2', '3', '4', 'Last']
+        : ['Occurrence 1 in month', 'Occurrence 2 in month', 'Occurrence 3 in month', 'Occurrence 4 in month',
+            'Last (4th/5th) occurrence in month']);
+    expect(await control.locator('option').evaluateAll(options => options.map(option => (option as HTMLOptionElement).value)))
+        .toEqual(['1', '2', '3', '4', 'LAST']);
+    const labelBounds = (await label.boundingBox())!;
+    const controlBounds = (await control.boundingBox())!;
+    expect(labelBounds.width).toBeGreaterThan(0);
+    expect(controlBounds.y).toBeGreaterThanOrEqual(labelBounds.y + labelBounds.height - 1);
+    expect(await label.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+}
+
+/** Only these fixed English form labels/options intentionally differ from native.
+ * Raw screenshots/presentations stay untouched; values, constraints, other text,
+ * styling and geometry retain the existing comparator. */
+function projectOccurrenceLabels(presentation: Awaited<ReturnType<typeof readVisiblePresentation>>, creation: boolean):
+    Awaited<ReturnType<typeof readVisiblePresentation>> {
+    const wording = creation ? [['Occurrence in month', 'Week of month']]
+        : [['Occurrence in month:', 'Day in month:'],
+            ...['1', '2', '3', '4'].map(nth => [`Occurrence ${nth} in month`, `${nth}. day in month`]),
+            ['Last (4th/5th) occurrence in month', 'Last (4./5.) day in month']];
+    function nativeLabel(text: string): string {
+        for (const [current, original] of wording) text = text.replaceAll(current!, original!);
+        return text;
+    }
+    return {...presentation, content: {...presentation.content, text: nativeLabel(presentation.content.text),
+        elements: presentation.content.elements.map(element => ({...element, text: nativeLabel(element.text),
+            field: element.field?.options ? {...element.field,
+                options: element.field.options.map(option => ({...option, text: nativeLabel(option.text)}))} : element.field}))}};
+}
+
 /** The requested single-choice protection deliberately disables only the last
- * creation Remove action. Preserve raw captures and compare every other field,
- * label and style against native after asserting that exact state difference. */
+ * creation Remove action. Compare every remaining field, label and style after
+ * asserting that state and the exact approved occurrence wording separately. */
 function expectSurveyCreationPresentation(native: Awaited<ReturnType<typeof readVisiblePresentation>>,
     pilot: Awaited<ReturnType<typeof readVisiblePresentation>>): void {
     const nativeRemove = native.content.elements.filter(isRemove);
@@ -40,7 +79,8 @@ function expectSurveyCreationPresentation(native: Awaited<ReturnType<typeof read
     expect(pilotRemove).toHaveLength(1);
     expect(nativeRemove[0]!.field).toEqual({disabled: false});
     expect(pilotRemove[0]!.field).toEqual({disabled: true});
-    const compared = {...pilot, content: {...pilot.content, elements: pilot.content.elements.map(element =>
+    const wording = projectOccurrenceLabels(pilot, true);
+    const compared = {...wording, content: {...wording.content, elements: wording.content.elements.map(element =>
         isRemove(element) ? {...element, field: {...element.field!, disabled: false}} : element)}};
     expectVisiblePresentation(native, compared);
 
@@ -78,7 +118,10 @@ for (const width of [1280, 390]) {
             else await expect(creationRemove).toBeEnabled();
             const creation = await captureSurveyPresentation(page, info, `${label}-survey-create`, page.locator('#surveyForm'),
                 ['label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button']);
-            if (pilot) expectSurveyCreationPresentation(native.creation!, creation);
+            if (pilot) {
+                await expectOccurrenceControl(page.locator('#surveyForm'), true);
+                expectSurveyCreationPresentation(native.creation!, creation);
+            }
             else native.creation = creation;
             const creationCard = await captureSurveyPresentation(page, info, `${label}-survey-create-card`,
                 page.locator('main .card').first(), ['h1', 'label', 'input:not([type="hidden"])', 'textarea', 'select', 'th', 'td', 'button']);
@@ -111,9 +154,10 @@ for (const width of [1280, 390]) {
             const additionPresentation = await captureSurveyPresentation(page, info, `${label}-survey-add`, addition,
                 ['label', 'select', 'button']);
             if (pilot) {
+                await expectOccurrenceControl(addition, false);
                 expectVisiblePresentation(native.ballot!, ballotPresentation);
                 expectVisiblePresentation(native.results!, resultsPresentation);
-                expectVisiblePresentation(native.addition!, additionPresentation);
+                expectVisiblePresentation(native.addition!, projectOccurrenceLabels(additionPresentation, false));
             } else {
                 native.ballot = ballotPresentation;
                 native.results = resultsPresentation;

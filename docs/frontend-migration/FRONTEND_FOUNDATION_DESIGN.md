@@ -4,7 +4,7 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-23
+last-verified: 2026-10-24
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Direct interface requests and full-plan/Home correction recorded after original choices; compact permissions, shared diagnostics, native isolation, approval provenance and separate execution evidence preserved
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
@@ -1091,6 +1091,29 @@ local test schemas; no database-user/grant change, non-test-data reset or produc
 instruction. The earlier unrun-test receipts retain their historical scope and do not constrain this authorization.
 The maintainer also requests another review for missed defects and successful tests before readiness assessment.
 Actual targets, executed results, fixes and remaining evidence limits belong to the paired review.
+
+## Direct dropdown, feedback and contextual-language corrections (2026-10-24)
+
+The maintainer requests usable German profile menus, dropdowns above alerts, automatic closure after confirmed
+invoice-pool creation, clear reasons for rejected actions, one common action message, right-aligned responsive
+recovery controls, separate mobile action rows and context-correct translations. The same request explicitly asks
+for a whole-app review of analogous defects. These are corrections within the existing shared interface owners;
+they do not authorize business-rule changes, native frontend edits, database grants, cutover or deployment.
+
+Shared presentation must preserve the actual operation and read-recovery owners. Confirmed navigation publishes
+one result; successful delivery needs no Retry. A failed following read or navigation retains read-only recovery
+without replaying the confirmed write. Page/dialog movement keeps the same feedback receipt and expiry. Matching
+read failures are compared by actual error identity, so an independent failure cannot disappear merely because its
+message key or resource resembles another one. Unknown delivery retains both its safe reason and explicit review
+controls in the common message.
+
+Existing business errors may receive bounded stable cause metadata solely to preserve their contextual reason
+through versioned adapters. Native wording, status, data, validation, authorization, operation order, transactions
+and DBAL ownership remain unchanged. Structural diagnostics use generated field/rule/limit metadata and translate
+at display time; parser prose and submitted values remain private. Activity terminology in both languages describes general
+activities, including talks and group activities; Survey ordinals describe occurrences of a weekday. Runtime Help
+follows these visible labels within its existing reviewed language corpus. The paired review records actual
+adoption, independent semantic review and current test execution separately from earlier receipts.
 
 ## Cutover retirement inventory
 

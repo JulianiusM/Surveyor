@@ -54,7 +54,12 @@ function discard(): void {
  * share in place. Only confirmed creation releases these completed fields. */
 async function save(event: Event): Promise<void> {
     if (!action.isAvailable() || !(event.target as HTMLFormElement).reportValidity()) return;
-    if (Number(draft.amount) === 0) return;
+    // Zero is a valid native number-field value, but cannot create a surcharge
+    // or rebate. Explain the rejection through the common feedback owner.
+    if (Number(draft.amount) === 0) {
+        command.setError('finance.enterAPositiveSurchargeOrANegativeRebateAmount');
+        return;
+    }
     const input = {registrationId: draft.registrationId, amount: financeDecimal(draft.amount), note: draft.note, subtractFromPool: draft.subtractFromPool};
     inspected.value = false;
     // A new row has no safe replay identity. Unknown delivery needs an admitted
@@ -114,7 +119,7 @@ function close(): void {
                :pending="command.pending.value || command.recovering.value || removal.pending.value || removal.recovering.value" @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refresh">
-            <template #uncertain>
+            <template #uncertainActions>
                 <ActionButton v-if="inspected" variant="outline-warning"
                     :disabled="command.recoveryAction.disabled.value || removal.recoveryAction.disabled.value" @click="acknowledge">
                     {{ messages.t('finance.reviewedAdjustments') }}

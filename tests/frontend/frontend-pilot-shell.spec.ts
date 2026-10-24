@@ -412,7 +412,7 @@ describe('native shell and help presentation contract', () => {
         expect(vi.getTimerCount()).toBe(0);
     });
 
-    it('keeps uncertain outcomes durable and local when passive page confirmation expires', async function preserveUncertainOutcome() {
+    it('keeps uncertain outcomes durable in their explicitly selected host when passive confirmation expires', async function preserveUncertainOutcome() {
         vi.useFakeTimers();
         vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
         const page = document.createElement('main');
@@ -434,18 +434,57 @@ describe('native shell and help presentation contract', () => {
         try {
             await flushPromises();
             expect(target.querySelector('.alert')?.textContent).toBe('Confirmed action');
-            const unknown = wrapper.get('.status-notice');
-            expect(unknown.attributes('role')).toBe('status');
-            expect(unknown.find('.btn-close').exists()).toBe(false);
-            expect(target.contains(unknown.element)).toBe(false);
+            const unknown = target.querySelector<HTMLElement>('.status-notice')!;
+            expect(unknown.getAttribute('role')).toBe('status');
+            expect(unknown.querySelector('.btn-close')).toBeNull();
+            expect(unknown.classList.contains('pilot-notification')).toBe(true);
             await vi.advanceTimersByTimeAsync(20_000);
             await flushPromises();
             expect(target.querySelector('.alert')).toBeNull();
-            expect(wrapper.get('.status-notice').element).toBe(unknown.element);
+            expect(target.querySelector('.status-notice')).toBe(unknown);
             expect(document.activeElement).toBe(input);
             expect(focus).not.toHaveBeenCalled();
             expect(scroll).not.toHaveBeenCalled();
         } finally { wrapper.unmount(); page.remove(); }
+        expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('retains one feedback node and its original expiry when a confirmed dialog closes', async function preserveClosedDialogFeedback() {
+        vi.useFakeTimers();
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(visibleRects);
+        const context = createPilotContext({session}, true);
+        context.hydrated.value = true;
+        const target = document.createElement('div');
+        document.body.appendChild(target);
+        const open = ref(true);
+        const shown = ref(true);
+        const dismiss = vi.fn(() => { shown.value = false; });
+        const wrapper = mount(defineComponent({components: {AppDialog, StatusNotice},
+            setup: function bindPersistentDialogFeedback() { return {open, shown, dismiss}; },
+            template: '<AppDialog :open="open" title="Create pool"><input value="Pool draft">'
+                + '<template #feedback><StatusNotice v-if="shown" placement="notification" transient'
+                + ' kind="success" @dismiss="dismiss">Pool created</StatusNotice></template></AppDialog>',
+        }), {attachTo: document.body, global: {plugins: [[I18NextVue, {i18next: context.i18next}]],
+            provide: {[pilotContextKey as symbol]: context, [noticeTargetKey as symbol]: ref(target)}}});
+        try {
+            await flushPromises();
+            const alert = document.querySelector<HTMLElement>('[role="dialog"] [data-pilot-notices] .alert')!;
+            expect(alert?.textContent).toBe('Pool created');
+            expect(target.querySelector('.alert')).toBeNull();
+            await vi.advanceTimersByTimeAsync(4_000);
+            open.value = false;
+            await flushPromises();
+            expect(document.querySelector('[role="dialog"]')).toBeNull();
+            expect(target.querySelector('.alert')).toBe(alert);
+            await vi.advanceTimersByTimeAsync(5_999);
+            await flushPromises();
+            expect(target.querySelector('.alert')).toBe(alert);
+            expect(dismiss).not.toHaveBeenCalled();
+            await vi.advanceTimersByTimeAsync(1);
+            await flushPromises();
+            expect(target.querySelector('.alert')).toBeNull();
+            expect(dismiss).toHaveBeenCalledOnce();
+        } finally { wrapper.unmount(); context.start()(); target.remove(); }
         expect(vi.getTimerCount()).toBe(0);
     });
 
@@ -555,7 +594,8 @@ describe('native shell and help presentation contract', () => {
 
             const card = wrapper.get('.pilot-page-message');
             expect(card.get('h1').text()).toBe(context.messages.value.t('common.errorTitle'));
-            expect(card.get('.alert-danger').text()).toBe(context.messages.value.t('help.notFound'));
+            expect(card.get('.alert-danger .pilot-notice-body').text()).toBe(context.messages.value.t('help.notFound'));
+            expect(card.get('.alert-danger .pilot-notice-actions button').text()).toBe(context.messages.value.t('common.retry'));
             expect(card.get('a[href="/frontend-pilot"]').text()).toBe(context.messages.value.t('app.home'));
             expect(wrapper.find('.help-content').exists()).toBe(false);
             expect(document.title).toBe(`${context.messages.value.t('common.errorTitle')} | Surveyor`);
@@ -1068,11 +1108,17 @@ describe('native shell and help presentation contract', () => {
             dropdown.element.style.position = 'absolute';
             vi.spyOn(createMenu.get('summary').element, 'getBoundingClientRect')
                 .mockReturnValue(new DOMRect(60, window.innerHeight - 50, 80, 32));
-            vi.spyOn(dropdown.element, 'getBoundingClientRect').mockReturnValue(new DOMRect(60, 0, 288, 200));
+            vi.spyOn(dropdown.element, 'getBoundingClientRect').mockReturnValue(new DOMRect(-70, 0, 288, 200));
             await createMenu.get('summary').trigger('keydown', {key: 'ArrowDown'});
             expect((createMenu.element as HTMLDetailsElement).open).toBe(true);
             expect(dropdown.element.style.bottom).toBe('100%');
+            expect(dropdown.element.style.translate).toBe('86px 0');
             expect(document.activeElement).toBe(createMenu.get('a[href="/frontend-pilot/survey/create"]').element);
+            dropdown.element.style.position = 'static';
+            window.dispatchEvent(new Event('resize'));
+            await flushPromises();
+            expect(dropdown.element.style.translate).toBe('');
+            expect(dropdown.element.style.bottom).toBe('');
             await createMenu.trigger('keydown', {key: 'Escape'});
             expect((createMenu.element as HTMLDetailsElement).open).toBe(false);
             expect(document.activeElement).toBe(createMenu.get('summary').element);

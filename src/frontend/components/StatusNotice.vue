@@ -4,7 +4,8 @@ import type {MessageKey} from '../../types/LocalizationTypes';
 import type {PilotNoticeAction} from '../../types/FrontendFeedbackTypes';
 import {createTranslator, formatReadTime} from '../../modules/localization/translator';
 import {pilotContextKey, useClientInitialization, usePilot} from '../app/context';
-import {noticeTargetKey, readFailureMessage, useTransientNotice} from '../composables/feedback';
+import {isElementVisible, noticeTargetKey, readFailureMessage, useTransientNotice} from '../composables/feedback';
+import {useNoticePresentation} from '../composables/noticePresentation';
 import ActionButton from './ActionButton.vue';
 
 // Teleport has no DOM element for automatic fallthrough. Preserve the original
@@ -54,8 +55,8 @@ const initialized = useClientInitialization();
 // native flashes retain their no-context fallback without a second adapter.
 const messages = context ? usePilot().messages : computed(() => createTranslator('en'));
 const dismissLabel = computed(() => messages.value.t('common.dismissNotification'));
-const lastRefresh = computed(() => readTime(props.lastUpdatedAt, 'state.lastSuccessfulRefresh'));
-const retryDeadline = computed(() => readTime(props.retryAt, 'state.retryAvailableAt'));
+const lastRefresh = computed(() => readTime(props.lastUpdatedAt ?? readPresentation.value?.lastUpdatedAt(), 'state.lastSuccessfulRefresh'));
+const retryDeadline = computed(() => readTime(props.retryAt ?? readPresentation.value?.retryAt(), 'state.retryAvailableAt'));
 const readIssue = computed(() => readFailureMessage(messages.value, props.readError));
 
 /** One validated timestamp presentation serves successful reads and server cooldowns.
@@ -73,7 +74,20 @@ function readTime(timestamp: number | undefined, key: 'state.lastSuccessfulRefre
 // transient success; unknown outcomes and failed follow-up reads remain durable.
 const transientNotice = computed(() => props.transient || props.notice === 'state.saved');
 const noticeKind = computed(() => props.notice === 'state.saved' ? 'success' : props.kind);
-const notification = computed(() => props.placement !== 'content' && transientNotice.value);
+// Explicit notification placement selects the shared page/dialog host for every
+// command outcome. Durability still owns expiry and dismissal independently.
+const notification = computed(() => props.placement !== 'content');
+const dismissibleNotification = computed(() => notification.value && transientNotice.value);
+// A common command receipt can explain this same GET more accurately than its
+// ordinary stale warning. Match only live presentation and exact Error identity;
+// query state and every independent read/unknown outcome remain untouched.
+const {duplicate, readPresentation} = useNoticePresentation(context, {
+    readError: () => props.readError,
+    common: () => notification.value,
+    presented: () => element.value !== null && isElementVisible(element.value),
+    lastUpdatedAt: () => props.lastUpdatedAt,
+    retryAt: () => props.retryAt,
+});
 // The caller owns the message and clears it on dismissal. Never remove Vue's node
 // directly, and never expire a durable uncertainty/read/update warning by default.
 useTransientNotice(element, () => transientNotice.value, () => props.renewal ?? props.notice, expire);
@@ -93,25 +107,34 @@ function dismiss(): void {
          Ordinary durable/content notices keep display:contents at this boundary. -->
     <div class="pilot-notice-origin" :class="{'pilot-notice-region': placement === 'notification' && notification && !notificationTarget}">
         <Teleport :to="notificationTarget ?? 'body'" :disabled="!notification || placement === 'hosted' || !notificationTarget">
-            <div v-bind="$attrs" ref="element" :class="[transientNotice ? 'alert' : 'status-notice', `alert-${noticeKind}`, `mb-${noMargin ? 0 : marginBottom}`,
-                 {'pilot-notification': notification, 'alert-dismissible': notification, fade: notification, show: notification}]"
+            <div v-if="!duplicate" v-bind="$attrs" ref="element" :class="[transientNotice ? 'alert' : 'status-notice', `alert-${noticeKind}`, `mb-${noMargin ? 0 : marginBottom}`,
+                 {'pilot-notification': notification, 'alert-dismissible': dismissibleNotification,
+                     'pilot-notice-with-action': !!action || !!$slots.actions, fade: dismissibleNotification, show: dismissibleNotification}]"
                  :role="role === null ? undefined : role ?? (transientNotice || noticeKind === 'danger' ? 'alert' : 'status')">
-                <slot /><ActionButton v-if="action" :class="action.class ?? 'btn-sm ms-2'" variant="outline-light"
-                    :state="action.state" @click="emit('action', $event)">{{ action.label }}</ActionButton>
-                <div v-if="readIssue" class="mt-2" data-read-issue>{{ readIssue }}</div>
-                <!-- This is the last successful read, not the time of the failed retry.
-                     Its owner omits it after actor/resource changes or confirmed denial. -->
-                <div v-if="lastRefresh" class="small mt-2" data-last-successful-refresh>
-                    <time :datetime="lastRefresh.datetime">{{ lastRefresh.label }}</time>
+                <!-- Text and diagnostics share one flexible column. The action's
+                     own column cannot interrupt wrapping or squeeze a long label. -->
+                <div class="pilot-notice-body">
+                    <slot />
+                    <div v-if="readIssue" class="mt-2" data-read-issue>{{ readIssue }}</div>
+                    <!-- This is the last successful read, not the time of the failed retry.
+                         Its owner omits it after actor/resource changes or confirmed denial. -->
+                    <div v-if="lastRefresh" class="small mt-2" data-last-successful-refresh>
+                        <time :datetime="lastRefresh.datetime">{{ lastRefresh.label }}</time>
+                    </div>
+                    <!-- Availability and this deadline share the read owner's single cooldown.
+                         Its existing wakeup removes the timing line when retry becomes available. -->
+                    <div v-if="retryDeadline" class="small mt-2" data-read-retry-at>
+                        <time :datetime="retryDeadline.datetime">{{ retryDeadline.label }}</time>
+                    </div>
                 </div>
-                <!-- Availability and this deadline share the read owner's single cooldown.
-                     Its existing wakeup removes the timing line when retry becomes available. -->
-                <div v-if="retryDeadline" class="small mt-2" data-read-retry-at>
-                    <time :datetime="retryDeadline.datetime">{{ retryDeadline.label }}</time>
+                <div v-if="action || $slots.actions" class="pilot-notice-actions">
+                    <ActionButton v-if="action" :class="action.class ?? 'btn-sm'" variant="outline-light"
+                        :state="action.state" @click="emit('action', $event)">{{ action.label }}</ActionButton>
+                    <slot name="actions" />
                 </div>
                 <!-- Vue owns removal. Bootstrap's data-bs-dismiss would remove the node
                      independently and leave the reactive message/timer state behind. -->
-                <button v-if="notification" type="button" class="btn-close" :disabled="disabled || !initialized"
+                <button v-if="dismissibleNotification" type="button" class="btn-close" :disabled="disabled || !initialized"
                     :aria-label="dismissLabel" @click="dismiss"></button>
             </div>
         </Teleport>

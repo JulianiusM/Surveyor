@@ -3,6 +3,7 @@ import {computed, ref, watch} from 'vue';
 import {RouterLink, useRoute} from 'vue-router';
 import {usePilot} from '../app/context';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
+import type {PilotNoticeAction} from '../../types/FrontendFeedbackTypes';
 import StatusNotice from './StatusNotice.vue';
 
 const props = withDefaults(defineProps<{
@@ -17,10 +18,12 @@ const props = withDefaults(defineProps<{
     // the same notice owns their safe diagnostic and server retry deadline.
     retryAt?: number;
     readError?: Error | null;
+    action?: PilotNoticeAction;
     // Common document messages return Home to the landing page. Existing feature
     // outcomes retain their established Overview destination unless explicitly supplied.
     homeUrl?: string;
 }>(), {transient: true, displayMessage: true, homeUrl: '/frontend-pilot'});
+const emit = defineEmits<{action: [source: MouseEvent]}>();
 const {messages} = usePilot();
 const route = useRoute();
 const documentUrl = computed(() => frontendDocumentUrl(route.fullPath));
@@ -53,10 +56,10 @@ function dismissMessage(): void { messageVisible.value = false; }
         </h1>
         <div class="card-body">
             <StatusNotice v-if="displayMessage && messageVisible" :kind="kind === 'error' ? 'danger' : kind"
-                :retry-at="retryAt" :read-error="readError"
+                :retry-at="retryAt" :read-error="readError" :action="action" @action="emit('action', $event)"
                 :transient="transient" :renewal="messageReceipt" @dismiss="dismissMessage">{{ message }}</StatusNotice>
             <slot />
-            <div class="d-flex justify-content-center gap-3 mt-4">
+            <div class="pilot-action-row justify-content-center gap-3 mt-4">
                 <RouterLink class="btn btn-primary" :to="homeUrl">
                     <i class="bi bi-house-door-fill me-1" aria-hidden="true"></i>{{ messages.t('app.home') }}
                 </RouterLink>

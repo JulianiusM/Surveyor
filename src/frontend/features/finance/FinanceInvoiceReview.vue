@@ -165,10 +165,10 @@ function acknowledge(): void {
     <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t(title)" :pending="command.pending.value || command.recovering.value" standard @close="close">
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: recovery, label: messages.t('common.refresh')}" @action="inspectSaved">
-            <template #uncertain>
+            <template #uncertainActions>
                 <!-- Local acknowledgement stays blocked during a saved-data read
                      without borrowing that read action's spinner or focus. -->
-                <ActionButton v-if="inspected" variant="outline-warning" class="mt-2" :disabled="recovery.disabled.value" @click="acknowledge">{{ messages.t('draft.review') }}</ActionButton>
+                <ActionButton v-if="inspected" variant="outline-warning" :disabled="recovery.disabled.value" @click="acknowledge">{{ messages.t('draft.review') }}</ActionButton>
             </template>
         </CommandFeedback>
         <FinanceHistory v-if="inspected && command.uncertain.value" :invoices="currentInvoice ? [currentInvoice] : []" admin read-only disabled @refresh="inspectSaved" />

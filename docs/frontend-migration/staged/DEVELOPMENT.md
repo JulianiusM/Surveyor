@@ -1217,13 +1217,23 @@ Dispose timers/listeners and preserve page-cache restoration behavior.
 
 `CommandFeedback` presents the existing command owner's read-only error, notice and uncertainty refs across identity,
 Packing, Event, Drivers, Survey, Activity and Overview consumers. Features retain outcome wording, commands, drafts and recovery;
-the shared renderer chooses notification placement. `StatusNotice` uses `placement="notification"` only for transient
-receipts; durable review, validation and read failures remain contextual rather than disappearing on a timer.
+the shared renderer chooses notification placement. `StatusNotice` accepts `placement="notification"` for both
+transient results and durable action/recovery feedback. Only transient receipts expire or offer dismissal; durable
+conditions remain visible until their actual owner resolves them. Ordinary read warnings remain contextual when
+they do not belong to a common action receipt.
+A common read-failure receipt retains its caught Error identity. An application-context set of mounted presentation
+readers hides only an ordinary notice for that exact Error while the common notice is actually visible; missing
+or different errors and hidden common notices remain independent. The common notice borrows matching live
+freshness/deadline values without copying query state. Its guarded Retry delegates to the actual command owner's
+read lifetime and clears only the receipt/error renewal it recovered.
 Activity's registration hint and requirement-progress summary adopt that same renderer as persistent content;
 the progress summary adds no live role, dismissal or expiry to its existing informational presentation.
 `StatusNotice` receives an action label and optional existing action state, then emits the user's action. When state
 is omitted, its `ActionButton` still applies shared initialization and the caller's handler retains its own guards.
-The notice does not choose read eligibility or perform recovery. Their contracts live in
+The notice does not choose read eligibility or perform recovery. Text and actions occupy separate columns, with
+actions on the right and long text wrapping independently. Phone layouts place each action on its own full-width
+row. Use the shared `pilot-action-row` for ordinary page/form action groups; table answer controls, compact header
+icons and filters retain their own layouts. Their contracts live in
 `src/types/FrontendFeedbackTypes.d.ts`. Share repeated receipt/action presentation through these owners rather than
 copy their expiry, disabled state or dismissal wiring.
 
@@ -1238,6 +1248,9 @@ Use `StatusNotice`'s `no-margin` input for a zero-margin consumer; adding `mb-0`
 leaves conflicting owners and can retain the default spacing.
 Check feedback inside the actual page/dialog hosts, including initial hosted SSR receipts and injected descendant
 notifications. One renderer and scope host must retain each receipt rather than recreate it inside feature markup.
+`AppDialog` supplies a persistent `feedback` slot outside its disposable body. A confirmed close moves that same
+receipt to the inherited page host, preserving its original lifetime; rejected and uncertain operations retain
+their existing draft and review controls. Do not render parallel page/dialog copies of a command's feedback.
 Use a real long page to verify sticky placement and retained viewport context after an actual command; DOM-only
 focus/scroll spies cannot establish CSS containing-block behavior.
 

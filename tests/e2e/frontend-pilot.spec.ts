@@ -3,7 +3,8 @@ import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {writeFile} from 'node:fs/promises';
 import {createE2EActivityPlan, createE2EEvent, createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, projectCreationPermissionDisclosure, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, expectMobileOverviewActionRows, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E,
+    projectCreationPermissionDisclosure, projectNativeMobileOverviewActions, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createBrowserReadGate as readGate, waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import {readActivitySettingsForE2E} from '../keywords/frontendActivityE2EKeywords';
 import type {components} from '../../src/types/api/v1';
@@ -510,8 +511,11 @@ for (const width of [1280, 390]) {
                 if (pilot) await expect(owner).toHaveAttribute('aria-busy', 'false');
                 const current = await captureMatchedPresentation(page, info, `${pilot ? 'pilot' : 'native'}-overview-${state}`,
                     surface, state === 'populated' ? ['h4', 'p', '.badge', 'button', 'summary[role="button"]', 'a'] : []);
-                if (pilot) expectVisiblePresentation(original!, current);
-                else original = current;
+                if (pilot) {
+                    const expected = width === 390 && state === 'populated' ? projectNativeMobileOverviewActions(original!) : original!;
+                    expectVisiblePresentation(expected, current);
+                    if (width === 390 && state === 'populated') await expectMobileOverviewActionRows(surface);
+                } else original = current;
                 // The Vue Refresh control is outside the compared card and empty-state
                 // surfaces. Its visible exception needs an explicit decision; this
                 // scoped comparison cannot supply that approval.

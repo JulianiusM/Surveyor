@@ -20,7 +20,6 @@ import {useReadRetry, useReadRetryAt} from '../../composables/feedback';
 import {observePageNavigation} from '../../composables/pageNavigation';
 import {ApiFailure, isReadDenial, isTerminalReadFailure, ObsoleteRequestError} from '../../app/transport';
 import {overviewKeys} from '../../app/queryKeys';
-import {isPlainMessageKey} from '../../../modules/localization/translator';
 import {frontendOverviewPath} from '../../../modules/lib/frontendIdentity';
 import {observeQueryReads, refetchFreshQueries, refetchFreshQuery, retireQueryFamily, useQueryAdmission, useQueryInvalidation} from '../../app/queryCache';
 import ActionButton from '../../components/ActionButton.vue';
@@ -70,12 +69,6 @@ const router = useRouter();
 // Visible/hidden regions coexist, including across collections. Keep confirmed
 // delivery scoped to this logical region through any actor-driven remount.
 const destination = useConfirmedNavigation(props.collection + ':' + props.region);
-// A failed destination retains the feature's confirmed message in the same receipt.
-// Locale changes translate its identity without relabeling it as another card family.
-const destinationNotice = computed(() => {
-    const key = destination.notice.value?.messageKey;
-    return key ? messages.value.t(isPlainMessageKey(key) ? key : 'common.error') : null;
-});
 // Each collection/region retains its own navigation and command lifetime while
 // matching cards share the same migrated presentation and feature API owners.
 let readGeneration = 0;
@@ -687,14 +680,11 @@ function page(next: number): void {
          during background reads, which leave cards and focused controls mounted. -->
     <section ref="element" :id="regionId" class="js-overview-region" :data-collection="collection" :data-region="region"
         :aria-busy="!!displayed && (overview.isFetching.value || !!pendingRead)">
-        <StatusNotice v-if="destination.target.value" kind="success"
-            :retry-at="destination.retryAt.value"
-            :action="{state: destination.retryAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="destination.retry">
-            {{ destinationNotice }}
-        </StatusNotice>
         <!-- Lifecycle/visibility results use common notifications. Read
              failures and unknown outcomes retain this region's recovery surface. -->
         <CommandFeedback :feedback="command.feedback" :disabled="command.pending.value || command.recovering.value" />
+        <!-- The shared notice owner suppresses only the exact failed GET already
+             presented by common delivery recovery. Independent reads stay visible. -->
         <StatusNotice v-if="readError || failedRead" kind="warning" :last-updated-at="lastUpdatedAt" :retry-at="retryAt"
             :read-error="navigationError ?? readError"
             :action="{state: refreshAction, label: messages.t('common.retry'), class: 'ms-2'}" @action="refreshOverview">{{

@@ -196,13 +196,6 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                 :action="{state: titleRetryAction, label: messages.t('common.retry')}" @action="retryGuestTitle">{{
                 messages.t(guestEntry ? 'state.stale' : 'state.loadFailed')
             }}</StatusNotice>
-            <!-- A confirmed identity/mail result is never submitted again because a route
-                 chunk failed. Keep delivery Retry with this mounted form when it owns it. -->
-            <StatusNotice v-if="completion.target.value" kind="warning"
-                :action="{state: completion.retryAction, label: messages.t('common.retry'), class: 'ms-2'}"
-                @action="completion.retry">
-                {{ messages.t('state.loadFailed') }}
-            </StatusNotice>
             <CommandFeedback :feedback="command.feedback" part="uncertain"
                 :action="{state: command.recoveryAction, label: messages.t('common.refresh'), class: 'ms-2'}"
                 @action="refreshIdentityState">
@@ -221,7 +214,7 @@ function requestRecovery(scope: PilotRequestScope): Promise<components['schemas'
                     </li>
                 </ul>
             </div>
-            <div class="d-flex flex-wrap justify-content-center gap-2 mb-4">
+            <div class="pilot-action-row justify-content-center mb-4">
                 <RouterLink class="btn btn-primary d-inline-flex align-items-center gap-2" :to="{path: '/frontend-pilot/users/login', query: {next}}"
                     ><i class="bi bi-box-arrow-in-right" aria-hidden="true"></i
                     >{{ messages.t('auth.logIn') }}</RouterLink

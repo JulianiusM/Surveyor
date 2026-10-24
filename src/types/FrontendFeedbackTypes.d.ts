@@ -8,15 +8,6 @@ export interface PilotInputField {
     row?: {label: PilotPlainMessageKey; number: number; day?: string};
 }
 
-/** The generated schema owns these rules and their limits. Presentation only
- * retains enough metadata to explain a rejection across locale changes. */
-export interface PilotInputDiagnostic {
-    field: PilotInputField;
-    rule: string;
-    limit?: number;
-    type?: string;
-}
-
 /** A notice presents an existing operation's action without owning its admission or retry policy. */
 export interface PilotNoticeAction {
     /** Omitted when the existing action uses only shared initialization and its handler's guards. */
@@ -24,6 +15,23 @@ export interface PilotNoticeAction {
     label: string;
     /** Existing callers distinguish ordinary and compact notice buttons. */
     class?: string;
+}
+
+/** An existing error receipt may retain only the failed read's identity.
+ * The query remains the owner of its data, freshness and retry deadline. */
+export interface PilotReadFailureDescriptor {
+    messageKey: PilotPlainMessageKey;
+    readError: Error;
+}
+
+/** Mounted notice prop readers coordinate presentation only. They retain no
+ * query state, request lifetime, submitted values or recovery callback. */
+export interface PilotNoticePresentationSource {
+    readError(): Error | null | undefined;
+    common(): boolean;
+    presented(): boolean;
+    lastUpdatedAt(): number | undefined;
+    retryAt(): number | undefined;
 }
 
 /** Read-only presentation of the command owner's existing receipts and status.
@@ -38,6 +46,12 @@ export interface PilotCommandPresentation {
     transientNotice: Readonly<Ref<boolean>>;
     noticeRenewal: Readonly<Ref<unknown>>;
     uncertain: Readonly<Ref<boolean>>;
+    errorReadError: Readonly<Ref<Error | null>>;
+    noticeReadError: Readonly<Ref<Error | null>>;
+    /** Read recovery uses the same command owner and never repeats a write or
+     * acknowledges an uncertain creation. Ordinary feature actions remain explicit. */
+    readRecoveryAction: PilotActionState;
+    reconcileRead(): Promise<boolean>;
     dismissError(): void;
     dismissNotice(): void;
 }

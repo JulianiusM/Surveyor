@@ -2,7 +2,7 @@ import {expect, test, type Locator, type Route} from '@playwright/test';
 import type {components} from '../../src/types/api/v1';
 import {createTranslator} from '../../src/modules/localization/translator';
 import {closeModalForE2E, expectUsableFrontendLayout, expectVisiblePresentation, openModalForE2E,
-    readVisiblePresentation} from '../keywords/e2eCoreKeywords';
+    readControlContracts, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {createActivityOverlapForE2E, expectActivityTabKeyboard, observeActivityCommand,
     readActivityForE2E} from '../keywords/frontendActivityE2EKeywords';
 import {captureAdvancedActivityPresentation, createActivitySwapPairsForE2E, createAdvancedActivityForE2E, openActivityRulesForE2E, readActivityRecommendationsForE2E,
@@ -24,6 +24,58 @@ async function expectReachableActivityControl(control: Locator): Promise<void> {
         const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
         return !!hit && element.contains(hit);
     })).toBe(true);
+}
+
+// Only these authored English requirement labels differ from unchanged native
+// wording. Keep the captured document, values, styles and geometry untouched.
+const activityRequirementWording = [
+    ['Set the required number of activities and optional participant overrides. Required mode needs one saved value for every possible stay duration.',
+        'Define exact required shifts and optional participant overrides. Required mode needs one saved value for every possible stay duration.'],
+    ['Baseline activity requirement', 'Baseline shift requirement'],
+    ['Required activities by length of stay', 'Exact shifts by days present'],
+    ['Set per-role required activity counts', 'Set per-role required shift counts'],
+    ['Specify event participant-specific required activities and optional role-scoped overrides. Only registered participants are eligible for overrides.',
+        'Specify event participant-specific required shifts and optional role-scoped overrides. Only registered participants are eligible for overrides.'],
+    ['Required activities', 'Required shifts'],
+] as const;
+
+/** Assert the actual new wording and unchanged numeric controls before comparing
+ * a separate text projection with native's older work-specific labels. */
+async function expectActivityRequirementWording(requirements: Locator, days: number): Promise<void> {
+    for (const [current] of activityRequirementWording)
+        await expect(requirements.getByText(current, {exact: true})).toBeVisible();
+    await expect(requirements.getByText(/^Required activities: \d+$/u)).toHaveCount(1);
+    const baseline = requirements.getByRole('spinbutton', {name: 'Baseline activity requirement', exact: true});
+    const override = requirements.getByRole('spinbutton', {name: 'Required activities', exact: true});
+    for (const [control, value] of [[baseline, '2'], [override, '1']] as const)
+        expect(await readControlContracts(control)).toMatchObject([{type: 'number', value, min: 0, step: 1, disabled: false}]);
+    for (let day = 1; day <= days; day++) {
+        const control = requirements.getByRole('spinbutton', {name: `Required activities for a ${day}-day stay`, exact: true});
+        expect(await readControlContracts(control)).toMatchObject([{type: 'number', min: 0, step: 1,
+            value: day === 1 ? '0' : day === days ? '2' : '1', disabled: false}]);
+    }
+    for (const [label, control] of [[requirements.locator('label[for="requiredShifts"]'), baseline],
+        [requirements.getByText('Required activities', {exact: true}), override]] as const) {
+        const labelBounds = (await label.boundingBox())!;
+        const controlBounds = (await control.boundingBox())!;
+        expect(labelBounds.width).toBeGreaterThan(0);
+        expect(controlBounds.y).toBeGreaterThanOrEqual(labelBounds.y + labelBounds.height - 1);
+        expect(await label.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    }
+    await expectUsableFrontendLayout(requirements);
+}
+
+/** Project only the six reviewed phrases inside this fixed Rules fixture.
+ * In particular, the final label also prefixes its unchanged numeric badge;
+ * profile names, controls, bounds and all other surfaces remain unmodified. */
+function projectActivityRequirementWording(presentation: Awaited<ReturnType<typeof readVisiblePresentation>>):
+    Awaited<ReturnType<typeof readVisiblePresentation>> {
+    function nativeWording(text: string): string {
+        for (const [current, original] of activityRequirementWording) text = text.replaceAll(current, original);
+        return text;
+    }
+    return {...presentation, content: {...presentation.content, text: nativeWording(presentation.content.text),
+        elements: presentation.content.elements.map(element => ({...element, text: nativeWording(element.text)}))}};
 }
 
 for (const locale of ['en', 'de'] as const) {
@@ -167,7 +219,9 @@ for (const width of [1280, 390]) {
 
             const surfaces = {requirements, coverage, recommendations, move};
             if (pilot) {
-                for (const [name, measured] of Object.entries(surfaces)) expectVisiblePresentation(native[name]!, measured);
+                await expectActivityRequirementWording(page.locator('#requirementPanel'), plan.days);
+                for (const [name, measured] of Object.entries(surfaces))
+                    expectVisiblePresentation(native[name]!, name === 'requirements' ? projectActivityRequirementWording(measured) : measured);
             } else Object.assign(native, surfaces);
         }
         expect(errors).toEqual([]);

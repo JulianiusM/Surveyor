@@ -200,14 +200,10 @@ async function refresh(): Promise<void> {
                 @action="refresh"
             />
         </div>
-        <StatusNotice v-if="destination.target.value" kind="success"
-            :retry-at="destination.retryAt.value"
-            :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">
-            {{ messages.t('state.saved') }}
-        </StatusNotice>
         <LoadingSkeleton v-if="section.loading.value" :variant="admin ? 'roster' : 'cards'" :rows="4" />
         <StatusNotice
             v-if="section.query.error.value"
+            :read-error="section.query.error.value"
             kind="warning"
             :action="{state: refreshAction, label: messages.t('common.retry')}"
             :retry-at="section.retryAt.value"
@@ -267,7 +263,7 @@ async function refresh(): Promise<void> {
                                     <div
                                         v-for="card in groupRows(group.type)"
                                         :key="card.id"
-                                        class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+                                        class="list-group-item list-group-item-action pilot-action-row justify-content-between"
                                     >
                                         <component
                                             :is="RouterLink"

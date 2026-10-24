@@ -57,8 +57,8 @@ function denied(): Response {
 
 /** Replace only HTTP delivery while mounting real generated adapters, query admission,
  * commands and dialogs; these client tests make no persistence/system-test claim. */
-async function mounted(component: Component, handler: (request: Request) => Promise<Response>, props: Record<string, unknown> = {}) {
-    const mounted = await mountFrontendEvent(component, handler, {eventId, ...props});
+async function mounted(component: Component, handler: (request: Request) => Promise<Response>, props: Record<string, unknown> = {}, withShell = false) {
+    const mounted = await mountFrontendEvent(component, handler, {eventId, ...props}, undefined, withShell);
     cleanups.push(mounted.dispose);
     await vi.waitFor(() => expect(mounted.request).toHaveBeenCalled());
     await vi.waitFor(() => expect(mounted.context.queryClient.isFetching()).toBe(0));
@@ -118,7 +118,7 @@ describe('Event organizer workflows', () => {
                 return new Promise<Response>(resolve => {finishDelete = () => resolve(json({changed: true}));});
             }
             return json({items: [owned]});
-        });
+        }, {}, true);
         // Closed Overview variants stay cached without a live read owner. A
         // confirmed child deletion makes them stale without forcing discovery
         // or retiring the Event section's independently mounted observer.
@@ -148,7 +148,8 @@ describe('Event organizer workflows', () => {
         finishDelete!(); await flushPromises();
         for (const key of cachedOverview) expect(context.queryClient.getQueryState(key)?.isInvalidated).toBe(true);
         expect(request.mock.calls.filter(([input]) => (input as Request).method === 'GET')).toHaveLength(1);
-        expect(wrapper.text()).toContain('Changes saved');
+        expect(wrapper.get('[data-pilot-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
+        expect(wrapper.find('.alert-success').exists()).toBe(false);
         expect(router.currentRoute.value.path).toBe(`/frontend-pilot/event/${eventId}`);
         stopFailure();
         // The first delivery attempt used the original approval. Retry must
@@ -244,7 +245,15 @@ describe('Event organizer workflows', () => {
         expect(router.currentRoute.value.path).toBe(origin);
         if (heldInvalidation) expect(releaseInvalidation).toBeTypeOf('function');
         expect(removal.attributes('disabled')).toBeDefined();
-        expect(wrapper.text()).toContain('Changes saved');
+        // The first delivery is still pending only in the held variant. A real
+        // failed delivery replaces its own success with one common warning.
+        if (heldInvalidation) {
+            expect(wrapper.get('[data-pilot-notices] .alert-success').text()).toContain(context.messages.value.t('event.organizer.activityDeleted'));
+            expect(wrapper.find('[data-pilot-notices] .alert-warning').exists()).toBe(false);
+        } else {
+            expect(wrapper.get('[data-pilot-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
+            expect(wrapper.find('.alert-success').exists()).toBe(false);
+        }
 
         // The parent retains independently admitted Settings and archival, but
         // cannot commit a second irreversible write into the child's exclusive
@@ -524,6 +533,10 @@ describe('Event organizer workflows', () => {
         expect(writes).toEqual([{path: `/api/v1/events/${eventId}/registrations/17`, body: {arrivalDate: '2027-06-02', departureDate: '2027-06-03'}}]);
         expect(dialog.props('open')).toBe(false);
         expect(wrapper.text()).toContain('Attendance dates updated');
+        const notices = document.querySelectorAll<HTMLElement>('.pilot-notification.alert-success');
+        expect(notices).toHaveLength(1);
+        expect(notices[0]!.closest('[role="dialog"]')).toBeNull();
+        expect(notices[0]!.querySelector('.pilot-notice-actions')).toBeNull();
     });
 
     it('retains a readable date draft but disables its command when the management grant is revoked', async () => {
@@ -601,6 +614,11 @@ describe('Event organizer workflows', () => {
         await flushPromises();
         expect(writes).toEqual([{maxUses: 3}]);
         expect(copied).toHaveBeenCalledOnce();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
+        const notices = document.querySelectorAll<HTMLElement>('.pilot-notification.alert-success');
+        expect(notices).toHaveLength(1);
+        expect(notices[0]!.textContent).toContain('Link created.');
+        expect(notices[0]!.querySelector('.pilot-notice-actions')).toBeNull();
     });
 
     it('does not replay an unknown link creation during explicit list recovery', async () => {

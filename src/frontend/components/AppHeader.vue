@@ -148,17 +148,16 @@ async function refreshLogoutState(): Promise<void> {
     await logoutCommand.recover();
 }
 
-/** The form/dialog normally owns delivery Retry. After a private subtree retires, the
- * shell presents only its orphaned canonical destination, without reviving private controls. */
+/** Retry only the retained read/navigation delivery of a confirmed command.
+ * One shell surface serves mounted and retired forms without replaying the write. */
 async function retryCompletion(): Promise<void> {
-    if (completion.target.value) await completion.retry();
-    else await completion.retryFallback();
+    await completion.retryRecovery();
 }
 
 </script>
 
 <template>
-    <header>
+    <header class="pilot-app-header">
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
             <div class="container">
                 <RouterLink class="navbar-brand d-flex align-items-center" to="/frontend-pilot">
@@ -352,14 +351,13 @@ async function retryCompletion(): Promise<void> {
                 :action="{state: logoutCommand.recoveryAction, label: messages.t('common.refresh'), class: 'ms-2'}"
                 @action="refreshLogoutState" />
         </nav>
-        <!-- Confirmed commands keep their own feedback. This shared recovery surface appears
-             only for header-owned navigation or after its originating form has unmounted.
-             Its spacing input avoids conflicting with the notice's default bottom margin. -->
-        <StatusNotice v-if="!completion.pending.value && (completion.target.value || completion.fallbackTarget.value)" kind="warning" no-margin
-            :retry-at="completion.target.value ? completion.retryAt.value : completion.fallbackRetryAt.value"
-            :action="{state: completion.target.value ? completion.retryAction : completion.fallbackRetryAction,
-                label: messages.t('common.retry'), class: 'ms-2'}" @action="retryCompletion">
-            {{ messages.t('state.loadFailed') }}
+        <!-- A confirmed write supplies one success receipt. Only failed delivery
+             adds this durable warning; its explicit action retries no command. -->
+        <StatusNotice v-if="!completion.pending.value && completion.recoveryTarget.value" kind="warning" no-margin
+            placement="notification" :retry-at="completion.recoveryRetryAt.value"
+            :read-error="completion.recoveryReadError.value"
+            :action="{state: completion.recoveryAction, label: messages.t('common.retry')}" @action="retryCompletion">
+            {{ messages.t('state.deliveryFailed') }}
         </StatusNotice>
     </header>
 </template>

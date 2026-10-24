@@ -1,8 +1,39 @@
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
+import {FinanceApi} from '../../src/frontend/features/finance/api';
+import {PilotApi} from '../../src/frontend/app/api';
+import {InvalidInputError} from '../../src/frontend/app/transport';
 import {financeDecimal} from '../../src/frontend/features/finance/numbers';
 import {contractValidator, operationContract} from '../../src/modules/api/contracts';
+import {formatInputDiagnostic} from '../../src/modules/localization/inputValidation';
+import {createTranslator} from '../../src/modules/localization/translator';
 
 describe('finance decimal transport preserves existing business inputs', () => {
+    it.each(['calculation', 'settlement', 'retraction'] as const)('explains an invalid generated %s field before any request', async kind => {
+        const request = vi.fn(async () => new Response('{}'));
+        const api = new FinanceApi(new PilotApi(() => true, vi.fn(), request));
+        const scope = {context: null, csrfToken: null, epoch: 0, locale: 'en'};
+        // These malformed internal drafts exercise the actual generated gates;
+        // no request, validator or feature transport is replaced by the test.
+        const result = kind === 'calculation'
+            ? api.calculate('event', 'pool', {expectedRevision: -1, sendEmails: false}, false, scope)
+            : kind === 'settlement'
+                ? api.settlement('event', 'pool', 'share', {isPaid: 'yes' as unknown as boolean}, scope)
+                : api.retract('event', 'pool', 'invoice', -1, scope);
+        const error = await result.catch(failure => failure);
+        expect(error).toBeInstanceOf(InvalidInputError);
+        expect(request).not.toHaveBeenCalled();
+        expect(error.diagnostic).toMatchObject({field: {label: kind === 'settlement'
+            ? 'validation.fields.settlementStatus' : 'validation.fields.revision'}, rule: kind === 'settlement' ? 'type' : 'minimum'});
+        for (const locale of ['en', 'de']) {
+            const messages = createTranslator(locale);
+            const explanation = formatInputDiagnostic(messages, error.diagnostic!);
+            expect(explanation).toContain(messages.t(error.diagnostic!.field.label));
+            expect(explanation).not.toContain('submitted values');
+            expect(explanation).not.toContain('expectedRevision');
+            expect(explanation).not.toContain('isPaid');
+        }
+    });
+
     it('retains amount precision while normalizing only transport spelling', () => {
         const validate = contractValidator('FinanceInvoiceInput');
         for (const [draft, expected] of [

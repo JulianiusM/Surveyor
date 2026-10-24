@@ -6,13 +6,25 @@
 /* Contextual page notices and transient notifications share the document flow.
    This contextual grouping adds no extra containing layout box. */
 .pilot-page-notices { display: contents; }
+/* Header disclosures and card/filter disclosures sit above the shared sticky
+   feedback, while actual modal backdrops retain their higher application layer. */
+.pilot-app-header { position: relative; z-index: 1040; }
+.pilot-dropdown { position: relative; min-width: 0; max-width: 100%; }
+.pilot-dropdown[open] { z-index: 1040; }
+.pilot-dropdown > .dropdown-menu { z-index: 1040; }
 .pilot-nav-dropdown > summary { list-style: none; cursor: pointer; }
 .pilot-nav-dropdown > summary::-webkit-details-marker { display: none; }
 .pilot-nav-dropdown > .dropdown-menu { top: 100%; left: 0; margin-top: var(--bs-dropdown-spacer); }
 .pilot-nav-dropdown[open] > .dropdown-menu { display: block; }
 .pilot-nav-dropdown .dropdown-menu-end { right: 0; left: auto; }
-.pilot-app .dropdown-menu { max-width: calc(100vw - 2rem); }
-.pilot-app .dropdown-item { white-space: normal; overflow-wrap: anywhere; }
+.pilot-app .dropdown-menu, .pilot-dialog .dropdown-menu { max-width: calc(100vw - 2rem); }
+/* Profile actions need their real translated width instead of Bootstrap's narrow
+   minimum. Long labels and user-authored names still wrap within the viewport. */
+.pilot-nav-dropdown > .dropdown-menu { width: max-content; min-width: min(14rem, calc(100vw - 2rem)); }
+.pilot-app :is(.dropdown-item, .dropdown-item-text, .dropdown-header),
+.pilot-dialog :is(.dropdown-item, .dropdown-item-text, .dropdown-header) { white-space: normal; overflow-wrap: anywhere; }
+.pilot-app-header :is(.navbar-collapse, .navbar-nav, .nav-item, .nav-link) { min-width: 0; }
+.pilot-app-header .nav-link { white-space: normal; overflow-wrap: anywhere; }
 .pilot-locale { width: auto; }
 /* Shared layout responds to available room rather than a selected language.
    Allow actual labels and user titles to shrink/wrap without changing table
@@ -68,6 +80,15 @@
     max-height: min(65dvh, 32rem); overflow-y: auto; overscroll-behavior: contain; pointer-events: none; }
 .pilot-notice-stack:not(:empty) { margin-bottom: 1rem; }
 .pilot-notification { min-width: 0; max-width: 100%; margin: 0 !important; overflow-wrap: anywhere; pointer-events: auto; }
+.pilot-notice-with-action { display: flex; align-items: flex-start; gap: .75rem 1rem; }
+.pilot-notice-body { min-width: 0; overflow-wrap: anywhere; }
+/* Notices without an action retain their caller's original inline/flex content
+   layout; only the shared action composition needs a separate text column. */
+:is(.status-notice, .alert):not(.pilot-notice-with-action) > .pilot-notice-body { display: contents; }
+.pilot-notice-with-action > .pilot-notice-body { flex: 1 1 auto; }
+.pilot-notice-actions { display: flex; flex: 0 0 auto; flex-wrap: wrap; gap: .5rem;
+    max-width: 45%; margin-inline-start: auto; }
+.pilot-notice-actions > .btn { margin-inline: 0 !important; }
 .pilot-dialog .pilot-notice-region { z-index: 3; }
 /* SSR has no mounted injection target yet. Its local origin uses the same
    natural height before hydration relocates the unchanged receipt. */
@@ -206,7 +227,7 @@
     .pilot-skeleton-balanced-header > .pilot-skeleton-heading { grid-column: 1; }
     .pilot-skeleton-balanced-header > .pilot-skeleton-header-actions { grid-column: 1; justify-self: center; }
     .pilot-skeleton-summary { grid-template-columns: minmax(0, 1fr); }
-    .pilot-skeleton-form-footer-half, .pilot-skeleton-form-footer-two-thirds { width: 100%; }
+    .pilot-skeleton-form-footer-two-thirds { width: 100%; }
     /* The participant roster alone folds email into the name column below md.
        Other tables retain all columns and their horizontal clipping behavior. */
     .pilot-skeleton-table-grid[data-skeleton-hide-column] { min-width: 0; }
@@ -216,6 +237,21 @@
     }
 }
 @media (max-width: 575.98px) {
+    .pilot-skeleton-form-footer-half { width: 100%; }
+    /* Ordinary action bars and dialog footers follow the native phone layout:
+       each complete action gets a row; table answer groups remain independent. */
+    .pilot-action-row { width: 100%; align-items: stretch; flex-direction: column; }
+    .pilot-action-row > :is(.btn, .btn-group, .pilot-dropdown, .d-inline-block) { width: 100%; }
+    .pilot-action-row > :is(.btn, .btn-group) { margin-inline: 0 !important; }
+    .pilot-action-row > .btn-group { display: flex !important; flex-direction: column; gap: .5rem; }
+    .pilot-action-row > .btn-group > .btn { width: 100%; margin-inline-start: 0; border-radius: var(--bs-btn-border-radius); }
+    .pilot-action-row > .d-inline-block > .pilot-dropdown > summary,
+    .pilot-action-row > .pilot-dropdown > summary { width: 100%; }
+    .pilot-dialog .modal-footer { flex-direction: column; align-items: stretch; }
+    .pilot-dialog .modal-footer > * { width: auto; }
+    .pilot-notice-with-action { flex-direction: column; align-items: stretch; }
+    .pilot-notice-actions { width: 100%; max-width: 100%; flex-direction: column; }
+    .pilot-notice-actions > .btn { width: 100%; }
     .pilot-skeleton-toolbar { grid-template-columns: minmax(0, 1fr); }
 }
 /* Respect the same motion preference across every future migrated feature. */

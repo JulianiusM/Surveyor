@@ -95,10 +95,10 @@ function acknowledge(): void {
         <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
         <CommandFeedback :feedback="command.feedback" part="uncertain"
             :action="{state: recovery, label: messages.t('common.refresh')}" @action="inspectSaved">
-            <template #uncertain>
+            <template #uncertainActions>
                 <!-- Acknowledgement is local review; a further saved-data read
                      blocks it without giving it a pending focus claim. -->
-                <ActionButton v-if="inspected" variant="outline-warning" class="mt-2" :disabled="recovery.disabled.value" @click="acknowledge">
+                <ActionButton v-if="inspected" variant="outline-warning" :disabled="recovery.disabled.value" @click="acknowledge">
                     {{ messages.t('finance.reviewedSavedShares') }}
                 </ActionButton>
             </template>

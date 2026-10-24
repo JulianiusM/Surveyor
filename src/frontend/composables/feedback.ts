@@ -6,7 +6,8 @@ import type {LocalizationContext, MessageKey} from '../../types/LocalizationType
 import type {components} from '../../types/api/v1';
 import type {PilotPlainMessageKey, PilotProblemPresentation} from '../../types/FrontendPilotUiTypes';
 import {validateProblem} from '../../../.generated/api/v1/browser/validateProblem.mjs';
-import {formatCivilDate} from '../../modules/lib/civilDate';
+import {formatFieldDiagnostic, formatInputDiagnostic} from '../../modules/localization/inputValidation';
+import type {PilotReadFailureDescriptor} from '../../types/FrontendFeedbackTypes';
 
 // Preserve the existing transient-feedback interval in this frontend's owner.
 // Native browser code remains an independent comparison implementation.
@@ -184,6 +185,12 @@ export function problemMessage(messages: LocalizationContext,
     problem: components['schemas']['Problem'] | components['schemas']['SafeProblemDetails'],
     presentation?: PilotProblemPresentation): string {
     if (!validateProblem(problem)) return problem.detail;
+    // Known structural failures retain safe field/rule identities. Reformat at
+    // display time so an existing rejected draft follows a later locale change.
+    if (problem.code === 'VALIDATION_FAILED') {
+        const diagnostic = problem.fieldErrors?.find(error => error.diagnostic)?.diagnostic;
+        if (diagnostic) return formatFieldDiagnostic(messages, diagnostic);
+    }
     // Structural validation precedes operation-specific selection. A future problem
     // must never acquire known behavior just because its unvalidated code resembles one.
     const key = presentation?.(problem);
@@ -202,7 +209,11 @@ export function readFailureMessage(messages: LocalizationContext, error?: Error 
  * language changes. Only validated known Problems drive typed behavior; safe future details remain text. */
 export function useFeedbackError(presentation?: PilotProblemPresentation) {
     const {messages} = usePilot();
-    const descriptor = shallowRef<MessageKey | ApiFailure | InvalidInputError | null>(null);
+    const descriptor = shallowRef<MessageKey | ApiFailure | InvalidInputError | PilotReadFailureDescriptor | null>(null);
+    const readError = computed(() => {
+        const value = descriptor.value;
+        return value && typeof value === 'object' && 'readError' in value ? value.readError : null;
+    });
     const transientError = ref(true);
     const errorRenewal = ref(0);
     const feedbackKind = ref<'danger' | 'info' | 'success'>('danger');
@@ -214,6 +225,7 @@ export function useFeedbackError(presentation?: PilotProblemPresentation) {
         const value = descriptor.value;
         if (value === null) return null;
         if (typeof value === 'string') return messages.value.t(value);
+        if ('readError' in value) return messages.value.t(value.messageKey);
         if (value instanceof InvalidInputError) return inputFailureMessage(messages.value, value);
         return value.problem ? problemMessage(messages.value, value.problem, presentation) : value.message;
     });
@@ -226,6 +238,15 @@ export function useFeedbackError(presentation?: PilotProblemPresentation) {
         errorRenewal.value++;
         transientError.value = lifetime === 'transient';
         feedbackKind.value = 'danger';
+    }
+
+    /** Retain the same durable localized read warning with its causal identity.
+     * No query contents or server deadline are copied into this error receipt. */
+    function setReadError(messageKey: PilotPlainMessageKey, failure: unknown): void {
+        setError(messageKey, 'durable');
+        // Non-Error rejections keep the safe warning but cannot claim another
+        // read notice merely because its error is also absent or malformed.
+        if (failure instanceof Error) descriptor.value = {messageKey, readError: failure};
     }
 
     /** Native form no-ops are information, with the same localized identity and
@@ -244,9 +265,12 @@ export function useFeedbackError(presentation?: PilotProblemPresentation) {
 
     function clearRecoveredError(value: MessageKey | ApiFailure): void {
         // A successful read must not erase another operation's validation or conflict.
-        if (descriptor.value === value) setError(null);
+        const current = descriptor.value;
+        if (current === value || current && typeof current === 'object'
+            && 'readError' in current && current.messageKey === value) setError(null);
     }
-    return {error, transientError, errorRenewal, feedbackKind, setError, setInformation, setSuccess, clearRecoveredError};
+    return {error, transientError, errorRenewal, feedbackKind, readError,
+        setError, setReadError, setInformation, setSuccess, clearRecoveredError};
 }
 
 /** Explain only safe generated rule metadata using the feature's visible labels.
@@ -254,28 +278,5 @@ export function useFeedbackError(presentation?: PilotProblemPresentation) {
  * with the same receipt, original controls, selected file and error identity. */
 function inputFailureMessage(messages: LocalizationContext, error: InvalidInputError): string {
     if (!error.diagnostic) return messages.t(error.messageKey ?? 'api:errors.VALIDATION_FAILED');
-    const {field, rule, limit, type} = error.diagnostic;
-    let label = messages.t(field.label);
-    if (field.row) {
-        const row = messages.t(field.row.label);
-        label = field.row.day
-            ? messages.t('validation.dayRowField', {day: formatCivilDate(field.row.day, messages.locale) ?? field.row.day,
-                row, number: field.row.number, field: label})
-            : messages.t('validation.rowField', {row, number: field.row.number, field: label});
-    }
-
-    // Bounds come directly from the generated failure, never another local copy
-    // of a schema. Unknown future rules still identify the field to correct.
-    let reason = messages.t('validation.invalid');
-    if (rule === 'maxLength' && limit !== undefined) reason = messages.t('validation.maxLength', {limit});
-    else if (rule === 'minLength' && limit === 1) reason = messages.t('validation.required');
-    else if (rule === 'minLength' && limit !== undefined) reason = messages.t('validation.minLength', {limit});
-    else if (rule === 'maximum' && limit !== undefined) reason = messages.t('validation.maximum', {limit});
-    else if (rule === 'minimum' && limit !== undefined) reason = messages.t('validation.minimum', {limit});
-    else if (rule === 'minItems' && limit !== undefined) reason = messages.t('validation.minItems', {limit});
-    else if (rule === 'required') reason = messages.t('validation.required');
-    else if (rule === 'nonBlank') reason = messages.t('validation.nonBlank');
-    else if (rule === 'type' && type === 'integer') reason = messages.t('validation.integer');
-    else if (rule === 'format' || rule === 'pattern' || rule === 'enum') reason = messages.t('validation.invalid');
-    return messages.t('validation.fieldError', {field: label, reason});
+    return formatInputDiagnostic(messages, error.diagnostic);
 }

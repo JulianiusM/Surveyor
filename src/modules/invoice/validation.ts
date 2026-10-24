@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {invoiceText} from './wording';
+import {invoiceText, invoiceRejectionCause} from './wording';
 import type {ConfirmedInvoiceChange} from '../../types/InvoicePoolTypes';
 import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool';
 import {APIError, ExpectedError} from '../lib/errors';
@@ -32,7 +32,7 @@ export function invoiceCents(amount: number): number {
     // Bound integer-cent arithmetic before it is used for cumulative settlement credits.
     const cents = Math.round(amount * 100);
     if (!Number.isFinite(amount) || !Number.isSafeInteger(cents)) {
-        throw new APIError(invoiceText('invoiceAmountsMustBeFiniteAndWithinTheSupported'), {}, 400);
+        throw new APIError(invoiceText('invoiceAmountsMustBeFiniteAndWithinTheSupported'), {}, 400, {cause: invoiceRejectionCause('invoiceAmountsMustBeFiniteAndWithinTheSupported')});
     }
     return cents;
 }
@@ -43,19 +43,19 @@ export function assertPositiveInvoiceAmount(amount: number): void {
     // Allow binary floating-point representation noise, but reject user amounts with additional decimal digits.
     const centTolerance = Number.EPSILON * Math.max(1, Math.abs(amount * 100)) * 4;
     if (cents <= 0 || amount > 99999999.99 || Math.abs(amount * 100 - cents) > centTolerance) {
-        throw new APIError(invoiceText('enterAPositiveAmountWithAtMostTwoDecimal'), {}, 400);
+        throw new APIError(invoiceText('enterAPositiveAmountWithAtMostTwoDecimal'), {}, 400, {cause: invoiceRejectionCause('enterAPositiveAmountWithAtMostTwoDecimal')});
     }
 }
 
 /** Protect existing correction and retraction commands against unconfirmed or stale revisions. */
 export function assertConfirmedInvoiceChange(pool: EventInvoicePool, confirmation: ConfirmedInvoiceChange): void {
     // Preserve the pre-existing accepted-invoice revision contract; new UI confirmation gates add no API fields.
-    if (confirmation?.confirmed !== true) throw new APIError(invoiceText('confirmThisInvoiceChangeBeforeContinuing'), {}, 400);
+    if (confirmation?.confirmed !== true) throw new APIError(invoiceText('confirmThisInvoiceChangeBeforeContinuing'), {}, 400, {cause: invoiceRejectionCause('confirmThisInvoiceChangeBeforeContinuing')});
     if (!Number.isSafeInteger(confirmation.expectedRevision) || confirmation.expectedRevision < 0) {
-        throw new APIError(invoiceText('currentRevisionRequired'), {}, 400);
+        throw new APIError(invoiceText('currentRevisionRequired'), {}, 400, {cause: invoiceRejectionCause('currentRevisionRequired')});
     }
     // This check must execute against the locked row so an acknowledged review cannot overwrite concurrent edits.
     if (pool.calculationRevision !== confirmation.expectedRevision) {
-        throw new APIError(invoiceText('thePoolChangedReloadAndReviewTheInvoiceAgain'), {}, 409);
+        throw new APIError(invoiceText('thePoolChangedReloadAndReviewTheInvoiceAgain'), {}, 409, {cause: invoiceRejectionCause('thePoolChangedReloadAndReviewTheInvoiceAgain', 409)});
     }
 }

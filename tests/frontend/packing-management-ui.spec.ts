@@ -1281,7 +1281,7 @@ describe('metadata conflict acknowledgement', () => {
         await flushPromises();
         expect(metadata.get<HTMLInputElement>('[name="title"]').element.value).toBe('Submitted title');
         expect(button(metadata, context.messages.value.t('packing.saveProperties')).attributes('disabled')).toBeDefined();
-        expect(metadata.text()).toContain(context.messages.value.t('state.savedRefreshFailed'));
+        expect(document.body.textContent).toContain(context.messages.value.t('state.savedRefreshFailed'));
     });
 
     it('retains a confirmed metadata save after an explicitly canceled warm follow-up until a fresh admitted GET', async function preservesCanceledWarmAuthority() {
@@ -2381,18 +2381,53 @@ describe('packing command forms', () => {
         }
     });
 
+    it.each(['rejected', 'unknown'] as const)('keeps Settings and its draft through a pending then %s DELETE', async disposition => {
+        const deletion = deferredResponse();
+        const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true, remove: true},
+            access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
+        const {wrapper, context, request} = await mounted(PackingPage, {}, async captured => {
+            if (captured.method === 'DELETE') return deletion.response;
+            return json(new URL(captured.url).pathname.endsWith('/settings') ? projection
+                : {...list, capabilities: {...list.capabilities, manageSettings: true}});
+        });
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        await button(wrapper, 'Entity settings').trigger('click');
+        await flushPromises();
+        const checkbox = wrapper.get<HTMLInputElement>('#settings-defaults-participant-EDIT_TITLE');
+        await checkbox.setValue(true);
+        await wrapper.get('#pilot-settings-tab-actions').trigger('click');
+        try {
+            await button(wrapper, 'Delete permanently').trigger('click');
+            await flushPromises();
+            expect(wrapper.findComponent(PackingSettings).exists()).toBe(true);
+            expect(button(wrapper, 'Close').attributes('disabled')).toBeDefined();
+            deletion.resolve(disposition === 'rejected' ? problem('FORBIDDEN', 403)
+                : new Response('Temporary proxy failure', {status: 503}));
+            await flushPromises();
+            expect(wrapper.findComponent(PackingSettings).exists()).toBe(true);
+            expect(wrapper.get<HTMLInputElement>('#settings-defaults-participant-EDIT_TITLE').element).toBe(checkbox.element);
+            expect(checkbox.element.checked).toBe(true);
+            expect(request.mock.calls.filter(([captured]) => (captured as Request).method === 'DELETE')).toHaveLength(1);
+            expect(document.body.textContent).toContain(context.messages.value.t(disposition === 'unknown'
+                ? 'state.unknownOutcome' : 'api:errors.FORBIDDEN'));
+        } finally {
+            deletion.resolve(json({changed: false}));
+            await flushPromises();
+        }
+    });
+
     it('rechecks retained drafts on confirmed deletion Retry without another DELETE', async () => {
         const projection = {...settings, capabilities: {...settings.capabilities, managePermissions: true, remove: true},
             access: {defaults, admins: [], permissions: [{key: 'EDIT_TITLE', bit: 1}], presets: []}};
         let deletes = 0;
-        const {wrapper, router, context, request} = await mounted(PackingPage, {}, async request => {
+        const {wrapper, root, router, context, request} = await mounted(PackingPage, {}, async request => {
             if (request.method === 'DELETE') {
                 deletes++;
                 return json({changed: true});
             }
             return json(new URL(request.url).pathname.endsWith('/settings') ? projection
                 : {...list, capabilities: {...list.capabilities, manageSettings: true}});
-        });
+        }, '/frontend-pilot/packing/' + id, session, {}, true);
         // Detail/Settings deletion must retire every warm Overview variant too,
         // without fetching that inactive destination or the just-deleted detail.
         const warmDefault = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'});
@@ -2419,15 +2454,18 @@ describe('packing command forms', () => {
         expect(deletes).toBe(1);
         expect(confirm).toHaveBeenCalledTimes(2);
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/packing/' + id);
-        expect(wrapper.findComponent(PackingSettings).exists()).toBe(true);
-        expect(button(wrapper, 'Delete permanently').attributes('disabled')).toBeDefined();
-        expect(button(wrapper, 'Close').attributes('disabled')).toBeDefined();
+        // Confirmed deletion releases only its obsolete Settings editor. The
+        // unrelated parent draft remains mounted, and common recovery is usable
+        // without a modal covering the one failure message at the top.
+        expect(wrapper.findComponent(PackingSettings).exists()).toBe(false);
+        expect(wrapper.find('#settings-defaults-participant-EDIT_TITLE').exists()).toBe(false);
+        expect(root.get('[data-pilot-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
         expect(context.queryClient.getQueryState(warmDefault)?.isInvalidated).toBe(true);
         expect(context.queryClient.getQueryState(warmFiltered)?.isInvalidated).toBe(true);
         expect(request.mock.calls.filter(([input]) => new URL((input as Request).url).pathname === '/api/v1/overview')).toHaveLength(0);
 
         failNavigation = false;
-        const retry = button(wrapper, 'Try again');
+        const retry = button(root.get('[data-pilot-notices] .alert-warning'), 'Try again');
         await retry.trigger('click');
         await flushPromises();
         // The first delivery attempt released its discard approval. Canceling
@@ -2435,15 +2473,15 @@ describe('packing command forms', () => {
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/packing/' + id);
         expect(wrapper.get('#quick-title').element).toBe(parentDraft);
         expect(parentDraft.value).toBe('Parent draft');
-        expect(wrapper.get<HTMLInputElement>('#settings-defaults-participant-EDIT_TITLE').element.checked).toBe(true);
-        expect(button(wrapper, 'Try again').element).toBe(retry.element);
-        expect(retry.attributes('disabled')).toBeUndefined();
+        expect(wrapper.findComponent(PackingSettings).exists()).toBe(false);
+        const renewedRetry = button(root.get('[data-pilot-notices] .alert-warning'), 'Try again');
+        expect(renewedRetry.attributes('disabled')).toBeUndefined();
         expect(confirm).toHaveBeenCalledTimes(3);
         expect(confirm.mock.calls[2]).toEqual(['Discard changes?']);
         expect(deletes).toBe(1);
 
         approveRetryDeparture = true;
-        await retry.trigger('click');
+        await renewedRetry.trigger('click');
         await flushPromises();
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/dashboard');
         expect(deletes).toBe(1);
@@ -2481,9 +2519,10 @@ describe('packing command forms', () => {
         await button(wrapper, 'Delete permanently').trigger('click');
         await flushPromises();
 
-        // These are real subsequent server reads of the deleted resource. Its denial
-        // must close private controls without losing the confirmed destination's Retry.
-        await context.queryClient.invalidateQueries({queryKey: packingKeys.editors(session.context, id)});
+        // Settings already closed on confirmation. Read the still-mounted detail
+        // owner so its actual denial retires private controls without losing the
+        // confirmed destination's read-only Retry.
+        await context.queryClient.invalidateQueries({queryKey: packingKeys.detail(session.context, id)});
         await flushPromises();
         expect(wrapper.findComponent(PackingSettings).exists()).toBe(false);
         expect(wrapper.find('#quick-title').exists()).toBe(false);
@@ -4039,7 +4078,7 @@ describe('packing command forms', () => {
 
     it.each(['failure', 'cancellation'] as const)('retains a confirmed created destination after navigation %s and retries without another POST', async failure => {
         let posts = 0;
-        const {wrapper, router, context} = await mounted(PackingCreatePage, {}, async request => {
+        const {wrapper, root, router, context} = await mounted(PackingCreatePage, {}, async request => {
             if (request.method === 'POST') {
                 posts++;
                 return json({id: otherId}, 201);
@@ -4047,7 +4086,7 @@ describe('packing command forms', () => {
             return json(new URL(request.url).pathname.endsWith('/events')
                 ? {items: [], nextCursor: null, selected: null}
                 : {entry: {kind: 'render'}, context: {defaults, permissions: [], presets: []}});
-        }, '/frontend-pilot/packing/create');
+        }, '/frontend-pilot/packing/create', session, {}, true);
         const destination = '/frontend-pilot/packing/' + otherId;
         let rejectNavigation = true;
         router.addRoute({path: destination, component: async function loadCreatedPage() {
@@ -4063,7 +4102,8 @@ describe('packing command forms', () => {
         expect(posts).toBe(1);
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/packing/create');
         expect(wrapper.get('fieldset').attributes('disabled')).toBeDefined();
-        expect(wrapper.text()).toContain(context.messages.value.t('state.saved'));
+        expect(root.get('[data-pilot-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
+        expect(root.find('.alert-success').exists()).toBe(false);
         expect(context.updates.requestReload()).toBe(false);
         // Recovery must deliver the confirmed creation instead of reloading its form.
         expect(context.updates.requestRecoveryReload()).toBe(false);
@@ -4073,7 +4113,7 @@ describe('packing command forms', () => {
         await wrapper.get('form').trigger('submit');
         expect(posts).toBe(1);
         rejectNavigation = false;
-        await button(wrapper, context.messages.value.t('common.retry')).trigger('click');
+        await button(root.get('[data-pilot-notices] .alert-warning'), context.messages.value.t('common.retry')).trigger('click');
         await flushPromises();
         expect(router.currentRoute.value.fullPath).toBe(destination);
         expect(posts).toBe(1);

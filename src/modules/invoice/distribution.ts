@@ -6,14 +6,14 @@
  *     http://www.apache.org/licenses/LICENSE-2.0
  */
 
-import {invoiceText} from './wording';
+import {invoiceText, invoiceRejectionCause} from './wording';
 import type {InvoiceDistributionResult} from '../../types/InvoicePoolTypes';
 
 /** Validate the existing bounded, four-decimal share factor without rounding it. */
 export function validateInvoiceFactor(factor: number): number {
     if (!Number.isFinite(factor) || factor < 0 || factor > 1000
         || Math.abs(factor * 10000 - Math.round(factor * 10000)) > 0.000001) {
-        throw new Error(invoiceText('factorsMustBeBetweenAndWithAtMostFour'));
+        throw new Error(invoiceText('factorsMustBeBetweenAndWithAtMostFour'), {cause: invoiceRejectionCause('factorsMustBeBetweenAndWithAtMostFour')});
     }
     return factor;
 }
@@ -46,15 +46,15 @@ export function explainInvoiceDistribution(
     roundUpShares = true,
 ): InvoiceDistributionResult {
     // Validate cents and every attendance/factor input before any allocation is produced.
-    if (!Number.isFinite(amount)) throw new Error(invoiceText('theSharedAmountMustBeFinite'));
+    if (!Number.isFinite(amount)) throw new Error(invoiceText('theSharedAmountMustBeFinite'), {cause: invoiceRejectionCause('theSharedAmountMustBeFinite')});
     const cents = Math.round(amount * 100);
-    if (!Number.isSafeInteger(cents)) throw new Error(invoiceText('theSharedAmountIsTooLarge'));
+    if (!Number.isSafeInteger(cents)) throw new Error(invoiceText('theSharedAmountIsTooLarge'), {cause: invoiceRejectionCause('theSharedAmountIsTooLarge')});
     const weighted: {registrationId: number; coefficient: bigint; scale: number}[] = [];
     let scale = 0;
     for (const participant of participants) {
         validateInvoiceFactor(participant.factor);
         if (!Number.isFinite(participant.weight) || participant.weight < 0) {
-            throw new Error(invoiceText('attendanceWeightsMustBeNonNegative'));
+            throw new Error(invoiceText('attendanceWeightsMustBeNonNegative'), {cause: invoiceRejectionCause('attendanceWeightsMustBeNonNegative')});
         }
         const weight = decimalWeight(participant.weight);
         weighted.push({
@@ -74,7 +74,7 @@ export function explainInvoiceDistribution(
     }
     // Zero money may be distributed across zero weights, but a nonzero amount needs a real divisor.
     if (totalWeight === 0n && cents !== 0) {
-        throw new Error(invoiceText('noPositiveDistributionWeight'));
+        throw new Error(invoiceText('noPositiveDistributionWeight'), {cause: invoiceRejectionCause('noPositiveDistributionWeight')});
     }
     // Round each participant independently before takeovers are combined, preserving equal exact ratios.
     const amounts = new Map<number, number>();

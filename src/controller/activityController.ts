@@ -99,7 +99,7 @@ async function requireRecommendationContext(
     if (!plan) throw new APIError('Activity plan not found', {planId}, 404);
     if ((plan.eventId ?? null) !== initialEventId || (expected && (expected.isCurrent?.() === false || (plan.eventId ?? null) !== expected.eventId
         || plan.startDate !== expected.startDate || plan.endDate !== expected.endDate))) {
-        throw new APIError('Activity plan context changed; reload and try again', {reason: 'activity-context-changed'}, 409);
+        throw new APIError('Activity plan context changed; reload and try again', {reason: 'activity-context-changed'}, 409, {cause: 'ACTIVITY_CONTEXT_CHANGED'});
     }
     return plan;
 }
@@ -111,10 +111,12 @@ const recommendationJobCoordinator = new RecommendationJobCoordinator({
     persist: saveGeneratedRecommendations,
 });
 
+/** Recheck generation eligibility when a queued job actually begins. */
 async function loadRecommendationJobContext(planId: string): Promise<AutoAssignmentContext> {
+    // Queue waiting does not preserve an earlier assignment mode or input set.
     const context = await buildPlanRecommendationContext(planId);
     if (context.plan.assignmentMode === 'FREE') {
-        throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409);
+        throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409, {cause: 'ACTIVITY_RECOMMENDATIONS_DISABLED'});
     }
     return context;
 }
@@ -748,10 +750,10 @@ async function saveActivityProperties(planId: string, patch: ActivityPropertyPat
         }
         const startDate = patch.startDate ?? plan.startDate;
         const endDate = patch.endDate ?? plan.endDate;
-        if (startDate > endDate) throw new APIError('Start date must be before end date', {}, 400);
+        if (startDate > endDate) throw new APIError('Start date must be before end date', {}, 400, {cause: 'ACTIVITY_DATE_RANGE_INVALID'});
         if (startDate !== plan.startDate || endDate !== plan.endDate) {
             if (await activityService.hasActivitySlotsOutsideRange(manager, planId, startDate, endDate)) {
-                throw new APIError('The activity date range must include every saved slot', {}, 409);
+                throw new APIError('The activity date range must include every saved slot', {}, 409, {cause: 'ACTIVITY_DATE_RANGE_EXCLUDES_ACTIVITIES'});
             }
             // Cancel while holding the lock: even a change back to the original dates
             // must invalidate a waiting job. Cancellation after rollback is conservative.
@@ -771,9 +773,11 @@ async function saveActivityProperties(planId: string, patch: ActivityPropertyPat
     return activityService.withActivityTransaction(saveProperties);
 }
 
+/** Keep new and moved activities inside their current plan's inclusive date range. */
 function validateSlotDate(plan: ActivityPlan, day?: string): void {
+    // Callers repeat this comparison under the root lock before persistence.
     if (!day || day < plan.startDate || day > plan.endDate) {
-        throw new APIError('Slot date must be within the activity plan date range', {}, 400);
+        throw new APIError('Slot date must be within the activity plan date range', {}, 400, {cause: 'ACTIVITY_DATE_OUTSIDE_PLAN'});
     }
 }
 
@@ -836,11 +840,13 @@ async function reorderSlots(id: string, order: { slotId: string, pos: number }[]
     return 'Order saved';
 }
 
+/** Validate an activity draft, then retain the existing slot/role persistence order. */
 async function quickAddSlot(plan: ActivityPlan, body: any, session: SessionLike) {
+    // Reject unusable draft dates and times before preparing any persistence.
     const {date, title = '', description = '', startTime, endTime, maxAssignees = 1, roles = []} = body;
     const d = fromISOtoLocal(date);
     if (d < fromISOtoLocal(plan.startDate) || d > fromISOtoLocal(plan.endDate))
-        throw new APIError('Date outside range', body, 400);
+        throw new APIError('Date outside range', body, 400, {cause: 'ACTIVITY_DATE_OUTSIDE_PLAN'});
 
     if (!title) throw new APIError('Title required', body, 400);
 
@@ -852,9 +858,10 @@ async function quickAddSlot(plan: ActivityPlan, body: any, session: SessionLike)
         throw new APIError('Invalid end time', body, 400);
     }
     if (startTime && endTime && startTime >= endTime) {
-        throw new APIError('End time must be after start time', body, 400);
+        throw new APIError('End time must be after start time', body, 400, {cause: 'ACTIVITY_TIME_ORDER_INVALID'});
     }
 
+    // Role membership and the next saved position come from this same plan.
     const normalizedRoles = await validatePlanRoleIds(plan.id, roles, body);
     const last = Number(await activityService.getLastActivitySlotNumber(plan.id, date)) || 0;
     const slot: Partial<ActivitySlot> = {
@@ -868,13 +875,16 @@ async function quickAddSlot(plan: ActivityPlan, body: any, session: SessionLike)
         pos: last + 1
     };
 
+    /** Recheck the current date range under the plan lock before adding the row. */
     async function saveSlot(manager: EntityManager): Promise<void> {
+        // A concurrent plan edit cannot make the original unlocked range authoritative.
         const currentPlan = await requireRecommendationContext(manager, plan.id);
         validateSlotDate(currentPlan, slot.day);
         await activityService.addActivitySlots(plan.id, [slot], session.profile!.id, manager);
     }
     await activityService.withActivityTransaction(saveSlot);
 
+    // Preserve the native follow-up role write; diagnostics add no new transaction guarantee.
     if (normalizedRoles.length > 0) {
         await activityService.addActivitySlotRoles(slot.id!, normalizedRoles);
     }
@@ -1096,7 +1106,7 @@ async function mergeRequirementOverrides(
     for (const id of removedOverrideIds) {
         const numericId = Number(id);
         if (!Number.isSafeInteger(numericId) || String(numericId) !== id || !savedById.has(numericId) || removedIds.has(numericId)) {
-            throw new APIError('Removed override must identify one saved override belonging to this activity plan', {}, 400);
+            throw new APIError('Removed override must identify one saved override belonging to this activity plan', {}, 400, {cause: 'ACTIVITY_OVERRIDE_INVALID'});
         }
         removedIds.add(numericId);
     }
@@ -1108,16 +1118,16 @@ async function mergeRequirementOverrides(
         const override = {...input, roleId: input.roleId ?? null};
         const previous = override.id == null ? undefined : savedById.get(override.id);
         if (override.id != null && (!previous || submittedIds.has(override.id) || removedIds.has(override.id))) {
-            throw new APIError('Override does not belong to this activity plan or is duplicated', {}, 400);
+            throw new APIError('Override does not belong to this activity plan or is duplicated', {}, 400, {cause: 'ACTIVITY_OVERRIDE_INVALID'});
         }
         const unchanged = previous && previous.profileId === override.profileId
             && (previous.roleId ?? null) === (override.roleId ?? null)
             && previous.requiredShifts === override.requiredShifts;
         if (!unchanged && (!override.profileId || !registered.has(override.profileId))) {
-            throw new APIError('Overrides must target participants registered for this event', {}, 400);
+            throw new APIError('Overrides must target participants registered for this event', {}, 400, {cause: 'ACTIVITY_OVERRIDE_PARTICIPANT_REQUIRED'});
         }
         const key = `${override.profileId}:${override.roleId ?? ''}`;
-        if (targetKeys.has(key)) throw new APIError('An override target may only appear once', {}, 400);
+        if (targetKeys.has(key)) throw new APIError('An override target may only appear once', {}, 400, {cause: 'ACTIVITY_OVERRIDE_DUPLICATE'});
         targetKeys.add(key);
         if (override.id != null) submittedIds.add(override.id);
         result.push(override);
@@ -1146,11 +1156,11 @@ async function updateRequirements(planId: string, body: any, removedOverrideIds:
     async function saveRequirements(manager: EntityManager): Promise<void> {
         const plan = await requireRecommendationContext(manager, planId);
         if (expectedPlan && (expectedPlan.eventId ?? null) !== (plan.eventId ?? null)) {
-            throw new APIError('Activity plan event changed; reload the requirements', {}, 409);
+            throw new APIError('Activity plan event changed; reload the requirements', {}, 409, {cause: 'ACTIVITY_CONTEXT_CHANGED'});
         }
 
         if (!plan.eventId) {
-            throw new APIError('Event is required to configure participant overrides', {planId}, 400);
+            throw new APIError('Event is required to configure participant overrides', {planId}, 400, {cause: 'ACTIVITY_EVENT_REQUIRED'});
         }
 
         // Membership and saved-override decisions use this same locked transaction.
@@ -1168,13 +1178,14 @@ async function updateRequirements(planId: string, body: any, removedOverrideIds:
                 'Requirement roles must belong to this activity plan',
                 invalidRoleRequirement ?? invalidOverrideRole,
                 400,
+                {cause: 'ACTIVITY_REQUIREMENT_ROLE_INVALID'},
             );
         }
 
         const planDays = countInclusiveDays(plan.startDate, plan.endDate);
         const invalidStayRequirement = stayRequirements.find((requirement) => requirement.stayDays > planDays);
         if (invalidStayRequirement) {
-            throw new APIError('Stay duration cannot exceed the activity plan duration', invalidStayRequirement, 400);
+            throw new APIError('Stay duration cannot exceed the activity plan duration', invalidStayRequirement, 400, {cause: 'ACTIVITY_STAY_DURATION_INVALID'});
         }
         const targetAssignmentMode = planSettings.assignmentMode ?? plan.assignmentMode;
         const savedStayDays = new Set(stayRequirements.map((requirement) => requirement.stayDays));
@@ -1187,6 +1198,7 @@ async function updateRequirements(planId: string, body: any, removedOverrideIds:
                 `Required mode needs exactly one saved requirement for every stay duration from 1 to ${planDays} days`,
                 {stayRequirements, planDays},
                 400,
+                {cause: 'ACTIVITY_STAY_REQUIREMENTS_INCOMPLETE'},
             );
         }
 
@@ -1302,10 +1314,12 @@ function overlapConfirmation(planId: string, results: RecommendationWarningResul
     return crypto.createHash('sha256').update(JSON.stringify([planId, collisions.sort()])).digest('hex');
 }
 
+/** Require deliberate confirmation of the current overlap review when one exists. */
 function requireOverlapConfirmation(expected: string | undefined, submitted: unknown): void {
+    // An older review digest cannot approve changed or newly discovered collisions.
     if (expected && submitted !== expected) {
         throw new APIError('Review the current overlap warnings and confirm again before applying this assignment',
-            {reason: 'activity-overlap-confirmation-required'}, 409);
+            {reason: 'activity-overlap-confirmation-required'}, 409, {cause: 'ACTIVITY_OVERLAP_CONFIRMATION_REQUIRED'});
     }
 }
 
@@ -1448,6 +1462,8 @@ async function collectRecommendationWarnings(
     return warnings;
 }
 
+/** Validate referenced activities, optional assignment state and participant eligibility
+ * through the supplied transaction's current plan snapshot, without writing proposals. */
 async function validateRecommendationTargets(planId: string, recommendations: {
     itemId: string;
     profileId?: string | null;
@@ -1455,6 +1471,7 @@ async function validateRecommendationTargets(planId: string, recommendations: {
     operation?: RecommendationOperation;
     sourceItemId?: string | null;
 }[], validateAssignmentState = false, manager?: EntityManager) {
+    // Read only this plan's current activities and commitments through the DBAL.
     const [plan, slots, assignees] = await Promise.all([
         activityService.getActivityPlanById(planId, manager),
         activityService.getActivitySlotsFlat(planId, manager),
@@ -1467,15 +1484,17 @@ async function validateRecommendationTargets(planId: string, recommendations: {
     const allowedSlotIds = new Set(slots.map((slot) => slot.id));
     const invalidSlot = recommendations.find((recommendation) => !allowedSlotIds.has(recommendation.itemId));
     if (invalidSlot) {
-        throw new APIError('Recommendation slot does not belong to this activity plan', invalidSlot, 400);
+        throw new APIError('Recommendation slot does not belong to this activity plan', invalidSlot, 400, {cause: 'ACTIVITY_RECOMMENDATION_TARGET_INVALID'});
     }
     const invalidSourceSlot = recommendations.find(
         (recommendation) => recommendation.sourceItemId && !allowedSlotIds.has(recommendation.sourceItemId),
     );
     if (invalidSourceSlot) {
-        throw new APIError('Recommendation source slot does not belong to this activity plan', invalidSourceSlot, 400);
+        throw new APIError('Recommendation source slot does not belong to this activity plan', invalidSourceSlot, 400, {cause: 'ACTIVITY_RECOMMENDATION_TARGET_INVALID'});
     }
 
+    // Applying a batch additionally requires consistent source/target pairs;
+    // history rows already applied or rejected are not pending assignment intents.
     if (validateAssignmentState) {
         const targetPairs = new Set<string>();
         const sourcePairs = new Set<string>();
@@ -1485,7 +1504,7 @@ async function validateRecommendationTargets(planId: string, recommendations: {
             const targetPair = `${recommendation.itemId}:${recommendation.profileId}`;
             if (operation !== "UNASSIGN") {
                 if (targetPairs.has(targetPair)) {
-                    throw new APIError('Duplicate recommendation target', recommendation, 409);
+                    throw new APIError('Duplicate recommendation target', recommendation, 409, {cause: 'ACTIVITY_RECOMMENDATION_DUPLICATE'});
                 }
                 targetPairs.add(targetPair);
             }
@@ -1494,7 +1513,7 @@ async function validateRecommendationTargets(planId: string, recommendations: {
                 (assignee) => assignee.profileId === recommendation.profileId,
             );
             if (operation === "ASSIGN" && targetAssignment) {
-                throw new APIError('Participant is already assigned to the recommendation slot', recommendation, 409);
+                throw new APIError('Participant is already assigned to the recommendation slot', recommendation, 409, {cause: 'ACTIVITY_RECOMMENDATION_ALREADY_ASSIGNED'});
             }
             const sourceItemId = operation === "REASSIGN"
                 ? recommendation.sourceItemId
@@ -1504,14 +1523,14 @@ async function validateRecommendationTargets(planId: string, recommendations: {
             if (sourceItemId) {
                 const sourcePair = `${sourceItemId}:${recommendation.profileId}`;
                 if (sourcePairs.has(sourcePair)) {
-                    throw new APIError('An assignment can only be changed once per recommendation batch', recommendation, 409);
+                    throw new APIError('An assignment can only be changed once per recommendation batch', recommendation, 409, {cause: 'ACTIVITY_RECOMMENDATION_CHANGE_DUPLICATE'});
                 }
                 sourcePairs.add(sourcePair);
                 const sourceAssignment = (assignees[sourceItemId] ?? []).find(
                     (assignee) => assignee.profileId === recommendation.profileId,
                 );
                 if (!sourceAssignment) {
-                    throw new APIError('Recommendation source assignment no longer exists', recommendation, 409);
+                    throw new APIError('Recommendation source assignment no longer exists', recommendation, 409, {cause: 'ACTIVITY_RECOMMENDATION_SOURCE_MISSING'});
                 }
                 if (
                     operation === "REASSIGN"
@@ -1521,15 +1540,18 @@ async function validateRecommendationTargets(planId: string, recommendations: {
                         'Assignments with named roles cannot be automatically reassigned',
                         recommendation,
                         409,
+                        {cause: 'ACTIVITY_RECOMMENDATION_NAMED_ROLE'},
                     );
                 }
             }
             if (operation === "REASSIGN" && targetAssignment) {
-                throw new APIError('Participant is already assigned to the recommendation slot', recommendation, 409);
+                throw new APIError('Participant is already assigned to the recommendation slot', recommendation, 409, {cause: 'ACTIVITY_RECOMMENDATION_ALREADY_ASSIGNED'});
             }
         }
     }
 
+    // Linked-event membership constrains new recommendations. Existing assignees
+    // remain eligible only through the plan's explicit external-assignee setting.
     if (!plan.event?.id) return;
 
     const eventParticipants = await eventService.getEventParticipants(plan.event.id, manager);
@@ -1544,7 +1566,7 @@ async function validateRecommendationTargets(planId: string, recommendations: {
             && recommendation.profileId && !allowedProfileIds.has(recommendation.profileId),
     );
     if (invalidProfile) {
-        throw new APIError('Recommendations must target participants registered for this event', invalidProfile, 400);
+        throw new APIError('Recommendations must target participants registered for this event', invalidProfile, 400, {cause: 'ACTIVITY_RECOMMENDATION_PARTICIPANT_REQUIRED'});
     }
 }
 
@@ -1845,12 +1867,12 @@ async function authorizeSelfAssignment(
     let requestedRole: {name: string; maxQty: number} | undefined;
     if (roleName !== undefined) {
         if (typeof roleName !== 'string' || !roleName.trim()) {
-            throw new APIError('Activity role is required', {slotId, roleName}, 400);
+            throw new APIError('Activity role is required', {slotId, roleName}, 400, {cause: 'ACTIVITY_ROLE_REQUIRED'});
         }
         const slotRoles = await activityService.getActivitySlotRoles(planId);
         requestedRole = slotRoles[slotId]?.find((role) => role.name === roleName);
         if (!requestedRole) {
-            throw new APIError('Activity role is not available for this slot', {slotId, roleName}, 400);
+            throw new APIError('Activity role is not available for this slot', {slotId, roleName}, 400, {cause: 'ACTIVITY_ROLE_UNAVAILABLE'});
         }
     }
 
@@ -1865,6 +1887,7 @@ async function authorizeSelfAssignment(
                 'Only registered event participants may take slots in this activity plan',
                 {planId, slotId},
                 403,
+                {cause: 'ACTIVITY_PARTICIPANT_REQUIRED'},
             );
         }
     }
@@ -1877,14 +1900,14 @@ async function authorizeSelfAssignment(
         && typeof slot.maxAssignees === 'number'
         && assignees.length >= slot.maxAssignees
     ) {
-        throw new APIError('This activity slot is already full', {planId, slotId}, 409);
+        throw new APIError('This activity slot is already full', {planId, slotId}, 409, {cause: 'ACTIVITY_FULL'});
     }
 
     if (requestedRole && requestedRole.maxQty > 0) {
         const alreadyHasRole = existingAssignee?.roles.includes(requestedRole.name);
         const roleCount = assignees.filter((assignee) => assignee.roles.includes(requestedRole!.name)).length;
         if (!alreadyHasRole && roleCount >= requestedRole.maxQty) {
-            throw new APIError('This activity role is already full', {planId, slotId, roleName}, 409);
+            throw new APIError('This activity role is already full', {planId, slotId, roleName}, 409, {cause: 'ACTIVITY_ROLE_FULL'});
         }
     }
 }
@@ -2043,7 +2066,7 @@ async function updateRecommendations(planId: string, body: any, session?: Sessio
 function normalizeRecommendationForPersistence(input: RecommendationInput): RecommendationInput {
     if (!input.itemId || !input.profileId) throw new APIError('Recommendation requires a slot and profile', input, 400);
     if (input.operation === 'REASSIGN' && (!input.sourceItemId || input.sourceItemId === input.itemId)) {
-        throw new APIError('Reassignment requires a different source slot', input, 400);
+        throw new APIError('Reassignment requires a different source slot', input, 400, {cause: 'ACTIVITY_RECOMMENDATION_SOURCE_INVALID'});
     }
     return normalizeRecommendationInput(input);
 }
@@ -2075,7 +2098,7 @@ export async function saveGeneratedRecommendations(
         if (expected?.inputFingerprint) {
             const current = await buildPlanRecommendationContext(planId, undefined, manager);
             if (fingerprintRecommendationContext(current) !== expected.inputFingerprint) {
-                throw new APIError('Activity plan inputs changed; generate recommendations again', {reason: 'activity-context-changed'}, 409);
+                throw new APIError('Activity plan inputs changed; generate recommendations again', {reason: 'activity-context-changed'}, 409, {cause: 'ACTIVITY_CONTEXT_CHANGED'});
             }
         }
         const normalized = recommendations.map(normalizeRecommendationForPersistence);
@@ -2207,7 +2230,7 @@ async function generateAndSaveRecommendations(planId: string, existing: Activity
     const recommendations = generateAutoRecommendations(context);
     const freshContext = await buildPlanRecommendationContext(planId);
     if (fingerprintRecommendationContext(freshContext) !== fingerprint) {
-        throw new APIError('Plan inputs changed while recommendations were being calculated', {}, 409);
+        throw new APIError('Plan inputs changed while recommendations were being calculated', {}, 409, {cause: 'ACTIVITY_CONTEXT_CHANGED'});
     }
     await saveGeneratedRecommendations(planId, recommendations, {
         eventId: context.plan.eventId ?? null,
@@ -2224,7 +2247,7 @@ async function autoGenerateRecommendations(planId: string) {
         throw new APIError('Activity plan not found', {planId}, 404);
     }
     if (plan.assignmentMode === "FREE") {
-        throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409);
+        throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409, {cause: 'ACTIVITY_RECOMMENDATIONS_DISABLED'});
     }
     const requirementConfig = await requireRequirementConfiguration(planId);
     const planDays = countInclusiveDays(plan.startDate, plan.endDate);
@@ -2233,6 +2256,7 @@ async function autoGenerateRecommendations(planId: string) {
             `Automatic recommendations need saved stay-duration requirements for days 1 through ${planDays}`,
             {planId},
             409,
+            {cause: 'ACTIVITY_GENERATION_REQUIREMENTS_INCOMPLETE'},
         );
     }
 
@@ -2396,11 +2420,13 @@ async function addSlotRole(slotId: string, body: any) {
     return 'Roles added';
 }
 
+/** Admit explicit generation against saved requirements before enqueueing any work. */
 async function queueAutoGenerateRecommendations(planId: string) {
+    // Free assignment and incomplete stay requirements cannot start a useful job.
     const plan = await activityService.getActivityPlanById(planId);
     if (!plan) throw new APIError('Activity plan not found', {planId}, 404);
     if (plan.assignmentMode === "FREE") {
-        throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409);
+        throw new APIError('Automatic recommendations are disabled in free assignment mode', {planId}, 409, {cause: 'ACTIVITY_RECOMMENDATIONS_DISABLED'});
     }
     const requirementConfig = await requireRequirementConfiguration(planId);
     const planDays = countInclusiveDays(plan.startDate, plan.endDate);
@@ -2409,9 +2435,12 @@ async function queueAutoGenerateRecommendations(planId: string) {
             `Automatic recommendations need saved stay-duration requirements for days 1 through ${planDays}`,
             {planId},
             409,
+            {cause: 'ACTIVITY_GENERATION_REQUIREMENTS_INCOMPLETE'},
         );
     }
 
+    // The coordinator retains coalescing and queue capacity. Its trusted queue
+    // failure carries the existing bounded retry advice rather than private text.
     try {
         const queued = recommendationJobCoordinator.enqueue(planId);
         return {
@@ -2435,23 +2464,26 @@ async function getAutoRecommendationJob(planId: string, jobId: string) {
     return {job};
 }
 
+/** Normalize selected role IDs and reject roles outside their activity plan. */
 async function validatePlanRoleIds(planId: string, roles: unknown, body: unknown): Promise<number[]> {
+    // Numeric conversion retains native form values; malformed IDs never reach a query.
     if (!Array.isArray(roles)) throw new APIError('Invalid roles', {body}, 400);
     const normalized = roles.map(Number);
     if (normalized.some((roleId) => !Number.isInteger(roleId) || roleId <= 0)) {
         throw new APIError('Invalid roles', {body}, 400);
     }
 
+    // Membership, rather than a posted role ID alone, authorizes this plan's selection.
     const allowed = new Set((await activityService.getAllRoles(planId)).map((role) => role.id));
     if (normalized.some((roleId) => !allowed.has(roleId))) {
-        throw new APIError('Roles must belong to this activity plan', {body}, 400);
+        throw new APIError('Roles must belong to this activity plan', {body}, 400, {cause: 'ACTIVITY_ROLE_UNAVAILABLE'});
     }
     return [...new Set(normalized)];
 }
 
 async function addActivityRole(plan: ActivityPlan, body: any) {
     const {name, description, isDefault} = body;
-    if (!name || name === "default") throw new APIError('Missing name', body, 400);
+    if (!name || name === "default") throw new APIError('Missing name', body, 400, {cause: 'ACTIVITY_ROLE_NAME_INVALID'});
     return activityService.ensureRoleId(plan.id, name, isDefault === 'on', description);
 }
 
@@ -2462,7 +2494,9 @@ async function updateRoleAssignments(slotId: string, body: any) {
     const current = await activityService.getActivitySlotById(slotId);
     if (!current) throw new APIError('Activity slot not found', {slotId}, 404);
     const planId = current.entityId;
+    /** Replace role links only after locked assignment membership and quota checks. */
     async function saveRoles(manager: EntityManager): Promise<void> {
+        // The plan and activity locks fence concurrent role/assignment changes.
         await requireRecommendationContext(manager, planId);
         const [slot] = await activityService.getLockedActivitySlots(manager, [slotId]);
         if (!slot) throw new APIError('Activity slot not found', {slotId}, 404);
@@ -2472,15 +2506,16 @@ async function updateRoleAssignments(slotId: string, body: any) {
         const assignmentIds = new Set(currentAssignments.map((assignment) => assignment.id));
         const requestedCounts = new Map<string, number>();
         const rows: {assignmentId: number; roleId: number}[] = [];
+        // Validate every requested role and assignee before replacing any links.
         for (const entry of assignments) {
             const role = entry && byName.get(entry.role);
-            if (!role) throw new APIError('Roles must be configured for this activity slot', body, 400);
+            if (!role) throw new APIError('Roles must be configured for this activity slot', body, 400, {cause: 'ACTIVITY_ROLE_UNAVAILABLE'});
             const assignmentId = entry.assignmentId === null ? null : Number.parseInt(entry.assignmentId) || null;
             if (assignmentId === null) continue;
-            if (!assignmentIds.has(assignmentId)) throw new APIError('Assignment not found in this slot', body, 400);
+            if (!assignmentIds.has(assignmentId)) throw new APIError('Assignment not found in this slot', body, 400, {cause: 'ACTIVITY_ASSIGNMENT_INVALID'});
             const count = (requestedCounts.get(entry.role) ?? 0) + 1;
             if (entry.role !== 'default' && count > (role.maxQty ?? 0)) {
-                throw new APIError('This activity role is already full', {slotId, role: entry.role}, 409);
+                throw new APIError('This activity role is already full', {slotId, role: entry.role}, 409, {cause: 'ACTIVITY_ROLE_FULL'});
             }
             requestedCounts.set(entry.role, count);
             rows.push({assignmentId, roleId: role.role.id});
@@ -2509,11 +2544,11 @@ async function assignActivityAssignmentRole(itemId: string, profileId: string, r
         const assignments = await activityService.getLockedPlanAssignments(manager, planId, itemId);
         const existing = assignments.find((assignment) => assignment.profile.id === profileId);
         if (!existing && !plan.allowOverfillAfterFull && slot.maxAssignees != null && assignments.length >= slot.maxAssignees) {
-            throw new APIError('This activity slot is already full', {itemId}, 409);
+            throw new APIError('This activity slot is already full', {itemId}, 409, {cause: 'ACTIVITY_FULL'});
         }
         let role = await activityService.getActivityRoleByName(manager, planId, roleName);
         if (!role && roleName !== 'default') {
-            throw new APIError('Activity role is not available for this plan', {itemId, roleName}, 400);
+            throw new APIError('Activity role is not available for this plan', {itemId, roleName}, 400, {cause: 'ACTIVITY_ROLE_UNAVAILABLE'});
         }
         if (role && existing && assignmentHasRole(existing, role.id)) return;
         if (!existing) {
@@ -2527,14 +2562,14 @@ async function assignActivityAssignmentRole(itemId: string, profileId: string, r
             const roleId = role!.id;
             const configured = await activityService.getConfiguredSlotRoles(manager, itemId);
             const slotRole = configured.find((entry) => entry.role.id === roleId);
-            if (!slotRole) throw new APIError('Activity role is not available for this slot', {itemId, roleName}, 400);
+            if (!slotRole) throw new APIError('Activity role is not available for this slot', {itemId, roleName}, 400, {cause: 'ACTIVITY_ROLE_UNAVAILABLE'});
             let roleCount = 0;
             for (const assignment of assignments) {
                 if (assignmentHasRole(assignment, roleId)) roleCount++;
             }
             // Slot overfill does not relax the independently configured named-role quota.
             if (slotRole.maxQty != null && roleCount >= slotRole.maxQty) {
-                throw new APIError('This activity role is already full', {itemId, roleName}, 409);
+                throw new APIError('This activity role is already full', {itemId, roleName}, 409, {cause: 'ACTIVITY_ROLE_FULL'});
             }
         }
         if (!role) [role] = await activityService.ensureRoleId(planId, 'default', true, undefined, manager);
@@ -2607,7 +2642,7 @@ async function applyActivityRecommendationOperations(
         ]))];
         const slots = await activityService.getLockedActivitySlots(manager, referencedSlotIds);
         if (slots.length !== referencedSlotIds.length || slots.some((slot) => slot.entityId !== planId)) {
-            throw new APIError("Recommendation slot does not belong to this activity plan", {planId}, 400);
+            throw new APIError("Recommendation slot does not belong to this activity plan", {planId}, 400, {cause: 'ACTIVITY_RECOMMENDATION_TARGET_INVALID'});
         }
         const slotById = new Map(slots.map((slot) => [slot.id, slot]));
 
@@ -2627,7 +2662,7 @@ async function applyActivityRecommendationOperations(
             }
             for (const operation of operations) {
                 if (!allowedProfiles.has(operation.profileId)) {
-                    throw new APIError('Recommendations must target participants registered for this event', operation, 400);
+                    throw new APIError('Recommendations must target participants registered for this event', operation, 400, {cause: 'ACTIVITY_RECOMMENDATION_PARTICIPANT_REQUIRED'});
                 }
             }
         }
@@ -2639,7 +2674,7 @@ async function applyActivityRecommendationOperations(
             const targetPair = pairKey(operation.itemId, operation.profileId);
             if (operation.operation === "ASSIGN") {
                 if (assignmentByPair.has(targetPair) || additionPairs.has(targetPair)) {
-                    throw new APIError("Participant is already assigned to the recommendation slot", operation, 409);
+                    throw new APIError("Participant is already assigned to the recommendation slot", operation, 409, {cause: 'ACTIVITY_RECOMMENDATION_ALREADY_ASSIGNED'});
                 }
                 additionPairs.add(targetPair);
                 additions.push(operation);
@@ -2650,25 +2685,25 @@ async function applyActivityRecommendationOperations(
                 ? operation.sourceItemId
                 : operation.itemId;
             if (!sourceItemId) {
-                throw new APIError("Reassignment requires a source slot", operation, 400);
+                throw new APIError("Reassignment requires a source slot", operation, 400, {cause: 'ACTIVITY_RECOMMENDATION_SOURCE_INVALID'});
             }
             const source = assignmentByPair.get(pairKey(sourceItemId, operation.profileId));
             if (!source) {
-                throw new APIError("Recommendation source assignment no longer exists", operation, 409);
+                throw new APIError("Recommendation source assignment no longer exists", operation, 409, {cause: 'ACTIVITY_RECOMMENDATION_SOURCE_MISSING'});
             }
             if (removals.has(source.id)) {
-                throw new APIError("An assignment can only be changed once per recommendation batch", operation, 409);
+                throw new APIError("An assignment can only be changed once per recommendation batch", operation, 409, {cause: 'ACTIVITY_RECOMMENDATION_CHANGE_DUPLICATE'});
             }
 
             if (operation.operation === "REASSIGN") {
                 if (sourceItemId === operation.itemId) {
-                    throw new APIError("Reassignment target must differ from its source", operation, 400);
+                    throw new APIError("Reassignment target must differ from its source", operation, 400, {cause: 'ACTIVITY_RECOMMENDATION_SOURCE_INVALID'});
                 }
                 if (source.activityAssignmentRoles.some(({role}) => !role.isDefault)) {
-                    throw new APIError("Assignments with named roles cannot be automatically reassigned", operation, 409);
+                    throw new APIError("Assignments with named roles cannot be automatically reassigned", operation, 409, {cause: 'ACTIVITY_RECOMMENDATION_NAMED_ROLE'});
                 }
                 if (assignmentByPair.has(targetPair) || additionPairs.has(targetPair)) {
-                    throw new APIError("Participant is already assigned to the recommendation slot", operation, 409);
+                    throw new APIError("Participant is already assigned to the recommendation slot", operation, 409, {cause: 'ACTIVITY_RECOMMENDATION_ALREADY_ASSIGNED'});
                 }
                 additionPairs.add(targetPair);
                 additions.push(operation);
@@ -2689,7 +2724,7 @@ async function applyActivityRecommendationOperations(
             const target = slotById.get(addition.itemId)!;
             const count = projectedCounts.get(target.id) ?? 0;
             if (!plan.allowOverfillAfterFull && target.maxAssignees != null && count >= target.maxAssignees) {
-                throw new APIError("This activity slot is already full", addition, 409);
+                throw new APIError("This activity slot is already full", addition, 409, {cause: 'ACTIVITY_FULL'});
             }
             projectedCounts.set(target.id, count + 1);
         }

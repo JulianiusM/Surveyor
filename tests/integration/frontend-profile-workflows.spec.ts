@@ -400,7 +400,14 @@ describe('shared profile workflows through versioned SPA commands and initial do
             const native = await actor.agent.post('/users/' + suffix, {[field]: value});
             expect(native.status).toBe(500);
             const response = await postWorkflow(actor, suffix, document.state, {[field]: value}, 400);
-            expect(JSON.parse(response.text)).toMatchObject({code: 'VALIDATION_FAILED', status: 400});
+            expect(JSON.parse(response.text)).toMatchObject({
+                code: suffix === 'profile/delete' ? 'PROFILE_DEACTIVATION_CONFIRMATION_INVALID' : 'ACCOUNT_DELETION_CONFIRMATION_INVALID',
+                status: 400, params: {},
+                detail: suffix === 'profile/delete'
+                    ? 'Enter the active profile name exactly to confirm profile deactivation.'
+                    : 'Enter your account username exactly to confirm account deletion.',
+            });
+            expect(response.text).not.toContain(value);
             expect(native.text).toContain(`value="${value}"`);
             expect(await userService.getProfileById(actor.profileId)).toMatchObject({userId: actor.userId});
             expect(await AppDataSource.getRepository(User).findOneBy({id: actor.userId!})).not.toBeNull();

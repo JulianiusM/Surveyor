@@ -1,5 +1,6 @@
 import {test, expect, type APIRequestContext, type APIResponse, type Response, type Request, type Route} from '@playwright/test';
 import {randomUUID} from 'node:crypto';
+import {Window} from 'happy-dom';
 import type {components} from '../../src/types/api/v1';
 import type {FrontendPilotBootstrap} from '../../src/types/FrontendPilotTypes';
 import {createE2ELogin, createE2EPackingList} from '../factories/e2eCoreFactory';
@@ -17,10 +18,17 @@ async function session(request: APIRequestContext): Promise<SessionView> {
     return view;
 }
 
-/** Native and Vue slot comments differ; they never change the visible alert sentence. */
+/** Read actual alert text through nested native/Vue markup without parsing tags as prose. */
 function renderedIdentityError(html: string): string | undefined {
-    const content = html.match(/<div class="[^"]*alert-danger[^"]*"[^>]*>(.*?)<\/div>/u)?.[1];
-    return content?.replace(/<!--[\s\S]*?-->/gu, '');
+    const window = new Window({settings: {disableJavaScriptEvaluation: true,
+        disableJavaScriptFileLoading: true, disableCSSFileLoading: true}});
+    try {
+        const document = new window.DOMParser().parseFromString(html, 'text/html');
+        const notice = document.querySelector('.alert-danger');
+        return (notice?.querySelector('.pilot-notice-body') ?? notice)?.textContent?.trim();
+    } finally {
+        window.close();
+    }
 }
 
 /** Match actual rendered fields rather than inferring browser constraints from the schema. */

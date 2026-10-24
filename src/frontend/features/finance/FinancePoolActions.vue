@@ -43,7 +43,7 @@ async function refresh(): Promise<void> {
         <CommandFeedback :feedback="command.feedback" part="uncertain"
                          :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="refresh" />
         <p v-if="pool.status === 'ORGANIZER_ONLY'" class="small text-secondary">{{ messages.t('finance.organizerOnlyPoolHelp') }}</p>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="pilot-action-row">
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'expense')">{{ messages.t('finance.addInvoiceAmount') }}</ActionButton>
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'settings')">{{ messages.t('finance.poolSettings') }}</ActionButton>
             <ActionButton variant="outline-light" class="btn-sm" :state="action" @click="emit('edit', 'assignments')">{{ messages.t('finance.participantsFactors') }}</ActionButton>

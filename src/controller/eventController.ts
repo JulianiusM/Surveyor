@@ -114,6 +114,25 @@ function validateCalendarDate(value: string, helpers: Joi.CustomHelpers): string
     return value;
 }
 
+/** Identify only authored Event property rejections from the existing validator.
+ * Native prose, submitted values and validation rules stay with their owner;
+ * versioned adapters receive a finite reason for an already rejected request. */
+function eventPropertyRejectionCause(error: Joi.ValidationError): string | undefined {
+    // Generated structural validation precedes this shared native boundary, but
+    // calendar semantics, trim checks and native string lengths still apply here.
+    const detail = error.details[0];
+    switch (detail?.path[0]) {
+        case 'title': return 'EVENT_TITLE_INVALID';
+        case 'startDate':
+        case 'endDate': return 'EVENT_CALENDAR_DATE_INVALID';
+        case 'maxParticipants': return 'EVENT_PARTICIPANT_LIMIT_INVALID';
+        case 'description': return detail.type === 'string.max' ? 'EVENT_DESCRIPTION_TOO_LONG' : undefined;
+        case 'location': return detail.type === 'string.max' ? 'EVENT_LOCATION_TOO_LONG' : undefined;
+        case 'deadlineTz': return 'EVENT_TIMEZONE_INVALID';
+        default: return undefined;
+    }
+}
+
 /** Authenticate both the seek position and the profile/filter scope as one opaque token. */
 function encodeEventCursor(position: {startDate: string; id: string}, scope: string): string {
     const iv = crypto.randomBytes(12);
@@ -132,7 +151,7 @@ function decodeEventCursor(token: string, scope: string): {startDate: string; id
         if (decoded.scope !== scope) throw new Error('Cursor scope changed');
         return decoded.position;
     } catch {
-        throw new APIError('Search expired or changed. Reset filters and try again.', {}, 400);
+        throw new APIError('Search expired or changed. Reset filters and try again.', {}, 400, {cause: 'EVENT_SEARCH_EXPIRED'});
     }
 }
 
@@ -202,7 +221,8 @@ export async function getEventLinkOptions(query: unknown, session: SessionLike):
         cursor: Joi.string().max(2048), selectedId: Joi.string().uuid().lowercase(),
     }).unknown(false).required();
     const {value, error} = schema.validate(query);
-    if (error || (value.from && value.to && value.from > value.to)) throw new APIError('Invalid event filters.', {}, 400);
+    if (error || (value.from && value.to && value.from > value.to)) throw new APIError('Invalid event filters.', {}, 400,
+        {cause: !error ? 'EVENT_SEARCH_RANGE_INVALID' : undefined});
     const {cursor, selectedId, ...filters} = value as EventLinkOptionsQuery;
     const scope = JSON.stringify({profileId, ...filters});
     let position = cursor ? decodeEventCursor(cursor, scope) : undefined;
@@ -603,7 +623,7 @@ async function updateEventSettings(event: Event, body: any, permData?: Pick<Perm
         deadlineTz: Joi.string().max(255).allow(''),
     }).min(1).unknown(false);
     const {error, value} = schema.validate(normalizedBody, {abortEarly: false});
-    if (error) throw new APIError(error.message, {}, 400);
+    if (error) throw new APIError(error.message, {}, 400, {cause: eventPropertyRejectionCause(error)});
     const patch: Partial<Event> = {};
     for (const field of ['title', 'description', 'startDate', 'endDate', 'location',
         'allowRegDateUpdatesAfterDeadline', 'allowRegCancelationAfterDeadline',

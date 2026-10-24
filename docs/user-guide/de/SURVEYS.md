@@ -4,9 +4,9 @@ documentation-metadata
 audience: Umfrageteilnehmer; Umfrageorganisatoren
 owner: survey feature maintainers
 status: current
-last-verified: 2026-10-20
+last-verified: 2026-10-24
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Migrated controls and exact localized labels source-reconciled with current component/catalog owners; German Survey diagram regenerated from catalog labels, inspected by author and independent nonauthor at full/768px/298px and by root at full/298px. Native business reference and declared anchors retained; no new application-browser execution claimed.
+verification-scope: German weekday-occurrence terminology reconciled with the recurring monthly selection and current catalog labels; existing user journeys, native business reference and declared anchors retained. Diagram regeneration and visual review are recorded separately in the frontend review receipt.
 heading-anchors: 1:surveys; 2:choose-your-task; 2:understand-the-recurring-monthly-model; 2:vote-in-a-survey; 3:1-open-the-survey-link; 3:2-check-the-active-profile; 3:3-choose-one-answer-for-every-combination; 3:4-select-submit; 2:change-an-answer; 2:return-as-a-guest; 2:read-the-results; 3:your-response; 3:all-answers; 3:result-visibility-and-privacy; 2:add-another-combination; 2:create-a-survey; 3:1-open-the-creation-form; 3:2-enter-the-survey-details; 3:3-add-at-least-one-combination; 3:4-select-create-survey; 2:understand-survey-access-before-sharing; 2:share-a-survey; 2:surveys-and-events; 2:manage-a-survey; 3:header-image; 3:title-and-description; 3:duplicate-a-survey; 3:delete-a-survey; 2:practical-examples; 3:primary-use-choose-a-recurring-monthly-meeting-pattern; 3:secondary-use-choose-a-day-within-one-stated-month; 3:compare-regular-volunteer-days; 2:capabilities-and-limits; 2:archive-or-restore-a-survey; 2:troubleshooting; 3:the-survey-cannot-be-created; 3:the-survey-is-missing-from-your-overview; 3:a-guest-cannot-return; 3:a-new-combination-shows-no-for-earlier-voters; 3:the-add-action-reports-an-error; 3:permission-or-event-controls-cannot-be-found; 3:entity-settings-or-an-expected-action-is-missing; 2:related-guides
 source-anchors: src/views/surveyor/survey-create.pug; src/views/surveyor/survey-vote.pug; src/controller/surveyController.ts; docs/user-guide/de/assets/survey-recurring-pattern.png; scripts/generate-help-visuals.mjs; src/frontend/features/surveys/; src/frontend/components/EntitySettingsDialog.vue; src/locales/
 next-review: survey-visible-UI-or-behavior-change
@@ -17,9 +17,9 @@ Umfragen dienen vor allem der Abstimmung **wiederkehrender monatlicher Termine**
 
 Zusätzlich kann eine Umfrage Optionen eines bestimmten Monats vergleichen. Nenne Monat und Jahr im Titel oder in der Beschreibung, denn gespeichert werden Wochentagspositionen statt konkreter Kalenderdaten. Für mehrere genaue Termine kann ein auf Einzeltermine spezialisierter Abstimmungsdienst direkter sein. Verwende Surveyor, wenn das wiederkehrende Monatsmuster im Mittelpunkt steht.
 
-![Montag im Feld Wochentag und 1. Tag im Monat im Feld Tag im Monat ergeben nach Hinzufügen den ersten Montag jedes Monats; Antworten sind Ja, Vielleicht und Nein.](assets/survey-recurring-pattern.png)
+![Montag im Feld Wochentag und 1. Vorkommen im Monat im Feld Vorkommen im Monat ergeben nach Hinzufügen den ersten Montag jedes Monats; Antworten sind Ja, Vielleicht und Nein.](assets/survey-recurring-pattern.png)
 
-*Wähle **Montag** und **1. Tag im Monat**, dann **Hinzufügen**, um den ersten Montag jedes Monats vorzuschlagen. Das genaue Kalenderdatum ändert sich von Monat zu Monat.*
+*Wähle **Montag** und **1. Vorkommen im Monat**, dann **Hinzufügen**, um den ersten Montag jedes Monats vorzuschlagen. Das genaue Kalenderdatum ändert sich von Monat zu Monat.*
 
 [Diagramm des Monatsmusters in voller Größe öffnen](/help/assets/survey-recurring-pattern.png?locale=de).
 
@@ -42,7 +42,7 @@ Jede Option verbindet einen Wochentag mit einer Position im Monat.
 | **3. Mittwoch im Monat** | Der dritte Mittwoch dieses Monats. |
 | **Letzter (4./5.) Freitag im Monat** | Der letzte Freitag, also je nach Monat der vierte oder fünfte. |
 
-Verfügbar sind **1**, **2**, **3**, **4** und **Letzte**. Es gibt keine eigene fünfte Woche; für das letzte Vorkommen eines Wochentags verwendest du **Letzte**.
+Verfügbar sind **1**, **2**, **3**, **4** und **Letztes**. Eine eigene Auswahl für das fünfte Vorkommen gibt es nicht; für das letzte Vorkommen eines Wochentags verwendest du **Letztes**.
 
 Für die wiederkehrende Hauptanwendung kann **Monatliche Ausschusssitzung** die Muster erster Dienstag, zweiter Mittwoch und letzter Donnerstag vergleichen, die sich jeden Monat wiederholen.
 
@@ -139,7 +139,7 @@ Eine Organisator- oder Administratorrolle ist nicht nötig.
 
 1. Scrolle zu **Neue Kombination hinzufügen**.
 2. Wähle unter **Wochentag:** Montag bis Sonntag.
-3. Wähle unter **Tag im Monat:** **1. Tag im Monat**, **2. Tag im Monat**, **3. Tag im Monat**, **4. Tag im Monat** oder **Letzter (4./5.) Tag im Monat**.
+3. Wähle unter **Vorkommen im Monat:** **1. Vorkommen im Monat**, **2. Vorkommen im Monat**, **3. Vorkommen im Monat**, **4. Vorkommen im Monat** oder **Letztes (4./5.) Vorkommen im Monat**.
 4. Wähle **Hinzufügen**.
 
 Die Option erscheint für alle als neue Spalte. Jede Kombination aus Wochentag und Monatsposition darf pro Umfrage nur einmal vorkommen.
@@ -153,7 +153,7 @@ Die Erstellung verlangt ein angemeldetes vollständiges Konto. Gäste dürfen te
 ### 1. Das Erstellungsformular öffnen
 
 1. Öffne oben **Neu**.
-2. Wähle unter **Planen und entscheiden** **Umfrage**.
+2. Wähle unter **Planen & entscheiden** **Umfrage**.
 
 ### 2. Umfragedetails eintragen
 
@@ -170,7 +170,7 @@ Surveyor erzwingt keine Antwortfrist für Umfragen. Ein Datum in der Beschreibun
 Die Tabelle **Terminkombinationen auswählen** beginnt mit einer Zeile.
 
 1. Wähle **Wochentag**.
-2. Wähle bei **Woche im Monat** **1**, **2**, **3**, **4** oder **Letzte**.
+2. Wähle bei **Vorkommen im Monat** **1**, **2**, **3**, **4** oder **Letztes**.
 3. Ergänze mit **Kombination hinzufügen** eine Zeile.
 4. Entferne nicht benötigte Zeilen über **Entfernen**.
 

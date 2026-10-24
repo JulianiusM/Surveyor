@@ -112,7 +112,7 @@ function expand(event: MouseEvent): void {
                     messages.t(card.visibility === 'hidden' ? 'overview.hiddenBadge' : 'overview.shown')
                 }}</span>
             </div>
-            <div class="d-flex flex-wrap gap-2">
+            <div class="pilot-action-row">
                 <AppNavigationDropdown v-if="personalVisibility || (interaction.lifecycle ?? interaction.migrated) && (card.capabilities.archive || card.capabilities.restore || card.automation?.canManage)" :navigation="false" :label="messages.t('common.archival')"
                     trigger-class="btn btn-sm btn-outline-light dropdown-toggle"
                     :trigger-label="messages.t('overview.archiveMenu', {title: card.title})">

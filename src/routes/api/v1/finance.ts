@@ -9,7 +9,7 @@ import invoiceController, {
     previewEventFinancePool, calculateEventFinancePool, rollbackEventFinancePool, notifyEventFinancePool, settleEventFinanceShare,
 } from '../../../controller/eventPoolController';
 import {requireApiContext} from '../../../modules/api/session';
-import {ApiProblem, requestLocale} from '../../../modules/api/problem';
+import {ApiProblem, declaredApiProblem, requestLocale} from '../../../modules/api/problem';
 import {
     decodeApiMultipartData, prepareValidatedJson, receiveApiUpload, sendPreparedJson,
     sendStoredApiBinary, sendValidatedJson, validateOperationRequest,
@@ -215,7 +215,7 @@ router.post('/pools/:poolId/invoices', asyncHandler(async function submitEventIn
             await invoiceController.submitInvoice(event, String(req.params.poolId), req.body.data, actor, req.file);
         } catch (error) {
             // Its exposed conflicts are locked precommit rejections, so retain a definite result instead of unknown delivery.
-            if (error instanceof APIError && error.status === 409) throw new ApiProblem('RESOURCE_CONFLICT');
+            if (error instanceof APIError && error.status === 409) throw declaredApiProblem(error) ?? new ApiProblem('RESOURCE_CONFLICT');
             throw error;
         }
         sendPreparedJson(req, res, reply);

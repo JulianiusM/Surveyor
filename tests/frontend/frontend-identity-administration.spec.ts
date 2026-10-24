@@ -8,6 +8,7 @@ import {VueQueryPlugin} from '@tanstack/vue-query';
 import I18NextVue from 'i18next-vue';
 import {createPilotContext, observeInitialDocument, pilotContextKey} from '../../src/frontend/app/context';
 import ProfileAdministrationPage from '../../src/frontend/features/identity/ProfileAdministrationPage.vue';
+import App from '../../src/frontend/app/App.vue';
 import {identityAdministrationKeys} from '../../src/frontend/app/queryKeys';
 import type {components} from '../../src/types/api/v1';
 
@@ -46,7 +47,8 @@ function rejected(status: 400 | 403): Response {
 
 /** Actual mounted reads, generated validators and identity completion; only HTTP is substituted. */
 async function mounted(path: string, handler: (request: Request) => Promise<Response>,
-                       entry: components['schemas']['PageEntryOutcome'] = {kind: 'render'}, initialSession = session) {
+                       entry: components['schemas']['PageEntryOutcome'] = {kind: 'render'}, initialSession = session,
+                       withShell = false) {
     const request = vi.fn(function deliverRequest(input: RequestInfo | URL): Promise<Response> {
         const received = input as Request;
         // Identity completion legitimately rechecks admission under its newly captured actor.
@@ -66,7 +68,7 @@ async function mounted(path: string, handler: (request: Request) => Promise<Resp
     ]});
     const stopDocument = observeInitialDocument(context, router);
     await router.push(path);
-    const wrapper = mount(defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
+    const wrapper = mount(withShell ? App : defineComponent({template: '<RouterView />'}), {attachTo: document.body, global: {
         plugins: [router, [VueQueryPlugin, {queryClient: context.queryClient}], [I18NextVue, {i18next: context.i18next}]],
         provide: {[pilotContextKey as symbol]: context},
     }});
@@ -183,16 +185,17 @@ describe('profile administration consumers', () => {
                 return json(refreshed);
             }
             return json(roster);
-        });
+        }, {kind: 'render'}, session, true);
         await wrapper.get('#name').setValue('Created profile');
-        await wrapper.get('form').trigger('submit');
+        await wrapper.get('main form').trigger('submit');
         await flushPromises();
         expect(writes).toBe(1);
-        expect(wrapper.text()).toContain(context.messages.value.t('state.saved'));
+        expect(wrapper.get('[data-pilot-notices] .alert-warning').text()).toContain(context.messages.value.t('state.deliveryFailed'));
+        expect(wrapper.find('.alert-success').exists()).toBe(false);
         expect(wrapper.text()).not.toContain(context.messages.value.t('state.unknownOutcome'));
         expect(context.readsReady.value).toBe(false);
-        expect(wrapper.find('button[type="submit"]').exists()).toBe(false);
-        const retry = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        expect(wrapper.find('main button[type="submit"]').exists()).toBe(false);
+        const retry = wrapper.get('[data-pilot-notices] .alert-warning button');
         expect(retry.attributes('disabled')).toBeUndefined();
         failSession = false;
         await retry.trigger('click');
@@ -236,11 +239,11 @@ describe('profile administration consumers', () => {
                     'Retry-After': '5'}}) : json(session);
             }
             return json({profiles: [profile], activeProfileId: profileId});
-        });
+        }, {kind: 'render'}, session, true);
         await wrapper.get('#name').setValue('Confirmed profile');
-        await wrapper.get('form').trigger('submit');
+        await wrapper.get('main form').trigger('submit');
         await flushPromises();
-        const retry = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        const retry = wrapper.get('[data-pilot-notices] .alert-warning button');
         expect(retry.attributes('disabled')).toBeDefined();
         await retry.trigger('click');
         expect(reads).toBe(1);

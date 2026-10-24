@@ -4,16 +4,16 @@ documentation-metadata
 audience: Aktivitätsteilnehmer; Aktivitätsorganisatoren
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-23
+last-verified: 2026-10-24
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
+verification-scope: German Activity labels and requirements wording reconciled with the neutral activity terminology; permission disclosure guidance, existing user journeys and stable heading anchors retained. No article figures are referenced; no new full-article browser verification claimed.
 source-anchors: docs/user-guide/en/ACTIVITY_PLANS.md; src/locales/de.json; src/frontend/features/activity/; src/frontend/components/EntitySettingsDialog.vue; src/views/activity/export/schedule.pug; src/frontend/features/activity/ActivityRecommendations.vue; src/frontend/features/activity/recommendationDraft.ts; src/locales/; src/frontend/components/permissions/CreationPermissions.vue
 heading-anchors: 1:activity-plans; 2:choose-your-task; 3:i-am-participating; 3:i-am-organizing; 2:before-you-begin; 2:participate-in-an-activity-plan; 3:find-a-slot; 3:join-a-whole-slot; 3:take-a-named-role; 3:leave-a-slot-or-role; 3:understand-assignment-warnings; 3:use-shared-text-fields; 2:organize-an-activity-plan; 3:create-an-activity-plan; 3:understand-the-tabs; 3:change-plan-properties; 3:link-change-or-remove-an-event; 3:add-and-edit-slots; 4:add-a-slot-after-creation; 4:edit-a-slot; 3:add-named-roles-to-a-slot; 3:manage-role-assignments; 3:review-participants; 3:configure-basic-assignment-rules; 3:change-permissions-and-administrators; 3:export-the-schedule; 2:advanced-requirements-and-assignment-recommendations; 3:set-participant-requirements; 4:understand-which-requirement-wins; 3:check-requirement-coverage; 3:generate-assignment-suggestions; 3:review-generated-suggestions; 3:stage-a-manual-assignment-change; 3:save-and-apply-the-review; 3:advanced-limitations; 2:archive-or-restore-a-plan; 2:troubleshooting; 3:i-see-registration-required; 3:join-or-take-is-unavailable; 3:a-slot-does-not-appear-under-open-slots; 3:i-joined-the-wrong-profile; 3:i-cannot-edit-slots-roles-participants-rules-settings-or-exports; 3:my-changes-in-rules-and-auto-assign-were-lost; 3:auto-generate-is-disabled; 3:requirement-coverage-says-the-configuration-is-incomplete; 3:recommendation-generation-became-stale-or-failed; 3:a-participant-still-needs-shifts-after-generation; 3:an-approved-change-was-not-applied; 2:related-guides
 next-review: activity-plan-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current German migrated controls and approved exceptions; not an installed production commit
 -->
 
-Aktivitätspläne stellen Zeitfenster in einem datierten Ablaufplan bereit. Teilnehmer können einem vollständigen Zeitfenster beitreten oder eine benannte Rolle übernehmen. Organisatoren können Zeitfenster erstellen, Zuweisungen verwalten und den Plan mit einer Veranstaltung verknüpfen.
+Mit Aktivitätsplänen organisieren Sie zum Beispiel Gruppenaktivitäten, Vorträge oder Aufgaben in einem datierten Ablaufplan. Teilnehmer können einem vollständigen Zeitfenster beitreten oder eine benannte Rolle übernehmen. Organisatoren können Zeitfenster erstellen, Zuweisungen verwalten und den Plan mit einer Veranstaltung verknüpfen.
 
 ## Wählen Sie Ihre Aufgabe
 
@@ -46,7 +46,7 @@ Aktivitätspläne stellen Zeitfenster in einem datierten Ablaufplan bereit. Teil
 
 Der Name im Benutzermenü bezeichnet Ihr aktives Profil. Teilnahme, Eigentümerschaft und Zuweisungen gehören zu diesem Profil. Unter [Erste Schritte](GETTING_STARTED.md#understand-accounts-and-profiles) erfahren Sie, wie Sie das Profil wechseln oder einen Gastzugang wiederherstellen.
 
-Ein Plan kann unabhängig sein oder einer Veranstaltung zugeordnet werden. Bei einem verknüpften Plan benötigen Sie normalerweise eine Anmeldung zu dieser Veranstaltung, bevor Sie Zeitfenstern beitreten können. Ein Organisator kann stattdessen **Einsätze für Personen ohne Veranstaltungsteilnahme erlauben** aktivieren. Unter Umständen dürfen Sie einen verknüpften Plan ansehen, aber nicht beitreten. Dann zeigt der Ablaufplan **Anmeldung erforderlich** und einen erklärenden Hinweis oberhalb der Filter.
+Ein Plan kann unabhängig sein oder einer Veranstaltung zugeordnet werden. Bei einem verknüpften Plan benötigen Sie normalerweise eine Anmeldung zu dieser Veranstaltung, bevor Sie Zeitfenstern beitreten können. Ein Organisator kann stattdessen **Aktivitäten für Personen ohne Veranstaltungsteilnahme erlauben** aktivieren. Unter Umständen dürfen Sie einen verknüpften Plan ansehen, aber nicht beitreten. Dann zeigt der Ablaufplan **Anmeldung erforderlich** und einen erklärenden Hinweis oberhalb der Filter.
 
 Ihre sichtbaren Aktionen richten sich nach den Freigabeeinstellungen des Plans. [Berechtigungen und Freigaben](PERMISSIONS.md) erklärt Zielgruppenberechtigungen und den Zugriff beauftragter Organisatoren.
 
@@ -64,13 +64,13 @@ Ihre sichtbaren Aktionen richten sich nach den Freigabeeinstellungen des Plans. 
 
 Verwenden Sie die Filter des Ablaufplans:
 
-- **Alle Einsätze** zeigt den vollständigen Ablaufplan.
-- **Meine Einsätze** zeigt Zeitfenster, die Ihrem aktiven Profil zugewiesen sind.
-- **Offene Einsätze** zeigt Zeitfenster mit verbleibender regulärer Kapazität. Volle Zeitfenster erscheinen hier auch dann nicht, wenn der Organisator eine Teilnahme über die Kapazität hinaus erlaubt.
+- **Alle Aktivitäten** zeigt den vollständigen Ablaufplan.
+- **Meine Aktivitäten** zeigt Zeitfenster, die Ihrem aktiven Profil zugewiesen sind.
+- **Offene Aktivitäten** zeigt Zeitfenster mit verbleibender regulärer Kapazität. Volle Zeitfenster erscheinen hier auch dann nicht, wenn der Organisator eine Teilnahme über die Kapazität hinaus erlaubt.
 
-Die Zusammenfassung oberhalb des Kalenders zeigt **Teilnehmende**, **Einsätze:**, offene und unbesetzte Zeitfenster. Ein unbesetztes Zeitfenster hat derzeit keine Teilnehmer; es ist deshalb nicht unbedingt gesperrt.
+Die Zusammenfassung oberhalb des Kalenders zeigt **Teilnehmende**, **Aktivitäten:**, offene und unbesetzte Zeitfenster. Ein unbesetztes Zeitfenster hat derzeit keine Teilnehmer; es ist deshalb nicht unbedingt gesperrt.
 
-Bei vorgeschriebener Teilnahme zeigt eine Nachricht oberhalb der Filter Ihren Fortschritt, beispielsweise **Du nimmst an 1 von 2 erforderlichen Einsätzen teil. Übernimm noch 1.** Im freien Modus gibt es keine Mindestanzahl.
+Bei vorgeschriebener Teilnahme zeigt eine Nachricht oberhalb der Filter Ihren Fortschritt, beispielsweise **Du nimmst an 1 von 2 erforderlichen Aktivitäten teil. Noch erforderlich: 1.** Im freien Modus gibt es keine Mindestanzahl.
 
 ### Einem vollständigen Zeitfenster beitreten
 
@@ -96,7 +96,7 @@ Eine benannte Rolle ist eine Position innerhalb eines Zeitfensters. Jede angezei
 
 Wenn Sie noch nicht zugewiesen waren, treten Sie mit der Rollenübernahme auch dem Zeitfenster bei. Die Rolle zeigt danach Ihr Profil und bietet Ihnen **Verlassen** an.
 
-Eine benannte Rolle erhöht die Gesamtkapazität des Zeitfensters nicht. Der Organisator legt diese über **Maximale Teilnehmendenzahl** und die verfügbaren Positionen über **Rollen für diesen Einsatz** fest.
+Eine benannte Rolle erhöht die Gesamtkapazität des Zeitfensters nicht. Der Organisator legt diese über **Maximale Teilnehmendenzahl** und die verfügbaren Positionen über **Rollen für diese Aktivität** fest.
 
 ### Ein Zeitfenster oder eine Rolle verlassen
 
@@ -147,7 +147,7 @@ Das Erstellen setzt ein angemeldetes vollständiges Benutzerkonto voraus. Das ak
    - **Veranstaltung zuordnen (optional)** — verbindet Anmeldung, Anwesenheit, Teilnehmer und erweiterte Zuweisungsfunktionen mit einer Veranstaltung.
 4. Öffnen Sie **Gruppenberechtigungen** und prüfen Sie, wer den Plan ansehen, teilnehmen, bearbeiten, verwalten oder exportieren darf. Siehe [Berechtigungen und Freigaben](PERMISSIONS.md).
 5. Fügen Sie nach Auswahl des Datumsbereichs mindestens ein anfängliches Zeitfenster im Kalender hinzu:
-   - Wählen Sie beim richtigen Tag **+ Einsatz**.
+   - Wählen Sie beim richtigen Tag **+ Aktivität**.
    - Geben Sie den **Titel** ein.
    - Geben Sie optional **Beschreibung**, **Startzeit** und **Endzeit** ein.
    - Setzen Sie **Maximale Teilnehmendenzahl** auf eine ganze Zahl von mindestens 1.
@@ -202,26 +202,26 @@ Erzeugte ausstehende Vorschläge aus dem alten Kontext werden entfernt. Manuelle
 #### Nach dem Erstellen ein Zeitfenster hinzufügen
 
 1. Öffnen Sie **Zeitplan**.
-2. Wählen Sie beim gewünschten Datum **+ Einsatz**.
-3. Füllen Sie unter **Einsatz erstellen** Folgendes aus:
+2. Wählen Sie beim gewünschten Datum **+ Aktivität**.
+3. Füllen Sie unter **Aktivität erstellen** Folgendes aus:
    - **Titel**.
    - **Startzeit** und **Endzeit**, wenn das Zeitfenster feste Uhrzeiten hat.
    - **Maximale Teilnehmendenzahl**, mindestens 1.
    - **Beschreibung**, wenn Teilnehmer weitere Angaben benötigen.
-   - **Rollen für diesen Einsatz**, wenn benannte Positionen benötigt werden.
+   - **Rollen für diese Aktivität**, wenn benannte Positionen benötigt werden.
 4. Wählen Sie **Speichern**.
 
 #### Ein Zeitfenster bearbeiten
 
-Wählen Sie den Stift am Zeitfenster, um **Einsatz bearbeiten** zu öffnen. Ändern Sie dieselben Felder und wählen Sie **Speichern**. Abhängig von Ihren Elementberechtigungen können Sie Titel oder Beschreibung auch zur schnellen Bearbeitung doppelklicken.
+Wählen Sie den Stift am Zeitfenster, um **Aktivität bearbeiten** zu öffnen. Ändern Sie dieselben Felder und wählen Sie **Speichern**. Abhängig von Ihren Elementberechtigungen können Sie Titel oder Beschreibung auch zur schnellen Bearbeitung doppelklicken.
 
-Wenn **Einsätze zum Sortieren ziehen.** angezeigt wird, können Sie Zeitfenster innerhalb eines Tages durch Ziehen neu sortieren. Mit der Papierkorbschaltfläche löschen Sie ein Zeitfenster. Dabei werden auch dessen Zuweisungen entfernt; prüfen Sie vorher die betroffenen Teilnehmer.
+Wenn **Aktivitäten zum Sortieren ziehen.** angezeigt wird, können Sie Zeitfenster innerhalb eines Tages durch Ziehen neu sortieren. Mit der Papierkorbschaltfläche löschen Sie ein Zeitfenster. Dabei werden auch dessen Zuweisungen entfernt; prüfen Sie vorher die betroffenen Teilnehmer.
 
 ### Benannte Rollen zu einem Zeitfenster hinzufügen
 
-Unter **Einsatz erstellen** oder **Einsatz bearbeiten**:
+Unter **Aktivität erstellen** oder **Aktivität bearbeiten**:
 
-1. Wählen Sie das Suchfeld **Rollen für diesen Einsatz**.
+1. Wählen Sie das Suchfeld **Rollen für diese Aktivität**.
 2. Tippen Sie, um eine vorhandene Rolle des Plans zu finden.
 3. Wählen Sie den Rollenvorschlag. Bei entsprechender Berechtigung können Sie mit **Neue Rolle „…“ erstellen** einen neuen Rollennamen hinzufügen.
 4. Wiederholen Sie dies für jede unterschiedliche benötigte Position dieses Zeitfensters.
@@ -253,7 +253,7 @@ Verwenden Sie **Person suchen…** oder die Filter:
 - **Zugewiesen**
 - **Nicht zugewiesen**
 - **Nicht begonnen**
-- **Benötigt Einsätze**
+- **Benötigt Aktivitäten**
 - **Vollständig**
 - **Kein Minimum**
 
@@ -268,8 +268,8 @@ Bei einem verknüpften Plan können berechtigte Organisatoren **Regeln & automat
 - **Zuweisungsmodus** — **Frei** bedeutet keine Mindestanzahl an Zeitfenstern; **Erforderlich** aktiviert Teilnahmeanforderungen.
 - **Verbindliche Frist** — nach diesem Zeitpunkt können Teilnehmer nicht mehr selbst beitreten oder verlassen.
 - **Zuweisungen über die Kapazität hinaus erlauben** — stellt für die allgemeine Zeitfensterteilnahme **Voll — trotzdem teilnehmen** und die Kapazitätswarnung bereit.
-- **Einsätze für Personen ohne Veranstaltungsteilnahme erlauben** — lässt Profile mit Planzugang ohne Veranstaltungsanmeldung beitreten.
-- **Einsätze am Abend des Anreisetags erlauben** und **Einsätze am Morgen des Abreisetags erlauben** — erlauben gegebenenfalls diese Ausnahmen an Ankunfts- und Abreisegrenzen.
+- **Aktivitäten für Personen ohne Veranstaltungsteilnahme erlauben** — lässt Profile mit Planzugang ohne Veranstaltungsanmeldung beitreten.
+- **Aktivitäten am Abend des Anreisetags erlauben** und **Aktivitäten am Morgen des Abreisetags erlauben** — erlauben gegebenenfalls diese Ausnahmen an Ankunfts- und Abreisegrenzen.
 
 Wählen Sie vor dem Verlassen der Registerkarte **Einstellungen speichern** oder **Anforderungseinstellungen speichern**. Für einen Pflichtteilnahmeplan fahren Sie mit [Teilnahmeanforderungen festlegen](#set-participant-requirements), [Abdeckung prüfen](#check-requirement-coverage) und [Zuweisungsvorschläge erzeugen](#generate-assignment-suggestions) fort.
 
@@ -312,23 +312,23 @@ Schließen Sie vor automatischen Vorschlägen die Veranstaltungsanmeldungen und 
 2. Setzen Sie **Verbindliche Frist**, wenn Teilnehmer ihre eigenen Zuweisungen ab einem Zeitpunkt nicht mehr ändern sollen.
 3. Prüfen Sie die Schalter für Überbelegung, Nichtteilnehmer und Ausnahmen an Ankunfts- und Abreisegrenzen.
 4. Erstellen Sie die Tabelle **Anforderungen nach Aufenthaltsdauer**:
-   - Geben Sie unter **Grundanforderung an Schichten** eine nicht negative ganze Zahl ein.
+   - Geben Sie unter **Grundanforderung an Aktivitäten** eine nicht negative ganze Zahl ein.
    - Wählen Sie unter **Rundungsmodus** **Aufrunden**, **Runden** oder **Abrunden**. Bei **Keine** verwendet **Berechnen** Aufrundung.
    - Wählen Sie **Berechnen**, um für jede mögliche Anzahl von Anwesenheitstagen einen proportionalen Entwurf einzutragen.
-   - Passen Sie Zeilen an, die eine andere genaue Anzahl erforderlicher Schichten verwenden sollen.
-5. Geben Sie unter **Rollenanforderungen** für Rollen, die das normale aufenthaltsbezogene Ziel ändern sollen, ein genaues Schichtziel für den gesamten Teilnehmer ein.
-6. Wählen Sie unter **Persönliche Ausnahmen** **Ausnahme hinzufügen**, wenn ein angemeldeter Veranstaltungsteilnehmer ein anderes Ziel benötigt. Wählen Sie den Teilnehmer, beschränken Sie die Ausnahme optional auf eine derzeit von ihm gehaltene Rolle und geben Sie die genaue Anzahl erforderlicher Schichten ein.
+   - Passen Sie Zeilen an, die eine andere genaue Anzahl erforderlicher Aktivitäten verwenden sollen.
+5. Geben Sie unter **Rollenanforderungen** für Rollen, die das normale aufenthaltsbezogene Ziel ändern sollen, ein genaues Teilnahmeziel für den gesamten Teilnehmer ein.
+6. Wählen Sie unter **Persönliche Ausnahmen** **Ausnahme hinzufügen**, wenn ein angemeldeter Veranstaltungsteilnehmer ein anderes Ziel benötigt. Wählen Sie den Teilnehmer, beschränken Sie die Ausnahme optional auf eine derzeit von ihm gehaltene Rolle und geben Sie die genaue Anzahl erforderlicher Aktivitäten ein.
 7. Wählen Sie **Anforderungseinstellungen speichern**. **Berechnen** und die laufende Vorschau speichern den Entwurf nicht.
 
 Der Pflichtmodus benötigt für jede Aufenthaltsdauer von einem Tag bis zur gesamten Planlänge eine gespeicherte nicht negative ganze Zahl. Überschneidet sich die Veranstaltungsanwesenheit eines Teilnehmers nicht mit dem Plan, erhält er ein Ziel von null.
 
 #### Welche Anforderung Vorrang hat
 
-Surveyor bestimmt für jeden Teilnehmer ein gesamtes Schichtziel. Es gilt die erste zutreffende Quelle in dieser Reihenfolge:
+Surveyor bestimmt für jeden Teilnehmer ein gesamtes Teilnahmeziel. Es gilt die erste zutreffende Quelle in dieser Reihenfolge:
 
 | Priorität | Quelle |
 |---:|---|
-| 1 | Eine rollenspezifische Teilnehmerausnahme für eine aktuell gehaltene Rolle. Treffen mehrere zu, gilt die niedrigste geforderte Schichtzahl. |
+| 1 | Eine rollenspezifische Teilnehmerausnahme für eine aktuell gehaltene Rolle. Treffen mehrere zu, gilt die niedrigste geforderte Anzahl an Aktivitäten. |
 | 2 | Eine teilnehmerweite Ausnahme ohne Rolle. |
 | 3 | Der niedrigste passende Wert unter **Rollenanforderungen** für eine aktuell gehaltene Rolle. |
 | 4 | Der genaue gespeicherte Wert unter **Anforderungen nach Aufenthaltsdauer** für die Anwesenheitsdauer des Teilnehmers. |
@@ -339,7 +339,7 @@ Null ist ein gültiges Ziel und führt nicht zur nächsten Quelle. Rollenanforde
 
 ### Die Abdeckung der Anforderungen prüfen
 
-**Schritt 2 — Abdeckung prüfen** aktualisiert sich während der Bearbeitung von Schritt 1, noch vor dem Speichern. Die Statuskarte kennzeichnet die Vorschau als **Gespeichert** oder **Ungespeicherte Änderungen** und vergleicht **Erforderliche Schichten** mit der gesamten **Einsatzkapazität**.
+**Schritt 2 — Abdeckung prüfen** aktualisiert sich während der Bearbeitung von Schritt 1, noch vor dem Speichern. Die Statuskarte kennzeichnet die Vorschau als **Gespeichert** oder **Ungespeicherte Änderungen** und vergleicht **Erforderliche Aktivitäten** mit der gesamten **Aktivitätskapazität**.
 
 Die wichtigsten Zustände bedeuten:
 
@@ -347,16 +347,16 @@ Die wichtigsten Zustände bedeuten:
 |---|---|
 | **Freier Zuweisungsmodus** | Die Abdeckungsprüfung für Pflichtteilnahme ist inaktiv. |
 | **Genaue Abdeckung** | Die Summe der Teilnehmerziele entspricht der gesamten Kapazität. |
-| **Um _N_ über der Einsatzkapazität** | Anforderungen überschreiten die normale Kapazität, Überbelegung ist jedoch erlaubt. Das ist zulässig, eine genaue Abdeckung bleibt vorzuziehen. |
-| **Um _N_ unter der Einsatzkapazität** | Bei erlaubter Überbelegung bleibt Kapazität durch Anforderungen ungedeckt. Erhöhen Sie Anforderungen, wenn jeder Platz abgedeckt sein soll. |
-| **Feste Einsatzkapazität um _N_ überschritten** | Anforderungen überschreiten die Kapazität, während Überbelegung deaktiviert ist. Senken Sie Anforderungen oder fügen Sie Kapazität hinzu. |
-| **Um _N_ unter der festen Einsatzkapazität** | Ein Teil der Kapazität bleibt außerhalb der Teilnehmerziele. Das ist zulässig, bedeutet aber, dass nicht jeder Platz verpflichtend ist. |
+| **Um _N_ über der Aktivitätskapazität** | Anforderungen überschreiten die normale Kapazität, Überbelegung ist jedoch erlaubt. Das ist zulässig, eine genaue Abdeckung bleibt vorzuziehen. |
+| **Um _N_ unter der Aktivitätskapazität** | Bei erlaubter Überbelegung bleibt Kapazität durch Anforderungen ungedeckt. Erhöhen Sie Anforderungen, wenn jeder Platz abgedeckt sein soll. |
+| **Feste Aktivitätskapazität um _N_ überschritten** | Anforderungen überschreiten die Kapazität, während Überbelegung deaktiviert ist. Senken Sie Anforderungen oder fügen Sie Kapazität hinzu. |
+| **Um _N_ unter der festen Aktivitätskapazität** | Ein Teil der Kapazität bleibt außerhalb der Teilnehmerziele. Das ist zulässig, bedeutet aber, dass nicht jeder Platz verpflichtend ist. |
 | **Ungültige oder unvollständige Anforderungen** | Eine erforderliche Aufenthaltszeile oder ein anderer Wert fehlt oder ist ungültig. Korrigieren Sie dies vor der Vorschlagserzeugung. |
-| **Rollenmengen überschreiten die Einsatzkapazität** | Die eingerichteten benannten Rollen passen nicht in die Kapazität eines oder mehrerer Zeitfenster. Erhöhen Sie die Kapazität oder reduzieren Sie die betroffenen Rollen. |
+| **Rollenmengen überschreiten die Aktivitätskapazität** | Die eingerichteten benannten Rollen passen nicht in die Kapazität eines oder mehrerer Zeitfenster. Erhöhen Sie die Kapazität oder reduzieren Sie die betroffenen Rollen. |
 
 Bei offenen benannten Rollen kann die Karte außerdem **Berücksichtigte offene Rollen** oder **Nicht besetzbare offene Rollen** anzeigen. Das ist nur eine Abdeckungsschätzung. Zur Bewertung der Summen kann Surveyor einen ansonsten nicht zugewiesenen Teilnehmer hypothetisch einer offenen Rolle zuordnen. Dadurch wird weder diese Rolle besetzt noch der Ablaufplan geändert.
 
-Die Abdeckung vergleicht die Zahl erforderlicher Schichten mit den verfügbaren Plätzen. Sie garantiert nicht, dass sich alle Personen zuweisen lassen. Auch bei passenden Summen können wegen Anwesenheitsdaten, überschneidender Zeitfenster, benannter Rollen oder abgelehnter Vorschläge Anforderungen offenbleiben. Prüfen Sie den vorgeschlagenen Zeitplan vor dem Anwenden.
+Die Abdeckung vergleicht die Zahl erforderlicher Aktivitäten mit den verfügbaren Plätzen. Sie garantiert nicht, dass sich alle Personen zuweisen lassen. Auch bei passenden Summen können wegen Anwesenheitsdaten, überschneidender Zeitfenster, benannter Rollen oder abgelehnter Vorschläge Anforderungen offenbleiben. Prüfen Sie den vorgeschlagenen Zeitplan vor dem Anwenden.
 
 ### Zuweisungsvorschläge erzeugen
 
@@ -454,9 +454,9 @@ Prüfen Sie, ob:
 - ein verknüpfter Plan eine Veranstaltungsanmeldung verlangt; oder
 - die benannte Rolle bereits von einem anderen Teilnehmer besetzt ist.
 
-### Ein Zeitfenster erscheint nicht unter Offene Einsätze
+### Ein Zeitfenster erscheint nicht unter Offene Aktivitäten
 
-**Offene Einsätze** enthält nur Zeitfenster unterhalb ihrer normalen Kapazität. Ein volles Zeitfenster bleibt ausgeschlossen, selbst wenn unter **Alle Einsätze** die Aktion **Voll — trotzdem teilnehmen** verfügbar ist.
+**Offene Aktivitäten** enthält nur Zeitfenster unterhalb ihrer normalen Kapazität. Ein volles Zeitfenster bleibt ausgeschlossen, selbst wenn unter **Alle Aktivitäten** die Aktion **Voll — trotzdem teilnehmen** verfügbar ist.
 
 ### Ich bin mit dem falschen Profil beigetreten
 
@@ -482,7 +482,7 @@ Prüfen Sie jede Zeile unter **Anforderungen nach Aufenthaltsdauer**. Der Pflich
 
 Eine veraltete Berechnung bedeutet, dass sich relevante Plandaten während der Berechnung geändert haben. Wählen Sie bei den Zuweisungsvorschlägen **Erneut laden**, prüfen Sie gespeicherte Anforderungen und aktuelle Zuweisungen und wählen Sie erneut **Automatisch erstellen**. Bei Fehlern oder Zeitüberschreitung bleibt der Ablaufplan unverändert.
 
-### Ein Teilnehmer benötigt nach der Erzeugung weiterhin Schichten
+### Ein Teilnehmer benötigt nach der Erzeugung weitere Aktivitäten
 
 Prüfen Sie, ob der Teilnehmer innerhalb seiner Anwesenheit geeignete, überschneidungsfreie Zeitfenster hat. Kontrollieren Sie Kapazität, Ankunfts- und Abreiseschalter, benannte Rollen sowie abgelehnte Teilnehmer-Zeitfenster-Paare. Eine manuelle Zuweisung, Verschiebung oder ein Tausch kann Anforderungen erfüllen, die automatische Vorschläge offenließen.
 

@@ -152,6 +152,21 @@ schemas:
     properties:
       locale:
         $ref: "#/schemas/LocaleTag"
+  FieldDiagnostic:
+    description: Safe generated validation metadata. No submitted values, schema locations or parser messages are included.
+    type: object
+    additionalProperties: false
+    required: [field, rule]
+    properties:
+      field:
+        type: string
+        enum: [request, title, name, description, username, displayname, email, password, passwordConfirmation, startDate, endDate, date, startTime, endTime, deadline, timezone, capacity, amount, note, reason, distribution, factor, participants, participant, payer, beneficiaries, registration, role, roles, permissions, image, proof, search, page, language, event, combinations, weekday, occurrence, answers, selection, arrival, departure, diet, allergy, comment, travel, meal, activity, sourceActivity, requirements, stay, overrides, recommendations, confirmation, revision, token, status, type, items, position, quantity, visibility, url, transfer, location, assignmentMode, baselineRequirement, requiredActivities, roundingMode, allowOverfillAfterFull, allowExternalAssignees, allowArrivalDayEvening, allowDepartureDayMorning, requiredByAll, assignAll, defaultSetting, subtractPersonalInvoices, sendCalculationEmails, roundUpShares, sendEmails, subtractFromPool, exemptions, requireDietaryInfo, allowDietComment, allowRegDateUpdatesAfterDeadline, allowRegCancelationAfterDeadline, allowRegDietUpdateAfterDeadline, maxUses, expiresAt, operation, assigned, settlementStatus, automaticArchival]
+      rule:
+        type: string
+        enum: [required, nonBlank, type, format, maxLength, minLength, maximum, minimum, exclusiveMaximum, exclusiveMinimum, minItems, maxItems, minProperties, maxProperties, pattern, enum, uniqueItems, additionalProperties, invalid]
+      limit: {type: number}
+      type: {type: string, enum: [integer, number, string, boolean, array, object, email, date, time, uuid]}
+      row: {type: integer, minimum: 1, maximum: 1000000}
   FieldError:
     type: object
     additionalProperties: false
@@ -171,6 +186,8 @@ schemas:
           - range
           - unknown
           - invalid
+      diagnostic:
+        $ref: '#/schemas/FieldDiagnostic'
   SafeProblemDetails:
     description: Display-only fallback for a newer error; it never grants a known code or parameter type.
     type: object
@@ -414,6 +431,648 @@ schemas:
           - messageKey
           - status
           - params
+      - properties:
+          code: {const: FINANCE_A_PARTICIPANT_BEING_COVERED_CANNOT_TAKE_OVER_OTHER_SHARES_400}
+          messageKey: {const: finance.aParticipantBeingCoveredCannotTakeOverOtherShares}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ATTENDANCE_WEIGHTS_MUST_BE_NON_NEGATIVE_400}
+          messageKey: {const: finance.attendanceWeightsMustBeNonNegative}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_CALCULATE_THE_POOL_BEFORE_RECORDING_SHARE_PAYMENTS_409}
+          messageKey: {const: finance.calculateThePoolBeforeRecordingSharePayments}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_CALCULATION_PARTICIPANT_NO_LONGER_BELONGS_TO_THIS_EVENT_409}
+          messageKey: {const: finance.calculationParticipantNoLongerBelongsToThisEvent}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_CANNOT_CALCULATE_INVOICE_SHARES_400}
+          messageKey: {const: finance.cannotCalculateInvoiceShares}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_CLEAR_APARTICIPANT_SEXISTING_TAKEOVERS_BEFORE_COVERING_THEIR_400}
+          messageKey: {const: finance.clearAParticipantSExistingTakeoversBeforeCoveringTheir}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_CLOSE_THE_POOL_BEFORE_SENDING_SETTLEMENT_EMAILS_400}
+          messageKey: {const: finance.closeThePoolBeforeSendingSettlementEmails}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_CONFIRM_THIS_INVOICE_CHANGE_BEFORE_CONTINUING_400}
+          messageKey: {const: finance.confirmThisInvoiceChangeBeforeContinuing}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_CURRENT_REVISION_REQUIRED_400}
+          messageKey: {const: finance.currentRevisionRequired}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_DUPLICATE_PAYER_IN_INVOICE_CALCULATION_400}
+          messageKey: {const: finance.duplicatePayerInInvoiceCalculation}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ENTER_ACORRECTION_DESCRIPTION_OF_UP_TO_CHARACTERS_OR_400}
+          messageKey: {const: finance.enterACorrectionDescriptionOfUpToCharactersOr}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ENTER_ADESCRIPTION_OF_UP_TO_CHARACTERS_400}
+          messageKey: {const: finance.enterADescriptionOfUpToCharacters}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ENTER_ANON_ZERO_SURCHARGE_OR_REBATE_WITHIN_THE_400}
+          messageKey: {const: finance.enterANonZeroSurchargeOrRebateWithinThe}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ENTER_APOSITIVE_AMOUNT_WITH_AT_MOST_TWO_DECIMAL_400}
+          messageKey: {const: finance.enterAPositiveAmountWithAtMostTwoDecimal}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_FACTOR_PARTICIPANT_IS_NOT_ASSIGNED_TO_THIS_POOL_400}
+          messageKey: {const: finance.factorParticipantIsNotAssignedToThisPool}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_FACTORS_CAN_ONLY_BE_SET_FOR_PARTICIPANTS_ASSIGNED_TO_400}
+          messageKey: {const: finance.factorsCanOnlyBeSetForParticipantsAssignedTo}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_FACTORS_MUST_BE_BETWEEN_AND_WITH_AT_MOST_FOUR_400}
+          messageKey: {const: finance.factorsMustBeBetweenAndWithAtMostFour}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_INVALID_FACTOR_400}
+          messageKey: {const: finance.invalidFactor}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_INVALID_PROOF_PATH_400}
+          messageKey: {const: finance.invalidProofPath}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_INVOICE_AMOUNTS_MUST_BE_FINITE_AND_WITHIN_THE_SUPPORTED_400}
+          messageKey: {const: finance.invoiceAmountsMustBeFiniteAndWithinTheSupported}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_INVOICE_WAS_ALREADY_REVIEWED_RELOAD_TO_SEE_THE_SAVED_409}
+          messageKey: {const: finance.invoiceWasAlreadyReviewedReloadToSeeTheSaved}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_INVOICES_MUST_BE_ACCEPTED_BEFORE_CLOSING_400}
+          messageKey: {const: finance.invoicesMustBeAcceptedBeforeClosing}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_NO_PARTICIPANTS_ASSIGNED_TO_THIS_POOL_400}
+          messageKey: {const: finance.noParticipantsAssignedToThisPool}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_NO_POSITIVE_DISTRIBUTION_WEIGHT_400}
+          messageKey: {const: finance.noPositiveDistributionWeight}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_NO_PREVIOUS_INPUT_SNAPSHOT_IS_AVAILABLE_CALCULATE_THE_POOL_409}
+          messageKey: {const: finance.noPreviousInputSnapshotIsAvailableCalculateThePool}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_NOTE_IS_REQUIRED_400}
+          messageKey: {const: finance.noteIsRequired}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONE_OR_MORE_PARTICIPANTS_ARE_ALREADY_COVERED_BY_SOMEONE_400}
+          messageKey: {const: finance.oneOrMoreParticipantsAreAlreadyCoveredBySomeone}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONE_OR_MORE_PARTICIPANTS_ARE_ALREADY_COVERED_BY_SOMEONE_409}
+          messageKey: {const: finance.oneOrMoreParticipantsAreAlreadyCoveredBySomeone}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONLY_ACCEPTED_INVOICES_CAN_BE_CLOSED_400}
+          messageKey: {const: finance.onlyAcceptedInvoicesCanBeClosed}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONLY_ACCEPTED_OR_CLOSED_INVOICES_CAN_BE_CORRECTED_409}
+          messageKey: {const: finance.onlyAcceptedOrClosedInvoicesCanBeCorrected}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONLY_ACCEPTED_OR_CLOSED_INVOICES_CAN_BE_REMOVED_FROM_409}
+          messageKey: {const: finance.onlyAcceptedOrClosedInvoicesCanBeRemovedFrom}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONLY_CALCULATED_POOLS_HAVE_SAVED_INPUTS_TO_RESTORE_409}
+          messageKey: {const: finance.onlyCalculatedPoolsHaveSavedInputsToRestore}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONLY_CLOSED_POOLS_CAN_BE_RECALCULATED_409}
+          messageKey: {const: finance.onlyClosedPoolsCanBeRecalculated}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONLY_CLOSED_POOLS_CAN_BE_RECALCULATED_400}
+          messageKey: {const: finance.onlyClosedPoolsCanBeRecalculated}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONLY_INVOICES_AWAITING_REVIEW_CAN_BE_ACCEPTED_409}
+          messageKey: {const: finance.onlyInvoicesAwaitingReviewCanBeAccepted}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONLY_INVOICES_AWAITING_REVIEW_CAN_BE_REJECTED_409}
+          messageKey: {const: finance.onlyInvoicesAwaitingReviewCanBeRejected}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ONLY_INVOICES_AWAITING_REVIEW_CAN_BE_RETRACTED_409}
+          messageKey: {const: finance.onlyInvoicesAwaitingReviewCanBeRetracted}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_PARTICIPANT_DOES_NOT_BELONG_TO_THIS_EVENT_400}
+          messageKey: {const: finance.participantDoesNotBelongToThisEvent}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_PARTICIPANT_INVOICE_ACCESS_ONLY_BEFORE_CALCULATION_409}
+          messageKey: {const: finance.participantInvoiceAccessOnlyBeforeCalculation}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_PARTICIPANT_NOT_ASSIGNED_TO_THIS_POOL_400}
+          messageKey: {const: finance.participantNotAssignedToThisPool}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_PARTICIPANT_TAKEOVERS_UNAVAILABLE_409}
+          messageKey: {const: finance.participantTakeoversUnavailable}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_PARTICIPANTS_CANNOT_COVER_THEMSELVES_400}
+          messageKey: {const: finance.participantsCannotCoverThemselves}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_PARTICIPANTS_WHOSE_SHARE_IS_TAKEN_OVER_CANNOT_COVER_OTHERS_400}
+          messageKey: {const: finance.participantsWhoseShareIsTakenOverCannotCoverOthers}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_PAYER_IS_NOT_PART_OF_THIS_POOL_400}
+          messageKey: {const: finance.payerIsNotPartOfThisPool}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_POOL_CHANGED_BEFORE_ROLLBACK_RELOAD_AND_TRY_AGAIN_409}
+          messageKey: {const: finance.poolChangedBeforeRollbackReloadAndTryAgain}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_POOL_CHANGED_BEFORE_SUBMISSION_STATE_409}
+          messageKey: {const: finance.poolChangedBeforeSubmissionState}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_POOL_INPUTS_CHANGED_DURING_CALCULATION_RELOAD_AND_CALCULATE_AGAIN_409}
+          messageKey: {const: finance.poolInputsChangedDuringCalculationReloadAndCalculateAgain}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_POOL_IS_ALREADY_CLOSED_409}
+          messageKey: {const: finance.poolIsAlreadyClosed}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_POOL_IS_CLOSED_FOR_INVOICE_SUBMISSIONS_409}
+          messageKey: {const: finance.poolIsClosedForInvoiceSubmissions}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_POOL_IS_CLOSED_FOR_INVOICE_SUBMISSIONS_400}
+          messageKey: {const: finance.poolIsClosedForInvoiceSubmissions}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_PROOF_REQUIRED_400}
+          messageKey: {const: finance.proofRequired}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_REJECTION_REASON_REQUIRED_400}
+          messageKey: {const: finance.rejectionReasonRequired}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_THE_POOL_CHANGED_RELOAD_AND_REVIEW_THE_INVOICE_AGAIN_409}
+          messageKey: {const: finance.thePoolChangedReloadAndReviewTheInvoiceAgain}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_THE_PREVIEW_IS_OUT_OF_DATE_PREVIEW_THE_CALCULATION_409}
+          messageKey: {const: finance.thePreviewIsOutOfDatePreviewTheCalculation}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_THE_SETTLEMENT_CHANGED_RELOAD_BEFORE_SENDING_EMAILS_409}
+          messageKey: {const: finance.theSettlementChangedReloadBeforeSendingEmails}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_THE_SHARED_AMOUNT_IS_TOO_LARGE_400}
+          messageKey: {const: finance.theSharedAmountIsTooLarge}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_THE_SHARED_AMOUNT_MUST_BE_FINITE_400}
+          messageKey: {const: finance.theSharedAmountMustBeFinite}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_UNSUPPORTED_PROOF_TYPE_400}
+          messageKey: {const: finance.unsupportedProofType}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_CONTEXT_CHANGED}
+          messageKey: {const: api:errors.ACTIVITY_CONTEXT_CHANGED}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_RECOMMENDATIONS_DISABLED}
+          messageKey: {const: api:errors.ACTIVITY_RECOMMENDATIONS_DISABLED}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_DATE_RANGE_INVALID}
+          messageKey: {const: api:errors.ACTIVITY_DATE_RANGE_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_DATE_RANGE_EXCLUDES_ACTIVITIES}
+          messageKey: {const: api:errors.ACTIVITY_DATE_RANGE_EXCLUDES_ACTIVITIES}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_DATE_OUTSIDE_PLAN}
+          messageKey: {const: api:errors.ACTIVITY_DATE_OUTSIDE_PLAN}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_TIME_ORDER_INVALID}
+          messageKey: {const: api:errors.ACTIVITY_TIME_ORDER_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_OVERRIDE_INVALID}
+          messageKey: {const: api:errors.ACTIVITY_OVERRIDE_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_OVERRIDE_PARTICIPANT_REQUIRED}
+          messageKey: {const: api:errors.ACTIVITY_OVERRIDE_PARTICIPANT_REQUIRED}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_OVERRIDE_DUPLICATE}
+          messageKey: {const: api:errors.ACTIVITY_OVERRIDE_DUPLICATE}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_EVENT_REQUIRED}
+          messageKey: {const: api:errors.ACTIVITY_EVENT_REQUIRED}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_REQUIREMENT_ROLE_INVALID}
+          messageKey: {const: api:errors.ACTIVITY_REQUIREMENT_ROLE_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_STAY_DURATION_INVALID}
+          messageKey: {const: api:errors.ACTIVITY_STAY_DURATION_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_STAY_REQUIREMENTS_INCOMPLETE}
+          messageKey: {const: api:errors.ACTIVITY_STAY_REQUIREMENTS_INCOMPLETE}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_GENERATION_REQUIREMENTS_INCOMPLETE}
+          messageKey: {const: api:errors.ACTIVITY_GENERATION_REQUIREMENTS_INCOMPLETE}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_OVERLAP_CONFIRMATION_REQUIRED}
+          messageKey: {const: api:errors.ACTIVITY_OVERLAP_CONFIRMATION_REQUIRED}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_RECOMMENDATION_TARGET_INVALID}
+          messageKey: {const: api:errors.ACTIVITY_RECOMMENDATION_TARGET_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_RECOMMENDATION_DUPLICATE}
+          messageKey: {const: api:errors.ACTIVITY_RECOMMENDATION_DUPLICATE}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_RECOMMENDATION_ALREADY_ASSIGNED}
+          messageKey: {const: api:errors.ACTIVITY_RECOMMENDATION_ALREADY_ASSIGNED}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_RECOMMENDATION_CHANGE_DUPLICATE}
+          messageKey: {const: api:errors.ACTIVITY_RECOMMENDATION_CHANGE_DUPLICATE}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_RECOMMENDATION_SOURCE_MISSING}
+          messageKey: {const: api:errors.ACTIVITY_RECOMMENDATION_SOURCE_MISSING}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_RECOMMENDATION_NAMED_ROLE}
+          messageKey: {const: api:errors.ACTIVITY_RECOMMENDATION_NAMED_ROLE}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_RECOMMENDATION_PARTICIPANT_REQUIRED}
+          messageKey: {const: api:errors.ACTIVITY_RECOMMENDATION_PARTICIPANT_REQUIRED}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_RECOMMENDATION_SOURCE_INVALID}
+          messageKey: {const: api:errors.ACTIVITY_RECOMMENDATION_SOURCE_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_ROLE_REQUIRED}
+          messageKey: {const: api:errors.ACTIVITY_ROLE_REQUIRED}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_ROLE_UNAVAILABLE}
+          messageKey: {const: api:errors.ACTIVITY_ROLE_UNAVAILABLE}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_PARTICIPANT_REQUIRED}
+          messageKey: {const: api:errors.ACTIVITY_PARTICIPANT_REQUIRED}
+          status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_FULL}
+          messageKey: {const: api:errors.ACTIVITY_FULL}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_ROLE_FULL}
+          messageKey: {const: api:errors.ACTIVITY_ROLE_FULL}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_ROLE_NAME_INVALID}
+          messageKey: {const: api:errors.ACTIVITY_ROLE_NAME_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACTIVITY_ASSIGNMENT_INVALID}
+          messageKey: {const: api:errors.ACTIVITY_ASSIGNMENT_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ARCHIVE_SCHEDULE_UNAVAILABLE}
+          messageKey: {const: api:errors.ARCHIVE_SCHEDULE_UNAVAILABLE}
+          status: {const: 409}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: SURVEY_RESPONSE_INVALID}
+          messageKey: {const: api:errors.SURVEY_RESPONSE_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: PROFILE_SELECTION_INVALID}
+          messageKey: {const: api:errors.PROFILE_SELECTION_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: OVERVIEW_MEMBERSHIP_LOST}
+          messageKey: {const: api:errors.OVERVIEW_MEMBERSHIP_LOST}
+          status: {const: 403}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_INVOICE_AMOUNT_MUST_BE_POSITIVE_400}
+          messageKey: {const: finance.invoiceAmountMustBePositive}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_INVOICE_AMOUNT_TOO_LARGE_400}
+          messageKey: {const: finance.invoiceAmountTooLarge}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: FINANCE_ADJUSTMENT_AMOUNT_INVALID_400}
+          messageKey: {const: finance.adjustmentAmountInvalid}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_SEARCH_EXPIRED}
+          messageKey: {const: api:errors.EVENT_SEARCH_EXPIRED}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_SEARCH_RANGE_INVALID}
+          messageKey: {const: api:errors.EVENT_SEARCH_RANGE_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_PARTICIPANT_LIMIT_INVALID}
+          messageKey: {const: api:errors.EVENT_PARTICIPANT_LIMIT_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_CALENDAR_DATE_INVALID}
+          messageKey: {const: api:errors.EVENT_CALENDAR_DATE_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_TITLE_INVALID}
+          messageKey: {const: api:errors.EVENT_TITLE_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_DESCRIPTION_TOO_LONG}
+          messageKey: {const: api:errors.EVENT_DESCRIPTION_TOO_LONG}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: EVENT_LOCATION_TOO_LONG}
+          messageKey: {const: api:errors.EVENT_LOCATION_TOO_LONG}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ACCOUNT_DELETION_CONFIRMATION_INVALID}
+          messageKey: {const: api:errors.ACCOUNT_DELETION_CONFIRMATION_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: PROFILE_DEACTIVATION_CONFIRMATION_INVALID}
+          messageKey: {const: api:errors.PROFILE_DEACTIVATION_CONFIRMATION_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: PROFILE_NAME_REQUIRED}
+          messageKey: {const: api:errors.PROFILE_NAME_REQUIRED}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ENTITY_TITLE_INVALID}
+          messageKey: {const: api:errors.ENTITY_TITLE_INVALID}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
+      - properties:
+          code: {const: ENTITY_DESCRIPTION_TOO_LONG}
+          messageKey: {const: api:errors.ENTITY_DESCRIPTION_TOO_LONG}
+          status: {const: 400}
+          params: {type: object, additionalProperties: false, maxProperties: 0}
+        required: [code, messageKey, status, params]
       - properties:
           code:
             const: VALIDATION_FAILED

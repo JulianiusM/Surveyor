@@ -34,7 +34,7 @@ describe('declared authored-node translations', () => {
         expect(wrapper.findAll('strong')).toHaveLength(1);
         context.locale.value = 'de';
         await flushPromises();
-        expect(wrapper.get('strong').element.parentElement!.textContent).toBe('Complete 0 von 2 erforderlichen Einsätzen abgedeckt.');
+        expect(wrapper.get('strong').element.parentElement!.textContent).toBe('Complete 0 von 2 erforderlichen Aktivitäten abgedeckt.');
         expect(wrapper.get('strong').text()).toBe('Complete');
         expect(wrapper.findAll('img, script')).toHaveLength(0);
     });

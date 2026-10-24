@@ -8,7 +8,7 @@ import * as activityApi from '../../../controller/activityController';
 import type {components} from '../../../types/api/v1';
 import type {PreparedApiJsonResponse} from '../../../types/ApiTransportTypes';
 import type {ActivitySimpleMutationOperation} from '../../../types/ActivityV1Types';
-import {ApiProblem} from '../../../modules/api/problem';
+import {ApiProblem, declaredApiProblem} from '../../../modules/api/problem';
 import {APIError} from '../../../modules/lib/errors';
 import {RecommendationQueueFullError} from '../../../modules/activity/recommendationJobs';
 import {requireApiContext} from '../../../modules/api/session';
@@ -464,6 +464,13 @@ const activityConflict: ErrorRequestHandler = function activityConflict(error, _
     if (error instanceof APIError && error.cause instanceof RecommendationQueueFullError) {
         res.set('Retry-After', '5');
         next(new ApiProblem('RECOMMENDATION_QUEUE_FULL'));
+        return;
+    }
+    // Shared controller causes identify the actual failed requirement. Preserve
+    // that declared status/message before the legacy generic conflict fallback.
+    const declared = declaredApiProblem(error);
+    if (declared) {
+        next(declared);
         return;
     }
     // The shared versioned classifier cannot infer each feature's generic 409.

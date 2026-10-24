@@ -371,6 +371,10 @@ export interface InvoiceOrganizerRequest {
 
 /** Locale catalogs retain the same stable keys while translated values remain unrestricted strings. */
 export type InvoiceTextKey = keyof typeof import('../modules/invoice/locales/en').englishInvoiceCatalog;
+/** Only authored Finance Problem messages can annotate a native rejection.
+ * The generated contract remains the runtime code/status/parameter allowlist. */
+export type InvoiceRejectionKey = Extract<import('./api/v1').components['schemas']['Problem'],
+    {code: `FINANCE_${string}`}>['messageKey'] extends `finance.${infer Key}` ? Key : never;
 export type InvoicePluralText = Readonly<{other: string} & Partial<Record<Intl.LDMLPluralRule, string>>>;
 export type InvoiceCatalog = Readonly<Record<InvoiceTextKey, string | InvoicePluralText>>;
 export type InvoiceTextParameters = Readonly<Record<string, string | number>>;

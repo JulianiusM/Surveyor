@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {onBeforeUnmount, onMounted, ref} from 'vue';
+import {nextTick, onBeforeUnmount, onMounted, ref} from 'vue';
 import {useDropdownPlacement} from '../composables/dropdownPlacement';
 import {useClientInitialization} from '../app/context';
 
@@ -67,7 +67,23 @@ function navigate(event: KeyboardEvent): void {
     const current = links.indexOf(document.activeElement as HTMLElement);
     const index = current < 0 ? (event.key === 'ArrowDown' ? 0 : links.length - 1)
         : Math.max(0, Math.min(links.length - 1, current + (event.key === 'ArrowDown' ? 1 : -1)));
-    links[index]?.focus({preventScroll: true});
+    const item = links[index];
+    item?.focus({preventScroll: true});
+    void nextTick(revealFocusedItem);
+}
+
+/** Apply local keyboard scrolling after Vue has installed the measured bounds. */
+function revealFocusedItem(): void {
+    // A viewport-constrained menu scrolls its own focused item into view. Keep
+    // that recovery local rather than moving the surrounding document/dialog.
+    const menu = element.value?.querySelector<HTMLElement>(':scope > .dropdown-menu');
+    const item = document.activeElement;
+    if (item instanceof HTMLElement && menu?.contains(item) && menu.scrollHeight > menu.clientHeight) {
+        const itemBounds = item.getBoundingClientRect();
+        const menuBounds = menu.getBoundingClientRect();
+        if (itemBounds.top < menuBounds.top) menu.scrollTop -= menuBounds.top - itemBounds.top;
+        else if (itemBounds.bottom > menuBounds.bottom) menu.scrollTop += itemBounds.bottom - menuBounds.bottom;
+    }
 }
 
 onMounted(() => {
@@ -85,7 +101,7 @@ onBeforeUnmount(() => {
 
 <template>
     <component :is="navigation ? 'li' : 'div'" :class="navigation ? 'nav-item dropdown' : 'd-inline-block'">
-        <details ref="element" :class="navigation ? 'pilot-nav-dropdown' : 'position-relative'"
+        <details ref="element" class="pilot-dropdown" :class="navigation ? 'pilot-nav-dropdown' : 'position-relative'"
                  @toggle="synchronizeOpen" @keydown="navigate">
             <!-- Native header links and card/filter buttons expose the button role.
                  Preserve that role while details retains disclosure keyboard/open-state ownership. -->

@@ -35,9 +35,11 @@ function chooseEvent(value: string | null): void {
                 <dt>{{ messages.t('draft.current') }}</dt>
                 <dd>{{ current?.title || current?.id || messages.t('eventPicker.noEvent') }}</dd>
             </dl>
-            <ActionButton variant="outline-warning" :disabled="disabled" @click="emit('review')">{{
-                messages.t('draft.review')
-            }}</ActionButton></StatusNotice
+            <template #actions>
+                <ActionButton variant="outline-warning" :disabled="disabled" @click="emit('review')">{{
+                    messages.t('draft.review')
+                }}</ActionButton>
+            </template></StatusNotice
         >
         <ActionButton type="submit" :disabled="disabled || conflict" :pending="pending" :show-spinner="false">{{ submitLabel }}</ActionButton>
     </form>

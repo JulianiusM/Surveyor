@@ -25,6 +25,7 @@ import eventRouter from '../../src/routes/api/v1/events';
 import nativeEventRouter from '../../src/routes/api/event';
 import {wrapErrorApi} from '../../src/middleware/validationErrorHandler';
 import {handleApiProblem} from '../../src/modules/api/problem';
+import {createTranslator} from '../../src/modules/localization/translator';
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import mailer from '../../src/modules/email';
 import type {Event} from '../../src/modules/database/entities/event/Event';
@@ -115,7 +116,7 @@ describe('versioned finance shared ownership and private saved projections', () 
         const first = await previewEventFinancePool(id, poolId, actor(owner));
         await updateEventFinanceSettings(id, poolId, {distribution: 'EQUAL', description: 'New input', sendCalculationEmails: false, roundUpShares: true}, actor(owner));
         await expect(calculateEventFinancePool(id, poolId, {expectedRevision: first.revision, sendEmails: false}, actor(owner), false))
-            .rejects.toMatchObject({code: 'RESOURCE_CONFLICT', status: 409});
+            .rejects.toMatchObject({code: 'FINANCE_THE_PREVIEW_IS_OUT_OF_DATE_PREVIEW_THE_CALCULATION_409', status: 409});
         expect((await invoiceService.getPoolWithInvoices(poolId))!.shares).toEqual([]);
         const reviewed = await previewEventFinancePool(id, poolId, actor(owner));
         sendEmail.mockClear();
@@ -155,7 +156,7 @@ describe('versioned finance shared ownership and private saved projections', () 
         expect(sendEmail).toHaveBeenCalledTimes(2);
         const saved = (await invoiceService.getPoolWithInvoices(poolId))!;
         await expect(notifyEventFinancePool(id, poolId, {expectedRevision: reviewed.revision}, actor(owner)))
-            .rejects.toMatchObject({code: 'RESOURCE_CONFLICT', status: 409});
+            .rejects.toMatchObject({code: 'FINANCE_THE_SETTLEMENT_CHANGED_RELOAD_BEFORE_SENDING_EMAILS_409', status: 409});
         sendEmail.mockClear();
         expect(await notifyEventFinancePool(id, poolId, {}, actor(owner))).toEqual({count: 2});
         expect(sendEmail).toHaveBeenCalledTimes(2);
@@ -266,6 +267,36 @@ describe('versioned finance shared ownership and private saved projections', () 
             expect(created.headers.get('cache-control')).toBe('private, no-store');
             expect(created.headers.get('content-language')).toBe('de');
             const poolId = (await invoiceService.listPools(id)).find(pool => pool.name === input.name)!.id;
+
+            // A valid empty allocation reaches the shared calculation rule,
+            // rather than being mislabeled as malformed submitted form values.
+            const emptyName = 'HTTP pool without assigned participants';
+            const emptyCreated = await fetch(endpoint, {method: 'POST', headers: {...headers, 'Content-Type': 'application/json'},
+                body: JSON.stringify({...input, name: emptyName, assignAll: false})});
+            expect(emptyCreated.status).toBe(200);
+            const empty = (await invoiceService.listPools(id)).find(pool => pool.name === emptyName)!;
+            for (const locale of ['en', 'de'] as const) {
+                const localizedHeaders = {...headers, 'X-Surveyor-Locale': locale};
+                const preview = await fetch(`${endpoint}/${empty.id}/preview`, {headers: localizedHeaders});
+                const close = await fetch(`${endpoint}/${empty.id}/close`, {method: 'POST',
+                    headers: {...localizedHeaders, 'Content-Type': 'application/json'},
+                    body: JSON.stringify({expectedRevision: empty.calculationRevision, sendEmails: false})});
+                for (const response of [preview, close]) {
+                    expect(response.status).toBe(400);
+                    expect(response.headers.get('content-language')).toBe(locale);
+                    const problem = await response.json();
+                    expect(contractValidator('Problem')(problem)).toBe(true);
+                    expect(problem).toMatchObject({code: 'FINANCE_NO_PARTICIPANTS_ASSIGNED_TO_THIS_POOL_400',
+                        messageKey: 'finance.noParticipantsAssignedToThisPool', params: {}, status: 400,
+                        detail: createTranslator(locale).t('finance.noParticipantsAssignedToThisPool')});
+                    expect(JSON.stringify(problem)).not.toContain(participant.user!.email);
+                    expect(JSON.stringify(problem)).not.toContain(other.user!.email);
+                }
+            }
+            const stillEmpty = (await invoiceService.getPoolWithInvoices(empty.id))!;
+            expect(stillEmpty.status).toBe('OPEN');
+            expect(stillEmpty.shares).toEqual([]);
+            expect(stillEmpty.assignments).toEqual([]);
 
             // A browser-supplied proof filename cannot impersonate uploaded evidence.
             const forgedProof = new FormData();
@@ -652,7 +683,8 @@ describe('versioned finance shared ownership and private saved projections', () 
             await closing;
             const response = await submission;
             expect(response.status).toBe(409);
-            expect(await response.json()).toMatchObject({code: 'RESOURCE_CONFLICT', status: 409});
+            expect(await response.json()).toMatchObject({code: 'FINANCE_POOL_IS_CLOSED_FOR_INVOICE_SUBMISSIONS_409',
+                messageKey: 'finance.poolIsClosedForInvoiceSubmissions', params: {}, status: 409});
             expect((await invoiceService.getPoolWithInvoices(poolId))!.invoices).toEqual([]);
         } finally {
             release();
@@ -710,7 +742,7 @@ describe('versioned finance shared ownership and private saved projections', () 
         await invoices.declineInvoice(event, poolId, String(rejected.id), {rejectionReason: 'Saved rejection reason'}, nativeActor(owner));
         const revision = (await readEventFinance(id, actor(participant))).pools[0].revision;
         await expect(retractEventInvoice(id, poolId, String(retracted.id), {confirmed: true, expectedRevision: revision - 1}, actor(participant)))
-            .rejects.toMatchObject({status: 409, code: 'RESOURCE_CONFLICT'});
+            .rejects.toMatchObject({status: 409, code: 'FINANCE_THE_POOL_CHANGED_RELOAD_AND_REVIEW_THE_INVOICE_AGAIN_409'});
         await retractEventInvoice(id, poolId, String(retracted.id), {confirmed: true, expectedRevision: revision}, actor(participant));
         await expect(closeEventInvoice(id, poolId, String(accepted.id), actor(other))).rejects.toMatchObject({status: 403});
         await closeEventInvoice(id, poolId, String(accepted.id), actor(participant));

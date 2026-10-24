@@ -532,7 +532,7 @@ export async function setPersonalVisibility<Result>(entityType: string, id: stri
         // A page rendered earlier does not authorize a write after deletion or membership loss.
         // The controller checks both against the transaction holding the current root lock.
         requireLockedArchiveRoot(context);
-        if (!await userService.isOverviewMember(profileId, reference, manager)) throw new APIError('This entity is not in your overview', {}, 403);
+        if (!await userService.isOverviewMember(profileId, reference, manager)) throw new APIError('This entity is not in your overview', {}, 403, {cause: 'OVERVIEW_MEMBERSHIP_LOST'});
         await userService.setVisibility(profileId, reference, visibility, manager);
 
         // Explicit completions use this transaction's lifecycle and grants. Any
@@ -1042,10 +1042,14 @@ function profileOwnerCleanupMessage(cleanup: ProfileOwnerCleanup): string {
     return '';
 }
 
+/** Verify the native typed username before selecting the existing account or
+ * guest deletion workflow, including its mail and provider/logout completion. */
 export async function deleteAccount(body: any, session: Request['session']) {
     const {username} = body;
+    // A mismatch is a confirmed rejection before either identity can be deleted.
     if (!username || (username !== session.auth?.guest?.username && username !== session.auth?.user?.username)) {
-        throw new ValidationError("users/delete-account", "Invalid account deletion verification", {username});
+        throw new ValidationError("users/delete-account", "Invalid account deletion verification", {username},
+            {cause: 'ACCOUNT_DELETION_CONFIRMATION_INVALID'});
     }
     if (session.auth?.guest && session.auth.user) {
         throw new ExpectedError("Ambiguous session. Log out and try again", "error", 500);
@@ -1091,7 +1095,8 @@ export async function deactivateProfile(body: any, session: Request['session'], 
     // Confirmation is the existing first check, before any ownership write.
     const {name} = body;
     if (!name || name !== session.profile?.name) {
-        throw new ValidationError("users/profile/delete", "Invalid profile deactivation verification", {name});
+        throw new ValidationError("users/profile/delete", "Invalid profile deactivation verification", {name},
+            {cause: 'PROFILE_DEACTIVATION_CONFIRMATION_INVALID'});
     }
 
     if (!session.profile) {
@@ -1121,14 +1126,14 @@ export async function changeActiveProfile(session: Request['session'], profileId
     if (profileId) {
         profile = await userService.getProfileById(profileId, manager);
         if (profile?.userId !== session.auth.user.id) {
-            throw new ExpectedError("Invalid profile id", "error", 400);
+            throw new ExpectedError("Invalid profile id", "error", 400, {}, {cause: 'PROFILE_SELECTION_INVALID'});
         }
     } else {
         const profiles = await userService.getProfilesForUser(session.auth.user.id, manager);
         if (profiles.length > 0) {
             profile = getDefaultProfile(profiles);
         } else {
-            throw new ExpectedError("Invalid profile id", "error", 400);
+            throw new ExpectedError("Invalid profile id", "error", 400, {}, {cause: 'PROFILE_SELECTION_INVALID'});
         }
     }
 
@@ -1185,17 +1190,21 @@ export async function validateSession(session: Request['session']) {
     return ok;
 }
 
+/** Retain native blank-name validation, optional rename and default selection,
+ * then reload the saved active profile before persisting the session copy. */
 export async function updateProfile(body: any, session: Request['session']) {
     const {name, isDefault} = body;
     const profileId = session.profile!.id;
     if (name?.trim()?.length === 0) {
-        throw new ValidationError("users/profile/view", "Invalid profile name");
+        throw new ValidationError("users/profile/view", "Invalid profile name", {}, {cause: 'PROFILE_NAME_REQUIRED'});
     }
+    // An omitted name keeps its old value; default selection still saves next.
     if (name) {
         await userService.updateProfileName(profileId, name);
     }
     await userService.updateProfileDefault(profileId, !!isDefault);
 
+    // Session presentation follows both original profile writes in their order.
     session.profile = await userService.getProfileById(profileId);
     await persistSession(session);
     return "Updated profile";
@@ -1205,10 +1214,13 @@ export async function getProfilesForUser(userId: number) {
     return await userService.getProfilesForUser(userId);
 }
 
+/** Reject the original blank-name case before creating an account-owned profile;
+ * selection and session changes remain with their existing separate workflows. */
 export async function createProfile(body: any, userId: number) {
     const {name} = body;
+    // Keep submitted form data on native rejection without entering persistence.
     if (name?.trim()?.length === 0) {
-        throw new ValidationError("users/profile/create", "Invalid profile name", body);
+        throw new ValidationError("users/profile/create", "Invalid profile name", body, {cause: 'PROFILE_NAME_REQUIRED'});
     }
     return await userService.createProfile(userId, name);
 }

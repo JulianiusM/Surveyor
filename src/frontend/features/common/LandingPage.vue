@@ -103,7 +103,7 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
                 </ul>
             </div>
             <template v-if="session?.activeProfile">
-                <div class="d-flex flex-wrap justify-content-center gap-2 mb-4">
+                <div class="pilot-action-row justify-content-center mb-4">
                     <RouterLink class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" :to="frontendOverviewPath">
                         <i class="bi bi-speedometer2" aria-hidden="true"></i>{{ messages.t('landing.openDashboard') }}
                     </RouterLink>
@@ -114,7 +114,7 @@ function chooseQuickCreate(): FrontendLandingQuickCreate {
                 </div>
             </template>
             <template v-else>
-                <div class="d-flex flex-wrap justify-content-center gap-2 mb-3">
+                <div class="pilot-action-row justify-content-center mb-3">
                     <RouterLink class="btn btn-primary btn-lg d-inline-flex align-items-center gap-2" :to="registerUrl">
                         <i class="bi bi-person-plus" aria-hidden="true"></i>{{ messages.t('auth.createAccount') }}
                     </RouterLink>

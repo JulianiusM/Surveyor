@@ -162,7 +162,7 @@ async function submitResponses(survey: Survey, session: SessionLike, body: any) 
                 || !['yes', 'maybe', 'no', ''].includes(answer ?? '');
         });
         if (invalidEntry) {
-            throw new ExpectedError('Invalid survey response', 'error', 400);
+            throw new ExpectedError('Invalid survey response', 'error', 400, {}, {cause: 'SURVEY_RESPONSE_INVALID'});
         }
         // Keep the native persistence order and its independently saved rows.
         await surveyService.deleteResponsesByProfileId(gid, survey.id);

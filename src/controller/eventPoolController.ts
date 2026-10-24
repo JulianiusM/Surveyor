@@ -39,7 +39,7 @@ import {
 } from '../modules/invoice/notifications';
 import {getInvoiceProofPath} from '../modules/invoice/proofs';
 import {assertInvoiceSharesExportable} from '../modules/invoice/validation';
-import {invoiceText} from '../modules/invoice/wording';
+import {invoiceText, invoiceRejectionCause} from '../modules/invoice/wording';
 import {
     invoiceSettledShareNotice, invoiceBalanceCaption, invoicePoolSummary, invoiceShareComponents,
     invoicePayerCalculation, invoicePoolCalculationBreakdown, invoicePoolCalculation, isOrganizerInvoice, presentInvoiceShare,
@@ -47,7 +47,7 @@ import {
 } from '../modules/invoice/presentation';
 import {invoiceAppliedTakeovers, invoiceHasAppliedTakeoverEvidence, invoiceHasPendingTakeovers} from '../modules/invoice/coverage';
 import {evaluateSubject} from '../modules/permissionEngine';
-import {ApiProblem} from '../modules/api/problem';
+import {ApiProblem, declaredApiProblem} from '../modules/api/problem';
 import {createTranslator} from '../modules/localization/translator';
 import type {EventInvoicePool} from '../modules/database/entities/event/EventInvoicePool';
 import type {EventInvoice} from '../modules/database/entities/event/EventInvoice';
@@ -285,7 +285,7 @@ export async function retractEventInvoice(eventId: string, poolId: string, invoi
     try {
         await retractInvoice(event, poolId, invoiceId, body, session as Request['session']);
     } catch (error) {
-        if (error instanceof APIError && error.status === 409) throw new ApiProblem('RESOURCE_CONFLICT');
+        if (error instanceof APIError && error.status === 409) throw declaredApiProblem(error) ?? new ApiProblem('RESOURCE_CONFLICT');
         throw error;
     }
 }
@@ -324,7 +324,7 @@ async function runFinanceOperation<T>(operation: () => Promise<T>): Promise<T> {
         return await operation();
     } catch (error) {
         // Legacy prose stays private; no mutable admission or response preparation runs after a successful write.
-        if (error instanceof APIError && error.status === 409) throw new ApiProblem('RESOURCE_CONFLICT');
+        if (error instanceof APIError && error.status === 409) throw declaredApiProblem(error) ?? new ApiProblem('RESOURCE_CONFLICT');
         throw error;
     }
 }
@@ -483,7 +483,7 @@ async function assertRegistrationAllowed(pool: Awaited<ReturnType<typeof ensureP
     const assignedIds = pool.assignAll
         ? (await eventService.getRegistrationsForEvent(pool.event.id)).map((r) => r.id)
         : pool.assignments.map((a) => a.registrationId);
-    if (!assignedIds.includes(registrationId)) throw new APIError(invoiceText('participantNotAssignedToThisPool'), {}, 400);
+    if (!assignedIds.includes(registrationId)) throw new APIError(invoiceText('participantNotAssignedToThisPool'), {}, 400, {cause: invoiceRejectionCause('participantNotAssignedToThisPool')});
 }
 
 // Create a new invoice pool with optional default/assign-all behavior and explicit participant list.
@@ -538,7 +538,7 @@ async function addPoolSurcharge(event: Event, poolId: string, body: any) {
 
     const registrationId = Number(value.registrationId);
     const cleanedNote = (value.note as string).trim();
-    if (!cleanedNote) throw new APIError(invoiceText('noteIsRequired'), body, 400);
+    if (!cleanedNote) throw new APIError(invoiceText('noteIsRequired'), body, 400, {cause: invoiceRejectionCause('noteIsRequired')});
     await assertRegistrationAllowed(pool, registrationId);
     const subtractFromPool = value.subtractFromPool === true || value.subtractFromPool === 'on';
     await poolOperations.savePoolSurcharge(poolId, registrationId, Number(value.amount), cleanedNote, subtractFromPool);
@@ -581,16 +581,16 @@ async function submitInvoice(event: Event, poolId: string, body: any, session: S
     const value = prepareSubmittedInvoice(body);
 
     const pool = await ensurePool(event, poolId);
-    if (pool.status !== 'OPEN') throw new APIError(invoiceText('poolIsClosedForInvoiceSubmissions'), body, 400);
+    if (pool.status !== 'OPEN') throw new APIError(invoiceText('poolIsClosedForInvoiceSubmissions'), body, 400, {cause: invoiceRejectionCause('poolIsClosedForInvoiceSubmissions')});
     const isAssigned = pool.assignAll || pool.assignments?.some((a) => a.registration.id === regId);
     if (!isAssigned) throw new APIError(invoiceText('notAllowedForThisPool'), body, 403);
     // Participant uploads keep their established mandatory proof and accepted MIME types.
-    if (!file) throw new APIError(invoiceText('proofRequired'), body, 400);
+    if (!file) throw new APIError(invoiceText('proofRequired'), body, 400, {cause: invoiceRejectionCause('proofRequired')});
     const isValidProof = file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/');
     if (!isValidProof) {
         // Clean up unexpected uploads immediately to avoid orphan files
         void fs.promises.unlink(file.path).catch(() => undefined);
-        throw new APIError(invoiceText('unsupportedProofType'), body, 400);
+        throw new APIError(invoiceText('unsupportedProofType'), body, 400, {cause: invoiceRejectionCause('unsupportedProofType')});
     }
     // Give the locked operation a portable proof descriptor; only a successful save can produce a receipt.
     const proofPath = path.relative(process.cwd(), file.path);
@@ -617,7 +617,7 @@ async function addOrganizerInvoice(event: Event, poolId: string, body: any, sess
         await ensurePool(event, poolId);
         const value = prepareOrganizerInvoice(body);
         if (file && !['application/pdf', 'image/jpeg', 'image/png', 'image/gif'].includes(file.mimetype)) {
-            throw new APIError(invoiceText('unsupportedProofType'), {}, 400);
+            throw new APIError(invoiceText('unsupportedProofType'), {}, 400, {cause: invoiceRejectionCause('unsupportedProofType')});
         }
         // Preserve the organizer recorder separately from optional paid-by attribution. The existing domain operation
         // repeats participant eligibility under the pool lock; absent attribution retains the shared-cost behavior.
@@ -644,11 +644,11 @@ async function approveInvoice(
     // Load the pool-scoped record for ownership checks and the post-commit notification context.
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
-    if (invoice.status !== 'NEW') throw new APIError(invoiceText('onlyInvoicesAwaitingReviewCanBeAccepted'), body, 409);
+    if (invoice.status !== 'NEW') throw new APIError(invoiceText('onlyInvoicesAwaitingReviewCanBeAccepted'), body, 409, {cause: invoiceRejectionCause('onlyInvoicesAwaitingReviewCanBeAccepted', 409)});
     const {correctedAmount, correctedDescription} = prepareInvoiceAcceptance(body);
     // Repeat the review decision under the root lock; notify only the request that wins the transition.
     const accepted = await invoiceOperations.acceptSavedInvoice(poolId, Number(invoiceId), {correctedAmount, correctedDescription});
-    if (!accepted) throw new APIError(invoiceText('invoiceWasAlreadyReviewedReloadToSeeTheSaved'), {}, 409);
+    if (!accepted) throw new APIError(invoiceText('invoiceWasAlreadyReviewedReloadToSeeTheSaved'), {}, 409, {cause: invoiceRejectionCause('invoiceWasAlreadyReviewedReloadToSeeTheSaved', 409)});
     notifyAcceptedInvoice(event, pool, invoice, correctedAmount, correctedDescription, session);
 }
 
@@ -668,7 +668,7 @@ async function closeInvoice(
     if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
     if (invoice.status === 'CLOSED') return;
     if (invoice.status !== 'APPROVED') {
-        throw new APIError(invoiceText('invoicesMustBeAcceptedBeforeClosing'), {}, 400);
+        throw new APIError(invoiceText('invoicesMustBeAcceptedBeforeClosing'), {}, 400, {cause: invoiceRejectionCause('invoicesMustBeAcceptedBeforeClosing')});
     }
     // Closing may be performed by the submitter or an authorized organizer; self-close forbids the override.
     const actorRegId = await getActorRegistrationId(event, session);
@@ -696,12 +696,12 @@ async function declineInvoice(
     // Load the pool-scoped record for ownership checks and the post-commit notification context.
     const invoice = await invoiceService.getInvoiceWithRegistration(poolId, Number(invoiceId));
     if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
-    if (invoice.status !== 'NEW') throw new APIError(invoiceText('onlyInvoicesAwaitingReviewCanBeRejected'), body, 409);
+    if (invoice.status !== 'NEW') throw new APIError(invoiceText('onlyInvoicesAwaitingReviewCanBeRejected'), body, 409, {cause: invoiceRejectionCause('onlyInvoicesAwaitingReviewCanBeRejected', 409)});
     const value = prepareInvoiceRejection(body);
 
     // The locked decision retains invoice evidence and excludes this cost; notification follows successful commit.
     const declined = await invoiceOperations.rejectSavedInvoice(poolId, Number(invoiceId), value.rejectionReason);
-    if (!declined) throw new APIError(invoiceText('invoiceWasAlreadyReviewedReloadToSeeTheSaved'), {}, 409);
+    if (!declined) throw new APIError(invoiceText('invoiceWasAlreadyReviewedReloadToSeeTheSaved'), {}, 409, {cause: invoiceRejectionCause('invoiceWasAlreadyReviewedReloadToSeeTheSaved', 409)});
     notifyRejectedInvoice(event, pool, invoice, value.rejectionReason, session);
 }
 
@@ -768,7 +768,7 @@ async function closePool(event: Event, poolId: string, body: any = {}, session?:
     const {sharePayloads, approvedInvoiceIds, explanation} = calculatePoolInputs(pool, participants, registrations);
     // A preview must still match its input revision; the commit repeats the comparison under its lock.
     if (options.expectedRevision !== undefined && options.expectedRevision !== pool.calculationRevision) {
-        throw new APIError(invoiceText('thePreviewIsOutOfDatePreviewTheCalculation'), {}, 409);
+        throw new APIError(invoiceText('thePreviewIsOutOfDatePreviewTheCalculation'), {}, 409, {cause: invoiceRejectionCause('thePreviewIsOutOfDatePreviewTheCalculation', 409)});
     }
     // Persist shares, cumulative settlement credits, and saved calculation inputs in one locked transaction.
     const committed = await poolOperations.commitPoolCalculation(poolId, approvedInvoiceIds, sharePayloads, recalculate, pool.calculationRevision, explanation);
@@ -820,9 +820,9 @@ async function notifyPoolShares(event: Event, poolId: string, body: any = {}, se
     // Notifications describe the saved calculation; load contact data without recalculating any shares.
     const participants = new Map((await eventService.getEventParticipants(event.id)).map((participant) => [Number(participant.id), participant]));
     const pool = await ensurePool(event, poolId);
-    if (pool.status !== 'CLOSED') throw new APIError(invoiceText('closeThePoolBeforeSendingSettlementEmails'), {}, 400);
+    if (pool.status !== 'CLOSED') throw new APIError(invoiceText('closeThePoolBeforeSendingSettlementEmails'), {}, 400, {cause: invoiceRejectionCause('closeThePoolBeforeSendingSettlementEmails')});
     if (options.expectedRevision !== undefined && options.expectedRevision !== pool.calculationRevision) {
-        throw new APIError(invoiceText('theSettlementChangedReloadBeforeSendingEmails'), {}, 409);
+        throw new APIError(invoiceText('theSettlementChangedReloadBeforeSendingEmails'), {}, 409, {cause: invoiceRejectionCause('theSettlementChangedReloadBeforeSendingEmails', 409)});
     }
     // The notification module owns message construction and non-blocking delivery for reachable payers.
     return notifyPoolShareSettlements(event, pool, participants, reason, session, {excludedRegistrationIds});
@@ -877,7 +877,7 @@ async function getInvoiceSharesPdfData(event: Event, poolId: string, query: unkn
 async function recalculatePool(event: Event, poolId: string, body: any = {}, session?: Request['session']) {
     const pool = await ensurePool(event, poolId);
     if (pool.status !== 'CLOSED') {
-        throw new APIError(invoiceText('onlyClosedPoolsCanBeRecalculated'), {}, 400);
+        throw new APIError(invoiceText('onlyClosedPoolsCanBeRecalculated'), {}, 400, {cause: invoiceRejectionCause('onlyClosedPoolsCanBeRecalculated')});
     }
 
     await closePool(event, poolId, body, session, true);

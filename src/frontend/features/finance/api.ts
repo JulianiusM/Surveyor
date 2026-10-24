@@ -2,7 +2,7 @@ import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotInputField} from '../../../types/FrontendFeedbackTypes';
 import type {PilotApi} from '../../app/api';
-import {createMultipartForm, generatedInputError, InvalidInputError} from '../../app/transport';
+import {createMultipartForm, generatedInputError} from '../../app/transport';
 import {validateFinanceView} from '../../../../.generated/api/v1/browser/validateFinanceView.mjs';
 import {validateFinanceBreakdown} from '../../../../.generated/api/v1/browser/validateFinanceBreakdown.mjs';
 import {validateFinanceInvoiceInput} from '../../../../.generated/api/v1/browser/validateFinanceInvoiceInput.mjs';
@@ -48,7 +48,7 @@ export class FinanceApi {
     /** Apply exactly the reviewed revision through the existing calculation
      * owner. An uncertain response must be inspected, never replayed. */
     async calculate(eventId: string, poolId: string, input: components['schemas']['FinanceCalculationInput'], recalculate: boolean, scope: PilotRequestScope) {
-        if (!validateFinanceCalculationInput(input)) throw new InvalidInputError();
+        if (!validateFinanceCalculationInput(input)) throw generatedInputError(validateFinanceCalculationInput.errors, financeInputField);
         const options = {params: {path: {eventId, poolId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store' as const};
         // Explicit generated operations preserve the distinct close/recalculate
         // lifecycle while sharing transport and the backend calculation owner.
@@ -77,7 +77,7 @@ export class FinanceApi {
     /** Record or reverse the captured saved share's complete settlement. The
      * existing owner validates its sign and identity without a new protocol. */
     async settlement(eventId: string, poolId: string, shareId: string, input: components['schemas']['FinanceSettlementInput'], scope: PilotRequestScope) {
-        if (!validateFinanceSettlementInput(input)) throw new InvalidInputError();
+        if (!validateFinanceSettlementInput(input)) throw generatedInputError(validateFinanceSettlementInput.errors, financeInputField);
         return this.transport.read('settleEventFinanceShare', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/shares/{shareId}/settlement', {
             params: {path: {eventId, poolId, shareId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), validateFinanceMutationResult, scope).data;
@@ -234,7 +234,7 @@ export class FinanceApi {
     /** A captured revision preserves the native participant retraction review. */
     async retract(eventId: string, poolId: string, invoiceId: string, revision: number, scope: PilotRequestScope) {
         const input = {confirmed: true as const, expectedRevision: revision};
-        if (!validateFinanceRetractionInput(input)) throw new InvalidInputError();
+        if (!validateFinanceRetractionInput(input)) throw generatedInputError(validateFinanceRetractionInput.errors, financeInputField);
         return this.transport.read('retractEventInvoice', await this.transport.client.POST('/events/{eventId}/finance/pools/{poolId}/invoices/{invoiceId}/retract', {
             params: {path: {eventId, poolId, invoiceId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), validateFinanceMutationResult, scope).data;
@@ -262,6 +262,8 @@ function financeInputField(path: string): PilotInputField | undefined {
     if (path === '/note') return {label: 'finance.note'};
     if (path === '/distribution') return {label: 'finance.shareDistributionMode'};
     if (path === '/status') return {label: 'finance.poolSubmissionState'};
+    if (path === '/isPaid') return {label: 'validation.fields.settlementStatus'};
+    if (path === '/sendEmails') return {label: 'finance.emailParticipantsAfterThisCalculation'};
     if (path === '/registrationId') return {label: 'finance.participant5'};
     if (path === '/payerId') return {label: 'finance.payer'};
     if (path.startsWith('/participantFactors/')) return {label: 'finance.shareFactor'};

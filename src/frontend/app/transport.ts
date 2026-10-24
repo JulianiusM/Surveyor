@@ -7,7 +7,9 @@ import {validateComparisonToken} from '../../../.generated/api/v1/browser/valida
 import {apiCompatibility, operationPolicies} from '../../../.generated/api/v1/policy.mjs';
 import type {ApiOperationId} from '../../types/ApiTransportTypes';
 import type {ErrorObject} from 'ajv';
-import type {PilotInputDiagnostic, PilotInputField} from '../../types/FrontendFeedbackTypes';
+import type {PilotInputField} from '../../types/FrontendFeedbackTypes';
+import type {InputDiagnostic} from '../../types/InputValidationTypes';
+import {fieldDiagnostic, fieldDiagnosticInput} from '../../modules/localization/inputValidation';
 
 type Validator<T> = (value: unknown) => value is T;
 type Problem = components['schemas']['Problem'];
@@ -62,7 +64,7 @@ export class UnconfirmedResponseError extends Error {
  * diagnostic text never becomes user feedback or implies a dispatched command. */
 export class InvalidInputError extends Error {
     constructor(message?: string, readonly messageKey?: PilotPlainMessageKey,
-                readonly diagnostic?: PilotInputDiagnostic) { super(message); }
+                readonly diagnostic?: InputDiagnostic) { super(message); }
 }
 
 /** Project a generated rejection onto a feature's visible field without copying
@@ -70,13 +72,18 @@ export class InvalidInputError extends Error {
  * Call immediately after validation: generated validators reuse their errors. */
 export function generatedInputError(errors: readonly ErrorObject[] | null | undefined,
                                     field: (path: string, error: ErrorObject) => PilotInputField | PilotPlainMessageKey | undefined): InvalidInputError {
-    // Pick the first actionable field in the generated order. Branch-summary
-    // diagnostics without a visible owner retain the established generic fallback.
+    // Prefer feature-specific fields and their actual row/day identities. Keep
+    // a generated generic field only as a fallback, without publishing raw paths.
+    let fallback: InputDiagnostic | undefined;
     for (const error of errors ?? []) {
         const path = error.keyword === 'required'
             ? error.instancePath + '/' + String(error.params.missingProperty) : error.instancePath;
         const identity = field(path, error);
-        if (!identity) continue;
+        if (!identity) {
+            const generated = fieldDiagnostic(error);
+            if (!fallback && generated) fallback = fieldDiagnosticInput(generated);
+            continue;
+        }
         // Some features already have clearer task-specific wording (for example
         // the Survey's required recurring choices). Keep that catalog identity.
         if (typeof identity === 'string') return new InvalidInputError(undefined, identity);
@@ -86,7 +93,7 @@ export function generatedInputError(errors: readonly ErrorObject[] | null | unde
         const rule = error.keyword === 'pattern' && error.params.pattern === '\\S' ? 'nonBlank' : error.keyword;
         return new InvalidInputError(undefined, undefined, {field: identity, rule, limit, type});
     }
-    return new InvalidInputError();
+    return new InvalidInputError(undefined, undefined, fallback);
 }
 
 /** Matching generated image/proof operations use one multipart envelope.
@@ -123,7 +130,7 @@ export class PilotTransport {
     headers(scope: PilotRequestScope, etag?: string | null) {
         // Bootstrap validates this pair together. Reject a malformed internal
         // caller too, rather than submit half a stored session's evidence.
-        if ((scope.context === null) !== (scope.csrfToken === null)) throw new InvalidInputError();
+        if ((scope.context === null) !== (scope.csrfToken === null)) throw new InvalidInputError(undefined, 'state.sessionChanged');
         return {
             ...(scope.context !== null ? {'X-Surveyor-Context': scope.context, 'X-CSRF-Token': scope.csrfToken!} : {}),
             'X-Surveyor-Locale': scope.locale,
@@ -202,7 +209,8 @@ export class PilotTransport {
     async uploadJson<T>(operationId: ApiOperationId, path: string, form: FormData, validate: Validator<T>,
                         scope: PilotRequestScope, progress: (loaded: number, total: number | null, complete?: boolean) => void): Promise<T> {
         if (!this.isCurrent(scope)) throw new ObsoleteRequestError();
-        if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) throw new InvalidInputError();
+        if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\'))
+            throw new InvalidInputError(undefined, 'state.uploadDestinationInvalid');
         const headers = this.headers(scope);
 
         // XHR supplies upload progress which fetch does not expose. Do not set

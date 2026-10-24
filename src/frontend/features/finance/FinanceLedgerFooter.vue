@@ -11,7 +11,7 @@ const {messages} = usePilot();
 </script>
 
 <template>
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+    <div class="pilot-action-row justify-content-between mt-3">
         <small class="text-secondary" role="status">
             {{ messages.t('finance.pageSummary', {
             start: total ? page * size + 1 : 0, end: Math.min((page + 1) * size, total), total,

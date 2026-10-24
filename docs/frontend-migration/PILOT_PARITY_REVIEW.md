@@ -1636,3 +1636,96 @@ receipts and documentation claims. The earlier unrelated backend exclusions rema
 No database user/grant change, non-test-data operation, native/default-route cutover, guide publication or deployment
 occurred. Passing this finite local corpus supplies readiness evidence for the exercised behavior, not an exhaustive
 browser/input/configuration matrix or authority to deploy.
+
+## Dropdown, diagnostic and common-feedback follow-up (2026-10-24)
+
+The subsequent direct request identifies German menu overflow, dropdowns under alerts, an unclosed successful
+pool-creation dialog, opaque errors, duplicate action notices, success with Retry, poor recovery-button wrapping,
+mobile action layout and contextually wrong translations. The root and independent delegates reviewed matching
+consumers across the implemented application rather than treating those examples as isolated page changes.
+
+All actual dropdown menus use the common navigation-disclosure owner. It now bounds translated menus in both
+axes, scrolls focused items within the menu and sits above sticky notices while remaining below real modals.
+Shared notices separate wrapping text from right-side actions; phone action bars and modal footers use individual
+rows. Home/Login, creation, settings, Event, Activity, Overview and Finance consumers adopt those shared layouts.
+
+Confirmed deletion/navigation supplies one common result. Only failed delivery offers read/navigation recovery;
+success has no Retry. Exact receipt identity prevents older recovery from erasing newer notices or reviving
+expired success. Dialog feedback survives confirmed closure as the same node/receipt, preserving its timer.
+Pool creation closes only after confirmed creation; rejected and unknown writes retain their draft. Unknown
+feedback combines its safe diagnostic, uncertainty and existing review controls into one durable common message.
+
+The analogous failed-read audit found common command warnings alongside local query warnings. An application-context
+registry contains mounted presentation readers only: it compares actual Error identity and actual common-node
+visibility. Matching content hides while the common message presents that failure; independent or missing errors
+remain visible. Freshness/deadline values stay with the query. Shared Retry calls the command's existing protected
+read lifetime, blocks repeated clicks, renews only its captured read error after another failure and clears only
+the exact recovered receipt. No second query store, business authority or write replay is introduced.
+
+Finance, Activity, archival, Survey, Overview, profile and Event rejection owners retain contextual causes through
+the generated Problem contract. The later audit also covers expired Event searches, cross-field search ranges,
+semantic Event metadata, shared root-property validation, wrong account/profile confirmation and blank profile
+names. These changes add diagnostic metadata only. Independent source/AST review checks unchanged native error
+arguments and actual validation, permission, transaction, persistence and session order. Shared structural feedback
+uses finite field/rule/limit metadata, retaining neither submitted values nor parser prose, and reformats retained
+errors in the selected language. Numeric Survey answer IDs remain record identifiers rather than invented rows.
+
+English/German Activity labels now describe general activities. English/German Survey controls describe an occurrence
+of a weekday, matching their actual recurring model. Four reviewed localized Help articles and the two Survey
+figures follow the same labels. Independent reviewers and root inspect the exported narrow figures; original
+anchors, tasks, trusted Markdown and whole-article language selection remain intact. Native flat Help is unchanged.
+
+Comparator updates retain raw captures. New text projections cover only the explicitly corrected Survey/Activity
+phrases or the native mobile Overview card's adjacent Duplicate/Delete text boundary. The existing creation-disclosure
+and final-choice Remove exceptions remain separately asserted. Shared Overview assertions also check
+the actual complete action rows and nonoverlap; individual labels, values, constraints and styles remain exact.
+Recovery tests select the exact common uncertainty receipt, retain draft/file/write-count assertions and check its
+retirement after the actual read or explicit acknowledgement. Success dismissal uses accessible transient Close
+buttons, preserving modal scope and ordinary clicks rather than changing application timers or removing notices.
+
+Independent nonauthors reviewed shared source, actual consumer adoption, presentation lifetimes, finite diagnostic
+mapping and runtime Help. Root reviewed their results and the corresponding production changes. Executed final
+test evidence is recorded below separately from the preceding task's historical receipts.
+
+### Executed follow-up validation (2026-10-24)
+
+The final application build uses API contract `58adef63f9a4` and locale catalog `c599765dcb36`. The complete
+server/client/SSR build and final test TypeScript check exited successfully. Validation ran on Windows with
+Node 24.13.0 and npm 11.6.2; these are the actual local versions, distinct from the documented CI baseline.
+
+| Executed layer | Final result | Local receipt |
+|---|---|---|
+| Full database-free unit/frontend and source-runtime integration selection | 95 files, 2,198 passed; no failures or skips | `.generated/frontend-ui-followup-database-free-complete.json` |
+| Full real MariaDB integration selection | 29 files, 540 passed; no failures or skips | `.generated/frontend-ui-followup-integration-final-reviewed.json` |
+| Isolated built-client Chromium selection | 93 passed; no failures or skips | `.generated/ui-followup-client-current.xml` |
+| Full built-application E2E selection with local login enabled | 272 passed, no failures; one login-disabled configuration case skipped as declared | `.generated/frontend-ui-followup-e2e-verified.xml` |
+| Required alternate configuration of that same E2E case | 1 passed with local login disabled; no failures or skips | `.generated/frontend-ui-followup-e2e-disabled-auth.xml` |
+
+Thus every one of the 273 E2E cases executed successfully in its applicable configuration. The full normal run
+exited zero after 23.9 minutes. The isolated browser selection remains client evidence rather than E2E evidence.
+Database-backed integration used the existing local MariaDB 10.11.14 fixture on `127.0.0.1:33318`, schema
+`surveyor_frontend_test`, with serialized schema resetters. E2E used the explicitly authorized existing local
+MariaDB 10.4.32 target on port 3306, schema `cgd_e2e`. Its opt-in runner preload verifies that exact test database
+and configures strict mode on real checked-out sessions only; it changes no global modes or grants and substitutes
+no SQL results. Target probes retained credentials in memory. The existing fixture container was returned to its
+original stopped state; no account, grant or non-test-data change was made.
+
+The local one-worker invocation retains the authored inventories, isolation and assertions, allowing 120 seconds
+for database-backed integration hooks. A distinct cold Express/Vite/Sass integration case has a reviewed 60-second
+compilation allowance; ordinary test deadlines remain unchanged.
+
+Earlier receipts retain the actual failed or interrupted attempts. Those include obsolete native-text/local-notice
+expectations, a run overlapping an asset rebuild, and one Windows `EPERM` while a watcher fixture replaced its own
+temporary readiness marker. That marker case passed unchanged both alone and in the final complete selection;
+no timeout or readiness assertion was weakened to hide the rename failure. Reviewed test adjustments preserve the
+explicitly requested UI changes and raw evidence, as described above. Final tests use the frozen application build.
+Independent post-run fingerprints match all 534 authored source/contract files and 236 built client/SSR files
+against that build. The managed E2E listener on port 3001 is closed.
+
+The final required engineering command reports 449 source files and zero findings, including the complete
+90-file changed readability scope and 126 nontrivial operations. Whitespace and the production-guide/amendment
+boundary checks pass. The advisory documentation report retains only the existing source-baseline fingerprint
+mismatch; links, metadata, classification, profile structure and runtime Help authoring have no findings. The
+baseline was not rebased to conceal it. Independent reviewers and root checked actual adoption, native isolation,
+diagnostic privacy, recovery ownership, source readability and these execution claims. Previously deferred backend
+work remains in its existing owners; these finite local results do not certify every browser, input or deployment.

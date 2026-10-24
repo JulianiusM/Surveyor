@@ -377,6 +377,9 @@ describe('SPA profile workflows', () => {
     });
 
     it('retains the admitted workflow input and focus through failed authority Refresh and explicit read recovery', async function retainsFailedAuthorityDraft() {
+        // Happy DOM has no layout. Let the shared presentation owner observe a
+        // visible common receipt so it hides only this same causal query notice.
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
         let failAdmission = true;
         const {host, context, request} = await mounted({kind: 'entry'}, undefined, rejectUnexpectedRequest,
             async function readRecoverableAdmission(received) {
@@ -400,7 +403,7 @@ describe('SPA profile workflows', () => {
         await nextTick();
 
         // The focused, editable draft stays mounted while a separate authority
-        // read fails. Its supplementary warning retains the actual read receipt.
+        // read fails. Its common warning retains the actual read receipt.
         refresh.click();
         await flushPromises();
         expect(host.querySelector('#forgotForm')).toBe(form);
@@ -409,8 +412,9 @@ describe('SPA profile workflows', () => {
         expect(input.value).toBe('Keep unsubmitted token');
         expect(document.activeElement).toBe(input);
         expect([input.selectionStart, input.selectionEnd]).toEqual([2, 8]);
-        const warning = host.querySelector('[data-read-retry-at]')!.closest('.status-notice')!;
-        expect(warning.textContent).toContain(context.messages.value.t('state.stale'));
+        const warning = host.querySelector('.pilot-notification [data-read-retry-at]')!.closest('.pilot-notification')!;
+        expect(warning.textContent).toContain(context.messages.value.t('state.loadFailed'));
+        expect(host.querySelectorAll('[data-read-retry-at]')).toHaveLength(1);
         expect(warning.querySelector('[data-last-successful-refresh]')).not.toBeNull();
         const retry = warning.querySelector<HTMLButtonElement>('button')!;
         expect(retry.disabled).toBe(true);
@@ -425,7 +429,8 @@ describe('SPA profile workflows', () => {
         expect(failedRequests.every(received => received.method === 'GET')).toBe(true);
 
         // Expiring the server deadline changes only availability. The existing
-        // explicit admission Retry must recover without replacing local controls.
+        // common Retry delegates to the workflow's original session/admission
+        // recovery owner without replacing local controls or repeating a write.
         await vi.advanceTimersByTimeAsync(1001);
         await flushPromises();
         expect(retry.disabled).toBe(false);
@@ -441,7 +446,8 @@ describe('SPA profile workflows', () => {
         expect(document.activeElement).toBe(input);
         expect([input.selectionStart, input.selectionEnd]).toEqual([2, 8]);
         expect(host.querySelector('[data-read-retry-at]')).toBeNull();
-        expect(request).toHaveBeenCalledTimes(3);
+        expect(request.mock.calls.map(([received]) => new URL((received as Request).url).pathname))
+            .toEqual(['/api/v1/session', '/api/v1/profiles/workflow-entry', '/api/v1/session', '/api/v1/profiles/workflow-entry']);
         expect(request.mock.calls.every(([received]) => (received as Request).method === 'GET')).toBe(true);
         expectPrivateCache(context);
     });

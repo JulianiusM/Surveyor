@@ -188,7 +188,7 @@ function recorderName(invoice: Invoice): string {
                             <!-- The admitted organizer projection supplies these
                                  review states; the server independently checks
                                  every method and child identity on submission. -->
-                            <div class="d-flex flex-wrap gap-1">
+                            <div class="pilot-action-row gap-1">
                                 <template v-if="invoice.status === 'NEW'">
                                     <ActionButton variant="success" class="btn-sm" :disabled="disabled" @click="emit('review', invoice, 'approve')">{{ messages.t('finance.accept') }}</ActionButton>
                                     <ActionButton variant="outline-danger" class="btn-sm" :disabled="disabled" @click="emit('review', invoice, 'decline')">{{ messages.t('finance.reject') }}</ActionButton>

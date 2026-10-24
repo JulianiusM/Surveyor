@@ -104,8 +104,10 @@ export function useEntityRemoval(command: Pick<ReturnType<typeof useCommand>, 'r
         const scope = context.capture();
         const origin = router.currentRoute.value.fullPath;
         try {
-            const confirmed = await command.run(deleteResource, false, false,
-                {success: request.success});
+            // The confirmed destination owns the one common success receipt.
+            // Keeping a second command notice would announce deletion twice when
+            // Overview is already mounted and the destination does not unmount it.
+            const confirmed = await command.run(deleteResource, false, false, {success: null});
             if (confirmed && context.isCurrent(scope)) {
                 // Every deletion consumer returns to the actor's Overview. The
                 // delivery owner installs its receipt synchronously, then marks

@@ -16,7 +16,6 @@ import CreationPermissions from '../../components/permissions/CreationPermission
 import ActionButton from '../../components/ActionButton.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import PageMessage from '../../components/PageMessage.vue';
-import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import CreationAdmissionNotices from '../../components/CreationAdmissionNotices.vue';
 import FileField from '../../components/FileField.vue';
@@ -46,7 +45,7 @@ const submission = useCreationCommand<components['schemas']['EventCreated']>({
     destination: result => '/frontend-pilot/event/' + result.id,
     success: 'event.created', unknownMessage: 'event.leaveUnknown',
 });
-const {command, destination, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
+const {command, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
     submissionRetryAt, submissionRetryAction, retrySubmissionAdmission} = submission;
 watch([entry.data, sourceId], receiveCreation, {immediate: true});
 usePageTitle(() => messages.value.t('event.createDocumentTitle'), true);
@@ -140,12 +139,8 @@ function collectCreation() {
     <section class="card bg-dark text-white mb-3">
         <h1 class="card-header text-center"><i class="bi bi-calendar2-plus me-2" aria-hidden="true"></i>{{ messages.t('event.create') }}</h1>
         <div class="card-body">
-            <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger" />
-            <CommandFeedback :feedback="command.feedback" part="uncertain" unknown-message="event.creationUnknown" />
-            <StatusNotice v-if="destination.target.value" kind="success"
-                :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">
-                {{ messages.t('state.saved') }}
-            </StatusNotice>
+            <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'uncertain' : 'error'"
+                error-kind="danger" unknown-message="event.creationUnknown" />
             <PageMessage v-if="entry.outcome.value?.kind === 'denied'" kind="error"
                 :message="messages.t('common.notAllowed')" :renewal="entry.outcome.value" />
             <CreationAdmissionNotices
@@ -180,7 +175,7 @@ function collectCreation() {
                         </div>
                     </div>
 
-                    <div class="d-flex justify-content-end gap-2">
+                    <div class="pilot-action-row justify-content-end">
                         <RouterLink class="btn btn-outline-secondary" to="/frontend-pilot"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>{{ messages.t('common.cancel') }}</RouterLink>
                         <ActionButton type="submit" variant="success" :state="createAction"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>{{ messages.t('event.create') }}</ActionButton>
                     </div>

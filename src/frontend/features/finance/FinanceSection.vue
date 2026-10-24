@@ -196,7 +196,6 @@ function revealHistory(): void { submissionOpen.value = true; }
 <template>
     <section v-if="enabled" class="accordion accordion-dark mb-3" data-finance-section>
         <div v-if="!retraction">
-            <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
             <CommandFeedback
                 :feedback="command.feedback"
                 part="uncertain"
@@ -217,6 +216,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                     <LoadingSkeleton v-if="section.loading.value" variant="table" :columns="4" :rows="3" />
                     <StatusNotice
                         v-if="section.query.error.value"
+                        :read-error="section.query.error.value"
                         kind="warning"
                         :retry-at="section.retryAt.value"
                         :last-updated-at="section.updatedAt.value"
@@ -227,7 +227,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                     </StatusNotice>
                     <template v-if="section.data.value">
                         <template v-if="admin">
-                            <div class="d-flex flex-wrap gap-2 mb-3">
+                            <div class="pilot-action-row mb-3">
                                 <ActionButton variant="primary" class="btn-sm" :state="available" @click="creating = true">{{ messages.t('finance.createPool') }}</ActionButton>
                             </div>
                             <FinancePoolEditor
@@ -376,7 +376,7 @@ function revealHistory(): void { submissionOpen.value = true; }
                                                                 @saved="command.setNotice" />
                                             <div
                                                 v-if="pool.status === 'CLOSED' && section.data.value.shares.some(share => share.poolId === pool.id)"
-                                                class="d-flex flex-wrap gap-2 mt-3"
+                                                class="pilot-action-row mt-3"
                                             >
                                                 <a
                                                     class="btn btn-outline-light btn-sm"
@@ -498,27 +498,32 @@ function revealHistory(): void { submissionOpen.value = true; }
                            :active="available.available.value" :refresh="section.refresh" @close="closeSettlement"
                            @pending="settlementPending = $event" @saved="command.setNotice" />
         <AppDialog content-class="text-white finance-dialog"
-            v-if="retraction"
-            open
+            :open="!!retraction"
             :title="messages.t('finance.retractInvoice')"
             :pending="command.pending.value || command.recovering.value"
             standard
             @close="closeRetraction"
         >
-            <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
+            <!-- One renderer keeps the same receipt and expiry as its host moves
+                 between an open retraction dialog and the common page region. -->
+            <template #feedback>
+                <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
+            </template>
             <CommandFeedback
                 :feedback="command.feedback"
                 part="uncertain"
                 :action="{state: refreshAction, label: messages.t('common.refresh')}"
                 @action="refresh()"
             />
-            <p class="fw-semibold">
-                {{ messages.t('finance.countedInvoiceDetails', {invoiceId: retraction.id, amount: financeMoney(retraction.amount, locale)}) }}
-                —
-                {{ retraction.poolName }}
-            </p>
-            <p>{{ retraction.description }}</p>
-            <p>{{ messages.t('finance.retractionWarning') }}</p>
+            <template v-if="retraction">
+                <p class="fw-semibold">
+                    {{ messages.t('finance.countedInvoiceDetails', {invoiceId: retraction.id, amount: financeMoney(retraction.amount, locale)}) }}
+                    —
+                    {{ retraction.poolName }}
+                </p>
+                <p>{{ retraction.description }}</p>
+                <p>{{ messages.t('finance.retractionWarning') }}</p>
+            </template>
             <template #footer>
                 <ActionButton
                     variant="secondary"

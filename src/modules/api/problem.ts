@@ -4,7 +4,8 @@ import type {components} from '../../types/api/v1';
 import type {ApiProblemCode, ApiProblemParameters, ApiProblemArguments} from '../../types/ApiTypes';
 import {APIError, ExpectedError, ValidationError} from '../lib/errors';
 import {createTranslator, resolveLocale, resolvePreferredLocale} from '../localization/translator';
-import {contractValidator, problemContract} from './contracts';
+import {apiContract, contractValidator, problemContract} from './contracts';
+import {formatFieldDiagnostic} from '../localization/inputValidation';
 
 /** Stable machine errors remain compatible with the legacy APIError transport during coexistence. */
 export class ApiProblem extends APIError {
@@ -47,12 +48,37 @@ export function isVersionedApiRequest(req: Request): boolean {
     return requestPath === '/api/v1' || requestPath.startsWith('/api/v1/');
 }
 
+/** Preserve an explicitly annotated native rejection through the authored API
+ * contract. A trusted application error, exact status and closed empty parameter
+ * declaration are all required; arbitrary causes, native prose and renderer data
+ * never become public messages. The manifest remains the sole code/key mapping. */
+export function declaredApiProblem(error: unknown): ApiProblem | null {
+    if (!(error instanceof APIError || error instanceof ExpectedError || error instanceof ValidationError)
+        || typeof error.cause !== 'string') return null;
+
+    // Domain owners annotate only stable, parameter-free causes. Verify those
+    // identities against the generated contract before constructing any reply.
+    // Native form ValidationError has no HTTP status; its existing API fallback
+    // is 400. Higher-status identity causes retain their explicit mapping below.
+    const status = error instanceof ValidationError ? 400 : error.status;
+    const declaration = apiContract.problems.find(candidate => candidate.code === error.cause && candidate.status === status);
+    const parameters = declaration?.paramsSchema as {type?: unknown; additionalProperties?: unknown; maxProperties?: unknown} | undefined;
+    if (!declaration || parameters?.type !== 'object' || parameters.additionalProperties !== false || parameters.maxProperties !== 0) return null;
+
+    return new ApiProblem(...[declaration.code, {}] as ApiProblemArguments);
+}
+
 /** Map only recognized controller outcomes and bounded transport failures.
  * Native prose/renderer data, arbitrary causes and untrusted status-shaped objects
  * never become versioned response data; unknown failures use the internal problem.
  */
 export function classifyApiError(error: unknown): ApiProblem {
     if (error instanceof ApiProblem) return error;
+
+    // Feature adapters use this same projection before their legacy conflict
+    // fallback, so a meaningful annotated rejection is not collapsed a second time.
+    const declared = declaredApiProblem(error);
+    if (declared) return declared;
 
     // Event business owners annotate only recognized rejection identities. Keep
     // native prose/data private and preserve the original action-specific status;
@@ -112,7 +138,10 @@ export function classifyApiError(error: unknown): ApiProblem {
 /** The same projection/validator protects both ordinary errors and the safe internal-error fallback. */
 export function validatedProblemBody(problem: ApiProblem, locale: string, requestId: string = randomUUID()): components['schemas']['Problem'] {
     const contract = problemContract(problem.code);
-    const detail = translateProblem(contract.messageKey, problem.params, locale);
+    const diagnostic = problem.code === 'VALIDATION_FAILED'
+        ? problem.fieldErrors?.find(error => error.diagnostic)?.diagnostic : undefined;
+    const detail = diagnostic ? formatFieldDiagnostic(createTranslator(locale), diagnostic)
+        : translateProblem(contract.messageKey, problem.params, locale);
     const body: components['schemas']['Problem'] = {
         type: `urn:surveyor:problem:${problem.code.toLowerCase().replaceAll('_', '-')}`,
         title: detail,

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {invoiceText} from './wording';
+import {invoiceText, invoiceRejectionCause} from './wording';
 import {differenceInCalendarDays} from 'date-fns';
 import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool';
 import type {EventInvoice} from '../database/entities/event/EventInvoice';
@@ -44,7 +44,7 @@ export function preparePoolCalculation(pool: EventInvoicePool, participants: Par
     const targetRegistrations = pool.assignAll
         ? registrations
         : Array.from(new Map(pool.assignments.map((assignment) => [assignment.registrationId, assignment.registration])).values());
-    if (!targetRegistrations.length && pool.status !== 'CLOSED') throw new APIError(invoiceText('noParticipantsAssignedToThisPool'), {}, 400);
+    if (!targetRegistrations.length && pool.status !== 'CLOSED') throw new APIError(invoiceText('noParticipantsAssignedToThisPool'), {}, 400, {cause: invoiceRejectionCause('noParticipantsAssignedToThisPool')});
 
     const targetIds = new Set(targetRegistrations.map((r) => r.id));
     const exemptIds = new Set((pool.assignments || []).filter((a) => a.isExempt).map((a) => a.registrationId));
@@ -209,7 +209,12 @@ function calculateIndividualCosts(pool: EventInvoicePool, billableRegistrations:
             // the displayed divisor free of binary floating-point artifacts; ratios remain exact.
             effectiveWeight: Math.round(weights.reduce((sum, participant) => sum + participant.weight * participant.factor, 0) * 10000) / 10000};
     } catch (error) {
-        throw new APIError(error instanceof Error ? error.message : invoiceText('cannotCalculateInvoiceShares'), {}, 400);
+        // Expected allocator failures carry a finite catalog identity. Preserve
+        // native wording while transport validates that cause independently;
+        // unrelated exceptions can never publish their message as API detail.
+        throw new APIError(error instanceof Error ? error.message : invoiceText('cannotCalculateInvoiceShares'), {}, 400,
+            {cause: error instanceof Error && typeof error.cause === 'string' && error.cause.startsWith('FINANCE_')
+                ? error.cause : invoiceRejectionCause('cannotCalculateInvoiceShares')});
     }
 }
 

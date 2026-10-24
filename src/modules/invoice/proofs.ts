@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {invoiceText} from './wording';
+import {invoiceText, invoiceRejectionCause} from './wording';
 import fs from 'node:fs';
 import path from 'node:path';
 import settings from '../settings';
@@ -57,7 +57,7 @@ export async function getInvoiceProofPath(invoice: EventInvoice | null, actorReg
     // Use path.relative to ensure the resolved path is within uploads directory
     const relativePath = path.relative(uploadsDir, fullPath);
     if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-        throw new APIError(invoiceText('invalidProofPath'), {}, 400);
+        throw new APIError(invoiceText('invalidProofPath'), {}, 400, {cause: invoiceRejectionCause('invalidProofPath')});
     }
 
     // Check if file exists (async)

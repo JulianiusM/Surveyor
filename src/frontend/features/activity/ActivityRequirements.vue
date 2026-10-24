@@ -363,7 +363,7 @@ async function save(): Promise<void> {
                             </div>
                         </div>
                     </div>
-                    <div class="d-flex flex-wrap justify-content-end align-items-center gap-2 border-top border-secondary-subtle mt-3 pt-3">
+                    <div class="pilot-action-row justify-content-end border-top border-secondary-subtle mt-3 pt-3">
                         <small class="text-secondary me-auto">{{ messages.t('activity.requirements.saveHint') }}</small>
                         <ActionButton type="button" variant="success" data-requirements-save
                             :pending="command.pending.value" :show-spinner="false" :disabled="blocked || !dirty" @click="save">

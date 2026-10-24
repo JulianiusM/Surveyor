@@ -145,11 +145,18 @@ export interface PilotConfirmedNavigation {
     target: ComputedRef<string | null>;
     notice: ComputedRef<components['schemas']['EntryNotice'] | null>;
     fallbackTarget: ComputedRef<string | null>;
+    /** The shell observes the existing receipt across every mounted origin.
+     * Recovery repeats reads/navigation only; it never repeats the command. */
+    recoveryTarget: ComputedRef<string | null>;
+    recoveryAction: PilotActionState;
+    recoveryRetryAt: ComputedRef<number | undefined>;
+    recoveryReadError: ComputedRef<Error | null>;
     navigate(destination: string, scope?: PilotRequestScope, origin?: string,
              notice?: components['schemas']['EntryNotice'] | null, refreshSession?: boolean,
              readFamilies?: readonly (readonly unknown[])[]): Promise<boolean>;
     retry(): Promise<boolean>;
     retryFallback(): Promise<boolean>;
+    retryRecovery(): Promise<boolean>;
 }
 
 export type PilotPageEntryDenial = Extract<components['schemas']['PageEntryOutcome'], {kind: 'denied'}>;

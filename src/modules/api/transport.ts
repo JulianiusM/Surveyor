@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 import type {ApiOperationId, ApiSuccessStatus, ApiResponseBody, PreparedApiJsonResponse} from '../../types/ApiTransportTypes';
 import {contractValidator, operationContract} from './contracts';
 import {ApiProblem, requestLocale} from './problem';
+import type {ErrorObject} from 'ajv';
+import {fieldDiagnostic} from '../localization/inputValidation';
 
 /** Await the caller's uploader without changing its filename, byte or type policy.
  * Parser diagnostics stay private; routes retain admission and upload cleanup. */
@@ -33,22 +35,25 @@ export function decodeApiMultipartData(body: unknown, file?: Express.Multer.File
     // Keep already decoded values and absent/malformed JSON distinctions intact.
     let data: unknown;
     try { data = typeof form.data === 'string' ? JSON.parse(form.data) : form.data; }
-    catch { throw new ApiProblem('VALIDATION_FAILED'); }
+    catch { throw new ApiProblem('INVALID_JSON'); }
     return {...form, data, ...(file ? {[field]: file.originalname} : {})};
 }
 
 /** Decode only the serialization subset declared in the contract; JSON request bodies stay untouched. */
-function scalarParameter(value: unknown, type: unknown): unknown {
-    if (typeof value !== 'string') throw new ApiProblem('VALIDATION_FAILED');
+function scalarParameter(value: unknown, type: unknown, pointer: string): unknown {
+    // Invalid scalar syntax receives the same field vocabulary as generated body
+    // errors. Only the declared type/path enters feedback, never its raw value.
+    const invalid = () => validationProblem([{instancePath: pointer, schemaPath: '', keyword: 'type', params: {type}}]);
+    if (typeof value !== 'string') throw invalid();
     if (type === 'boolean') {
-        if (value !== 'true' && value !== 'false') throw new ApiProblem('VALIDATION_FAILED');
+        if (value !== 'true' && value !== 'false') throw invalid();
         return value === 'true';
     }
     if (type === 'integer' || type === 'number') {
         const pattern = type === 'integer' ? /^-?(?:0|[1-9]\d*)$/u : /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u;
         const number = Number(value);
         if (!pattern.test(value) || !Number.isFinite(number) || type === 'integer' && !Number.isSafeInteger(number)) {
-            throw new ApiProblem('VALIDATION_FAILED');
+            throw invalid();
         }
         return number;
     }
@@ -68,7 +73,7 @@ export function decodeApiParameters(operationId: ApiOperationId, input: {path: o
         const value = decoded[parameter.in]?.[parameter.name];
         if (value === undefined) continue;
         const schema = parameter.schema as {type?: string};
-        decoded[parameter.in]![parameter.name] = scalarParameter(value, schema.type);
+        decoded[parameter.in]![parameter.name] = scalarParameter(value, schema.type, '/' + parameter.in + '/' + parameter.name);
     }
     return decoded;
 }
@@ -80,15 +85,28 @@ export function validateApiInput(operationId: ApiOperationId, value: unknown): v
     const validator = contractValidator(schema);
     if (validator(value)) return;
 
-    // Bound structural diagnostics and expose machine pointers, never schema internals
-    // or user-supplied values. Localized presentation belongs to the problem adapter.
+    throw validationProblem(validator.errors);
+}
+
+/** Keep a bounded structural rejection with safe display identities. Shared
+ * server/client formatting owns its wording; the generated rule supplies limits.
+ * Submitted values, parser messages and schema locations are never retained. */
+function validationProblem(errors: readonly ErrorObject[] | null | undefined): ApiProblem {
     const problem = new ApiProblem('VALIDATION_FAILED');
-    problem.fieldErrors = (validator.errors ?? []).slice(0, 20).map(error => ({
-        pointer: error.instancePath,
-        code: ['required', 'type', 'format'].includes(error.keyword) ? error.keyword as 'required' | 'type' | 'format'
-            : error.keyword === 'additionalProperties' ? 'unknown' : 'invalid',
-    }));
-    throw problem;
+    // Required errors identify their missing field rather than only the parent.
+    // Unknown-field errors keep the parent pointer and never echo an unknown key.
+    problem.fieldErrors = (errors ?? []).slice(0, 20).map(error => {
+        const missing = error.keyword === 'required' ? String(error.params.missingProperty ?? '') : '';
+        const pointer = error.instancePath + (missing ? '/' + missing.replaceAll('~', '~0').replaceAll('/', '~1') : '');
+        const diagnostic = fieldDiagnostic(error);
+        return {
+            pointer: pointer.slice(0, 512),
+            code: ['required', 'type', 'format'].includes(error.keyword) ? error.keyword as 'required' | 'type' | 'format'
+                : error.keyword === 'additionalProperties' ? 'unknown' : 'invalid',
+            ...(diagnostic ? {diagnostic} : {}),
+        };
+    });
+    return problem;
 }
 
 /** Decode declared parameters before validating the operation's media type and closed body shape. */
@@ -104,7 +122,8 @@ export function validateOperationRequest(req: Request, operationId: ApiOperation
     }
 
     const parameters = decodeApiParameters(operationId, {path: req.params, query: req.query, header});
-    if (!contractValidator(operation.parametersValidator)(parameters)) throw new ApiProblem('VALIDATION_FAILED');
+    const parameterValidator = contractValidator(operation.parametersValidator);
+    if (!parameterValidator(parameters)) throw validationProblem(parameterValidator.errors);
 
     // Feature normalization runs only after media admission, preserving native
     // trim/empty-value semantics while retaining the generated structural contract.
@@ -113,7 +132,7 @@ export function validateOperationRequest(req: Request, operationId: ApiOperation
         if (normalizeBody) req.body = normalizeBody(req.body as unknown);
         validateApiInput(operationId, req.body as unknown);
     } else if (Number(req.get('Content-Length') ?? 0) > 0 || req.get('Transfer-Encoding') || req.body !== undefined) {
-        throw new ApiProblem('VALIDATION_FAILED');
+        throw validationProblem([{instancePath: '', schemaPath: '', keyword: 'additionalProperties', params: {}}]);
     }
 }
 

@@ -1,4 +1,4 @@
-import {computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, watch} from 'vue';
+import {computed, getCurrentInstance, onBeforeUnmount, ref, shallowRef, toRaw, watch} from 'vue';
 import {isNavigationFailure, useRoute, useRouter} from 'vue-router';
 import type {RouteLocationNormalized, Router} from 'vue-router';
 import {hashKey, useQuery} from '@tanstack/vue-query';
@@ -403,11 +403,19 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
             // language. Clear this exact receipt after commitment; a newer owner
             // or failed navigation must not lose its retained recovery state.
             const committed = await navigatePageEntry(context, router,
-                {kind: 'redirect', url: confirmed.destination, notice: confirmed.notice}, context.capture(), confirmed.origin);
+                // Carry only feedback that is still live at Router commitment.
+                // A dismissed/expired initial success must never return on Retry.
+                {kind: 'redirect', url: confirmed.destination, notice: null}, context.capture(), confirmed.origin);
             if (committed && receipt.value === confirmed) receipt.value = undefined;
             return committed;
         } finally {
             pending.value = false;
+            // An idle retained receipt means delivery needs deliberate recovery.
+            // Its common warning already explains the confirmed operation; remove
+            // only that operation's exact success to avoid two alerts for one
+            // action. Equal message keys from a newer receipt remain independent.
+            if (receipt.value === confirmed && confirmed.notice
+                && toRaw(context.pageNotice.value) === toRaw(confirmed.notice)) context.pageNotice.value = null;
         }
 
         /** Keep selected key prefixes in the existing cache matcher rather than
@@ -434,6 +442,10 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         // replace the dependencies of this already confirmed command receipt.
         receipt.value = {destination: pageDestination(router, destination), scope, origin, notice, owner, refreshSession,
             readFamilies: readFamilies.map(family => [...family])};
+        // The write has already confirmed this result. Announce it once through
+        // the common host even if its following read/navigation later fails;
+        // that delivery failure has a separate read-only recovery warning.
+        if (notice) context.pageNotice.value = notice;
         return retry(owner, true);
     }
 
@@ -453,6 +465,23 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
     function fallbackTarget(): string | null {
         const confirmed = receipt.value;
         return confirmed && !mountedOwners.value.has(confirmed.owner) ? confirmed.destination : null;
+    }
+
+    /** The shell presents every failed delivery through one common notice.
+     * Its receipt stays with the confirmed operation, independently of whether
+     * the originating form remains mounted or has already retired. */
+    function recoveryTarget(): string | null {
+        return receipt.value?.destination ?? null;
+    }
+
+    function mayRetryRecovery(): boolean {
+        const confirmed = receipt.value;
+        return !!confirmed && mayRetry(confirmed.owner);
+    }
+
+    function retryRecovery(): Promise<boolean> {
+        const confirmed = receipt.value;
+        return confirmed ? retry(confirmed.owner) : Promise.resolve(false);
     }
 
     function retryFallback(): Promise<boolean> {
@@ -498,8 +527,8 @@ function createConfirmedNavigation(context: PilotContext, router: Router) {
         if (context.browser) window.removeEventListener('beforeunload', protectPendingDeparture);
         if (confirmedNavigations.get(context.session) === navigation) confirmedNavigations.delete(context.session);
     }
-    const navigation = {pending, target, notice, fallbackTarget, navigate, retry, retryFallback, retain, identifyOwner,
-        mayNavigate, mayRetry, mayRetryFallback, retryError};
+    const navigation = {pending, target, notice, fallbackTarget, recoveryTarget, navigate, retry, retryFallback,
+        retryRecovery, retain, identifyOwner, mayNavigate, mayRetry, mayRetryFallback, mayRetryRecovery, retryError};
     return navigation;
 }
 
@@ -524,16 +553,21 @@ export function useConfirmedNavigation(identity?: string): PilotConfirmedNavigat
     const available = computed(navigation.mayNavigate);
     const notice = computed(() => navigation.notice(owner));
     const fallbackTarget = computed(navigation.fallbackTarget);
+    const recoveryTarget = computed(navigation.recoveryTarget);
     const retryAvailable = useReadRetry(navigation.retryError);
     const readRetryAt = useReadRetryAt(navigation.retryError, retryAvailable);
     const retryAt = computed(() => target.value ? readRetryAt.value : undefined);
     const fallbackRetryAt = computed(() => fallbackTarget.value ? readRetryAt.value : undefined);
+    const recoveryRetryAt = computed(() => recoveryTarget.value ? readRetryAt.value : undefined);
+    const recoveryReadError = computed(navigation.retryError);
     // These states belong to each mounted control, while the receipt and its
     // dispatch guard remain application-owned across originating-view retirement.
     const retryAction = useActionState({eligible: () => retryAvailable.value
         && navigation.mayRetry(owner), pending: () => navigation.pending.value});
     const fallbackRetryAction = useActionState({eligible: () => retryAvailable.value
         && navigation.mayRetryFallback(), pending: () => navigation.pending.value});
+    const recoveryAction = useActionState({eligible: () => retryAvailable.value
+        && navigation.mayRetryRecovery(), pending: () => navigation.pending.value});
     async function navigate(destination: string, scope: PilotRequestScope = context.capture(),
                             origin: string = router.currentRoute.value.fullPath,
                             notice: components['schemas']['EntryNotice'] | null = null, refreshSession = false,
@@ -549,8 +583,12 @@ export function useConfirmedNavigation(identity?: string): PilotConfirmedNavigat
     function retryFallback(): Promise<boolean> {
         return fallbackRetryAction.isAvailable() ? navigation.retryFallback() : Promise.resolve(false);
     }
+    function retryRecovery(): Promise<boolean> {
+        return recoveryAction.isAvailable() ? navigation.retryRecovery() : Promise.resolve(false);
+    }
     return {pending: navigation.pending, available, target, notice, fallbackTarget, navigate, retry, retryFallback,
-        retryAction, fallbackRetryAction, retryAt, fallbackRetryAt};
+        retryAction, fallbackRetryAction, retryAt, fallbackRetryAt,
+        recoveryTarget, recoveryAction, recoveryRetryAt, recoveryReadError, retryRecovery};
 }
 
 /** One reusable read/navigation boundary for server-owned page admission. A feature supplies

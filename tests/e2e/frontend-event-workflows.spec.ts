@@ -469,10 +469,20 @@ test('keeps a pending registration draft and reconciles uncertain delivery witho
         await expect(page.locator('#departureDate')).toHaveValue('2030-06-04');
         releaseDelivery();
 
-        const refresh = page.locator('#registrationForm').locator('..').getByRole('button', {name: 'Refresh', exact: true});
+        // Uncertain delivery belongs to the shared page notice. Its recovery
+        // action reads saved state without submitting this retained draft again.
+        const uncertainty = page.locator('main [data-pilot-notices] .pilot-notification')
+            .filter({hasText: 'The result is uncertain. Refresh before trying the change again.'});
+        await expect(uncertainty).toHaveCount(1);
+        await expect(uncertainty).toBeVisible();
+        const refresh = uncertainty.getByRole('button', {name: 'Refresh', exact: true});
         await expect(refresh).toBeVisible();
+        const refreshed = page.waitForResponse(response => response.request().method() === 'GET'
+            && new URL(response.url()).pathname === `/api/v1/events/${event.id}`);
         await refresh.click();
+        expect((await refreshed).status()).toBe(200);
         await expect(page.getByText('Your registration', {exact: true})).toBeVisible();
+        await expect(uncertainty).toHaveCount(0);
         await expect(page.locator('#departureDate')).toHaveValue('2030-06-04');
         expect(writes).toBe(1);
         expect((await eventView(page.request, event.id)).registrationCount).toBe(1);

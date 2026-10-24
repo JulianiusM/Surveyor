@@ -322,7 +322,7 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
 </script>
 
 <template>
-    <CommandFeedback v-if="!draft" :feedback="command.feedback" part="error" />
+    <CommandFeedback v-if="!draft" :feedback="command.feedback" :part="command.uncertain.value ? 'all' : 'error'" />
     <!-- One recovery action covers uncertainty, confirmed values awaiting authority
          and failed reads. Keep its node while an unknown command's read fails so
          the focused control is retained rather than replaced by another Refresh. -->
@@ -339,7 +339,7 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
     }}</StatusNotice>
     <!-- A recoverable read failure also belongs to a retained draft. Show its
          warning/retry without replacing fields or treating the failure as denial. -->
-    <StatusNotice v-if="metadata.error.value && !lostAuthority && command.notice.value !== 'state.savedRefreshFailed'" kind="warning"
+    <StatusNotice v-if="metadata.error.value && !lostAuthority" kind="warning"
         :last-updated-at="metadata.data.value ? metadata.dataUpdatedAt.value : undefined"
         :retry-at="retryAt" :read-error="metadata.error.value">
         <p class="mb-2">{{ messages.t(metadata.data.value ? 'state.stale' : 'state.loadFailed') }}</p>
@@ -353,11 +353,7 @@ defineExpose({mayLeave, pending, refreshing, unknown, dirty, awaitingAuthority, 
         <!-- Shared transient notifications retain the command receipt; durable
              recovery stays available beside this independently owned draft. -->
         <div aria-live="polite">
-            <CommandFeedback :feedback="command.feedback" :disabled="busy || pending || refreshing"
-                :notice-last-updated-at="command.notice.value === 'state.savedRefreshFailed' && metadata.data.value && !lostAuthority
-                    ? metadata.dataUpdatedAt.value : undefined"
-                :notice-retry-at="command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"
-                :notice-read-error="command.notice.value === 'state.savedRefreshFailed' ? metadata.error.value : undefined" />
+            <CommandFeedback :feedback="command.feedback" :disabled="busy || pending || refreshing" />
         </div>
         <form ref="form" :id="formId" novalidate @submit.prevent="save">
             <fieldset :disabled="disabled || busy || pending || refreshing || unknown || awaitingAuthority || lostAuthority"

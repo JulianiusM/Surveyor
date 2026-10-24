@@ -115,7 +115,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                 @click="filter = option">{{ messages.t(option === 'all' ? 'activity.allSlots' : option === 'mine' ? 'activity.mySlots' : 'activity.openSlots') }}</ActionButton>
         </div>
         <small class="text-secondary mb-0">{{ messages.t('activity.filterHint') }}</small>
-        <div v-if="view.capabilities.exportSchedule" class="d-flex align-items-center gap-2 mt-2 mt-sm-0">
+        <div v-if="view.capabilities.exportSchedule" class="pilot-action-row mt-2 mt-sm-0">
             <a class="btn btn-outline-light btn-sm" :href="'/activity/' + view.id + '/export/schedule'" target="_blank">
                 <i class="bi bi-printer me-1" aria-hidden="true"></i>{{ messages.t('activity.exportSchedule') }}</a>
         </div>
@@ -310,7 +310,7 @@ function drop(slot: components['schemas']['ActivitySlotView'], event: DragEvent)
                                             </template>
                                         </EntityAssignees>
                                     </div>
-                                    <div class="d-flex gap-2 mt-2">
+                                    <div class="pilot-action-row mt-2">
                                         <ActionButton
                                             v-if="slot.selfAssigned"
                                             type="button"

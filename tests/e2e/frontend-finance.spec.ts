@@ -416,17 +416,24 @@ test('distinguishes transferred bytes, confirmed repeated uploads, rejection and
             expect(posts).toHaveLength(4);
             await interception.send('Fetch.failRequest', {requestId: committed.requestId, errorReason: 'Failed'});
             pausedId = undefined;
-            await expect(form).toContainText(/could not confirm|unconfirmed/i);
+            // The same durable receipt now presents its history actions through
+            // the common page host while this mounted invoice stays a draft.
+            const uncertainty = participantPage.locator('main [data-pilot-notices] .pilot-notification')
+                .filter({hasText: 'We could not confirm whether your invoice was saved. It may still have been submitted. Check invoice history before uploading it again.'});
+            await expect(uncertainty).toHaveCount(1);
+            await expect(uncertainty).toBeVisible();
+            await expect(uncertainty).toContainText(/could not confirm|unconfirmed/i);
             await expect(submit).toBeDisabled();
             await form.locator('form').evaluate(node => node.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})));
             expect(posts).toHaveLength(4);
             await form.screenshot({path: info.outputPath('upload-unconfirmed.png'), animations: 'disabled'});
-            await form.getByRole('button', {name: /Check invoice history|View invoice history|Reload and check saved invoices/i}).click();
+            await uncertainty.getByRole('button', {name: /Check invoice history|View invoice history|Reload and check saved invoices/i}).click();
             await expect(participantPage.locator('[data-finance-history]')).toContainText('Committed response lost');
             expect((await readFinance(participant.request, event.id)).invoices.filter(invoice => invoice.description === 'Committed response lost')).toHaveLength(1);
             await expect(submit).toBeDisabled();
             await expect(form.getByLabel('Amount', {exact: true})).toHaveValue('14');
-            await form.getByRole('button', {name: 'I have checked the invoice history', exact: true}).click();
+            await uncertainty.getByRole('button', {name: 'I have checked the invoice history', exact: true}).click();
+            await expect(uncertainty).toHaveCount(0);
             await expect(submit).toBeEnabled();
             await expect(form.getByLabel('Amount', {exact: true})).toHaveValue('');
             await expect(form.getByLabel('Proof (image or PDF)', {exact: true})).toHaveValue('');

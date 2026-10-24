@@ -699,17 +699,28 @@ test('enforces CSRF, media types, UUIDs and closed payloads before a conditional
     // original native envelope keeps its precise field diagnostics. Literal oracles
     // prevent a shared catalog/adapter regression from passing a native/pilot comparison.
     const invalidNativeProperties = [
-        {body: {title: '   '}, message: '"title" is not allowed to be empty'},
-        {body: {description: 'D'.repeat(16001)}, message: '"description" length must be less than or equal to 16000 characters long'},
-        {body: {}, message: '"value" must have at least 1 key'},
+        {body: {title: '   '}, message: '"title" is not allowed to be empty', code: 'VALIDATION_FAILED',
+            detail: 'Title: Enter a value.', fieldErrors: [
+                {pointer: '/title', code: 'invalid', diagnostic: {field: 'title', rule: 'minLength', limit: 1}},
+                {pointer: '/title', code: 'invalid', diagnostic: {field: 'title', rule: 'nonBlank'}},
+            ]},
+        {body: {description: 'D'.repeat(16001)}, message: '"description" length must be less than or equal to 16000 characters long',
+            code: 'VALIDATION_FAILED', detail: 'Description: Use no more than 16000 characters.',
+            fieldErrors: [{pointer: '/description', code: 'invalid', diagnostic: {field: 'description', rule: 'maxLength', limit: 16000}}]},
+        {body: {}, message: '"value" must have at least 1 key', code: 'VALIDATION_FAILED',
+            detail: 'Form: Change at least one field before saving.',
+            fieldErrors: [{pointer: '', code: 'invalid', diagnostic: {field: 'request', rule: 'minProperties', limit: 1}}]},
     ];
     for (const invalid of invalidNativeProperties) {
         const native = await request.post(`/api/packing/${list.id}/update`, {data: invalid.body});
         expect(native.status()).toBe(400);
         expect(await native.json()).toEqual({status: 'error', message: invalid.message, data: {}});
         const versioned = await request.patch(path, {headers: patchHeaders, data: invalid.body});
-        await expectProblem(versioned, 400, 'VALIDATION_FAILED');
-        expect(await versioned.json()).toMatchObject({detail: 'Check the submitted values.'});
+        await expectProblem(versioned, 400, invalid.code);
+        const problem = await versioned.json();
+        expect(problem).toMatchObject({detail: invalid.detail, fieldErrors: invalid.fieldErrors});
+        expect(JSON.stringify(problem)).not.toContain('D'.repeat(100));
+        expect(JSON.stringify(problem)).not.toContain('must NOT');
     }
     const nativeDescription = await request.post(`/api/packing/${list.id}/description`, {data: {description: 'D'.repeat(16001)}});
     expect(nativeDescription.status()).toBe(400);
@@ -1280,7 +1291,7 @@ test('uses typed multipart, item/settings drafts and scoped binary transport for
             {title: 'Water', description: 'Drink bottle', maxAssignees: 1, requiredByAll: true}]};
     const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX2kAAAAASUVORK5CYII=', 'base64');
     await expectProblem(await request.post('/api/v1/packing-lists', {headers, data: creation}), 415, 'UNSUPPORTED_MEDIA_TYPE');
-    await expectProblem(await request.post('/api/v1/packing-lists', {headers, multipart: {data: '{bad-json'}}), 400, 'VALIDATION_FAILED');
+    await expectProblem(await request.post('/api/v1/packing-lists', {headers, multipart: {data: '{bad-json'}}), 400, 'INVALID_JSON');
     await expectProblem(await request.post('/api/v1/packing-lists', {headers, multipart: {
         data: JSON.stringify({...creation, items: [{...creation.items[0], maxAssignees: false}]}),
     }}), 400, 'VALIDATION_FAILED');

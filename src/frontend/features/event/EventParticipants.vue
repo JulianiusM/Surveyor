@@ -197,11 +197,9 @@ async function refresh(): Promise<void> {
 
     <section class="event-participants text-bg-dark border border-secondary-subtile rounded-2 py-1 mb-3"
         data-entity-section>
-        <!-- The page host retains command status when the date editor closes.
-             While it is open, the dialog below owns the same receipt presentation. -->
+        <!-- Durable recovery follows its active controls. One persistent receipt
+             renderer below moves between date-dialog and page presentation. -->
         <div v-if="!edit.id">
-            <CommandFeedback :feedback="command.feedback"
-                :part="command.uncertain.value ? 'error' : 'all'" />
             <CommandFeedback :feedback="command.feedback" part="uncertain"
                 :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refresh" />
         </div>
@@ -217,7 +215,7 @@ async function refresh(): Promise<void> {
                 <div v-show="open" :id="`${id}-roster`" class="accordion-collapse">
                     <div class="accordion-body bg-dark">
                         <LoadingSkeleton v-if="section.loading.value" variant="table" :columns="5" :rows="3" :hide-column-on-mobile="2" />
-                        <StatusNotice v-if="section.query.error.value" kind="warning"
+            <StatusNotice v-if="section.query.error.value" kind="warning" :read-error="section.query.error.value"
                             :action="{state: refreshAction, label: messages.t('common.retry')}"
                             :retry-at="section.retryAt.value" @action="refresh">
                             {{ section.failure.value ?? messages.t('state.stale') }}
@@ -336,9 +334,11 @@ async function refresh(): Promise<void> {
             content-class="text-light border border-secondary" footer-class="justify-content-between"
             :pending="command.pending.value || command.recovering.value" :fullscreen-on-small="false"
             @close="closeDates">
-            <div>
+            <template #feedback>
                 <CommandFeedback :feedback="command.feedback"
                     :part="command.uncertain.value ? 'error' : 'all'" />
+            </template>
+            <div>
                 <CommandFeedback :feedback="command.feedback" part="uncertain"
                     :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refresh" />
             </div>
@@ -364,7 +364,7 @@ async function refresh(): Promise<void> {
             </form>
             <template #footer>
                 <small class="text-secondary">{{ messages.t('event.organizer.eventWindow') }}</small>
-                <div class="d-flex gap-2">
+                <div class="pilot-action-row">
                     <ActionButton variant="outline-secondary"
                         :disabled="command.pending.value || command.recovering.value" @click="closeDates">{{ messages.t('common.cancel') }}</ActionButton>
                     <ActionButton type="submit" :form="`${id}-date-form`" :state="management"

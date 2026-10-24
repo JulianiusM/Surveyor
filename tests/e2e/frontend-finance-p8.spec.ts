@@ -498,7 +498,7 @@ test('preserves native organizer form information and completes pool creation, a
         await creation.locator('[name="distribution"]').selectOption('EQUAL');
         await creation.getByRole('button', {name: 'Add pool', exact: true}).click();
         await expect.poll(async () => (await readFinance(page.request, event.id)).pools.some(row => row.name === 'P8 created through Vue')).toBe(true);
-        await creation.getByRole('button', {name: 'Cancel', exact: true}).click();
+        await expect(creation).toBeHidden();
 
         await pool.getByRole('button', {name: 'Add invoice / amount', exact: true}).click();
         const expense = page.getByRole('dialog');
@@ -728,9 +728,9 @@ for (const width of [320, 390]) {
             const ownId = (await readFinance(participant.request, event.id, false)).registrationId!;
             const otherId = (await readFinance(other.request, event.id, false)).registrationId!;
             await dismissFrontendSuccessNotifications(page);
-            // Creation deliberately remains open for another pool after saving;
-            // complete that interaction before opening a saved pool's actions.
-            await creation.getByRole('button', {name: messages.t('common.cancel'), exact: true}).click();
+            // Confirmed creation finishes its dialog before another saved pool
+            // action begins; no additional Cancel step is required.
+            await expect(creation).toBeHidden();
             const pool = finance.locator(`[data-finance-pool="${poolId}"]`);
             const toggle = pool.locator('.accordion-button').first();
             if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();

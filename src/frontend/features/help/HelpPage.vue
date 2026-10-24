@@ -15,7 +15,6 @@ import {pilotHelpUrl, resolvePilotHelpQuery} from '../../../modules/lib/helpNavi
 import {createTranslator} from '../../../modules/localization/translator';
 import PageMessage from '../../components/PageMessage.vue';
 import StatusNotice from '../../components/StatusNotice.vue';
-import ActionButton from '../../components/ActionButton.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
 import RefreshButton from '../../components/RefreshButton.vue';
 
@@ -148,12 +147,10 @@ function retainReadingSpace(): void {
 </script>
 
 <template>
-    <PageMessage v-if="notFound" kind="error" renewal="help.notFound" :message="messages.t('help.notFound')">
-        <!-- A confirmed missing document suspends automatic observation. Retain
-             native Error/Home presentation while offering deliberate read recovery. -->
-        <ActionButton variant="outline-light" :state="retryAction"
-            @click="retryHelp">{{ messages.t('common.retry') }}</ActionButton>
-    </PageMessage>
+    <!-- A missing document keeps its explanation while explicit read recovery
+         is offered. Its action shares the responsive notice layout and lifetime. -->
+    <PageMessage v-if="notFound" kind="error" renewal="help.notFound" :message="messages.t('help.notFound')"
+        :transient="false" :action="{state: retryAction, label: messages.t('common.retry')}" @action="retryHelp" />
     <section v-else ref="articleRegion" class="card bg-dark text-white mb-3"
         :style="{minHeight: retainedReadingHeight === undefined ? undefined : `${retainedReadingHeight}px`}">
         <div class="card-header d-flex justify-content-between align-items-center gap-2">

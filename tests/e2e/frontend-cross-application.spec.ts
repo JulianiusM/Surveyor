@@ -2,7 +2,8 @@ import {expect, test, type APIRequestContext, type Locator, type Page, type Resp
 import {randomUUID} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createE2EActivityPlan, createE2EDriversList, createE2EEvent, createE2ELogin, createE2EPackingList, createE2ESurvey} from '../factories/e2eCoreFactory';
-import {createResourceViaForm, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
+import {createResourceViaForm, expectMobileOverviewActionRows, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E,
+    projectNativeMobileOverviewActions, readVisiblePresentation} from '../keywords/e2eCoreKeywords';
 import {frontendEventHeaders} from '../keywords/frontendEventE2EKeywords';
 import {createBrowserReadGate, waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
 import type {components} from '../../src/types/api/v1';
@@ -155,7 +156,12 @@ for (const width of [1280, 390]) {
         await expect(refreshEmpty).toBeEnabled();
         await expect(search).toBeFocused();
         const migrated = await captureCards(page, info, 'vue', owner, fixture.resources);
-        for (const [index, presentation] of migrated.entries()) expectVisiblePresentation(native[index]!, presentation);
+        for (const [index, presentation] of migrated.entries()) {
+            const expected = width === 390 ? projectNativeMobileOverviewActions(native[index]!) : native[index]!;
+            expectVisiblePresentation(expected, presentation);
+            if (width === 390)
+                await expectMobileOverviewActionRows(owner.locator(`.js-item[data-id="${fixture.resources[index]!.id}"]`));
+        }
         await expectUsableFrontendLayout(owner);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
 

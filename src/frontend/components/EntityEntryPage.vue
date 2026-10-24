@@ -11,7 +11,6 @@ import {useReadRetryAt} from '../composables/feedback';
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import PageMessage from './PageMessage.vue';
 import LoadingSkeleton from './LoadingSkeleton.vue';
-import ActionButton from './ActionButton.vue';
 import StatusNotice from './StatusNotice.vue';
 
 // A feature supplies its actual native admission and dependent invalidation.
@@ -56,9 +55,9 @@ function admissionErrorText(): string | undefined {
     <PageMessage v-if="admissionError" kind="error" :message="admissionError"
         :renewal="admission.outcome.value?.kind === 'denied' ? admission.outcome.value.messageKey : admission.error.value"
         :transient="admission.outcome.value?.kind === 'denied'" :retry-at="recoverableRead ? retryAt : undefined"
-        :read-error="recoverableRead ? admission.error.value : undefined">
-        <ActionButton v-if="recoverableRead" variant="outline-light" :state="admission.retryAction" @click="admission.retry">{{ context.messages.value.t('common.retry') }}</ActionButton>
-    </PageMessage>
+        :read-error="recoverableRead ? admission.error.value : undefined"
+        :action="recoverableRead ? {state: admission.retryAction, label: context.messages.value.t('common.retry')} : undefined"
+        @action="admission.retry" />
     <template v-else-if="admission.outcome.value?.kind === 'render'">
         <StatusNotice v-if="recoverableRead" kind="warning" :last-updated-at="admission.admittedAt.value"
             :retry-at="retryAt" :read-error="admission.error.value"

@@ -306,8 +306,6 @@ function ownsPreviewRead(scope: PilotRequestScope, controller: AbortController, 
             :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refreshWorkflowAuthority">
             <template #uncertain>{{ ' ' + messages.t('auth.unconfirmedRequest') }}</template>
         </CommandFeedback>
-        <StatusNotice v-if="completion.target.value" kind="success"
-            :action="{state: completion.retryAction, label: messages.t('common.retry')}" @action="completion.retry">{{ messages.t('state.saved') }}</StatusNotice>
         <section class="card bg-dark text-white mb-3">
             <PageHeading class="card-header" :title="heading" :icon="destructive ? 'bi-trash-fill' : 'bi-archive-fill'">
                 <template #actions><RefreshButton :state="refreshAction" @refresh="refreshWorkflowAuthority" /></template>

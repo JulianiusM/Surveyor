@@ -531,7 +531,7 @@ function details(event: PilotEventPickerOption): string {
                         )
                     }}</template>
                 </p>
-                <div class="d-flex gap-2">
+                <div class="pilot-action-row">
                     <ActionButton
                         v-if="history.length > 1"
                         class="btn-sm"

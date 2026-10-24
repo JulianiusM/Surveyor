@@ -136,9 +136,12 @@ export function useListCommands(source: FrontendListCommandSource, draft: PilotC
         if (!readAction.isAvailable()) return false;
         try {
             return await command.reconcile(source.refresh);
-        } catch {
+        } catch (failure) {
             // A failed GET supplies no evidence about a previously sent write.
-            command.notice.value = 'state.stale';
+            // An ordinary manual read already has its query-owned stale/denied
+            // surface. Only an existing confirmed-write warning needs the new
+            // causal identity; uncertainty and independent validation stay intact.
+            if (command.notice.value === 'state.savedRefreshFailed') command.setReadNotice('state.savedRefreshFailed', failure);
             return false;
         }
     }

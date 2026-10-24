@@ -1,6 +1,6 @@
 import {onBeforeUnmount, onMounted, ref, type CSSProperties, type Ref} from 'vue';
 
-/** Keep native disclosure menus beside their trigger when the viewport has less room below it. */
+/** Keep mixed-content disclosure menus usable within the actual viewport. */
 export function useDropdownPlacement(element: Ref<HTMLDetailsElement | null>) {
     const dropdownStyle = ref<CSSProperties>({});
 
@@ -22,13 +22,23 @@ export function useDropdownPlacement(element: Ref<HTMLDetailsElement | null>) {
         }
 
         const bounds = trigger.getBoundingClientRect();
-        const height = menu.getBoundingClientRect().height;
+        const menuBounds = menu.getBoundingClientRect();
+        const height = Math.max(menuBounds.height, menu.scrollHeight);
         const roomBelow = window.innerHeight - bounds.bottom;
         const roomAbove = bounds.top;
         const above = height + 2 > roomBelow && roomAbove > roomBelow;
-        dropdownStyle.value = above
+        const vertical: CSSProperties = above
             ? {top: 'auto', bottom: '100%', marginTop: '0', marginBottom: 'var(--bs-dropdown-spacer)'}
             : {top: '100%', bottom: 'auto', marginTop: 'var(--bs-dropdown-spacer)', marginBottom: '0'};
+
+        // End-aligned profile menus can otherwise extend left of a narrow
+        // viewport; card menus can extend past either edge. Correct the measured
+        // position without changing their trigger, DOM ownership or focus.
+        const previousShift = Number.parseFloat(menu.style.translate) || 0;
+        const horizontalCorrection = Math.max(16 - menuBounds.left,
+            Math.min(0, window.innerWidth - 16 - menuBounds.right));
+        dropdownStyle.value = {...vertical, translate: `${previousShift + horizontalCorrection}px 0`,
+            maxHeight: `${Math.max(1, (above ? roomAbove : roomBelow) - 2)}px`, overflowY: 'auto'};
     }
 
     onMounted(() => {

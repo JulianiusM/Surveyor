@@ -82,7 +82,7 @@ function calculationSaved(notice: PilotPlainMessageKey): void {emit('saved', not
     <div class="border-top border-secondary-subtle mt-4 pt-3" data-finance-pool-outputs>
         <strong>{{ messages.t(pool.status === 'CLOSED' ? 'finance.updateTheCalculatedShares' : 'finance.readyToCalculateShares') }}</strong>
         <p class="text-secondary small">{{ messages.t(pool.status === 'CLOSED' ? 'finance.previewTheUpdatedSharesAndCarryRecordedPaymentsForward' : 'finance.reviewInvoicesAttendanceAndSavedAllocationSettingsBeforeClosing') }}</p>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="pilot-action-row">
             <ActionButton variant="warning" class="btn-sm" :state="action" @click="open('calculation')">{{ messages.t(pool.status === 'CLOSED' ? 'finance.recalculatePool' : 'finance.previewCalculation') }}</ActionButton>
             <ActionButton v-if="pool.status === 'CLOSED'" variant="outline-info" class="btn-sm" :state="action" @click="open('notify')">{{ messages.t('finance.sendSettlementEmails') }}</ActionButton>
             <template v-if="pool.status === 'CLOSED' && pool.needsRecalculation">
@@ -100,10 +100,10 @@ function calculationSaved(notice: PilotPlainMessageKey): void {emit('saved', not
                     <template #notice><p v-if="notificationCount !== null" class="mb-0 mt-1">{{ messages.t('finance.settlementEmailDeliveryRequestedForPayerS', {count: notificationCount}) }}</p></template>
                 </CommandFeedback>
                 <CommandFeedback :feedback="command.feedback" part="uncertain" :action="{state: command.recoveryAction, label: messages.t('common.refresh')}" @action="inspectSaved">
-                    <template #uncertain>
+                    <template #uncertainActions>
                         <!-- Acknowledgement is local review; the saved-data read
                              blocks it without claiming pending focus for it. -->
-                        <ActionButton v-if="inspected" variant="outline-warning" class="mt-2"
+                        <ActionButton v-if="inspected" variant="outline-warning"
                             :disabled="command.recoveryAction.disabled.value" @click="acknowledge">{{ messages.t('finance.reviewedSavedShares') }}</ActionButton>
                     </template>
                 </CommandFeedback>

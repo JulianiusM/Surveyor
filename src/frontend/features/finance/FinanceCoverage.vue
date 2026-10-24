@@ -138,7 +138,7 @@ function toggle(groupId: string, event: MouseEvent): void {
                                 </div>
                                 <div
                                     v-if="matchingBeneficiaries(group).length > 6 || matchingBeneficiaries(group).length !== group.beneficiaries.length"
-                                    class="d-flex flex-wrap align-items-center gap-2 mt-2"
+                                    class="pilot-action-row mt-2"
                                 >
                                     <small class="text-secondary" role="status">
                                         {{ messages.t(matchingBeneficiaries(group).length === group.beneficiaries.length ? 'finance.shownCoverageSummary' : 'finance.matchingCoverageSummary', {shown: shownBeneficiaries(group).length, count: matchingBeneficiaries(group).length}) }}

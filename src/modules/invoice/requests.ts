@@ -18,13 +18,39 @@ import Joi from 'joi';
 import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool';
 import {InvoicePoolDistributions} from '../database/entities/event/EventInvoicePool';
 import type {EventRegistration} from '../database/entities/event/EventRegistration';
-import type {InvoiceSharesPdfOptions, InvoicePoolSubmissionState, InvoiceOrganizerRequest} from '../../types/InvoicePoolTypes';
+import type {InvoiceSharesPdfOptions, InvoicePoolSubmissionState, InvoiceOrganizerRequest, InvoiceRejectionKey} from '../../types/InvoicePoolTypes';
 import {normalizeToArray} from '../lib/util';
 import {APIError} from '../lib/errors';
-import {invoiceText, getInvoiceValidationMessages} from './wording';
+import {invoiceText, getInvoiceValidationMessages, invoiceRejectionCause} from './wording';
 
 // Creation and later state changes share the same two uncalculated pool states; neither is a prerequisite for closure.
 const invoicePoolSubmissionStates: InvoicePoolSubmissionState[] = ['OPEN', 'ORGANIZER_ONLY'];
+
+/** Explain semantic Joi rejections which intentionally remain with the existing
+ * operation instead of the structural JSON schema. Inspect authored field/rule
+ * identities only; submitted values and Joi prose never enter the API Problem. */
+function invoiceRequestCause(error: Joi.ValidationError, amountKey?: InvoiceRejectionKey): string | undefined {
+    const detail = error.details[0];
+    const field = detail?.path[0];
+    // The operation selects its real amount rules: participant/initial review
+    // permit extra decimal places, while signed adjustments enforce cents.
+    if (field === 'amount' || field === 'correctedAmount') {
+        if (!amountKey) return undefined;
+        if (amountKey === 'adjustmentAmountInvalid') return invoiceRejectionCause(amountKey);
+        return invoiceRejectionCause(detail.type === 'number.max' ? 'invoiceAmountTooLarge' : amountKey);
+    }
+
+    // Generated validation already names structural fields. These remaining
+    // normalization rules identify the bounded control the user can correct.
+    if (field === 'participantFactors') return invoiceRejectionCause('factorsMustBeBetweenAndWithAtMostFour');
+    if (field === 'description') return invoiceRejectionCause('enterADescriptionOfUpToCharacters');
+    if (field === 'correctedDescription') return invoiceRejectionCause('enterACorrectionDescriptionOfUpToCharactersOr');
+    if (field === 'rejectionReason') return invoiceRejectionCause('rejectionReasonRequired');
+    if (field === 'note') return invoiceRejectionCause('noteIsRequired');
+    if (field === 'confirmed') return invoiceRejectionCause('confirmThisInvoiceChangeBeforeContinuing');
+    if (field === 'expectedRevision') return invoiceRejectionCause('currentRevisionRequired');
+    return undefined;
+}
 
 /** Reject excess factor precision rather than letting validation round the financial input. */
 function validateFactorPrecision(factor: number, helpers: Joi.CustomHelpers): number | Joi.ErrorReport {
@@ -76,7 +102,7 @@ export function preparePoolAssignments(pool: EventInvoicePool, body: any, regist
     const {error, value} = Joi.object({
         participantFactors: Joi.object().pattern(/^[1-9]\d*$/, Joi.number().min(0).max(1000).custom(validateFactorPrecision)).default({}),
     }).validate(body, {messages: getInvoiceValidationMessages(), abortEarly: false, allowUnknown: true});
-    if (error) throw new APIError(error.message, body, 400);
+    if (error) throw new APIError(error.message, body, 400, {cause: invoiceRequestCause(error)});
     // Preserve an omitted reimbursement flag and normalize each explicit membership/exemption selection.
     const isDefault = body.isDefault === true || body.isDefault === 'on';
     const assignAll = body.assignAll === true || body.assignAll === 'on';
@@ -91,7 +117,7 @@ export function preparePoolAssignments(pool: EventInvoicePool, body: any, regist
     const participantFactors = value.participantFactors as Record<number, number>;
     // A factor for a removed or foreign registration is a rejected edit, never an ignored assignment.
     if (Object.keys(participantFactors).some((id) => !regIds.includes(Number(id)))) {
-        throw new APIError(invoiceText('factorsCanOnlyBeSetForParticipantsAssignedTo'), body, 400);
+        throw new APIError(invoiceText('factorsCanOnlyBeSetForParticipantsAssignedTo'), body, 400, {cause: invoiceRejectionCause('factorsCanOnlyBeSetForParticipantsAssignedTo')});
     }
 
     return {isDefault, assignAll, subtractPersonalInvoices, registrationIds: regIds, exemptIds, participantFactors};
@@ -124,7 +150,7 @@ export function prepareTakeoverRequest(pool: EventInvoicePool, body: any, regist
     const allowedIds = pool.assignAll
         ? registrations.map((r) => r.id)
         : pool.assignments.map((a) => a.registration.id);
-    if (!allowedIds.includes(payerId)) throw new APIError(invoiceText('payerIsNotPartOfThisPool'), body, 400);
+    if (!allowedIds.includes(payerId)) throw new APIError(invoiceText('payerIsNotPartOfThisPool'), body, 400, {cause: invoiceRejectionCause('payerIsNotPartOfThisPool')});
 
     const normalizedBeneficiaries: number[] = Array.from(new Set(beneficiaries)).filter(
         (id) => allowedIds.includes(id) && id !== payerId,
@@ -133,12 +159,12 @@ export function prepareTakeoverRequest(pool: EventInvoicePool, body: any, regist
     const existing = pool.takeovers || [];
     const payerCovered = existing.some((t) => t.beneficiaryRegistrationId === payerId);
     if (payerCovered && normalizedBeneficiaries.length) {
-        throw new APIError(invoiceText('participantsWhoseShareIsTakenOverCannotCoverOthers'), body, 400);
+        throw new APIError(invoiceText('participantsWhoseShareIsTakenOverCannotCoverOthers'), body, 400, {cause: invoiceRejectionCause('participantsWhoseShareIsTakenOverCannotCoverOthers')});
     }
 
     const blockedBeneficiaries = existing.filter((t) => normalizedBeneficiaries.includes(t.payerRegistrationId));
     if (blockedBeneficiaries.length) {
-        throw new APIError(invoiceText('aParticipantBeingCoveredCannotTakeOverOtherShares'), body, 400);
+        throw new APIError(invoiceText('aParticipantBeingCoveredCannotTakeOverOtherShares'), body, 400, {cause: invoiceRejectionCause('aParticipantBeingCoveredCannotTakeOverOtherShares')});
     }
 
     // Reassignment is organizer-only. The locked operation repeats these checks against current saved coverage.
@@ -146,7 +172,7 @@ export function prepareTakeoverRequest(pool: EventInvoicePool, body: any, regist
         (t) => normalizedBeneficiaries.includes(t.beneficiaryRegistrationId) && t.payerRegistrationId !== payerId,
     );
     if (conflicting.length && !allowReassign) {
-        throw new APIError(invoiceText('oneOrMoreParticipantsAreAlreadyCoveredBySomeone'), body, 400);
+        throw new APIError(invoiceText('oneOrMoreParticipantsAreAlreadyCoveredBySomeone'), body, 400, {cause: invoiceRejectionCause('oneOrMoreParticipantsAreAlreadyCoveredBySomeone')});
     }
 
     return {payerId, beneficiaryIds: normalizedBeneficiaries};
@@ -176,7 +202,7 @@ export function prepareSurchargeRequest(body: any) {
     });
     // Return the validated signed request; membership and locked persistence belong to the orchestration flow.
     const {error, value} = schema.validate(body, {messages: getInvoiceValidationMessages(), abortEarly: false, allowUnknown: true});
-    if (error) throw new APIError(error.message, body, 400);
+    if (error) throw new APIError(error.message, body, 400, {cause: invoiceRequestCause(error, 'adjustmentAmountInvalid')});
     return value;
 }
 
@@ -187,7 +213,7 @@ export function prepareSubmittedInvoice(body: any) {
         description: Joi.string().allow('').optional(),
     });
     const {error, value} = schema.validate(body, {messages: getInvoiceValidationMessages(), abortEarly: false, allowUnknown: true});
-    if (error) throw new APIError(error.message, body, 400);
+    if (error) throw new APIError(error.message, body, 400, {cause: invoiceRequestCause(error, 'invoiceAmountMustBePositive')});
     return value;
 }
 
@@ -199,7 +225,7 @@ export function prepareOrganizerInvoice(body: any): InvoiceOrganizerRequest {
         description: Joi.string().trim().max(4000).required(),
         registrationId: Joi.number().integer().positive().empty('').optional(),
     }).validate(body || {}, {messages: getInvoiceValidationMessages(), abortEarly: false, allowUnknown: true});
-    if (error) throw new APIError(error.message, {}, 400);
+    if (error) throw new APIError(error.message, {}, 400, {cause: invoiceRequestCause(error, 'invoiceAmountMustBePositive')});
     // Membership is checked against current event and pool rows under the creation transaction's lock.
     return value;
 }
@@ -212,7 +238,7 @@ export function prepareInvoiceAcceptance(body: any) {
         correctedDescription: Joi.string().max(4000).allow('').optional(),
     });
     const {error, value} = schema.validate(body || {}, {messages: getInvoiceValidationMessages(), abortEarly: false, allowUnknown: true});
-    if (error) throw new APIError(error.message, body, 400);
+    if (error) throw new APIError(error.message, body, 400, {cause: invoiceRequestCause(error, 'invoiceAmountMustBePositive')});
     // Empty optional corrections restore submitted values rather than saving a second competing amount.
     const correctedAmount = value.correctedAmount === '' || value.correctedAmount === null || value.correctedAmount === undefined
         ? null
@@ -227,7 +253,7 @@ export function prepareInvoiceRejection(body: any) {
         rejectionReason: Joi.string().trim().min(1).max(4000).required(),
     });
     const {error, value} = schema.validate(body || {}, {messages: getInvoiceValidationMessages(), abortEarly: false, allowUnknown: true});
-    if (error) throw new APIError(error.message, body, 400);
+    if (error) throw new APIError(error.message, body, 400, {cause: invoiceRequestCause(error)});
     return value;
 }
 
@@ -239,7 +265,7 @@ export function prepareConfirmedInvoiceChange(body: unknown, fields: Joi.SchemaM
         confirmed: Joi.boolean().valid(true).strict().required(),
         expectedRevision: Joi.number().integer().min(0).required(),
     }).validate(body || {}, {messages: getInvoiceValidationMessages(), abortEarly: false, allowUnknown: true});
-    if (error) throw new APIError(error.message, {}, 400);
+    if (error) throw new APIError(error.message, {}, 400, {cause: invoiceRequestCause(error, 'invoiceAmountMustBePositive')});
     return value;
 }
 
@@ -249,7 +275,7 @@ export function prepareCalculationOptions(body: unknown) {
         sendEmails: Joi.alternatives().try(Joi.boolean(), Joi.string().valid('on', '')).optional(),
         expectedRevision: Joi.number().integer().min(0).optional(),
     }).validate(body, {messages: getInvoiceValidationMessages(), allowUnknown: true});
-    if (error) throw new APIError(error.message, {}, 400);
+    if (error) throw new APIError(error.message, {}, 400, {cause: invoiceRequestCause(error)});
     return value as {sendEmails?: boolean | 'on' | ''; expectedRevision?: number};
 }
 
@@ -271,7 +297,7 @@ export function preparePoolSubmissionState(body: unknown): {status: InvoicePoolS
         status: Joi.string().valid(...invoicePoolSubmissionStates).required(),
         expectedRevision: Joi.number().integer().min(0).required(),
     }).validate(body, {messages: getInvoiceValidationMessages(), allowUnknown: true});
-    if (error) throw new APIError(error.message, {}, 400);
+    if (error) throw new APIError(error.message, {}, 400, {cause: invoiceRequestCause(error)});
     // Return only the validated independent state and revision; frontend confirmation is not an API requirement.
     return value;
 }

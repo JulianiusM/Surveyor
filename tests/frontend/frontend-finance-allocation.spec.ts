@@ -193,6 +193,25 @@ describe('P8 independently saved allocation inputs', () => {
         expect(button(surface, 'Add surcharge or rebate').attributes('disabled')).toBeUndefined();
     });
 
+    it('explains a zero adjustment without writing or discarding the submitted fields', async () => {
+        const mounted = await mountFrontendEvent(FinanceAdjustments, async () => json({changed: true}), {
+            eventId, pool, participants, open: true, active: true, refresh: vi.fn(async () => {}),
+        });
+        cleanups.push(mounted.dispose);
+        const surface = body();
+        await surface.get('select').setValue('7');
+        await surface.get('input[type="number"]').setValue('0');
+        await surface.get('input[id$="-note"]').setValue('Unchanged adjustment draft');
+        const form = surface.get('form'); valid(form);
+        await form.trigger('submit');
+        await flushPromises();
+
+        expect(mounted.request).not.toHaveBeenCalled();
+        expect(surface.get('.alert-danger').text()).toContain(mounted.context.messages.value.t('finance.enterAPositiveSurchargeOrANegativeRebateAmount'));
+        expect(surface.get<HTMLInputElement>('input[type="number"]').element.value).toBe('0');
+        expect(surface.get<HTMLInputElement>('input[id$="-note"]').element.value).toBe('Unchanged adjustment draft');
+    });
+
     it('protects one held inspection of an uncertain removal before allowing another Refresh or Close', async () => {
         vi.stubGlobal('confirm', vi.fn(() => true));
         let finishRead!: () => void;

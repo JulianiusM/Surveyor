@@ -97,14 +97,12 @@ function acknowledgeHistory(): void {
             :action="{state: historyAction, label: messages.t('finance.checkInvoiceHistory')}"
             @action="inspectHistory"
         >
-            <template #uncertain>
+            <template #uncertainActions>
                 <!-- Reviewing saved history is local acknowledgement. A further
                      history read blocks it without making it another read action. -->
-                <div v-if="inspected" class="mt-2">
-                    <ActionButton variant="outline-warning" :disabled="historyAction.disabled.value" @click="acknowledgeHistory">
-                        {{ messages.t('finance.reviewedHistory') }}
-                    </ActionButton>
-                </div>
+                <ActionButton v-if="inspected" variant="outline-warning" :disabled="historyAction.disabled.value" @click="acknowledgeHistory">
+                    {{ messages.t('finance.reviewedHistory') }}
+                </ActionButton>
             </template>
         </CommandFeedback>
         <!-- Keep the chooser mounted even when eligible pools disappear during
@@ -178,7 +176,7 @@ function acknowledgeHistory(): void {
                     </div>
                 </div>
             </div>
-            <div class="d-flex justify-content-end mt-2">
+            <div class="pilot-action-row justify-content-end mt-2">
                 <ActionButton type="submit" :state="submitAction" :pending="command.pending.value" :show-spinner="false">
                     <i class="bi bi-cloud-upload me-1" aria-hidden="true"></i>
                     {{ messages.t(command.pending.value ? 'finance.submitting' : command.uncertain.value ? 'finance.submissionUnconfirmed' : 'finance.submitInvoice') }}

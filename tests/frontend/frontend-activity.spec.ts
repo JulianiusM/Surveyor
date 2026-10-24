@@ -711,11 +711,42 @@ describe('Activity production frontend consumers', () => {
         await flushPromises();
         const feedback = document.querySelector('.alert-danger')!;
         expect(feedback.textContent).toContain('Title: Enter at least one non-space character.');
+        expect(document.querySelectorAll('.alert-danger')).toHaveLength(1);
         expect(feedback.classList.contains('pilot-notification')).toBe(true);
         expect(title.value).toBe('   ');
         expect(text.value).toBe('Keep these instructions exactly.');
         expect(document.querySelector('#textFieldTitle')).toBe(title);
         expect(request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
+    it('presents shared-text command feedback once and preserves its expiry when reopening the editor', async () => {
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
+        vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'Date']});
+        const {wrapper, context, request} = await mounted(ActivityPage, async captured =>
+            captured.method === 'GET' ? json(view) : json({changed: true}));
+        const add = wrapper.findAll('button').find(button => button.text() === context.messages.value.t('activity.addTextField'))!;
+        await add.trigger('click');
+        await flushPromises();
+        const title = document.querySelector<HTMLInputElement>('#textFieldTitle')!;
+        title.value = 'Group announcements';
+        title.dispatchEvent(new Event('input', {bubbles: true}));
+        document.querySelector<HTMLFormElement>('#textFieldForm')!.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+        await flushPromises();
+        expect(document.querySelector('#textFieldForm')).toBeNull();
+        const success = document.querySelector('.alert-success')!;
+        expect(success.textContent?.trim()).toBe(context.messages.value.t('activity.textCreated'));
+        expect(document.querySelectorAll('.alert-success')).toHaveLength(1);
+
+        await vi.advanceTimersByTimeAsync(6000);
+        await add.trigger('click');
+        await flushPromises();
+        expect(document.querySelector('.alert-success')).toBe(success);
+        expect(document.querySelectorAll('.alert-success')).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(4001);
+        await flushPromises();
+        expect(document.querySelector('.alert-success')).toBeNull();
+        expect(document.querySelector('#textFieldForm')).not.toBeNull();
+        expect(request.mock.calls.filter(([captured]) => (captured as Request).method === 'POST')).toHaveLength(1);
     });
 
     it('keeps the native default of one when optional new-slot capacity is blank', async () => {
@@ -837,7 +868,7 @@ describe('Activity production frontend consumers', () => {
         context.locale.value = 'de';
         await flushPromises();
         expect(feedback.text()).not.toBe(label + ': ' + reason);
-        if (field.startsWith('slot-')) expect(feedback.text()).toContain('2.6.2030, Dienst 1');
+        if (field.startsWith('slot-')) expect(feedback.text()).toContain('2.6.2030, Aktivität 1');
         expect(retained.value).toBe(value);
         expect(chooser.files?.[0]).toBe(file);
     });

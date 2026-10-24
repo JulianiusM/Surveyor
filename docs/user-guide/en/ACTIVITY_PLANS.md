@@ -4,15 +4,16 @@ documentation-metadata
 audience: activity participants; activity organizers
 owner: activity-plan maintainers
 status: current
-last-verified: 2026-10-23
+last-verified: 2026-10-24
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Creation and duplication permission instructions reconciled with the shared collapsed disclosure and exact localized labels; existing task guidance, anchors and image bytes retained. Source review only; no new full-article browser verification claimed.
+verification-scope: English requirement labels and prose reconciled with general activity participation; permission disclosure guidance, user tasks and original heading IDs retained through explicit metadata anchors. No article figures are referenced; no new full-article browser verification claimed.
 source-anchors: tests/unit/activity-linked-recommendations.spec.ts; tests/frontend/activity-recommendation-warnings.spec.ts; tests/integration/activity-plan-interlinking.spec.ts; tests/e2e/activity-plan-interlinking.spec.ts; src/public/js/modules/activity/activity-assignments.ts; src/views/modules/module_entity_properties.pug; src/public/js/modules/entity-properties.ts; src/views/modules/module_entity_select.pug; src/public/js/modules/entity-select.ts; src/controller/entityAdminController.ts; src/modules/archive/policy.ts; src/modules/database/services/EntityLifecycleService.ts; src/views/modules/module_entity_archive.pug; src/views/activity/activity-create.pug; src/views/activity/activity-view.pug; src/views/activity/parts/schedule.pug; src/views/activity/parts/participants.pug; src/views/activity/parts/participant-status.pug; src/views/activity/parts/assignments.pug; src/views/activity/parts/recommendations-schedule.pug; src/views/activity/export/schedule.pug; src/views/modules/module_role_assignment_addon.pug; src/public/js/activity-create.ts; src/public/js/modules/activity/activity-requirements.ts; src/public/js/modules/activity/activity-recommendation-jobs.ts; src/public/js/modules/activity/activity-recommendations-schedule.ts; src/public/js/modules/activity/activity-recommendations-state.ts; src/public/js/modules/activity/activity-recommendations-logic.ts; src/public/js/modules/activity/activity-recommendations-ui.ts; src/routes/activity.ts; src/routes/api/activity.ts; src/controller/activityController.ts; src/middleware/assignFlowFactory.ts; src/modules/activity/requirements.ts; src/modules/activity/availability.ts; src/modules/activity/fairAssignment.ts; src/modules/activity/autoAssignment.ts; src/modules/activity/recommendations.ts; src/modules/activity/recommendationJobs.ts; src/modules/database/services/ActivityService.ts; src/modules/database/services/ActivityRequirementService.ts; src/modules/database/services/ActivityRecommendationService.ts; tests/unit/activity-requirements.spec.ts; tests/frontend/activity-requirement-coverage.spec.ts; tests/unit/activity-auto-assignment.spec.ts; tests/unit/activity-recommendation-jobs.spec.ts; tests/integration/activity-workflows.spec.ts; src/controller/helpController.ts; tests/unit/help-documentation.spec.ts; src/frontend/features/activity/ActivityRecommendations.vue; src/frontend/features/activity/recommendationDraft.ts; src/locales/en.json; src/frontend/features/activity/; src/frontend/components/EntitySettingsDialog.vue; src/locales/; src/frontend/components/permissions/CreationPermissions.vue
+heading-anchors: 1:activity-plans; 2:choose-your-task; 3:i-am-participating; 3:i-am-organizing; 2:before-you-begin; 2:participate-in-an-activity-plan; 3:find-a-slot; 3:join-a-whole-slot; 3:take-a-named-role; 3:leave-a-slot-or-role; 3:understand-assignment-warnings; 3:use-shared-text-fields; 2:organize-an-activity-plan; 3:create-an-activity-plan; 3:understand-the-tabs; 3:change-plan-properties; 3:link-change-or-remove-an-event; 3:add-and-edit-slots; 4:add-a-slot-after-creation; 4:edit-a-slot; 3:add-named-roles-to-a-slot; 3:manage-role-assignments; 3:review-participants; 3:configure-basic-assignment-rules; 3:change-permissions-and-administrators; 3:export-the-schedule; 2:advanced-requirements-and-assignment-recommendations; 3:set-participant-requirements; 4:understand-which-requirement-wins; 3:check-requirement-coverage; 3:generate-assignment-suggestions; 3:review-generated-suggestions; 3:stage-a-manual-assignment-change; 3:save-and-apply-the-review; 3:advanced-limitations; 2:archive-or-restore-a-plan; 2:troubleshooting; 3:i-see-registration-required; 3:join-or-take-is-unavailable; 3:a-slot-does-not-appear-under-open-slots; 3:i-joined-the-wrong-profile; 3:i-cannot-edit-slots-roles-participants-rules-settings-or-exports; 3:my-changes-in-rules-and-auto-assign-were-lost; 3:auto-generate-is-disabled; 3:requirement-coverage-says-the-configuration-is-incomplete; 3:recommendation-generation-became-stale-or-failed; 3:a-participant-still-needs-shifts-after-generation; 3:an-approved-change-was-not-applied; 2:related-guides
 next-review: activity-plan-visible-UI-or-behavior-change
 production-reference: 2dfa257 native business comparator with current English migrated controls and approved exceptions; not an installed production commit
 -->
 
-Activity plans provide a dated schedule of slots. Participants can join a complete slot or take a named role, while organizers can create slots, manage assignments, and link the plan to an event.
+Use activity plans to schedule group activities, talks or tasks. Participants can join a complete slot or take a named role, while organizers can create slots, manage assignments, and link the plan to an event.
 
 ## Choose your task
 
@@ -311,23 +312,23 @@ Open **Rules & auto-assign**, then use **Step 1 — Configure rules & defaults**
 2. Set the **Binding deadline** when participants should stop changing their own assignments.
 3. Review the switches for over-capacity assignments, nonparticipants, and arrival/departure boundary exceptions.
 4. Build the **Stay duration requirements** table:
-   - Enter a non-negative whole number in **Baseline shift requirement**.
+   - Enter a non-negative whole number in **Baseline activity requirement**.
    - Choose **Ceil**, **Round**, or **Floor** under **Rounding mode**. When **None** is selected, **Calculate** uses upward rounding.
    - Select **Calculate** to fill a proportional draft for every possible number of attendance days.
-   - Adjust any row that should use a different exact number of required shifts.
-5. Under **Role requirements**, enter an exact participant-wide shift target for any named role that should change the normal stay-based target.
-6. Under **Participant overrides**, select **Add override** when one registered event participant needs a different target. Select the participant, optionally restrict the override to a role they currently hold, and enter the exact required shifts.
+   - Adjust any row that should use a different exact number of required activities.
+5. Under **Role requirements**, enter the participant's total number of required activities for any named role that should change the normal stay-based target.
+6. Under **Participant overrides**, select **Add override** when one registered event participant needs a different target. Select the participant, optionally restrict the override to a role they currently hold, and enter the exact number of required activities.
 7. Select **Save requirement settings**. The **Calculate** action and the live preview do not save the draft.
 
 Required mode needs one saved non-negative integer for every stay duration from one day through the complete plan length. A participant whose event attendance does not overlap the plan receives a target of zero.
 
 #### Understand which requirement wins
 
-Surveyor resolves one total shift target for each participant. The first applicable source in this order wins:
+Surveyor resolves one total participation target for each participant. The first applicable source in this order wins:
 
 | Priority | Source |
 |---:|---|
-| 1 | A role-scoped participant override whose role the participant currently holds. When several match, the lowest required-shift value wins. |
+| 1 | A role-scoped participant override whose role the participant currently holds. When several match, the lowest activity count wins. |
 | 2 | A participant-wide override without a role. |
 | 3 | The lowest matching **Role requirements** value for a role the participant currently holds. |
 | 4 | The exact saved **Stay duration requirements** value for the participant's attendance length. |
@@ -338,7 +339,7 @@ Zero is a valid target and does not fall through to the next source. Role requir
 
 ### Check requirement coverage
 
-**Step 2 — Check coverage** updates while you edit Step 1, before you save. The status card labels the preview as **Saved** or **Unsaved changes** and compares **Required shifts** with total **Slot capacity**.
+**Step 2 — Check coverage** updates while you edit Step 1, before you save. The status card labels the preview as **Saved** or **Unsaved changes** and compares **Required activities** with total **Slot capacity**.
 
 The main states mean:
 
@@ -355,7 +356,7 @@ The main states mean:
 
 When open named roles exist, the card can also show **Open roles modeled** or **Open roles unfillable**. This is a coverage estimate only. Surveyor may hypothetically match an otherwise unassigned participant to one open role to assess totals, but it does not assign that role or change the schedule.
 
-Coverage compares the number of required shifts with available places; it does not guarantee that everyone can be assigned. Exact totals can still leave unmet requirements because of attendance dates, overlapping slots, named roles or rejected suggestions. Review the proposed timetable before applying it.
+Coverage compares the number of required activities with available places; it does not guarantee that everyone can be assigned. Exact totals can still leave unmet requirements because of attendance dates, overlapping slots, named roles or rejected suggestions. Review the proposed timetable before applying it.
 
 ### Generate assignment suggestions
 
@@ -481,7 +482,7 @@ Check every row under **Stay duration requirements**. Required mode needs a non-
 
 A stale calculation means relevant plan data changed while Surveyor was working. Select **Reload**, confirm the saved requirements and current assignments, and select **Auto-generate** again. A failure or timeout leaves the schedule unchanged.
 
-### A participant still needs shifts after generation
+### A participant still needs more activities after generation
 
 Check that the participant has eligible, non-overlapping slots inside their attendance period. Review capacity, arrival/departure switches, named roles and any rejected participant/slot pairs. A manual assignment, reassignment or swap may meet requirements that the automatic suggestions left open.
 

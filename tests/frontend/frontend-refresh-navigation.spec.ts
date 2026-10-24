@@ -2420,7 +2420,7 @@ describe('mixed-family Overview integration', () => {
         const selected = {...card, type: 'packing' as const, capabilities: {...card.capabilities, remove: true}};
         let heldRequest: Request | undefined;
         let deletes = 0;
-        const {wrapper, router, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+        const {wrapper, root, router, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
             async function holdWarmDestination(request): Promise<Response> {
                 if (request.method === 'DELETE') { deletes++; return json({changed: true}); }
                 if (deletes && !new URL(request.url).searchParams.get('q')) {
@@ -2428,7 +2428,7 @@ describe('mixed-family Overview integration', () => {
                     return held.promise;
                 }
                 return json(mixedRegion(request, deletes ? [] : [selected]));
-            });
+            }, '/frontend-pilot/users/dashboard', '/before', App);
         const defaultKey = overviewKeys.region(session.context, 'en', {collection: 'owner', region: 'main'});
         await router.push('/frontend-pilot/users/dashboard?owner_main_q=equipment');
         await flushPromises();
@@ -2444,6 +2444,14 @@ describe('mixed-family Overview integration', () => {
             await flushPromises();
             expect(deletes).toBe(1);
             expect(request.mock.calls.filter(([value]) => (value as Request).method === 'DELETE')).toHaveLength(1);
+            // Confirmation has one common announcement while its genuine read
+            // is pending. Successful deletion has no local or success Retry.
+            const success = root.get('[data-pilot-notices] .alert-success');
+            expect(success.text()).toBe(context.messages.value.t('packing.deleted'));
+            expect(root.findAll('[data-pilot-notices] .alert-success')).toHaveLength(1);
+            expect(success.find('button:not(.btn-close)').exists()).toBe(false);
+            expect(wrapper.find('.alert-success').exists()).toBe(false);
+            expect(root.find('[data-pilot-notices] .alert-warning').exists()).toBe(false);
         } finally {
             held.resolve(heldRequest ? json(mixedRegion(heldRequest, [])) : json({}));
             await flushPromises();
@@ -2714,6 +2722,7 @@ describe('mixed-family Overview integration', () => {
     });
 
     it.each([429, 503])('retains confirmed deletion when its Overview read fails with %s and retries only after the server deadline', async status => {
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
         vi.useFakeTimers({toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']});
         vi.setSystemTime(new Date('2026-10-23T12:00:00Z'));
         vi.stubGlobal('confirm', vi.fn(() => true));
@@ -2721,19 +2730,21 @@ describe('mixed-family Overview integration', () => {
         let deletes = 0;
         let unavailable = true;
         const reads: string[] = [];
-        const {wrapper, router, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
+        const {wrapper, root, router, context, request} = await mounted(OverviewRegion, {collection: 'owner', region: 'main'},
             async function failOnlyConfirmedRead(request): Promise<Response> {
                 if (request.method === 'DELETE') { deletes++; return json({changed: true}); }
                 reads.push(new URL(request.url).pathname);
                 if (deletes && unavailable) return new Response('{}', {status,
                     headers: {'Content-Type': 'application/json', 'X-Surveyor-Context': session.context, 'Retry-After': '5'}});
                 return json(mixedRegion(request, deletes ? [] : [selected]));
-            });
+            }, '/frontend-pilot/users/dashboard', '/before', App);
         await wrapper.get('button.btn-danger').trigger('click');
         await flushPromises();
-        const confirmation = wrapper.get('.status-notice.alert-success');
+        const confirmation = root.get('[data-pilot-notices] .alert-warning');
         const retry = confirmation.get<HTMLButtonElement>('button');
-        expect(confirmation.text()).toContain(context.messages.value.t('packing.deleted'));
+        expect(confirmation.text()).toContain(context.messages.value.t('state.deliveryFailed'));
+        expect(root.findAll('[data-pilot-notices] .alert-warning')).toHaveLength(1);
+        expect(wrapper.find('.alert-warning').exists()).toBe(false);
         expect(confirmation.get('[data-read-retry-at] time').attributes('datetime')).toBe('2026-10-23T12:00:05.000Z');
         expect(retry.element.disabled).toBe(true);
         expect(retry.attributes('aria-busy')).toBe('false');
@@ -2753,7 +2764,7 @@ describe('mixed-family Overview integration', () => {
         await flushPromises();
         expect(router.currentRoute.value.fullPath).toBe('/frontend-pilot/users/dashboard');
         expect(wrapper.find('article.js-item').exists()).toBe(false);
-        expect(wrapper.find('.status-notice.alert-success').exists()).toBe(false);
+        expect(root.find('[data-pilot-notices] .alert-warning').exists()).toBe(false);
         expect(reads).toEqual(['/api/v1/overview', '/api/v1/overview', '/api/v1/overview']);
         expect(request.mock.calls.filter(([value]) => (value as Request).method === 'DELETE')).toHaveLength(1);
         expect(deletes).toBe(1);
@@ -2773,22 +2784,25 @@ describe('mixed-family Overview integration', () => {
             return json(mixedRegion(request, [selected]));
         }
 
-        const {wrapper, router, context} = await mounted(OverviewRegion,
-            {collection: 'owner', region: 'main'}, serveDeletion, '/frontend-pilot/users/dashboard?owner_main_q=delete');
+        const {wrapper, root, router, context} = await mounted(OverviewRegion,
+            {collection: 'owner', region: 'main'}, serveDeletion, '/frontend-pilot/users/dashboard?owner_main_q=delete', '/before', App);
         const stopDelivery = router.beforeEach(to => to.query.owner_main_q ? undefined : false);
         cleanups.push(stopDelivery);
         await wrapper.get('button.btn-danger').trigger('click');
         await flushPromises();
-        const notice = wrapper.get('.status-notice.alert-success');
-        expect(notice.text()).toContain(context.messages.value.t(`${family.type}.deleted`));
+        const notice = root.get('[data-pilot-notices] .alert-warning');
+        expect(notice.text()).toContain(context.messages.value.t('state.deliveryFailed'));
+        expect(context.pageNotice.value).toBeNull();
+        expect(wrapper.find('.alert-success').exists()).toBe(false);
         expect(writes).toEqual([`/api/v1/${family.endpoint}/${otherId}`]);
         expect(wrapper.get<HTMLButtonElement>('button.btn-danger').element.disabled).toBe(true);
 
-        // The notice belongs to the retained confirmation, so its current locale
-        // can change without relabeling another family or repeating the DELETE.
+        // The shared warning translates without relabeling a confirmed result
+        // or repeating the DELETE. It never presents a successful action to retry.
         context.locale.value = 'de';
         await flushPromises();
-        expect(notice.text()).toContain(context.messages.value.t(`${family.type}.deleted`));
+        expect(notice.text()).toContain(context.messages.value.t('state.deliveryFailed'));
+        expect(context.pageNotice.value).toBeNull();
         stopDelivery();
         await notice.get('button').trigger('click');
         await flushPromises();

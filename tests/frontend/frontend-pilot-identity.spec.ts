@@ -333,7 +333,9 @@ describe('identity forms and packing overview navigation', () => {
         expect(wrapper.text()).toContain(warning);
         expect(form.get('button').attributes('disabled')).toBeDefined();
         await form.trigger('submit');
-        const refresh = wrapper.findAll('header button').find(button => button.text() === context.messages.value.t('common.refresh'))!;
+        const notification = wrapper.get('.pilot-notification.alert-warning');
+        expect(wrapper.findAll('.pilot-notification.alert-warning')).toHaveLength(1);
+        const refresh = notification.findAll('button').find(button => button.text() === context.messages.value.t('common.refresh'))!;
         await refresh.trigger('click');
         await flushPromises();
         expect(wrapper.text()).toContain(context.messages.value.t('state.loadFailed'));
@@ -367,8 +369,10 @@ describe('identity forms and packing overview navigation', () => {
         await flushPromises();
         expect(confirmation).not.toHaveBeenCalled();
         expect(wrapper.text()).toContain(context.messages.value.t('state.unknownOutcome'));
-        expect(wrapper.get('header .status-notice.alert-warning').classes()).toContain('mb-0');
-        expect(wrapper.get('header .status-notice.alert-warning').classes()).not.toContain('mb-3');
+        const notification = wrapper.get('.pilot-notification.alert-warning');
+        expect(wrapper.findAll('.pilot-notification.alert-warning')).toHaveLength(1);
+        expect(notification.classes()).toContain('mb-0');
+        expect(notification.classes()).not.toContain('mb-3');
         expect(wrapper.get('header form button').attributes('disabled')).toBeDefined();
         await router.push('/frontend-pilot/users/forgot-password');
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
@@ -507,13 +511,14 @@ describe('identity forms and packing overview navigation', () => {
         await flushPromises();
         expect(activations).toBe(1);
         expect(router.currentRoute.value.path).toContain('/activate/');
-        expect(wrapper.text()).toContain(context.messages.value.t('state.saved'));
-        const retry = wrapper.findAll('main button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        expect(wrapper.text()).toContain(context.messages.value.t('state.deliveryFailed'));
+        expect(wrapper.find('.alert-success').exists()).toBe(false);
+        const retry = wrapper.get('[data-pilot-notices] .alert-warning button');
         failDelivery = false;
         await retry.trigger('click');
         await flushPromises();
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/users/login');
-        expect(context.pageNotice.value?.messageKey).toBe('auth.activated');
+        expect(context.pageNotice.value).toBeNull();
         expect(wrapper.find('#password').exists()).toBe(true);
         expect(activations).toBe(1);
     });
@@ -614,7 +619,7 @@ describe('identity forms and packing overview navigation', () => {
         await flushPromises();
         expect(router.currentRoute.value.path).toBe(destination);
         expect(wrapper.text()).toContain('Delivered signed-in destination');
-        expect(context.pageNotice.value).toEqual({kind: 'success', messageKey: 'auth.loginDone'});
+        expect(context.pageNotice.value).toBeNull();
         expect(loginCommands).toBe(1);
     });
 
@@ -638,7 +643,7 @@ describe('identity forms and packing overview navigation', () => {
         expect(recoveryCommands).toBe(1);
 
         removeFailure();
-        const retry = wrapper.findAll('main button').find(button => button.text() === context.messages.value.t('common.retry'))!;
+        const retry = wrapper.get('[data-pilot-notices] .alert-warning button');
         await retry.trigger('click');
         await flushPromises();
         expect(router.currentRoute.value.path).toBe('/frontend-pilot/guest/recovery');
@@ -831,11 +836,12 @@ describe('identity forms and packing overview navigation', () => {
         const path = '/frontend-pilot/guest/recovery';
         const problem: components['schemas']['Problem'] = {type: 'about:blank', title: 'Bad Request', status: 400,
             code: 'VALIDATION_FAILED', messageKey: 'api:errors.VALIDATION_FAILED', params: {},
-            detail: 'Invalid recovery email', requestId: 'recovery-error'};
+            detail: 'Invalid recovery email', requestId: 'recovery-error',
+            fieldErrors: [{pointer: '/email', code: 'format', diagnostic: {field: 'email', rule: 'format', type: 'email'}}]};
         const bootstrap = {session, initialUrl: path, identityProblem: problem};
         const result = await render(path, bootstrap);
         expect(result.title).toBe('Error | Surveyor');
-        expect(result.html).toContain('Check the submitted values.');
+        expect(result.html).toContain('Email address: Enter a valid email address.');
         const content = document.createElement('div');
         content.innerHTML = result.html;
         expect(content.querySelector('main form')).toBeNull();
@@ -843,7 +849,7 @@ describe('identity forms and packing overview navigation', () => {
         const {wrapper, router, request} = await mounted(path, async () => json({changed: true}), bootstrap);
         expect(router.currentRoute.value.path).toBe(path);
         expect(wrapper.get('h1').text()).toBe('Error');
-        expect(wrapper.text()).toContain('Check the submitted values.');
+        expect(wrapper.text()).toContain('Email address: Enter a valid email address.');
         expect(wrapper.find('form').exists()).toBe(false);
         expect(request).not.toHaveBeenCalled();
     });
@@ -996,6 +1002,38 @@ describe('identity forms and packing overview navigation', () => {
             expect(problemMessage(context.messages.value, future)).toBe(future.detail);
         }
     });
+    it('combines a safe server reason and uncertain login recovery in one common notice without replay', async () => {
+        const reason = 'The identity provider did not confirm whether the login completed.';
+        const {wrapper, context, request} = await mounted('/frontend-pilot/users/login', async req => {
+            if (req.method === 'POST') return new Response(JSON.stringify({type: 'urn:surveyor:problem:future-login',
+                title: 'Unconfirmed identity response', status: 500, detail: reason, requestId: 'unknown-login-receipt',
+                code: 'FUTURE_LOGIN_UNCONFIRMED', messageKey: 'future.loginUnconfirmed', params: {}}), {
+                status: 500, headers: {'Content-Type': 'application/problem+json', 'X-Surveyor-Context': session.context},
+            });
+            return json(session);
+        }, {}, true);
+        await wrapper.get('#username').setValue('account');
+        await wrapper.get('#password').setValue('password1');
+        await wrapper.get('main form').trigger('submit');
+        await flushPromises();
+
+        const notices = wrapper.findAll('main [data-pilot-notices] .pilot-notification');
+        expect(notices).toHaveLength(1);
+        const notice = notices[0]!;
+        expect(notice.classes()).toContain('alert-warning');
+        expect(notice.text()).toContain(reason);
+        expect(notice.text()).toContain(context.messages.value.t('state.unknownOutcome'));
+        expect(notice.text()).toContain(context.messages.value.t('auth.unconfirmedRequest'));
+        expect(notice.find('.btn-close').exists()).toBe(false);
+        expect(wrapper.find('main .card .status-notice.alert-warning').exists()).toBe(false);
+        expect(wrapper.get('main form button[type="submit"]').attributes('disabled')).toBeDefined();
+        await notice.get('.pilot-notice-actions button').trigger('click');
+        await flushPromises();
+        expect(request.mock.calls.map(([req]) => (req as Request).method)).toEqual(['POST', 'GET']);
+        expect(wrapper.findAll('main [data-pilot-notices] .pilot-notification')).toHaveLength(1);
+        expect(wrapper.get('main form button[type="submit"]').attributes('disabled')).toBeDefined();
+    });
+
     it('reads the session after an uncertain identity request without claiming failure or replaying it', async () => {
         const {wrapper, request, router} = await mounted('/frontend-pilot/users/login', async req => {
             if (req.method === 'POST') throw new TypeError('Response lost');
@@ -1596,8 +1634,11 @@ describe('identity forms and packing overview navigation', () => {
         await wrapper.get('#password').setValue('Private password1');
         await wrapper.get('form').trigger('submit');
         await flushPromises();
-        expect(wrapper.get('.alert-danger').text()).toBe(detail);
-        expect(wrapper.find('.alert-danger em').exists()).toBe(false);
+        const notification = wrapper.get('.pilot-notification.alert-warning');
+        expect(wrapper.findAll('.status-notice')).toHaveLength(1);
+        expect(notification.text()).toContain(detail);
+        expect(notification.text()).toContain(context.messages.value.t('state.unknownOutcome'));
+        expect(notification.find('em').exists()).toBe(false);
         expect(wrapper.text()).toContain(context.messages.value.t('state.unknownOutcome'));
         expect(wrapper.get<HTMLInputElement>('#password').element.value).toBe('Private password1');
         expect(wrapper.get('form button[type="submit"]').attributes('disabled')).toBeDefined();

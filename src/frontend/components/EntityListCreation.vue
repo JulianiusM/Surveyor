@@ -15,7 +15,6 @@ import {usePageEntry} from '../composables/pageEntry';
 import {useQueryAdmission} from '../app/queryCache';
 import {usePageTitle} from '../composables/pageTitle';
 import ActionButton from './ActionButton.vue';
-import StatusNotice from './StatusNotice.vue';
 import CommandFeedback from './CommandFeedback.vue';
 import PageMessage from './PageMessage.vue';
 import LoadingSkeleton from './LoadingSkeleton.vue';
@@ -217,7 +216,7 @@ const submission = useCreationCommand<components['schemas']['PackingCreated']>({
     destination: props.source.destination,
     success: props.created, unknownMessage: props.leaveUnknown,
 });
-const {command, destination, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
+const {command, blocked, createAction, submissionAdmissionError, submissionAdmittedAt,
     submissionRetryAt, submissionRetryAction, retrySubmissionAdmission} = submission;
 
 /** A duplicate grant admits its form independently of creation. The server projects the
@@ -264,10 +263,6 @@ function collectCreation() {
         </h1>
         <div class="card-body">
             <CommandFeedback :feedback="command.feedback" part="uncertain" :unknown-message="creationUnknown" />
-            <StatusNotice v-if="destination.target.value" kind="success"
-                :action="{state: destination.retryAction, label: messages.t('common.retry')}" @action="destination.retry">
-                {{ messages.t('state.saved') }}
-            </StatusNotice>
             <CreationAdmissionNotices
                 :read="{error: loadError, lastUpdatedAt, retryAt, action: readAction, stale: !!lastUpdatedAt, kind: 'danger'}"
                 :submission="{error: submissionAdmissionError, lastUpdatedAt: submissionAdmittedAt,
@@ -323,7 +318,7 @@ function collectCreation() {
                         </div>
                     </div>
                     <slot :disabled="blocked || !formContext" :pending="createAction.pending.value"></slot>
-                    <div :class="fullWidthSubmit ? 'd-grid mt-4' : 'd-flex justify-content-between align-items-center'">
+                    <div :class="fullWidthSubmit ? 'd-grid mt-4' : 'pilot-action-row justify-content-between'">
                         <slot name="before-submit" :disabled="blocked || !formContext"></slot>
                         <ActionButton type="submit" variant="success" :state="createAction"
                             ><i class="bi bi-check-lg me-1" aria-hidden="true"></i

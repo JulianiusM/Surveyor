@@ -97,10 +97,10 @@ function acknowledge(): void {
         <CommandFeedback :feedback="command.feedback" part="uncertain"
             unknown-message="finance.weCouldNotConfirmWhetherYourInvoiceWasSaved"
             :action="{state: recovery, label: messages.t('finance.checkInvoiceHistory')}" @action="inspectHistory">
-            <template #uncertain>
+            <template #uncertainActions>
                 <!-- History inspection blocks this local acknowledgement, but
                      its pending read belongs only to the inspection control. -->
-                <ActionButton v-if="inspected" variant="outline-warning" class="mt-2" :disabled="recovery.disabled.value" @click="acknowledge">
+                <ActionButton v-if="inspected" variant="outline-warning" :disabled="recovery.disabled.value" @click="acknowledge">
                     {{ messages.t('finance.reviewedHistory') }}
                 </ActionButton>
             </template>

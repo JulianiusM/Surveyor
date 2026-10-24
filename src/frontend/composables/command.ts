@@ -5,7 +5,7 @@ import {useActionState, usePilot} from '../app/context';
 import {ApiFailure, InvalidInputError, ObsoleteRequestError} from '../app/transport';
 import type {PilotCommandDraft, PilotCommandFeedback, PilotCommandOutcome, PilotDraftState, PilotPlainMessageKey,
     PilotRecoveryRead, PilotRequestScope} from '../../types/FrontendPilotUiTypes';
-import {useFeedbackError} from './feedback';
+import {useFeedbackError, useReadRetry} from './feedback';
 import {frontendDocumentUrl} from '../../modules/lib/frontendIdentity';
 import type {PilotCommandPresentation} from '../../types/FrontendFeedbackTypes';
 
@@ -34,6 +34,7 @@ interface CommandNotice {
     key: PilotPlainMessageKey;
     kind: 'success' | 'warning';
     transient: boolean;
+    readError?: Error;
 }
 
 /**
@@ -246,7 +247,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     const pending = ref(false);
     const recovering = ref(false);
     const uncertain = ref(false);
-    const {error, transientError, errorRenewal, feedbackKind, setError,
+    const {error, transientError, errorRenewal, feedbackKind, readError: errorReadError, setError, setReadError,
         setInformation: setFeedbackInformation, clearRecoveredError} = useFeedbackError(draft?.problemKey);
     const noticeReceipt = shallowRef<CommandNotice | null>(null);
     // Keep the existing writable notice contract for durable recovery callers.
@@ -262,6 +263,8 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     const noticeKind = computed(() => noticeReceipt.value?.kind ?? 'warning');
     const transientNotice = computed(() => noticeReceipt.value?.transient ?? false);
     const noticeRenewal = computed(() => noticeReceipt.value);
+    const noticeReadError = computed(() => noticeReceipt.value?.readError ?? null);
+    const readRetryAvailable = useReadRetry(() => noticeReadError.value ?? errorReadError.value);
     const outcome = shallowRef<PilotCommandOutcome | null>(null);
     const needsUnknownReview = ref(requireUnknownReview);
     // Consumers may explain the current command's manual review without
@@ -279,6 +282,8 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     // not depend on the resource-read barrier that this operation may reopen.
     const recoveryAction = useActionState({eligible: mayRecoverCommand,
         pending: () => pending.value || recovering.value});
+    const readRecoveryAction = useActionState({eligible: mayReconcileRead,
+        pending: () => pending.value || recovering.value});
     const protection = useDraftProtection({
         dirty: () => draft?.dirty() ?? false,
         busy: () => pending.value || recovering.value || (draft?.busy?.() ?? false),
@@ -288,6 +293,34 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
 
     function ownsCommand(): boolean { return mounted; }
     function mayRecoverCommand(): boolean { return mounted && (draft?.recoveryEligible?.() ?? true); }
+
+    /** Only a retained read failure admits the generic feedback recovery action. */
+    function mayReconcileRead(): boolean {
+        // Unknown write review remains the feature's explicit operation. This
+        // action can neither repeat a write nor acknowledge uncertain creation.
+        return !uncertain.value && !!(noticeReadError.value ?? errorReadError.value)
+            && readRetryAvailable.value && recoveryAction.isAvailable();
+    }
+
+    /** Retry this receipt's read through the existing command reconciliation. */
+    async function reconcileRead(): Promise<boolean> {
+        if (!readRecoveryAction.isAvailable()) return false;
+        const reviewedError = errorReadError.value;
+        const reviewedErrorRenewal = errorRenewal.value;
+        // Reuse this command's captured read lifetime and exact refresh callback,
+        // even when the failed query belongs to an enclosing feature section.
+        // Ordinary feature Refresh controls own an outer pending flag. This
+        // shared control instead uses the existing retained read lifetime, so
+        // a second click cannot start/cancel another reconciliation GET.
+        const reconciled = await reconcileSafely(readForRecovery);
+        if (reconciled && errorReadError.value === reviewedError && errorRenewal.value === reviewedErrorRenewal)
+            clearRecoveredError('state.loadFailed');
+        return reconciled;
+    }
+
+    function readForRecovery(): Promise<boolean> {
+        return readAuthority(refreshAuthority, false);
+    }
 
     /** This retained status carries no fields or callbacks into another feature. Ordinary
      * mounted drafts remain in the component tree; only admitted command uncertainty lasts. */
@@ -319,7 +352,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         const origin = frontendDocumentUrl(router.currentRoute.value.fullPath);
         const reviewedCommand = commandScope;
         const reviewedUnknown = uncertain.value;
-        const reviewedNotice = notice.value;
+        const reviewedNotice = noticeReceipt.value;
         // An unknown write's reconciliation is protected recovery. An ordinary
         // background/resource refresh can still retire with its page. Both must
         // retain the command identity captured before the read, because an older
@@ -338,8 +371,8 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         // A resource read can reconcile a desired-state update. It cannot identify a created
         // row or prove that mail/registration failed; those commands need deliberate review.
         if (reviewedUnknown && !needsUnknownReview.value) acknowledge();
-        else if (notice.value === reviewedNotice && (reviewedNotice === 'state.stale'
-            || reviewedNotice === 'state.savedRefreshFailed')) {
+        else if (noticeReceipt.value === reviewedNotice && (reviewedNotice?.key === 'state.stale'
+            || reviewedNotice?.key === 'state.savedRefreshFailed')) {
             // Native Refresh clears its own read warning, while validation and
             // confirmed success retain their independently owned transient lifetime.
             notice.value = null;
@@ -356,12 +389,23 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
      * Unlike a causal post-command refresh, an event handler has no awaiting owner
      * to receive rejection. Preserve its draft/status and report unsuccessful recovery. */
     async function reconcileSafely(read: PilotRecoveryRead = refreshAuthority): Promise<boolean> {
+        const reviewedNotice = noticeReceipt.value;
+        const reviewedError = errorReadError.value;
+        const reviewedErrorRenewal = errorRenewal.value;
         try {
             // Keep all current-actor, command and fresh-read checks in reconcile;
             // consuming delivery failure never acknowledges or retries a write.
             return await reconcile(read);
-        } catch {
+        } catch (failure) {
             // The read owner retains its failure, cooldown and last admitted data.
+            // Renew only this still-owned read identity after a failed Retry so
+            // the common notice does not describe the previous GET indefinitely.
+            if (noticeReceipt.value === reviewedNotice && reviewedNotice?.readError
+                && (reviewedNotice.key === 'state.stale' || reviewedNotice.key === 'state.savedRefreshFailed')) {
+                setReadNotice(reviewedNotice.key, failure);
+            } else if (reviewedError && errorReadError.value === reviewedError && errorRenewal.value === reviewedErrorRenewal) {
+                setReadError('state.loadFailed', failure);
+            }
             return false;
         }
     }
@@ -383,6 +427,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         if (!recoveryAction.isAvailable()) return false;
         const scope = context.capture();
         const origin = frontendDocumentUrl(router.currentRoute.value.fullPath);
+        const reviewedErrorRenewal = errorRenewal.value;
         recovering.value = true;
         const releaseRecovery = protection.retainCommand(readCommandState, scope);
 
@@ -394,12 +439,12 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
         try {
             await read(scope, isCurrentRead);
             const current = isCurrentRead();
-            if (current && presentFailure) clearRecoveredError('state.loadFailed');
+            if (current && presentFailure && errorRenewal.value === reviewedErrorRenewal) clearRecoveredError('state.loadFailed');
             return current;
         } catch (failure) {
             // Only this recovery owns its durable warning. A retired page cannot attach
             // feedback to a later form, and recovery cannot erase unrelated validation.
-            if (isCurrentRead() && presentFailure) setError('state.loadFailed', 'durable');
+            if (isCurrentRead() && presentFailure && errorRenewal.value === reviewedErrorRenewal) setReadError('state.loadFailed', failure);
             if (!presentFailure) throw failure;
             return false;
         } finally {
@@ -438,6 +483,13 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     /** Only the operation confirms success. Shared presentation owns its visible host. */
     function publishNotice(key: PilotPlainMessageKey): void {
         noticeReceipt.value = {key, kind: 'success', transient: true};
+    }
+
+    /** Explain a failed read through this notice's existing immutable receipt.
+     * Error identity joins presentation only; the query still owns its state. */
+    function setReadNotice(key: 'state.stale' | 'state.savedRefreshFailed', failure: unknown): void {
+        noticeReceipt.value = {key, kind: 'warning', transient: false,
+            ...(failure instanceof Error ? {readError: failure} : {})};
     }
 
     /** Execute once in the captured identity scope, protecting its status through
@@ -498,7 +550,7 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
                 // without retiring this actor. Preserve the completed write's result
                 // so its form releases submitted input instead of offering it again.
                 outcome.value = {confirmation: 'confirmed', refresh: 'failed'};
-                notice.value = 'state.savedRefreshFailed';
+                setReadNotice('state.savedRefreshFailed', failure);
             } else if (failure instanceof InvalidInputError) {
                 outcome.value = {confirmation: 'rejected', refresh: 'not-requested'};
                 // Keep the feature's validated field diagnostic localized across
@@ -554,12 +606,14 @@ export function useCommand(refresh: () => Promise<unknown>, requireUnknownReview
     function dismissNotice(): void { notice.value = null; }
 
     // Share the actual refs rather than copying their current values into another
-    // reactive store. Components receive no operation, draft or recovery callback.
+    // reactive store. No write, draft or authority callback reaches presentation;
+    // guarded read-only recovery delegates to this same command owner.
     const feedback: PilotCommandPresentation = {error, transientError, errorRenewal, feedbackKind,
-        notice, noticeKind, transientNotice, noticeRenewal, uncertain, dismissError, dismissNotice};
+        notice, noticeKind, transientNotice, noticeRenewal, uncertain, errorReadError, noticeReadError,
+        readRecoveryAction, reconcileRead, dismissError, dismissNotice};
 
     return {action, recoveryAction, pending, recovering, uncertain, reviewRequired, feedback, error, transientError, errorRenewal, feedbackKind,
         notice, noticeKind, transientNotice, noticeRenewal, outcome, setError, setInformation, setNotice,
-        clearRecoveredError, run, reconcile, reconcileSafely, recover, acknowledge,
+        clearRecoveredError, setReadError, setReadNotice, run, reconcile, reconcileSafely, recover, acknowledge,
         mayLeave: protection.mayLeave, prepareDeparture: protection.prepareDeparture};
 }

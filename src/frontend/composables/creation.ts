@@ -109,7 +109,9 @@ export function useCreationCommand<Result>(options: PilotCreationOptions<Result>
 
             // Dispatch once for the captured actor. The initiating presentation
             // spans preflight and write, without adding another command lease.
-            const result = await command.run(operation, false);
+            // The destination owns the one confirmed success announcement.
+            // Validation and unknown outcomes remain with this command owner.
+            const result = await command.run(operation, false, undefined, {success: null});
             submissionPurpose.value = null;
             if (result) {
                 // Confirmation hands off to the existing destination receipt.

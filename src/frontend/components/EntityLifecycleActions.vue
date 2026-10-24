@@ -22,7 +22,7 @@ const {messages} = usePilot();
         </p>
         <p v-if="contextHint">{{ contextHint }}</p>
         <p v-if="automation?.paused">{{ automation.pausedHint }}</p>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="pilot-action-row">
             <ActionButton v-if="canArchive" class="btn-sm" variant="outline-light" :disabled="disabled"
                 :pending="pendingAction === 'archive'" :show-spinner="false"
                 @click="emit('archive', false, $event)">{{ messages.t('common.archive') }}</ActionButton
@@ -37,7 +37,7 @@ const {messages} = usePilot();
     <!-- Preserve ordinary duplicate-link semantics; deletion is a separately confirmed command. -->
     <section v-if="canDuplicate || canRemove || exportLink" data-entity-section="actions">
         <h3 class="fs-5">{{ labels.otherActions }}</h3>
-        <div class="d-flex flex-wrap gap-2">
+        <div class="pilot-action-row">
             <RouterLink v-if="canDuplicate" class="btn btn-outline-light" :to="duplicateTo">{{
                 messages.t('common.duplicate')
             }}</RouterLink

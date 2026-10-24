@@ -7,7 +7,7 @@ import type {components} from '../../../types/api/v1';
 import type {PilotContext, PilotRead, PilotRequestScope} from '../../../types/FrontendPilotUiTypes';
 import type {PilotApi} from '../../app/api';
 import type {PilotInputField} from '../../../types/FrontendFeedbackTypes';
-import {createMultipartForm, generatedInputError, InvalidInputError} from '../../app/transport';
+import {createMultipartForm, generatedInputError} from '../../app/transport';
 import {validateEventCreateEntry} from '../../../../.generated/api/v1/browser/validateEventCreateEntry.mjs';
 import {validateEventCreateInput} from '../../../../.generated/api/v1/browser/validateEventCreateInput.mjs';
 import {validateEventCreated} from '../../../../.generated/api/v1/browser/validateEventCreated.mjs';
@@ -271,7 +271,7 @@ export class EventApi {
 
     /** Dispatch one deliberate shared operation; an unconfirmed delivery never replays. */
     async saveRegistration(eventId: string, input: components['schemas']['EventRegistrationInput'], scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
-        if (!validateEventRegistrationInput(input)) throw new InvalidInputError('Invalid Event command.');
+        if (!validateEventRegistrationInput(input)) throw generatedInputError(validateEventRegistrationInput.errors, () => undefined);
         // The captured actor/CSRF headers remain identical through response classification.
         const result = await this.transport.client.PUT('/events/{eventId}/registration', {
             params: {path: {eventId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -290,7 +290,7 @@ export class EventApi {
 
     /** Dispatch one deliberate shared operation; an unconfirmed delivery never replays. */
     async updateRegistrationDates(eventId: string, registrationId: string, input: components['schemas']['EventRegistrationDates'], scope: PilotRequestScope): Promise<components['schemas']['MutationResult']> {
-        if (!validateEventRegistrationDates(input)) throw new InvalidInputError('Invalid Event command.');
+        if (!validateEventRegistrationDates(input)) throw generatedInputError(validateEventRegistrationDates.errors, () => undefined);
         // The captured actor/CSRF headers remain identical through response classification.
         const result = await this.transport.client.PATCH('/events/{eventId}/registrations/{registrationId}', {
             params: {path: {eventId, registrationId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
@@ -309,7 +309,7 @@ export class EventApi {
 
     /** Dispatch one deliberate shared operation; an unconfirmed delivery never replays. */
     async createLink(eventId: string, input: components['schemas']['EventRegistrationLinkInput'], scope: PilotRequestScope): Promise<components['schemas']['EventCreatedRegistrationLink']> {
-        if (!validateEventRegistrationLinkInput(input)) throw new InvalidInputError('Invalid Event command.');
+        if (!validateEventRegistrationLinkInput(input)) throw generatedInputError(validateEventRegistrationLinkInput.errors, () => undefined);
         // The captured actor/CSRF headers remain identical through response classification.
         const result = await this.transport.client.POST('/events/{eventId}/links', {
             params: {path: {eventId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',

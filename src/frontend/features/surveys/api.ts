@@ -121,7 +121,7 @@ export class SurveysApi {
     async submitBallot(surveyId: string, input: components['schemas']['SurveyBallotInput'], scope: PilotRequestScope) {
         // Structural validation precedes dispatch; the server checks that every
         // answer belongs to this Survey before its unchanged replacement write.
-        if (!validateSurveyBallotInput(input)) throw new InvalidInputError('Invalid survey ballot.');
+        if (!validateSurveyBallotInput(input)) throw generatedInputError(validateSurveyBallotInput.errors, () => undefined);
 
         const result = await this.transport.client.PUT('/surveys/{surveyId}/ballot', {
             params: {path: {surveyId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',

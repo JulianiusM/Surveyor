@@ -6,6 +6,7 @@ import * as eventService from '../../src/modules/database/services/EventService'
 import * as adminService from '../../src/modules/database/services/EntityAdminService';
 import * as invoiceService from '../../src/modules/database/services/EventInvoiceService';
 import {contractValidator} from '../../src/modules/api/contracts';
+import {classifyApiError, validatedProblemBody} from '../../src/modules/api/problem';
 import {prepareValidatedJson} from '../../src/modules/api/transport';
 import type {Request} from 'express';
 import type {components} from '../../src/types/api/v1';
@@ -265,6 +266,33 @@ describe('versioned Event projections and native operation adoption', () => {
         expect(Boolean(saved.allowRegDietUpdateAfterDeadline)).toBe(true);
         await expect(eventApi.patchEventMetadata(id, {title: 'Stale title'}, baseline.editToken, sessionFor(owner)))
             .rejects.toMatchObject({status: 412});
+    });
+
+    it('explains structurally valid metadata rejections after real admission without changing saved Event properties', async () => {
+        const id = await createEvent('Saved Event before invalid metadata');
+        const session = sessionFor(owner);
+        const baseline = await eventApi.readEventMetadata(id, session);
+        const original = (await eventService.getEventById(id))!;
+        for (const {body, code} of [
+            {body: {maxParticipants: 0}, code: 'EVENT_PARTICIPANT_LIMIT_INVALID'},
+            {body: {startDate: '2030-02-30'}, code: 'EVENT_CALENDAR_DATE_INVALID'},
+            {body: {title: '   '}, code: 'EVENT_TITLE_INVALID'},
+            {body: {description: '😀'.repeat(8001)}, code: 'EVENT_DESCRIPTION_TOO_LONG'},
+        ]) {
+            expect(contractValidator('EventMetadataPatch')(body)).toBe(true);
+            const error = await eventApi.patchEventMetadata(id, body, baseline.editToken, session).catch(failure => failure);
+            expect(error).toMatchObject({name: 'APIError', status: 400, cause: code, data: {}});
+            const problem = classifyApiError(error);
+            for (const locale of ['en', 'de']) {
+                const response = validatedProblemBody(problem, locale, 'persisted-event-metadata');
+                expect(contractValidator('Problem')(response)).toBe(true);
+                expect(response).toMatchObject({code, status: 400, params: {}});
+                expect(response.detail).not.toContain('submitted values');
+                expect(response.detail).not.toBe(error.message);
+            }
+            expect(await eventService.getEventById(id)).toMatchObject({title: original.title, description: original.description,
+                maxParticipants: original.maxParticipants, startDate: original.startDate, endDate: original.endDate});
+        }
     });
 
     it('updates existing attendance at capacity without duplicate registrations and replaces dietary choices', async () => {

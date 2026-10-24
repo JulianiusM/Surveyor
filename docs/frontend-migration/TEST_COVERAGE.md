@@ -4,7 +4,7 @@ documentation-metadata
 audience: frontend migration implementers; reviewers; test maintainers
 owner: project maintainers
 status: migration-pending
-last-verified: 2026-10-23
+last-verified: 2026-10-24
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Interface corrections, Home restoration, collapsed permissions and actionable generated validation mapped to tests; existing P0-P10 mappings retained; selection is not execution or exhaustive parity certification
 source-anchors: package.json; vitest.config.mts; playwright.config.ts; playwright.frontend.config.ts; playwright.integration.config.ts; tests/unit/; tests/frontend/; tests/integration/; tests/e2e/; tests/keywords/coreDomainKeywords.ts; tests/keywords/e2eCoreKeywords.ts; tests/support/database.ts; docs/TESTING_GUIDE.md; docs/policies/DOCUMENTATION_POLICY.md; src/types/FrontendPilotUiTypes.d.ts; src/frontend/app/queryKeys.ts; src/frontend/app/context.ts
@@ -867,3 +867,34 @@ profile administration cover registered server modes, resource guest intent and 
 `frontend-route-admission` journeys cover direct/warm anonymous Login with the original document and a mixed-case
 Event administration arrival. Header comparison retains raw captures and explicitly tests the approved embedded
 Refresh control before projecting that single addition out of the native meaning comparison.
+
+## Dropdown, diagnostic and feedback follow-up assertions (2026-10-24)
+
+The direct follow-up extends the existing shared-owner checks across these boundaries. Selection is not an
+execution claim; the paired review records final results and remaining limits.
+
+- Built-client startup checks German profile menus at desktop, tablet and narrow phone widths, viewport bounds,
+  keyboard scrolling within a short menu, actual hit-testing above alerts, independently wrapping long retry text,
+  desktop right alignment and separate mobile action rows. Home and Login use the same responsive action behavior.
+- Matched Overview mobile cards share a bounded native aggregate-text projection after raw capture and verify
+  actual separate action-row geometry. Individual control text/styles/contracts, desktop, empty and no-match
+  comparisons remain exact. Recovery callers address the one common uncertainty notice and verify its retirement;
+  success dismissal selects only accessible transient Close buttons in the current page/dialog scope.
+- Mounted command/navigation cases distinguish one confirmed result from failed destination delivery. Recovery
+  repeats reads/navigation only, preserves newer receipts and cooldowns, and never restores expired success or
+  attaches Retry to an ordinary successful action. Overview and matching creation/profile consumers adopt that owner.
+- Shared notice cases compare actual Error identities, live common-host visibility, component retirement and
+  application isolation. A common failed-save receipt suppresses only its matching local read warning, retains
+  freshness/deadline diagnostics, and retries through its actual command owner. Independent errors remain visible.
+- Unknown-write feedback retains safe diagnostic, uncertainty and existing review controls in one durable common
+  notification. Mounted identity and Finance cases assert retained drafts, actual read recovery and no write replay.
+- Finance creation closes on confirmed success even after a failed follow-up read; rejection and uncertainty retain
+  the dialog/draft. Mounted parent/child cases cover one receipt and guarded recovery. Real Finance API cases reject
+  preview/close of an empty pool with its precise English/German reason and unchanged saved state.
+- Isolated input-diagnostic tests exercise actual generated request schemas, bounded Problem output and client
+  locale reformatting: field/limit, missing/nonblank input, minimum Survey choices, unsupported properties and real
+  collection positions. Numeric Survey answer-record IDs do not become array row numbers. Domain/Finance cases
+  preserve stable business reasons without publishing native renderer data, raw values or parser prose.
+- English/German Activity labels describe general activities; English/German Survey selectors describe weekday occurrences.
+  Rich-message DOM tests retain their markup assertions. Localized runtime Help and its referenced figures follow
+  the visible labels in the existing trusted language corpora.

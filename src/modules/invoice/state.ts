@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {invoiceText} from './wording';
+import {invoiceText, invoiceRejectionCause} from './wording';
 import type {EntityManager} from 'typeorm';
 import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool';
 import * as invoiceService from '../database/services/EventInvoiceService';
@@ -31,7 +31,7 @@ export async function assertLockedParticipant(manager: EntityManager, pool: Even
     // Read both event membership and explicit pool membership through the transaction-scoped DBAL.
     const {registration, assignment} = await invoiceService.getPoolMembership(manager, pool, registrationId);
     // assignAll broadens pool membership only; it never permits a registration from another event.
-    if (!registration || (!pool.assignAll && !assignment)) throw new APIError(invoiceText('participantNotAssignedToThisPool'), {}, 400);
+    if (!registration || (!pool.assignAll && !assignment)) throw new APIError(invoiceText('participantNotAssignedToThisPool'), {}, 400, {cause: invoiceRejectionCause('participantNotAssignedToThisPool')});
 }
 
 /** Advancing the revision invalidates previews; only changed inputs make a saved calculation stale. */

@@ -25,11 +25,13 @@ const {messages} = usePilot();
                 <StatusNotice v-if="conflict" kind="warning"
                     ><p>{{ messages.t('draft.readConflict') }}</p>
                     <p>{{ messages.t('draft.mine') }}: {{ selectedFile?.name }}</p>
-                    <ActionButton variant="outline-warning" :disabled="disabled" @click="emit('review')">{{
-                        messages.t('draft.review')
-                    }}</ActionButton></StatusNotice
+                    <template #actions>
+                        <ActionButton variant="outline-warning" :disabled="disabled" @click="emit('review')">{{
+                            messages.t('draft.review')
+                        }}</ActionButton>
+                    </template></StatusNotice
                 >
-                <div class="d-flex flex-wrap gap-2">
+                <div class="pilot-action-row">
                     <ActionButton :disabled="disabled || conflict" :pending="uploadPending" :show-spinner="false"
                         @click="emit('upload', $event)">{{
                         labels.upload

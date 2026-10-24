@@ -118,6 +118,16 @@ function texts(root: Element, selector: string): string[] {
     return Array.from(root.querySelectorAll(selector), normalizedText);
 }
 
+/** Keep the native landing copy as the oracle except for the one explicitly
+ * corrected Survey occurrence description. No other text or ordering changes. */
+function expectedLandingText(native: Element): string[] {
+    const original = 'Define date combinations such as specific weekdays and weeks of a month.';
+    const current = 'Define date combinations from weekdays and their occurrences in a month.';
+    const content = texts(native, 'h1, h2, p, li');
+    expect(content.filter(text => text === original)).toHaveLength(1);
+    return content.map(text => text === original ? current : text);
+}
+
 function normalizedText(element: Element): string {
     return element.textContent!.replace(/\s+/gu, ' ').trim();
 }
@@ -728,7 +738,7 @@ describe('common frontend presentation', () => {
     it('retains anonymous landing copy, card order and responsive groups from the native template', async () => {
         const native = nativePage(renderNativeLanding).querySelector('main > .card')!;
         const {wrapper, context, request} = await mounted(LandingPage);
-        expect(texts(wrapper.element, 'h1, h2, p, li')).toEqual(texts(native, 'h1, h2, p, li'));
+        expect(texts(wrapper.element, 'h1, h2, p, li')).toEqual(expectedLandingText(native));
         expect(texts(wrapper.element, '.row > .col h2')).toEqual(['Surveys', 'Events', 'Packing lists', 'Activity plans', 'Drivers lists']);
         expect(wrapper.findAll('.row')[0]!.classes()).toEqual(['row', 'row-cols-1', 'row-cols-md-2', 'row-cols-xl-3', 'g-4', 'mb-4']);
         expect(wrapper.findAll('.row')[1]!.classes()).toEqual(['row', 'row-cols-1', 'row-cols-md-2', 'g-4', 'mb-4']);
@@ -742,7 +752,7 @@ describe('common frontend presentation', () => {
         const native = nativePage(renderNativeLanding, {profile: {name: current.activeProfile!.name,
             ...(kind === 'account' ? {userId: 1} : {guestId: 'guest'})}}).querySelector('main > .card')!;
         const {wrapper, request} = await mounted(LandingPage, {}, {session: current, landing: {quickCreate: 'survey'}});
-        expect(texts(wrapper.element, 'h1, h2, p, li')).toEqual(texts(native, 'h1, h2, p, li'));
+        expect(texts(wrapper.element, 'h1, h2, p, li')).toEqual(expectedLandingText(native));
         expect(wrapper.get('a.btn-outline-light').attributes('href')).toBe('/frontend-pilot/survey/create');
         expect(wrapper.get('a.btn-primary').attributes('href')).toBe('/frontend-pilot/users/dashboard');
         expect(wrapper.find('fixture').exists()).toBe(false);

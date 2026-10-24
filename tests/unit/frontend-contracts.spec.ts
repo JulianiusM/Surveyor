@@ -50,7 +50,7 @@ describe('generated v1 contract boundaries', () => {
         expect(() => decodeApiMultipartData({data: JSON.stringify(data), image: 'forged.png'}))
             .toThrow(expect.objectContaining({code: 'UPLOAD_INVALID'}));
         expect(() => decodeApiMultipartData({data: '{private-malformed-data'}))
-            .toThrow(expect.objectContaining({code: 'VALIDATION_FAILED'}));
+            .toThrow(expect.objectContaining({code: 'INVALID_JSON'}));
         req.body = {data: JSON.stringify(data), ownerId: listId};
         expect(() => validateOperationRequest(req, 'createEvent', body => decodeApiMultipartData(body, file)))
             .toThrow(expect.objectContaining({code: 'VALIDATION_FAILED'}));

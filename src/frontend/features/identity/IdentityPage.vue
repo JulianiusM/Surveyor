@@ -11,7 +11,6 @@ import {usePageTitle} from '../../composables/pageTitle';
 import {completeIdentityEntry, completePageEntry, useConfirmedNavigation} from '../../composables/pageEntry';
 import FormField from '../../components/FormField.vue';
 import ActionButton from '../../components/ActionButton.vue';
-import StatusNotice from '../../components/StatusNotice.vue';
 import CommandFeedback from '../../components/CommandFeedback.vue';
 import PageMessage from '../../components/PageMessage.vue';
 import LoadingSkeleton from '../../components/LoadingSkeleton.vue';
@@ -413,22 +412,14 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
     <PageMessage v-if="identityDenial || (mode === 'reset' && resetDenial)" kind="error"
         :renewal="denialReceipt"
         :message="identityDenial || resetDenial || ''" :transient="!!identityDenial || !resetReadFailure"
-        :read-error="identityDenial ? undefined : resetReadFailure" :retry-at="identityDenial ? undefined : resetRetryAt">
-        <ActionButton v-if="resetReadFailure && !identityDenial" variant="outline-light"
-            :state="resetRetryAction" @click="retryResetAdmission">{{ messages.t('common.retry') }}</ActionButton>
-    </PageMessage>
+        :read-error="identityDenial ? undefined : resetReadFailure" :retry-at="identityDenial ? undefined : resetRetryAt"
+        :action="resetReadFailure && !identityDenial ? {state: resetRetryAction, label: messages.t('common.retry')} : undefined"
+        @action="retryResetAdmission" />
     <PageMessage v-else-if="finished" :kind="mode === 'register' ? 'info' : 'success'" :message="messages.t(finishedMessage)" />
     <PageMessage v-else-if="pageCompleted" kind="success" :renewal="context.pageCompletion.value"
         :message="messages.t(mode === 'reset' ? 'auth.resetDone' : 'auth.recoverySent')" />
     <LoadingSkeleton v-else-if="mode === 'recovery'" v-bind="route.meta.loadingSkeleton" page />
     <template v-else>
-        <!-- A delivered command stays confirmed even if its destination cannot load.
-             Retry belongs to the shared receipt and never resubmits credentials or mail. -->
-        <StatusNotice v-if="confirmedNavigation.target.value" kind="success"
-            :action="{state: confirmedNavigation.retryAction, label: messages.t('common.retry')}"
-            @action="confirmedNavigation.retry">
-            {{ messages.t('state.saved') }}
-        </StatusNotice>
         <!-- Identity validation and activation feedback occupy the same shared region
              above the form card as native account pages. Keep it outside the form. -->
         <CommandFeedback :feedback="command.feedback" part="error" error-kind="danger"
@@ -545,7 +536,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                             :pending="submittingIdentity"
                         ><div v-if="repeatState === 'invalid'" id="password-repeat-info" class="invalid-feedback d-block">{{ messages.t('auth.passwordMismatch') }}</div></FormField>
                         <div v-if="mode === 'register'" class="col-md-6"></div>
-                        <div class="d-grid mt-2" :class="['forgot', 'reset'].includes(mode) ? 'col-12' : 'col-6'">
+                        <div class="d-grid mt-2" :class="['forgot', 'reset'].includes(mode) ? 'col-12' : 'col-12 col-sm-6'">
                             <ActionButton
                                 type="submit"
                                 variant="success"
@@ -561,7 +552,7 @@ watch(() => [mode.value, route.fullPath, identityDenial.value, pageCompleted.val
                     <p v-else class="text-center">{{ messages.t('auth.loginDisabled') }}</p>
                     <div
                         v-if="context.session.value?.shell.oidcEnabled && ['login', 'register'].includes(mode)"
-                        class="col-6 d-grid mt-2"
+                        class="col-12 col-sm-6 d-grid mt-2"
                     >
                         <a
                             class="btn btn-primary"

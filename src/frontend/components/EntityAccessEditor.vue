@@ -479,11 +479,13 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                 <dd>{{ data.access.defaults }}</dd>
                             </dl>
                         </div>
-                        <ActionButton variant="outline-warning" :disabled="controlsPending" @click="reviewDefaults">{{
-                            messages.t('draft.review')
-                        }}</ActionButton></StatusNotice
+                        <template #actions>
+                            <ActionButton variant="outline-warning" :disabled="controlsPending" @click="reviewDefaults">{{
+                                messages.t('draft.review')
+                            }}</ActionButton>
+                        </template></StatusNotice
                     >
-                    <div class="d-flex justify-content-end border-top border-secondary pt-3">
+                    <div class="pilot-action-row justify-content-end border-top border-secondary pt-3">
                         <ActionButton
                             type="submit"
                             :pending="pendingAction?.kind === 'defaults' && command.pending.value" :show-spinner="false"
@@ -557,17 +559,17 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                             {{ admins[admin.profileId]!.value }} ·
                                             <template v-if="!adminRemoved(admin.profileId)">{{ messages.t('draft.current') }}: {{ admin.mask }}</template>
                                         </p>
-                                        <ActionButton
-                                            v-if="adminConflict(admin.profileId)"
-                                            variant="outline-warning"
-                                            :disabled="controlsPending"
-                                            @click="reviewAdmin(admin.profileId)"
-                                            >{{ messages.t(adminRemoved(admin.profileId) ? 'packing.reviewAdminRegrant' : 'draft.review') }}</ActionButton
-                                        ></StatusNotice
+                                        <template v-if="adminConflict(admin.profileId)" #actions>
+                                            <ActionButton
+                                                variant="outline-warning"
+                                                :disabled="controlsPending"
+                                                @click="reviewAdmin(admin.profileId)"
+                                                >{{ messages.t(adminRemoved(admin.profileId) ? 'packing.reviewAdminRegrant' : 'draft.review') }}</ActionButton>
+                                        </template></StatusNotice
                                     >
                                     <!-- PermissionFields retains the last group's mb-3 inside its fieldset;
                                          avoid adding a second gap before the native Save/Remove row. -->
-                                    <div class="d-flex justify-content-between">
+                                    <div class="pilot-action-row justify-content-between">
                                         <ActionButton
                                             class="btn-sm"
                                             variant="outline-danger"
@@ -657,7 +659,7 @@ defineExpose({dirty, awaitingAuthority, receiveSettings});
                                 </option>
                             </select>
                         </div>
-                        <div class="d-flex justify-content-end gap-2">
+                        <div class="pilot-action-row justify-content-end">
                             <ActionButton
                                 variant="outline-secondary"
                                 :disabled="blocked"

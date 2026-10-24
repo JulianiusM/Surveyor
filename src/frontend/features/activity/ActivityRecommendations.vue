@@ -649,6 +649,7 @@ function statusLabel(status: typeof statuses[number]): string {
                 @action="reviewUnknown">{{ messages.t('activity.recommendations.unknownReview') }}</StatusNotice>
             <StatusNotice
                 v-if="snapshot.error.value"
+                :read-error="snapshot.error.value"
                 kind="warning"
                 :action="{label: messages.t('common.retry'), state: snapshotAction}"
                 @action="command.recover(refreshSnapshot)">{{ messages.t('state.loadFailed') }}</StatusNotice>
@@ -662,6 +663,7 @@ function statusLabel(status: typeof statuses[number]): string {
             <StatusNotice v-if="running" kind="info">{{ messages.t(job.data.value?.status === 'RUNNING' ? 'activity.recommendations.jobRunning' : 'activity.recommendations.jobQueued') }}</StatusNotice>
             <StatusNotice
                 v-if="job.error.value"
+                :read-error="job.error.value"
                 kind="warning"
                 :action="{label: messages.t('activity.recommendations.jobRetry'), state: jobAction}"
                 @action="job.refetch()">{{ messages.t('activity.recommendations.jobReadFailed') }}</StatusNotice>

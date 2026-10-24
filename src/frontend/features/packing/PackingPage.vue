@@ -385,10 +385,12 @@ const reorder = useListReorder({
                      Retry touches only personal checks, keeping server commands independent. -->
                 <StatusNotice v-if="packedStorageUnavailable" kind="warning" data-packed-storage-warning>
                     {{ messages.t('packing.packedStorageUnavailable') }}
-                    <ActionButton class="btn-sm ms-2" variant="outline-warning" :data-packed-list="listId"
-                        @click="retryPackedStorage">
-                        {{ messages.t('common.retry') }}
-                    </ActionButton>
+                    <template #actions>
+                        <ActionButton class="btn-sm" variant="outline-warning" :data-packed-list="listId"
+                            @click="retryPackedStorage">
+                            {{ messages.t('common.retry') }}
+                        </ActionButton>
+                    </template>
                 </StatusNotice>
                 <StatusNotice v-if="data.archived || data.inheritedArchived" kind="info">{{
                     messages.t('packing.archived')

@@ -103,12 +103,11 @@ async function reviewUnknown(): Promise<void> {
                 @click="edit()">
                 <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>{{ messages.t('activity.addTextField') }}</ActionButton>
         </div>
-        <CommandFeedback :feedback="command.feedback" />
         <p v-if="!fields.length" class="text-secondary small mt-2 mb-3">{{ messages.t('activity.noTextFields') }}</p>
         <div v-for="field in fields" :key="field.id" class="card text-bg-dark border border-secondary-subtle mb-3">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <strong class="mb-0">{{ field.title }}</strong>
-                <div class="d-flex gap-2">
+                <div class="pilot-action-row">
                     <ActionButton
                         v-if="field.capabilities.delete"
                         type="button"
@@ -188,18 +187,15 @@ async function reviewUnknown(): Promise<void> {
                 <StatusNotice v-if="conflict" kind="warning">
                     <p>{{ messages.t('draft.readConflict') }}</p>
                     <p>{{ current?.title }}<br />{{ current?.text }}</p>
+                    <template #actions>
                     <ActionButton
                         type="button"
                         class="btn-sm" variant="outline-warning"
                         :disabled="blocked"
                         @click="editToken = current?.editToken ?? ''">{{ messages.t('draft.review') }}</ActionButton>
+                    </template>
                 </StatusNotice>
                 <StatusNotice v-if="permissionLost" kind="warning">{{ messages.t('common.notAllowed') }}</StatusNotice>
-                <CommandFeedback
-                    :feedback="command.feedback"
-                    :creation-review="{required: command.reviewRequired.value, message: 'activity.reviewUnknownItem', state: command.recoveryAction}"
-                    @review-creation="reviewUnknown"
-                />
             </form>
             <template #footer>
                 <ActionButton type="button" class="btn-sm" variant="outline-secondary" :disabled="command.pending.value" @click="close">{{ messages.t('common.cancel') }}</ActionButton>
@@ -210,6 +206,16 @@ async function reviewUnknown(): Promise<void> {
                     :pending="command.pending.value && !removingId" :show-spinner="false"
                     :disabled="blocked || !maySave || conflict">
                     <i class="bi bi-save me-1" aria-hidden="true"></i>{{ messages.t('common.save') }}</ActionButton>
+            </template>
+            <!-- One persistent presentation follows the dialog's active host.
+                 Closing/opening never duplicates the command receipt or restarts
+                 its transient lifetime in a different component instance. -->
+            <template #feedback>
+                <CommandFeedback
+                    :feedback="command.feedback"
+                    :creation-review="{required: command.reviewRequired.value, message: 'activity.reviewUnknownItem', state: command.recoveryAction}"
+                    @review-creation="reviewUnknown"
+                />
             </template>
         </AppDialog>
     </section>

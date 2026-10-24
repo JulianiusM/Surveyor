@@ -77,6 +77,41 @@ function unloadAttempt(): Event {
 }
 
 describe('reconcile-only commands', () => {
+    it.each(['notice', 'error'] as const)('retains a newer same-key %s receipt while an older read finishes', async kind => {
+        const {command, refresh} = await mountedCommand();
+        const previous = new Error('Previous failed GET');
+        const newer = new Error('Independent later failed GET');
+        if (kind === 'notice') command.setReadNotice('state.savedRefreshFailed', previous);
+        else command.setReadError('state.loadFailed', previous);
+        let finish!: () => void;
+        refresh.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        const recovering = command.feedback.reconcileRead();
+        expect(command.recovering.value).toBe(true);
+        expect(command.feedback.readRecoveryAction.disabled.value).toBe(true);
+        expect(await command.feedback.reconcileRead()).toBe(false);
+        expect(refresh).toHaveBeenCalledOnce();
+        // A matching message key is insufficient to consume another receipt.
+        if (kind === 'notice') command.setReadNotice('state.savedRefreshFailed', newer);
+        else command.setReadError('state.loadFailed', newer);
+        finish();
+        expect(await recovering).toBe(true);
+        expect(kind === 'notice' ? command.feedback.noticeReadError.value : command.feedback.errorReadError.value).toBe(newer);
+        expect(kind === 'notice' ? command.notice.value : command.error.value).not.toBeNull();
+    });
+
+    it('renews only its existing causal read receipt when a deliberate Retry fails again', async () => {
+        const {command, refresh} = await mountedCommand();
+        const initial = new Error('Initial failed GET');
+        const repeated = new Error('Retry GET failed');
+        command.setReadNotice('state.savedRefreshFailed', initial);
+        refresh.mockRejectedValueOnce(repeated);
+        expect(await command.feedback.reconcileRead()).toBe(false);
+        expect(command.feedback.noticeReadError.value).toBe(repeated);
+        expect(command.notice.value).toBe('state.savedRefreshFailed');
+        expect(command.recovering.value).toBe(false);
+        expect(command.feedback.readRecoveryAction.disabled.value).toBe(false);
+    });
+
     it('confirms explicitly silent success while retaining ordinary saved feedback by default', async () => {
         const {command, refresh, context} = await mountedCommand();
         const operation = vi.fn(async () => ({changed: true}));

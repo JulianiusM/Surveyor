@@ -119,10 +119,9 @@ function statusClass(status: Link['status']): string {
          private link list, local expiry draft and explicit create/revoke commands. -->
 
     <section class="reg-links text-bg-dark border border-secondary rounded-2 py-1 my-2" data-entity-section>
-        <!-- Page and open-dialog hosts present one shared command receipt. -->
+        <!-- Durable recovery remains next to its active controls. Confirmed and
+             rejected receipts have one persistent renderer in the dialog below. -->
         <div v-if="!creating">
-            <CommandFeedback :feedback="command.feedback"
-                :part="command.uncertain.value ? 'error' : 'all'" />
             <CommandFeedback :feedback="command.feedback" part="uncertain"
                 :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refresh" />
         </div>
@@ -138,7 +137,7 @@ function statusClass(status: Link['status']): string {
                 <div v-show="expanded" :id="`${id}-links`" class="accordion-collapse">
                     <div class="accordion-body bg-dark">
                         <LoadingSkeleton v-if="section.loading.value" variant="table" :columns="5" :rows="3" />
-                        <StatusNotice v-if="section.query.error.value" kind="warning"
+            <StatusNotice v-if="section.query.error.value" kind="warning" :read-error="section.query.error.value"
                             :action="{state: refreshAction, label: messages.t('common.retry')}"
                             :retry-at="section.retryAt.value" @action="refresh">{{ section.failure.value ?? messages.t('state.stale') }}</StatusNotice>
 
@@ -146,7 +145,7 @@ function statusClass(status: Link['status']): string {
                              access. The controller supplies every private token. -->
                         <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
                             <small class="text-secondary">{{ messages.t('event.organizer.linksHelp') }}</small>
-                            <div class="d-flex gap-2">
+                            <div class="pilot-action-row">
                                 <ActionButton class="btn-sm" variant="outline-light" :state="available"
                                     @click="openCreate"><i class="bi bi-plus-circle me-1" aria-hidden="true"></i>{{ messages.t('event.organizer.createLink') }}</ActionButton>
                             </div>
@@ -206,9 +205,11 @@ function statusClass(status: Link['status']): string {
             content-class="text-light border border-secondary"
             :pending="command.pending.value || command.recovering.value" :fullscreen-on-small="false"
             @close="closeCreate">
-            <div>
+            <template #feedback>
                 <CommandFeedback :feedback="command.feedback"
                     :part="command.uncertain.value ? 'error' : 'all'" />
+            </template>
+            <div>
                 <CommandFeedback :feedback="command.feedback" part="uncertain"
                     :action="{state: refreshAction, label: messages.t('common.refresh')}" @action="refresh" />
             </div>

@@ -24,7 +24,7 @@
     "firstHeading": "{{surveyheading}}",
     "fields": [
       {"label": "{{surveyweekday}}:", "value": "{{surveymonday}}", "meaning": ""},
-      {"label": "{{surveyday}}:", "value": "{{surveyfirst}}", "meaning": ""}
+      {"label": "{{surveyday}}:", "value": "{{surveyfirst}}", "meaning": "Chooses the first Monday of the month"}
     ],
     "instruction": "Choose the values above, then select {{surveyadd}}.",
     "recurrenceHeading": "First Monday of every month",

@@ -182,6 +182,111 @@ async function expandStartupNavigation(page: Page): Promise<void> {
     if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
 }
 
+for (const width of [1280, 1024, 390, 320]) {
+    test(`German navigation disclosures fit and remain above shared feedback at ${width}px`, async ({page}, info) => {
+        await page.setViewportSize({width, height: 900});
+        const profile = {id: '11111111-1111-4111-8111-111111111111',
+            name: 'Maximilian Langnamiger Teilnehmer mit einem ausführlichen Profilnamen'};
+        const session: Session = {...startupSession('de'), kind: 'account', activeProfile: profile, profiles: [profile],
+            context: 'german-navigation-context-1234567890', csrfToken: 'german-navigation-csrf-1234567890'};
+        const delivery = await startupDocument(page, '/frontend-pilot', {session,
+            landing: {quickCreate: 'packing'}, pageNotice: {kind: 'info', messageKey: 'auth.accountRequired'}});
+        await page.goto(delivery.url);
+        await waitForPilotHydration(page);
+        await expandStartupNavigation(page);
+        await expect(page.locator('main [data-pilot-notices] .pilot-notification')).toBeVisible();
+
+        // Exercise every actual header disclosure with translated labels. Hit
+        // testing catches a usable-looking menu hidden underneath sticky feedback.
+        const disclosures = await page.locator('header details').all();
+        for (let index = 0; index < disclosures.length; index++) {
+            const disclosure = disclosures[index]!;
+            await disclosure.locator('summary').click();
+            const menu = disclosure.locator('.dropdown-menu');
+            await expect(menu).toBeVisible();
+            const geometry = await menu.evaluate(function inspectNavigationMenu(element) {
+                const bounds = element.getBoundingClientRect();
+                return {left: bounds.left, right: bounds.right, width: bounds.width,
+                    clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
+                    documentWidth: document.documentElement.scrollWidth, viewport: window.innerWidth};
+            });
+            expect(geometry.left).toBeGreaterThanOrEqual(0);
+            expect(geometry.right).toBeLessThanOrEqual(width);
+            expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1);
+            expect(geometry.documentWidth).toBeLessThanOrEqual(width + 1);
+            const item = menu.locator('.dropdown-item').first();
+            await item.click({trial: true});
+            expect(await item.evaluate(function itemReceivesPointer(element) {
+                const bounds = element.getBoundingClientRect();
+                return element.contains(document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2));
+            })).toBe(true);
+            await page.screenshot({path: info.outputPath('german-disclosure-' + index + '.png'),
+                animations: 'disabled'});
+            await disclosure.press('Escape');
+            await expect(disclosure).not.toHaveAttribute('open');
+        }
+        if (width === 1280) {
+            // A short desktop viewport must retain keyboard access to the final
+            // action by scrolling the menu itself, with no document movement.
+            await page.setViewportSize({width, height: 180});
+            const disclosure = disclosures[disclosures.length - 1]!;
+            const origin = await page.evaluate(() => window.scrollY);
+            await disclosure.locator('summary').press('ArrowUp');
+            const menu = disclosure.locator('.dropdown-menu');
+            const item = menu.locator('.dropdown-item').last();
+            await expect(item).toBeFocused();
+            const itemBounds = (await item.boundingBox())!;
+            const menuBounds = (await menu.boundingBox())!;
+            expect(itemBounds.y).toBeGreaterThanOrEqual(menuBounds.y);
+            expect(itemBounds.y + itemBounds.height).toBeLessThanOrEqual(menuBounds.y + menuBounds.height);
+            expect(await menu.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+            expect(await page.evaluate(() => window.scrollY)).toBe(origin);
+        }
+        expect(delivery.observed.commands).toBe(0);
+    });
+}
+
+for (const width of [1280, 390]) {
+    test(`long read diagnostics retain a separate responsive retry action at ${width}px`, async ({page}, info) => {
+        await page.setViewportSize({width, height: 900});
+        const help: components['schemas']['HelpPageData'] = {locale: 'de', title: 'Lange Rückmeldung',
+            content: '<h2>Weiterhin lesbarer Inhalt</h2>', currentDoc: 'fixture.md', docsList: [], docsGroups: [], toc: []};
+        const delivery = await startupDocument(page, '/frontend-pilot/help', {session: startupSession('de'), help});
+        const diagnostic = 'Die angeforderten Informationen konnten wegen einer vorübergehenden Unterbrechung nicht geladen werden. '.repeat(6);
+        await page.route('**/api/v1/help*', async function failHelpRead(route) {
+            // A future server's safe plain-text detail crosses the real decoding
+            // boundary and makes wrapping independent of today's catalog length.
+            await route.fulfill({status: 503, contentType: 'application/problem+json', body: JSON.stringify({
+                type: 'urn:surveyor:problem:future-read-failure', title: 'Read unavailable', status: 503,
+                detail: diagnostic, requestId: 'responsive-feedback-fixture', code: 'FUTURE_READ_FAILURE',
+                messageKey: 'future.readFailure', params: {},
+            })});
+        });
+        await page.goto(delivery.url);
+        await waitForPilotHydration(page);
+        await page.locator('main').getByRole('button', {name: 'Aktualisieren', exact: true}).click();
+        const notice = page.locator('main .status-notice.alert-danger');
+        await expect(notice.locator('[data-read-issue]')).toHaveText(diagnostic.trim());
+        const body = (await notice.locator('.pilot-notice-body').boundingBox())!;
+        const action = notice.locator('.pilot-notice-actions .btn');
+        const button = (await action.boundingBox())!;
+        const bounds = (await notice.boundingBox())!;
+        expect(button.x).toBeGreaterThanOrEqual(bounds.x);
+        expect(button.x + button.width).toBeLessThanOrEqual(bounds.x + bounds.width);
+        if (width < 576) {
+            expect(button.y).toBeGreaterThanOrEqual(body.y + body.height);
+            expect(Math.abs(button.width - body.width)).toBeLessThan(1);
+        } else {
+            expect(button.x).toBeGreaterThan(body.x + body.width);
+            expect(Math.abs(button.x + button.width - bounds.x - bounds.width + 17)).toBeLessThan(2);
+        }
+        expect(await notice.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+        await action.click({trial: true});
+        await page.screenshot({path: info.outputPath('long-responsive-read-diagnostic.png'), fullPage: true, animations: 'disabled'});
+        expect(delivery.observed.commands).toBe(0);
+    });
+}
+
 for (const kind of ['anonymous', 'account', 'guest'] as const) {
     for (const width of [1280, 390]) {
         test(`Home preserves the public landing and separates Overview for ${kind} at ${width}px`, async ({page}, info) => {
@@ -208,6 +313,16 @@ for (const kind of ['anonymous', 'account', 'guest'] as const) {
             await expect(brand).toHaveAttribute('href', '/frontend-pilot');
             await expect(home).toHaveAttribute('href', '/frontend-pilot');
             if (kind !== 'anonymous') await expect(landing.locator('a.btn-primary')).toHaveAttribute('href', '/frontend-pilot/users/dashboard');
+            if (width < 576) {
+                const bar = landing.locator('.pilot-action-row').first();
+                const actions = await bar.locator(':scope > .btn').all();
+                const row = (await bar.boundingBox())!;
+                const first = (await actions[0]!.boundingBox())!;
+                const second = (await actions[1]!.boundingBox())!;
+                expect(Math.abs(first.width - row.width)).toBeLessThan(1);
+                expect(Math.abs(second.width - row.width)).toBeLessThan(1);
+                expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
+            }
             await page.screenshot({path: info.outputPath('restored-public-landing.png'), fullPage: true, animations: 'disabled'});
 
             await expandStartupNavigation(page);
@@ -219,6 +334,11 @@ for (const kind of ['anonymous', 'account', 'guest'] as const) {
                 await expect(page).toHaveURL(/\/frontend-pilot\/users\/login\?next=/u);
                 expect(new URL(page.url()).searchParams.get('next')).toBe('/frontend-pilot/users/dashboard');
                 await expect(page.locator('main #username')).toBeVisible();
+                if (width < 576) {
+                    const form = page.locator('main form').filter({has: page.locator('#username')});
+                    const submit = (await form.getByRole('button', {name: 'Login', exact: true}).boundingBox())!;
+                    expect(submit.width).toBeGreaterThan((await form.boundingBox())!.width * .85);
+                }
                 await expect(page.locator('.js-overview-region')).toHaveCount(0);
                 expect(overviewReads).toEqual([]);
                 await page.screenshot({path: info.outputPath('anonymous-dashboard-login.png'), fullPage: true, animations: 'disabled'});

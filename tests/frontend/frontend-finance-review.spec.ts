@@ -99,6 +99,150 @@ describe('P8A organizer finance forms', () => {
         expect(mounted.request).toHaveBeenCalledTimes(1);
         expect(await (mounted.request.mock.calls[0]![0] as Request).json()).toMatchObject({name: 'Weekend pool', description});
         expect(mounted.wrapper.emitted('saved')).toHaveLength(1);
+        expect(mounted.wrapper.emitted('close')).toHaveLength(1);
+    });
+
+    it('closes confirmed creation after a failed saved read without replaying the write', async () => {
+        const refresh = vi.fn(async () => {throw new Error('Saved pool read unavailable');});
+        const mounted = await mountForm(FinancePoolEditor, {pool: undefined, refresh});
+        await mounted.dialog.get('input[name="name"]').setValue('Confirmed pool');
+        await mounted.dialog.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(mounted.request).toHaveBeenCalledTimes(1);
+        expect(refresh).toHaveBeenCalledTimes(1);
+        expect(mounted.wrapper.emitted('saved')).toHaveLength(1);
+        expect(mounted.wrapper.emitted('close')).toHaveLength(1);
+        expect(mounted.dialog.get<HTMLInputElement>('input[name="name"]').element.value).toBe('');
+    });
+
+    it.each(['rejected', 'unknown'] as const)('retains the creation draft and dialog after %s delivery', async outcome => {
+        const refresh = vi.fn(async () => {});
+        const mounted = await mountForm(FinancePoolEditor, {pool: undefined, refresh}, async () => {
+            if (outcome === 'unknown') throw new TypeError('Creation response lost');
+            return new Response(JSON.stringify({type: 'urn:surveyor:problem:validation-failed', title: 'Invalid input',
+                status: 400, code: 'VALIDATION_FAILED', messageKey: 'api:errors.VALIDATION_FAILED', params: {},
+                detail: 'Check the submitted values.', requestId: 'rejected-pool'}),
+            {status: 400, headers: {'Content-Type': 'application/problem+json'}});
+        });
+        await mounted.dialog.get('input[name="name"]').setValue('Retained pool');
+        await mounted.dialog.get('form').trigger('submit');
+        await flushPromises();
+
+        expect(mounted.request).toHaveBeenCalledTimes(1);
+        expect(refresh).not.toHaveBeenCalled();
+        expect(mounted.wrapper.emitted('close')).toBeUndefined();
+        expect(mounted.wrapper.emitted('saved')).toBeUndefined();
+        expect(mounted.dialog.get<HTMLInputElement>('input[name="name"]').element.value).toBe('Retained pool');
+        if (outcome === 'unknown') {
+            await mounted.dialog.get('form').trigger('submit');
+            await flushPromises();
+            expect(mounted.request).toHaveBeenCalledTimes(1);
+        }
+    });
+
+    it.each([false, true])('closes the section creation dialog and retains one receipt when saved read fails=%s', async failRead => {
+        let reads = 0;
+        let writes = 0;
+        const mounted = await mountFrontendEvent(FinanceSection, async request => {
+            if (request.method === 'POST') { writes++; return json({changed: true}); }
+            reads++;
+            // A real server cooldown makes the following read fail immediately;
+            // this case targets creation finality rather than Query retry timing.
+            if (reads > 1 && failRead) return new Response('Saved Finance read unavailable', {
+                status: 503, headers: {'Retry-After': '60'},
+            });
+            return json(snapshot);
+        }, {eventId, admin: true, enabled: true});
+        cleanups.push(mounted.dispose);
+        await vi.waitFor(() => expect(mounted.context.queryClient.isFetching()).toBe(0));
+        await button(mounted.wrapper, 'Create pool').trigger('click');
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        const form = dialog.get('form');
+        vi.spyOn(form.element as HTMLFormElement, 'reportValidity').mockReturnValue(true);
+        await dialog.get('input[name="name"]').setValue('Confirmed section pool');
+        await form.trigger('submit');
+        await flushPromises();
+        await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+
+        expect(writes).toBe(1);
+        const notices = [...document.querySelectorAll('.alert-success, .status-notice.alert-warning')]
+            .filter(element => element.textContent?.includes(failRead ? 'Your change was saved' : 'Pool created.'));
+        expect(notices).toHaveLength(1);
+        const retries = [...notices[0]!.querySelectorAll<HTMLButtonElement>('button')]
+            .filter(control => control.textContent?.trim() === mounted.context.messages.value.t('common.retry'));
+        expect(retries).toHaveLength(failRead ? 1 : 0);
+        if (failRead) expect(retries[0]!.disabled).toBe(true);
+    });
+
+    it.each([false, true])('retries only the failed Finance read through its one common receipt; repeated failure=%s', async failAgain => {
+        // Happy DOM supplies no layout; production still checks disclosure and
+        // hidden ancestors while joining only the matching visible receipt.
+        vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
+        let reads = 0;
+        let writes = 0;
+        let deliver: ((response: Response) => void) | undefined;
+        function limited(deadline = false): Response {
+            return new Response(JSON.stringify({type: 'urn:surveyor:problem:rate-limited', status: 429,
+                title: 'Read limited', detail: 'Read limited', requestId: 'finance-read-recovery',
+                code: 'RATE_LIMITED', messageKey: 'api:errors.RATE_LIMITED', params: {}}), {
+                status: 429, headers: {'Content-Type': 'application/problem+json', ...(deadline ? {'Retry-After': '60'} : {})},
+            });
+        }
+        const mounted = await mountFrontendEvent(FinanceSection, async request => {
+            if (request.method === 'POST') { writes++; return json({changed: true}); }
+            reads++;
+            if (reads === 1) return json(snapshot);
+            if (reads === 2) return limited();
+            return new Promise<Response>(resolve => { deliver = resolve; });
+        }, {eventId, admin: true, enabled: true});
+        cleanups.push(mounted.dispose);
+        await vi.waitFor(() => expect(mounted.context.queryClient.isFetching()).toBe(0));
+        await button(mounted.wrapper, 'Create pool').trigger('click');
+        const dialog = new DOMWrapper(document.querySelector<HTMLElement>('[role="dialog"]')!);
+        const form = dialog.get('form');
+        vi.spyOn(form.element as HTMLFormElement, 'reportValidity').mockReturnValue(true);
+        await dialog.get('input[name="name"]').setValue('Confirmed pool before failed read');
+        await form.trigger('submit'); await flushPromises();
+        expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+        const surface = new DOMWrapper(document.body);
+        const common = surface.get('.pilot-notification.status-notice.alert-warning');
+        expect(surface.findAll('.status-notice.alert-warning')).toHaveLength(1);
+        expect(common.text()).toContain(mounted.context.messages.value.t('state.savedRefreshFailed'));
+        expect(common.find('[data-read-issue]').exists()).toBe(true);
+        expect(common.find('[data-last-successful-refresh]').exists()).toBe(true);
+        const query = mounted.context.queryClient.getQueryCache().getAll().find(entry => entry.state.error)!;
+        const originalFailure = query.state.error;
+        expect(originalFailure).toBeInstanceOf(ApiFailure);
+        expect(query.state.data).toMatchObject({audience: 'organizer', pools: [{id: poolId}]});
+        const retry = button(common, mounted.context.messages.value.t('common.retry'));
+        await retry.trigger('click');
+        await vi.waitFor(() => expect(deliver).toBeTypeOf('function'));
+        try {
+            expect(retry.attributes('aria-busy')).toBe('true');
+            expect((retry.element as HTMLButtonElement).disabled).toBe(true);
+            await retry.trigger('click'); await flushPromises();
+            expect(reads).toBe(3);
+            expect(writes).toBe(1);
+        } finally {
+            deliver!(failAgain ? limited(true) : json(snapshot));
+            await flushPromises();
+        }
+
+        expect(writes).toBe(1);
+        expect(reads).toBe(3);
+        if (failAgain) {
+            expect(query.state.error).not.toBe(originalFailure);
+            expect(surface.findAll('.status-notice.alert-warning')).toHaveLength(1);
+            const retained = surface.get('.pilot-notification.status-notice.alert-warning');
+            expect(retained.find('[data-read-issue]').exists()).toBe(true);
+            expect(retained.find('[data-read-retry-at]').exists()).toBe(true);
+            expect((button(retained, mounted.context.messages.value.t('common.retry')).element as HTMLButtonElement).disabled).toBe(true);
+        } else {
+            expect(query.state.error).toBeNull();
+            expect(surface.find('.status-notice.alert-warning').exists()).toBe(false);
+        }
     });
 
     it('retains the source draft and captured revision through Back, fresh saved props and the final retroactive confirmation', async () => {

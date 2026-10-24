@@ -73,16 +73,18 @@ describe('validated API problem output', () => {
         expect(contractValidator('Problem')(result.body)).toBe(true);
     });
 
-    it('keeps versioned metadata validation bounded instead of publishing native structural prose', () => {
+    it('explains the actual metadata constraint without publishing values or native structural prose', () => {
         try {
             validateApiInput('updatePackingMetadata', normalizePackingMetadataPatch({description: 'D'.repeat(16001)}));
             throw new Error('Invalid versioned metadata was accepted');
         } catch (error) {
             const result = respond(error, request({header: 'en'}));
             expect(result.body).toMatchObject({code: 'VALIDATION_FAILED', status: 400,
-                detail: 'Check the submitted values.', fieldErrors: [{pointer: '/description', code: 'invalid'}]});
+                detail: 'Description: Use no more than 16000 characters.', fieldErrors: [{pointer: '/description', code: 'invalid',
+                    diagnostic: {field: 'description', rule: 'maxLength', limit: 16000}}]});
             expect(contractValidator('Problem')(result.body)).toBe(true);
-            expect(JSON.stringify(result.body)).not.toContain('16000 characters');
+            expect(JSON.stringify(result.body)).not.toContain('D'.repeat(100));
+            expect(JSON.stringify(result.body)).not.toContain('must NOT have more than');
         }
     });
 

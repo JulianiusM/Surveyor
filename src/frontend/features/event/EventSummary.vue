@@ -77,7 +77,7 @@ function deadlineCountdown(): string {
             <!-- The feature capability grants navigation presentation only;
                  the destination's own entry owner rechecks admission. -->
             <div v-if="admin || event.capabilities.admin" class="row">
-                <div class="col-12 d-flex justify-content-end gap-2">
+                <div class="col-12 pilot-action-row justify-content-end">
                     <RouterLink class="btn btn-primary"
                         :to="`/frontend-pilot/event/${event.id}${admin ? '' : '/admin'}`"><i class="bi me-1" :class="admin ? 'bi-calendar2-event' : 'bi-check2-circle'" aria-hidden="true"></i>{{ messages.t(admin ? 'event.eventPage' : 'event.admin') }}</RouterLink>
                 </div>

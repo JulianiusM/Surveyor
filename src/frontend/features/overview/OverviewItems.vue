@@ -83,7 +83,7 @@ function followPage(event: MouseEvent, page: number, available: boolean): void {
             messages.t(view.parent ? 'overview.childRange' : 'overview.cardRange', range)
         }}</span>
         <nav
-            class="d-flex gap-2"
+            class="pilot-action-row"
             :aria-label="messages.t(view.parent ? 'overview.childNavigation' : 'overview.pageNavigation')"
         >
             <a

@@ -268,12 +268,13 @@ async function reviewUnknown(): Promise<void> {
             <StatusNotice v-if="conflict" kind="warning">
                 <p>{{ messages.t('draft.readConflict') }}</p>
                 <p v-if="slot">{{ slot.title }}<br />{{ slot.description }}<br />{{ slot.startTime }} – {{ slot.endTime }}<br />{{ slot.maxAssignees }}</p>
-                <ActionButton
-                    v-if="slot"
-                    type="button"
-                    class="btn-sm" variant="outline-warning"
-                    :disabled="blocked"
-                    @click="token = slot.editToken">{{ messages.t('draft.review') }}</ActionButton>
+                <template v-if="slot" #actions>
+                    <ActionButton
+                        type="button"
+                        class="btn-sm" variant="outline-warning"
+                        :disabled="blocked"
+                        @click="token = slot.editToken">{{ messages.t('draft.review') }}</ActionButton>
+                </template>
             </StatusNotice>
             <CommandFeedback
                 :feedback="command.feedback"

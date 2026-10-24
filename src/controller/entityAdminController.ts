@@ -18,7 +18,7 @@
 import Joi from 'joi';
 import {createHash} from 'node:crypto';
 import type {components} from '../types/api/v1';
-import {ApiProblem} from '../modules/api/problem';
+import {ApiProblem, declaredApiProblem} from '../modules/api/problem';
 import {contractValidator} from '../modules/api/contracts';
 import {archiveKey, automaticArchiveCutoff, isEffectivelyArchived} from '../modules/archive/policy';
 import type {EntityManager} from 'typeorm';
@@ -190,7 +190,14 @@ export function normalizeBasicProperties(body: unknown): BasicEntityPropertyPatc
     const schema = Joi.object({title: Joi.string().trim().min(1).max(255), description: Joi.string().max(16000).allow('', null)})
         .min(1).unknown(false).required();
     const {value, error} = schema.validate(body, {abortEarly: false});
-    if (error) throw new APIError(error.message, {}, 400);
+    if (error) {
+        // Preserve native validation while identifying only the authored field
+        // and rule for an actionable, value-free versioned explanation.
+        const detail = error.details[0];
+        const cause = detail?.path[0] === 'title' ? 'ENTITY_TITLE_INVALID'
+            : detail?.path[0] === 'description' && detail.type === 'string.max' ? 'ENTITY_DESCRIPTION_TOO_LONG' : undefined;
+        throw new APIError(error.message, {}, 400, {cause});
+    }
     if (value.description === '') value.description = null;
     return value;
 }
@@ -755,7 +762,7 @@ export async function setAutomaticArchival<Result>(reference: ArchiveReference, 
     async function setPauseLocked(manager: EntityManager, context: LockedArchiveContext): Promise<Result | undefined> {
         const root = requireLockedArchiveRoot(context);
         await requireArchiveManagement(reference, root, session, manager);
-        if (!hasIndependentSchedule(reference, root)) throw new APIError('Automatic archival is controlled by an event or a standalone activity plan.', {}, 409);
+        if (!hasIndependentSchedule(reference, root)) throw new APIError('Automatic archival is controlled by an event or a standalone activity plan.', {}, 409, {cause: 'ARCHIVE_SCHEDULE_UNAVAILABLE'});
         await lifecycleService.updateLifecycleMetadata(manager, reference, {autoArchivePaused: value.paused});
         // The feature can recheck its captured parent scope and serialize a reply
         // before commit; native callers keep their original presentation below.
@@ -769,6 +776,11 @@ export async function setAutomaticArchival<Result>(reference: ArchiveReference, 
 
 /** Keep inherited restoration distinct from a changed root/parent relationship. */
 export function classifyArchiveCommandError(error: unknown, archived: boolean): unknown {
+    if (error instanceof ApiProblem) return error;
+    // A controller-owned schedule diagnostic is more specific than the legacy
+    // parent-change fallback. Native prose/data never cross this adapter.
+    const declared = declaredApiProblem(error);
+    if (declared) return declared;
     if (error instanceof APIError && error.status === 409) {
         return new ApiProblem(!archived && Object.hasOwn(error.data, 'eventId') ? 'ARCHIVE_INHERITED' : 'ENTITY_CONTEXT_CHANGED');
     }

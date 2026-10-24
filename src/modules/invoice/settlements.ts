@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {invoiceText} from './wording';
+import {invoiceText, invoiceRejectionCause} from './wording';
 import type {PreviousInvoiceShare, InvoiceSharePayload, ProjectedInvoiceShare} from '../../types/InvoicePoolTypes';
 import {APIError} from '../lib/errors';
 import {invoiceCents} from './validation';
@@ -83,8 +83,8 @@ export function projectInvoiceShares(
     };
     // Reject duplicate or departed payers before projecting each current allocation.
     for (const payload of newGrossPayloads) {
-        if (seenIds.has(payload.registrationId)) throw new APIError(invoiceText('duplicatePayerInInvoiceCalculation'), {}, 400);
-        if (validIds && !validIds.has(payload.registrationId)) throw new APIError(invoiceText('calculationParticipantNoLongerBelongsToThisEvent'), {}, 409);
+        if (seenIds.has(payload.registrationId)) throw new APIError(invoiceText('duplicatePayerInInvoiceCalculation'), {}, 400, {cause: invoiceRejectionCause('duplicatePayerInInvoiceCalculation')});
+        if (validIds && !validIds.has(payload.registrationId)) throw new APIError(invoiceText('calculationParticipantNoLongerBelongsToThisEvent'), {}, 409, {cause: invoiceRejectionCause('calculationParticipantNoLongerBelongsToThisEvent', 409)});
         seenIds.add(payload.registrationId);
         remainingPayments.delete(payload.registrationId);
         projected.push(project(payload));

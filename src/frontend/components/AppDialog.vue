@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {DialogRoot, DialogPortal, DialogOverlay, DialogContent, DialogTitle, DialogClose} from 'reka-ui';
-import {provide, ref, watch} from 'vue';
+import {computed, inject, provide, ref, watch} from 'vue';
 import {usePilot} from '../app/context';
 import {noticeTargetKey} from '../composables/feedback';
 
@@ -29,8 +29,12 @@ const emit = defineEmits<{close: []}>();
 const {messages} = usePilot();
 // A modal owns a presentation host above its body, using the same notice renderer
 // and receipts as the page. Visible receipts reserve space above the scroll body.
+const inheritedNoticeTarget = inject(noticeTargetKey, null);
 const noticeTarget = ref<HTMLElement | null>(null);
-provide(noticeTargetKey, noticeTarget);
+// Persistent feedback can outlive a confirmed dialog close. Move its same node
+// back to the enclosing host without remounting its receipt or restarting expiry.
+const activeNoticeTarget = computed(() => props.open ? noticeTarget.value : inheritedNoticeTarget?.value ?? null);
+provide(noticeTargetKey, activeNoticeTarget);
 // Features may open a modal from several buttons instead of one Reka DialogTrigger.
 // Remember the actual invoker so Escape/cancel returns keyboard focus to the right control.
 let opener: HTMLElement | null = null;
@@ -105,5 +109,8 @@ function restoreFocus(event: Event): void {
                 <footer v-if="$slots.footer" class="modal-footer" :class="footerClass"><slot name="footer" /></footer>
             </DialogContent>
         </DialogPortal>
+        <!-- Commands that finish by closing their dialog keep one feedback
+             instance here. Ordinary form bodies retain their existing lifetime. -->
+        <slot name="feedback" />
     </DialogRoot>
 </template>

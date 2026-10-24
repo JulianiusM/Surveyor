@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {invoiceText} from './wording';
+import {invoiceText, invoiceRejectionCause} from './wording';
 import type {EntityManager} from 'typeorm';
 import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool';
 import type {EventInvoice} from '../database/entities/event/EventInvoice';
@@ -33,7 +33,7 @@ export async function persistSubmittedInvoice(poolId: string, registrationId: nu
         // The DBAL holds the pool lock throughout policy checks and dependent writes.
         const pool = requireLockedPool(row);
         // Recheck submission eligibility after acquiring the lock, including concurrent closure or membership edits.
-        if (pool.status !== 'OPEN') throw new APIError(invoiceText('poolIsClosedForInvoiceSubmissions'), {}, 409);
+        if (pool.status !== 'OPEN') throw new APIError(invoiceText('poolIsClosedForInvoiceSubmissions'), {}, 409, {cause: invoiceRejectionCause('poolIsClosedForInvoiceSubmissions', 409)});
         await assertLockedParticipant(manager, pool, registrationId);
         // New participant costs require review and retain the original proof and submitted amount.
         const invoice = await invoiceService.saveInvoice({
@@ -56,11 +56,11 @@ export async function persistOrganizerInvoice(poolId: string, profileId: string,
     if (typeof profileId !== 'string' || !profileId.trim()) throw new APIError(invoiceText('organizerProfileNotFound'), {}, 401);
     assertPositiveInvoiceAmount(amount);
     if (typeof description !== 'string' || !description.trim() || description.trim().length > 4000) {
-        throw new APIError(invoiceText('enterADescriptionOfUpToCharacters'), {}, 400);
+        throw new APIError(invoiceText('enterADescriptionOfUpToCharacters'), {}, 400, {cause: invoiceRejectionCause('enterADescriptionOfUpToCharacters')});
     }
     // Direct domain callers obey the same explicit-ID contract as multipart requests; zero never means attribution.
     if (registrationId !== undefined && (!Number.isSafeInteger(registrationId) || registrationId <= 0)) {
-        throw new APIError(invoiceText('participantNotAssignedToThisPool'), {}, 400);
+        throw new APIError(invoiceText('participantNotAssignedToThisPool'), {}, 400, {cause: invoiceRejectionCause('participantNotAssignedToThisPool')});
     }
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function submitLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<number> {
@@ -122,7 +122,7 @@ export async function closeSavedInvoice(poolId: string, invoiceId: number): Prom
         const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId, manager);
         if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
         if (invoice.status === 'CLOSED') return false;
-        if (invoice.status !== 'APPROVED') throw new APIError(invoiceText('onlyAcceptedInvoicesCanBeClosed'), {}, 400);
+        if (invoice.status !== 'APPROVED') throw new APIError(invoiceText('onlyAcceptedInvoicesCanBeClosed'), {}, 400, {cause: invoiceRejectionCause('onlyAcceptedInvoicesCanBeClosed')});
         // Closing retains the accepted cost; refresh aggregates without changing saved shares or pool inputs.
         invoice.status = 'CLOSED';
         await invoiceService.saveInvoice(invoice, manager);
@@ -161,7 +161,7 @@ export async function reviseSavedInvoice(poolId: string, invoiceId: number, corr
     if (corrections?.correctedAmount !== null) assertPositiveInvoiceAmount(corrections?.correctedAmount);
     if (corrections?.correctedDescription !== null && (typeof corrections?.correctedDescription !== 'string'
         || corrections.correctedDescription.trim().length > 4000)) {
-        throw new APIError(invoiceText('enterACorrectionDescriptionOfUpToCharactersOr'), {}, 400);
+        throw new APIError(invoiceText('enterACorrectionDescriptionOfUpToCharactersOr'), {}, 400, {cause: invoiceRejectionCause('enterACorrectionDescriptionOfUpToCharactersOr')});
     }
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function reviseLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<EventInvoice> {
@@ -171,7 +171,7 @@ export async function reviseSavedInvoice(poolId: string, invoiceId: number, corr
         // Read the current review state within this pool; preloaded request data cannot authorize a stale transition.
         const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId, manager);
         if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
-        if (invoice.status !== 'APPROVED' && invoice.status !== 'CLOSED') throw new APIError(invoiceText('onlyAcceptedOrClosedInvoicesCanBeCorrected'), {}, 409);
+        if (invoice.status !== 'APPROVED' && invoice.status !== 'CLOSED') throw new APIError(invoiceText('onlyAcceptedOrClosedInvoicesCanBeCorrected'), {}, 409, {cause: invoiceRejectionCause('onlyAcceptedOrClosedInvoicesCanBeCorrected', 409)});
         // Null restores the submitted value. Accepted and Closed records keep their existing lifecycle state.
         invoice.correctedAmount = corrections.correctedAmount === null ? null : formatAmount(corrections.correctedAmount);
         invoice.correctedDescription = corrections.correctedDescription?.trim() || null;
@@ -186,7 +186,7 @@ export async function reviseSavedInvoice(poolId: string, invoiceId: number, corr
 /** Exclude a counted invoice from future calculation without deleting its original evidence. */
 export async function rejectAcceptedSavedInvoice(poolId: string, invoiceId: number, reason: string, confirmation: ConfirmedInvoiceChange): Promise<EventInvoice> {
     // Reject an accepted cost only with a meaningful bounded reason; retain all original evidence.
-    if (typeof reason !== 'string' || !reason.trim() || reason.trim().length > 4000) throw new APIError(invoiceText('rejectionReasonRequired'), {}, 400);
+    if (typeof reason !== 'string' || !reason.trim() || reason.trim().length > 4000) throw new APIError(invoiceText('rejectionReasonRequired'), {}, 400, {cause: invoiceRejectionCause('rejectionReasonRequired')});
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function rejectLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<EventInvoice> {
         // The DBAL holds the pool lock throughout policy checks and dependent writes.
@@ -195,7 +195,7 @@ export async function rejectAcceptedSavedInvoice(poolId: string, invoiceId: numb
         // Read the current review state within this pool; preloaded request data cannot authorize a stale transition.
         const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId, manager);
         if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
-        if (invoice.status !== 'APPROVED' && invoice.status !== 'CLOSED') throw new APIError(invoiceText('onlyAcceptedOrClosedInvoicesCanBeRemovedFrom'), {}, 409);
+        if (invoice.status !== 'APPROVED' && invoice.status !== 'CLOSED') throw new APIError(invoiceText('onlyAcceptedOrClosedInvoicesCanBeRemovedFrom'), {}, 409, {cause: invoiceRejectionCause('onlyAcceptedOrClosedInvoicesCanBeRemovedFrom', 409)});
         invoice.status = 'REJECTED';
         // Exclude the cost and its invoice credit from the next calculation, while keeping current shares unchanged.
         invoice.rejectionReason = reason.trim();
@@ -220,7 +220,7 @@ export async function retractSavedInvoice(poolId: string, invoiceId: number, pro
         const invoice = await invoiceService.getInvoiceWithRegistration(poolId, invoiceId, manager);
         if (!invoice) throw new APIError(invoiceText('invoiceNotFound'), {}, 404);
         if (!invoice.registration || invoice.registration.profileId !== profileId) throw new APIError(invoiceText('youCanOnlyRetractYourOwnInvoice'), {}, 403);
-        if (invoice.status !== 'NEW') throw new APIError(invoiceText('onlyInvoicesAwaitingReviewCanBeRetracted'), {}, 409);
+        if (invoice.status !== 'NEW') throw new APIError(invoiceText('onlyInvoicesAwaitingReviewCanBeRetracted'), {}, 409, {cause: invoiceRejectionCause('onlyInvoicesAwaitingReviewCanBeRetracted', 409)});
         // Retraction is permitted only for the submitter of an unreviewed cost; it is never a deletion.
         invoice.status = 'RETRACTED';
         const saved = await invoiceService.saveInvoice(invoice, manager);

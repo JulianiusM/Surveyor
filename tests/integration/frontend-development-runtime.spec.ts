@@ -22,6 +22,9 @@ describe('Express-integrated frontend development', () => {
         expect(frontendDevelopmentServer()).toBeUndefined();
     });
 
+    // This real HTTP case compiles the cold Vite SSR/client graph and Sass.
+    // Measured passing runs take 25–29 seconds; allow compilation and owned
+    // cleanup without widening ordinary test or hook deadlines.
     it('renders source SSR and serves Vue HMR through the existing HTTP origin', async () => {
         vi.stubEnv('NODE_ENV', 'development');
         vi.stubEnv('SURVEYOR_FRONTEND_DEV', '1');
@@ -154,5 +157,5 @@ describe('Express-integrated frontend development', () => {
             await frontendDevelopmentServer()?.close();
             await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
         }
-    }, 30_000);
+    }, 60_000);
 });

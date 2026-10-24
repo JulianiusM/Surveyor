@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {invoiceText} from './wording';
+import {invoiceText, invoiceRejectionCause} from './wording';
 import {createHash} from 'node:crypto';
 import type {EntityManager} from 'typeorm';
 import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool';
@@ -56,8 +56,8 @@ export async function savePoolSubmissionState(poolId: string, status: InvoicePoo
     async function changeLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<void> {
         const pool = requireLockedPool(row);
         // A financial close is authoritative. This operation never reopens calculated shares or bypasses their workflow.
-        if (pool.status === 'CLOSED') throw new APIError(invoiceText('participantInvoiceAccessOnlyBeforeCalculation'), {}, 409);
-        if (pool.calculationRevision !== expectedRevision) throw new APIError(invoiceText('poolChangedBeforeSubmissionState'), {}, 409);
+        if (pool.status === 'CLOSED') throw new APIError(invoiceText('participantInvoiceAccessOnlyBeforeCalculation'), {}, 409, {cause: invoiceRejectionCause('participantInvoiceAccessOnlyBeforeCalculation', 409)});
+        if (pool.calculationRevision !== expectedRevision) throw new APIError(invoiceText('poolChangedBeforeSubmissionState'), {}, 409, {cause: invoiceRejectionCause('poolChangedBeforeSubmissionState', 409)});
         if (pool.status === status) return;
         // Invalidate outstanding previews while keeping every cost and allocation input; this is not a calculation edit.
         pool.status = status;
@@ -77,11 +77,16 @@ export async function saveInvoicePoolAssignments(poolId: string, isDefault: bool
         const records = await invoiceService.getCalculationRows(manager, pool);
         const eventIds = records.registrations.map(registration => registration.id);
         const validIds = Array.from(new Set(assignAll ? eventIds : allowedRegistrationIds));
-        if (validIds.some(id => !eventIds.includes(id))) throw new APIError(invoiceText('participantDoesNotBelongToThisEvent'), {}, 400);
+        if (validIds.some(id => !eventIds.includes(id))) throw new APIError(invoiceText('participantDoesNotBelongToThisEvent'), {}, 400, {cause: invoiceRejectionCause('participantDoesNotBelongToThisEvent')});
         for (const [id, factor] of Object.entries(participantFactors)) {
-            if (!validIds.includes(Number(id))) throw new APIError(invoiceText('factorParticipantIsNotAssignedToThisPool'), {}, 400);
+            if (!validIds.includes(Number(id))) throw new APIError(invoiceText('factorParticipantIsNotAssignedToThisPool'), {}, 400, {cause: invoiceRejectionCause('factorParticipantIsNotAssignedToThisPool')});
             try { validateInvoiceFactor(factor); }
-            catch (error) { throw new APIError(error instanceof Error ? error.message : invoiceText('invalidFactor'), {}, 400); }
+            catch (error) {
+                // Keep the native diagnostic but publish only the authored
+                // bounded factor rule through the versioned interface.
+                throw new APIError(error instanceof Error ? error.message : invoiceText('invalidFactor'), {}, 400,
+                    {cause: invoiceRejectionCause('factorsMustBeBetweenAndWithAtMostFour')});
+            }
         }
         // Assignment replacement must retain saved factors when a request only changes membership.
         // Removing a member also removes coverage and adjustments that would otherwise outlive it.
@@ -135,9 +140,9 @@ export async function commitPoolCalculation(poolId: string, _approvedInvoiceIds:
         // The DBAL holds the root lock; decisions below use the current persisted pool state.
         const pool = requireLockedPool(row);
         // Reject stale previews and invalid transitions before replacing any share rows.
-        if (expectedRevision !== undefined && pool.calculationRevision !== expectedRevision) throw new APIError(invoiceText('poolInputsChangedDuringCalculationReloadAndCalculateAgain'), {}, 409);
-        if (recalculate && pool.status !== 'CLOSED') throw new APIError(invoiceText('onlyClosedPoolsCanBeRecalculated'), {}, 409);
-        if (!recalculate && pool.status === 'CLOSED') throw new APIError(invoiceText('poolIsAlreadyClosed'), {}, 409);
+        if (expectedRevision !== undefined && pool.calculationRevision !== expectedRevision) throw new APIError(invoiceText('poolInputsChangedDuringCalculationReloadAndCalculateAgain'), {}, 409, {cause: invoiceRejectionCause('poolInputsChangedDuringCalculationReloadAndCalculateAgain', 409)});
+        if (recalculate && pool.status !== 'CLOSED') throw new APIError(invoiceText('onlyClosedPoolsCanBeRecalculated'), {}, 409, {cause: invoiceRejectionCause('onlyClosedPoolsCanBeRecalculated', 409)});
+        if (!recalculate && pool.status === 'CLOSED') throw new APIError(invoiceText('poolIsAlreadyClosed'), {}, 409, {cause: invoiceRejectionCause('poolIsAlreadyClosed', 409)});
         const rows = await invoiceService.getCalculationRows(manager, pool);
         // Compare the final pending inputs with the applied snapshot read under this same lock.
         // First closure already notified its planning edits. Older snapshots may certify coverage
@@ -178,11 +183,11 @@ export async function restorePoolCalculationInputs(poolId: string, expectedRevis
         // The DBAL holds the root lock; decisions below use the current persisted pool state.
         const pool = requireLockedPool(row);
         // A rollback requires the matching saved input snapshot and the current pool revision.
-        if (pool.status !== 'CLOSED') throw new APIError(invoiceText('onlyCalculatedPoolsHaveSavedInputsToRestore'), {}, 409);
-        if (expectedRevision !== undefined && pool.calculationRevision !== expectedRevision) throw new APIError(invoiceText('poolChangedBeforeRollbackReloadAndTryAgain'), {}, 409);
+        if (pool.status !== 'CLOSED') throw new APIError(invoiceText('onlyCalculatedPoolsHaveSavedInputsToRestore'), {}, 409, {cause: invoiceRejectionCause('onlyCalculatedPoolsHaveSavedInputsToRestore', 409)});
+        if (expectedRevision !== undefined && pool.calculationRevision !== expectedRevision) throw new APIError(invoiceText('poolChangedBeforeRollbackReloadAndTryAgain'), {}, 409, {cause: invoiceRejectionCause('poolChangedBeforeRollbackReloadAndTryAgain', 409)});
         const snapshot = pool.calculationSnapshot;
         if (!snapshot || snapshot.version !== 1 || !invoiceHasAppliedTakeoverEvidence(pool)) {
-            throw new APIError(invoiceText('noPreviousInputSnapshotIsAvailableCalculateThePool'), {}, 409);
+            throw new APIError(invoiceText('noPreviousInputSnapshotIsAvailableCalculateThePool'), {}, 409, {cause: invoiceRejectionCause('noPreviousInputSnapshotIsAvailableCalculateThePool', 409)});
         }
         // Legacy numeric explanations can certify coverage when their explicit list is missing.
         // Use only that saved evidence; never restore current pending inputs as a guessed old baseline.
@@ -221,7 +226,7 @@ export async function restorePoolCalculationInputs(poolId: string, expectedRevis
 /** Persist a bounded signed adjustment after checking current locked pool membership. */
 export async function savePoolSurcharge(poolId: string, registrationId: number, amount: number, note: string, subtractFromPool: boolean) {
     // Signed adjustments must be finite, nonzero, and fit the existing money-column bounds.
-    if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 99999999.99) throw new APIError(invoiceText('enterANonZeroSurchargeOrRebateWithinThe'), {}, 400);
+    if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 99999999.99) throw new APIError(invoiceText('enterANonZeroSurchargeOrRebateWithinThe'), {}, 400, {cause: invoiceRejectionCause('enterANonZeroSurchargeOrRebateWithinThe')});
     /** Evaluate this operation and apply its writes while the DBAL holds the pool’s root lock. */
     async function addLocked(manager: EntityManager, row: EventInvoicePool | null) {
         // The DBAL holds the root lock; decisions below use the current persisted pool state.
@@ -256,7 +261,7 @@ export async function recordShareSettlement(poolId: string, shareId: number, isP
     async function settleLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<void> {
         // The DBAL holds the root lock; decisions below use the current persisted pool state.
         const pool = requireLockedPool(row);
-        if (pool.status !== 'CLOSED') throw new APIError(invoiceText('calculateThePoolBeforeRecordingSharePayments'), {}, 409);
+        if (pool.status !== 'CLOSED') throw new APIError(invoiceText('calculateThePoolBeforeRecordingSharePayments'), {}, 409, {cause: invoiceRejectionCause('calculateThePoolBeforeRecordingSharePayments', 409)});
         // Resolve the share in this pool under the same lock used by recalculation and input edits.
         const share = await invoiceService.getShareWithRegistration(poolId, shareId, manager);
         if (!share) throw new APIError(invoiceText('shareNotFound'), {}, 404);

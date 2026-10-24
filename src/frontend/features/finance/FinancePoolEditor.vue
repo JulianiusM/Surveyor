@@ -131,6 +131,9 @@ async function save(): Promise<void> {
     // A settings confirmation adopts the submitted values, never a stale read.
     if (pool) baseline.value = JSON.stringify(draft); else resetDraft();
     emit('saved');
+    // Creation is complete once its write is confirmed. A failed following GET
+    // must not keep a blank creation form open or invite another submission.
+    if (!pool) emit('close');
 }
 
 /** Unknown delivery needs a deliberate fresh saved-data inspection. The review
@@ -148,13 +151,17 @@ function acknowledge(): void {
 <template>
     <AppDialog content-class="text-white finance-dialog" :open="open" :title="messages.t(pool ? 'finance.poolSettings' : 'finance.createANewPool')" :subtitle="pool?.name"
         :pending="command.pending.value || command.recovering.value" standard @close="close">
-        <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
+        <!-- The shared dialog keeps this receipt renderer mounted across Close,
+             moving confirmed feedback to the page host without copying it. -->
+        <template #feedback>
+            <CommandFeedback :feedback="command.feedback" :part="command.uncertain.value ? 'error' : 'all'" />
+        </template>
         <CommandFeedback :feedback="command.feedback" part="uncertain"
             :action="{state: recovery, label: messages.t('common.refresh')}" @action="inspectSaved">
-            <template #uncertain>
+            <template #uncertainActions>
                 <!-- Acknowledgement changes local review only. Another saved
                      read blocks it without assigning that read's pending focus. -->
-                <ActionButton v-if="inspected" class="mt-2" variant="outline-warning" :disabled="recovery.disabled.value" @click="acknowledge">
+                <ActionButton v-if="inspected" variant="outline-warning" :disabled="recovery.disabled.value" @click="acknowledge">
                     {{ messages.t('draft.review') }}
                 </ActionButton>
             </template>

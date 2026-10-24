@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {invoiceText} from './wording';
+import {invoiceText, invoiceRejectionCause} from './wording';
 import type {EntityManager} from 'typeorm';
 import type {EventInvoicePool} from '../database/entities/event/EventInvoicePool';
 import * as invoiceService from '../database/services/EventInvoiceService';
@@ -28,26 +28,26 @@ export async function savePoolTakeovers(poolId: string, payerRegistrationId: num
     async function updateLocked(manager: EntityManager, row: EventInvoicePool | null): Promise<InvoiceTakeoverSaveResult> {
         // Read current coverage under the root lock so competing edits cannot claim the same beneficiary.
         const pool = requireLockedPool(row);
-        if (!allowReassign && pool.status !== 'OPEN') throw new APIError(invoiceText('participantTakeoversUnavailable'), {}, 409);
+        if (!allowReassign && pool.status !== 'OPEN') throw new APIError(invoiceText('participantTakeoversUnavailable'), {}, 409, {cause: invoiceRejectionCause('participantTakeoversUnavailable', 409)});
         const existing = await invoiceService.getTakeovers(poolId, manager);
         // Validate every endpoint against current membership before evaluating the one-level coverage rule.
         const beneficiaries = Array.from(new Set(beneficiaryIds.map(Number)));
         await assertLockedParticipant(manager, pool, payerRegistrationId);
         for (const beneficiaryId of beneficiaries) {
-            if (beneficiaryId === payerRegistrationId) throw new APIError(invoiceText('participantsCannotCoverThemselves'), {}, 400);
+            if (beneficiaryId === payerRegistrationId) throw new APIError(invoiceText('participantsCannotCoverThemselves'), {}, 400, {cause: invoiceRejectionCause('participantsCannotCoverThemselves')});
             await assertLockedParticipant(manager, pool, beneficiaryId);
         }
         // Coverage is one level deep: a beneficiary cannot also be a payer. Organizers may move
         // an existing beneficiary between payers; participant requests must respect its current owner.
         if (beneficiaries.length && existing.some(takeover => takeover.beneficiaryRegistrationId === payerRegistrationId)) {
-            throw new APIError(invoiceText('participantsWhoseShareIsTakenOverCannotCoverOthers'), {}, 400);
+            throw new APIError(invoiceText('participantsWhoseShareIsTakenOverCannotCoverOthers'), {}, 400, {cause: invoiceRejectionCause('participantsWhoseShareIsTakenOverCannotCoverOthers')});
         }
         if (existing.some(takeover => beneficiaries.includes(takeover.payerRegistrationId))) {
-            throw new APIError(invoiceText('clearAParticipantSExistingTakeoversBeforeCoveringTheir'), {}, 400);
+            throw new APIError(invoiceText('clearAParticipantSExistingTakeoversBeforeCoveringTheir'), {}, 400, {cause: invoiceRejectionCause('clearAParticipantSExistingTakeoversBeforeCoveringTheir')});
         }
         if (!allowReassign && existing.some(takeover => beneficiaries.includes(takeover.beneficiaryRegistrationId)
             && takeover.payerRegistrationId !== payerRegistrationId)) {
-            throw new APIError(invoiceText('oneOrMoreParticipantsAreAlreadyCoveredBySomeone'), {}, 409);
+            throw new APIError(invoiceText('oneOrMoreParticipantsAreAlreadyCoveredBySomeone'), {}, 409, {cause: invoiceRejectionCause('oneOrMoreParticipantsAreAlreadyCoveredBySomeone', 409)});
         }
         // Build a minimal diff: remove obsolete or reassigned links, retaining unchanged coverage records.
         const removed: InvoiceTakeoverChange[] = [];

@@ -40,6 +40,24 @@ async function mountReview(handler = async (request: Request) => json(request.me
 }
 
 describe('P9 saved calculation review', () => {
+    it('keeps the empty-pool reason localized and blocks calculation without replaying a rejected preview', async () => {
+        const mounted = await mountReview(async () => new Response(JSON.stringify({
+            type: 'urn:surveyor:problem:finance-no-participants-assigned-to-this-pool-400',
+            title: 'No participants assigned to this pool', detail: 'No participants assigned to this pool',
+            status: 400, requestId: 'empty-calculation-pool', params: {},
+            code: 'FINANCE_NO_PARTICIPANTS_ASSIGNED_TO_THIS_POOL_400', messageKey: 'finance.noParticipantsAssignedToThisPool',
+        }), {status: 400, headers: {'Content-Type': 'application/problem+json'}}));
+        for (const locale of ['en', 'de'] as const) {
+            mounted.context.locale.value = locale;
+            await flushPromises();
+            const reason = mounted.context.messages.value.t('finance.noParticipantsAssignedToThisPool');
+            expect(mounted.dialog.get('.alert-danger').text()).toContain(reason);
+            expect(button(mounted.dialog, mounted.context.messages.value.t('finance.closePoolCalculate')).attributes('disabled')).toBeDefined();
+        }
+        expect(mounted.request).toHaveBeenCalledTimes(1);
+        expect(mounted.request.mock.calls.every(([request]) => (request as Request).method === 'GET')).toBe(true);
+    });
+
     it('renders escaped adaptive evidence and captures the original revision and explicit mail choice through background reads', async () => {
         const mounted = await mountReview();
         expect(mounted.dialog.text()).toContain('<Reviewed payer>');

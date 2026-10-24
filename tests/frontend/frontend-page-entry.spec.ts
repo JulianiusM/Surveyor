@@ -326,6 +326,59 @@ describe('server-owned page entry and canonical navigation', () => {
         expect(completion.available.value).toBe(true);
     });
 
+    it.each(['dismissed', 'expired', 'replaced'] as const)(
+        'keeps a %s success receipt retired through failed delivery and recovery', async disposition => {
+            vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}] as unknown as DOMRectList);
+            vi.useFakeTimers();
+            const held = deferredResponse();
+            let holdRead = true;
+            const visit = await confirmedReadVisit(async () => holdRead ? held.response : json(session));
+            const family = ['confirmed-notice-lifetime', session.context] as const;
+            const observer = new QueryObserver(visit.context.queryClient, {queryKey: [...family, 'visible'],
+                queryFn: () => visit.context.api.bootstrap(), initialData: session, staleTime: Infinity, retry: false});
+            const stopRead = observer.subscribe(() => {});
+            cleanups.push(async () => { stopRead(); });
+            const notice = {kind: 'success' as const, messageKey: 'packing.deleted'};
+            const replacement = {...notice};
+            const delivery = visit.completion.navigate('/frontend-pilot/help', visit.context.capture(), visit.origin,
+                notice, false, [family]);
+            await flushPromises();
+            try {
+                // One confirmed result is visible immediately. Its pending read
+                // must not make that successful action look eligible for Retry.
+                const success = visit.wrapper.get('[data-pilot-notices] .alert-success');
+                expect(success.text()).toBe(visit.context.messages.value.t('packing.deleted'));
+                expect(success.find('button:not(.btn-close)').exists()).toBe(false);
+                expect(visit.wrapper.find('[data-pilot-notices] .alert-warning').exists()).toBe(false);
+                if (disposition === 'dismissed') await success.get('.btn-close').trigger('click');
+                else if (disposition === 'expired') await vi.advanceTimersByTimeAsync(10_001);
+                else visit.context.pageNotice.value = replacement;
+
+                holdRead = false;
+                held.resolve(new Response('{}', {status: 503, headers: {'Content-Type': 'application/json',
+                    'X-Surveyor-Context': session.context}}));
+                expect(await delivery).toBe(false);
+                await flushPromises();
+                expect(visit.context.pageNotice.value).toEqual(disposition === 'replaced' ? replacement : null);
+                const warning = visit.wrapper.get('[data-pilot-notices] .alert-warning');
+                expect(warning.text()).toContain(visit.context.messages.value.t('state.deliveryFailed'));
+                expect(visit.wrapper.findAll('[data-pilot-notices] .alert-warning')).toHaveLength(1);
+
+                // The shell reaches this still-mounted origin's existing receipt.
+                // Recovery sends only a fresh GET and its canonical navigation;
+                // an equal-key later action remains a separate live receipt.
+                expect(await visit.completion.retryRecovery()).toBe(true);
+                await flushPromises();
+                expect(visit.context.pageNotice.value).toEqual(disposition === 'replaced' ? replacement : null);
+                expect(visit.completion.recoveryTarget.value).toBeNull();
+                expect(visit.wrapper.find('[data-pilot-notices] .alert-warning').exists()).toBe(false);
+                expect(visit.request.mock.calls.map(([value]) => (value as Request).method)).toEqual(['GET', 'GET']);
+            } finally {
+                held.resolve(json(session));
+                await delivery;
+            }
+        });
+
     it('invalidates every selected warm variant before an existing read cooldown can pause confirmed delivery', async () => {
         let unavailable = true;
         const visit = await confirmedReadVisit(async () => unavailable
@@ -398,11 +451,11 @@ describe('server-owned page entry and canonical navigation', () => {
         // existing fallback observes the same cache-owned deadline and receipt.
         visit.showOwner.value = false;
         await flushPromises();
-        const deadline = visit.wrapper.get('header [data-read-retry-at]');
+        const deadline = visit.wrapper.get('[data-pilot-notices] [data-read-retry-at]');
         const timestamp = deadline.get('time').attributes('datetime');
         expect(timestamp).toBeDefined();
         expect(Date.parse(timestamp!)).toBeGreaterThan(Date.now());
-        const retry = visit.wrapper.get('header .status-notice button');
+        const retry = visit.wrapper.get('[data-pilot-notices] .status-notice button');
         expect(retry.attributes('disabled')).toBeDefined();
         await retry.trigger('click');
         expect(visit.request).toHaveBeenCalledOnce();

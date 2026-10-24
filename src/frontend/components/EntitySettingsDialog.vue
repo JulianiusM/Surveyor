@@ -268,8 +268,8 @@ async function metadataSaved(): Promise<void> {
         function mayRead(): boolean {
             return active && resource === props.resourceId && context.mayRead(scope);
         }
-    } catch {
-        command.notice.value = 'state.savedRefreshFailed';
+    } catch (failure) {
+        command.setReadNotice('state.savedRefreshFailed', failure);
     } finally {
         refreshingSettings.value = false;
         emit('saved');
@@ -288,10 +288,13 @@ async function refreshSettings(): Promise<void> {
         if (reconciled && context.isCurrent(scope)) {
             command.clearRecoveredError('state.loadFailed');
         }
-    } catch {
+    } catch (failure) {
         // A dependent metadata read can fail while settings itself remains readable.
         // Preserve that recovery warning until a matching read succeeds, not flash expiry.
-        if (context.isCurrent(scope)) command.setError('state.loadFailed', 'durable');
+        if (context.isCurrent(scope)) {
+            if (command.notice.value === 'state.savedRefreshFailed') command.setReadNotice('state.savedRefreshFailed', failure);
+            else command.setReadError('state.loadFailed', failure);
+        }
     } finally {
         refreshingSettings.value = false;
     }
@@ -463,10 +466,16 @@ async function automate(paused: boolean): Promise<void> {
  * current drafts and repeats only admitted reads/delivery; the controller owns deletion policy. */
 async function remove(): Promise<void> {
     if (blocked.value) return;
+    const scope = context.capture();
     pendingAction.value = 'remove';
     try {
         await removal.remove({operation: deleteResource, confirmation: 'packing.confirmDelete',
             success: props.deletedKey});
+        // A confirmed DELETE has released this entity's editable state, even
+        // when loading Overview failed. Close its obsolete modal so the common
+        // read/navigation recovery remains reachable; sibling drafts keep their
+        // own departure guards. Pending, rejected and unknown writes stay open.
+        if (active && context.isCurrent(scope) && command.outcome.value?.confirmation === 'confirmed') emit('close');
     } finally {
         pendingAction.value = null;
     }
@@ -501,10 +510,7 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
         >
         <!-- One receipt owner supplies shared notifications and contextual recovery. -->
         <div aria-live="polite">
-            <CommandFeedback :feedback="command.feedback" :disabled="controlsPending"
-                :notice-retry-at="destination.target.value ? destination.retryAt.value
-                    : command.notice.value === 'state.savedRefreshFailed' ? retryAt : undefined"
-                :notice-read-error="command.notice.value === 'state.savedRefreshFailed' ? settings.error.value : undefined" />
+            <CommandFeedback :feedback="command.feedback" :disabled="controlsPending" />
         </div>
         <StatusNotice v-if="settings.error.value" kind="warning"
             :last-updated-at="settings.data.value && !isReadDenial(settings.error.value) ? settings.dataUpdatedAt.value : undefined"
@@ -592,10 +598,6 @@ async function deleteResource(scope: PilotRequestScope): Promise<string> {
             </div>
         </template>
         <template #footer
-            ><ActionButton v-if="destination.target.value" variant="outline-secondary"
-                :state="destination.retryAction" @click="destination.retry">
-                {{ messages.t('common.retry') }}
-            </ActionButton
             ><ActionButton
                 v-if="settings.error.value || command.uncertain.value || fields?.unknown || awaitingAuthority || command.notice.value === 'state.savedRefreshFailed'"
                 variant="outline-secondary"

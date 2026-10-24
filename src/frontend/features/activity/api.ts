@@ -3,7 +3,7 @@ import type {PilotContext, PilotEventPickerQuery, PilotEventPickerSource, PilotR
 import type {PilotApi} from '../../app/api';
 import type {PilotInputField} from '../../../types/FrontendFeedbackTypes';
 import {activityKeys} from '../../app/queryKeys';
-import {createMultipartForm, generatedInputError, InvalidInputError} from '../../app/transport';
+import {createMultipartForm, generatedInputError} from '../../app/transport';
 import {validateActivityView} from '../../../../.generated/api/v1/browser/validateActivityView.mjs';
 import {validateActivityMetadata} from '../../../../.generated/api/v1/browser/validateActivityMetadata.mjs';
 import {validateActivityMetadataPatch} from '../../../../.generated/api/v1/browser/validateActivityMetadataPatch.mjs';
@@ -88,7 +88,7 @@ export class ActivityApi {
     /** Preview the submitted batch and retain the digest for its explicit warning acknowledgement. */
     async previewRecommendations(planId: string, input: components['schemas']['ActivityRecommendationReview'], scope: PilotRequestScope, signal?: AbortSignal) {
         // The preview carries the same generated draft that application will submit.
-        if (!validateActivityRecommendationReview(input)) throw new InvalidInputError('Invalid recommendation review.');
+        if (!validateActivityRecommendationReview(input)) throw generatedInputError(validateActivityRecommendationReview.errors, () => undefined);
         return this.transport.read('previewActivityRecommendations', await this.transport.client.POST('/activity-plans/{planId}/recommendations/warnings', {
             params: {path: {planId}, header: this.transport.headers(scope)}, body: input, signal, cache: 'no-store',
         }), validateActivityRecommendationPreview, scope).data;
@@ -97,7 +97,7 @@ export class ActivityApi {
     /** Apply once with the reviewed batch and optional acknowledgement; uncertainty never replays. */
     async applyRecommendations(planId: string, input: components['schemas']['ActivityRecommendationApplication'], scope: PilotRequestScope) {
         // The server rechecks current sources and warnings before its existing transaction writes.
-        if (!validateActivityRecommendationApplication(input)) throw new InvalidInputError('Invalid recommendation application.');
+        if (!validateActivityRecommendationApplication(input)) throw generatedInputError(validateActivityRecommendationApplication.errors, () => undefined);
         return this.transport.read('applyActivityRecommendations', await this.transport.client.POST('/activity-plans/{planId}/recommendations/apply', {
             params: {path: {planId}, header: this.transport.headers(scope)}, body: input, cache: 'no-store',
         }), validateActivityRecommendationApplyResult, scope).data;

@@ -66,10 +66,16 @@ export async function readSecondaryInstructionColors(surface: Locator): Promise<
 /** Use the ordinary shared dismissal when a confirmed notification covers the
  * next control. Errors and durable reconciliation notices are never suppressed. */
 export async function dismissFrontendSuccessNotifications(page: Page): Promise<void> {
-    const notices = page.locator('[data-pilot-notices] .pilot-notification.alert-success');
-    for (const notice of await notices.all()) {
-        if (!await notice.isVisible()) continue;
-        const close = notice.getByRole('button');
+    // A modal can leave background notices painted but inaccessible. Select its
+    // actual accessible Close controls, excluding errors and durable feedback.
+    const closes = page.getByRole('button').and(page.locator(
+        '[data-pilot-notices] .pilot-notification.alert-success.alert-dismissible > button.btn-close'));
+    const initialCount = await closes.count();
+    for (let remaining = initialCount; remaining > 0; remaining--) {
+        // Normal dismissal changes the list; retain no positional locator from
+        // the previous iteration. Natural expiry can already have emptied it.
+        if (!await closes.count()) return;
+        const close = closes.first();
         await expect(close).toHaveAccessibleName(/\S/u);
         await close.click();
     }
@@ -114,6 +120,39 @@ export async function readVisiblePresentation(surface: Locator, selectors: strin
     await expect(surface).toHaveCount(1);
     const result = await surface.evaluateAll(inspectBrowserPresentation, {selectors, generatedToken});
     return result.presentation!;
+}
+
+/** Only the native inline action pair omits this aggregate word boundary.
+ * Individual action text/contracts, styles, geometry and raw captures remain
+ * unchanged; the phone comparison permits their requested separate rows. */
+export function projectNativeMobileOverviewActions(presentation: Awaited<ReturnType<typeof readVisiblePresentation>>) {
+    for (const label of ['Duplicate', 'Delete'])
+        expect(presentation.content.elements.filter(element => element.text === label)).toHaveLength(1);
+    expect(presentation.content.text.split('DuplicateDelete')).toHaveLength(2);
+    return {...presentation, content: {...presentation.content,
+        text: presentation.content.text.replace('DuplicateDelete', 'Duplicate Delete')}};
+}
+
+/** Check the actual phone layout before continuing the real card workflows.
+ * Each ordinary action occupies its own complete row without covering another. */
+export async function expectMobileOverviewActionRows(card: Locator): Promise<void> {
+    const row = card.locator(':scope > .card-footer > .pilot-action-row');
+    const rowBounds = (await row.boundingBox())!;
+    expect(rowBounds.width).toBeGreaterThan(0);
+    const actions = [row.getByRole('button', {name: /^Archival and visibility for /u}),
+        row.getByRole('link', {name: 'Duplicate', exact: true}),
+        row.getByRole('button', {name: 'Delete', exact: true})];
+    let previousBottom = rowBounds.y;
+    for (const action of actions) {
+        await expect(action).toBeVisible();
+        await expect(action).toBeEnabled();
+        const bounds = (await action.boundingBox())!;
+        expect(bounds.height).toBeGreaterThan(0);
+        expect(Math.abs(bounds.x - rowBounds.x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(bounds.width - rowBounds.width)).toBeLessThanOrEqual(1);
+        expect(bounds.y).toBeGreaterThanOrEqual(previousBottom - 1);
+        previousBottom = bounds.y + bounds.height;
+    }
 }
 
 /** Compare the existing creation controls after opening the directly requested

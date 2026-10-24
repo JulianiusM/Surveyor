@@ -250,7 +250,7 @@ async function cancel(): Promise<void> {
 
                 <!-- Cancellation has separate server policy from saving changes.
                      Both controls reflect their existing shared command lifetime. -->
-                <div class="col-12 d-flex justify-content-end gap-2">
+                <div class="col-12 pilot-action-row justify-content-end">
                     <ActionButton type="submit" :variant="event.registration ? 'primary' : 'success'"
                         :state="saveAction"><i class="bi me-1" :class="event.registration ? 'bi-save' : 'bi-check2-circle'" aria-hidden="true"></i>{{ messages.t(event.registration ? 'event.registration.update' : 'event.registration.save') }}</ActionButton>
                     <ActionButton v-if="event.registration" id="cancelRegistrationBtn" variant="outline-danger"

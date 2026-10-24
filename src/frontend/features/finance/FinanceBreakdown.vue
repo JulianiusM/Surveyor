@@ -54,6 +54,7 @@ async function refresh(): Promise<void> {
         <LoadingSkeleton v-if="section.loading.value" variant="form" :rows="3" />
         <StatusNotice
             v-if="section.query.error.value"
+            :read-error="section.query.error.value"
             kind="warning"
             :retry-at="section.retryAt.value"
             :last-updated-at="section.updatedAt.value"
