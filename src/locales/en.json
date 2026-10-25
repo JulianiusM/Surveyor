@@ -1778,7 +1778,7 @@
         "executeMigration": "Permanently migrate profile",
         "deactivateTitle": "Deactivate Profile",
         "deactivateHeading": "Deactivate your profile?",
-        "deactivateIntro": "Enter your profile name to confirm deleting your account. This action is permanent and cannot be undone!",
+        "deactivateIntro": "Enter your profile name to confirm deactivating this profile. If this is the account's last profile, the account can also be permanently deleted. This action is permanent and cannot be undone!",
         "executeDeactivation": "Permanently deactivate profile",
         "deleteAccountTitle": "Delete Account",
         "deleteAccountHeading": "Delete your account?",

@@ -231,12 +231,9 @@ async function refreshAdmission(): Promise<void> {
     // Cookie-changing legacy operations can have completed despite lost delivery.
     // Let the sole authoritative session reader retire that actor before recovery.
     await context.refreshSession(true);
-    if (!active || !context.mayRead() || !admission.retryAction.isAvailable()) throw new ObsoleteRequestError();
-    await admission.retry();
-    // The generic UI retry resolves even when its query fails. Recovery must
-    // positively require a new admitted read, never interpret that void as proof.
-    if (admission.error.value) throw admission.error.value;
-    if (admission.outcome.value?.kind !== 'render' || admission.admittedAt.value === undefined) throw new ObsoleteRequestError();
+    // Reopening session admission can already resume the entry GET. Its UI Retry
+    // state cannot certify recovery; the shared owner requires a fresh scoped read.
+    await admission.readFreshAdmission();
 }
 /** Healthy Refresh and unknown-result recovery recheck current authority only.
  * The shared read lease never replaces an issued token, private preview or draft. */

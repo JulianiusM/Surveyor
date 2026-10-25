@@ -3,6 +3,7 @@ import {writeFile} from 'node:fs/promises';
 import {expectEmbeddedFrontendRefresh, expectUsableFrontendLayout, expectVisiblePresentation, loginForE2E, readProfileWorkflowFixtureForE2E,
     readVisiblePresentation, withProfileWorkflowFixtureForE2E} from '../keywords/e2eCoreKeywords';
 import {waitForPilotHydration} from '../keywords/frontendDynamicKeywords';
+import {createTranslator} from '../../src/modules/localization/translator';
 
 /** Snapshot real browser geometry while retaining ordinary native/pilot page rendering. */
 function workflowPresentation() {
@@ -53,6 +54,22 @@ function workflowHeaderPresentation(snapshot: Awaited<ReturnType<typeof readVisi
     expect(first?.style.background).toBe(heading.ownBackground);
     return {...snapshot, content: {...snapshot.content, elements: snapshot.content.elements.map((element, index) =>
         index === 0 ? {...element, style: {...element.style, background: heading.headerBackground}} : element)}};
+}
+
+/** Apply only R2's approved deactivation warning to the comparison value.
+ * Raw native/pilot snapshots retain their original text and every measured style,
+ * field and rectangle; all other workflow content stays directly comparable. */
+function workflowWarningPresentation(snapshot: Awaited<ReturnType<typeof readVisiblePresentation>>,
+    nativeWarning: string, approvedWarning: string) {
+    // The actual sole lead was read before leaving the native page. Require one
+    // complete paragraph match in aggregate text and the selected element.
+    expect(nativeWarning).not.toBe('');
+    expect(snapshot.content.text.split(nativeWarning)).toHaveLength(2);
+    expect(snapshot.content.elements.filter(element => element.text === nativeWarning)).toHaveLength(1);
+    return {...snapshot, content: {...snapshot.content,
+        text: snapshot.content.text.replace(nativeWarning, approvedWarning),
+        elements: snapshot.content.elements.map(element => element.text === nativeWarning
+            ? {...element, text: approvedWarning} : element)}};
 }
 
 /** Translate the same confirmed notice through the real locale command. Reading
@@ -319,7 +336,7 @@ const presentations = [
 
 for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) {
     for (const presentation of presentations) {
-        test(`${presentation.name} document retains native presentation at ${viewport.width}px`, async function compareNativePresentation({page, browser, baseURL}, testInfo) {
+        test(`${presentation.name} document retains native presentation with approved copy at ${viewport.width}px`, async function compareNativePresentation({page, browser, baseURL}, testInfo) {
             await withProfileWorkflowFixtureForE2E(async function compareDocuments(fixture) {
                 await page.setViewportSize(viewport);
                 const browserErrors: string[] = [];
@@ -346,6 +363,9 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
                 const native = await page.evaluate(workflowPresentation);
                 const nativeCard = await readVisiblePresentation(page.locator('main > .card'),
                     ['h1', 'h2', 'h3', 'h4', 'p', 'label', 'input', 'button', 'a', 'hr'], presentation.name === 'token');
+                const nativeWarning = presentation.name === 'deactivate' ? page.locator('main > .card p.lead') : undefined;
+                if (nativeWarning) await expect(nativeWarning).toHaveCount(1);
+                const nativeWarningText = nativeWarning ? (await nativeWarning.innerText()).replace(/\s+/gu, ' ').trim() : undefined;
                 const nativeHeadingPaint = await readWorkflowHeadingPaint(page);
                 const nativeFooter = await readVisiblePresentation(page.locator('footer'), ['a']);
                 const nativeFooterLinks = await page.locator('footer a').evaluateAll(links => links.map(link => link.getAttribute('href')));
@@ -361,13 +381,23 @@ for (const viewport of [{width: 1280, height: 900}, {width: 390, height: 844}]) 
                 const pilot = await page.evaluate(workflowPresentation);
                 const pilotCard = await readVisiblePresentation(page.locator('main > .card'),
                     ['h1', 'h2', 'h3', 'h4', 'p', 'label', 'input', 'button', 'a', 'hr'], presentation.name === 'token');
+                // R2 deliberately corrects only Vue's deactivation consequences.
+                // Assert its exact catalog warning before projecting that sole native paragraph.
+                let comparedNativeCard = nativeCard;
+                if (presentation.name === 'deactivate') {
+                    const approvedWarning = createTranslator('en').t('profile.deactivateIntro');
+                    const pilotWarning = page.locator('main > .card p.lead');
+                    await expect(pilotWarning).toHaveCount(1);
+                    await expect(pilotWarning).toHaveText(approvedWarning);
+                    comparedNativeCard = workflowWarningPresentation(nativeCard, nativeWarningText!, approvedWarning);
+                }
                 const pilotHeadingPaint = await readWorkflowHeadingPaint(page);
                 const pilotFooter = await readVisiblePresentation(page.locator('footer'), ['a']);
                 expect(nativeHeadingPaint.ownBackground).toBe(nativeHeadingPaint.headerBackground);
                 expect(pilotHeadingPaint.headerBackground).toBe(nativeHeadingPaint.headerBackground);
                 expect(pilotHeadingPaint.ownBackground).toBe('rgba(0, 0, 0, 0)');
                 await expectEmbeddedFrontendRefresh(page.locator('main > .card > .card-header'));
-                expectVisiblePresentation(workflowHeaderPresentation(nativeCard, nativeHeadingPaint),
+                expectVisiblePresentation(workflowHeaderPresentation(comparedNativeCard, nativeHeadingPaint),
                     workflowHeaderPresentation(pilotCard, pilotHeadingPaint));
                 expectVisiblePresentation(nativeFooter, pilotFooter);
                 expect(await page.locator('footer a').evaluateAll(links => links.map(link => link.getAttribute('href')))).toEqual(nativeFooterLinks);

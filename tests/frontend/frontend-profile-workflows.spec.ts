@@ -169,6 +169,55 @@ async function guardedWorkflow() {
 }
 
 describe('SPA profile workflows', () => {
+    it('recovers a failed workflow authority read through the visible common retry without releasing its draft', async function recoversWorkflowRead() {
+        vi.useFakeTimers();
+        let unavailable = true;
+        let finishRecovery!: () => void;
+        const recovered = new Promise<void>(resolve => { finishRecovery = resolve; });
+        const {host, context, request} = await mounted({kind: 'deactivate', value: ''},
+            '/frontend-pilot/users/profile/delete', async function verifyCurrentSession(input) {
+                expect(new URL((input as Request).url).pathname).toBe('/api/v1/session');
+                return json(session);
+            }, async function deliverWorkflowAdmission() {
+                if (unavailable) throw new TypeError('The workflow entry GET was unavailable.');
+                // Separate response instances preserve real fetch-body ownership
+                // if recovery replaces an automatically resumed admission read.
+                await recovered;
+                return json({entry: {kind: 'render'}});
+            });
+        const field = host.querySelector<HTMLInputElement>('main input[name="name"]')!;
+        field.value = 'Unsubmitted confirmation input';
+        field.dispatchEvent(new Event('input', {bubbles: true}));
+        const refresh = host.querySelector<HTMLButtonElement>('button[aria-label="Refresh"]')!;
+        refresh.click();
+        await flushPromises();
+        // Advance the production two-retry schedule without changing its policy
+        // or this test's budget, then use the actual shared notification action.
+        await vi.advanceTimersByTimeAsync(4000);
+        await flushPromises();
+        const failure = host.querySelector<HTMLElement>('main .status-notice.alert-danger')!;
+        expect(text(failure)).toContain(context.messages.value.t('state.loadFailed'));
+        const retry = Array.from(failure.querySelectorAll<HTMLButtonElement>('button'))
+            .find(button => text(button) === context.messages.value.t('common.retry'))!;
+        unavailable = false;
+        retry.click();
+        await flushPromises();
+        try {
+            // Reopened session admission may automatically start the entry GET.
+            // Retry still owns a pending fresh read until actual delivery settles.
+            expect(retry.disabled).toBe(true);
+            expect(field.value).toBe('Unsubmitted confirmation input');
+        } finally {
+            finishRecovery();
+            await flushPromises();
+        }
+        expect(host.querySelector('main .status-notice.alert-danger')).toBeNull();
+        expect(host.querySelector('main input[name="name"]')).toBe(field);
+        expect(field.value).toBe('Unsubmitted confirmation input');
+        expect(request.mock.calls.every(([input]) => (input as Request).method === 'GET')).toBe(true);
+        expectPrivateCache(context);
+    });
+
     it('keeps token submission blocked while authority Refresh awaits its entry read after session verification', async function holdsWorkflowAuthority() {
         let finishAdmission!: (response: Response) => void;
         const admissionResponse = new Promise<Response>(resolve => { finishAdmission = resolve; });
@@ -298,7 +347,7 @@ describe('SPA profile workflows', () => {
                 user: {name: 'Original owner', username: 'original-owner', email: 'owner@example.test'}}}},
         {workflow: {kind: 'deactivate', value: ''}, path: 'profile/delete', template: 'profile/delete'},
         {workflow: {kind: 'delete-account', value: ''}, path: 'account/delete', template: 'delete-account'},
-    ] as const)('retains native $workflow.kind headings, copy and submitted field shape', async function matchesNative(candidate) {
+    ] as const)('retains native $workflow.kind headings and submitted fields with approved copy', async function matchesNative(candidate) {
         const withPreview = 'preview' in candidate;
         const {host, context, request} = await mounted(candidate.workflow, `/frontend-pilot/users/${candidate.path}`,
             withPreview ? async function readNativePreview() { return previewResponse(preview); } : rejectUnexpectedRequest);
@@ -307,7 +356,12 @@ describe('SPA profile workflows', () => {
         const actual = host.querySelector('main > section.card')!;
 
         expect(text(actual.querySelector('h1')!)).toBe(text(native.querySelector('h1')!));
-        expect(Array.from(actual.querySelectorAll('p.lead'), text)).toEqual(Array.from(native.querySelectorAll('p.lead'), text));
+        // Approved R2 (2026-10-25) changes only Vue's deactivation consequence
+        // warning. Other workflow prose retains the unchanged native comparator.
+        const expectedLead = candidate.workflow.kind === 'deactivate'
+            ? [context.messages.value.t('profile.deactivateIntro')]
+            : Array.from(native.querySelectorAll('p.lead'), text);
+        expect(Array.from(actual.querySelectorAll('p.lead'), text)).toEqual(expectedLead);
         expect(Array.from(actual.querySelectorAll('label'), text)).toEqual(Array.from(native.querySelectorAll('label'), text));
         expect(Array.from(actual.querySelectorAll('form button'), text)).toEqual(Array.from(native.querySelectorAll('form button'), text));
         expect(request).toHaveBeenCalledTimes(withPreview ? 1 : 0);
@@ -446,8 +500,11 @@ describe('SPA profile workflows', () => {
         expect(document.activeElement).toBe(input);
         expect([input.selectionStart, input.selectionEnd]).toEqual([2, 8]);
         expect(host.querySelector('[data-read-retry-at]')).toBeNull();
+        // Session recovery can resume one automatic GET. The shared admission
+        // owner replaces it with its own fresh read before certifying recovery.
         expect(request.mock.calls.map(([received]) => new URL((received as Request).url).pathname))
-            .toEqual(['/api/v1/session', '/api/v1/profiles/workflow-entry', '/api/v1/session', '/api/v1/profiles/workflow-entry']);
+            .toEqual(['/api/v1/session', '/api/v1/profiles/workflow-entry', '/api/v1/session',
+                '/api/v1/profiles/workflow-entry', '/api/v1/profiles/workflow-entry']);
         expect(request.mock.calls.every(([received]) => (received as Request).method === 'GET')).toBe(true);
         expectPrivateCache(context);
     });

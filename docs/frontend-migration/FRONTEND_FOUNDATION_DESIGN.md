@@ -4,7 +4,7 @@ documentation-metadata
 audience: maintainers; frontend developers; API developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-24
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-06-d14
 verification-scope: Direct interface requests and full-plan/Home correction recorded after original choices; compact permissions, shared diagnostics, native isolation, approval provenance and separate execution evidence preserved
 source-anchors: docs/frontend-migration/FRONTEND_MIGRATION_BASELINE.md; docs/frontend-migration/FRONTEND_PILOT.md; docs/frontend-migration/; contracts/api/v1/; src/controller/; src/modules/database/services/; src/frontend/; src/modules/frontendPilotRenderer.ts; src/modules/frontendDevelopment.ts; src/modules/api/session.ts; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/types/; package.json; vite.config.mts; .github/workflows/ci.yml; src/types/FrontendPilotUiTypes.d.ts
@@ -1114,6 +1114,27 @@ at display time; parser prose and submitted values remain private. Activity term
 activities, including talks and group activities; Survey ordinals describe occurrences of a weekday. Runtime Help
 follows these visible labels within its existing reviewed language corpus. The paired review records actual
 adoption, independent semantic review and current test execution separately from earlier receipts.
+
+## Approved workspace comparison and deactivation warning (2026-10-25)
+
+The maintainer directly approves R1 and R2 from the preceding final-inspection response and requests continued
+frontend fixes and thorough native/Vue comparison across page, permission and profile states.
+
+R1 authorizes normal Activity recommendation-workspace entry on the selected fictional fixtures in the existing
+local `cgd_e2e` database. Entry retains its shared controller's proposal maintenance and possible automatic suggestion
+generation. The comparison may inspect the healthy workspace and local editors at desktop and phone widths;
+assignment application and other business writes remain blocked. Pure warning-preview reads retain their existing
+read-only scope. This is bounded test-data permission, not a new feature or cutover exception.
+
+R2 authorizes the English/German Vue profile-deactivation warning to distinguish deactivating the selected profile
+from account deletion when no profiles remain. The existing shared catalog message remains the presentation owner;
+the permanence warning, confirmation input, controller operation and uncertain-completion handling are retained.
+The native comparator remains unchanged. This bounded wording exception does not authorize the separately excluded
+`IMP-006` completion repair.
+
+The prior unanswered requests and evidence limits retain their historical scope. The paired review records actual
+implementation and new comparison results. Existing native isolation and separate cutover/publication/deployment
+authority remain in force; the reported responsiveness problem still requires demonstrated diagnosis or resolution.
 
 ## Cutover retirement inventory
 

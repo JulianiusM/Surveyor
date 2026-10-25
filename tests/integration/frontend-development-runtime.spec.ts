@@ -118,8 +118,9 @@ describe('Express-integrated frontend development', () => {
             expect(html).not.toContain('file:///');
             expect(html).toContain('id="surveyor-pilot-javascript-required"');
             expect(html).not.toContain('data-pilot-initial-loading');
-            // The independent initialization notice lives outside the hydrated tree.
-            // Its local Help URL and source entry survive Vite's transform unchanged.
+            // SSR and hydration share one notice beneath the shell header. The
+            // renderer monitor controls visibility without replacing that markup;
+            // local Help and the source entry survive Vite's transform unchanged.
             for (const locale of ['en', 'de']) {
                 const packing = await fetch(`${origin}/frontend-pilot/packing/create?locale=${locale}`);
                 expect(packing.status).toBe(200);
@@ -127,7 +128,15 @@ describe('Express-integrated frontend development', () => {
                 expect(packingHtml).toContain(locale === 'de'
                     ? 'Interaktive Funktionen dieser Website benötigen JavaScript.' : 'Interactive features on this site require JavaScript.');
                 expect(packingHtml).toContain(`<a class="btn btn-outline-light" href="/frontend-pilot/help?locale=${locale}">`);
-                expect(packingHtml.indexOf('id="surveyor-pilot-javascript-required"')).toBeLessThan(packingHtml.indexOf('<div id="surveyor-pilot">'));
+                const rootAt = packingHtml.indexOf('<div id="surveyor-pilot">');
+                const headerEndAt = packingHtml.indexOf('</header>', rootAt);
+                const noticeAt = packingHtml.indexOf('id="surveyor-pilot-javascript-required"');
+                const mainAt = packingHtml.indexOf('<main id="pilot-main"');
+                expect(rootAt).toBeGreaterThanOrEqual(0);
+                expect(headerEndAt).toBeGreaterThan(rootAt);
+                expect(noticeAt).toBeGreaterThan(headerEndAt);
+                expect(noticeAt).toBeLessThan(mainAt);
+                expect(packingHtml.match(/id="surveyor-pilot-javascript-required"/gu)).toHaveLength(1);
                 expect(packingHtml).toContain('data-pilot-initial-loading');
                 expect(packingHtml).not.toContain('id="create-title"');
                 expect(packingHtml).not.toContain('/app/app/');

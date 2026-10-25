@@ -2,7 +2,7 @@
 import {apiCompatibility} from '../../.generated/api/v1/policy.mjs';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {flushPromises, mount} from '@vue/test-utils';
-import {defineComponent, ref} from 'vue';
+import {computed, defineComponent, ref} from 'vue';
 import type {Component} from 'vue';
 import {createMemoryHistory, createRouter} from 'vue-router';
 import {QueryObserver, VueQueryPlugin} from '@tanstack/vue-query';
@@ -14,7 +14,7 @@ import {packingKeys} from '../../src/frontend/app/queryKeys';
 import PackingEntry from '../../src/frontend/features/packing/PackingEntry.vue';
 import IdentityPage from '../../src/frontend/features/identity/IdentityPage.vue';
 import App from '../../src/frontend/app/App.vue';
-import {completePageEntry, navigatePageEntry, useConfirmedNavigation} from '../../src/frontend/composables/pageEntry';
+import {completePageEntry, navigatePageEntry, useConfirmedNavigation, usePageEntry} from '../../src/frontend/composables/pageEntry';
 
 const firstId = '11111111-1111-4111-8111-111111111111';
 const secondId = '22222222-2222-4222-8222-222222222222';
@@ -110,7 +110,67 @@ async function confirmedReadVisit(read: (request: Request) => Promise<Response>)
     return {...visit, completion, showOwner, origin: visit.router.currentRoute.value.fullPath};
 }
 
+/** Exercise the shared admission owner and real query promise independently of a
+ * feature's command UI, including its own denial-generation transition. */
+async function freshEntryVisit(read: () => Promise<{entry: components['schemas']['PageEntryOutcome']}>) {
+    const visit = await mounted('/frontend-pilot', async request => {
+        if (new URL(request.url).pathname === '/api/v1/locale') {
+            const {locale} = await request.json();
+            return json({...session, locale});
+        }
+        return json(session);
+    });
+    let admission!: ReturnType<typeof usePageEntry<{entry: components['schemas']['PageEntryOutcome']}>>;
+    const EntryOwner = defineComponent({template: '<p>Shared admission visit</p>', setup() {
+        admission = usePageEntry({key: computed(() => ['fresh-entry-fixture']), read});
+        return {};
+    }});
+    visit.router.addRoute({path: '/frontend-pilot/fresh-entry-fixture', component: EntryOwner});
+    await visit.router.push('/frontend-pilot/fresh-entry-fixture');
+    await flushPromises();
+    return {...visit, admission};
+}
+
 describe('server-owned page entry and canonical navigation', () => {
+    it('certifies only fresh restored render admission and keeps a later typed denial retired', async () => {
+        const denied: components['schemas']['PageEntryOutcome'] = {kind: 'denied', status: 403,
+            messageKey: 'api:errors.FORBIDDEN'};
+        let value: {entry: components['schemas']['PageEntryOutcome']} = {entry: denied};
+        const read = vi.fn(async () => value);
+        const {admission} = await freshEntryVisit(read);
+        expect(admission.outcome.value).toEqual(denied);
+        value = {entry: {kind: 'render'}};
+        await expect(admission.readFreshAdmission()).resolves.toBeUndefined();
+        await flushPromises();
+        expect(admission.outcome.value).toEqual({kind: 'render'});
+        expect(admission.admittedAt.value).toBeDefined();
+        value = {entry: denied};
+        await expect(admission.readFreshAdmission()).rejects.toBeDefined();
+        await flushPromises();
+        expect(admission.outcome.value).toEqual(denied);
+        expect(admission.admittedAt.value).toBeUndefined();
+        expect(read).toHaveBeenCalledTimes(3);
+    });
+
+    it.each(['locale', 'route'] as const)('rejects fresh authority delivered after its %s retires', async retirement => {
+        let hold = false;
+        let resolveRead!: (value: {entry: components['schemas']['PageEntryOutcome']}) => void;
+        const held = new Promise<{entry: components['schemas']['PageEntryOutcome']}>(resolve => { resolveRead = resolve; });
+        const {admission, context, router} = await freshEntryVisit(async () => hold ? held : {entry: {kind: 'render'}});
+        hold = true;
+        const fresh = admission.readFreshAdmission();
+        const rejected = expect(fresh).rejects.toBeDefined();
+        await flushPromises();
+        if (retirement === 'locale') await context.changeLocale('de');
+        else await router.push('/frontend-pilot/help');
+        resolveRead({entry: {kind: 'render'}});
+        await rejected;
+        await flushPromises();
+        expect(context.locale.value).toBe(retirement === 'locale' ? 'de' : 'en');
+        expect(router.currentRoute.value.path).toBe(retirement === 'locale'
+            ? '/frontend-pilot/fresh-entry-fixture' : '/frontend-pilot/help');
+    });
+
     it.each([400, 404])('keeps private cached locales retired after typed %s denial and admits only a fresh restoration', async status => {
         let denied = false;
         let holdEnglish = false;

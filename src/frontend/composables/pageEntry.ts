@@ -11,7 +11,7 @@ import {frontendDocumentUrl, safeFrontendReturn} from '../../modules/lib/fronten
 import {isPlainMessageKey} from '../../modules/localization/translator';
 import {canRetryRead, useActionState, usePilot} from '../app/context';
 import {ApiFailure, isReadDenial, ObsoleteRequestError} from '../app/transport';
-import {invalidateQueryFamilies, queryFamilyReadError, refetchFreshQueries, retireQueryFamily, useQueryAdmission} from '../app/queryCache';
+import {invalidateQueryFamilies, queryFamilyReadError, refetchFreshQueries, refetchFreshQuery, retireQueryFamily, useQueryAdmission} from '../app/queryCache';
 import {belongsToQueryFamily} from '../app/queryKeys';
 import {useReadRetry, useReadRetryAt} from './feedback';
 import {observePageNavigation} from './pageNavigation';
@@ -805,6 +805,37 @@ export function usePageEntry<T extends {entry: components['schemas']['PageEntryO
         await query.refetch();
     }
 
+    /** Require this visit's new authoritative render admission before recovery continues.
+     * Session revalidation may already have resumed a query. Replace that read through
+     * the shared fresh-query owner instead of treating the UI's pending state as denial
+     * or accepting retained data. The ordinary Retry control keeps its existing guard. */
+    async function readFreshAdmission(): Promise<void> {
+        const scope = context.capture();
+        const expectedRoute = documentRoute.value;
+        const generation = admissionGeneration;
+        const key = queryKey.value;
+        const identity = hashKey(key);
+        const denial = deniedEntry.value;
+
+        // A cancellation yields before replacement dispatch. Recheck the same
+        // actor, visit, locale, enabled source and server deadline on both sides.
+        function mayReadFresh(): boolean {
+            return isCurrentEntry(scope, expectedRoute, generation) && hashKey(queryKey.value) === identity
+                && context.hydrated.value && context.mayRead(scope, true)
+                && source.enabled?.value !== false && retryAvailable.value;
+        }
+        if (!mayReadFresh()) throw new ObsoleteRequestError();
+        const value = await refetchFreshQuery<T>(context.queryClient, key, () => query.refetch(), mayReadFresh);
+        // A fresh denial or redirect is retained by its existing owner, but
+        // cannot certify recovery. Only this read restoring its captured denial
+        // may advance the generation; any other transition remains obsolete.
+        const expectedGeneration = generation + (denial ? 1 : 0);
+        const admitted = value.entry.kind === 'render' && !deniedEntry.value;
+        if (!isCurrentEntry(scope, expectedRoute, expectedGeneration) || hashKey(queryKey.value) !== identity
+            || !context.hydrated.value || !context.mayRead(scope, true) || source.enabled?.value === false
+            || !retryAvailable.value || !admitted) throw new ObsoleteRequestError();
+    }
+
     return {data: query.data, dataUpdatedAt: query.dataUpdatedAt, error,
-        pending, reading: query.isFetching, outcome, admittedAt, navigate, retry, retryAction, retryAvailable};
+        pending, reading: query.isFetching, outcome, admittedAt, navigate, retry, retryAction, retryAvailable, readFreshAdmission};
 }

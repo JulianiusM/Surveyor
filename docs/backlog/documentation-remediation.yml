@@ -2774,8 +2774,13 @@ implementation_defects:
     owner: frontend migration maintainers
     package: frontend-visual-regression-review
     title: Reported repeated application hangs lack a reproduced root cause and correction evidence
-    evidence: The maintainer reports that the app repeatedly becomes unresponsive. Initial bounded built-app loads
-      and interactions do not reproduce a hang; that negative sample does not disprove the reported regression.
+    evidence: The maintainer reports that the app repeatedly becomes unresponsive. Renewed built-app profiling
+      through polling, expanded Finance, overlapping warm navigation and failed-read recovery does not reproduce
+      the persistent hang. The 36.3-second idle sample is 97.8 percent idle with stable observer/DOM counts;
+      these bounded negative samples do not disprove the report or identify its cause. The approved continuation
+      also exercises dirty profile/history/language and modal-dismissal cycles with stable DOM/observer counts and
+      sampled heartbeat delays below 32ms. Its reproduced workflow retry false-failure is tracked separately as
+      IMP-130; that visible recovery defect is not evidence of the reported persistent freeze's cause.
     authorization: The direct request includes responsiveness-regression diagnosis and correction within existing
       frontend owners; it does not authorize backend business or database redesign.
     disposition: Profile ordinary and error-recovery interactions, warm navigation and the actual development path;
@@ -2991,6 +2996,73 @@ implementation_defects:
     closes_when:
       - Mounted stale/current and organizer/personal cases follow the fresh protected response and issue only the existing GET.
       - Actual desktop and phone personal breakdowns show matching context and preserve reachable expanded details and Close.
+  - id: IMP-128
+    status: closed
+    closed_on: 2026-10-25
+    closure_evidence: Direct R2 approval permits the bounded Vue EN/DE warning correction. Shared catalog consumers,
+      focused mounted parity tests and actual desktop/phone originals distinguish selected-profile deactivation from
+      conditional last-profile account deletion. Native remains unchanged; this closure covers only approved Vue wording.
+    discovered_on: 2026-10-24
+    severity: medium
+    owner: application maintainers
+    package: frontend-final-cutover-review
+    out_of_scope_for_documentation_migration: true
+    title: Profile-deactivation confirmation always describes account deletion
+    evidence:
+      - At discovery, fresh native and Vue profile-deactivation forms both told users to confirm deleting their account.
+      - The discovery-time src/views/users/profile/delete.pug and profile.deactivateIntro in src/locales/en.json and de.json shared that wording.
+      - src/controller/userController.ts deactivates the selected profile and deletes its previous account only when no profiles remain.
+    impact: Users with other profiles receive a misleading description of the destructive operation they are confirming.
+    authorization: The maintainer directly approved R2 on 2026-10-25, authorizing Vue EN/DE consequence wording only.
+    disposition: The shared Vue catalog now states profile deactivation and conditional account deletion. The native
+      comparator retains its original warning. The separately excluded IMP-006 completion defect remains unrepaired;
+      this wording correction changes no operation, confirmation input or uncertain-result handling.
+    closes_when:
+      - Confirmation accurately distinguishes profile deactivation and conditional account deletion within explicitly approved scope.
+      - The permanence warning, confirmation input and existing operation and uncertain-result handling remain intact.
+  - id: IMP-129
+    status: closed
+    closed_on: 2026-10-25
+    closure_evidence: Both existing German catalog labels now mention arrival and departure. Generated catalog
+      validation and the full build pass; rebuilt desktop/phone create, duplicate and owner/narrow-grant Settings
+      images show the corrected wrapping. Root and independent source/pixel reviews retain existing operation scope.
+    discovered_on: 2026-10-25
+    severity: low
+    owner: frontend migration maintainers
+    package: frontend-final-cutover-review
+    title: German Event date-update label omits departure dates
+    evidence: Actual German Event Settings pixels say arrival dates only. The existing eventController date-update
+      guard covers either arrival or departure. Both the shared field label and validation-field label have this omission.
+    authorization: The current frontend review-and-fix request and approved complete-localization contract cover this
+      accurate presentation correction; no operation or native exception is introduced.
+    disposition: Correct the two existing German catalog labels used by Event creation, duplication and metadata;
+      retain the existing shared form/controller owners and verify their rebuilt rendered consumers.
+    closes_when:
+      - Both labels describe arrival and departure, and actual rebuilt desktop/phone consumer views remain usable.
+  - id: IMP-130
+    status: closed
+    closed_on: 2026-10-25
+    closure_evidence: The shared readFreshAdmission owner certifies a new successful render read after session
+      verification and the actual ProfileWorkflowPage consumes it. The old-source user-flow regression fails and
+      the corrected 77-case workflow/admission suite passes, including denial restoration and obsolete route/locale
+      delivery. Actual rebuilt desktop/phone aborted-GET then Try again clears the notice and preserves unsent input
+      without business requests. Root and independent semantic/pixel review pass; this does not close IMP-117.
+    discovered_on: 2026-10-25
+    severity: medium
+    owner: frontend migration maintainers
+    package: frontend-final-cutover-review
+    title: Profile workflow retry retains a failure after successful authority reads
+    evidence: Aborting the actual workflow-entry GET then choosing Try again returns successful session and entry
+      reads but leaves the common load-failure notice. Session admission resumes a query before the workflow checks
+      the ordinary Retry button availability, so pending is mistaken for failed recovery. A mounted user-flow
+      regression reproduces this on unchanged production source while retaining unsent confirmation input.
+    authorization: The current frontend review-and-fix request covers recovery through the existing shared admission
+      and command owners; no business replay, permission grant, backend or native change is authorized.
+    disposition: Let the shared page-admission owner require a fresh scoped read after session verification. Preserve
+      actor, route, locale, denial, deadline and lifecycle fences, ordinary UI retry guards and unsent draft ownership.
+    closes_when:
+      - The original failing mounted flow passes and successful actual built recovery clears the notice without business writes.
+      - Independent review and focused denial/obsolete-result checks verify the shared boundary and actual workflow adoption.
 findings:
   - id: DESIGN-ACTIVITY-MAINTENANCE-FEEDBACK
     status: closed

@@ -4,9 +4,9 @@ documentation-metadata
 audience: maintainers; frontend developers; migration reviewers
 owner: frontend migration maintainers
 status: migration-pending
-last-verified: 2026-10-24
+last-verified: 2026-10-25
 verification-baseline: docs-baseline-2026-09-06-d14
-verification-scope: Rejected visual acceptance withdrawn; reported and related native-parity corrections with explicit actor/view coverage, shared invoice ownership and honest capture/test limits; P11 and native-isolation boundaries retained
+verification-scope: Approved R1 healthy Activity comparison and R2 Vue warning completed; shared-owner and stage audit, actual page/state comparison, German Event labels and workflow Retry correction verified; reported persistent hang remains unresolved without cutover approval
 source-anchors: docs/frontend-migration/FRONTEND_FOUNDATION_DESIGN.md; docs/frontend-migration/FRONTEND_FULL_IMPLEMENTATION_PLAN.md; docs/frontend-migration/TEST_COVERAGE.md; docs/frontend-migration/staged/; docs/backlog/documentation-remediation.yml; src/controller/; src/modules/database/services/; src/modules/api/; src/modules/lib/session.ts; src/modules/lib/frontendSession.ts; src/frontend/; contracts/api/v1/; src/locales/; scripts/generate-api.mjs; scripts/generate-locales.mjs; scripts/watch-frontend-inputs.mjs; tests/frontend/; tests/integration/; tests/e2e/; vitest.config.mts; playwright.config.ts; src/types/FrontendPilotUiTypes.d.ts
 next-review: authorized-pilot-correction-verification-or-next-migration-slice
 -->
@@ -1922,3 +1922,212 @@ Activity recommendation POSTs with their matching request/console failures, and 
 permission warnings. There are no uncaught page errors or top-level capture errors. These observations do not
 establish a hang remedy: controlled built runs and development cold-delay profiling did not reproduce the reported
 persistent freeze, and concurrent-run timeouts remain preserved with their original limits.
+
+## Final cutover inspection (2026-10-25)
+
+Whole-application cutover approval remains withheld. Source review found no additional named P0–P10 feature
+implementation deferral, but the P6 healthy recommendation-workspace comparison is still incomplete and the reported
+persistent hang (`IMP-117`) has no reproduced cause or demonstrated remedy. Existing excluded backend/token/finality
+work remains deferred in its original owners; its repair is not a migration prerequisite. P11 routing, native
+retirement, guide publication and deployment remain separately authorized actions.
+
+The acceptance audit in `artifacts/frontend-final-pdf-review/stage-acceptance.json` traces each stage against current
+source and preserved decisions. Matching Vue consumers use the existing shared entity entry/settings/creation,
+removal, header/action, dialog, feedback, draft and command-recovery owners. Finance retains its audience-specific
+protected projections and shared invoice ownership; the versioned transports call existing business owners.
+The review found no new parallel business implementation or concrete Vue-only production defect. That finite
+inspection does not establish that every future consumer or possible state is correct.
+
+Two integration expectations were stale after earlier approved corrections. The source-development test now checks
+exactly one shared-shell JavaScript notice after the header and before main, inside the hydration root, in both
+languages. The denied Event administration test now expects its existing contextual Forbidden catalog key, retaining
+the same permission predicate, denied kind, 403 status and mixed-case alias check. Root and independent nonauthors
+reviewed both diffs against the actual production owners and decision history. No application, native, locale,
+business, schema, timeout or permission implementation changed in this run.
+
+The fresh built comparison uses the same 1,294-file runtime/source identity
+`f7e20a5aa9e7a5143c9d715d03da7f0cc027e23275590712a2c73c3a2e4f5005`, checked unchanged across capture and later
+verification. `artifacts/frontend-final-inspection/index.html` links native/Vue originals, independent dialog/table
+scroll frames, exact-image reviewer ledgers and the stage/output supplements. The main run has 517 attempts,
+515 captures and two unavailable Vue recommendation-create views across 118 named scenarios, English desktop
+1440px/phone 390px pairs, selected 1024px tablets and German Vue supplements. Names include aliases and shared
+layouts rather than 118 independent workflows. Separate fallback captures add 40 authenticated-arrival examples
+and ten actual anonymous Login examples; their manifests distinguish those actor scopes.
+
+Reviewers actually compared readable original-width regions and independent scroll areas, including all five
+families, identity/profile/common pages, Overview, Event administration, Finance and Help. Repeated list/prose
+interiors and picker options retain explicit sampling limits; a recorded image region is not a claim to have read
+every word or row. The final ledger join has no missing successful main original or image-hash mismatch. Layouts
+follow the approved responsive action, localization, Refresh, feedback and calendar exceptions. Initial apparent
+missing Activity day text and fallback letters were checked against original images,
+fresh DOM/element captures and direct pixel evidence; neither established an application omission. Derived crops
+used for the verification review also match their source pixels. Capture counts and pixel equality alone do not
+establish parity or acceptance.
+
+The output review closes a previous long/multipage evidence gap at the actual production PDF-renderer boundary.
+Both root and an independent reviewer inspected all 15 pages: seven representative pages across two variants with
+50-character names, 3,918-character notes and signed saved balances, plus eight separately identified stress pages
+with inputs beyond ordinary accepted bounds. Page breaks, repeated headers/footers, negative values and retained
+note/end markers were checked. These are saved-output renderer results, not an integrated database/download E2E
+run or complete output-localization evidence.
+
+The comparison browsers blocked non-read requests after fictional account/profile/guest admission. Ordinary GET/session
+effects remain possible. Healthy recommendation entry maintains saved proposals, so its blocked views are not
+accepted as healthy coverage. The earlier unanswered maintenance permission remains unresolved. Fresh comparison
+also exposed the inherited profile-deactivation warning that always says account deletion; controller inspection
+confirms account cleanup is conditional on no remaining profiles. `IMP-128` records this without changing either
+frontend or authorizing the separately excluded `IMP-006` completion repair. Its bounded Vue wording exception
+requires an individual decision; the inherited defect alone does not create a backend cutover prerequisite.
+
+Renewed responsiveness profiling exercised expanded Finance polling, six warm navigation rounds, eight overlapping
+navigation rounds and failed-read recovery. The 36.3-second idle sample was 97.8 percent idle with stable DOM and
+observer counts; the sampled heartbeat delay stayed below 72ms, including failed-read recovery. No persistent freeze
+was reproduced. A cold
+9.7-second hydration observation under concurrent inspection and all initial timeout evidence remain retained.
+These negative samples neither disprove the reported hang nor close `IMP-117`.
+
+The full application build, 95-file database-free suite (2,244 tests), 150 isolated built-client Chromium checks
+and the focused renewed integration checks passed. The client fixtures are not database E2E. The first complete
+database-backed integration run had six failures: five ordinary-budget timeouts and the stale Event assertion.
+All five timeout cases subsequently passed unchanged under their original budgets, and the corrected Event suite
+passed all 28 cases. The final complete real-MariaDB repeat passed all 29 files / 540 tests, with no failures or skips,
+in 693.17 seconds under the original budgets. It uses MariaDB 10.11.14 on the guarded disposable schema and its
+existing exact-schema account; the database-free, final built-client and complete integration runs use Node 24.15.0,
+while the build uses the available Node 24.13.0. The final test type check also passes. The source-development
+integration file passed both cases under its original budget.
+
+The engineering check reports 452 sources and zero findings; it has no changed executable source readability scope
+in this test/documentation-only diff. Root and independent reviewers separately inspected both changed tests.
+Whitespace and production-guide/amendment boundaries pass. The advisory documentation report retains one existing
+source-baseline mismatch, with no link, metadata, classification, profile or Help-authoring findings; its baseline
+was not rebased. The owned comparison listener was stopped, the pre-existing port 3104 listener preserved, and
+the dedicated integration container restored to its original stopped state after all owned connections settled.
+
+One procedure deviation was reported: the verification delegate refreshed its narrowed context receipt after the
+first test edit instead of before that assignment expansion. Both policies, the applicable profile and actual task
+authorization had already been supplied/read; the refresh found no changed governing source. Root and independent
+reviewers reconciled the exact edit. This late refresh is not described as full pre-edit compliance, and no approval
+was inferred from it. The second edit used a refreshed context before implementation. Automatic review also rejected
+an unnecessary delegated database-root inventory attempt; it did not execute, and verification used the existing
+exact-schema test account instead. No grant or account was changed.
+
+The full schema-resetting built E2E suite, external OIDC/SMTP, other browser engines, physical devices and deployment
+were not exercised in this run. Maintained guide boundaries and advisory documentation diagnostics remain distinct
+from application acceptance; an existing documentation fingerprint mismatch is not a delivery gate.
+
+## Approved final-inspection continuation (2026-10-25)
+
+The maintainer directly approved R1 and R2 and requested continued fixes and thorough page/state comparison.
+Both approved items are complete. Whole-application cutover approval remains withheld because the reported
+persistent hang (`IMP-117`) still has no reproduced cause or demonstrated remedy. The renewed source/acceptance
+audit found no additional named P0–P10 feature implementation deferral. P11 default routing, native retirement,
+guide publication and deployment remain separate actions requiring their own authorization. Existing excluded backend/token/finality
+repairs retain their original disposition; they are not newly pending frontend decisions.
+
+The [dated amendment](FRONTEND_FOUNDATION_DESIGN.md#approved-workspace-comparison-and-deactivation-warning-2026-10-25)
+records the actual approval boundaries. R1 enabled normal recommendation-workspace entry on four existing fictional
+local Activity fixtures, including its proposal maintenance and possible automatic suggestion generation. The root
+reviewer selected the additional fixture identifiers within that scope; the maintainer did not name those identifiers.
+The healthy comparison now covers empty and populated REQUIRED plans, standalone and Event-linked FREE plans,
+three pending proposals and a local approved/rejected/pending review, and ASSIGN/REASSIGN/SWAP editors with pure
+warning previews. No assignment application or explicit generation job was submitted. Queued/running/terminal job
+states and applied/skipped outcomes therefore retain their bounded historical/test evidence rather than a new
+visual-completion claim.
+
+R2 corrects the existing shared Vue English/German deactivation warning: selected-profile deactivation is distinct
+from conditional last-profile account deletion. The permanence warning, confirmation field and business operation
+remain intact. The native warning remains the unchanged comparator under this explicit exception; the excluded
+`IMP-006` completion repair is untouched. `IMP-128` closes only for this approved Vue wording scope.
+
+Two further concrete frontend defects were found and fixed. Both German Event date-update labels now describe
+arrival and departure, matching the existing controller guard (`IMP-129`). After a failed profile-workflow read,
+Try again could retain the error even when session and page reads succeeded: resumed reading made the ordinary
+Retry button unavailable, which the workflow incorrectly treated as failed recovery. The shared page-entry owner
+now certifies a fresh successful render admission and its actual workflow consumer awaits that result (`IMP-130`).
+Actor, route, locale, generation, deadline, source and lifecycle fences remain enforced; denial or redirect cannot
+certify recovery. Unsent input survives, and no business command is replayed. This reproduced recovery defect is
+separate from the reported persistent freeze and does not close `IMP-117`.
+
+Root and independent nonauthors reviewed each production change against its original owner, callers and approved
+responsibilities. Matching Vue consumers retain shared entity entry/settings/creation, permissions, metadata/image,
+actions/removal, dialogs, feedback, drafts, query and command recovery. The five entity families use the shared
+Settings owner; feature image adapters reuse the existing multipart/transport owners. Finance retains its protected
+audience projections and shared invoice-review owner. The audit found no additional concrete parallel business
+implementation or misplaced matching-consumer behavior. Native/Vue frontend separation remains the approved
+temporary duplication boundary, rather than a reason to share native application presentation code.
+
+`artifacts/frontend-approved-review/index.html` links the actual native/Vue originals and evidence. The final joined
+record contains 922 main screenshot originals plus four separately identified internal-region originals. Of the
+main originals, 495 received direct image inspection in this run; 427 have exact byte equality to recorded prior
+inspected pixels and transfer only that recorded region scope. The four regional originals were directly read.
+All included originals have reviewer provenance, with zero missing records, absent ledgers or image-hash mismatches.
+Capture counts include aliases, repeated layouts, retakes and different fixtures; they are not distinct workflow
+counts or proof of exhaustive state coverage.
+
+| Current capture group | Included scope |
+|---|---|
+| Main page/state run | 624 of 625 main originals; 144 named scenarios before exclusions, English desktop/phone pairs, selected tablets and German Vue supplements |
+| Approved Activity supplement | 44 main and four internal-region originals; four early Rules tab-race captures excluded |
+| Shared Settings and actor supplement | 144 of 146 main originals; two native picker-loading captures superseded |
+| Final affected identity/Finance pages | 24 main originals, including admitted guest account deletion and a healthy personal breakdown retake |
+| Final Event labels and healthy picker retakes | 24 Event originals and two native Activity originals |
+| Final loading, failure, identity and recovery states | 60 selected originals from 68 captures; two incorrect native URL preparations and six superseded session-readiness frames excluded |
+
+Actual comparisons cover identity/common pages, Overview, Packing, Drivers, Surveys, Activity, Event/detail/admin,
+Finance and Help, including owner/alternate profiles, restricted administrators, participant/open/history contexts,
+registered guests and selected independent grants. Added states include missing resources, empty/saved-header/archived
+data, My/Open schedules and participant filters, shared Settings tabs, local image selection, linked-list pickers,
+invalid capabilities, disabled-provider arrivals, initial loading, failed GETs and successful recovery. Permissions
+are classified by effective audience plus method grants: an Activity view grant combined with ordinary audience
+access is not mislabeled read-only. Full-account deactivation denied to a guest is distinct from the separately
+captured admitted guest account-deletion form.
+
+Reviewers opened original-width images and independent dialog/table regions and compared their visible information,
+controls, layout and usable actions. The base capture produced 1,040 independent scroll frames and the shared run
+412; only named reviewed regions are accepted. Long repeated picker prose/rows were sampled at recorded positions,
+not claimed as entirely read. Approved localization, responsive controls, common feedback/Refresh, calendar-day
+presentation and privacy redaction explain their recorded native/Vue differences. German Vue supplements establish
+translated fit and meaning against the inspected English/native structure unless a German native comparator is
+explicitly named. Fifteen erroneous or superseded preparation captures remain preserved and excluded from healthy
+acceptance; purposeful loading/error states are separately identified. The Finance skeleton and native Activity
+picker-loading gaps were closed by actually viewed healthy retakes.
+
+The initial completed comparisons use runtime/source identity
+`60858071f4e2282e34f235e5d0ce8298103b1f800badc242d02fbc4bad9e13f9`; final affected-consumer comparisons use
+`640bceee81b2874b75a63772da2d79e3cd212413fe787691862a25eef0c09f39`, each covering 1,294 files. Manifests and ledgers
+preserve which build produced each image. The final source includes the warning, Event-label and recovery changes;
+earlier unchanged views are not described as recaptured on that final build. The actual built Express application
+used existing fictional `cgd_e2e` data on MariaDB 10.4.32 without schema initialization or job/retention bootstrap.
+This is real application/HTTP/database comparison evidence, not a full production-bootstrap E2E suite. Browser
+guards blocked business writes after fictional admission except the expressly authorized R1 entry operations;
+ordinary authentication/session and GET-side effects remain possible. Local editor changes were not saved.
+
+The final full build passed with Node 24.13.0. With Node 24.15.0, both affected mounted suites passed all 77 tests,
+22 selected isolated built-client Chromium checks passed, and the full test compiler passed. The new visible-Retry
+regression failed on original production source and passes after correction. Focused tests cover fresh admission,
+restored denial, repeated denial and obsolete route/locale delivery; actual rebuilt desktop/phone recovery removes
+the failure and retains unsent input. The two updated R2 presentation E2E cases were source-reviewed and compiled
+but not executed: the standard runner resets its guarded E2E-named schema, while the proven isolated schema account's
+target does not satisfy that guard. No grant, schema or guard was changed. The earlier 2,244 database-free tests,
+150 client checks and 540 real-MariaDB integration tests remain explicitly prior-source evidence, not freshly
+repeated whole-suite results for this continuation.
+
+The engineering check covers 452 authored sources, 11 DBAL owners and both changed executable source operations
+(`pageEntry.ts` and `ProfileWorkflowPage.vue`) with zero findings; root and independent semantic review also pass.
+Generated locale validation reports two locales and 1,904 messages. Whitespace and production-guide/amendment
+boundaries pass. The advisory documentation report retains its existing source-baseline mismatch without rebasing;
+this is separate from application readiness. Initial failing test/capture attempts remain in ignored evidence,
+including the pre-fix recovery reproduction and corrected harness readiness/URL mistakes.
+
+Nine completed dirty-profile/history/language and Packing-dialog interaction cycles retained stable DOM/observer
+counts and a maximum sampled heartbeat delay below 32ms. Recovery correctness also passed under concurrent capture,
+without an isolated performance claim. These finite negative samples do not identify or disprove the persistent
+hang. No exhaustive permission/profile/data Cartesian product, fresh business-command completion, live OIDC/SMTP,
+other browser engine, physical device or deployment was verified. Existing valid-token completion and external
+service coverage are not inferred from invalid-arrival screenshots. The prior 15-page PDF renderer inspection
+retains its own renderer-only scope.
+
+All comparison browsers and owned connections closed. The verified owned port 3109 listener was stopped; the
+pre-existing port 3104 listener and stopped integration-container state were preserved. No new approval request
+remains from this continuation. The unresolved hang and explicitly bounded evidence prevent an unconditional
+whole-application cutover recommendation.

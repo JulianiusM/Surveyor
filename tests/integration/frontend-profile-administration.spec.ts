@@ -406,8 +406,10 @@ describe('admitted common documents through the actual Express application', () 
         expect((await unrelated.agent.dispatch(`/frontend-pilot/event/${eventId}/admin`)).status).toBe(403);
         const denied = await unrelated.agent.dispatch(`/FRONTEND-PILOT/EVENT/${eventId}/ADMIN/`);
         expect(denied.status).toBe(403);
+        // Event admission retains its owner's shared Forbidden wording; an
+        // accepted alternative route spelling must preserve that catalog key.
         expect((await documentBootstrap(await denied.text())).eventEntry?.entry).toEqual({
-            kind: 'denied', status: 403, messageKey: 'problem.forbidden'});
+            kind: 'denied', status: 403, messageKey: 'api:errors.FORBIDDEN'});
     });
 
     it('keeps the localized Packing not-found outcome for an admitted uppercase namespace', async () => {
